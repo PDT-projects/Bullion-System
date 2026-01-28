@@ -52,7 +52,8 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
         { id: 'employees', name: 'Employees', icon: Users },
         { id: 'products', name: 'Products / Inventory', icon: Package },
         { id: 'invoices', name: 'Invoices', icon: FileText },
-        { id: 'product-transfer', name: 'Product Transfer', icon: ArrowLeftRight }
+      { id: 'product-transfer', name: 'Product Transfer', icon: ArrowLeftRight }
+    
       ]
     },
     {
@@ -133,7 +134,7 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
           return (
             <div key={item.id} className="mb-1">
               <button
-                onClick={() => handleMenuClick(item.id, hasChildren)}
+                onClick={() => handleMenuClick(item.id, hasChildren ?? false)}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${
                   activeModule === item.id && !hasChildren
                     ? 'bg-[#4f46e5] text-white'
