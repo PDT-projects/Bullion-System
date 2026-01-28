@@ -1,0 +1,738 @@
+import { useState } from 'react';
+import { Dashboard } from './components/Dashboard';
+import { Employees } from './components/Employees';
+import { Products } from './components/Products';
+import { Transactions } from './components/Transactions';
+import { Loans } from './components/Loans';
+import { Banks } from './components/Banks';
+import { Invoices } from './components/Invoices';
+import { BankTransfers } from './components/BankTransfers';
+import { TransactionHistory } from './components/TransactionHistory';
+import { LoanHistory } from './components/LoanHistory';
+import { TransferHistory } from './components/TransferHistory';
+import { CashInflow } from './components/CashInflow';
+import { CashOutflow } from './components/CashOutflow';
+import { Bills } from './components/Bills';
+import { Salary } from './components/Salary';
+import { LoansPayable } from './components/LoansPayable';
+import { LoansReceivable } from './components/LoansReceivable';
+import { CashInHand } from './components/CashInHand';
+import { ProductTransfers } from './components/ProductTransfer';
+import { SalesReport } from './components/SalesReport';
+import { ReferralReport } from './components/ReferralReport';
+import { InventoryReport } from './components/InventoryReport';
+import { TransactionHistoryReport } from './components/TransactionHistoryReport';
+import { Sidebar } from './components/Sidebar';
+import { TopBar } from './components/TopBar';
+import { Toaster } from './components/ui/sonner';
+
+export type Employee = {
+  id: string;
+  name: string;
+  position: string;
+  salary: number;
+  phone: string;
+  email: string;
+  joinDate: string;
+  status: 'active' | 'inactive';
+};
+
+export type Product = {
+  id: string;
+  brandName: string;
+  modelName: string;
+  category: string;
+  costPrice: number;
+  sellPrice: number;
+  buyType: 'Import' | 'Export';
+  warrantyYears: number;
+  stock: number;
+  serialNumbers: string[]; // Array of serial numbers for each unit
+  serialCities: { [serialNumber: string]: string }; // Map serial numbers to cities
+  serialStatus?: { [serialNumber: string]: 'Available' | 'In Transit' | 'Damaged' | 'Returned' }; // Per-serial status
+  description: string;
+  status: 'New' | 'Used' | 'Returned';
+  createdDate?: string; // Date when inventory was created
+};
+
+export type InvoiceProduct = {
+  id: string;
+  productId: string;
+  productName: string;
+  brandName: string;
+  modelName: string;
+  category: string;
+  description: string;
+  quantity: number;
+  price: number;
+  total: number;
+  serialNumbers: string[]; // Serial numbers assigned to this invoice
+  serialCities?: { [serialNumber: string]: string }; // Map serial numbers to their cities
+};
+
+export type Invoice = {
+  id: string;
+  invoiceNumber: string;
+  date: string;
+  customerName: string;
+  customerPhone: string;
+  customerPhone2?: string; // Optional second phone number
+  customerCNIC: string;
+  customerProvince: string; // Province for address
+  customerCity: string; // City based on province
+  customerAddress?: string; // Full address
+  warrantyLocation?: string; // Optional warranty location
+  products: InvoiceProduct[];
+  exchangeWarrantyNote: string;
+  deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered'; // Delivery status
+  totalAmount: number;
+  status: 'Paid' | 'Unpaid';
+  // Sales metadata (not shown on invoice slip)
+  salesperson?: string;
+  salespersonLocation?: string;
+  clientDealBy?: string;
+  referralBy?: string;
+  createdBy?: string;
+  // Payment mode and details (not shown on invoice slip)
+  paymentMode?: 'Cash' | 'Online';
+  bankId?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  // Payment status (not shown on invoice slip)
+  paymentStatus?: 'Full' | 'Partial';
+  paidAmount?: number; // Amount paid by customer (for partial payments)
+  remainingAmount?: number; // Auto-calculated: totalAmount - paidAmount
+  // Collection method for deduction charges (not shown on invoice slip)
+  collectionMethod?: 'Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others';
+  deductionCharges?: number; // Auto-calculated based on collection method and total amount
+  // Optional image upload
+  imageUrl?: string;
+  paidBy?: string;
+  paidTo?: string;
+};
+
+export type Transaction = {
+  id: string;
+  date: string;
+  company: string;
+  mainCategory: 'Cash Inflow' | 'Cash Outflow' | 'Loans & Advances' | 'Salary' | 'Bills';
+  subCategory: string;
+  amount: number;
+  mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method
+  bankName?: string;
+  note: string;
+  paidBy?: string; // Person/company who paid (e.g., "Ahmed Khan", "Pakistan Detectors - Islamabad")
+  paidTo?: string; // Person/company/vendor who received payment
+  transactionBy?: string; // Person who handled/processed the transaction (e.g., "Sir ABC", "Manager Ahmed")
+  employeeId?: string; // For salary transactions
+  employeeName?: string; // For salary transactions
+  baseSalary?: number; // For salary transactions
+  commission?: number; // For salary transactions
+  deductions?: number; // For salary transactions
+  netAmount?: number; // For salary transactions (base + commission - deductions)
+  imageUrl?: string; // Optional image upload
+  paymentStatus?: 'Full' | 'Partial'; // Payment status
+  remainingAmount?: number; // Remaining amount for partial payments
+};
+
+export type ProductTransfer = {
+  id: string;
+  date: string;
+  productId: string;
+  productName: string;
+  brandName: string;
+  modelName: string;
+  serialNumbers: string[];
+  fromLocation: string;
+  toLocation: string;
+  quantity: number;
+  transferredBy: string;
+  note: string;
+  status?: 'Pending' | 'Received'; // Transfer lifecycle status
+  receivedAt?: string; // When destination confirmed receipt
+  receiptName?: string; // Optional receipt filename
+  receiptType?: string; // MIME type (pdf/jpg/png)
+  receiptDataUrl?: string; // Base64 data URL for viewing/downloading
+};
+
+export type Loan = {
+  id: string;
+  receiverType: 'Employee' | 'Person'; // Type of receiver
+  receiverName: string; // Name of receiver (employee or person)
+  receiverId?: string; // Employee ID (if receiver is employee)
+  receiverPhone?: string; // Optional phone number (if receiver is person)
+  loanAmount: number;
+  paid: number;
+  remaining: number;
+  type: 'Payable' | 'Receivable';
+  loanType: 'Official' | 'Personal' | 'Other';
+  status: 'Full' | 'Partial';
+  date: string;
+  mode: 'Cash' | 'Bank';
+  bankId?: string;
+  bankName?: string;
+  // Legacy fields for backward compatibility
+  entityName?: string;
+  employeeId?: string;
+  employeeName?: string;
+};
+
+export type Bank = {
+  id: string;
+  name: string;
+  balance: number;
+  accountNumber: string;
+};
+
+export type BankTransfer = {
+  id: string;
+  date: string;
+  fromBankId: string;
+  fromBankName: string;
+  toBankId: string;
+  toBankName: string;
+  amount: number;
+  note: string;
+};
+
+export type AppData = {
+  employees: Employee[];
+  products: Product[];
+  transactions: Transaction[];
+  loans: Loan[];
+  banks: Bank[];
+  invoices: Invoice[]
+;
+  bankTransfers: BankTransfer[];
+  productTransfers: ProductTransfer[];
+};
+
+// Normalize initial data:
+// - Ensure all serial numbers that exist in invoices also exist in inventory
+// - Map those serials to the correct city based on the invoice's customer city
+// - Initialize per-serial status (default: Available)
+// - Recalculate product stock based on serial count
+const normalizeInitialData = (data: AppData): AppData => {
+  // Clone products into a mutable map
+  const productsById = new Map<string, Product>();
+  data.products.forEach((p) => {
+    const initialStatus: { [serial: string]: 'Available' } = {};
+    (p.serialNumbers || []).forEach((serial) => {
+      if (serial) {
+        initialStatus[serial] = 'Available';
+      }
+    });
+
+    productsById.set(p.id, {
+      ...p,
+      serialNumbers: [...p.serialNumbers],
+      serialCities: { ...p.serialCities },
+      serialStatus: { ...(p.serialStatus || {}), ...initialStatus },
+    });
+  });
+
+  // Sync invoice serials into products
+  data.invoices.forEach((invoice) => {
+    invoice.products.forEach((invProd) => {
+      const product = productsById.get(invProd.productId);
+      if (!product) return;
+
+      (invProd.serialNumbers || []).forEach((serial) => {
+        if (!serial) return;
+        if (!product.serialNumbers.includes(serial)) {
+          product.serialNumbers.push(serial);
+        }
+        // Map serial to city from invoice (if available)
+        if (invoice.customerCity) {
+          product.serialCities[serial] = invoice.customerCity;
+        }
+        // If status not set yet, treat as available inventory
+        if (!product.serialStatus) {
+          product.serialStatus = {};
+        }
+        if (!product.serialStatus[serial]) {
+          product.serialStatus[serial] = 'Available';
+        }
+      });
+    });
+  });
+
+  const normalizedProducts = Array.from(productsById.values()).map((p) => ({
+    ...p,
+    stock: p.serialNumbers.length,
+  }));
+
+  return {
+    ...data,
+    products: normalizedProducts,
+  };
+};
+
+const initialData: AppData = {
+  employees: [
+    {
+      id: '1',
+      name: 'Ahmed Khan',
+      position: 'Sales Manager',
+      salary: 85000,
+      phone: '+92 300 1234567',
+      email: 'ahmed.khan@pdt.com',
+      joinDate: '2023-01-15',
+      status: 'active'
+    },
+    {
+      id: '2',
+      name: 'Fatima Ali',
+      position: 'Product Developer',
+      salary: 75000,
+      phone: '+92 321 9876543',
+      email: 'fatima.ali@pdt.com',
+      joinDate: '2023-03-20',
+      status: 'active'
+    },
+    {
+      id: '3',
+      name: 'Hassan Raza',
+      position: 'Marketing Executive',
+      salary: 65000,
+      phone: '+92 333 5551234',
+      email: 'hassan.raza@pdt.com',
+      joinDate: '2023-06-10',
+      status: 'active'
+    },
+    {
+      id: '4',
+      name: 'Ayesha Malik',
+      position: 'Accountant',
+      salary: 70000,
+      phone: '+92 345 7778888',
+      email: 'ayesha.malik@pdt.com',
+      joinDate: '2022-11-05',
+      status: 'active'
+    }
+  ],
+  products: [
+    {
+      id: '1',
+      brandName: 'Metal Detector',
+      modelName: 'Pro X1',
+      category: 'Detection Equipment',
+      costPrice: 100000,
+      sellPrice: 125000,
+      buyType: 'Import',
+      warrantyYears: 2,
+      stock: 13,
+      serialNumbers: ['MDX1-003', 'MDX1-004', 'MDX1-005', 'MDX1-006', 'MDX1-007', 'MDX1-008', 'MDX1-009', 'MDX1-010', 'MDX1-011', 'MDX1-012', 'MDX1-013', 'MDX1-014', 'MDX1-015'],
+      serialCities: {
+        'MDX1-003': 'Karachi',
+        'MDX1-004': 'Lahore',
+        'MDX1-005': 'Islamabad',
+        'MDX1-006': 'Karachi',
+        'MDX1-007': 'Lahore',
+        'MDX1-008': 'Islamabad',
+        'MDX1-009': 'Karachi',
+        'MDX1-010': 'Lahore',
+        'MDX1-011': 'Islamabad',
+        'MDX1-012': 'Karachi',
+        'MDX1-013': 'Lahore',
+        'MDX1-014': 'Islamabad',
+        'MDX1-015': 'Karachi'
+      },
+      description: 'Professional grade metal detector with advanced sensitivity',
+      status: 'New'
+    },
+    {
+      id: '2',
+      brandName: 'Security Scanner',
+      modelName: 'S200',
+      category: 'Security Equipment',
+      costPrice: 200000,
+      sellPrice: 250000,
+      buyType: 'Export',
+      warrantyYears: 3,
+      stock: 8,
+      serialNumbers: ['SS200-001', 'SS200-002', 'SS200-003', 'SS200-004', 'SS200-005', 'SS200-006', 'SS200-007', 'SS200-008'],
+      serialCities: {
+        'SS200-001': 'Karachi',
+        'SS200-002': 'Lahore',
+        'SS200-003': 'Islamabad',
+        'SS200-004': 'Karachi',
+        'SS200-005': 'Lahore',
+        'SS200-006': 'Islamabad',
+        'SS200-007': 'Karachi',
+        'SS200-008': 'Lahore'
+      },
+      description: 'High-precision security scanning system',
+      status: 'New'
+    },
+    {
+      id: '3',
+      brandName: 'Handheld Detector',
+      modelName: 'HD-50',
+      category: 'Detection Equipment',
+      costPrice: 30000,
+      sellPrice: 45000,
+      buyType: 'Import',
+      warrantyYears: 1,
+      stock: 20,
+      serialNumbers: ['HD50-006', 'HD50-007', 'HD50-008', 'HD50-009', 'HD50-010', 'HD50-011', 'HD50-012', 'HD50-013', 'HD50-014', 'HD50-015', 'HD50-016', 'HD50-017', 'HD50-018', 'HD50-019', 'HD50-020', 'HD50-021', 'HD50-022', 'HD50-023', 'HD50-024', 'HD50-025'],
+      serialCities: {
+        'HD50-006': 'Karachi',
+        'HD50-007': 'Lahore',
+        'HD50-008': 'Islamabad',
+        'HD50-009': 'Karachi',
+        'HD50-010': 'Lahore',
+        'HD50-011': 'Islamabad',
+        'HD50-012': 'Karachi',
+        'HD50-013': 'Lahore',
+        'HD50-014': 'Islamabad',
+        'HD50-015': 'Karachi',
+        'HD50-016': 'Lahore',
+        'HD50-017': 'Islamabad',
+        'HD50-018': 'Karachi',
+        'HD50-019': 'Lahore',
+        'HD50-020': 'Islamabad',
+        'HD50-021': 'Karachi',
+        'HD50-022': 'Lahore',
+        'HD50-023': 'Islamabad',
+        'HD50-024': 'Karachi',
+        'HD50-025': 'Lahore'
+      },
+      description: 'Portable handheld metal detector',
+      status: 'New'
+    },
+    {
+      id: '4',
+      brandName: 'X-Ray Scanner',
+      modelName: 'XR-100',
+      category: 'Imaging Equipment',
+      costPrice: 400000,
+      sellPrice: 450000,
+      buyType: 'Export',
+      warrantyYears: 5,
+      stock: 5,
+      serialNumbers: ['XR100-001', 'XR100-002', 'XR100-003', 'XR100-004', 'XR100-005'],
+      serialCities: {
+        'XR100-001': 'Karachi',
+        'XR100-002': 'Lahore',
+        'XR100-003': 'Islamabad',
+        'XR100-004': 'Karachi',
+        'XR100-005': 'Lahore'
+      },
+      description: 'Advanced X-ray baggage scanner',
+      status: 'New'
+    }
+  ],
+  transactions: [
+    {
+      id: '1',
+      date: '2024-01-15',
+      company: 'Pakistan Detectors Technologies: Islamabad/ Head Office',
+      mainCategory: 'Cash Inflow',
+      subCategory: 'Product sale received',
+      amount: 250000,
+      mode: 'Bank',
+      bankName: 'HBL Main Branch',
+      note: 'Payment for Metal Detector Pro X1 - 2 units'
+    },
+    {
+      id: '2',
+      date: '2024-01-14',
+      company: 'Pakistan Detectors Technologies: Islamabad/ Head Office',
+      mainCategory: 'Cash Outflow',
+      subCategory: 'Employee salary',
+      amount: 85000,
+      mode: 'Bank',
+      bankName: 'UBL Corporate',
+      note: 'January salary - Ahmed Khan'
+    },
+    {
+      id: '3',
+      date: '2024-01-14',
+      company: 'Pakistan Detectors Technologies: Karachi',
+      mainCategory: 'Cash Inflow',
+      subCategory: 'Payment received: Customers',
+      amount: 150000,
+      mode: 'Cash',
+      note: 'Customer payment - Security Scanner'
+    }
+  ],
+  loans: [
+    {
+      id: '1',
+      entityName: 'Ahmed Khan',
+      loanAmount: 150000,
+      paid: 50000,
+      remaining: 100000,
+      type: 'Receivable',
+      loanType: 'Personal',
+      status: 'Partial',
+      date: '2023-11-01',
+      mode: 'Bank',
+      bankId: '1',
+      bankName: 'HBL Main Branch'
+    },
+    {
+      id: '2',
+      entityName: 'Hassan Raza',
+      loanAmount: 80000,
+      paid: 80000,
+      remaining: 0,
+      type: 'Receivable',
+      loanType: 'Official',
+      status: 'Full',
+      date: '2023-08-15',
+      mode: 'Bank',
+      bankId: '2',
+      bankName: 'UBL Corporate'
+    }
+  ],
+  banks: [
+    {
+      id: '1',
+      name: 'HBL Main Branch',
+      balance: 1850000,
+      accountNumber: 'HBL-2345678901'
+    },
+    {
+      id: '2',
+      name: 'UBL Corporate',
+      balance: 950000,
+      accountNumber: 'UBL-9876543210'
+    },
+    {
+      id: '3',
+      name: 'MCB Business',
+      balance: 620000,
+      accountNumber: 'MCB-5556667777'
+    }
+  ],
+  invoices: [
+    {
+      id: '1',
+      invoiceNumber: 'INV-2024-001',
+      date: '2024-01-15',
+      customerName: 'ABC Corporation',
+      customerPhone: '+92 300 1234567',
+      customerCNIC: '42101-1234567-1',
+      customerProvince: 'Sindh',
+      customerCity: 'Karachi',
+      products: [
+        {
+          id: '1',
+          productId: '1',
+          productName: 'Metal Detector Pro X1',
+          brandName: 'Metal Detector',
+          modelName: 'Pro X1',
+          category: 'Detection Equipment',
+          description: 'Professional grade metal detector with advanced sensitivity',
+          quantity: 2,
+          price: 125000,
+          total: 250000,
+          serialNumbers: ['MDX1-001', 'MDX1-002']
+        }
+      ],
+      exchangeWarrantyNote: '2 years warranty, no exchange after 7 days',
+      deliveryStatus: 'Delivered',
+      totalAmount: 250000,
+      status: 'Paid',
+      salesperson: 'Ahmed Khan',
+      salespersonLocation: 'Karachi',
+      clientDealBy: 'Ahmed Khan',
+      referralBy: 'Ali Hassan',
+      createdBy: 'Admin'
+    },
+    {
+      id: '2',
+      invoiceNumber: 'INV-2024-002',
+      date: '2024-01-14',
+      customerName: 'XYZ Enterprises',
+      customerPhone: '+92 321 7654321',
+      customerCNIC: '42101-7654321-9',
+      customerProvince: 'Punjab',
+      customerCity: 'Lahore',
+      products: [
+        {
+          id: '1',
+          productId: '3',
+          productName: 'Handheld Detector HD-50',
+          brandName: 'Handheld Detector',
+          modelName: 'HD-50',
+          category: 'Detection Equipment',
+          description: 'Portable handheld metal detector',
+          quantity: 5,
+          price: 45000,
+          total: 225000,
+          serialNumbers: ['HD50-001', 'HD50-002', 'HD50-003', 'HD50-004', 'HD50-005']
+        }
+      ],
+      exchangeWarrantyNote: '1 year warranty',
+      deliveryStatus: 'Self-collect',
+      totalAmount: 225000,
+      status: 'Unpaid',
+      salesperson: 'Hassan Raza',
+      salespersonLocation: 'Lahore',
+      clientDealBy: 'Hassan Raza'
+    }
+  ],
+  bankTransfers: [
+    {
+      id: '1',
+      date: '2024-01-10',
+      fromBankId: '1',
+      fromBankName: 'HBL Main Branch',
+      toBankId: '2',
+      toBankName: 'UBL Corporate',
+      amount: 100000,
+      note: 'Operational fund transfer'
+    }
+  ],
+  productTransfers: [
+    {
+      id: '1',
+      date: '2024-01-15',
+      productId: '1',
+      productName: 'Metal Detector Pro X1',
+      brandName: 'Metal Detector',
+      modelName: 'Pro X1',
+      serialNumbers: ['MDX1-003', 'MDX1-004'],
+      fromLocation: 'Karachi',
+      toLocation: 'Lahore',
+      quantity: 2,
+      transferredBy: 'Ahmed Khan',
+      note: 'Transfer for sales'
+    }
+  ]
+};
+
+export default function App() {
+  const [activeModule, setActiveModule] = useState('dashboard');
+  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
+
+  const renderModule = () => {
+    switch (activeModule) {
+      case 'dashboard':
+        return <Dashboard data={data} />;
+      case 'employees':
+        return <Employees employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
+      case 'products':
+        return <Products products={data.products} setProducts={(products) => setData({ ...data, products })} />;
+      case 'transactions':
+        return <Transactions 
+          transactions={data.transactions} 
+          setTransactions={(transactions) => setData({ ...data, transactions })} 
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+        />;
+      case 'loans':
+        return <Loans 
+          loans={data.loans} 
+          setLoans={(loans) => setData({ ...data, loans })} 
+          employees={data.employees}
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+        />;
+      case 'banks':
+        return <Banks banks={data.banks} setBanks={(banks) => setData({ ...data, banks })} />;
+      case 'invoices':
+        return <Invoices 
+          invoices={data.invoices} 
+          setInvoices={(invoices) => setData({ ...data, invoices })}
+          products={data.products}
+          setProducts={(products) => setData({ ...data, products })}
+          banks={data.banks}
+          employees={data.employees}
+        />;
+      case 'product-transfer':
+        return <ProductTransfers
+          products={data.products}
+          setProducts={(products) => setData({ ...data, products })}
+          transfers={data.productTransfers}
+          setTransfers={(transfers) => setData({ ...data, productTransfers: transfers })}
+        />;
+      case 'bank-transfers':
+        return <BankTransfers 
+          transfers={data.bankTransfers}
+          setTransfers={(transfers) => setData({ ...data, bankTransfers: transfers })}
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+        />;
+      case 'transaction-history':
+        return <TransactionHistory transactions={data.transactions} />;
+      case 'loan-history':
+        return <LoanHistory loans={data.loans} />;
+      case 'transfer-history':
+        return <TransferHistory transfers={data.bankTransfers} />;
+      case 'cash-inflow':
+        return <CashInflow 
+          transactions={data.transactions} 
+          setTransactions={(transactions) => setData({ ...data, transactions })}
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+        />;
+      case 'cash-outflow':
+        return <CashOutflow 
+          transactions={data.transactions} 
+          setTransactions={(transactions) => setData({ ...data, transactions })}
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+        />;
+      case 'bills':
+        return <Bills 
+          transactions={data.transactions} 
+          setTransactions={(transactions) => setData({ ...data, transactions })}
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+        />;
+      case 'salary':
+        return <Salary 
+          transactions={data.transactions} 
+          setTransactions={(transactions) => setData({ ...data, transactions })}
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+          employees={data.employees}
+        />;
+      case 'loans-payable':
+        return <LoansPayable 
+          loans={data.loans} 
+          setLoans={(loans) => setData({ ...data, loans })}
+          employees={data.employees}
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+        />;
+      case 'loans-receivable':
+        return <LoansReceivable 
+          loans={data.loans} 
+          setLoans={(loans) => setData({ ...data, loans })}
+          employees={data.employees}
+          banks={data.banks}
+          setBanks={(banks) => setData({ ...data, banks })}
+        />;
+      case 'cash-in-hand':
+        return <CashInHand transactions={data.transactions} />;
+      case 'sales-report':
+        return <SalesReport invoices={data.invoices} products={data.products} />;
+      case 'referral-report':
+        return <ReferralReport invoices={data.invoices} />;
+      case 'inventory-report':
+        return <InventoryReport products={data.products} />;
+      case 'transaction-history-report':
+        return <TransactionHistoryReport transactions={data.transactions} />;
+      default:
+        return <Dashboard data={data} />;
+    }
+  };
+
+  return (
+    <div className="flex h-screen bg-[#f0f2f5]">
+      <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBar />
+        <main className="flex-1 overflow-y-auto">
+          {renderModule()}
+        </main>
+      </div>
+      <Toaster position="top-right" />
+    </div>
+  );
+}
