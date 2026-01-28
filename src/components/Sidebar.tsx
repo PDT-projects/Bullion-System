@@ -36,7 +36,7 @@ type SidebarProps = {
 };
 
 export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
-  const [expandedSections, setExpandedSections] = useState<string[]>(['finance', 'operations']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['finance', 'operations', 'reports']);
 
   const menuItems: MenuItem[] = [
     {
@@ -62,6 +62,7 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
       icon: Banknote,
       children: [
         { id: 'transactions', name: 'Transactions', icon: Receipt },
+        { id: 'pending-payments', name: 'Pending Payments', icon: CreditCard },
         { id: 'bills', name: 'Bills', icon: Zap },
         { id: 'salary', name: 'Salary', icon: UserCheck }
       ]
