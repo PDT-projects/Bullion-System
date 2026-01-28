@@ -22,6 +22,7 @@ import { SalesReport } from './components/SalesReport';
 import { ReferralReport } from './components/ReferralReport';
 import { InventoryReport } from './components/InventoryReport';
 import { TransactionHistoryReport } from './components/TransactionHistoryReport';
+import { PendingPayments } from './components/PendingPayments';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Toaster } from './components/ui/sonner';
@@ -111,18 +112,43 @@ export type Invoice = {
   paidTo?: string;
 };
 
+export type PartialPayment = {
+  id: string; // Unique payment ID
+  amount: number;
+  date: string;
+  time: string;
+  method: 'Cash' | 'Cheque' | 'Bank';
+  bankId?: string;
+  chequeNumber?: string;
+  isCleared: boolean; // True if cleared/deposited, false if pending
+  depositedDate?: string; // When it was deposited
+  attachments?: Attachment[];
+};
+
+export type Attachment = {
+  id: string;
+  name: string;
+  type: string; // MIME type
+  dataUrl: string; // Base64 data URL
+  uploadedAt: string;
+};
+
 export type Transaction = {
   id: string;
+  transactionId: string; // System-generated unique ID (TXN-XXXXX format)
   date: string;
+  time: string; // Added: time component
   company: string;
   mainCategory: 'Cash Inflow' | 'Cash Outflow' | 'Loans & Advances' | 'Salary' | 'Bills';
   subCategory: string;
   amount: number;
-  mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method
+  mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method (main/legacy field)
   bankName?: string;
+  bankId?: string; // Added for better bank tracking
   note: string;
   paidBy?: string; // Person/company who paid (e.g., "Ahmed Khan", "Pakistan Detectors - Islamabad")
   paidTo?: string; // Person/company/vendor who received payment
+  accountablePerson?: string; // New: Person on whose behalf payment is made
   transactionBy?: string; // Person who handled/processed the transaction (e.g., "Sir ABC", "Manager Ahmed")
   employeeId?: string; // For salary transactions
   employeeName?: string; // For salary transactions
@@ -133,6 +159,13 @@ export type Transaction = {
   imageUrl?: string; // Optional image upload
   paymentStatus?: 'Full' | 'Partial'; // Payment status
   remainingAmount?: number; // Remaining amount for partial payments
+  
+  // New payment tracking fields
+  partialPayments?: PartialPayment[]; // Track all partial payments under same transaction ID
+  totalPaid?: number; // Total amount paid across all partial payments
+  isFullyCleared?: boolean; // True when all payments are cleared AND fully paid
+  depositedToBank?: boolean; // For cash/cheque: whether deposited to bank
+  attachments?: Attachment[]; // New: Attachments for transaction
 };
 
 export type ProductTransfer = {
@@ -426,35 +459,57 @@ const initialData: AppData = {
   transactions: [
     {
       id: '1',
+      transactionId: 'TXN-00001',
       date: '2024-01-15',
+      time: '10:30',
       company: 'Pakistan Detectors Technologies: Islamabad/ Head Office',
       mainCategory: 'Cash Inflow',
       subCategory: 'Product sale received',
       amount: 250000,
       mode: 'Bank',
+      bankId: '1',
       bankName: 'HBL Main Branch',
-      note: 'Payment for Metal Detector Pro X1 - 2 units'
+      note: 'Payment for Metal Detector Pro X1 - 2 units',
+      paymentStatus: 'Full',
+      isFullyCleared: true,
+      totalPaid: 250000,
+      partialPayments: []
     },
     {
       id: '2',
+      transactionId: 'TXN-00002',
       date: '2024-01-14',
+      time: '14:15',
       company: 'Pakistan Detectors Technologies: Islamabad/ Head Office',
       mainCategory: 'Cash Outflow',
       subCategory: 'Employee salary',
       amount: 85000,
       mode: 'Bank',
+      bankId: '2',
       bankName: 'UBL Corporate',
-      note: 'January salary - Ahmed Khan'
+      note: 'January salary - Ahmed Khan',
+      paymentStatus: 'Full',
+      isFullyCleared: true,
+      totalPaid: 85000,
+      partialPayments: []
     },
     {
       id: '3',
+      transactionId: 'TXN-00003',
       date: '2024-01-14',
+      time: '11:45',
       company: 'Pakistan Detectors Technologies: Karachi',
       mainCategory: 'Cash Inflow',
       subCategory: 'Payment received: Customers',
       amount: 150000,
       mode: 'Cash',
-      note: 'Customer payment - Security Scanner'
+      note: 'Customer payment - Security Scanner',
+      paymentStatus: 'Partial',
+      isFullyCleared: false,
+      totalPaid: 0,
+      depositedToBank: false,
+      partialPayments: [],
+      remainingAmount: 150000
     }
   ],
   loans: [
@@ -659,6 +714,12 @@ export default function App() {
         />;
       case 'transaction-history':
         return <TransactionHistory transactions={data.transactions} />;
+      case 'pending-payments':
+        return <PendingPayments 
+          transactions={data.transactions}
+          setTransactions={(transactions) => setData({ ...data, transactions })}
+          banks={data.banks}
+        />;
       case 'loan-history':
         return <LoanHistory loans={data.loans} />;
       case 'transfer-history':
