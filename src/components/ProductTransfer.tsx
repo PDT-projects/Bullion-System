@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Product, ProductTransfer } from '../App';
 import { Plus, Eye, Trash2, X, ArrowRightLeft, Package, CheckCircle2, Clock } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { jsPDF } from 'jspdf';
 
 type ProductTransferProps = {
   products: Product[];
@@ -18,7 +19,7 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    productId: '',
+    productId: '', // kept for backward compat when single-item used
     fromLocation: '',
     toLocation: '',
     quantity: 1,
@@ -26,10 +27,17 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
     note: ''
   });
 
-  const [selectedSerials, setSelectedSerials] = useState<string[]>([]);
+  // legacy single-selected serials removed; using `transferItems` instead for per-line serials
   const [receiptName, setReceiptName] = useState<string>('');
   const [receiptType, setReceiptType] = useState<string>('');
   const [receiptDataUrl, setReceiptDataUrl] = useState<string>('');
+
+  // Support multiple products per transfer: each item has productId, quantity and selected serials
+  const [transferItems, setTransferItems] = useState<Array<{ productId: string; quantity: number; selectedSerials: string[] }>>([
+    { productId: '', quantity: 1, selectedSerials: [] }
+  ]);
+
+  const [showSummary, setShowSummary] = useState(false);
 
   const handleAdd = () => {
     setFormData({
@@ -41,7 +49,7 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
       transferredBy: '',
       note: ''
     });
-    setSelectedSerials([]);
+    // reset line items
     setReceiptName('');
     setReceiptType('');
     setReceiptDataUrl('');
@@ -56,14 +64,16 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
       return;
     }
 
-    const isAllowed =
-      file.type === 'application/pdf' ||
-      file.type === 'image/jpeg' ||
-      file.type === 'image/jpg' ||
-      file.type === 'image/png';
+    const isAllowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(file.type);
+    const maxSize = 5 * 1024 * 1024; // 5MB limit
 
     if (!isAllowed) {
       toast.error('Receipt must be a PDF, JPG, or PNG file');
+      return;
+    }
+
+    if (file.size > maxSize) {
+      toast.error('Receipt must be smaller than 5MB');
       return;
     }
 
@@ -78,48 +88,47 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
     reader.readAsDataURL(file);
   };
 
-  const getAvailableSerials = () => {
-    if (!formData.productId || !formData.fromLocation) return [];
-    
-    const product = products.find(p => p.id === formData.productId);
+  const getAvailableSerials = (productId?: string, location?: string) => {
+    const pid = productId || formData.productId;
+    const loc = location || formData.fromLocation;
+    if (!pid || !loc) return [];
+
+    const product = products.find(p => p.id === pid);
     if (!product) return [];
 
     return product.serialNumbers?.filter(serial => {
-      const cityMatch = product.serialCities?.[serial] === formData.fromLocation;
+      const cityMatch = product.serialCities?.[serial] === loc;
       const status = product.serialStatus?.[serial] || 'Available';
-      // Only allow serials that are physically at source and not in transit/damaged
-      return cityMatch && status !== 'In Transit' && status !== 'Damaged';
+      return cityMatch && status !== 'In Transit' && status !== 'Damaged' && status !== 'Returned';
     }) || [];
   };
 
   const getProductStockByLocation = (productId: string, location: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return 0;
-    
-    return product.serialNumbers?.filter(serial => 
-      product.serialCities?.[serial] === location
-    ).length || 0;
+    return product.serialNumbers?.filter(serial => product.serialCities?.[serial] === location).length || 0;
   };
 
-  const handleQuantityChange = (newQuantity: number) => {
-    const availableSerials = getAvailableSerials();
-    setFormData({ ...formData, quantity: newQuantity });
-    
-    if (newQuantity > selectedSerials.length) {
-      setSelectedSerials([...selectedSerials, ...Array(newQuantity - selectedSerials.length).fill('')]);
+  const handleQuantityChange = (index: number, newQuantity: number) => {
+    const items = [...transferItems];
+    items[index] = { ...items[index], quantity: newQuantity };
+    // adjust serials array length
+    if (items[index].selectedSerials.length < newQuantity) {
+      items[index].selectedSerials = [...items[index].selectedSerials, ...Array(newQuantity - items[index].selectedSerials.length).fill('')];
     } else {
-      setSelectedSerials(selectedSerials.slice(0, newQuantity));
+      items[index].selectedSerials = items[index].selectedSerials.slice(0, newQuantity);
     }
+    setTransferItems(items);
   };
 
-  const updateSerial = (index: number, value: string) => {
-    const newSerials = [...selectedSerials];
-    newSerials[index] = value;
-    setSelectedSerials(newSerials);
+  const updateSerial = (lineIndex: number, serialIndex: number, value: string) => {
+    const items = [...transferItems];
+    items[lineIndex].selectedSerials[serialIndex] = value;
+    setTransferItems(items);
   };
 
   const handleSave = () => {
-    if (!formData.productId || !formData.fromLocation || !formData.toLocation || !formData.transferredBy) {
+    if (!formData.fromLocation || !formData.toLocation || !formData.transferredBy) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -128,28 +137,35 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
       toast.error('From and To locations must be different');
       return;
     }
-
-    const validSerials = selectedSerials.filter(s => s.trim() !== '');
-    if (validSerials.length !== formData.quantity) {
-      toast.error('Please select all serial numbers');
-      return;
+    // Validate all transfer lines
+    for (let i = 0; i < transferItems.length; i++) {
+      const item = transferItems[i];
+      if (!item.productId || item.quantity < 1) {
+        toast.error('Please select product and quantity for all lines');
+        return;
+      }
+      const validSerials = (item.selectedSerials || []).filter(s => s && s.trim() !== '');
+      if (validSerials.length !== item.quantity) {
+        toast.error('Please select all serial numbers for each product line');
+        return;
+      }
     }
 
-    const product = products.find(p => p.id === formData.productId);
-    if (!product) return;
-
-    // Create transfer record in Pending state
     const newTransfer: ProductTransfer = {
       id: Date.now().toString(),
       date: formData.date,
-      productId: formData.productId,
-      productName: `${product.brandName} ${product.modelName}`,
-      brandName: product.brandName,
-      modelName: product.modelName,
-      serialNumbers: validSerials,
+      // product-level fields kept for compatibility - set to first item's product
+      productId: transferItems[0].productId,
+      productName: (() => {
+        const p = products.find(pp => pp.id === transferItems[0].productId);
+        return p ? `${p.brandName} ${p.modelName}` : '';
+      })(),
+      brandName: '',
+      modelName: '',
+      serialNumbers: transferItems.flatMap(it => it.selectedSerials.filter(Boolean)),
       fromLocation: formData.fromLocation,
       toLocation: formData.toLocation,
-      quantity: formData.quantity,
+      quantity: transferItems.reduce((s, it) => s + it.quantity, 0),
       transferredBy: formData.transferredBy,
       note: formData.note,
       status: 'Pending',
@@ -158,45 +174,80 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
       receiptDataUrl: receiptDataUrl || undefined,
     };
 
-    // Mark selected serials as In Transit and remove them from source city inventory
+    // Update all affected products serials to In Transit
     const updatedProducts = products.map(p => {
-      if (p.id === formData.productId) {
-        const newSerialCities = { ...p.serialCities };
-        const newSerialStatus = { ...(p.serialStatus || {}) };
+      const item = transferItems.find(it => it.productId === p.id);
+      if (!item) return p;
+      const newSerialCities = { ...p.serialCities };
+      const newSerialStatus = { ...(p.serialStatus || {}) };
 
-        validSerials.forEach(serial => {
-          if (!serial) return;
-          // Mark as in transit
-          newSerialStatus[serial] = 'In Transit';
-          // Remove from any concrete city so it doesn't count towards city stock
-          newSerialCities[serial] = 'In Transit';
-        });
+      item.selectedSerials.forEach(serial => {
+        if (!serial) return;
+        newSerialStatus[serial] = 'In Transit';
+        newSerialCities[serial] = 'In Transit';
+      });
 
-        return { ...p, serialCities: newSerialCities, serialStatus: newSerialStatus };
-      }
-      return p;
+      return { ...p, serialCities: newSerialCities, serialStatus: newSerialStatus };
     });
 
     setProducts(updatedProducts);
     setTransfers([newTransfer, ...transfers]);
     toast.success('Product transfer created and marked as In Transit');
     setIsModalOpen(false);
+    setTransferItems([{ productId: '', quantity: 1, selectedSerials: [] }]);
+  };
+
+  // Generate a simple PDF preview for the transfer
+  const generatePDF = (transfer: ProductTransfer) => {
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const left = 40;
+    let y = 40;
+    doc.setFontSize(14);
+    doc.text(`Transfer ID: ${transfer.id}`, left, y);
+    y += 20;
+    doc.setFontSize(12);
+    doc.text(`Date: ${new Date(transfer.date).toLocaleString()}`, left, y);
+    y += 18;
+    doc.text(`From: ${transfer.fromLocation}`, left, y);
+    y += 16;
+    doc.text(`To: ${transfer.toLocation}`, left, y);
+    y += 16;
+    doc.text(`Transferred By: ${transfer.transferredBy}`, left, y);
+    y += 24;
+
+    doc.setFontSize(13);
+    doc.text('Items:', left, y);
+    y += 18;
+
+    transfer.serialNumbers.forEach((s, idx) => {
+      doc.text(`${idx + 1}. ${s}`, left + 10, y);
+      y += 14;
+      if (y > 740) {
+        doc.addPage();
+        y = 40;
+      }
+    });
+
+    y += 10;
+    doc.setFontSize(11);
+    doc.text(`Status: ${transfer.status || 'Pending'}`, left, y);
+    return doc;
   };
 
   const handleMarkReceived = (transfer: ProductTransfer) => {
     if (transfer.status === 'Received') return;
 
     const updatedProducts = products.map((p: Product) => {
-      if (p.id !== transfer.productId) return p;
-
       const newSerialCities = { ...p.serialCities };
       const newSerialStatus = { ...(p.serialStatus || {}) };
 
       transfer.serialNumbers.forEach(serial => {
         if (!serial) return;
-        // Move serial to destination city and mark as Available
-        newSerialCities[serial] = transfer.toLocation;
-        newSerialStatus[serial] = 'Available';
+        // If this product includes the serial, move it
+        if (p.serialNumbers.includes(serial)) {
+          newSerialCities[serial] = transfer.toLocation;
+          newSerialStatus[serial] = 'Available';
+        }
       });
 
       return { ...p, serialCities: newSerialCities, serialStatus: newSerialStatus };
@@ -355,31 +406,10 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Product *</label>
-                  <select
-                    value={formData.productId}
-                    onChange={(e) => {
-                      setFormData({ ...formData, productId: e.target.value, fromLocation: '', toLocation: '' });
-                      setSelectedSerials([]);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                  >
-                    <option value="">Select product</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.brandName} {p.modelName} (Stock: {p.stock})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">From Location *</label>
                   <select
                     value={formData.fromLocation}
-                    onChange={(e) => {
-                      setFormData({ ...formData, fromLocation: e.target.value });
-                      setSelectedSerials([]);
-                    }}
+                    onChange={(e) => setFormData({ ...formData, fromLocation: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                   >
                     <option value="">Select location</option>
@@ -402,22 +432,6 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={getAvailableSerials().length}
-                    value={formData.quantity}
-                    onChange={(e) => handleQuantityChange(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                  />
-                  {formData.productId && formData.fromLocation && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Available in {formData.fromLocation}: {getAvailableSerials().length}
-                    </p>
-                  )}
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Transferred By *</label>
                   <input
                     type="text"
@@ -429,6 +443,80 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
                 </div>
               </div>
 
+              {/* Transfer lines - multiple products */}
+              <div className="border-t pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Items to Transfer</label>
+                <div className="space-y-3">
+                  {transferItems.map((line, li) => (
+                    <div key={li} className="grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-5">
+                        <select
+                          value={line.productId}
+                          onChange={(e) => {
+                            const items = [...transferItems];
+                            items[li].productId = e.target.value;
+                            items[li].selectedSerials = [];
+                            setTransferItems(items);
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        >
+                          <option value="">Select product</option>
+                          {products.map(p => (
+                            <option key={p.id} value={p.id}>{p.brandName} {p.modelName} (Stock: {getProductStockByLocation(p.id, formData.fromLocation || '')})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={line.quantity}
+                          onChange={(e) => handleQuantityChange(li, Number(e.target.value))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        />
+                      </div>
+                      <div className="col-span-4">
+                        <div className="grid grid-cols-2 gap-2">
+                          {Array.from({ length: line.quantity }).map((_, si) => (
+                            <select
+                              key={si}
+                              value={line.selectedSerials[si] || ''}
+                              onChange={(e) => updateSerial(li, si, e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            >
+                              <option value="">Select serial</option>
+                              {getAvailableSerials(line.productId, formData.fromLocation).map(serial => (
+                                <option key={serial} value={serial} disabled={transferItems.some((it, idx) => idx !== li && it.selectedSerials.includes(serial))}>{serial}</option>
+                              ))}
+                            </select>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="col-span-1 flex gap-2">
+                        <button
+                          onClick={() => {
+                            const items = transferItems.filter((_, idx) => idx !== li);
+                            setTransferItems(items.length ? items : [{ productId: '', quantity: 1, selectedSerials: [] }]);
+                          }}
+                          className="px-2 py-1 text-sm text-red-600 bg-red-50 rounded"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div>
+                    <button
+                      onClick={() => setTransferItems([...transferItems, { productId: '', quantity: 1, selectedSerials: [] }])}
+                      className="px-3 py-2 bg-[#eef2ff] text-[#4f46e5] rounded text-sm"
+                    >
+                      Add Item
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div className="border-t pt-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Transfer Receipt (Optional)</label>
                 <input
@@ -437,42 +525,20 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
                   onChange={(e) => handleReceiptChange(e.target.files?.[0])}
                   className="w-full text-sm"
                 />
-                {receiptName && (
-                  <p className="text-xs text-gray-600 mt-2">
-                    Attached: <span className="font-medium">{receiptName}</span>
-                  </p>
+                {receiptDataUrl && (
+                  <div className="mt-2 flex items-center gap-3">
+                    {receiptType.startsWith('image/') ? (
+                      <img src={receiptDataUrl} alt={receiptName} className="w-20 h-20 object-cover rounded" />
+                    ) : (
+                      <div className="w-20 h-20 flex items-center justify-center bg-gray-100 rounded text-sm">PDF</div>
+                    )}
+                    <div className="text-sm">
+                      <div className="font-medium">{receiptName}</div>
+                      <a href={receiptDataUrl} download={receiptName} className="text-green-700 hover:underline">Download</a>
+                    </div>
+                  </div>
                 )}
               </div>
-
-              {/* Serial Number Selection */}
-              {formData.productId && formData.fromLocation && formData.quantity > 0 && (
-                <div className="border-t pt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Serial Numbers ({formData.quantity} required)
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {Array.from({ length: formData.quantity }).map((_, index) => (
-                      <select
-                        key={index}
-                        value={selectedSerials[index] || ''}
-                        onChange={(e) => updateSerial(index, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm"
-                      >
-                        <option value="">Select serial #{index + 1}</option>
-                        {getAvailableSerials().map(serial => (
-                          <option
-                            key={serial}
-                            value={serial}
-                            disabled={selectedSerials.includes(serial) && selectedSerials[index] !== serial}
-                          >
-                            {serial}
-                          </option>
-                        ))}
-                      </select>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
@@ -494,11 +560,113 @@ export function ProductTransfers({ products, setProducts, transfers, setTransfer
                 Cancel
               </button>
               <button
-                onClick={handleSave}
+                onClick={() => setShowSummary(true)}
                 className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors"
               >
                 Complete Transfer
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Summary / PDF Preview Modal */}
+      {showSummary && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold">Transfer Summary</h3>
+              <button onClick={() => setShowSummary(false)} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">From: <span className="font-medium">{formData.fromLocation}</span> — To: <span className="font-medium">{formData.toLocation}</span></p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Product</th>
+                      <th className="px-3 py-2 text-left">Qty</th>
+                      <th className="px-3 py-2 text-left">Serials</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transferItems.map((it, idx) => {
+                      const p = products.find(pp => pp.id === it.productId);
+                      return (
+                        <tr key={idx} className="border-b">
+                          <td className="px-3 py-2">{p ? `${p.brandName} ${p.modelName}` : '—'}</td>
+                          <td className="px-3 py-2">{it.quantity}</td>
+                          <td className="px-3 py-2">{it.selectedSerials.join(', ')}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    // create a temporary transfer object to preview PDF
+                    const tmpTransfer: ProductTransfer = {
+                      id: Date.now().toString(),
+                      date: formData.date,
+                      productId: transferItems[0]?.productId || '',
+                      productName: products.find(p=>p.id===transferItems[0]?.productId)?.brandName || '',
+                      brandName: '',
+                      modelName: '',
+                      serialNumbers: transferItems.flatMap(it => it.selectedSerials.filter(Boolean)),
+                      fromLocation: formData.fromLocation,
+                      toLocation: formData.toLocation,
+                      quantity: transferItems.reduce((s, it) => s + it.quantity, 0),
+                      transferredBy: formData.transferredBy,
+                      note: formData.note,
+                      status: 'Pending',
+                    };
+                    const doc = generatePDF(tmpTransfer);
+                    window.open(doc.output('bloburl'));
+                  }}
+                  className="px-3 py-2 bg-white border rounded"
+                >
+                  Preview PDF
+                </button>
+                <button
+                  onClick={() => {
+                    const tmpTransfer: ProductTransfer = {
+                      id: Date.now().toString(),
+                      date: formData.date,
+                      productId: transferItems[0]?.productId || '',
+                      productName: products.find(p=>p.id===transferItems[0]?.productId)?.brandName || '',
+                      brandName: '',
+                      modelName: '',
+                      serialNumbers: transferItems.flatMap(it => it.selectedSerials.filter(Boolean)),
+                      fromLocation: formData.fromLocation,
+                      toLocation: formData.toLocation,
+                      quantity: transferItems.reduce((s, it) => s + it.quantity, 0),
+                      transferredBy: formData.transferredBy,
+                      note: formData.note,
+                      status: 'Pending',
+                    };
+                    const doc = generatePDF(tmpTransfer);
+                    doc.save(`transfer-${tmpTransfer.id}.pdf`);
+                  }}
+                  className="px-3 py-2 bg-[#4f46e5] text-white rounded"
+                >
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => {
+                    // Confirm and save transfer
+                    handleSave();
+                    setShowSummary(false);
+                  }}
+                  className="px-3 py-2 bg-green-600 text-white rounded"
+                >
+                  Confirm Transfer
+                </button>
+              </div>
             </div>
           </div>
         </div>

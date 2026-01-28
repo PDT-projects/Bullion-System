@@ -25,7 +25,9 @@ import { TransactionHistoryReport } from './components/TransactionHistoryReport'
 import { PendingPayments } from './components/PendingPayments';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
+import { NotificationBell } from './components/NotificationBell';
 import { Toaster } from './components/ui/sonner';
+import { Notification } from './types/Notification';
 
 export type Employee = {
   id: string;
@@ -48,12 +50,12 @@ export type Product = {
   buyType: 'Import' | 'Export';
   warrantyYears: number;
   stock: number;
-  serialNumbers: string[]; // Array of serial numbers for each unit
-  serialCities: { [serialNumber: string]: string }; // Map serial numbers to cities
-  serialStatus?: { [serialNumber: string]: 'Available' | 'In Transit' | 'Damaged' | 'Returned' }; // Per-serial status
+  serialNumbers: string[];
+  serialCities: { [serialNumber: string]: string };
+  serialStatus?: { [serialNumber: string]: 'Available' | 'In Transit' | 'Damaged' | 'Returned' };
   description: string;
   status: 'New' | 'Used' | 'Returned';
-  createdDate?: string; // Date when inventory was created
+  createdDate?: string;
 };
 
 export type InvoiceProduct = {
@@ -67,8 +69,8 @@ export type InvoiceProduct = {
   quantity: number;
   price: number;
   total: number;
-  serialNumbers: string[]; // Serial numbers assigned to this invoice
-  serialCities?: { [serialNumber: string]: string }; // Map serial numbers to their cities
+  serialNumbers: string[];
+  serialCities?: { [serialNumber: string]: string };
 };
 
 export type Invoice = {
@@ -77,36 +79,31 @@ export type Invoice = {
   date: string;
   customerName: string;
   customerPhone: string;
-  customerPhone2?: string; // Optional second phone number
+  customerPhone2?: string;
   customerCNIC: string;
-  customerProvince: string; // Province for address
-  customerCity: string; // City based on province
-  customerAddress?: string; // Full address
-  warrantyLocation?: string; // Optional warranty location
+  customerProvince: string;
+  customerCity: string;
+  customerAddress?: string;
+  warrantyLocation?: string;
   products: InvoiceProduct[];
   exchangeWarrantyNote: string;
-  deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered'; // Delivery status
+  deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered';
   totalAmount: number;
   status: 'Paid' | 'Unpaid';
-  // Sales metadata (not shown on invoice slip)
   salesperson?: string;
   salespersonLocation?: string;
   clientDealBy?: string;
   referralBy?: string;
   createdBy?: string;
-  // Payment mode and details (not shown on invoice slip)
   paymentMode?: 'Cash' | 'Online';
   bankId?: string;
   bankName?: string;
   bankAccountNumber?: string;
-  // Payment status (not shown on invoice slip)
   paymentStatus?: 'Full' | 'Partial';
-  paidAmount?: number; // Amount paid by customer (for partial payments)
-  remainingAmount?: number; // Auto-calculated: totalAmount - paidAmount
-  // Collection method for deduction charges (not shown on invoice slip)
+  paidAmount?: number;
+  remainingAmount?: number;
   collectionMethod?: 'Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others';
-  deductionCharges?: number; // Auto-calculated based on collection method and total amount
-  // Optional image upload
+  deductionCharges?: number;
   imageUrl?: string;
   paidBy?: string;
   paidTo?: string;
@@ -142,10 +139,23 @@ export type Transaction = {
   mainCategory: 'Cash Inflow' | 'Cash Outflow' | 'Loans & Advances' | 'Salary' | 'Bills';
   subCategory: string;
   amount: number;
+  mode: 'Cash' | 'Bank' | 'Cheque';
   mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method (main/legacy field)
   bankName?: string;
   bankId?: string; // Added for better bank tracking
   note: string;
+  paidBy?: string;
+  paidTo?: string;
+  transactionBy?: string;
+  employeeId?: string;
+  employeeName?: string;
+  baseSalary?: number;
+  commission?: number;
+  deductions?: number;
+  netAmount?: number;
+  imageUrl?: string;
+  paymentStatus?: 'Full' | 'Partial';
+  remainingAmount?: number;
   paidBy?: string; // Person/company who paid (e.g., "Ahmed Khan", "Pakistan Detectors - Islamabad")
   paidTo?: string; // Person/company/vendor who received payment
   accountablePerson?: string; // New: Person on whose behalf payment is made
@@ -181,19 +191,16 @@ export type ProductTransfer = {
   quantity: number;
   transferredBy: string;
   note: string;
-  status?: 'Pending' | 'Received'; // Transfer lifecycle status
-  receivedAt?: string; // When destination confirmed receipt
-  receiptName?: string; // Optional receipt filename
-  receiptType?: string; // MIME type (pdf/jpg/png)
-  receiptDataUrl?: string; // Base64 data URL for viewing/downloading
+  status?: 'Pending' | 'Received';
+  receivedAt?: string;
+  receiptName?: string;
+  receiptType?: string;
+  receiptDataUrl?: string;
 };
 
 export type Loan = {
   id: string;
-  receiverType: 'Employee' | 'Person'; // Type of receiver
-  receiverName: string; // Name of receiver (employee or person)
-  receiverId?: string; // Employee ID (if receiver is employee)
-  receiverPhone?: string; // Optional phone number (if receiver is person)
+  entityName: string;
   loanAmount: number;
   paid: number;
   remaining: number;
@@ -204,8 +211,10 @@ export type Loan = {
   mode: 'Cash' | 'Bank';
   bankId?: string;
   bankName?: string;
-  // Legacy fields for backward compatibility
-  entityName?: string;
+  receiverType: 'Employee' | 'Person';
+  receiverName: string;
+  receiverId?: string;
+  receiverPhone?: string;
   employeeId?: string;
   employeeName?: string;
 };
@@ -234,19 +243,12 @@ export type AppData = {
   transactions: Transaction[];
   loans: Loan[];
   banks: Bank[];
-  invoices: Invoice[]
-;
+  invoices: Invoice[];
   bankTransfers: BankTransfer[];
   productTransfers: ProductTransfer[];
 };
 
-// Normalize initial data:
-// - Ensure all serial numbers that exist in invoices also exist in inventory
-// - Map those serials to the correct city based on the invoice's customer city
-// - Initialize per-serial status (default: Available)
-// - Recalculate product stock based on serial count
 const normalizeInitialData = (data: AppData): AppData => {
-  // Clone products into a mutable map
   const productsById = new Map<string, Product>();
   data.products.forEach((p) => {
     const initialStatus: { [serial: string]: 'Available' } = {};
@@ -264,7 +266,6 @@ const normalizeInitialData = (data: AppData): AppData => {
     });
   });
 
-  // Sync invoice serials into products
   data.invoices.forEach((invoice) => {
     invoice.products.forEach((invProd) => {
       const product = productsById.get(invProd.productId);
@@ -275,11 +276,9 @@ const normalizeInitialData = (data: AppData): AppData => {
         if (!product.serialNumbers.includes(serial)) {
           product.serialNumbers.push(serial);
         }
-        // Map serial to city from invoice (if available)
         if (invoice.customerCity) {
           product.serialCities[serial] = invoice.customerCity;
         }
-        // If status not set yet, treat as available inventory
         if (!product.serialStatus) {
           product.serialStatus = {};
         }
@@ -525,7 +524,9 @@ const initialData: AppData = {
       date: '2023-11-01',
       mode: 'Bank',
       bankId: '1',
-      bankName: 'HBL Main Branch'
+      bankName: 'HBL Main Branch',
+      receiverType: 'Employee',
+      receiverName: 'Ahmed Khan'
     },
     {
       id: '2',
@@ -539,7 +540,9 @@ const initialData: AppData = {
       date: '2023-08-15',
       mode: 'Bank',
       bankId: '2',
-      bankName: 'UBL Corporate'
+      bankName: 'UBL Corporate',
+      receiverType: 'Employee',
+      receiverName: 'Hassan Raza'
     }
   ],
   banks: [
@@ -663,6 +666,7 @@ const initialData: AppData = {
 export default function App() {
   const [activeModule, setActiveModule] = useState('dashboard');
   const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const renderModule = () => {
     switch (activeModule) {
@@ -704,7 +708,9 @@ export default function App() {
           setProducts={(products) => setData({ ...data, products })}
           transfers={data.productTransfers}
           setTransfers={(transfers) => setData({ ...data, productTransfers: transfers })}
+          onNotification={(notif: Notification) => setNotifications([notif, ...notifications])}
         />;
+  
       case 'bank-transfers':
         return <BankTransfers 
           transfers={data.bankTransfers}
@@ -784,16 +790,20 @@ export default function App() {
     }
   };
 
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar />
-        <main className="flex-1 overflow-y-auto">
-          {renderModule()}
-        </main>
-      </div>
-      <Toaster position="top-right" />
+// In your App.tsx, find the header section and replace it with this:
+return (
+  <div className="flex h-screen bg-[#f0f2f5]">
+    <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} />
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+  <TopBar notifications={notifications} setNotifications={setNotifications} />
+</header>
+
+      <main className="flex-1 overflow-y-auto">
+        {renderModule()}
+      </main>
     </div>
-  );
+    <Toaster position="top-right" />
+  </div>
+);
 }
