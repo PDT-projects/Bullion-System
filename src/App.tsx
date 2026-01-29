@@ -18,6 +18,7 @@ import { LoansPayable } from './components/LoansPayable';
 import { LoansReceivable } from './components/LoansReceivable';
 import { CashInHand } from './components/CashInHand';
 import { ProductTransfers } from './components/ProductTransfer';
+import { ProductCosting } from './components/ProductCosting';
 import { SalesReport } from './components/SalesReport';
 import { ReferralReport } from './components/ReferralReport';
 import { InventoryReport } from './components/InventoryReport';
@@ -30,6 +31,7 @@ import { Toaster } from './components/ui/sonner';
 import { Notification } from './types/Notification';
 import { Routes, Route } from 'react-router-dom';
 import { AdvanceSalary } from './components/AdvanceSalary';
+import { CommissionSlabs } from './components/CommissionSlabs';
 
 
 
@@ -229,6 +231,33 @@ export type BankTransfer = {
   note: string;
 };
 
+export type ProductCosting = {
+  id: string;
+  brandName: string;
+  modelName: string;
+  category: string;
+  units: number;
+  unitCostUSD: number;
+  totalCostUSD: number;
+  percentage: number;
+  customPerModel: number;
+  customPerUnit: number;
+  freightPerModel: number;
+  freightPerUnit: number;
+  unitCostPKR: number;
+  totalUnitCost: number;
+  totalShipmentValuePKR: number;
+};
+
+export type CommissionSlab = {
+  id: string;
+  salesperson: string;
+  city: string;
+  fromAmount: number;
+  toAmount: number;
+  commissionPercentage: number;
+};
+
 export type AppData = {
   employees: Employee[];
   products: Product[];
@@ -238,6 +267,8 @@ export type AppData = {
   invoices: Invoice[];
   bankTransfers: BankTransfer[];
   productTransfers: ProductTransfer[];
+  productCosting: ProductCosting[];
+  commissionSlabs: CommissionSlab[];
 };
 
 const normalizeInitialData = (data: AppData): AppData => {
@@ -660,7 +691,9 @@ const initialData: AppData = {
       transferredBy: 'Ahmed Khan',
       note: 'Transfer for sales'
     }
-  ]
+  ],
+  productCosting: [],
+  commissionSlabs: []
 };
 
 export default function App() {
@@ -675,7 +708,7 @@ export default function App() {
       case 'employees':
         return <Employees employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
       case 'products':
-        return <Products products={data.products} setProducts={(products) => setData({ ...data, products })} />;
+        return <Products products={data.products} setProducts={(products) => setData({ ...data, products })} productCosting={data.productCosting} />;
       case 'transactions':
         return <Transactions 
           transactions={data.transactions} 
@@ -709,7 +742,10 @@ export default function App() {
           transfers={data.productTransfers}
           setTransfers={(transfers) => setData({ ...data, productTransfers: transfers })}
         />;
-  
+      case 'product-costing':
+        return <ProductCosting products={data.products} productCosting={data.productCosting} setProductCosting={(productCosting) => setData({ ...data, productCosting })} />;
+      case 'commission-slabs':
+        return <CommissionSlabs commissionSlabs={data.commissionSlabs} setCommissionSlabs={(commissionSlabs) => setData({ ...data, commissionSlabs })} employees={data.employees} />;
       case 'bank-transfers':
         return <BankTransfers 
           transfers={data.bankTransfers}

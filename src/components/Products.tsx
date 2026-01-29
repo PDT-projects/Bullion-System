@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { Product } from '../App';
 import { Plus, Eye, Edit, Trash2, X, Hash, MapPin, Maximize2, Minimize2, Filter } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 type ProductsProps = {
   products: Product[];
   setProducts: (products: Product[]) => void;
+  productCosting: any[];
 };
 
 const categories = [
@@ -19,10 +20,9 @@ const categories = [
 
 const cities = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'];
 
-const ADD_NEW_BRAND = '__ADD_NEW_BRAND__';
-const ADD_NEW_MODEL = '__ADD_NEW_MODEL__';
 
-export function Products({ products, setProducts }: ProductsProps) {
+
+export function Products({ products, setProducts, productCosting }: ProductsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -34,11 +34,7 @@ export function Products({ products, setProducts }: ProductsProps) {
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  // New brand/model input states
-  const [isAddingNewBrand, setIsAddingNewBrand] = useState(false);
-  const [isAddingNewModel, setIsAddingNewModel] = useState(false);
-  const [newBrandInput, setNewBrandInput] = useState('');
-  const [newModelInput, setNewModelInput] = useState('');
+
   
   const [formData, setFormData] = useState<Partial<Product>>({
     brandName: '',
@@ -59,18 +55,23 @@ export function Products({ products, setProducts }: ProductsProps) {
   const [serialInputs, setSerialInputs] = useState<string[]>([]);
   const [serialCities, setSerialCities] = useState<{[key: string]: string}>({});
 
-  // Get unique brands and models from existing products
+  // Get unique brands and models from Product Costing
   const getUniqueBrands = () => {
-    return Array.from(new Set(products.map(p => p.brandName).filter(Boolean))).sort();
+    return Array.from(new Set(productCosting.map(p => p.brandName).filter(Boolean))).sort();
   };
 
   const getUniqueModels = (brand?: string) => {
     if (brand) {
       return Array.from(new Set(
-        products.filter(p => p.brandName === brand).map(p => p.modelName).filter(Boolean)
+        productCosting.filter(p => p.brandName === brand).map(p => p.modelName).filter(Boolean)
       )).sort();
     }
-    return Array.from(new Set(products.map(p => p.modelName).filter(Boolean))).sort();
+    return Array.from(new Set(productCosting.map(p => p.modelName).filter(Boolean))).sort();
+  };
+
+  // Get costing data for selected brand and model
+  const getCostingData = (brand: string, model: string) => {
+    return productCosting.find(p => p.brandName === brand && p.modelName === model);
   };
 
   // Filtered products based on selected brands, models and cities
@@ -110,10 +111,6 @@ export function Products({ products, setProducts }: ProductsProps) {
     });
     setSerialInputs([]);
     setSerialCities({});
-    setIsAddingNewBrand(false);
-    setIsAddingNewModel(false);
-    setNewBrandInput('');
-    setNewModelInput('');
     // Open add product modal in full screen by default
     setIsFullScreen(true);
     setIsModalOpen(true);
@@ -124,61 +121,11 @@ export function Products({ products, setProducts }: ProductsProps) {
     setFormData(product);
     setSerialInputs(product.serialNumbers || []);
     setSerialCities(product.serialCities || {});
-    setIsAddingNewBrand(false);
-    setIsAddingNewModel(false);
-    setNewBrandInput('');
-    setNewModelInput('');
     setIsFullScreen(false);
     setIsModalOpen(true);
   };
 
-  // Handle brand dropdown change
-  const handleBrandChange = (value: string) => {
-    if (value === ADD_NEW_BRAND) {
-      setIsAddingNewBrand(true);
-      setNewBrandInput('');
-      setFormData({ ...formData, brandName: '', modelName: '' });
-    } else {
-      setIsAddingNewBrand(false);
-      setFormData({ ...formData, brandName: value, modelName: '' });
-    }
-  };
 
-  // Handle model dropdown change
-  const handleModelChange = (value: string) => {
-    if (value === ADD_NEW_MODEL) {
-      setIsAddingNewModel(true);
-      setNewModelInput('');
-      setFormData({ ...formData, modelName: '' });
-    } else {
-      setIsAddingNewModel(false);
-      setFormData({ ...formData, modelName: value });
-    }
-  };
-
-  // Confirm new brand
-  const handleConfirmNewBrand = () => {
-    if (newBrandInput.trim()) {
-      setFormData({ ...formData, brandName: newBrandInput.trim(), modelName: '' });
-      setIsAddingNewBrand(false);
-      setNewBrandInput('');
-      toast.success('New brand will be added when you save the product');
-    } else {
-      toast.error('Please enter a brand name');
-    }
-  };
-
-  // Confirm new model
-  const handleConfirmNewModel = () => {
-    if (newModelInput.trim()) {
-      setFormData({ ...formData, modelName: newModelInput.trim() });
-      setIsAddingNewModel(false);
-      setNewModelInput('');
-      toast.success('New model will be added when you save the product');
-    } else {
-      toast.error('Please enter a model name');
-    }
-  };
 
   // Update serial inputs when stock quantity changes
   const handleStockChange = (newStock: number) => {
@@ -232,6 +179,20 @@ export function Products({ products, setProducts }: ProductsProps) {
   };
 
   const handleSave = () => {
+    // Check if brand exists in Product Costing
+    const brandExists = productCosting.some(p => p.brandName === formData.brandName);
+    if (!brandExists) {
+      toast.error('Selected brand does not exist in Product Costing. Please add it to Product Costing first.');
+      return;
+    }
+
+    // Check if model exists for the selected brand in Product Costing
+    const modelExists = productCosting.some(p => p.brandName === formData.brandName && p.modelName === formData.modelName);
+    if (!modelExists) {
+      toast.error('Selected model does not exist for this brand in Product Costing. Please add it to Product Costing first.');
+      return;
+    }
+
     if (!formData.brandName || !formData.modelName || !formData.category) {
       toast.error('Please fill in all required fields');
       return;
@@ -295,8 +256,6 @@ export function Products({ products, setProducts }: ProductsProps) {
     setFormData({});
     setSerialInputs([]);
     setSerialCities({});
-    setIsAddingNewBrand(false);
-    setIsAddingNewModel(false);
   };
 
   const handleDelete = (id: string) => {
@@ -582,104 +541,52 @@ export function Products({ products, setProducts }: ProductsProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Brand Name *</label>
-                    {isAddingNewBrand ? (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newBrandInput}
-                          onChange={(e) => setNewBrandInput(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                          placeholder="Enter new brand name..."
-                          autoFocus
-                        />
-                        <button
-                          onClick={handleConfirmNewBrand}
-                          className="px-4 py-2 bg-[#10b981] text-white rounded-lg hover:bg-[#059669]"
-                        >
-                          Add
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsAddingNewBrand(false);
-                            setNewBrandInput('');
-                          }}
-                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <select
-                        value={formData.brandName || ''}
-                        onChange={(e) => handleBrandChange(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                      >
-                        <option value="">Select brand...</option>
-                        {brands.map(brand => (
-                          <option key={brand} value={brand}>{brand}</option>
-                        ))}
-                        <option value={ADD_NEW_BRAND} className="text-[#4f46e5] font-medium">+ Add New Brand</option>
-                      </select>
-                    )}
+                    <select
+                      value={formData.brandName || ''}
+                      onChange={(e) => setFormData({ ...formData, brandName: e.target.value, modelName: '' })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                    >
+                      <option value="">Select brand...</option>
+                      {brands.map(brand => (
+                        <option key={brand} value={brand}>{brand}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Model Name *</label>
-                    {isAddingNewModel ? (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newModelInput}
-                          onChange={(e) => setNewModelInput(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                          placeholder="Enter new model name..."
-                          autoFocus
-                        />
-                        <button
-                          onClick={handleConfirmNewModel}
-                          className="px-4 py-2 bg-[#10b981] text-white rounded-lg hover:bg-[#059669]"
-                        >
-                          Add
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsAddingNewModel(false);
-                            setNewModelInput('');
-                          }}
-                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <select
-                        value={formData.modelName || ''}
-                        onChange={(e) => handleModelChange(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                        disabled={!formData.brandName}
-                      >
-                        <option value="">Select model...</option>
-                        {models.map(model => (
-                          <option key={model} value={model}>{model}</option>
-                        ))}
-                        <option value={ADD_NEW_MODEL} className="text-[#4f46e5] font-medium">+ Add New Model</option>
-                      </select>
-                    )}
+                    <select
+                      value={formData.modelName || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const costingData = getCostingData(formData.brandName || '', value);
+                        setFormData({
+                          ...formData,
+                          modelName: value,
+                          category: costingData?.category || '',
+                          costPrice: costingData?.unitCostPKR || 0
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                      disabled={!formData.brandName}
+                    >
+                      <option value="">Select model...</option>
+                      {models.map(model => (
+                        <option key={model} value={model}>{model}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mt-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                    <select
+                    <input
+                      type="text"
                       value={formData.category || ''}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                    >
-                      <option value="">Select category</option>
-                      {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                      placeholder="Auto-filled from Product Costing"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
@@ -796,9 +703,9 @@ export function Products({ products, setProducts }: ProductsProps) {
                     <input
                       type="number"
                       value={formData.costPrice || ''}
-                      onChange={(e) => setFormData({ ...formData, costPrice: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                      placeholder="0"
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                      placeholder="Auto-filled from Product Costing"
                     />
                   </div>
                   <div>
@@ -813,12 +720,12 @@ export function Products({ products, setProducts }: ProductsProps) {
                   </div>
                 </div>
 
-                {formData.costPrice > 0 && formData.sellPrice > 0 && (
+                {formData.costPrice && formData.costPrice > 0 && formData.sellPrice && formData.sellPrice > 0 && (
                   <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-700">Profit Margin:</span>
                       <span className="font-semibold text-green-700">
-                        {formatCurrency(formData.sellPrice - formData.costPrice)} 
+                        {formatCurrency(formData.sellPrice - formData.costPrice)}
                         <span className="text-xs ml-1">
                           ({((formData.sellPrice - formData.costPrice) / formData.costPrice * 100).toFixed(1)}%)
                         </span>
