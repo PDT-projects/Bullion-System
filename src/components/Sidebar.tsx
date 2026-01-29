@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  ChevronDown, 
+import {
+  LayoutDashboard,
+  ChevronDown,
   ChevronRight,
   Users,
   Package,
@@ -20,7 +20,8 @@ import {
   FileSpreadsheet,
   UserCheck,
   PieChart,
-  UserPlus
+  UserPlus,
+  Percent
 } from 'lucide-react';
 
 type MenuItem = {
@@ -51,9 +52,11 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
       children: [
         { id: 'employees', name: 'Employees', icon: Users },
         { id: 'products', name: 'Products / Inventory', icon: Package },
+        { id: 'product-costing', name: 'Product Costing', icon: DollarSign },
+        { id: 'commission-slabs', name: 'Commission Slabs', icon: Percent },
         { id: 'invoices', name: 'Invoices', icon: FileText },
       { id: 'product-transfer', name: 'Product Transfer', icon: ArrowLeftRight }
-    
+
       ]
     },
     {
