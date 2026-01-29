@@ -162,6 +162,12 @@ export type Transaction = {
   paymentStatus?: 'Full' | 'Partial'; // Payment status
   remainingAmount?: number; // Remaining amount for partial payments
 
+  // Advance Salary fields
+  isAdvanceSalary?: boolean; // Flag to identify advance salary transactions
+  advanceAmount?: number; // Amount paid as advance
+  remainingSalary?: number; // Remaining salary after advance
+  salaryMonth?: string; // Month for which advance was given
+
   // New payment tracking fields
   partialPayments?: PartialPayment[]; // Track all partial payments under same transaction ID
   totalPaid?: number; // Total amount paid across all partial payments
@@ -482,7 +488,13 @@ const initialData: AppData = {
       paymentStatus: 'Full',
       isFullyCleared: true,
       totalPaid: 85000,
-      partialPayments: []
+      partialPayments: [],
+      employeeId: '1',
+      employeeName: 'Ahmed Khan',
+      baseSalary: 85000,
+      commission: 0,
+      deductions: 0,
+      netAmount: 85000
     },
     {
       id: '3',
@@ -501,6 +513,52 @@ const initialData: AppData = {
       depositedToBank: false,
       partialPayments: [],
       remainingAmount: 150000
+    },
+    {
+      id: '4',
+      transactionId: 'TXN-00004',
+      date: '2024-01-10',
+      time: '09:30',
+      company: 'Pakistan Detectors Technologies: Islamabad/ Head Office',
+      mainCategory: 'Cash Outflow',
+      subCategory: 'Advance Salary',
+      amount: 25000,
+      mode: 'Cash',
+      note: 'Advance salary for January 2024 - Ahmed Khan',
+      paymentStatus: 'Full',
+      isFullyCleared: true,
+      totalPaid: 25000,
+      partialPayments: [],
+      employeeId: '1',
+      employeeName: 'Ahmed Khan',
+      isAdvanceSalary: true,
+      advanceAmount: 25000,
+      remainingSalary: 60000,
+      salaryMonth: '2024-01'
+    },
+    {
+      id: '5',
+      transactionId: 'TXN-00005',
+      date: '2024-01-12',
+      time: '11:00',
+      company: 'Pakistan Detectors Technologies: Islamabad/ Head Office',
+      mainCategory: 'Cash Outflow',
+      subCategory: 'Advance Salary',
+      amount: 15000,
+      mode: 'Bank',
+      bankId: '1',
+      bankName: 'HBL Main Branch',
+      note: 'Advance salary for January 2024 - Fatima Ali',
+      paymentStatus: 'Full',
+      isFullyCleared: true,
+      totalPaid: 15000,
+      partialPayments: [],
+      employeeId: '2',
+      employeeName: 'Fatima Ali',
+      isAdvanceSalary: true,
+      advanceAmount: 15000,
+      remainingSalary: 60000,
+      salaryMonth: '2024-01'
     }
   ],
   loans: [

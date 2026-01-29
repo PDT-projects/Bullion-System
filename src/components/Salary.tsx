@@ -3,6 +3,23 @@ import { Transaction, Bank, Employee } from '../App';
 import { Plus, Eye, Trash2, X, Printer, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Advance Salary types and state
+type AdvanceSalaryRecord = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  designation: string;
+  salaryMonth: string; // e.g. 2024-03
+  totalSalary: number;
+  paidAmount: number;
+  remainingAmount: number;
+  mode: 'Cash' | 'Bank' | 'Cheque';
+  bankName?: string;
+  date: string;
+  time: string;
+  imageUrl?: string;
+};
+
 
 
 type SalaryProps = {
@@ -40,6 +57,18 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
   const [viewSalary, setViewSalary] = useState<Transaction | null>(null);
   const [viewSlip, setViewSlip] = useState<Transaction | null>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  // Advance Salary state
+  const [advanceRecords, setAdvanceRecords] = useState<AdvanceSalaryRecord[]>([]);
+  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+  const [advanceFormData, setAdvanceFormData] = useState({
+    employeeId: '',
+    salaryMonth: '',
+    paidAmount: 0,
+    mode: 'Cash' as 'Cash' | 'Bank' | 'Cheque',
+    bankName: '',
+    imageUrl: ''
+  });
   
   const [formData, setFormData] = useState({
     company: companies[0],
@@ -61,8 +90,11 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     imageUrl: ''
   }]);
 
-  // Filter salary transactions
-  const allSalaries = transactions.filter(t => t.mainCategory === 'Salary');
+  // Filter salary transactions (both regular salary and advance salary)
+  const allSalaries = transactions.filter(t =>
+    t.mainCategory === 'Salary' ||
+    (t.mainCategory === 'Cash Outflow' && t.subCategory === 'Advance Salary')
+  );
 
   const handleAdd = () => {
     setFormData({
@@ -246,6 +278,113 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     }).format(amount);
   };
 
+  // Advance Salary handlers
+  const selectedEmployee = employees.find(e => e.id === advanceFormData.employeeId);
+  const remainingAmount = selectedEmployee ? selectedEmployee.salary - advanceFormData.paidAmount : 0;
+
+  const handleAdvanceImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAdvanceFormData({ ...advanceFormData, imageUrl: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAdvanceSave = () => {
+    if (!selectedEmployee || !advanceFormData.salaryMonth) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+
+    if (advanceFormData.paidAmount <= 0) {
+      toast.error('Paid amount must be greater than 0');
+      return;
+    }
+
+    if ((advanceFormData.mode === 'Bank' || advanceFormData.mode === 'Cheque') && !advanceFormData.bankName) {
+      toast.error('Please select a bank for Bank or Cheque mode');
+      return;
+    }
+
+    if ((advanceFormData.mode === 'Bank' || advanceFormData.mode === 'Cheque') && advanceFormData.bankName) {
+      const bank = banks.find(b => b.name === advanceFormData.bankName);
+      if (bank && bank.balance < advanceFormData.paidAmount) {
+        toast.error(`Insufficient balance in ${bank.name}`);
+        return;
+      }
+    }
+
+    if (remainingAmount < 0) {
+      toast.error('Paid amount cannot exceed total salary');
+      return;
+    }
+
+    const now = new Date();
+
+    const newRecord: AdvanceSalaryRecord = {
+      id: `ADV-${Date.now()}`,
+      employeeId: selectedEmployee.id,
+      employeeName: selectedEmployee.name,
+      designation: selectedEmployee.position,
+      salaryMonth: advanceFormData.salaryMonth,
+      totalSalary: selectedEmployee.salary,
+      paidAmount: advanceFormData.paidAmount,
+      remainingAmount: selectedEmployee.salary - advanceFormData.paidAmount,
+      mode: advanceFormData.mode,
+      bankName: advanceFormData.bankName || undefined,
+      date: now.toISOString().split('T')[0],
+      time: now.toTimeString().split(' ')[0],
+      imageUrl: advanceFormData.imageUrl
+    };
+
+    // Create transaction record
+    const newTransaction: Transaction = {
+      id: newRecord.id,
+      transactionId: `TXN-${Date.now()}`,
+      date: newRecord.date,
+      time: newRecord.time,
+      company: 'Pakistan Detectors Technologies: Islamabad/ Head Office', // Default company
+      mainCategory: 'Cash Outflow',
+      subCategory: 'Advance Salary',
+      amount: advanceFormData.paidAmount,
+      mode: advanceFormData.mode,
+      bankName: advanceFormData.bankName || undefined,
+      note: `Advance salary for ${selectedEmployee.name} - ${advanceFormData.salaryMonth}`,
+      paidBy: 'Pakistan Detectors Technologies',
+      paidTo: selectedEmployee.name,
+      employeeId: selectedEmployee.id,
+      employeeName: selectedEmployee.name,
+      imageUrl: advanceFormData.imageUrl
+    };
+
+    // Update bank balances
+    if ((advanceFormData.mode === 'Bank' || advanceFormData.mode === 'Cheque') && advanceFormData.bankName) {
+      const updatedBanks = banks.map(bank =>
+        bank.name === advanceFormData.bankName
+          ? { ...bank, balance: bank.balance - advanceFormData.paidAmount }
+          : bank
+      );
+      setBanks(updatedBanks);
+    }
+
+    setAdvanceRecords([...advanceRecords, newRecord]);
+    setTransactions([...transactions, newTransaction]);
+    toast.success('Advance salary recorded and transaction added');
+    setIsAdvanceModalOpen(false);
+
+    setAdvanceFormData({
+      employeeId: '',
+      salaryMonth: '',
+      paidAmount: 0,
+      mode: 'Cash',
+      bankName: '',
+      imageUrl: ''
+    });
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -264,11 +403,9 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
 
 
   <button
-
-    onClick={() => setActiveModule('advance-salary')}
+    onClick={() => setIsAdvanceModalOpen(true)}
     className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
   >
-
     Advance Salary
   </button>
 </div>
@@ -291,61 +428,81 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Salary</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commission</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deductions</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paid By</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {allSalaries.map((salary) => (
-                <tr key={salary.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(salary.date).toLocaleDateString('en-PK')}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{salary.company.split(': ')[1] || salary.company}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#4f46e5]">{salary.employeeName || '-'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(salary.baseSalary || 0)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">{formatCurrency(salary.commission || 0)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">{formatCurrency(salary.deductions || 0)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{formatCurrency(salary.netAmount || salary.amount)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{salary.paidBy || '-'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setViewSalary(salary)}
-                        className="p-2 text-[#4f46e5] hover:bg-[#4f46e5]/10 rounded-lg transition-colors"
-                        title="View"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        onClick={() => setViewSlip(salary)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="View Slip"
-                      >
-                        <FileText size={16} />
-                      </button>
-                      <button
-                        onClick={() => handlePrint(salary)}
-                        className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                        title="Print"
-                      >
-                        <Printer size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(salary.id)}
-                        className="p-2 text-[#ef4444] hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {allSalaries.map((salary) => {
+                const isAdvanceSalary = salary.mainCategory === 'Cash Outflow' && salary.subCategory === 'Advance Salary';
+                const employee = employees.find(e => e.id === salary.employeeId);
+                const remainingSalary = employee ? employee.salary - (salary.advanceAmount || 0) : 0;
+
+                return (
+                  <tr key={salary.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(salary.date).toLocaleDateString('en-PK')}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{salary.company.split(': ')[1] || salary.company}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#4f46e5]">{salary.employeeName || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {isAdvanceSalary ? 'Advance Salary' : 'Regular Salary'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                      {formatCurrency(salary.amount)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                      {isAdvanceSalary ? formatCurrency(remainingSalary) : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      {salary.mode}{salary.bankName ? ` (${salary.bankName})` : ''}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        isAdvanceSalary ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {isAdvanceSalary ? 'Paid Advance' : 'Full Salary'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setViewSalary(salary)}
+                          className="p-2 text-[#4f46e5] hover:bg-[#4f46e5]/10 rounded-lg transition-colors"
+                          title="View"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => setViewSlip(salary)}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="View Slip"
+                        >
+                          <FileText size={16} />
+                        </button>
+                        <button
+                          onClick={() => handlePrint(salary)}
+                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                          title="Print"
+                        >
+                          <Printer size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(salary.id)}
+                          className="p-2 text-[#ef4444] hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {allSalaries.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
@@ -750,6 +907,134 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
               {/* Footer */}
               <div className="border-t pt-4 text-center text-sm text-gray-500">
                 <p>Generated on {new Date().toLocaleDateString('en-PK')} at {new Date().toLocaleTimeString('en-PK')}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advance Salary Modal */}
+      {isAdvanceModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-full max-w-xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Add Advance Salary</h3>
+              <button onClick={() => setIsAdvanceModalOpen(false)}>
+                <X />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <select
+                value={advanceFormData.employeeId}
+                onChange={e =>
+                  setAdvanceFormData({ ...advanceFormData, employeeId: e.target.value })
+                }
+                className="w-full border px-3 py-2 rounded"
+              >
+                <option value="">Select Employee</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name} – {emp.position}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="month"
+                value={advanceFormData.salaryMonth}
+                onChange={e =>
+                  setAdvanceFormData({ ...advanceFormData, salaryMonth: e.target.value })
+                }
+                className="w-full border px-3 py-2 rounded"
+              />
+
+              <input
+                type="number"
+                placeholder="Advance Amount Paid"
+                value={advanceFormData.paidAmount}
+                onChange={e => {
+                  const value = Number(e.target.value);
+                  if (value >= 0) {
+                    setAdvanceFormData({
+                      ...advanceFormData,
+                      paidAmount: value
+                    });
+                  }
+                }}
+                min="0"
+                className="w-full border px-3 py-2 rounded"
+              />
+
+              {selectedEmployee && (
+                <p className="text-sm text-gray-600">
+                  Remaining Salary:{' '}
+                  <span className="font-medium text-red-600">
+                    {formatCurrency(remainingAmount)}
+                  </span>
+                </p>
+              )}
+
+              <select
+                value={advanceFormData.mode}
+                onChange={e => {
+                  const newMode = e.target.value as 'Cash' | 'Bank' | 'Cheque';
+                  setAdvanceFormData({
+                    ...advanceFormData,
+                    mode: newMode,
+                    bankName: newMode === 'Cash' ? '' : advanceFormData.bankName
+                  });
+                }}
+                className="w-full border px-3 py-2 rounded"
+              >
+                <option value="Cash">Cash</option>
+                <option value="Bank">Bank</option>
+                <option value="Cheque">Cheque</option>
+              </select>
+
+              {advanceFormData.mode !== 'Cash' && (
+                <select
+                  value={advanceFormData.bankName}
+                  onChange={e =>
+                    setAdvanceFormData({ ...advanceFormData, bankName: e.target.value })
+                  }
+                  className="w-full border px-3 py-2 rounded"
+                >
+                  <option value="">Select Bank</option>
+                  {banks.map(b => (
+                    <option key={b.id} value={b.name}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <label className="flex items-center gap-2 cursor-pointer border p-2 rounded">
+                <Upload size={16} />
+                Upload Receipt
+                <input type="file" hidden onChange={handleAdvanceImageUpload} />
+              </label>
+
+              {advanceFormData.imageUrl && (
+                <img
+                  src={advanceFormData.imageUrl}
+                  className="h-20 rounded border"
+                />
+              )}
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  onClick={() => setIsAdvanceModalOpen(false)}
+                  className="px-4 py-2 bg-gray-200 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdvanceSave}
+                  className="px-4 py-2 bg-[#4f46e5] text-white rounded"
+                >
+                  Save
+                </button>
               </div>
             </div>
           </div>
