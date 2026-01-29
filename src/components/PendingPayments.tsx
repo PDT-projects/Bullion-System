@@ -599,28 +599,8 @@ const markPaymentAsCleared = (transactionId: string, paymentId: string) => {
                     </div>
                   )}
 
-                 {/* {paymentData.method === 'Bank' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Select Bank *
-                      </label>
-                      <select
-                        value={paymentData.bankId}
-                        onChange={(e) =>
-                          setPaymentData({ ...paymentData, bankId: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                      >
-                        <option value="">-- Select Bank --</option>
-                        {banks.map(bank => (
-                          <option key={bank.id} value={bank.id}>
-                            {bank.bankName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )} */}
-                  {paymentData.method === 'Bank' && (
+            
+                {paymentData.method === 'Bank' && (
   <div>
     <label className="block text-sm font-medium text-gray-700 mb-1">
       Select Bank *

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Transaction, Bank, Employee } from '../App';
 import { Plus, Eye, Trash2, X, Printer, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+
+
 
 type SalaryProps = {
   transactions: Transaction[];
@@ -9,6 +11,7 @@ type SalaryProps = {
   banks: Bank[];
   setBanks: (banks: Bank[]) => void;
   employees: Employee[];
+  setActiveModule: (module: string) => void;
 };
 
 const companies = [
@@ -32,7 +35,7 @@ type SalaryTransaction = {
   imageUrl?: string;
 };
 
-export function Salary({ transactions, setTransactions, banks, setBanks, employees }: SalaryProps) {
+export function Salary({ transactions, setTransactions, banks, setBanks, employees, setActiveModule }: SalaryProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewSalary, setViewSalary] = useState<Transaction | null>(null);
   const [viewSlip, setViewSlip] = useState<Transaction | null>(null);
@@ -179,9 +182,12 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     }
 
     // Create individual transaction records
-    const newTransactions: Transaction[] = salaryTransactions.map((salTxn) => ({
-      id: Date.now().toString() + Math.random().toString(),
+    const now = new Date();
+    const newTransactions: Transaction[] = salaryTransactions.map((salTxn, index) => ({
+      id: Date.now().toString() + Math.random().toString() + index,
+      transactionId: `TXN-${Date.now()}-${index + 1}`,
       date: formData.date,
+      time: now.toTimeString().split(' ')[0],
       company: formData.company,
       mainCategory: 'Salary',
       subCategory: 'Employee Salary',
@@ -247,13 +253,34 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
           <h2 className="text-2xl font-bold">Salary</h2>
           <p className="text-sm text-gray-600 mt-1">Manage employee salary payments</p>
         </div>
-        <button
+        <div className="flex gap-3">
+  <button
+    onClick={handleAdd}
+    className="flex items-center gap-2 bg-[#4f46e5] text-white px-4 py-2 rounded-lg"
+  >
+    <Plus size={20} />
+    Add Salary Payment
+  </button>
+
+
+  <button
+
+    onClick={() => setActiveModule('advance-salary')}
+    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+  >
+
+    Advance Salary
+  </button>
+</div>
+
+
+        {/* <button
           onClick={handleAdd}
           className="flex items-center gap-2 bg-[#4f46e5] text-white px-4 py-2 rounded-lg hover:bg-[#4338ca] transition-colors"
         >
           <Plus size={20} />
           Add Salary Payment
-        </button>
+        </button> */}
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

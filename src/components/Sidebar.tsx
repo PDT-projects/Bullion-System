@@ -64,7 +64,8 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
         { id: 'transactions', name: 'Transactions', icon: Receipt },
         { id: 'pending-payments', name: 'Pending Payments', icon: CreditCard },
         { id: 'bills', name: 'Bills', icon: Zap },
-        { id: 'salary', name: 'Salary', icon: UserCheck }
+        { id: 'salary', name: 'Salary', icon: UserCheck },
+        { id: 'advance-salary', name: 'Advance Salary', icon: DollarSign }
       ]
     },
     {

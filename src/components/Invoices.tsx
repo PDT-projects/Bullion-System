@@ -1,7 +1,7 @@
-import { useState } from 'react';
+  import { useState } from 'react';
 import { Invoice, Product, InvoiceProduct, Bank, Employee } from '../App';
 import { Plus, Eye, Edit, Trash2, X, Printer, Download, FileText, Hash, Truck, User, Briefcase, CreditCard, Maximize2, Minimize2 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 type InvoicesProps = {
   invoices: Invoice[];
@@ -14,29 +14,11 @@ type InvoicesProps = {
 
 const deliveryStatuses: ('Self-collect' | 'LCS' | 'Daewoo' | 'Delivered')[] = ['Self-collect', 'LCS', 'Daewoo', 'Delivered'];
 
+// UPDATED: Dynamic delivery tracking statuses
+const deliveryReceivedStatuses: ('Pending' | 'In Process' | 'Received')[] = ['Pending', 'In Process', 'Received'];
+
 // Collection methods for deduction charges
 const collectionMethods: ('Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others')[] = ['Self Collection', 'TCS', 'LCS', 'Daewoo', 'Others'];
-
-// Calculate deduction charges based on total amount and collection method
-const calculateDeductionCharges = (totalAmount: number, collectionMethod?: string): number => {
-  // No deduction for Self Collection
-  if (!collectionMethod || collectionMethod === 'Self Collection') {
-    return 0;
-  }
-
-  // Deduction slabs
-  if (totalAmount <= 150000) {
-    return 500;
-  } else if (totalAmount <= 250000) {
-    return 10000;
-  } else if (totalAmount <= 600000) {
-    return 15000;
-  } else if (totalAmount <= 1000000) {
-    return 20000;
-  } else {
-    return 25000;
-  }
-};
 
 // Pakistan provinces and cities
 const provinceCities: { [key: string]: string[] } = {
@@ -55,6 +37,10 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
   const [viewSlip, setViewSlip] = useState<Invoice | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Paid' | 'Unpaid'>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'customer'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [formData, setFormData] = useState<Partial<Invoice>>({
     date: new Date().toISOString().split('T')[0],
     customerName: '',
@@ -68,18 +54,19 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
     products: [],
     exchangeWarrantyNote: '',
     deliveryStatus: 'Self-collect',
+    deliveryReceivedStatus: 'Pending', // NEW: Delivery tracking status
     status: 'Unpaid',
     salesperson: '',
     salespersonLocation: '',
-    clientDealBy: '',
-    referralBy: '',
+    referFrom: '', // NEW: Required field replacing clientDealBy
+    referTo: '', // NEW: Optional referral destination
     createdBy: '',
     paymentMode: 'Cash',
     paymentStatus: 'Full',
     paidAmount: 0,
     remainingAmount: 0,
     collectionMethod: 'Self Collection',
-    deductionCharges: 0,
+    deductionCharges: 0, // NEW: Now manually editable
     bankId: '',
     bankName: '',
     bankAccountNumber: ''
@@ -154,13 +141,19 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
       products: [],
       exchangeWarrantyNote: '',
       deliveryStatus: 'Self-collect',
+      deliveryReceivedStatus: 'Pending', // NEW: Delivery tracking status
       status: 'Unpaid',
       salesperson: '',
       salespersonLocation: '',
-      clientDealBy: '',
-      referralBy: '',
+      referFrom: '', // NEW: Required field replacing clientDealBy
+      referTo: '', // NEW: Optional referral destination
       createdBy: '',
-      paymentType: undefined,
+      paymentMode: 'Cash',
+      paymentStatus: 'Full',
+      paidAmount: 0,
+      remainingAmount: 0,
+      collectionMethod: 'Self Collection',
+      deductionCharges: 0, // NEW: Manually editable deduction
       bankId: '',
       bankName: '',
       bankAccountNumber: ''
@@ -266,9 +259,19 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
     return selectedProducts.reduce((sum, p) => sum + p.total, 0);
   };
 
+  const calculateInvoiceTotal = () => {
+    return calculateTotal() + (formData.deductionCharges || 0);
+  };
+
   const handleSave = () => {
     if (!formData.customerName || !formData.customerPhone || !formData.customerCNIC) {
       toast.error('Please fill in all required customer fields');
+      return;
+    }
+
+    // NEW: Validate required "Refer From" field
+    if (!formData.referFrom) {
+      toast.error('Please fill in the "Refer From" field');
       return;
     }
 
@@ -288,6 +291,13 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
         toast.error(`Please select all serial numbers for ${product.productName}`);
         return;
       }
+    }
+
+    // NEW: Validate deduction charges don't exceed total amount
+    const totalAmount = calculateTotal();
+    if (formData.deductionCharges && formData.deductionCharges > totalAmount) {
+      toast.error('Deduction charges cannot exceed the total invoice amount');
+      return;
     }
 
     // Ensure serial numbers referenced in the invoice exist in inventory.
@@ -324,6 +334,7 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
       });
     };
 
+    const invoiceTotal = calculateInvoiceTotal();
     const newInvoice: Invoice = {
       id: editingInvoice?.id || Date.now().toString(),
       invoiceNumber: formData.invoiceNumber || `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`,
@@ -339,19 +350,20 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
       products: selectedProducts,
       exchangeWarrantyNote: formData.exchangeWarrantyNote || '',
       deliveryStatus: formData.deliveryStatus || 'Self-collect',
-      totalAmount: calculateTotal(),
+      deliveryReceivedStatus: formData.deliveryReceivedStatus || 'Pending', // NEW: Delivery tracking status
+      totalAmount: invoiceTotal,
       status: formData.status || 'Unpaid',
       salesperson: formData.salesperson || '',
       salespersonLocation: formData.salespersonLocation || '',
-      clientDealBy: formData.clientDealBy || '',
-      referralBy: formData.referralBy || '',
+      referFrom: formData.referFrom || '', // NEW: Required field replacing clientDealBy
+      referTo: formData.referTo || '', // NEW: Optional referral destination
       createdBy: formData.createdBy || '',
       paymentMode: formData.paymentMode || 'Cash',
       paymentStatus: formData.paymentStatus || 'Full',
-      paidAmount: formData.paymentStatus === 'Partial' ? formData.paidAmount || 0 : calculateTotal(),
+      paidAmount: formData.paymentStatus === 'Partial' ? formData.paidAmount || 0 : invoiceTotal,
       remainingAmount: formData.paymentStatus === 'Partial' ? formData.remainingAmount || 0 : 0,
       collectionMethod: formData.collectionMethod || 'Self Collection',
-      deductionCharges: calculateDeductionCharges(calculateTotal(), formData.collectionMethod),
+      deductionCharges: formData.deductionCharges || 0, // NEW: Manually editable deduction
       bankId: formData.bankId || '',
       bankName: formData.bankName || '',
       bankAccountNumber: formData.bankAccountNumber || ''
@@ -906,23 +918,23 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Client Deal By</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Refer From *</label>
                     <input
                       type="text"
-                      value={formData.clientDealBy || ''}
-                      onChange={(e) => setFormData({ ...formData, clientDealBy: e.target.value })}
+                      value={formData.referFrom || ''}
+                      onChange={(e) => setFormData({ ...formData, referFrom: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                       placeholder="e.g., Ahmed Khan, Company XYZ"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Referral By</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Refer To</label>
                     <input
                       type="text"
-                      value={formData.referralBy || ''}
-                      onChange={(e) => setFormData({ ...formData, referralBy: e.target.value })}
+                      value={formData.referTo || ''}
+                      onChange={(e) => setFormData({ ...formData, referTo: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                      placeholder="e.g., Existing customer, Partner company"
+                      placeholder="e.g., Lahore Branch, Karachi Office"
                     />
                   </div>
                   <div className="col-span-2">
@@ -1078,15 +1090,10 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
                     <label className="block text-sm font-medium text-gray-700 mb-1">Collection Method</label>
                     <select
                       value={formData.collectionMethod || 'Self Collection'}
-                      onChange={(e) => {
-                        const method = e.target.value;
-                        const deduction = calculateDeductionCharges(calculateTotal(), method);
-                        setFormData({ 
-                          ...formData, 
-                          collectionMethod: method as any,
-                          deductionCharges: deduction
-                        });
-                      }}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        collectionMethod: e.target.value as any
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                     >
                       {collectionMethods.map(method => (
@@ -1095,30 +1102,39 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Deduction Charges (Auto-calculated)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deduction Charges (Manual Entry)</label>
                     <input
-                      type="text"
-                      value={formatCurrency(calculateDeductionCharges(calculateTotal(), formData.collectionMethod))}
-                      readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-medium"
+                      type="number"
+                      value={formData.deductionCharges || ''}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        if (value >= 0) {
+                          setFormData({
+                            ...formData,
+                            deductionCharges: value
+                          });
+                        }
+                      }}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                     />
                   </div>
                 </div>
-                {formData.collectionMethod && formData.collectionMethod !== 'Self Collection' && (
-                  <div className="mt-3 p-3 bg-orange-100 border border-orange-200 rounded-lg">
-                    <p className="text-sm text-orange-800">
-                      <strong>ℹ️ Note:</strong> Deduction charges are auto-calculated based on the collection method and total amount. 
-                      This will be shown in the Sales Report only, not on the invoice slip.
-                    </p>
-                  </div>
-                )}
+                <div className="mt-3 p-3 bg-orange-100 border border-orange-200 rounded-lg">
+                  <p className="text-sm text-orange-800">
+                    <strong>ℹ️ Note:</strong> Deduction charges can be manually entered. Leave as 0 if no deduction applies.
+                    This will be shown in the Sales Report only, not on the invoice slip.
+                  </p>
+                </div>
               </div>
 
               {/* Total Amount */}
               <div className="bg-[#4f46e5]/10 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-lg font-semibold text-gray-900">Total Amount:</span>
-                  <span className="text-2xl font-bold text-[#4f46e5]">{formatCurrency(calculateTotal())}</span>
+                  <span className="text-2xl font-bold text-[#4f46e5]">{formatCurrency(calculateInvoiceTotal())}</span>
                 </div>
               </div>
             </div>
@@ -1210,12 +1226,7 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
                     {viewInvoice.deliveryStatus}
                   </span>
                 </div>
-                {viewInvoice.productLocation && (
-                  <div>
-                    <p className="text-sm text-gray-600">Product Location</p>
-                    <p className="font-medium text-gray-900">{viewInvoice.productLocation}</p>
-                  </div>
-                )}
+
                 <div>
                   <p className="text-sm text-gray-600">Payment Status</p>
                   <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(viewInvoice.status)}`}>
