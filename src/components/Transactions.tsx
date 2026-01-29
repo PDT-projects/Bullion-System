@@ -1,18 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
-import { Transaction, Bank, PartialPayment } from '../App';
-import { Plus, Eye, Edit, Trash2, X, Printer, Download, FileText, Upload, Image as ImageIcon, Maximize2, Minimize2, TrendingUp, TrendingDown, Banknote, DollarSign, Filter, AlertCircle, Wallet, Clock, Check } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
-
-// Utility function to generate unique Transaction ID
-const generateTransactionId = (allTransactions: Transaction[]): string => {
-  const maxId = Math.max(
-    0,
-    ...allTransactions
-      .filter(t => t.transactionId && t.transactionId.startsWith('TXN-'))
-      .map(t => parseInt(t.transactionId.replace('TXN-', ''), 10) || 0)
-  );
-  return `TXN-${String(maxId + 1).padStart(5, '0')}`;
-};
+import { Transaction, Bank } from '../App';
+import { Plus, Eye, Edit, Trash2, X, Printer, Download, FileText, Upload, Image as ImageIcon, Maximize2, Minimize2, TrendingUp, TrendingDown, Banknote, DollarSign, Filter, AlertCircle, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
 
 type TransactionsProps = {
   transactions: Transaction[];
@@ -23,18 +12,16 @@ type TransactionsProps = {
 
 type TransactionRow = {
   amount: number;
+  amountPaid?: number; // New field for amount paid
   note: string;
   mode: 'Cash' | 'Bank' | 'Cheque';
   bankId?: string;
   bankName?: string;
   paidBy?: string;
   paidTo?: string;
-  accountablePerson?: string;
   paymentStatus?: 'Full' | 'Partial';
   remainingAmount?: number;
   imageUrl?: string;
-  depositedToBank?: boolean;
-  time?: string;
 };
 
 const OFFICES = [
@@ -121,12 +108,11 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
     mainCategory: '',
     subCategory: '',
     detailCategory: '',
-    date: new Date().toISOString().split('T')[0],
-    time: new Date().toTimeString().slice(0, 5)
+    date: new Date().toISOString().split('T')[0]
   });
 
   const [transactionRows, setTransactionRows] = useState<TransactionRow[]>([
-    { amount: 0, note: '', mode: 'Cash', bankId: '', bankName: '', paidBy: '', paidTo: '', accountablePerson: '', paymentStatus: 'Full', remainingAmount: 0, depositedToBank: false, time: new Date().toTimeString().slice(0, 5) }
+    { amount: 0, note: '', mode: 'Cash', bankId: '', bankName: '', paidBy: '', paidTo: '', paymentStatus: 'Full', remainingAmount: 0 }
   ]);
 
   // Get main categories based on Inflow/Outflow type
@@ -198,11 +184,10 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
       mainCategory: '',
       subCategory: '',
       detailCategory: '',
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toTimeString().slice(0, 5)
+      date: new Date().toISOString().split('T')[0]
     });
     setTransactionRows([
-      { amount: 0, note: '', mode: 'Cash', bankId: '', bankName: '', paidBy: '', paidTo: '', accountablePerson: '', paymentStatus: 'Full', remainingAmount: 0, depositedToBank: false, time: new Date().toTimeString().slice(0, 5) }
+      { amount: 0, note: '', mode: 'Cash', bankId: '', bankName: '', paidBy: '', paidTo: '', paymentStatus: 'Full', remainingAmount: 0 }
     ]);
     setIsMultiRow(false);
     setIsFullScreen(false);
@@ -217,8 +202,7 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
       mainCategory: transaction.subCategory,
       subCategory: '',
       detailCategory: '',
-      date: transaction.date,
-      time: transaction.time || '10:00'
+      date: transaction.date
     });
     setTransactionRows([{
       amount: transaction.amount,
@@ -228,12 +212,9 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
       bankName: transaction.bankName,
       paidBy: transaction.paidBy,
       paidTo: transaction.paidTo,
-      accountablePerson: transaction.accountablePerson,
       paymentStatus: transaction.paymentStatus,
       remainingAmount: transaction.remainingAmount,
-      imageUrl: transaction.imageUrl,
-      depositedToBank: transaction.depositedToBank,
-      time: transaction.time || '10:00'
+      imageUrl: transaction.imageUrl
     }]);
     setIsMultiRow(false);
     setIsFullScreen(false);
@@ -254,23 +235,26 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
   const updateRow = (index: number, field: keyof TransactionRow, value: any) => {
     const updatedRows = [...transactionRows];
     updatedRows[index] = { ...updatedRows[index], [field]: value };
-    
+
     // Auto-calculate remaining amount for partial payments
-    if (field === 'amount' || field === 'paymentStatus') {
+    if (field === 'amount' || field === 'amountPaid' || field === 'paymentStatus') {
       if (updatedRows[index].paymentStatus === 'Partial') {
-        updatedRows[index].remainingAmount = updatedRows[index].remainingAmount || 0;
+        const totalAmount = updatedRows[index].amount || 0;
+        const amountPaid = updatedRows[index].amountPaid || 0;
+        updatedRows[index].remainingAmount = Math.max(0, totalAmount - amountPaid);
       } else {
         updatedRows[index].remainingAmount = 0;
+        updatedRows[index].amountPaid = updatedRows[index].amount || 0;
       }
     }
-    
+
     setTransactionRows(updatedRows);
   };
 
   const addRow = () => {
     setTransactionRows([
       ...transactionRows,
-      { amount: 0, note: '', mode: 'Cash', bankId: '', bankName: '', paidBy: '', paidTo: '', accountablePerson: '', paymentStatus: 'Full', remainingAmount: 0, depositedToBank: false, time: formData.time }
+      { amount: 0, note: '', mode: 'Cash', bankId: '', bankName: '', paidBy: '', paidTo: '', paymentStatus: 'Full', remainingAmount: 0 }
     ]);
   };
 
@@ -334,65 +318,22 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
     }
 
     // Create transactions
-    const newTransactions: Transaction[] = transactionRows.map(row => {
-      const txnId = editingTransaction?.transactionId || generateTransactionId(transactions);
-      
-      // Initialize partial payments based on payment status
-      let initialPartialPayments: PartialPayment[] = [];
-      let totalPaid = 0;
-      let remainingAmount = row.amount;
-      let isFullyCleared = false;
-      
-      if (row.paymentStatus === 'Full') {
-        // Full payment - create initial partial payment record
-        totalPaid = row.amount;
-        remainingAmount = 0;
-        isFullyCleared = row.mode === 'Bank' || row.depositedToBank;
-        
-        initialPartialPayments = [{
-          id: `PAY-${Date.now()}`,
-          amount: row.amount,
-          date: formData.date,
-          time: row.time || formData.time,
-          method: row.mode,
-          bankId: row.bankId,
-          isCleared: isFullyCleared,
-          depositedDate: isFullyCleared ? formData.date : undefined
-        }];
-      } else {
-        // Partial payment - no payment recorded yet
-        totalPaid = 0;
-        remainingAmount = row.amount;
-        isFullyCleared = false;
-        initialPartialPayments = [];
-      }
-      
-      return {
-        id: editingTransaction?.id || `${Date.now()}-${Math.random()}`,
-        transactionId: txnId,
-        date: formData.date,
-        time: row.time || formData.time,
-        company: formData.office,
-        mainCategory: formData.type === 'Inflow' ? 'Cash Inflow' : 'Cash Outflow',
-        subCategory: formData.mainCategory,
-        amount: row.amount,
-        mode: row.mode,
-        bankId: row.bankId,
-        bankName: row.bankName,
-        note: row.note,
-        paidBy: row.paidBy,
-        paidTo: row.paidTo,
-        accountablePerson: row.accountablePerson,
-        paymentStatus: row.paymentStatus,
-        remainingAmount: remainingAmount,
-        imageUrl: row.imageUrl,
-        depositedToBank: row.depositedToBank && row.mode !== 'Bank',
-        totalPaid: totalPaid,
-        isFullyCleared: isFullyCleared,
-        partialPayments: initialPartialPayments,
-        attachments: []
-      };
-    });
+    const newTransactions: Transaction[] = transactionRows.map(row => ({
+      id: editingTransaction?.id || `${Date.now()}-${Math.random()}`,
+      date: formData.date,
+      company: formData.office,
+      mainCategory: formData.type === 'Inflow' ? 'Cash Inflow' : 'Cash Outflow',
+      subCategory: formData.mainCategory,
+      amount: row.amount,
+      mode: row.mode,
+      bankName: row.bankName,
+      note: row.note,
+      paidBy: row.paidBy,
+      paidTo: row.paidTo,
+      paymentStatus: row.paymentStatus,
+      remainingAmount: row.remainingAmount,
+      imageUrl: row.imageUrl
+    }));
 
     // Update bank balances
     transactionRows.forEach(row => {
@@ -565,8 +506,7 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TXN ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Office</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
@@ -579,11 +519,8 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredTransactions.map((transaction) => (
                 <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#4f46e5]">
-                    {transaction.transactionId}
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(transaction.date).toLocaleDateString('en-PK')} {transaction.time && <span className="text-xs text-gray-500 ml-1">{transaction.time}</span>}
+                    {new Date(transaction.date).toLocaleDateString('en-PK')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {transaction.company.split(':')[1]?.trim() || transaction.company}
@@ -694,7 +631,7 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
               {/* General Information */}
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h4 className="font-semibold text-gray-900 mb-4">📋 General Information</h4>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Office/Branch *</label>
                     <select
@@ -713,17 +650,6 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
                       type="date"
                       value={formData.date}
                       onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                      <Clock size={16} /> Time *
-                    </label>
-                    <input
-                      type="time"
-                      value={formData.time}
-                      onChange={(e) => setFormData({ ...formData, time: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                     />
                   </div>
@@ -963,9 +889,9 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
                           </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="grid grid-cols-3 gap-4 mb-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount *</label>
                             <input
                               type="number"
                               value={row.amount || ''}
@@ -976,7 +902,18 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid *</label>
+                            <input
+                              type="number"
+                              value={row.amountPaid || ''}
+                              onChange={(e) => updateRow(index, 'amountPaid', Number(e.target.value))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                              placeholder="0"
+                              min="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
                             <select
                               value={row.paymentStatus || 'Full'}
                               onChange={(e) => updateRow(index, 'paymentStatus', e.target.value)}
@@ -988,19 +925,18 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
                           </div>
                         </div>
 
-                        {row.paymentStatus === 'Partial' && (
-                          <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Remaining Amount</label>
-                            <input
-                              type="number"
-                              value={row.remainingAmount || ''}
-                              onChange={(e) => updateRow(index, 'remainingAmount', Number(e.target.value))}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                              placeholder="0"
-                              min="0"
-                            />
+                        {/* Remaining Amount Display */}
+                        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-700">Remaining Amount:</span>
+                            <span className={`text-lg font-bold ${row.remainingAmount && row.remainingAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {formatCurrency(row.remainingAmount || 0)}
+                            </span>
                           </div>
-                        )}
+                          {row.paymentStatus === 'Partial' && row.remainingAmount && row.remainingAmount > 0 && (
+                            <p className="text-xs text-gray-600 mt-1">⚠️ Partial payment - remaining amount will be tracked</p>
+                          )}
+                        </div>
 
                         <div className="grid grid-cols-2 gap-4 mb-4">
                           <div>
@@ -1023,51 +959,6 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
                               placeholder="Who received this amount"
                             />
                           </div>
-                        </div>
-
-                        {/* Accountable Person - Optional field */}
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Accountable Person (Optional)</label>
-                          <input
-                            type="text"
-                            value={row.accountablePerson || ''}
-                            onChange={(e) => updateRow(index, 'accountablePerson', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                            placeholder="Person on whose behalf payment is made (optional)"
-                          />
-                        </div>
-
-                        {/* Cash/Cheque Deposit Checkbox */}
-                        {(row.mode === 'Cash' || row.mode === 'Cheque') && (
-                          <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={row.depositedToBank || false}
-                                onChange={(e) => updateRow(index, 'depositedToBank', e.target.checked)}
-                                className="w-4 h-4 text-[#4f46e5] border-gray-300 rounded focus:ring-[#4f46e5]"
-                              />
-                              <span className="text-sm font-medium text-amber-900 flex items-center gap-2">
-                                <Check size={16} /> Deposited to Bank
-                              </span>
-                            </label>
-                            <p className="text-xs text-amber-700 mt-2 ml-7">
-                              Check this when {row.mode.toLowerCase()} is deposited/cleared
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Time field for each transaction row */}
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                            <Clock size={16} /> Transaction Time
-                          </label>
-                          <input
-                            type="time"
-                            value={row.time || formData.time}
-                            onChange={(e) => updateRow(index, 'time', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                          />
                         </div>
 
                         <div className="mb-4">

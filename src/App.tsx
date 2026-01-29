@@ -28,6 +28,10 @@ import { TopBar } from './components/TopBar';
 import { NotificationBell } from './components/NotificationBell';
 import { Toaster } from './components/ui/sonner';
 import { Notification } from './types/Notification';
+import { Routes, Route } from 'react-router-dom';
+import { AdvanceSalary } from './components/AdvanceSalary';
+
+
 
 export type Employee = {
   id: string;
@@ -88,12 +92,13 @@ export type Invoice = {
   products: InvoiceProduct[];
   exchangeWarrantyNote: string;
   deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered';
+  deliveryReceivedStatus: 'Pending' | 'In Process' | 'Received'; // UPDATED: Dynamic delivery tracking with multiple statuses
   totalAmount: number;
   status: 'Paid' | 'Unpaid';
   salesperson?: string;
   salespersonLocation?: string;
-  clientDealBy?: string;
-  referralBy?: string;
+  referFrom?: string; // NEW: Replaced clientDealBy, now required
+  referTo?: string; // NEW: Optional referral destination
   createdBy?: string;
   paymentMode?: 'Cash' | 'Online';
   bankId?: string;
@@ -103,7 +108,7 @@ export type Invoice = {
   paidAmount?: number;
   remainingAmount?: number;
   collectionMethod?: 'Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others';
-  deductionCharges?: number;
+  deductionCharges: number; // UPDATED: Now manually editable, required field (defaults to 0)
   imageUrl?: string;
   paidBy?: string;
   paidTo?: string;
@@ -139,23 +144,10 @@ export type Transaction = {
   mainCategory: 'Cash Inflow' | 'Cash Outflow' | 'Loans & Advances' | 'Salary' | 'Bills';
   subCategory: string;
   amount: number;
-  mode: 'Cash' | 'Bank' | 'Cheque';
-  mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method (main/legacy field)
+  mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method
   bankName?: string;
   bankId?: string; // Added for better bank tracking
   note: string;
-  paidBy?: string;
-  paidTo?: string;
-  transactionBy?: string;
-  employeeId?: string;
-  employeeName?: string;
-  baseSalary?: number;
-  commission?: number;
-  deductions?: number;
-  netAmount?: number;
-  imageUrl?: string;
-  paymentStatus?: 'Full' | 'Partial';
-  remainingAmount?: number;
   paidBy?: string; // Person/company who paid (e.g., "Ahmed Khan", "Pakistan Detectors - Islamabad")
   paidTo?: string; // Person/company/vendor who received payment
   accountablePerson?: string; // New: Person on whose behalf payment is made
@@ -169,7 +161,7 @@ export type Transaction = {
   imageUrl?: string; // Optional image upload
   paymentStatus?: 'Full' | 'Partial'; // Payment status
   remainingAmount?: number; // Remaining amount for partial payments
-  
+
   // New payment tracking fields
   partialPayments?: PartialPayment[]; // Track all partial payments under same transaction ID
   totalPaid?: number; // Total amount paid across all partial payments
@@ -592,13 +584,16 @@ const initialData: AppData = {
       ],
       exchangeWarrantyNote: '2 years warranty, no exchange after 7 days',
       deliveryStatus: 'Delivered',
+      deliveryReceivedStatus: 'Received', // NEW: Delivery tracking
       totalAmount: 250000,
       status: 'Paid',
       salesperson: 'Ahmed Khan',
       salespersonLocation: 'Karachi',
-      clientDealBy: 'Ahmed Khan',
-      referralBy: 'Ali Hassan',
-      createdBy: 'Admin'
+      referFrom: 'Ahmed Khan', // NEW: Required field replacing clientDealBy
+      referTo: 'Lahore Branch', // NEW: Optional referral destination
+      createdBy: 'Admin',
+      collectionMethod: 'Self Collection', // NEW: Collection method
+      deductionCharges: 0 // NEW: Manually editable deduction
     },
     {
       id: '2',
@@ -626,11 +621,16 @@ const initialData: AppData = {
       ],
       exchangeWarrantyNote: '1 year warranty',
       deliveryStatus: 'Self-collect',
+      deliveryReceivedStatus: 'Pending', // NEW: Delivery tracking
       totalAmount: 225000,
       status: 'Unpaid',
       salesperson: 'Hassan Raza',
       salespersonLocation: 'Lahore',
-      clientDealBy: 'Hassan Raza'
+      referFrom: 'Hassan Raza', // NEW: Required field replacing clientDealBy
+      referTo: '', // NEW: Optional referral destination
+      createdBy: 'Admin',
+      collectionMethod: 'Self Collection', // NEW: Collection method
+      deductionCharges: 0 // NEW: Manually editable deduction
     }
   ],
   bankTransfers: [
@@ -708,7 +708,6 @@ export default function App() {
           setProducts={(products) => setData({ ...data, products })}
           transfers={data.productTransfers}
           setTransfers={(transfers) => setData({ ...data, productTransfers: transfers })}
-          onNotification={(notif: Notification) => setNotifications([notif, ...notifications])}
         />;
   
       case 'bank-transfers':
@@ -752,12 +751,21 @@ export default function App() {
           setBanks={(banks) => setData({ ...data, banks })}
         />;
       case 'salary':
-        return <Salary 
-          transactions={data.transactions} 
+        return <Salary
+          transactions={data.transactions}
           setTransactions={(transactions) => setData({ ...data, transactions })}
           banks={data.banks}
           setBanks={(banks) => setData({ ...data, banks })}
           employees={data.employees}
+          setActiveModule={setActiveModule}
+        />;
+      case 'advance-salary':
+        return <AdvanceSalary
+          employees={data.employees}
+          banks={data.banks}
+          transactions={data.transactions}
+          setTransactions={(transactions) => setData({ ...data, transactions })}
+          setBanks={(banks) => setData({ ...data, banks })}
         />;
       case 'loans-payable':
         return <LoansPayable 
