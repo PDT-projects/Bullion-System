@@ -32,6 +32,8 @@ import { Notification } from './types/Notification';
 import { Routes, Route } from 'react-router-dom';
 import { AdvanceSalary } from './components/AdvanceSalary';
 import { CommissionSlabs } from './components/CommissionSlabs';
+import { Budgets } from './components/budgets/Budgets';
+import { Budget } from './types/Budget';
 
 
 
@@ -275,6 +277,7 @@ export type AppData = {
   productTransfers: ProductTransfer[];
   productCosting: ProductCosting[];
   commissionSlabs: CommissionSlab[];
+  budgets: Budget[];
 };
 
 const normalizeInitialData = (data: AppData): AppData => {
@@ -751,7 +754,49 @@ const initialData: AppData = {
     }
   ],
   productCosting: [],
-  commissionSlabs: []
+  commissionSlabs: [],
+  budgets: [
+    {
+      id: '1',
+      category: 'Expenses',
+      subCategory: 'Salaries',
+      period: 'Monthly',
+      budgetLimit: 500000,
+      spent: 450000,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-15T00:00:00.000Z'
+    },
+    {
+      id: '2',
+      category: 'Expenses',
+      subCategory: 'Office Rent',
+      period: 'Monthly',
+      budgetLimit: 150000,
+      spent: 150000,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-15T00:00:00.000Z'
+    },
+    {
+      id: '3',
+      category: 'Expenses',
+      subCategory: 'Utilities',
+      period: 'Monthly',
+      budgetLimit: 80000,
+      spent: 55000,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-15T00:00:00.000Z'
+    },
+    {
+      id: '4',
+      category: 'Expenses',
+      subCategory: 'Marketing',
+      period: 'Quarterly',
+      budgetLimit: 200000,
+      spent: 120000,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-15T00:00:00.000Z'
+    }
+  ]
 };
 
 export default function App() {
@@ -887,6 +932,8 @@ export default function App() {
         return <InventoryReport products={data.products} />;
       case 'transaction-history-report':
         return <TransactionHistoryReport transactions={data.transactions} />;
+      case 'budgets':
+        return <Budgets budgets={data.budgets} setBudgets={(budgets) => setData({ ...data, budgets })} />;
       default:
         return <Dashboard data={data} />;
     }
