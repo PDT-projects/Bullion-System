@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Product } from '../App';
 import { Package, MapPin, Calendar, Filter, Download, BarChart3 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type InventoryReportProps = {
   products: Product[];
@@ -13,6 +14,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [selectedBrand, setSelectedBrand] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [showVisualization, setShowVisualization] = useState(false);
 
   // Get unique brands and categories
   const brands = useMemo(() => {
@@ -106,6 +108,71 @@ export function InventoryReport({ products }: InventoryReportProps) {
     }), { totalStock: 0, totalValue: 0, totalProducts: 0, totalInTransit: 0 });
   }, [cityInventory]);
 
+  // Prepare visualization data
+  const visualizationData = useMemo(() => {
+    // Stock by city
+    const stockByCity = cityInventory.map(inv => ({
+      city: inv.city,
+      stock: inv.totalStock,
+      value: inv.totalValue
+    }));
+
+    // Stock by brand
+    const stockByBrand = products.reduce((acc, product) => {
+      const brand = product.brandName;
+      const totalStock = product.serialNumbers.length;
+      if (!acc[brand]) acc[brand] = 0;
+      acc[brand] += totalStock;
+      return acc;
+    }, {} as Record<string, number>);
+    const brandStockData = Object.entries(stockByBrand)
+      .map(([brand, stock]) => ({ brand, stock }))
+      .sort((a, b) => b.stock - a.stock);
+
+    // Stock by category
+    const stockByCategory = products.reduce((acc, product) => {
+      const category = product.category;
+      const totalStock = product.serialNumbers.length;
+      if (!acc[category]) acc[category] = 0;
+      acc[category] += totalStock;
+      return acc;
+    }, {} as Record<string, number>);
+    const categoryStockData = Object.entries(stockByCategory)
+      .map(([category, stock]) => ({ category, stock }))
+      .sort((a, b) => b.stock - a.stock);
+
+    // Top products by stock
+    const topProducts = products
+      .map(product => ({
+        product: `${product.brandName} ${product.modelName}`,
+        stock: product.serialNumbers.length,
+        value: product.serialNumbers.length * product.costPrice
+      }))
+      .sort((a, b) => b.stock - a.stock)
+      .slice(0, 10);
+
+    // Inventory status distribution
+    const statusCounts = products.reduce((acc, product) => {
+      const serialStatus = product.serialStatus || {};
+      product.serialNumbers.forEach(serial => {
+        const status = serialStatus[serial] || 'Available';
+        if (!acc[status]) acc[status] = 0;
+        acc[status] += 1;
+      });
+      return acc;
+    }, {} as Record<string, number>);
+    const statusData = Object.entries(statusCounts)
+      .map(([status, count]) => ({ status, count }));
+
+    return {
+      stockByCity,
+      brandStockData,
+      categoryStockData,
+      topProducts,
+      statusData
+    };
+  }, [cityInventory, products]);
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
@@ -154,8 +221,19 @@ export function InventoryReport({ products }: InventoryReportProps) {
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Inventory Report</h2>
-        <p className="text-sm text-gray-600 mt-1">City-wise product inventory for Pakistan Detectors Technologies</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Inventory Report</h2>
+            <p className="text-sm text-gray-600 mt-1">City-wise product inventory for Pakistan Detectors Technologies</p>
+          </div>
+          <button
+            onClick={() => setShowVisualization(!showVisualization)}
+            className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-lg hover:bg-blue-200 flex items-center gap-2"
+          >
+            <BarChart3 size={16} />
+            {showVisualization ? 'Hide' : 'Show'} Visualization
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -187,6 +265,111 @@ export function InventoryReport({ products }: InventoryReportProps) {
           </p>
         </div>
       </div>
+
+      {/* Visualization Section */}
+      {showVisualization && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Inventory Analytics</h3>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Stock Distribution by City */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Stock Distribution by City</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.stockByCity}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="city" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} units`, 'Stock']} />
+                  <Bar dataKey="stock" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Inventory Value by City */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Inventory Value by City</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.stockByCity}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="city" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${formatCurrency(Number(value))}`, 'Value']} />
+                  <Bar dataKey="value" fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Stock by Brand */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Stock by Brand</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.brandStockData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="brand" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} units`, 'Stock']} />
+                  <Bar dataKey="stock" fill="#f59e0b" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Stock by Category */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Stock by Category</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.categoryStockData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} units`, 'Stock']} />
+                  <Bar dataKey="stock" fill="#8b5cf6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Top 10 Products by Stock */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Top 10 Products by Stock</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.topProducts} layout="horizontal">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="product" type="category" width={100} />
+                  <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} units`, 'Stock']} />
+                  <Bar dataKey="stock" fill="#ef4444" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Inventory Status Distribution */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Inventory Status Distribution</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={visualizationData.statusData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="count"
+                  >
+                    {visualizationData.statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">

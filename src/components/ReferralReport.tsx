@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Invoice } from '../App';
-import { Calendar, MapPin, User, Filter, Download, UserPlus } from 'lucide-react';
+import { Calendar, MapPin, User, Filter, Download, UserPlus, BarChart3 } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type ReferralReportProps = {
   invoices: Invoice[];
@@ -11,12 +12,13 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
   const [dateTo, setDateTo] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedReferralPerson, setSelectedReferralPerson] = useState('');
+  const [showVisualization, setShowVisualization] = useState(false);
 
   // Get unique values for filters
   const cities = useMemo(() => {
     const citySet = new Set<string>();
     invoices.forEach(inv => {
-      if (inv.customerCity && inv.clientDealBy) citySet.add(inv.customerCity);
+      if (inv.customerCity && inv.referFrom) citySet.add(inv.customerCity);
     });
     return Array.from(citySet).sort();
   }, [invoices]);
@@ -24,24 +26,24 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
   const referralPersons = useMemo(() => {
     const referralSet = new Set<string>();
     invoices.forEach(inv => {
-      if (inv.clientDealBy && inv.clientDealBy.trim() !== '') referralSet.add(inv.clientDealBy);
+      if (inv.referFrom && inv.referFrom.trim() !== '') referralSet.add(inv.referFrom);
     });
     return Array.from(referralSet).sort();
   }, [invoices]);
 
-  // Prepare referral data from invoices (only those with clientDealBy)
+  // Prepare referral data from invoices (only those with referFrom)
   const referralData = useMemo(() => {
     return invoices
       .filter(invoice => {
-        // Referral entry only if clientDealBy is filled (new rule)
-        return invoice.clientDealBy && invoice.clientDealBy.trim() !== '';
+        // Referral entry only if referFrom is filled (new rule)
+        return invoice.referFrom && invoice.referFrom.trim() !== '';
       })
       .flatMap(invoice => {
         return invoice.products.map(product => {
           const salePriceBeforeReferral = product.price;
           const referralShare = product.price * 0.5; // 50% referral share
           const salePriceAfterReferral = product.price * 0.5; // Remaining 50%
-          const salesperson = invoice.clientDealBy || ''; // Salesperson is Client Deal By
+          const salesperson = invoice.referFrom || ''; // Salesperson is Refer From
           const referBy = invoice.salesperson || ''; // Refer By is the salesperson field
 
           return {
@@ -124,7 +126,7 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
   // Group by salesperson for summary
   const referralSummary = useMemo(() => {
     const summary = new Map<string, { count: number; totalSales: number; totalReferral: number }>();
-    
+
     filteredData.forEach(item => {
       const existing = summary.get(item.salesperson) || { count: 0, totalSales: 0, totalReferral: 0 };
       summary.set(item.salesperson, {
@@ -133,18 +135,96 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
         totalReferral: existing.totalReferral + item.referralShare
       });
     });
-    
+
     return Array.from(summary.entries()).map(([person, data]) => ({
       person,
       ...data
     }));
   }, [filteredData]);
 
+  // Prepare visualization data
+  const visualizationData = useMemo(() => {
+    // Referral trend over time
+    const referralByDate = filteredData.reduce((acc, item) => {
+      if (!acc[item.date]) acc[item.date] = 0;
+      acc[item.date] += item.referralShare;
+      return acc;
+    }, {} as Record<string, number>);
+    const referralTrend = Object.entries(referralByDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, amount]) => ({ date, amount }));
+
+    // Referrals by city
+    const referralByCity = filteredData.reduce((acc, item) => {
+      if (!acc[item.city]) acc[item.city] = 0;
+      acc[item.city] += item.referralShare;
+      return acc;
+    }, {} as Record<string, number>);
+    const cityReferrals = Object.entries(referralByCity)
+      .map(([city, amount]) => ({ city, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Referrals by salesperson
+    const referralBySalesperson = filteredData.reduce((acc, item) => {
+      if (!acc[item.salesperson]) acc[item.salesperson] = 0;
+      acc[item.salesperson] += item.referralShare;
+      return acc;
+    }, {} as Record<string, number>);
+    const salespersonReferrals = Object.entries(referralBySalesperson)
+      .map(([salesperson, amount]) => ({ salesperson, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Referrals by product
+    const referralByProduct = filteredData.reduce((acc, item) => {
+      const key = `${item.product} / ${item.brand}`;
+      if (!acc[key]) acc[key] = 0;
+      acc[key] += item.referralShare;
+      return acc;
+    }, {} as Record<string, number>);
+    const productReferrals = Object.entries(referralByProduct)
+      .map(([product, amount]) => ({ product, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10); // Top 10 products
+
+    // Referral count by salesperson
+    const referralCountBySalesperson = filteredData.reduce((acc, item) => {
+      if (!acc[item.salesperson]) acc[item.salesperson] = 0;
+      acc[item.salesperson] += 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const referralCountData = Object.entries(referralCountBySalesperson)
+      .map(([salesperson, count]) => ({ salesperson, count }));
+
+    // Referral amount distribution by salesperson
+    const referralAmountData = Object.entries(referralBySalesperson)
+      .map(([salesperson, amount]) => ({ salesperson, amount }));
+
+    return {
+      referralTrend,
+      cityReferrals,
+      salespersonReferrals,
+      productReferrals,
+      referralCountData,
+      referralAmountData
+    };
+  }, [filteredData]);
+
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Referral Report</h2>
-        <p className="text-sm text-gray-600 mt-1">Sales counted by Salesperson (Client Deal By) • Entries generated when Client Deal By is filled • Display only (no commission payout logic)</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Referral Report</h2>
+            <p className="text-sm text-gray-600 mt-1">Sales counted by Salesperson (Refer From) • Entries generated when Refer From is filled • Display only (no commission payout logic)</p>
+          </div>
+          <button
+            onClick={() => setShowVisualization(!showVisualization)}
+            className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-lg hover:bg-blue-200 flex items-center gap-2"
+          >
+            <BarChart3 size={16} />
+            {showVisualization ? 'Hide' : 'Show'} Visualization
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -274,6 +354,122 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
           <p className="text-2xl font-bold text-[#10b981]">Rs {totals.referralAmount.toLocaleString()}</p>
         </div>
       </div>
+
+      {/* Visualization Section */}
+      {showVisualization && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Referral Analytics</h3>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Referral Trend Over Time */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Referral Trend Over Time</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={visualizationData.referralTrend}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Referral Amount']} />
+                  <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Referrals by City */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Referrals by City</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.cityReferrals}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="city" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Referral Amount']} />
+                  <Bar dataKey="amount" fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Referrals by Salesperson */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Referrals by Salesperson</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.salespersonReferrals}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="salesperson" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Referral Amount']} />
+                  <Bar dataKey="amount" fill="#f59e0b" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Top Referral Products */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Top Referral Products</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.productReferrals} layout="horizontal">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="product" type="category" width={100} />
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Referral Amount']} />
+                  <Bar dataKey="amount" fill="#8b5cf6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Referral Count by Salesperson */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Referral Count by Salesperson</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={visualizationData.referralCountData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="count"
+                  >
+                    {visualizationData.referralCountData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444'][index % 4]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [value, 'Referral Count']} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Referral Amount Distribution */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Referral Amount Distribution</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={visualizationData.referralAmountData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ salesperson, amount }) => `${salesperson}: Rs ${amount.toLocaleString()}`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="amount"
+                  >
+                    {visualizationData.referralAmountData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Referral Amount']} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Referral Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">

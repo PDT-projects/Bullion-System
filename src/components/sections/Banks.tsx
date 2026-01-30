@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Eye, Edit, Trash2, Search, ArrowLeftRight, Building2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -10,13 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Badge } from "../ui/badge";
 import { toast } from "sonner";
 
+interface BalanceHistoryEntry {
+  date: string;
+  balance: number;
+  transaction: string;
+  type: 'initial' | 'transfer' | 'transaction' | 'salary' | 'loan' | 'payment';
+}
+
 interface Bank {
-  id: number;
+  id: string;
   name: string;
   accountNumber: string;
   balance: number;
-  accountType: 'Current' | 'Savings';
-  branch: string;
+  accountType?: 'Current' | 'Savings';
+  branch?: string;
+  balanceHistory?: BalanceHistoryEntry[];
 }
 
 interface Transfer {
@@ -30,36 +38,60 @@ interface Transfer {
 
 const initialBanks: Bank[] = [
   {
-    id: 1,
+    id: '1',
     name: 'Habib Bank Limited',
     accountNumber: 'HBL-12345678',
     balance: 650000,
     accountType: 'Current',
-    branch: 'Islamabad Main Branch'
+    branch: 'Islamabad Main Branch',
+    balanceHistory: [{
+      date: new Date().toISOString().split('T')[0],
+      balance: 650000,
+      transaction: 'Initial balance',
+      type: 'initial'
+    }]
   },
   {
-    id: 2,
+    id: '2',
     name: 'MCB Bank',
     accountNumber: 'MCB-87654321',
     balance: 480000,
     accountType: 'Current',
-    branch: 'Karachi Branch'
+    branch: 'Karachi Branch',
+    balanceHistory: [{
+      date: new Date().toISOString().split('T')[0],
+      balance: 480000,
+      transaction: 'Initial balance',
+      type: 'initial'
+    }]
   },
   {
-    id: 3,
+    id: '3',
     name: 'Allied Bank',
     accountNumber: 'ABL-11223344',
     balance: 320000,
     accountType: 'Savings',
-    branch: 'Lahore Branch'
+    branch: 'Lahore Branch',
+    balanceHistory: [{
+      date: new Date().toISOString().split('T')[0],
+      balance: 320000,
+      transaction: 'Initial balance',
+      type: 'initial'
+    }]
   },
   {
-    id: 4,
+    id: '4',
     name: 'United Bank Limited',
     accountNumber: 'UBL-55667788',
     balance: 400000,
     accountType: 'Current',
-    branch: 'Islamabad F-7 Branch'
+    branch: 'Islamabad F-7 Branch',
+    balanceHistory: [{
+      date: new Date().toISOString().split('T')[0],
+      balance: 400000,
+      transaction: 'Initial balance',
+      type: 'initial'
+    }]
   }
 ];
 
@@ -82,9 +114,44 @@ const initialTransfers: Transfer[] = [
   }
 ];
 
-export function Banks() {
-  const [banks, setBanks] = useState<Bank[]>(initialBanks);
+export function Banks({ banks: propBanks, setBanks: propSetBanks }: { banks: any[], setBanks: (banks: any[]) => void }) {
+  // Convert prop banks to our Bank interface format
+  const convertedBanks: Bank[] = propBanks.map(bank => ({
+    id: bank.id,
+    name: bank.name,
+    accountNumber: bank.accountNumber,
+    balance: bank.balance,
+    accountType: 'Current', // Default value
+    branch: 'Main Branch', // Default value
+    balanceHistory: [{
+      date: new Date().toISOString().split('T')[0],
+      balance: bank.balance,
+      transaction: 'Initial balance',
+      type: 'initial'
+    }]
+  }));
+
+  const [banks, setBanks] = useState<Bank[]>(convertedBanks);
   const [transfers, setTransfers] = useState<Transfer[]>(initialTransfers);
+
+  // Sync with props when they change
+  useState(() => {
+    const newConvertedBanks = propBanks.map(bank => ({
+      id: bank.id,
+      name: bank.name,
+      accountNumber: bank.accountNumber,
+      balance: bank.balance,
+      accountType: 'Current',
+      branch: 'Main Branch',
+      balanceHistory: [{
+        date: new Date().toISOString().split('T')[0],
+        balance: bank.balance,
+        transaction: 'Initial balance',
+        type: 'initial'
+      }]
+    }));
+    setBanks(newConvertedBanks);
+  }, [propBanks]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddBankModalOpen, setIsAddBankModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -104,15 +171,23 @@ export function Banks() {
     note: '',
     date: new Date().toISOString().split('T')[0]
   });
+  const [historicalDate, setHistoricalDate] = useState('');
+  const [selectedBankForHistory, setSelectedBankForHistory] = useState<Bank | null>(null);
 
   const handleAddBank = () => {
     const newBank: Bank = {
-      id: banks.length + 1,
+      id: (banks.length + 1).toString(),
       name: bankFormData.name,
       accountNumber: bankFormData.accountNumber,
       balance: parseFloat(bankFormData.balance),
       accountType: bankFormData.accountType,
-      branch: bankFormData.branch
+      branch: bankFormData.branch,
+      balanceHistory: [{
+        date: new Date().toISOString().split('T')[0],
+        balance: parseFloat(bankFormData.balance),
+        transaction: 'Bank account created',
+        type: 'initial'
+      }]
     };
     setBanks([...banks, newBank]);
     setIsAddBankModalOpen(false);
@@ -140,21 +215,42 @@ export function Banks() {
     }
   };
 
-  const handleDeleteBank = (id: number) => {
+  const handleDeleteBank = (id: string) => {
     setBanks(banks.filter(bank => bank.id !== id));
     toast.success('Bank deleted successfully');
   };
 
   const handleTransfer = () => {
     const amount = parseFloat(transferFormData.amount);
-    
-    // Update bank balances
+    const transferDate = transferFormData.date;
+
+    // Update bank balances and record history
     setBanks(banks.map(bank => {
       if (bank.name === transferFormData.fromBank) {
-        return { ...bank, balance: bank.balance - amount };
+        const newBalance = bank.balance - amount;
+        return {
+          ...bank,
+          balance: newBalance,
+          balanceHistory: [...(bank.balanceHistory || []), {
+            date: transferDate,
+            balance: newBalance,
+            transaction: `Transfer to ${transferFormData.toBank} - ${transferFormData.note}`,
+            type: 'transfer'
+          }]
+        };
       }
       if (bank.name === transferFormData.toBank) {
-        return { ...bank, balance: bank.balance + amount };
+        const newBalance = bank.balance + amount;
+        return {
+          ...bank,
+          balance: newBalance,
+          balanceHistory: [...(bank.balanceHistory || []), {
+            date: transferDate,
+            balance: newBalance,
+            transaction: `Transfer from ${transferFormData.fromBank} - ${transferFormData.note}`,
+            type: 'transfer'
+          }]
+        };
       }
       return bank;
     }));
@@ -162,14 +258,14 @@ export function Banks() {
     // Add transfer record
     const newTransfer: Transfer = {
       id: transfers.length + 1,
-      date: transferFormData.date,
+      date: transferDate,
       fromBank: transferFormData.fromBank,
       toBank: transferFormData.toBank,
       amount: amount,
       note: transferFormData.note
     };
     setTransfers([newTransfer, ...transfers]);
-    
+
     setIsTransferModalOpen(false);
     resetTransferForm();
     toast.success('Transfer completed successfully');
@@ -181,8 +277,8 @@ export function Banks() {
       name: bank.name,
       accountNumber: bank.accountNumber,
       balance: bank.balance.toString(),
-      accountType: bank.accountType,
-      branch: bank.branch
+      accountType: bank.accountType || 'Current',
+      branch: bank.branch || ''
     });
   };
 
@@ -209,10 +305,20 @@ export function Banks() {
   const filteredBanks = banks.filter(bank =>
     bank.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     bank.accountNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    bank.branch.toLowerCase().includes(searchQuery.toLowerCase())
+    (bank.branch || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalBalance = banks.reduce((sum, bank) => sum + bank.balance, 0);
+
+  const getHistoricalBalances = (date: string) => {
+    return banks.map(bank => {
+      const relevantHistory = (bank.balanceHistory || [])
+        .filter(entry => entry.date <= date)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const historicalBalance = relevantHistory.length > 0 ? relevantHistory[0].balance : (bank.balanceHistory || [])[0]?.balance || 0;
+      return { ...bank, historicalBalance };
+    });
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -246,7 +352,7 @@ export function Banks() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="fromBank">From Bank</Label>
-                  <Select value={transferFormData.fromBank} onValueChange={(value) => setTransferFormData({ ...transferFormData, fromBank: value })}>
+                  <Select value={transferFormData.fromBank} onValueChange={(value: string) => setTransferFormData({ ...transferFormData, fromBank: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select source bank" />
                     </SelectTrigger>
@@ -261,9 +367,9 @@ export function Banks() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="toBank">To Bank</Label>
-                  <Select 
-                    value={transferFormData.toBank} 
-                    onValueChange={(value) => setTransferFormData({ ...transferFormData, toBank: value })}
+                  <Select
+                    value={transferFormData.toBank}
+                    onValueChange={(value: string) => setTransferFormData({ ...transferFormData, toBank: value })}
                     disabled={!transferFormData.fromBank}
                   >
                     <SelectTrigger>
@@ -396,6 +502,69 @@ export function Banks() {
         </CardContent>
       </Card>
 
+      {/* Historical Balance Viewer */}
+      <Card className="border-2 border-blue-200 bg-blue-50/30">
+        <CardHeader>
+          <CardTitle className="text-blue-800 flex items-center gap-2">
+            <Building2 className="w-5 h-5" />
+            View Historical Balances
+          </CardTitle>
+          <p className="text-sm text-gray-600">Select a date to see bank balances as they were on that date</p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex gap-4 items-end">
+              <div className="space-y-2">
+                <Label htmlFor="historicalDate">Select Date</Label>
+                <Input
+                  id="historicalDate"
+                  type="date"
+                  value={historicalDate}
+                  onChange={(e) => setHistoricalDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setHistoricalDate('')}
+                disabled={!historicalDate}
+              >
+                Clear Date
+              </Button>
+            </div>
+
+            {historicalDate && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Balances on {new Date(historicalDate).toLocaleDateString()}</h3>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {getHistoricalBalances(historicalDate).map((bank) => (
+                    <Card key={bank.id} className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                      <CardContent className="pt-4">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600">{bank.name}</p>
+                          <p className="text-2xl font-bold text-blue-600">
+                            PKR {bank.historicalBalance.toLocaleString()}
+                          </p>
+                          <p className="text-xs text-gray-500">Historical Balance</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Total Historical Balance</p>
+                    <p className="text-3xl font-bold text-green-600">
+                      PKR {getHistoricalBalances(historicalDate).reduce((sum, bank) => sum + bank.historicalBalance, 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Search Bar */}
       <Card>
         <CardContent className="pt-6">
@@ -435,9 +604,9 @@ export function Banks() {
                   <TableCell className="font-medium">{bank.name}</TableCell>
                   <TableCell className="text-gray-600">{bank.accountNumber}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{bank.accountType}</Badge>
+                    <Badge variant="outline">{bank.accountType || 'Current'}</Badge>
                   </TableCell>
-                  <TableCell className="text-sm">{bank.branch}</TableCell>
+                  <TableCell className="text-sm">{bank.branch || 'N/A'}</TableCell>
                   <TableCell className="font-bold text-[#4f46e5]">PKR {bank.balance.toLocaleString()}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -468,11 +637,11 @@ export function Banks() {
                                 </div>
                                 <div>
                                   <p className="text-sm text-gray-500">Account Type</p>
-                                  <Badge variant="outline">{viewBank.accountType}</Badge>
+                                  <Badge variant="outline">{viewBank.accountType || 'Current'}</Badge>
                                 </div>
                                 <div className="col-span-2">
                                   <p className="text-sm text-gray-500">Branch</p>
-                                  <p className="font-medium">{viewBank.branch}</p>
+                                  <p className="font-medium">{viewBank.branch || 'N/A'}</p>
                                 </div>
                                 <div className="col-span-2">
                                   <p className="text-sm text-gray-500">Current Balance</p>
@@ -483,7 +652,7 @@ export function Banks() {
                           )}
                         </DialogContent>
                       </Dialog>
-                      <Dialog open={editBank?.id === bank.id} onOpenChange={(open) => !open && setEditBank(null)}>
+                      <Dialog open={editBank?.id === bank.id} onOpenChange={(open: boolean) => !open && setEditBank(null)}>
                         <DialogTrigger asChild>
                           <Button 
                             variant="ghost" 
@@ -541,6 +710,7 @@ export function Banks() {
                                 id="edit-branch"
                                 value={bankFormData.branch}
                                 onChange={(e) => setBankFormData({ ...bankFormData, branch: e.target.value })}
+                                placeholder="Enter branch name"
                               />
                             </div>
                           </div>
