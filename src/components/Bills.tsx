@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Transaction, Bank } from '../App';
 import { Plus, Eye, Trash2, X, Printer, Download, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 type BillsProps = {
   transactions: Transaction[];
@@ -40,6 +40,7 @@ type BillTransaction = {
   imageUrl?: string;
   paymentStatus?: 'Full' | 'Partial';
   remainingAmount?: number;
+  billMonth?: string; // Month for which the bill is being paid
 };
 
 export function Bills({ transactions, setTransactions, banks, setBanks }: BillsProps) {
@@ -65,7 +66,8 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
     bankName: '',
     imageUrl: '',
     paymentStatus: 'Full',
-    remainingAmount: 0
+    remainingAmount: 0,
+    billMonth: new Date().toISOString().slice(0, 7) // Default to current month
   }]);
 
   // Filter bills from all transactions
@@ -88,7 +90,8 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
       bankName: '',
       imageUrl: '',
       paymentStatus: 'Full',
-      remainingAmount: 0
+      remainingAmount: 0,
+      billMonth: new Date().toISOString().slice(0, 7) // Default to current month
     }]);
     setIsModalOpen(true);
   };
@@ -173,7 +176,9 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
     // Create individual transaction records for each bill transaction
     const newTransactions: Transaction[] = billTransactions.map((billTxn) => ({
       id: Date.now().toString() + Math.random().toString(),
+      transactionId: `TXN-${Date.now()}${Math.random().toString().slice(-4)}`,
       date: formData.date,
+      time: new Date().toLocaleTimeString('en-US', { hour12: false }),
       company: formData.company,
       mainCategory: 'Bills',
       subCategory: formData.billCategory,
@@ -183,8 +188,11 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
       paidBy: billTxn.paidBy,
       paidTo: billTxn.paidTo,
       transactionBy: billTxn.transactionBy,
+      billMonth: billTxn.billMonth,
       note: formData.note,
-      imageUrl: billTxn.imageUrl
+      imageUrl: billTxn.imageUrl,
+      paymentStatus: billTxn.paymentStatus,
+      remainingAmount: billTxn.remainingAmount
     }));
 
     // Update bank balances
@@ -249,6 +257,7 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paid To</th>
@@ -263,6 +272,9 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
                 <tr key={bill.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {new Date(bill.date).toLocaleDateString('en-PK')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {bill.billMonth || '-'}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900">{bill.company.split(': ')[1] || bill.company}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.subCategory}</td>
@@ -308,7 +320,7 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
               ))}
               {allBills.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                     No bills found. Click "Add Bill" to create one.
                   </td>
                 </tr>
@@ -413,7 +425,7 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
                         )}
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">Amount *</label>
                           <input
@@ -434,6 +446,15 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
                             <option value="Full">Full Payment</option>
                             <option value="Partial">Partial Payment</option>
                           </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Bill Month *</label>
+                          <input
+                            type="month"
+                            value={txn.billMonth || ''}
+                            onChange={(e) => updateBillTransaction(txn.id, 'billMonth', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm"
+                          />
                         </div>
                       </div>
 
