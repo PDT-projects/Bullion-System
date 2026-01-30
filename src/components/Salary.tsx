@@ -238,15 +238,22 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
       imageUrl: salTxn.imageUrl
     }));
 
-    // Update bank balances
+    // Update bank balances and record history
     const updatedBanks = [...banks];
     for (const salTxn of salaryTransactions) {
       if ((salTxn.mode === 'Bank' || salTxn.mode === 'Cheque') && salTxn.bankName) {
         const bankIndex = updatedBanks.findIndex(b => b.name === salTxn.bankName);
         if (bankIndex !== -1) {
+          const newBalance = updatedBanks[bankIndex].balance - salTxn.netAmount;
           updatedBanks[bankIndex] = {
             ...updatedBanks[bankIndex],
-            balance: updatedBanks[bankIndex].balance - salTxn.netAmount
+            balance: newBalance,
+            balanceHistory: [...updatedBanks[bankIndex].balanceHistory, {
+              date: formData.date,
+              balance: newBalance,
+              transaction: `Salary payment to ${salTxn.employeeName} - ${formData.note}`,
+              type: 'salary'
+            }]
           };
         }
       }

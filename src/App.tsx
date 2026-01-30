@@ -18,7 +18,6 @@ import { LoansPayable } from './components/LoansPayable';
 import { LoansReceivable } from './components/LoansReceivable';
 import { CashInHand } from './components/CashInHand';
 import { ProductTransfers } from './components/ProductTransfer';
-import { ProductCosting } from './components/ProductCosting';
 import { SalesReport } from './components/SalesReport';
 import { ReferralReport } from './components/ReferralReport';
 import { InventoryReport } from './components/InventoryReport';
@@ -29,9 +28,13 @@ import { TopBar } from './components/TopBar';
 import { NotificationBell } from './components/NotificationBell';
 import { Toaster } from './components/ui/sonner';
 import { Notification } from './types/Notification';
-import { Routes, Route } from 'react-router-dom';
+
 import { AdvanceSalary } from './components/AdvanceSalary';
 import { CommissionSlabs } from './components/CommissionSlabs';
+import { CommissionCalculation } from './components/CommissionCalculation';
+import { CommissionReport } from './components/CommissionReport';
+import { InventoryAuditLogComponent } from './components/InventoryAuditLog';
+import { ProductCosting } from './components/ProductCosting';
 
 
 
@@ -237,7 +240,16 @@ export type BankTransfer = {
   note: string;
 };
 
-export type ProductCosting = {
+export type CommissionSlab = {
+  id: string;
+  salesperson: string;
+  city: string;
+  fromAmount: number;
+  toAmount: number;
+  commissionPercentage: number;
+};
+
+export type ProductCostingType = {
   id: string;
   brandName: string;
   modelName: string;
@@ -255,13 +267,25 @@ export type ProductCosting = {
   totalShipmentValuePKR: number;
 };
 
-export type CommissionSlab = {
+export type Commission = {
   id: string;
   salesperson: string;
+  salespersonName: string;
   city: string;
-  fromAmount: number;
-  toAmount: number;
+  month: string; // Format: "YYYY-MM"
+  totalSales: number;
+  appliedSlabFrom: number;
+  appliedSlabTo: number;
   commissionPercentage: number;
+  calculatedCommissionAmount: number;
+  overriddenCommissionPercentage?: number;
+  overriddenCommissionAmount?: number;
+  status: 'Calculated' | 'Adjusted' | 'Confirmed';
+  calculatedBy: string;
+  confirmedBy?: string;
+  calculatedAt: string;
+  confirmedAt?: string;
+  isLocked: boolean;
 };
 
 export type AppData = {
@@ -273,8 +297,9 @@ export type AppData = {
   invoices: Invoice[];
   bankTransfers: BankTransfer[];
   productTransfers: ProductTransfer[];
-  productCosting: ProductCosting[];
   commissionSlabs: CommissionSlab[];
+  productCosting: ProductCostingType[];
+  commissions: Commission[];
 };
 
 const normalizeInitialData = (data: AppData): AppData => {
@@ -676,7 +701,7 @@ const initialData: AppData = {
       deliveryReceivedStatus: 'Received', // NEW: Delivery tracking
       totalAmount: 250000,
       status: 'Paid',
-      salesperson: 'Ahmed Khan',
+      salesperson: '1', // Employee ID for Ahmed Khan
       salespersonLocation: 'Karachi',
       referFrom: 'Ahmed Khan', // NEW: Required field replacing clientDealBy
       referTo: 'Lahore Branch', // NEW: Optional referral destination
@@ -712,8 +737,8 @@ const initialData: AppData = {
       deliveryStatus: 'Self-collect',
       deliveryReceivedStatus: 'Pending', // NEW: Delivery tracking
       totalAmount: 225000,
-      status: 'Unpaid',
-      salesperson: 'Hassan Raza',
+      status: 'Paid', // Changed to Paid so it can be used for commission calculation
+      salesperson: '3', // Employee ID for Hassan Raza
       salespersonLocation: 'Lahore',
       referFrom: 'Hassan Raza', // NEW: Required field replacing clientDealBy
       referTo: '', // NEW: Optional referral destination
@@ -750,8 +775,131 @@ const initialData: AppData = {
       note: 'Transfer for sales'
     }
   ],
+  commissionSlabs: [
+    {
+      id: '1',
+      salesperson: '1', // Ahmed Khan
+      city: 'Karachi',
+      fromAmount: 0,
+      toAmount: 500000,
+      commissionPercentage: 5
+    },
+    {
+      id: '2',
+      salesperson: '1', // Ahmed Khan
+      city: 'Karachi',
+      fromAmount: 500001,
+      toAmount: 1000000,
+      commissionPercentage: 7
+    },
+    {
+      id: '3',
+      salesperson: '1', // Ahmed Khan
+      city: 'Karachi',
+      fromAmount: 1000001,
+      toAmount: 2000000,
+      commissionPercentage: 10
+    },
+    {
+      id: '4',
+      salesperson: '3', // Hassan Raza
+      city: 'Lahore',
+      fromAmount: 0,
+      toAmount: 300000,
+      commissionPercentage: 4
+    },
+    {
+      id: '5',
+      salesperson: '3', // Hassan Raza
+      city: 'Lahore',
+      fromAmount: 300001,
+      toAmount: 600000,
+      commissionPercentage: 6
+    },
+    {
+      id: '6',
+      salesperson: '3', // Hassan Raza
+      city: 'Lahore',
+      fromAmount: 600001,
+      toAmount: 1000000,
+      commissionPercentage: 8
+    }
+  ],
   productCosting: [],
-  commissionSlabs: []
+  commissions: [
+    {
+      id: 'COM-001',
+      salesperson: '1',
+      salespersonName: 'Ahmed Khan',
+      city: 'Karachi',
+      month: '2024-01',
+      totalSales: 250000,
+      appliedSlabFrom: 0,
+      appliedSlabTo: 500000,
+      commissionPercentage: 5,
+      calculatedCommissionAmount: 12500,
+      status: 'Confirmed',
+      calculatedBy: 'Admin',
+      confirmedBy: 'Manager',
+      calculatedAt: '2024-01-20T10:00:00Z',
+      confirmedAt: '2024-01-25T14:30:00Z',
+      isLocked: true
+    },
+    {
+      id: 'COM-002',
+      salesperson: '3',
+      salespersonName: 'Hassan Raza',
+      city: 'Lahore',
+      month: '2024-01',
+      totalSales: 225000,
+      appliedSlabFrom: 0,
+      appliedSlabTo: 300000,
+      commissionPercentage: 4,
+      calculatedCommissionAmount: 9000,
+      status: 'Confirmed',
+      calculatedBy: 'Admin',
+      confirmedBy: 'Manager',
+      calculatedAt: '2024-01-20T10:15:00Z',
+      confirmedAt: '2024-01-25T15:00:00Z',
+      isLocked: true
+    },
+    {
+      id: 'COM-003',
+      salesperson: '1',
+      salespersonName: 'Ahmed Khan',
+      city: 'Karachi',
+      month: '2024-02',
+      totalSales: 750000,
+      appliedSlabFrom: 500001,
+      appliedSlabTo: 1000000,
+      commissionPercentage: 7,
+      calculatedCommissionAmount: 52500,
+      status: 'Calculated',
+      calculatedBy: 'Admin',
+      calculatedAt: '2024-02-20T09:00:00Z',
+      isLocked: false
+    },
+    {
+      id: 'COM-004',
+      salesperson: '3',
+      salespersonName: 'Hassan Raza',
+      city: 'Lahore',
+      month: '2024-02',
+      totalSales: 450000,
+      appliedSlabFrom: 300001,
+      appliedSlabTo: 600000,
+      commissionPercentage: 6,
+      calculatedCommissionAmount: 27000,
+      overriddenCommissionPercentage: 8,
+      overriddenCommissionAmount: 36000,
+      status: 'Adjusted',
+      calculatedBy: 'Admin',
+      confirmedBy: 'Manager',
+      calculatedAt: '2024-02-20T09:30:00Z',
+      confirmedAt: '2024-02-25T11:00:00Z',
+      isLocked: true
+    }
+  ]
 };
 
 export default function App() {
@@ -767,6 +915,8 @@ export default function App() {
         return <Employees employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
       case 'products':
         return <Products products={data.products} setProducts={(products) => setData({ ...data, products })} productCosting={data.productCosting} />;
+      case 'product-costing':
+        return <ProductCosting products={data.products} productCosting={data.productCosting} setProductCosting={(productCosting) => setData({ ...data, productCosting })} />;
       case 'transactions':
         return <Transactions 
           transactions={data.transactions} 
@@ -800,10 +950,7 @@ export default function App() {
           transfers={data.productTransfers}
           setTransfers={(transfers) => setData({ ...data, productTransfers: transfers })}
         />;
-      case 'product-costing':
-        return <ProductCosting products={data.products} productCosting={data.productCosting} setProductCosting={(productCosting) => setData({ ...data, productCosting })} />;
-      case 'commission-slabs':
-        return <CommissionSlabs commissionSlabs={data.commissionSlabs} setCommissionSlabs={(commissionSlabs) => setData({ ...data, commissionSlabs })} employees={data.employees} />;
+  
       case 'bank-transfers':
         return <BankTransfers 
           transfers={data.bankTransfers}
@@ -887,6 +1034,20 @@ export default function App() {
         return <InventoryReport products={data.products} />;
       case 'transaction-history-report':
         return <TransactionHistoryReport transactions={data.transactions} />;
+      case 'commission-slabs':
+        return <CommissionSlabs commissionSlabs={data.commissionSlabs} setCommissionSlabs={(commissionSlabs) => setData({ ...data, commissionSlabs })} employees={data.employees} />;
+      case 'commission-calculation':
+        return <CommissionCalculation
+          commissions={data.commissions}
+          setCommissions={(commissions) => setData({ ...data, commissions })}
+          commissionSlabs={data.commissionSlabs}
+          invoices={data.invoices}
+          employees={data.employees}
+        />;
+      case 'commission-report':
+        return <CommissionReport commissions={data.commissions} />;
+      case 'inventory-audit-log':
+        return <InventoryAuditLogComponent auditLogs={[]} />;
       default:
         return <Dashboard data={data} />;
     }

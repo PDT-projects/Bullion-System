@@ -335,16 +335,25 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
       imageUrl: row.imageUrl
     }));
 
-    // Update bank balances
+    // Update bank balances and record history
     transactionRows.forEach(row => {
       if (row.mode === 'Bank' && row.bankId) {
         const bank = banks.find(b => b.id === row.bankId);
         if (bank) {
           const isInflow = formData.type === 'Inflow';
           const newBalance = isInflow ? bank.balance + row.amount : bank.balance - row.amount;
-          
-          const updatedBanks = banks.map(b => 
-            b.id === row.bankId ? { ...b, balance: newBalance } : b
+
+          const updatedBanks = banks.map(b =>
+            b.id === row.bankId ? {
+              ...b,
+              balance: newBalance,
+              balanceHistory: [...b.balanceHistory, {
+                date: formData.date,
+                balance: newBalance,
+                transaction: `${formData.type === 'Inflow' ? 'Inflow' : 'Outflow'}: ${formData.subCategory} - ${row.note}`,
+                type: 'transaction'
+              }]
+            } : b
           );
           setBanks(updatedBanks);
         }

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Invoice, Product } from '../App';
-import { Calendar, MapPin, User, Filter, Download, FileSpreadsheet } from 'lucide-react';
+import { Calendar, MapPin, User, Filter, Download, FileSpreadsheet, BarChart3 } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type SalesReportProps = {
   invoices: Invoice[];
@@ -13,6 +14,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedSalesperson, setSelectedSalesperson] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [showVisualization, setShowVisualization] = useState(false);
 
   // Get unique values for filters
   const cities = useMemo(() => {
@@ -102,7 +104,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
   const totals = useMemo(() => {
     // Group by invoice to avoid counting invoice-level data multiple times
     const uniqueInvoices = new Map<string, any>();
-    
+
     filteredData.forEach(item => {
       if (!uniqueInvoices.has(item.invoiceNumber)) {
         uniqueInvoices.set(item.invoiceNumber, {
@@ -112,12 +114,84 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
         });
       }
     });
-    
+
     return Array.from(uniqueInvoices.values()).reduce((acc, inv) => ({
       invoiceTotal: acc.invoiceTotal + inv.invoiceTotal,
       deductionCharges: acc.deductionCharges + inv.deductionCharges,
       netAmount: acc.netAmount + inv.netAmount
     }), { invoiceTotal: 0, deductionCharges: 0, netAmount: 0 });
+  }, [filteredData]);
+
+  // Prepare visualization data
+  const visualizationData = useMemo(() => {
+    // Sales trend over time
+    const salesByDate = filteredData.reduce((acc, item) => {
+      if (!acc[item.date]) acc[item.date] = 0;
+      acc[item.date] += item.netAmount;
+      return acc;
+    }, {} as Record<string, number>);
+    const salesTrend = Object.entries(salesByDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, amount]) => ({ date, amount }));
+
+    // Sales by city
+    const salesByCity = filteredData.reduce((acc, item) => {
+      if (!acc[item.city]) acc[item.city] = 0;
+      acc[item.city] += item.netAmount;
+      return acc;
+    }, {} as Record<string, number>);
+    const citySales = Object.entries(salesByCity)
+      .map(([city, amount]) => ({ city, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Sales by salesperson
+    const salesBySalesperson = filteredData.reduce((acc, item) => {
+      if (!acc[item.salesperson]) acc[item.salesperson] = 0;
+      acc[item.salesperson] += item.netAmount;
+      return acc;
+    }, {} as Record<string, number>);
+    const salespersonSales = Object.entries(salesBySalesperson)
+      .map(([salesperson, amount]) => ({ salesperson, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Sales by product
+    const salesByProduct = filteredData.reduce((acc, item) => {
+      const key = `${item.product} / ${item.brand}`;
+      if (!acc[key]) acc[key] = 0;
+      acc[key] += item.netAmount;
+      return acc;
+    }, {} as Record<string, number>);
+    const productSales = Object.entries(salesByProduct)
+      .map(([product, amount]) => ({ product, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10); // Top 10 products
+
+    // Delivery status distribution
+    const statusCounts = filteredData.reduce((acc, item) => {
+      if (!acc[item.status]) acc[item.status] = 0;
+      acc[item.status] += 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const statusData = Object.entries(statusCounts)
+      .map(([status, count]) => ({ status, count }));
+
+    // Collection method distribution
+    const collectionCounts = filteredData.reduce((acc, item) => {
+      if (!acc[item.collectionMethod]) acc[item.collectionMethod] = 0;
+      acc[item.collectionMethod] += 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const collectionData = Object.entries(collectionCounts)
+      .map(([method, count]) => ({ method, count }));
+
+    return {
+      salesTrend,
+      citySales,
+      salespersonSales,
+      productSales,
+      statusData,
+      collectionData
+    };
   }, [filteredData]);
 
   const handleExportCSV = () => {
@@ -160,8 +234,19 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Sales Report</h2>
-        <p className="text-sm text-gray-600 mt-1">Auto-generated from invoice data - Read-only report</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Sales Report</h2>
+            <p className="text-sm text-gray-600 mt-1">Auto-generated from invoice data - Read-only report</p>
+          </div>
+          <button
+            onClick={() => setShowVisualization(!showVisualization)}
+            className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-lg hover:bg-blue-200 flex items-center gap-2"
+          >
+            <BarChart3 size={16} />
+            {showVisualization ? 'Hide' : 'Show'} Visualization
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -287,6 +372,123 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
           <p className="text-2xl font-bold text-[#10b981]">Rs {totals.netAmount.toLocaleString()}</p>
         </div>
       </div>
+
+      {/* Visualization Section */}
+      {showVisualization && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Sales Analytics</h3>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Sales Trend Over Time */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Sales Trend Over Time</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={visualizationData.salesTrend}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Amount']} />
+                  <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Sales by City */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Sales by City</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.citySales}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="city" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Amount']} />
+                  <Bar dataKey="amount" fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Sales by Salesperson */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Sales by Salesperson</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.salespersonSales}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="salesperson" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Amount']} />
+                  <Bar dataKey="amount" fill="#f59e0b" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Top 10 Products */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Top 10 Products by Sales</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={visualizationData.productSales} layout="horizontal">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="product" type="category" width={100} />
+                  <Tooltip formatter={(value) => [`Rs ${Number(value).toLocaleString()}`, 'Amount']} />
+                  <Bar dataKey="amount" fill="#8b5cf6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Delivery Status Distribution */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Delivery Status Distribution</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={visualizationData.statusData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ status, count }) => `${status}: ${count}`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="count"
+                  >
+                    {visualizationData.statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444'][index % 4]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Collection Method Distribution */}
+            <div>
+              <h4 className="text-md font-medium text-gray-900 mb-4">Collection Method Distribution</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={visualizationData.collectionData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ method, count }) => `${method}: ${count}`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="count"
+                  >
+                    {visualizationData.collectionData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sales Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">

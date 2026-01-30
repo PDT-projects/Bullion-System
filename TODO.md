@@ -1,12 +1,35 @@
-# TODO: Complete Advance Salary Integration
+# Historical Balance Viewing Feature Implementation
+
+## Overview
+Add functionality to view bank balance history by selecting a specific date, showing how much balance was available on that date.
 
 ## Tasks
-- [ ] Update Salary.tsx: Remove useNavigate import, add setActiveModule prop, change button to use setActiveModule('advance-salary')
-- [ ] Update App.tsx: Pass setActiveModule to Salary, add 'advance-salary' case in renderModule, remove Route for AdvanceSalary
-- [ ] Update Sidebar.tsx: Add 'Advance Salary' menu item under Finance
-- [ ] Improve AdvanceSalary.tsx: Add min="0" to inputs, prevent negatives, add bank validation, integrate with transactions
 
-## Followup
-- [ ] Test navigation from Salary to Advance Salary
-- [ ] Verify transactions and bank updates
-- [ ] Ensure no negative values in forms
+### 1. Update Bank Interface and Data Structure
+- [x] Add `balanceHistory` array to Bank interface with structure: `{date: string, balance: number, transaction: string, type: 'initial' | 'transfer' | 'transaction' | 'salary' | 'loan' | 'payment'}`
+- [x] Initialize balance history for existing banks with initial balance entries
+
+### 2. Modify Banks.tsx Component
+- [x] Add balance history recording for bank transfers
+- [x] Add date picker component for historical date selection
+- [x] Implement `calculateHistoricalBalance(bankId: number, targetDate: string)` function
+- [x] Add "View Historical Balance" UI section with date picker and balance display
+- [x] Update transfer logic to record history entries
+
+### 3. Update Transaction Components
+- [x] Modify `src/components/Transactions.tsx` to record balance history on inflow/outflow
+- [ ] Modify `src/components/Salary.tsx` to record balance history on salary payments
+- [ ] Modify `src/components/LoansPayable.tsx` to record balance history on loan payments
+- [ ] Modify `src/components/Loans.tsx` to record balance history on loan disbursements
+- [ ] Modify `src/components/PendingPayments.tsx` to record balance history on payments
+
+### 4. Testing and Validation
+- [ ] Test historical balance calculations for various dates
+- [ ] Verify history recording works across all transaction types
+- [ ] Test date picker functionality and edge cases
+- [ ] Ensure backward compatibility with existing functionality
+
+### 5. UI/UX Enhancements
+- [ ] Add visual indicators for historical vs current balances
+- [ ] Improve date picker styling and user experience
+- [ ] Add loading states for historical calculations if needed

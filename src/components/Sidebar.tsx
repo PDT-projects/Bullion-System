@@ -21,7 +21,8 @@ import {
   UserCheck,
   PieChart,
   UserPlus,
-  Percent
+  Percent,
+  Calculator
 } from 'lucide-react';
 
 type MenuItem = {
@@ -54,6 +55,7 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
         { id: 'products', name: 'Products / Inventory', icon: Package },
         { id: 'product-costing', name: 'Product Costing', icon: DollarSign },
         { id: 'commission-slabs', name: 'Commission Slabs', icon: Percent },
+        { id: 'commission-calculation', name: 'Commission Calculation', icon: Calculator },
         { id: 'invoices', name: 'Invoices', icon: FileText },
       { id: 'product-transfer', name: 'Product Transfer', icon: ArrowLeftRight }
 
@@ -97,7 +99,9 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
       children: [
         { id: 'sales-report', name: 'Sales Report', icon: PieChart },
         { id: 'referral-report', name: 'Referral Report', icon: UserPlus },
+        { id: 'commission-report', name: 'Commission Report', icon: Calculator },
         { id: 'inventory-report', name: 'Inventory Report', icon: Package },
+        { id: 'inventory-audit-log', name: 'Inventory Audit Log', icon: FileSpreadsheet },
         { id: 'transaction-history-report', name: 'Transaction History Report', icon: FileSpreadsheet },
         { id: 'transaction-history', name: 'Transaction History', icon: Receipt },
         { id: 'loan-history', name: 'Loan History', icon: Banknote },
