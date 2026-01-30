@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Loan, Bank } from '../App';
+import { Loan, Bank, Employee } from '../App';
 import { Plus, Eye, Edit, Trash2, X, Printer, Download, FileText, DollarSign, Maximize2, Minimize2, Building2, Calendar, Banknote, TrendingUp } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 type LoansPayableProps = {
   loans: Loan[];
   setLoans: (loans: Loan[]) => void;
+  employees: Employee[];
   banks: Bank[];
   setBanks: (banks: Bank[]) => void;
 };
@@ -128,7 +129,13 @@ export function LoansPayable({ loans, setLoans, banks, setBanks }: LoansPayableP
       date: formData.date!,
       mode: formData.mode!,
       bankId: formData.bankId,
-      bankName: formData.bankName
+      bankName: formData.bankName,
+      receiverType: 'Person',
+      receiverName: formData.entityName!,
+      receiverId: undefined,
+      receiverPhone: undefined,
+      employeeId: undefined,
+      employeeName: undefined
     };
 
     if (editingLoan) {
