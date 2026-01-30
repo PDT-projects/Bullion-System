@@ -901,7 +901,8 @@ const initialData: AppData = {
       calculatedAt: '2024-02-20T09:30:00Z',
       confirmedAt: '2024-02-25T11:00:00Z',
       isLocked: true
-  commissionSlabs: [],
+    }
+  ],
   budgets: [
     {
       id: '1',
