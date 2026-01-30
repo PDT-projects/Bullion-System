@@ -35,6 +35,8 @@ import { CommissionCalculation } from './components/CommissionCalculation';
 import { CommissionReport } from './components/CommissionReport';
 import { InventoryAuditLogComponent } from './components/InventoryAuditLog';
 import { ProductCosting } from './components/ProductCosting';
+import { Budgets } from './components/budgets/Budgets';
+import { Budget } from './types/Budget';
 
 
 
@@ -300,6 +302,7 @@ export type AppData = {
   commissionSlabs: CommissionSlab[];
   productCosting: ProductCostingType[];
   commissions: Commission[];
+  budgets: Budget[];
 };
 
 const normalizeInitialData = (data: AppData): AppData => {
@@ -898,6 +901,47 @@ const initialData: AppData = {
       calculatedAt: '2024-02-20T09:30:00Z',
       confirmedAt: '2024-02-25T11:00:00Z',
       isLocked: true
+  commissionSlabs: [],
+  budgets: [
+    {
+      id: '1',
+      category: 'Expenses',
+      subCategory: 'Salaries',
+      period: 'Monthly',
+      budgetLimit: 500000,
+      spent: 450000,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-15T00:00:00.000Z'
+    },
+    {
+      id: '2',
+      category: 'Expenses',
+      subCategory: 'Office Rent',
+      period: 'Monthly',
+      budgetLimit: 150000,
+      spent: 150000,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-15T00:00:00.000Z'
+    },
+    {
+      id: '3',
+      category: 'Expenses',
+      subCategory: 'Utilities',
+      period: 'Monthly',
+      budgetLimit: 80000,
+      spent: 55000,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-15T00:00:00.000Z'
+    },
+    {
+      id: '4',
+      category: 'Expenses',
+      subCategory: 'Marketing',
+      period: 'Quarterly',
+      budgetLimit: 200000,
+      spent: 120000,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-15T00:00:00.000Z'
     }
   ]
 };
@@ -1048,6 +1092,8 @@ export default function App() {
         return <CommissionReport commissions={data.commissions} />;
       case 'inventory-audit-log':
         return <InventoryAuditLogComponent auditLogs={[]} />;
+      case 'budgets':
+        return <Budgets budgets={data.budgets} setBudgets={(budgets) => setData({ ...data, budgets })} />;
       default:
         return <Dashboard data={data} />;
     }

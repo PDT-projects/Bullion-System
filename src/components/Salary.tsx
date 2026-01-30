@@ -50,6 +50,7 @@ type SalaryTransaction = {
   mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method
   bankName?: string;
   imageUrl?: string;
+  salaryMonth?: string; // Month for which salary is being paid
 };
 
 export function Salary({ transactions, setTransactions, banks, setBanks, employees, setActiveModule }: SalaryProps) {
@@ -87,7 +88,8 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     paidBy: 'Pakistan Detectors - Islamabad',
     mode: 'Cash',
     bankName: '',
-    imageUrl: ''
+    imageUrl: '',
+    salaryMonth: ''
   }]);
 
   // Filter salary transactions (both regular salary and advance salary)
@@ -113,7 +115,8 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
       paidBy: companies[0].split(': ')[1] || companies[0],
       mode: 'Cash',
       bankName: '',
-      imageUrl: ''
+      imageUrl: '',
+      salaryMonth: new Date().toISOString().slice(0, 7) // Default to current month
     }]);
     setIsModalOpen(true);
   };
@@ -130,7 +133,8 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
       paidBy: formData.company.split(': ')[1] || formData.company,
       mode: 'Cash',
       bankName: '',
-      imageUrl: ''
+      imageUrl: '',
+      salaryMonth: new Date().toISOString().slice(0, 7) // Default to current month
     }]);
   };
 
@@ -234,6 +238,7 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
       commission: salTxn.commission,
       deductions: salTxn.deductions,
       netAmount: salTxn.netAmount,
+      salaryMonth: salTxn.salaryMonth,
       note: formData.note,
       imageUrl: salTxn.imageUrl
     }));
@@ -433,6 +438,7 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
@@ -453,6 +459,9 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
                   <tr key={salary.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(salary.date).toLocaleDateString('en-PK')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {salary.salaryMonth || '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{salary.company.split(': ')[1] || salary.company}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#4f46e5]">{salary.employeeName || '-'}</td>
@@ -606,7 +615,7 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
                       </div>
                       
                       <div className="grid grid-cols-3 gap-3 mb-3">
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                           <label className="block text-xs font-medium text-gray-600 mb-1">Employee *</label>
                           <select
                             value={txn.employeeId}
@@ -620,6 +629,15 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
                               </option>
                             ))}
                           </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Salary Month *</label>
+                          <input
+                            type="month"
+                            value={txn.salaryMonth || ''}
+                            onChange={(e) => updateSalaryTransaction(txn.id, 'salaryMonth', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm"
+                          />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">Base Salary</label>
