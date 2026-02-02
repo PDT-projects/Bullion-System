@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Product } from '../App';
-import { Package, MapPin, Calendar, Filter, Download, BarChart3, Eye, X, Hash, DollarSign } from 'lucide-react';
+import { Package, MapPin, Calendar, Filter, Download, BarChart3, Eye, X, Hash, DollarSign, FileText, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -238,30 +238,36 @@ export function InventoryReport({ products }: InventoryReportProps) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Package size={18} className="text-blue-600" />
-            <p className="text-sm text-gray-600">Total Available/Returned</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Package size={20} className="text-blue-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">Total Available/Returned</p>
           </div>
-          <p className="text-2xl font-bold text-[#4f46e5]">{overallTotals.totalStock} units</p>
+          <p className="text-3xl font-bold text-[#4f46e5]">{overallTotals.totalStock} units</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <BarChart3 size={18} className="text-green-600" />
-            <p className="text-sm text-gray-600">Total Value</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <BarChart3 size={20} className="text-green-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">Total Value</p>
           </div>
-          <p className="text-2xl font-bold text-[#10b981]">{formatCurrency(overallTotals.totalValue)}</p>
+          <p className="text-3xl font-bold text-[#10b981]">{formatCurrency(overallTotals.totalValue)}</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <MapPin size={18} className="text-purple-600" />
-            <p className="text-sm text-gray-600">Cities / In Transit</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <MapPin size={20} className="text-purple-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">Cities / In Transit</p>
           </div>
-          <p className="text-lg font-bold text-gray-900">
+          <p className="text-2xl font-bold text-gray-900">
             {selectedCity ? 1 : CITIES.length} cities
           </p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 mt-2">
             In Transit: {overallTotals.totalInTransit} units
           </p>
         </div>
@@ -269,8 +275,13 @@ export function InventoryReport({ products }: InventoryReportProps) {
 
       {/* Visualization Section */}
       {showVisualization && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Inventory Analytics</h3>
+        <div className="bg-white rounded-xl border border-gray-200 p-8 mb-8 shadow-sm">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="p-3 bg-purple-100 rounded-xl">
+              <BarChart3 size={24} className="text-purple-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">Inventory Analytics</h3>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Stock Distribution by City */}
@@ -437,24 +448,26 @@ export function InventoryReport({ products }: InventoryReportProps) {
       </div>
 
       {/* City-wise Inventory */}
-      <div className="space-y-6">
+      <div className="space-y-8">
         {cityInventory.map(inv => (
-          <div key={inv.city} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div key={inv.city} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
             {/* City Header */}
-            <div className="bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] p-4">
+            <div className="bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] p-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <MapPin size={24} className="text-white" />
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-white/20 rounded-xl">
+                    <MapPin size={28} className="text-white" />
+                  </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white">{inv.city}</h3>
-                    <p className="text-sm text-white/80 mt-1">
+                    <h3 className="text-2xl font-bold text-white">{inv.city}</h3>
+                    <p className="text-base text-white/90 mt-1">
                       {inv.products.length} product{inv.products.length !== 1 ? 's' : ''} • {inv.totalStock} units
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-white/80">Total Value</p>
-                  <p className="text-2xl font-bold text-white">{formatCurrency(inv.totalValue)}</p>
+                  <p className="text-3xl font-bold text-white">{formatCurrency(inv.totalValue)}</p>
                 </div>
               </div>
             </div>

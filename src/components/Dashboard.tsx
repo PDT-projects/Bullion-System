@@ -1,9 +1,7 @@
 import { AppData, Transaction } from '../App';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Wallet, Building2, DollarSign, BarChart3, PieChart, Activity, FileText, Package, Users, Receipt, TrendingUp as TrendingUpIcon } from 'lucide-react';
-import { InventoryCharts } from './InventoryCharts';
-import { TransactionCharts } from './TransactionCharts';
-import { CashFlowCharts } from './CashFlowCharts';
+import { TrendingUp, TrendingDown, Wallet, Building2, DollarSign, Activity, FileText, Package, Users, Receipt, TrendingUp as TrendingUpIcon } from 'lucide-react';
+
 import { SalesReport } from './SalesReport';
 import { InventoryReport } from './InventoryReport';
 import { TransactionHistoryReport } from './TransactionHistoryReport';
@@ -11,7 +9,6 @@ import { ReferralReport } from './ReferralReport';
 import { CommissionReport } from './CommissionReport';
 import { InvoiceReport } from './InvoiceReport';
 import { useState } from 'react';
-import { mockCashFlowData } from '../mockData';
 
 type DashboardProps = {
   data: AppData;
@@ -58,12 +55,6 @@ export function Dashboard({ data }: DashboardProps) {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'inventory':
-        return <InventoryCharts products={data.products} />;
-      case 'transactions':
-        return <TransactionCharts transactions={data.transactions} />;
-      case 'cashflow':
-        return <CashFlowCharts transactions={data.transactions} />;
       case 'reports':
         if (selectedReport) {
           // Render selected report
@@ -117,70 +108,181 @@ export function Dashboard({ data }: DashboardProps) {
               name: 'Sales Report',
               description: 'View sales performance, revenue trends, and customer analytics',
               icon: TrendingUpIcon,
-              color: 'bg-blue-500'
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Revenue & Analytics'
             },
             {
               id: 'inventory',
               name: 'Inventory Report',
               description: 'Track stock levels, product distribution, and inventory value',
               icon: Package,
-              color: 'bg-green-500'
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Stock Management'
             },
             {
               id: 'transactions',
               name: 'Transaction History',
               description: 'Analyze financial transactions and payment patterns',
               icon: Receipt,
-              color: 'bg-purple-500'
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Financial Flow'
             },
             {
               id: 'invoices',
               name: 'Invoice Report',
               description: 'Monitor invoice status, payments, and outstanding amounts',
               icon: FileText,
-              color: 'bg-orange-500'
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Payment Tracking'
             },
             {
               id: 'referral',
               name: 'Referral Report',
               description: 'Track referral performance and commission earnings',
               icon: Users,
-              color: 'bg-pink-500'
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Referral Network'
             },
             {
               id: 'commission',
               name: 'Commission Report',
               description: 'View salesperson commissions and performance metrics',
               icon: DollarSign,
-              color: 'bg-indigo-500'
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Performance Bonus'
             }
           ];
 
           return (
-            <div>
-              <div className="mb-6">
-                <h3 className="text-xl font-bold text-gray-900">Reports Hub</h3>
-                <p className="text-sm text-gray-600 mt-1">Access all your business reports in one place</p>
+            <div className="space-y-8">
+              {/* Header Section */}
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#4f46e5] to-[#7c3aed] rounded-2xl mb-4">
+                  <FileText size={32} className="text-white" />
+                </div>
+                <h3 className="text-3xl font-bold text-gray-900 mb-2">Reports Hub</h3>
+                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                  Access comprehensive business insights and analytics across all your operations
+                </p>
               </div>
 
+              {/* Quick Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">Total Reports</p>
+                      <p className="text-2xl font-bold text-gray-900">{reportCards.length}</p>
+                    </div>
+                    <FileText size={24} className="text-indigo-600" />
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">Data Sources</p>
+                      <p className="text-2xl font-bold text-gray-900">6</p>
+                    </div>
+                    <Package size={24} className="text-indigo-600" />
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">Real-time</p>
+                      <p className="text-2xl font-bold text-gray-900">Yes</p>
+                    </div>
+                    <Activity size={24} className="text-indigo-600" />
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">Export Ready</p>
+                      <p className="text-2xl font-bold text-gray-900">All</p>
+                    </div>
+                    <TrendingUp size={24} className="text-indigo-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Reports Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {reportCards.map((card) => (
+                {reportCards.map((card, index) => (
                   <div
                     key={card.id}
                     onClick={() => setSelectedReport(card.id)}
-                    className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                    className="group relative bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-300 cursor-pointer transform hover:-translate-y-1 overflow-hidden"
+                    style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <div className="flex items-center mb-4">
-                      <div className={`w-12 h-12 ${card.color} rounded-lg flex items-center justify-center mr-4`}>
-                        <card.icon size={24} className="text-white" />
+                    {/* Background Gradient on Hover */}
+                    <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-2xl`} />
+
+                    {/* Content */}
+                    <div className="relative z-10">
+                      {/* Header */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={`w-14 h-14 bg-gradient-to-br ${card.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                          <card.icon size={28} className="text-white" />
+                        </div>
+                        <div className="text-right">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${card.bgColor} ${card.textColor}`}>
+                            {card.stats}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{card.name}</h4>
+
+                      {/* Title and Description */}
+                      <div className="mb-4">
+                        <h4 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-gray-800 transition-colors">
+                          {card.name}
+                        </h4>
+                        <p className="text-gray-600 leading-relaxed">
+                          {card.description}
+                        </p>
+                      </div>
+
+                      {/* Action Indicator */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center text-sm text-gray-500">
+                          <span>View Report</span>
+                          <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                        <div className={`w-8 h-8 rounded-full ${card.bgColor} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                          <svg className="w-4 h-4 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600">{card.description}</p>
+
+                    {/* Hover Effect Border */}
+                    <div className={`absolute inset-0 rounded-2xl border-2 border-transparent group-hover:border-gradient-to-r group-hover:${card.color.split(' ')[0]}/20 transition-all duration-300`} />
                   </div>
                 ))}
+              </div>
+
+              {/* Bottom Section */}
+              <div className="text-center py-8">
+                <div className="inline-flex items-center gap-2 text-gray-500">
+                  <Activity size={16} />
+                  <span className="text-sm">All reports are updated in real-time</span>
+                </div>
               </div>
             </div>
           );
@@ -351,39 +453,6 @@ export function Dashboard({ data }: DashboardProps) {
           >
             <Activity className="inline mr-2" size={18} />
             Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('inventory')}
-            className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
-              activeTab === 'inventory'
-                ? 'text-[#4f46e5] border-b-2 border-[#4f46e5] bg-[#4f46e5]/5'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <BarChart3 className="inline mr-2" size={18} />
-            Inventory
-          </button>
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
-              activeTab === 'transactions'
-                ? 'text-[#4f46e5] border-b-2 border-[#4f46e5] bg-[#4f46e5]/5'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <PieChart className="inline mr-2" size={18} />
-            Transactions
-          </button>
-          <button
-            onClick={() => setActiveTab('cashflow')}
-            className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
-              activeTab === 'cashflow'
-                ? 'text-[#4f46e5] border-b-2 border-[#4f46e5] bg-[#4f46e5]/5'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <TrendingUp className="inline mr-2" size={18} />
-            Cash Flow
           </button>
           <button
             onClick={() => {

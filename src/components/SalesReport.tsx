@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Invoice, Product } from '../App';
-import { Calendar, MapPin, User, Filter, Download, FileSpreadsheet, BarChart3, Eye, X, Truck, Hash, CreditCard } from 'lucide-react';
+import { Calendar, MapPin, User, Filter, Download, FileSpreadsheet, BarChart3, Eye, X, Truck, Hash, CreditCard, FileText, TrendingUp } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type SalesReportProps = {
@@ -241,28 +241,30 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-6">
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Sales Report</h2>
-            <p className="text-sm text-gray-600 mt-1">Auto-generated from invoice data - Read-only report</p>
+            <h2 className="text-3xl font-bold text-gray-900">Sales Report</h2>
+            <p className="text-base text-gray-600 mt-2">Auto-generated from invoice data - Read-only report</p>
           </div>
           <button
             onClick={() => setShowVisualization(!showVisualization)}
-            className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-lg hover:bg-blue-200 flex items-center gap-2"
+            className="px-6 py-3 text-sm font-semibold text-blue-700 bg-blue-100 border border-blue-300 rounded-xl hover:bg-blue-200 hover:shadow-md transition-all duration-200 flex items-center gap-2"
           >
-            <BarChart3 size={16} />
+            <BarChart3 size={18} />
             {showVisualization ? 'Hide' : 'Show'} Visualization
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter size={18} className="text-gray-600" />
-          <h3 className="font-semibold text-gray-900">Filters</h3>
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-blue-100 rounded-lg">
+            <Filter size={20} className="text-blue-600" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900">Filters</h3>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -384,8 +386,13 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
 
       {/* Visualization Section */}
       {showVisualization && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Sales Analytics</h3>
+        <div className="bg-white rounded-xl border border-gray-200 p-8 mb-8 shadow-sm">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="p-3 bg-purple-100 rounded-xl">
+              <BarChart3 size={24} className="text-purple-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">Sales Analytics</h3>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Sales Trend Over Time */}
@@ -500,10 +507,18 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
       )}
 
       {/* Sales Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-100 rounded-lg">
+              <FileSpreadsheet size={20} className="text-indigo-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900">Sales Data Table</h3>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Invoice #</th>
@@ -594,8 +609,20 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
         </div>
       </div>
 
-      <div className="mt-4 text-sm text-gray-600">
-        Showing {filteredData.length} of {salesData.length} sales entries
+      <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-200 rounded-lg">
+              <FileText size={16} className="text-blue-700" />
+            </div>
+            <span className="text-sm font-semibold text-blue-800">
+              Showing {filteredData.length} of {salesData.length} sales entries
+            </span>
+          </div>
+          <div className="text-xs text-blue-600 bg-blue-100 px-3 py-1 rounded-full">
+            Live Data
+          </div>
+        </div>
       </div>
 
       {/* View Invoice Details Modal */}
