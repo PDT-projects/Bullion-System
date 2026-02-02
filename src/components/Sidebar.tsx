@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   ChevronDown,
@@ -40,6 +40,24 @@ type SidebarProps = {
 export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(['finance', 'operations', 'reports']);
 
+  const sectionChildren: { [key: string]: string[] } = {
+    operations: ['employees', 'inventory-entry', 'commission-slabs', 'commission-calculation', 'invoices', 'product-transfer'],
+    finance: ['transactions', 'pending-payments', 'bills', 'salary', 'budgets'],
+    loans: ['loans-payable', 'loans-receivable', 'loans'],
+    banking: ['banks', 'bank-transfers', 'cash-in-hand'],
+    reports: ['sales-report', 'referral-report', 'commission-report', 'inventory-report', 'inventory-audit-log', 'transaction-history-report', 'transaction-history', 'loan-history', 'transfer-history']
+  };
+
+  useEffect(() => {
+    const sectionsToExpand: string[] = ['finance', 'operations', 'reports']; // default expanded
+    Object.entries(sectionChildren).forEach(([section, children]) => {
+      if (children.includes(activeModule)) {
+        sectionsToExpand.push(section);
+      }
+    });
+    setExpandedSections([...new Set(sectionsToExpand)]);
+  }, [activeModule]);
+
   const menuItems: MenuItem[] = [
     {
       id: 'dashboard',
@@ -52,8 +70,7 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
       icon: Package,
       children: [
         { id: 'employees', name: 'Employees', icon: Users },
-        { id: 'products', name: 'Products / Inventory', icon: Package },
-        { id: 'product-costing', name: 'Product Costing', icon: DollarSign },
+        { id: 'inventory-entry', name: 'Inventory Entry', icon: Package },
         { id: 'commission-slabs', name: 'Commission Slabs', icon: Percent },
         { id: 'commission-calculation', name: 'Commission Calculation', icon: Calculator },
         { id: 'invoices', name: 'Invoices', icon: FileText },
