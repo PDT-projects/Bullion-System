@@ -98,7 +98,7 @@ export type Invoice = {
   warrantyLocation?: string;
   products: InvoiceProduct[];
   exchangeWarrantyNote: string;
-  deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered';
+  deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Self-delivered';
   deliveryReceivedStatus: 'Pending' | 'In Process' | 'Received'; // UPDATED: Dynamic delivery tracking with multiple statuses
   totalAmount: number;
   status: 'Paid' | 'Unpaid';
@@ -700,7 +700,7 @@ const initialData: AppData = {
         }
       ],
       exchangeWarrantyNote: '2 years warranty, no exchange after 7 days',
-      deliveryStatus: 'Delivered',
+      deliveryStatus: 'Self-delivered',
       deliveryReceivedStatus: 'Received', // NEW: Delivery tracking
       totalAmount: 250000,
       status: 'Paid',

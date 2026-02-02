@@ -12,7 +12,7 @@ type InvoicesProps = {
   employees: Employee[];
 };
 
-const deliveryStatuses: ('Self-collect' | 'LCS' | 'Daewoo' | 'Delivered')[] = ['Self-collect', 'LCS', 'Daewoo', 'Delivered'];
+const deliveryStatuses: ('Self-collect' | 'LCS' | 'Daewoo' | 'Self-delivered')[] = ['Self-collect', 'LCS', 'Daewoo', 'Self-delivered'];
 
 // Collection methods for deduction charges
 const collectionMethods: ('Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others')[] = ['Self Collection', 'TCS', 'LCS', 'Daewoo', 'Others'];
@@ -400,20 +400,77 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this invoice?')) {
-      setInvoices(invoices.filter(inv => inv.id !== id));
-      toast.success('Invoice deleted successfully');
-    }
-  };
+
 
   const handlePrint = (invoice: Invoice) => {
     toast.success(`Printing invoice ${invoice.invoiceNumber}`);
     window.print();
   };
 
-  const handleDownload = (invoice: Invoice) => {
-    toast.success(`Downloading ${invoice.invoiceNumber}.pdf`);
+  const handleDownload = async (invoice: Invoice) => {
+    try {
+      // Import required libraries
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+
+      // Get the invoice content element
+      const invoiceElement = document.querySelector('#invoice-content') as HTMLElement;
+      if (!invoiceElement) {
+        toast.error('Invoice content not found');
+        return;
+      }
+
+      // Create canvas from the invoice content
+      const canvas = await html2canvas(invoiceElement, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      });
+
+      // Create PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      // Calculate dimensions to fit A4
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 10;
+
+      // Add the invoice image to PDF
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+
+      // Add digital stamp (dummy)
+      const stampX = pdfWidth - 50;
+      const stampY = pdfHeight - 30;
+
+      // Add stamp background
+      pdf.setFillColor(240, 240, 240);
+      pdf.rect(stampX - 40, stampY - 15, 35, 20, 'F');
+
+      // Add stamp border
+      pdf.setDrawColor(100, 100, 100);
+      pdf.setLineWidth(0.5);
+      pdf.rect(stampX - 40, stampY - 15, 35, 20);
+
+      // Add stamp text
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text('DIGITAL STAMP', stampX - 22, stampY - 8);
+      pdf.text('PAK-DET', stampX - 15, stampY - 2);
+      pdf.text(new Date().toLocaleDateString(), stampX - 25, stampY + 4);
+
+      // Download the PDF
+      pdf.save(`${invoice.invoiceNumber}.pdf`);
+      toast.success(`Downloaded ${invoice.invoiceNumber}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -536,13 +593,7 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
                       >
                         <Download size={16} />
                       </button>
-                      <button
-                        onClick={() => handleDelete(invoice.id)}
-                        className="p-2 text-[#ef4444] hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+
                     </div>
                   </td>
                 </tr>
