@@ -126,7 +126,7 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
   const getSubCategories = () => {
     if (!formData.mainCategory) return [];
     const categories = formData.type === 'Inflow' ? INFLOW_CATEGORIES : OUTFLOW_CATEGORIES;
-    return categories[formData.mainCategory] || [];
+    return categories[formData.mainCategory as keyof typeof categories] || [];
   };
 
   // Get bank balance preview with real-time calculation
@@ -527,80 +527,103 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredTransactions.map((transaction) => (
-                <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <tr
+                  key={transaction.id}
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => setViewTransaction(transaction)}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 cursor-pointer" onClick={() => setViewTransaction(transaction)}>
                     {new Date(transaction.date).toLocaleDateString('en-PK')}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 cursor-pointer" onClick={() => setViewTransaction(transaction)}>
                     {transaction.company.split(':')[1]?.trim() || transaction.company}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={() => setViewTransaction(transaction)}>
                     <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(transaction.mainCategory)}`}>
                       {transaction.mainCategory}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.subCategory}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 cursor-pointer" onClick={() => setViewTransaction(transaction)}>{transaction.subCategory}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 cursor-pointer" onClick={() => setViewTransaction(transaction)}>
                     {formatCurrency(transaction.amount)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 cursor-pointer" onClick={() => setViewTransaction(transaction)}>
                     <span className="inline-flex items-center gap-1">
                       {transaction.mode === 'Bank' && <Banknote size={14} />}
                       {transaction.mode}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={() => setViewTransaction(transaction)}>
                     {transaction.paymentStatus && (
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(transaction.paymentStatus)}`}>
                         {transaction.paymentStatus}
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setViewTransaction(transaction)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setViewTransaction(transaction);
+                        }}
                         className="p-2 text-[#4f46e5] hover:bg-[#4f46e5]/10 rounded-lg transition-colors"
                         title="View"
                       >
                         <Eye size={16} />
                       </button>
                       <button
-                        onClick={() => setViewSlip(transaction)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setViewSlip(transaction);
+                        }}
                         className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                         title="View Slip"
                       >
                         <FileText size={16} />
                       </button>
                       <button
-                        onClick={() => handleEdit(transaction)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(transaction);
+                        }}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Edit"
                       >
                         <Edit size={16} />
                       </button>
                       <button
-                        onClick={() => handlePrint(transaction)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePrint(transaction);
+                        }}
                         className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                         title="Print Slip"
                       >
                         <Printer size={16} />
                       </button>
                       <button
-                        onClick={() => handleDownload(transaction)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownload(transaction);
+                        }}
                         className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
                         title="Download Slip"
                       >
                         <Download size={16} />
                       </button>
                       <button
-                        onClick={() => handleDelete(transaction.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(transaction.id);
+                        }}
                         className="p-2 text-[#ef4444] hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete"
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
+                    <Eye size={16} className="text-gray-400 ml-2" />
                   </td>
                 </tr>
               ))}

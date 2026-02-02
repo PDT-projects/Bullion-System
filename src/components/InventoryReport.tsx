@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Product } from '../App';
-import { Package, MapPin, Calendar, Filter, Download, BarChart3 } from 'lucide-react';
+import { Package, MapPin, Calendar, Filter, Download, BarChart3, Eye, X, Hash, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -15,6 +15,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
   const [selectedBrand, setSelectedBrand] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [showVisualization, setShowVisualization] = useState(false);
+  const [viewProduct, setViewProduct] = useState<Product | null>(null);
 
   // Get unique brands and categories
   const brands = useMemo(() => {
@@ -481,7 +482,11 @@ export function InventoryReport({ products }: InventoryReportProps) {
                     </tr>
                   ) : (
                     inv.products.map(product => (
-                      <tr key={product.id} className="hover:bg-gray-50">
+                      <tr
+                        key={product.id}
+                        className="hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => setViewProduct(product)}
+                      >
                         <td className="px-6 py-4">
                           <div>
                             <p className="font-medium text-gray-900">{product.brandName}</p>
@@ -511,7 +516,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-[#4f46e5]">
                           {formatCurrency(product.cityStock * product.costPrice)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td className="px-6 py-4 text-sm text-gray-600 flex items-center justify-between">
                           <div className="max-w-xs">
                             {product.citySerials.slice(0, 3).map(serial => (
                               <span key={serial} className="inline-block mr-2 mb-1 px-2 py-0.5 bg-gray-100 rounded text-xs font-mono">
@@ -524,6 +529,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
                               </span>
                             )}
                           </div>
+                          <Eye size={16} className="text-gray-400 ml-2" />
                         </td>
                       </tr>
                     ))
@@ -568,6 +574,183 @@ export function InventoryReport({ products }: InventoryReportProps) {
             <div>
               <p className="text-sm text-white/80">Total Inventory Value</p>
               <p className="text-2xl font-bold">{formatCurrency(overallTotals.totalValue)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Product Details Modal */}
+      {viewProduct && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold">Product Details</h3>
+              <button onClick={() => setViewProduct(null)} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Product Header */}
+              <div className="bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] text-white rounded-lg p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-2xl font-bold">{viewProduct.brandName} {viewProduct.modelName}</h4>
+                    <p className="text-sm opacity-90 mt-1">{viewProduct.category}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm opacity-90">Total Stock</p>
+                    <p className="text-3xl font-bold">{viewProduct.serialNumbers.length} units</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Product Information */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <h5 className="font-semibold text-gray-900 mb-3">Pricing Information</h5>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Cost Price:</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(viewProduct.costPrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Sell Price:</span>
+                      <span className="font-semibold text-green-600">{formatCurrency(viewProduct.sellPrice)}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-2">
+                      <span className="text-gray-600">Profit Margin:</span>
+                      <span className={`font-semibold ${viewProduct.sellPrice > viewProduct.costPrice ? 'text-green-600' : 'text-red-600'}`}>
+                        {viewProduct.costPrice > 0 ? (((viewProduct.sellPrice - viewProduct.costPrice) / viewProduct.costPrice) * 100).toFixed(1) : 0}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <h5 className="font-semibold text-gray-900 mb-3">Stock Information</h5>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Serial Numbers:</span>
+                      <span className="font-semibold text-gray-900">{viewProduct.serialNumbers.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Value:</span>
+                      <span className="font-semibold text-[#4f46e5]">{formatCurrency(viewProduct.serialNumbers.length * viewProduct.costPrice)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Serial Numbers by City */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h5 className="font-semibold text-gray-900 mb-4">Serial Numbers by City</h5>
+                <div className="space-y-4">
+                  {CITIES.map(city => {
+                    const citySerials = viewProduct.serialNumbers.filter(serial => {
+                      const status = (viewProduct.serialStatus || {})[serial] || 'Available';
+                      return viewProduct.serialCities[serial] === city && status !== 'In Transit';
+                    });
+
+                    const available = citySerials.filter(serial => {
+                      const status = (viewProduct.serialStatus || {})[serial] || 'Available';
+                      return status === 'Available';
+                    });
+
+                    const returned = citySerials.filter(serial => {
+                      const status = (viewProduct.serialStatus || {})[serial];
+                      return status === 'Returned';
+                    });
+
+                    const damaged = citySerials.filter(serial => {
+                      const status = (viewProduct.serialStatus || {})[serial];
+                      return status === 'Damaged';
+                    });
+
+                    const inTransit = viewProduct.serialNumbers.filter(serial => {
+                      const status = (viewProduct.serialStatus || {})[serial];
+                      return status === 'In Transit';
+                    });
+
+                    if (citySerials.length === 0 && inTransit.length === 0) return null;
+
+                    return (
+                      <div key={city} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h6 className="font-medium text-gray-900 flex items-center gap-2">
+                            <MapPin size={16} className="text-gray-500" />
+                            {city}
+                          </h6>
+                          <span className="text-sm text-gray-600">
+                            {citySerials.length} units in city
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                          <div className="text-center">
+                            <p className="text-xs text-gray-500">Available</p>
+                            <p className="text-lg font-semibold text-green-600">{available.length}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-gray-500">Returned</p>
+                            <p className="text-lg font-semibold text-blue-600">{returned.length}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-gray-500">Damaged</p>
+                            <p className="text-lg font-semibold text-red-600">{damaged.length}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-gray-500">In Transit</p>
+                            <p className="text-lg font-semibold text-orange-600">{inTransit.length}</p>
+                          </div>
+                        </div>
+
+                        {citySerials.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">Serial Numbers:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {citySerials.map(serial => {
+                                const status = (viewProduct.serialStatus || {})[serial] || 'Available';
+                                const statusColor = {
+                                  'Available': 'bg-green-100 text-green-800',
+                                  'Returned': 'bg-blue-100 text-blue-800',
+                                  'Damaged': 'bg-red-100 text-red-800',
+                                  'In Transit': 'bg-orange-100 text-orange-800'
+                                }[status] || 'bg-gray-100 text-gray-800';
+
+                                return (
+                                  <span key={serial} className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${statusColor}`}>
+                                    {serial}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {inTransit.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-sm font-medium text-orange-700 mb-2">In Transit Serial Numbers:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {inTransit.map(serial => (
+                                <span key={serial} className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                                  {serial}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Additional Product Details */}
+              {viewProduct.description && (
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <h5 className="font-semibold text-gray-900 mb-2">Description</h5>
+                  <p className="text-gray-700">{viewProduct.description}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Invoice, Product } from '../App';
-import { Calendar, MapPin, User, Filter, Download, FileSpreadsheet, BarChart3 } from 'lucide-react';
+import { Calendar, MapPin, User, Filter, Download, FileSpreadsheet, BarChart3, Eye, X, Truck, Hash, CreditCard } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type SalesReportProps = {
@@ -15,6 +15,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
   const [selectedSalesperson, setSelectedSalesperson] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [showVisualization, setShowVisualization] = useState(false);
+  const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
 
   // Get unique values for filters
   const cities = useMemo(() => {
@@ -229,6 +230,14 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
     setSelectedCity('');
     setSelectedSalesperson('');
     setSelectedStatus('');
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-PK', {
+      style: 'currency',
+      currency: 'PKR',
+      minimumFractionDigits: 0
+    }).format(amount);
   };
 
   return (
@@ -517,46 +526,56 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">{item.date}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 font-mono">{item.invoiceNumber}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{item.clientName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{item.city}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{item.product} / {item.brand}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">Rs {item.invoiceTotal.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        item.collectionMethod === 'Self Collection' ? 'bg-green-100 text-green-800' :
-                        item.collectionMethod === 'TCS' ? 'bg-blue-100 text-blue-800' :
-                        item.collectionMethod === 'LCS' ? 'bg-yellow-100 text-yellow-800' :
-                        item.collectionMethod === 'Daewoo' ? 'bg-purple-100 text-purple-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {item.collectionMethod}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-medium">
-                      {item.deductionCharges > 0 ? (
-                        <span className="text-[#ef4444]">- Rs {item.deductionCharges.toLocaleString()}</span>
-                      ) : (
-                        <span className="text-[#10b981]">Rs 0</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-bold text-[#4f46e5]">Rs {item.netAmount.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        item.status === 'Delivered' ? 'bg-green-100 text-green-800' :
-                        item.status === 'Self-collect' ? 'bg-blue-100 text-blue-800' :
-                        item.status === 'LCS' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-purple-100 text-purple-800'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{item.salesperson}</td>
-                  </tr>
-                ))
+                filteredData.map((item) => {
+                  const invoice = invoices.find(inv => inv.invoiceNumber === item.invoiceNumber);
+                  return (
+                    <tr
+                      key={item.id}
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => invoice && setViewInvoice(invoice)}
+                    >
+                      <td className="px-4 py-3 text-sm text-gray-900">{item.date}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 font-mono">{item.invoiceNumber}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{item.clientName}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{item.city}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{item.product} / {item.brand}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">Rs {item.invoiceTotal.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          item.collectionMethod === 'Self Collection' ? 'bg-green-100 text-green-800' :
+                          item.collectionMethod === 'TCS' ? 'bg-blue-100 text-blue-800' :
+                          item.collectionMethod === 'LCS' ? 'bg-yellow-100 text-yellow-800' :
+                          item.collectionMethod === 'Daewoo' ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {item.collectionMethod}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-medium">
+                        {item.deductionCharges > 0 ? (
+                          <span className="text-[#ef4444]">- Rs {item.deductionCharges.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-[#10b981]">Rs 0</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-[#4f46e5]">Rs {item.netAmount.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          item.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+                          item.status === 'Self-collect' ? 'bg-blue-100 text-blue-800' :
+                          item.status === 'LCS' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-purple-100 text-purple-800'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 flex items-center justify-between">
+                        <span>{item.salesperson}</span>
+                        <Eye size={16} className="text-gray-400 ml-2" />
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
             {filteredData.length > 0 && (
@@ -578,6 +597,263 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
       <div className="mt-4 text-sm text-gray-600">
         Showing {filteredData.length} of {salesData.length} sales entries
       </div>
+
+      {/* View Invoice Details Modal */}
+      {viewInvoice && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold">Invoice Details</h3>
+              <button onClick={() => setViewInvoice(null)} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Invoice Number</p>
+                  <p className="font-medium text-gray-900">{viewInvoice.invoiceNumber}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Date</p>
+                  <p className="font-medium text-gray-900">{new Date(viewInvoice.date).toLocaleDateString('en-PK')}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Customer Name</p>
+                  <p className="font-medium text-gray-900">{viewInvoice.customerName}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">CNIC</p>
+                  <p className="font-medium text-gray-900">{viewInvoice.customerCNIC}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Phone 1</p>
+                  <p className="font-medium text-gray-900">{viewInvoice.customerPhone}</p>
+                </div>
+                {viewInvoice.customerPhone2 && (
+                  <div>
+                    <p className="text-sm text-gray-600">Phone 2</p>
+                    <p className="font-medium text-gray-900">{viewInvoice.customerPhone2}</p>
+                  </div>
+                )}
+                {viewInvoice.customerProvince && (
+                  <div>
+                    <p className="text-sm text-gray-600">Province</p>
+                    <p className="font-medium text-gray-900">{viewInvoice.customerProvince}</p>
+                  </div>
+                )}
+                {viewInvoice.customerCity && (
+                  <div>
+                    <p className="text-sm text-gray-600">City</p>
+                    <p className="font-medium text-gray-900">{viewInvoice.customerCity}</p>
+                  </div>
+                )}
+                {viewInvoice.customerAddress && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-600">Address</p>
+                    <p className="font-medium text-gray-900">{viewInvoice.customerAddress}</p>
+                  </div>
+                )}
+                {viewInvoice.warrantyLocation && (
+                  <div>
+                    <p className="text-sm text-gray-600">Warranty Location</p>
+                    <p className="font-medium text-gray-900">{viewInvoice.warrantyLocation}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm text-gray-600">Delivery Status</p>
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
+                    viewInvoice.deliveryStatus === 'Delivered' ? 'bg-green-100 text-green-800' :
+                    viewInvoice.deliveryStatus === 'Self-collect' ? 'bg-blue-100 text-blue-800' :
+                    viewInvoice.deliveryStatus === 'LCS' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-purple-100 text-purple-800'
+                  }`}>
+                    <Truck size={12} />
+                    {viewInvoice.deliveryStatus}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-3">Products</h4>
+                <div className="space-y-3">
+                  {viewInvoice.products.map((product, index) => (
+                    <div key={index} className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex justify-between mb-2">
+                        <span className="font-medium text-lg">{product.productName}</span>
+                        <span className="font-semibold text-lg">{formatCurrency(product.total)}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        {product.brandName && (
+                          <p><span className="font-medium text-gray-700">Brand:</span> {product.brandName}</p>
+                        )}
+                        {product.modelName && (
+                          <p><span className="font-medium text-gray-700">Model:</span> {product.modelName}</p>
+                        )}
+                        {product.category && (
+                          <p><span className="font-medium text-gray-700">Category:</span> {product.category}</p>
+                        )}
+                        {product.description && (
+                          <p><span className="font-medium text-gray-700">Description:</span> {product.description}</p>
+                        )}
+                        <p><span className="font-medium text-gray-700">Quantity:</span> {product.quantity} × {formatCurrency(product.price)}</p>
+                        {product.serialNumbers && product.serialNumbers.length > 0 && (
+                          <div className="mt-2">
+                            <p className="font-medium text-gray-700 mb-1">Serial Numbers:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {product.serialNumbers.map((serial, idx) => (
+                                <span key={idx} className="inline-block mr-2 mb-1 px-2 py-0.5 bg-white border border-gray-200 rounded text-xs font-mono">
+                                  {serial}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {viewInvoice.exchangeWarrantyNote && (
+                <div className="border-t pt-4">
+                  <p className="text-sm text-gray-600 mb-1">Exchange & Warranty Note</p>
+                  <p className="font-medium text-gray-900">{viewInvoice.exchangeWarrantyNote}</p>
+                </div>
+              )}
+
+              {/* Sales Details (Internal) */}
+              {(viewInvoice.salesperson || viewInvoice.salespersonLocation || viewInvoice.referFrom || viewInvoice.referTo || viewInvoice.createdBy) && (
+                <div className="border-t pt-4 bg-blue-50 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <User size={16} className="text-[#4f46e5]" />
+                    <h4 className="font-semibold text-gray-900">Sales Details (Internal)</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {viewInvoice.salesperson && (
+                      <div>
+                        <p className="text-gray-600">Salesperson:</p>
+                        <p className="font-medium text-gray-900">{viewInvoice.salesperson}</p>
+                      </div>
+                    )}
+                    {viewInvoice.salespersonLocation && (
+                      <div>
+                        <p className="text-gray-600">Salesperson Location:</p>
+                        <p className="font-medium text-gray-900">{viewInvoice.salespersonLocation}</p>
+                      </div>
+                    )}
+                    {viewInvoice.referTo && (
+                      <div>
+                        <p className="text-gray-600">Referral To:</p>
+                        <p className="font-medium text-gray-900">{viewInvoice.referTo}</p>
+                      </div>
+                    )}
+                    {viewInvoice.referFrom && (
+                      <div>
+                        <p className="text-gray-600">Referral From:</p>
+                        <p className="font-medium text-gray-900">{viewInvoice.referFrom}</p>
+                      </div>
+                    )}
+                    {viewInvoice.createdBy && (
+                      <div>
+                        <p className="text-gray-600">Created By:</p>
+                        <p className="font-medium text-gray-900">{viewInvoice.createdBy}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Details (Internal) */}
+              {(viewInvoice.paymentMode || viewInvoice.paymentStatus || viewInvoice.bankName) && (
+                <div className="border-t pt-4 bg-green-50 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CreditCard size={16} className="text-[#10b981]" />
+                    <h4 className="font-semibold text-gray-900">Payment Details (Internal)</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {viewInvoice.paymentMode && (
+                      <div>
+                        <p className="text-gray-600">Payment Mode:</p>
+                        <p className="font-medium text-gray-900">{viewInvoice.paymentMode}</p>
+                      </div>
+                    )}
+                    {viewInvoice.paymentStatus && (
+                      <div>
+                        <p className="text-gray-600">Payment Status:</p>
+                        <p className="font-medium text-gray-900">{viewInvoice.paymentStatus}</p>
+                      </div>
+                    )}
+                    {viewInvoice.paymentStatus === 'Partial' && (
+                      <>
+                        <div>
+                          <p className="text-gray-600">Total Amount:</p>
+                          <p className="font-medium text-gray-900">{formatCurrency(viewInvoice.totalAmount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600">Paid Amount:</p>
+                          <p className="font-medium text-green-600">{formatCurrency(viewInvoice.paidAmount || 0)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600">Remaining Amount:</p>
+                          <p className="font-medium text-red-600">{formatCurrency(viewInvoice.remainingAmount || 0)}</p>
+                        </div>
+                      </>
+                    )}
+                    {viewInvoice.paymentMode === 'Online' && viewInvoice.bankName && (
+                      <>
+                        <div>
+                          <p className="text-gray-600">Bank:</p>
+                          <p className="font-medium text-gray-900">{viewInvoice.bankName}</p>
+                        </div>
+                        {viewInvoice.bankAccountNumber && (
+                          <div>
+                            <p className="text-gray-600">Account Number:</p>
+                            <p className="font-medium text-gray-900">{viewInvoice.bankAccountNumber}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Collection Method & Deduction (Internal) */}
+              {(viewInvoice.collectionMethod || viewInvoice.deductionCharges) && (
+                <div className="border-t pt-4 bg-orange-50 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Truck size={16} className="text-orange-600" />
+                    <h4 className="font-semibold text-gray-900">Collection & Deduction (For Reports Only)</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {viewInvoice.collectionMethod && (
+                      <div>
+                        <p className="text-gray-600">Collection Method:</p>
+                        <p className="font-medium text-gray-900">{viewInvoice.collectionMethod}</p>
+                      </div>
+                    )}
+                    {viewInvoice.deductionCharges !== undefined && (
+                      <div>
+                        <p className="text-gray-600">Deduction Charges:</p>
+                        <p className={`font-medium ${viewInvoice.deductionCharges > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                          {viewInvoice.deductionCharges > 0 ? formatCurrency(viewInvoice.deductionCharges) : 'No Deduction'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t pt-4 bg-[#4f46e5]/10 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold">Total Amount:</span>
+                  <span className="text-2xl font-bold text-[#4f46e5]">{formatCurrency(viewInvoice.totalAmount)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

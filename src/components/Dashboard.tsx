@@ -1,9 +1,15 @@
 import { AppData, Transaction } from '../App';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Wallet, Building2, DollarSign, BarChart3, PieChart, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Building2, DollarSign, BarChart3, PieChart, Activity, FileText, Package, Users, Receipt, TrendingUp as TrendingUpIcon } from 'lucide-react';
 import { InventoryCharts } from './InventoryCharts';
 import { TransactionCharts } from './TransactionCharts';
 import { CashFlowCharts } from './CashFlowCharts';
+import { SalesReport } from './SalesReport';
+import { InventoryReport } from './InventoryReport';
+import { TransactionHistoryReport } from './TransactionHistoryReport';
+import { ReferralReport } from './ReferralReport';
+import { CommissionReport } from './CommissionReport';
+import { InvoiceReport } from './InvoiceReport';
 import { useState } from 'react';
 import { mockCashFlowData } from '../mockData';
 
@@ -13,6 +19,7 @@ type DashboardProps = {
 
 export function Dashboard({ data }: DashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedReport, setSelectedReport] = useState<string | null>(null);
 
   // Calculate totals
   const cashInflow = data.transactions
@@ -57,6 +64,127 @@ export function Dashboard({ data }: DashboardProps) {
         return <TransactionCharts transactions={data.transactions} />;
       case 'cashflow':
         return <CashFlowCharts transactions={data.transactions} />;
+      case 'reports':
+        if (selectedReport) {
+          // Render selected report
+          const reportProps = {
+            sales: { invoices: data.invoices, products: data.products },
+            inventory: { products: data.products },
+            transactions: { transactions: data.transactions },
+            referral: { invoices: data.invoices },
+            commission: { commissions: data.commissions },
+            invoices: { invoices: data.invoices, products: data.products }
+          };
+
+          const renderReport = () => {
+            switch (selectedReport) {
+              case 'sales':
+                return <SalesReport {...reportProps.sales} />;
+              case 'inventory':
+                return <InventoryReport {...reportProps.inventory} />;
+              case 'transactions':
+                return <TransactionHistoryReport {...reportProps.transactions} />;
+              case 'referral':
+                return <ReferralReport {...reportProps.referral} />;
+              case 'commission':
+                return <CommissionReport {...reportProps.commission} />;
+              case 'invoices':
+                return <InvoiceReport {...reportProps.invoices} />;
+              default:
+                return null;
+            }
+          };
+
+          return (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900 capitalize">{selectedReport} Report</h3>
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  ← Back to Reports Hub
+                </button>
+              </div>
+              {renderReport()}
+            </div>
+          );
+        } else {
+          // Reports Hub
+          const reportCards = [
+            {
+              id: 'sales',
+              name: 'Sales Report',
+              description: 'View sales performance, revenue trends, and customer analytics',
+              icon: TrendingUpIcon,
+              color: 'bg-blue-500'
+            },
+            {
+              id: 'inventory',
+              name: 'Inventory Report',
+              description: 'Track stock levels, product distribution, and inventory value',
+              icon: Package,
+              color: 'bg-green-500'
+            },
+            {
+              id: 'transactions',
+              name: 'Transaction History',
+              description: 'Analyze financial transactions and payment patterns',
+              icon: Receipt,
+              color: 'bg-purple-500'
+            },
+            {
+              id: 'invoices',
+              name: 'Invoice Report',
+              description: 'Monitor invoice status, payments, and outstanding amounts',
+              icon: FileText,
+              color: 'bg-orange-500'
+            },
+            {
+              id: 'referral',
+              name: 'Referral Report',
+              description: 'Track referral performance and commission earnings',
+              icon: Users,
+              color: 'bg-pink-500'
+            },
+            {
+              id: 'commission',
+              name: 'Commission Report',
+              description: 'View salesperson commissions and performance metrics',
+              icon: DollarSign,
+              color: 'bg-indigo-500'
+            }
+          ];
+
+          return (
+            <div>
+              <div className="mb-6">
+                <h3 className="text-xl font-bold text-gray-900">Reports Hub</h3>
+                <p className="text-sm text-gray-600 mt-1">Access all your business reports in one place</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {reportCards.map((card) => (
+                  <div
+                    key={card.id}
+                    onClick={() => setSelectedReport(card.id)}
+                    className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                  >
+                    <div className="flex items-center mb-4">
+                      <div className={`w-12 h-12 ${card.color} rounded-lg flex items-center justify-center mr-4`}>
+                        <card.icon size={24} className="text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{card.name}</h4>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600">{card.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
       default:
         return (
           <>
@@ -256,6 +384,20 @@ export function Dashboard({ data }: DashboardProps) {
           >
             <TrendingUp className="inline mr-2" size={18} />
             Cash Flow
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('reports');
+              setSelectedReport(null);
+            }}
+            className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
+              activeTab === 'reports'
+                ? 'text-[#4f46e5] border-b-2 border-[#4f46e5] bg-[#4f46e5]/5'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <FileText className="inline mr-2" size={18} />
+            Reports
           </button>
         </div>
       </div>

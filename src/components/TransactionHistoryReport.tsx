@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Transaction } from '../App';
-import { Filter, Calendar, MapPin, FileText, DollarSign, Download } from 'lucide-react';
+import { Filter, Calendar, MapPin, FileText, DollarSign, Download, Eye, X } from 'lucide-react';
 
 type TransactionHistoryReportProps = {
   transactions: Transaction[];
@@ -44,7 +44,7 @@ const transactionTypes = [
 export function TransactionHistoryReport({ transactions }: TransactionHistoryReportProps) {
   const today = new Date().toISOString().split('T')[0];
   const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-  
+
   const [filters, setFilters] = useState({
     dateFrom: firstDayOfMonth,
     dateTo: today,
@@ -52,6 +52,8 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
     transactionType: 'All Types',
     city: 'All Offices'
   });
+
+  const [viewTransaction, setViewTransaction] = useState<Transaction | null>(null);
 
   // Filter and process transactions
   const filteredTransactions = useMemo(() => {
@@ -365,7 +367,11 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
                 </tr>
               ) : (
                 filteredTransactions.map((transaction, index) => (
-                  <tr key={transaction.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <tr
+                    key={transaction.id}
+                    className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100 cursor-pointer transition-colors`}
+                    onClick={() => setViewTransaction(transaction)}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(transaction.date).toLocaleDateString('en-PK', {
                         year: 'numeric',
@@ -375,12 +381,11 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        transaction.mainCategory === 'Expenses' ? 'bg-blue-100 text-blue-800' :
-                        transaction.mainCategory === 'Bills' ? 'bg-yellow-100 text-yellow-800' :
-                        transaction.mainCategory === 'Salary' ? 'bg-green-100 text-green-800' :
-                        transaction.mainCategory === 'Other Outflow' ? 'bg-purple-100 text-purple-800' :
                         transaction.mainCategory === 'Cash Inflow' ? 'bg-emerald-100 text-emerald-800' :
                         transaction.mainCategory === 'Cash Outflow' ? 'bg-red-100 text-red-800' :
+                        transaction.mainCategory === 'Bills' ? 'bg-yellow-100 text-yellow-800' :
+                        transaction.mainCategory === 'Salary' ? 'bg-green-100 text-green-800' :
+                        transaction.mainCategory === 'Loans & Advances' ? 'bg-purple-100 text-purple-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {transaction.mainCategory}
@@ -404,8 +409,9 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
                         {transaction.mode || 'Cash'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-right text-gray-900">
-                      {formatCurrency(transaction.amount)}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-right text-gray-900 flex items-center justify-between">
+                      <span>{formatCurrency(transaction.amount)}</span>
+                      <Eye size={16} className="text-gray-400 ml-2" />
                     </td>
                   </tr>
                 ))
@@ -472,6 +478,106 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
             <p className="text-xs text-gray-500 mt-1">
               Remaining: {formatCurrency(filteredTransactions.filter(t => t.paymentStatus === 'Partial').reduce((sum, t) => sum + (t.remainingAmount || 0), 0))}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* View Transaction Details Modal */}
+      {viewTransaction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold">Transaction Details</h3>
+              <button onClick={() => setViewTransaction(null)} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm text-gray-600">Date</p>
+                  <p className="font-medium">{new Date(viewTransaction.date).toLocaleDateString('en-PK')}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Office</p>
+                  <p className="font-medium">{viewTransaction.company}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Type</p>
+                  <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${
+                    viewTransaction.mainCategory === 'Cash Inflow' ? 'bg-green-100 text-green-800' :
+                    viewTransaction.mainCategory === 'Cash Outflow' ? 'bg-red-100 text-red-800' :
+                    viewTransaction.mainCategory === 'Bills' ? 'bg-yellow-100 text-yellow-800' :
+                    viewTransaction.mainCategory === 'Salary' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {viewTransaction.mainCategory}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Category</p>
+                  <p className="font-medium">{viewTransaction.subCategory || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Amount</p>
+                  <p className="font-bold text-lg">{formatCurrency(viewTransaction.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Payment Mode</p>
+                  <p className="font-medium">{viewTransaction.mode || 'Cash'}</p>
+                </div>
+                {viewTransaction.bankName && (
+                  <div>
+                    <p className="text-sm text-gray-600">Bank</p>
+                    <p className="font-medium">{viewTransaction.bankName}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm text-gray-600">Payment Status</p>
+                  <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${
+                    viewTransaction.paymentStatus === 'Full' ? 'bg-green-100 text-green-800' :
+                    viewTransaction.paymentStatus === 'Partial' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {viewTransaction.paymentStatus || 'Full'}
+                  </span>
+                </div>
+                {viewTransaction.paidBy && (
+                  <div>
+                    <p className="text-sm text-gray-600">Paid By</p>
+                    <p className="font-medium">{viewTransaction.paidBy}</p>
+                  </div>
+                )}
+                {viewTransaction.paidTo && (
+                  <div>
+                    <p className="text-sm text-gray-600">Paid To</p>
+                    <p className="font-medium">{viewTransaction.paidTo}</p>
+                  </div>
+                )}
+                {viewTransaction.note && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-600">Note</p>
+                    <p className="font-medium">{viewTransaction.note}</p>
+                  </div>
+                )}
+                {viewTransaction.imageUrl && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-600 mb-2">Receipt Image</p>
+                    <img
+                      src={viewTransaction.imageUrl}
+                      alt="Receipt"
+                      className="w-full max-w-md rounded-lg border border-gray-200"
+                    />
+                  </div>
+                )}
+                {viewTransaction.paymentStatus === 'Partial' && viewTransaction.remainingAmount && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-600">Remaining Amount</p>
+                    <p className="font-medium text-orange-600">{formatCurrency(viewTransaction.remainingAmount)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
