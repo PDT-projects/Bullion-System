@@ -34,7 +34,7 @@ import { CommissionSlabs } from './components/CommissionSlabs';
 import { CommissionCalculation } from './components/CommissionCalculation';
 import { CommissionReport } from './components/CommissionReport';
 import { InventoryAuditLogComponent } from './components/InventoryAuditLog';
-import { ProductCosting } from './components/ProductCosting';
+import { InventoryEntry } from './components/InventoryEntry';
 import { Budgets } from './components/budgets/Budgets';
 import { Budget } from './types/Budget';
 
@@ -958,10 +958,8 @@ export default function App() {
         return <Dashboard data={data} />;
       case 'employees':
         return <Employees employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
-      case 'products':
-        return <Products products={data.products} setProducts={(products) => setData({ ...data, products })} productCosting={data.productCosting} />;
-      case 'product-costing':
-        return <ProductCosting products={data.products} productCosting={data.productCosting} setProductCosting={(productCosting) => setData({ ...data, productCosting })} />;
+      case 'inventory-entry':
+        return <InventoryEntry products={data.products} productCosting={data.productCosting} setProducts={(products) => setData({ ...data, products })} setProductCosting={(productCosting) => setData({ ...data, productCosting })} />;
       case 'transactions':
         return <Transactions 
           transactions={data.transactions} 
