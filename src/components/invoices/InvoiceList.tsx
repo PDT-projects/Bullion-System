@@ -1,12 +1,11 @@
 import { Invoice } from '../../App';
-import { Plus, Eye, Edit, Trash2, Download, Printer } from 'lucide-react';
+import { Plus, Eye, Edit, Download, Printer } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 
 type InvoiceListProps = {
   invoices: Invoice[];
   onView: (invoice: Invoice) => void;
   onEdit: (invoice: Invoice) => void;
-  onDelete: (id: string) => void;
   onCreate: () => void;
 };
 
@@ -40,12 +39,7 @@ export function InvoiceList({ invoices, onView, onEdit, onDelete, onCreate }: In
     toast.success(`Printing invoice ${invoice.invoiceNumber}`);
   };
 
-  const handleDelete = (id: string, invoiceNumber: string) => {
-    if (confirm(`Are you sure you want to delete invoice ${invoiceNumber}?`)) {
-      onDelete(id);
-      toast.success('Invoice deleted successfully');
-    }
-  };
+
 
   return (
     <div className="p-6">
@@ -152,13 +146,6 @@ export function InvoiceList({ invoices, onView, onEdit, onDelete, onCreate }: In
                         title="Print"
                       >
                         <Printer size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(invoice.id, invoice.invoiceNumber)}
-                        className="p-2 text-[#ef4444] hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
                       </button>
                     </div>
                   </td>
