@@ -163,7 +163,8 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
       paymentType: undefined,
       bankId: '',
       bankName: '',
-      bankAccountNumber: ''
+      bankAccountNumber: '',
+      digitalStamp: false
     });
     setSelectedProducts([]);
     setIsModalOpen(true);
@@ -354,7 +355,8 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
       deductionCharges: calculateDeductionCharges(calculateTotal(), formData.collectionMethod),
       bankId: formData.bankId || '',
       bankName: formData.bankName || '',
-      bankAccountNumber: formData.bankAccountNumber || ''
+      bankAccountNumber: formData.bankAccountNumber || '',
+      digitalStamp: formData.digitalStamp || false
     };
 
     // Update product stock by removing sold serial numbers
@@ -410,59 +412,135 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
   const handleDownload = async (invoice: Invoice) => {
     try {
       // Import required libraries
-      const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).default;
 
-      // Get the invoice content element
-      const invoiceElement = document.querySelector('#invoice-content') as HTMLElement;
-      if (!invoiceElement) {
-        toast.error('Invoice content not found');
-        return;
-      }
-
-      // Create canvas from the invoice content
-      const canvas = await html2canvas(invoiceElement, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff'
-      });
-
       // Create PDF
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-
-      // Calculate dimensions to fit A4
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 10;
 
-      // Add the invoice image to PDF
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      // Company Header
+      pdf.setFontSize(20);
+      pdf.setTextColor(79, 70, 229); // #4f46e5
+      pdf.text('Pakistan Detectors Technologies', pdfWidth / 2, 20, { align: 'center' });
 
-      // Add digital stamp (dummy)
-      const stampX = pdfWidth - 50;
-      const stampY = pdfHeight - 30;
+      pdf.setFontSize(12);
+      pdf.setTextColor(107, 114, 128); // gray-600
+      pdf.text('Security & Detection Equipment Solutions', pdfWidth / 2, 30, { align: 'center' });
 
-      // Add stamp background
-      pdf.setFillColor(240, 240, 240);
-      pdf.rect(stampX - 40, stampY - 15, 35, 20, 'F');
+      pdf.setFontSize(16);
+      pdf.text('SALES INVOICE', pdfWidth / 2, 45, { align: 'center' });
 
-      // Add stamp border
-      pdf.setDrawColor(100, 100, 100);
-      pdf.setLineWidth(0.5);
-      pdf.rect(stampX - 40, stampY - 15, 35, 20);
+      // Invoice Info
+      pdf.setFontSize(10);
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(`Invoice Number: ${invoice.invoiceNumber}`, 20, 60);
+      pdf.text(`Date: ${new Date(invoice.date).toLocaleDateString('en-PK')}`, 120, 60);
 
-      // Add stamp text
-      pdf.setFontSize(8);
-      pdf.setTextColor(100, 100, 100);
-      pdf.text('DIGITAL STAMP', stampX - 22, stampY - 8);
-      pdf.text('PAK-DET', stampX - 15, stampY - 2);
-      pdf.text(new Date().toLocaleDateString(), stampX - 25, stampY + 4);
+      // Customer Info
+      pdf.setFontSize(12);
+      pdf.setTextColor(79, 70, 229);
+      pdf.text('Customer Information', 20, 80);
+
+      pdf.setFontSize(10);
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(`Name: ${invoice.customerName}`, 20, 90);
+      pdf.text(`CNIC: ${invoice.customerCNIC}`, 20, 100);
+      pdf.text(`Phone: ${invoice.customerPhone}`, 20, 110);
+      if (invoice.customerAddress) {
+        pdf.text(`Address: ${invoice.customerAddress}`, 20, 120);
+      }
+
+      // Products
+      let yPosition = 140;
+      pdf.setFontSize(12);
+      pdf.setTextColor(79, 70, 229);
+      pdf.text('Products', 20, yPosition);
+      yPosition += 10;
+
+      pdf.setFontSize(10);
+      pdf.setTextColor(0, 0, 0);
+
+      invoice.products.forEach((product, index) => {
+        if (yPosition > pdfHeight - 50) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+
+        pdf.text(`${index + 1}. ${product.productName}`, 20, yPosition);
+        pdf.text(`Quantity: ${product.quantity}`, 120, yPosition);
+        pdf.text(`Price: ${formatCurrency(product.price)}`, 160, yPosition);
+        pdf.text(`Total: ${formatCurrency(product.total)}`, 180, yPosition);
+        yPosition += 10;
+
+        if (product.serialNumbers && product.serialNumbers.length > 0) {
+          pdf.text(`Serial Numbers: ${product.serialNumbers.join(', ')}`, 20, yPosition);
+          yPosition += 10;
+        }
+        yPosition += 5;
+      });
+
+      // Total
+      yPosition += 10;
+      pdf.setFontSize(14);
+      pdf.setTextColor(79, 70, 229);
+      pdf.text(`Total Amount: ${formatCurrency(invoice.totalAmount)}`, pdfWidth - 20, yPosition, { align: 'right' });
+
+      // Add digital stamp only if enabled
+      if (invoice.digitalStamp) {
+        try {
+          // Load the PDT logo image from public folder
+          const response = await fetch('/PDT-logo.png');
+          const blob = await response.blob();
+
+          // Convert blob to base64
+          const imgData = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+
+          const stampX = pdfWidth - 50;
+          const stampY = pdfHeight - 40;
+
+          // Add stamp background
+          pdf.setFillColor(240, 240, 240);
+          pdf.rect(stampX - 40, stampY - 25, 35, 30, 'F');
+
+          // Add stamp border
+          pdf.setDrawColor(100, 100, 100);
+          pdf.setLineWidth(0.5);
+          pdf.rect(stampX - 40, stampY - 25, 35, 30);
+
+          // Add logo image
+          pdf.addImage(imgData, 'PNG', stampX - 35, stampY - 20, 25, 15);
+
+          // Add stamp text
+          pdf.setFontSize(6);
+          pdf.setTextColor(100, 100, 100);
+          pdf.text('DIGITAL STAMP', stampX - 17, stampY + 2);
+          pdf.text('PAK-DET', stampX - 12, stampY + 7);
+          pdf.text(new Date().toLocaleDateString(), stampX - 17, stampY + 12);
+        } catch (error) {
+          console.error('Error loading stamp image:', error);
+          // Fallback to text-only stamp if image fails to load
+          const stampX = pdfWidth - 50;
+          const stampY = pdfHeight - 30;
+
+          pdf.setFillColor(240, 240, 240);
+          pdf.rect(stampX - 40, stampY - 15, 35, 20, 'F');
+
+          pdf.setDrawColor(100, 100, 100);
+          pdf.setLineWidth(0.5);
+          pdf.rect(stampX - 40, stampY - 15, 35, 20);
+
+          pdf.setFontSize(8);
+          pdf.setTextColor(100, 100, 100);
+          pdf.text('DIGITAL STAMP', stampX - 22, stampY - 8);
+          pdf.text('PAK-DET', stampX - 15, stampY - 2);
+          pdf.text(new Date().toLocaleDateString(), stampX - 25, stampY + 4);
+        }
+      }
 
       // Download the PDF
       pdf.save(`${invoice.invoiceNumber}.pdf`);
@@ -1178,6 +1256,23 @@ export function Invoices({ invoices, setInvoices, products, setProducts, banks, 
                     </p>
                   </div>
                 )}
+              </div>
+
+              {/* Digital Stamp Option */}
+              <div className="border-b pb-4">
+                <h4 className="font-semibold text-gray-900 mb-3">Digital Stamp</h4>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.digitalStamp || false}
+                      onChange={(e) => setFormData({ ...formData, digitalStamp: e.target.checked })}
+                      className="w-4 h-4 text-[#4f46e5] border-gray-300 rounded focus:ring-[#4f46e5]"
+                    />
+                    <span className="text-sm text-gray-700">Add digital stamp to invoice</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">The PDT logo will be used as the digital stamp on the invoice PDF</p>
               </div>
 
               {/* Total Amount */}

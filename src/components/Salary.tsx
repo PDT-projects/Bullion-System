@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Transaction, Bank, Employee } from '../App';
-import { Plus, Eye, Trash2, X, Printer, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
+import { Plus, Eye, Trash2, X, Printer, Upload, FileText, Maximize2, Minimize2, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
+import { generateTransactionId, getTransactionPrefix } from '../utils/transactionIdGenerator';
 
 // Advance Salary types and state
 type AdvanceSalaryRecord = {
@@ -68,6 +69,30 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     paidAmount: 0,
     mode: 'Cash' as 'Cash' | 'Bank' | 'Cheque',
     bankName: '',
+    imageUrl: ''
+  });
+
+  // Pay Remaining Salary state
+  const [isPayRemainingModalOpen, setIsPayRemainingModalOpen] = useState(false);
+  const [payRemainingData, setPayRemainingData] = useState({
+    salaryRecord: null as Transaction | null,
+    amount: 0,
+    mode: 'Cash' as 'Cash' | 'Bank' | 'Cheque',
+    bankName: '',
+    imageUrl: ''
+  });
+
+  // Pay Salary state
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [payFormData, setPayFormData] = useState({
+    employeeId: '',
+    salaryMonth: '',
+    amount: 0,
+    mode: 'Cash' as 'Cash' | 'Bank' | 'Cheque',
+    bankName: '',
+    chequeNumber: '',
+    chequeDate: '',
+    transactionReference: '',
     imageUrl: ''
   });
   
@@ -221,7 +246,7 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     const now = new Date();
     const newTransactions: Transaction[] = salaryTransactions.map((salTxn, index) => ({
       id: Date.now().toString() + Math.random().toString() + index,
-      transactionId: `TXN-${Date.now()}-${index + 1}`,
+      transactionId: generateTransactionId('SAL'),
       date: formData.date,
       time: now.toTimeString().split(' ')[0],
       company: formData.company,
@@ -243,7 +268,7 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
       imageUrl: salTxn.imageUrl
     }));
 
-    // Update bank balances and record history
+    // Update bank balances
     const updatedBanks = [...banks];
     for (const salTxn of salaryTransactions) {
       if ((salTxn.mode === 'Bank' || salTxn.mode === 'Cheque') && salTxn.bankName) {
@@ -252,13 +277,7 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
           const newBalance = updatedBanks[bankIndex].balance - salTxn.netAmount;
           updatedBanks[bankIndex] = {
             ...updatedBanks[bankIndex],
-            balance: newBalance,
-            balanceHistory: [...updatedBanks[bankIndex].balanceHistory, {
-              date: formData.date,
-              balance: newBalance,
-              transaction: `Salary payment to ${salTxn.employeeName} - ${formData.note}`,
-              type: 'salary'
-            }]
+            balance: newBalance
           };
         }
       }
@@ -280,6 +299,133 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
   const handlePrint = (salary: Transaction) => {
     toast.success(`Printing salary slip`);
     window.print();
+  };
+
+  const handlePayRemaining = (salary: Transaction) => {
+    const employee = employees.find(e => e.id === salary.employeeId);
+    if (!employee) {
+      toast.error('Employee not found');
+      return;
+    }
+
+    const remainingAmount = employee.salary - salary.amount;
+
+    if (remainingAmount <= 0) {
+      toast.error('No remaining salary to pay');
+      return;
+    }
+
+    setPayRemainingData({
+      salaryRecord: salary,
+      amount: remainingAmount,
+      mode: 'Cash',
+      bankName: '',
+      imageUrl: ''
+    });
+    setIsPayRemainingModalOpen(true);
+  };
+
+  const handlePayRemainingImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPayRemainingData({ ...payRemainingData, imageUrl: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePayRemainingSave = () => {
+    if (!payRemainingData.salaryRecord) {
+      toast.error('No salary record selected');
+      return;
+    }
+
+    const employee = employees.find(e => e.id === payRemainingData.salaryRecord!.employeeId);
+    if (!employee) {
+      toast.error('Employee not found');
+      return;
+    }
+
+    const maxAmount = employee.salary - payRemainingData.salaryRecord.amount;
+
+    if (payRemainingData.amount <= 0) {
+      toast.error('Payment amount must be greater than 0');
+      return;
+    }
+
+    if (payRemainingData.amount > maxAmount) {
+      toast.error(`Payment amount cannot exceed remaining salary of ${formatCurrency(maxAmount)}`);
+      return;
+    }
+
+    if ((payRemainingData.mode === 'Bank' || payRemainingData.mode === 'Cheque') && !payRemainingData.bankName) {
+      toast.error('Please select a bank for Bank or Cheque mode');
+      return;
+    }
+
+    if ((payRemainingData.mode === 'Bank' || payRemainingData.mode === 'Cheque') && payRemainingData.bankName) {
+      const bank = banks.find(b => b.name === payRemainingData.bankName);
+      if (!bank) {
+        toast.error('Bank not found');
+        return;
+      }
+
+      if (bank.balance < payRemainingData.amount) {
+        toast.error(`Insufficient balance in ${payRemainingData.bankName}`);
+        return;
+      }
+    }
+
+    const now = new Date();
+
+    // Create transaction record for remaining payment
+    const newTransaction: Transaction = {
+      id: Date.now().toString(),
+      transactionId: generateTransactionId('SAL'),
+      date: now.toISOString().split('T')[0],
+      time: now.toTimeString().split(' ')[0],
+      company: payRemainingData.salaryRecord.company,
+      mainCategory: 'Salary',
+      subCategory: 'Employee Salary',
+      amount: payRemainingData.amount,
+      mode: payRemainingData.mode,
+      bankName: payRemainingData.bankName || undefined,
+      paidBy: payRemainingData.salaryRecord.paidBy,
+      paidTo: employee.name,
+      employeeId: employee.id,
+      employeeName: employee.name,
+      baseSalary: employee.salary,
+      commission: 0,
+      deductions: 0,
+      netAmount: payRemainingData.amount,
+      salaryMonth: payRemainingData.salaryRecord.salaryMonth,
+      note: `Remaining salary payment for ${payRemainingData.salaryRecord.salaryMonth || 'month'}`,
+      imageUrl: payRemainingData.imageUrl
+    };
+
+    // Update bank balances if bank transfer/cheque
+    if ((payRemainingData.mode === 'Bank' || payRemainingData.mode === 'Cheque') && payRemainingData.bankName) {
+      const updatedBanks = banks.map(bank =>
+        bank.name === payRemainingData.bankName
+          ? { ...bank, balance: bank.balance - payRemainingData.amount }
+          : bank
+      );
+      setBanks(updatedBanks);
+    }
+
+    setTransactions([...transactions, newTransaction]);
+    toast.success(`Remaining salary of ${formatCurrency(payRemainingData.amount)} paid successfully`);
+    setIsPayRemainingModalOpen(false);
+
+    setPayRemainingData({
+      salaryRecord: null,
+      amount: 0,
+      mode: 'Cash',
+      bankName: '',
+      imageUrl: ''
+    });
   };
 
   const formatCurrency = (amount: number) => {
@@ -355,7 +501,7 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     // Create transaction record
     const newTransaction: Transaction = {
       id: newRecord.id,
-      transactionId: `TXN-${Date.now()}`,
+      transactionId: generateTransactionId('ADV'),
       date: newRecord.date,
       time: newRecord.time,
       company: 'Pakistan Detectors Technologies: Islamabad/ Head Office', // Default company
@@ -397,6 +543,160 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     });
   };
 
+  // Pay Salary handlers
+  const handlePay = (salary: Transaction) => {
+    const employee = employees.find(e => e.id === salary.employeeId);
+    if (!employee) {
+      toast.error('Employee not found');
+      return;
+    }
+
+    // Calculate total paid for this employee in this month
+    const employeeMonthTransactions = transactions.filter(t =>
+      t.employeeId === salary.employeeId &&
+      t.salaryMonth === salary.salaryMonth &&
+      (t.mainCategory === 'Salary' || (t.mainCategory === 'Cash Outflow' && t.subCategory === 'Advance Salary'))
+    );
+    const totalPaid = employeeMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const remaining = employee.salary - totalPaid;
+
+    if (remaining <= 0) {
+      toast.error('No remaining salary to pay');
+      return;
+    }
+
+    setPayFormData({
+      employeeId: salary.employeeId,
+      salaryMonth: salary.salaryMonth || '',
+      amount: remaining,
+      mode: 'Cash',
+      bankName: '',
+      chequeNumber: '',
+      chequeDate: '',
+      transactionReference: '',
+      imageUrl: ''
+    });
+    setIsPayModalOpen(true);
+  };
+
+  const handlePayImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPayFormData({ ...payFormData, imageUrl: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaySave = () => {
+    const employee = employees.find(e => e.id === payFormData.employeeId);
+    if (!employee) {
+      toast.error('Employee not found');
+      return;
+    }
+
+    if (payFormData.amount <= 0) {
+      toast.error('Payment amount must be greater than 0');
+      return;
+    }
+
+    // Calculate total paid for this employee in this month
+    const employeeMonthTransactions = transactions.filter(t =>
+      t.employeeId === payFormData.employeeId &&
+      t.salaryMonth === payFormData.salaryMonth &&
+      (t.mainCategory === 'Salary' || (t.mainCategory === 'Cash Outflow' && t.subCategory === 'Advance Salary'))
+    );
+    const totalPaid = employeeMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const maxAmount = employee.salary - totalPaid;
+
+    if (payFormData.amount > maxAmount) {
+      toast.error(`Payment amount cannot exceed remaining salary of ${formatCurrency(maxAmount)}`);
+      return;
+    }
+
+    if ((payFormData.mode === 'Bank' || payFormData.mode === 'Cheque') && !payFormData.bankName) {
+      toast.error('Please select a bank for Bank or Cheque mode');
+      return;
+    }
+
+    if (payFormData.mode === 'Cheque' && (!payFormData.chequeNumber || !payFormData.chequeDate)) {
+      toast.error('Please provide cheque number and date for cheque payments');
+      return;
+    }
+
+    if ((payFormData.mode === 'Bank' || payFormData.mode === 'Cheque') && payFormData.bankName) {
+      const bank = banks.find(b => b.name === payFormData.bankName);
+      if (!bank) {
+        toast.error('Bank not found');
+        return;
+      }
+
+      if (bank.balance < payFormData.amount) {
+        toast.error(`Insufficient balance in ${payFormData.bankName}`);
+        return;
+      }
+    }
+
+    const now = new Date();
+
+    // Create transaction record
+    const newTransaction: Transaction = {
+      id: Date.now().toString(),
+      transactionId: generateTransactionId('SAL'),
+      date: now.toISOString().split('T')[0],
+      time: now.toTimeString().split(' ')[0],
+      company: 'Pakistan Detectors Technologies: Islamabad/ Head Office',
+      mainCategory: 'Salary',
+      subCategory: 'Employee Salary',
+      amount: payFormData.amount,
+      mode: payFormData.mode,
+      bankName: payFormData.bankName || undefined,
+      chequeNumber: payFormData.chequeNumber || '',
+      chequeDate: payFormData.chequeDate || '',
+
+      note: `Salary payment for ${employee.name} - ${payFormData.salaryMonth}`,
+      paidBy: 'Pakistan Detectors Technologies',
+      paidTo: employee.name,
+      employeeId: employee.id,
+      employeeName: employee.name,
+      baseSalary: employee.salary,
+      commission: 0,
+      deductions: 0,
+      netAmount: payFormData.amount,
+      salaryMonth: payFormData.salaryMonth,
+      imageUrl: payFormData.imageUrl,
+      paymentStatus: payFormData.amount >= maxAmount ? 'Full' : 'Partial'
+    };
+
+    // Update bank balances if bank transfer/cheque
+    if ((payFormData.mode === 'Bank' || payFormData.mode === 'Cheque') && payFormData.bankName) {
+      const updatedBanks = banks.map(bank =>
+        bank.name === payFormData.bankName
+          ? { ...bank, balance: bank.balance - payFormData.amount }
+          : bank
+      );
+      setBanks(updatedBanks);
+    }
+
+    setTransactions([...transactions, newTransaction]);
+    toast.success(`Salary payment of ${formatCurrency(payFormData.amount)} processed successfully`);
+    setIsPayModalOpen(false);
+
+    setPayFormData({
+      employeeId: '',
+      salaryMonth: '',
+      amount: 0,
+      mode: 'Cash',
+      bankName: '',
+      chequeNumber: '',
+      chequeDate: '',
+      transactionReference: '',
+      imageUrl: ''
+    });
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -413,6 +713,19 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
     Add Salary Payment
   </button>
 
+  <button
+    onClick={() => setActiveModule('commission-slabs')}
+    className="flex items-center gap-2 bg-[#4f46e5] text-white px-4 py-2 rounded-lg hover:bg-[#4338ca] transition-colors"
+  >
+    Commission Slabs
+  </button>
+
+  <button
+    onClick={() => setActiveModule('commission-calculation')}
+    className="flex items-center gap-2 bg-[#4f46e5] text-white px-4 py-2 rounded-lg hover:bg-[#4338ca] transition-colors"
+  >
+    Commission Calculation
+  </button>
 
   <button
     onClick={() => setIsAdvanceModalOpen(true)}
@@ -453,7 +766,15 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
               {allSalaries.map((salary) => {
                 const isAdvanceSalary = salary.mainCategory === 'Cash Outflow' && salary.subCategory === 'Advance Salary';
                 const employee = employees.find(e => e.id === salary.employeeId);
-                const remainingSalary = employee ? employee.salary - (salary.advanceAmount || 0) : 0;
+
+                // Calculate total paid for this employee in this month
+                const employeeMonthTransactions = transactions.filter(t =>
+                  t.employeeId === salary.employeeId &&
+                  t.salaryMonth === salary.salaryMonth &&
+                  (t.mainCategory === 'Salary' || (t.mainCategory === 'Cash Outflow' && t.subCategory === 'Advance Salary'))
+                );
+                const totalPaid = employeeMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
+                const remainingSalary = employee ? employee.salary - totalPaid : 0;
 
                 return (
                   <tr key={salary.id} className="hover:bg-gray-50 transition-colors">
@@ -472,16 +793,18 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
                       {formatCurrency(salary.amount)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                      {isAdvanceSalary ? formatCurrency(remainingSalary) : '-'}
+                      {remainingSalary > 0 ? formatCurrency(remainingSalary) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                       {salary.mode}{salary.bankName ? ` (${salary.bankName})` : ''}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        isAdvanceSalary ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                        salary.paymentStatus === 'Partial' ? 'bg-yellow-100 text-yellow-800' :
+                        remainingSalary === 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                       }`}>
-                        {isAdvanceSalary ? 'Paid Advance' : 'Full Salary'}
+                        {salary.paymentStatus === 'Partial' ? 'Partial' :
+                         remainingSalary === 0 ? 'Paid' : 'Pending'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -507,6 +830,15 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
                         >
                           <Printer size={16} />
                         </button>
+                        {remainingSalary > 0 && (
+                          <button
+                            onClick={() => handlePay(salary)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Pay Salary"
+                          >
+                            <CreditCard size={16} />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(salary.id)}
                           className="p-2 text-[#ef4444] hover:bg-red-50 rounded-lg transition-colors"
@@ -1061,6 +1393,154 @@ export function Salary({ transactions, setTransactions, banks, setBanks, employe
                   Save
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pay Salary Modal */}
+      {isPayModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold">Pay Remaining Salary</h3>
+              <button onClick={() => setIsPayModalOpen(false)} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+                <input
+                  type="text"
+                  value={employees.find(e => e.id === payFormData.employeeId)?.name || ''}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Salary Month</label>
+                <input
+                  type="month"
+                  value={payFormData.salaryMonth}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Amount *</label>
+                <input
+                  type="number"
+                  value={payFormData.amount}
+                  onChange={(e) => setPayFormData({ ...payFormData, amount: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
+                <select
+                  value={payFormData.mode}
+                  onChange={(e) => {
+                    const newMode = e.target.value as 'Cash' | 'Bank' | 'Cheque';
+                    setPayFormData({
+                      ...payFormData,
+                      mode: newMode,
+                      bankName: newMode === 'Cash' ? '' : payFormData.bankName,
+                      chequeNumber: newMode !== 'Cheque' ? '' : payFormData.chequeNumber,
+                      chequeDate: newMode !== 'Cheque' ? '' : payFormData.chequeDate,
+                      transactionReference: newMode !== 'Bank' ? '' : payFormData.transactionReference
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="Bank">Bank Transfer</option>
+                  <option value="Cheque">Cheque</option>
+                </select>
+              </div>
+              {(payFormData.mode === 'Bank' || payFormData.mode === 'Cheque') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name *</label>
+                  <select
+                    value={payFormData.bankName}
+                    onChange={(e) => setPayFormData({ ...payFormData, bankName: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                  >
+                    <option value="">Select bank</option>
+                    {banks.map(bank => (
+                      <option key={bank.id} value={bank.name}>
+                        {bank.name} (Balance: {formatCurrency(bank.balance)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {payFormData.mode === 'Cheque' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cheque Number *</label>
+                    <input
+                      type="text"
+                      value={payFormData.chequeNumber}
+                      onChange={(e) => setPayFormData({ ...payFormData, chequeNumber: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                      placeholder="Enter cheque number"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cheque Date *</label>
+                    <input
+                      type="date"
+                      value={payFormData.chequeDate}
+                      onChange={(e) => setPayFormData({ ...payFormData, chequeDate: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Image (JPG/PNG)</label>
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 flex items-center justify-center px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                    <Upload size={16} className="mr-2" />
+                    <span className="text-sm">{payFormData.imageUrl ? 'Change' : 'Upload'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png"
+                      onChange={handlePayImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {payFormData.imageUrl && (
+                    <button
+                      onClick={() => setPayFormData({ ...payFormData, imageUrl: '' })}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                      title="Remove image"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+                {payFormData.imageUrl && (
+                  <img src={payFormData.imageUrl} alt="Receipt" className="mt-2 h-16 w-16 object-cover rounded border" />
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setIsPayModalOpen(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePaySave}
+                className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors"
+              >
+                Pay Salary
+              </button>
             </div>
           </div>
         </div>

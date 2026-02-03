@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from 'react';
 import { Transaction, Bank } from '../App';
 import { Plus, Eye, Edit, Trash2, X, Printer, Download, FileText, Upload, Image as ImageIcon, Maximize2, Minimize2, TrendingUp, TrendingDown, Banknote, DollarSign, Filter, AlertCircle, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
+import { generateTransactionId } from '../utils/transactionIdGenerator';
 
 type TransactionsProps = {
   transactions: Transaction[];
@@ -96,7 +97,7 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
   const [currentUploadIndex, setCurrentUploadIndex] = useState<number>(0);
   
   // Filters
-  const [filterType, setFilterType] = useState<'All' | 'Inflow' | 'Outflow'>('All');
+  const [filterType, setFilterType] = useState<'All' | 'Inflow' | 'Outflow' | 'Loan'>('All');
   const [filterOffice, setFilterOffice] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -104,10 +105,16 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
   
   const [formData, setFormData] = useState({
     office: OFFICES[0],
-    type: 'Inflow' as 'Inflow' | 'Outflow',
+    type: 'Inflow' as 'Inflow' | 'Outflow' | 'Loan',
     mainCategory: '',
     subCategory: '',
     detailCategory: '',
+    loanType: 'Receivable' as 'Receivable' | 'Payable',
+    borrowerName: '',
+    lenderName: '',
+    loanDate: '',
+    expectedReturnDate: '',
+    dueDate: '',
     date: new Date().toISOString().split('T')[0]
   });
 
@@ -184,6 +191,12 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
       mainCategory: '',
       subCategory: '',
       detailCategory: '',
+      loanType: 'Receivable',
+      borrowerName: '',
+      lenderName: '',
+      loanDate: '',
+      expectedReturnDate: '',
+      dueDate: '',
       date: new Date().toISOString().split('T')[0]
     });
     setTransactionRows([
@@ -196,14 +209,37 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
 
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
-    setFormData({
-      office: transaction.company,
-      type: transaction.mainCategory === 'Cash Inflow' ? 'Inflow' : 'Outflow',
-      mainCategory: transaction.subCategory,
-      subCategory: '',
-      detailCategory: '',
-      date: transaction.date
-    });
+    if (transaction.mainCategory === 'Loan') {
+      setFormData({
+        office: transaction.company,
+        type: 'Loan',
+        mainCategory: '',
+        subCategory: '',
+        detailCategory: transaction.note || '',
+        loanType: transaction.loanType || 'Receivable',
+        borrowerName: transaction.borrowerName || '',
+        lenderName: transaction.lenderName || '',
+        loanDate: transaction.loanDate || '',
+        expectedReturnDate: transaction.expectedReturnDate || '',
+        dueDate: transaction.dueDate || '',
+        date: transaction.date
+      });
+    } else {
+      setFormData({
+        office: transaction.company,
+        type: transaction.mainCategory === 'Cash Inflow' ? 'Inflow' : 'Outflow',
+        mainCategory: transaction.subCategory,
+        subCategory: '',
+        detailCategory: '',
+        loanType: 'Receivable',
+        borrowerName: '',
+        lenderName: '',
+        loanDate: '',
+        expectedReturnDate: '',
+        dueDate: '',
+        date: transaction.date
+      });
+    }
     setTransactionRows([{
       amount: transaction.amount,
       note: transaction.note,
@@ -278,15 +314,46 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
 
   const handleSave = () => {
     // Validate required fields
-    if (!formData.office || !formData.type || !formData.mainCategory) {
-      toast.error('Please fill in all required category fields');
+    if (!formData.office || !formData.type) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    // Validate Loan-specific fields
+    if (formData.type === 'Loan') {
+      if (!formData.loanType) {
+        toast.error('Please select a loan type');
+        return;
+      }
+      if (formData.loanType === 'Receivable' && !formData.borrowerName) {
+        toast.error('Please enter borrower name');
+        return;
+      }
+      if (formData.loanType === 'Payable' && !formData.lenderName) {
+        toast.error('Please enter lender name');
+        return;
+      }
+      if (!formData.loanDate) {
+        toast.error('Please enter loan date');
+        return;
+      }
+      if (formData.loanType === 'Receivable' && !formData.expectedReturnDate) {
+        toast.error('Please enter expected return date');
+        return;
+      }
+      if (formData.loanType === 'Payable' && !formData.dueDate) {
+        toast.error('Please enter due date');
+        return;
+      }
+    } else if (!formData.mainCategory) {
+      toast.error('Please select a category');
       return;
     }
 
     // Validate all rows
     for (let i = 0; i < transactionRows.length; i++) {
       const row = transactionRows[i];
-      
+
       if (!row.amount || row.amount <= 0) {
         toast.error(`Please enter a valid amount for row ${i + 1}`);
         return;
@@ -298,7 +365,13 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
       }
 
       // Validate bank balance for outflow transactions
-      if (formData.type === 'Outflow' && row.mode === 'Bank' && row.bankId) {
+      // For loans: Receivable = outflow (money given), Payable = inflow (money received)
+      const isOutflowTransaction = formData.type === 'Outflow' ||
+                                   (formData.type === 'Loan' && formData.loanType === 'Receivable');
+      const isInflowTransaction = formData.type === 'Inflow' ||
+                                  (formData.type === 'Loan' && formData.loanType === 'Payable');
+
+      if (isOutflowTransaction && row.mode === 'Bank' && row.bankId) {
         const preview = getBankPreview(row.bankId, row.amount);
         if (preview && !preview.isValid) {
           toast.error(`Insufficient balance in ${preview.bank.name} for row ${i + 1}`);
@@ -318,41 +391,65 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
     }
 
     // Create transactions
-    const newTransactions: Transaction[] = transactionRows.map(row => ({
-      id: editingTransaction?.id || `${Date.now()}-${Math.random()}`,
-      date: formData.date,
-      company: formData.office,
-      mainCategory: formData.type === 'Inflow' ? 'Cash Inflow' : 'Cash Outflow',
-      subCategory: formData.mainCategory,
-      amount: row.amount,
-      mode: row.mode,
-      bankName: row.bankName,
-      note: row.note,
-      paidBy: row.paidBy,
-      paidTo: row.paidTo,
-      paymentStatus: row.paymentStatus,
-      remainingAmount: row.remainingAmount,
-      imageUrl: row.imageUrl
-    }));
+    const now = new Date();
+    const newTransactions: Transaction[] = transactionRows.map(row => {
+      let mainCategory: string;
+      let subCategory: string;
+
+      if (formData.type === 'Loan') {
+        mainCategory = 'Loan';
+        subCategory = 'Loan Transaction';
+      } else {
+        mainCategory = formData.type === 'Inflow' ? 'Cash Inflow' : 'Cash Outflow';
+        subCategory = formData.mainCategory;
+      }
+
+      const transaction: Transaction = {
+        id: editingTransaction?.id || `${Date.now()}-${Math.random()}`,
+        transactionId: generateTransactionId(formData.type === 'Inflow' || (formData.type === 'Loan' && formData.loanType === 'Payable') ? 'INC' : 'EXP'),
+        date: formData.date,
+        time: now.toTimeString().split(' ')[0],
+        company: formData.office,
+        mainCategory,
+        subCategory,
+        amount: row.amount,
+        mode: row.mode,
+        bankName: row.bankName,
+        note: row.note,
+        paidBy: row.paidBy,
+        paidTo: row.paidTo,
+        paymentStatus: row.paymentStatus,
+        remainingAmount: row.remainingAmount,
+        imageUrl: row.imageUrl
+      };
+
+      // Add loan-specific fields
+      if (formData.type === 'Loan') {
+        transaction.loanType = formData.loanType;
+        transaction.borrowerName = formData.borrowerName;
+        transaction.lenderName = formData.lenderName;
+        transaction.loanDate = formData.loanDate;
+        transaction.expectedReturnDate = formData.expectedReturnDate;
+        transaction.dueDate = formData.dueDate;
+      }
+
+      return transaction;
+    });
 
     // Update bank balances and record history
     transactionRows.forEach(row => {
       if (row.mode === 'Bank' && row.bankId) {
         const bank = banks.find(b => b.id === row.bankId);
         if (bank) {
-          const isInflow = formData.type === 'Inflow';
-          const newBalance = isInflow ? bank.balance + row.amount : bank.balance - row.amount;
+          // Determine if this is an inflow or outflow for bank balance
+          const isInflowForBank = formData.type === 'Inflow' ||
+                                  (formData.type === 'Loan' && formData.loanType === 'Payable');
+          const newBalance = isInflowForBank ? bank.balance + row.amount : bank.balance - row.amount;
 
           const updatedBanks = banks.map(b =>
             b.id === row.bankId ? {
               ...b,
-              balance: newBalance,
-              balanceHistory: [...b.balanceHistory, {
-                date: formData.date,
-                balance: newBalance,
-                transaction: `${formData.type === 'Inflow' ? 'Inflow' : 'Outflow'}: ${formData.subCategory} - ${row.note}`,
-                type: 'transaction'
-              }]
+              balance: newBalance
             } : b
           );
           setBanks(updatedBanks);
@@ -361,7 +458,7 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
     });
 
     if (editingTransaction) {
-      setTransactions(transactions.map(t => 
+      setTransactions(transactions.map(t =>
         t.id === editingTransaction.id ? newTransactions[0] : t
       ));
       toast.success('Transaction updated successfully');
@@ -691,11 +788,11 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
               {/* Transaction Type Toggle */}
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h4 className="font-semibold text-gray-900 mb-4">💸 Transaction Type</h4>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, type: 'Inflow', mainCategory: '', subCategory: '', detailCategory: '' })}
-                    className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
+                    onClick={() => setFormData({ ...formData, type: 'Inflow', mainCategory: '', subCategory: '', detailCategory: '', loanType: 'Receivable' })}
+                    className={`py-3 px-4 rounded-lg font-medium transition-all ${
                       formData.type === 'Inflow'
                         ? 'bg-green-500 text-white shadow-md'
                         : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -708,8 +805,8 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, type: 'Outflow', mainCategory: '', subCategory: '', detailCategory: '' })}
-                    className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
+                    onClick={() => setFormData({ ...formData, type: 'Outflow', mainCategory: '', subCategory: '', detailCategory: '', loanType: 'Receivable' })}
+                    className={`py-3 px-4 rounded-lg font-medium transition-all ${
                       formData.type === 'Outflow'
                         ? 'bg-red-500 text-white shadow-md'
                         : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -720,52 +817,201 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
                       Cash Outflow
                     </div>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, type: 'Loan', mainCategory: '', subCategory: '', detailCategory: '' })}
+                    className={`py-3 px-4 rounded-lg font-medium transition-all ${
+                      formData.type === 'Loan'
+                        ? 'text-black shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                    style={formData.type === 'Loan' ? { backgroundColor: '#6699FF' } : {}}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <Wallet size={20} />
+                      Loan
+                    </div>
+                  </button>
                 </div>
               </div>
 
-              {/* Category Selection */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-semibold text-gray-900 mb-4">📁 Category Selection</h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Main Category *</label>
-                    <select
-                      value={formData.mainCategory}
-                      onChange={(e) => setFormData({ ...formData, mainCategory: e.target.value, subCategory: '', detailCategory: '' })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                    >
-                      <option value="">Select main category</option>
-                      {getMainCategories().map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Sub Category *</label>
-                    <select
-                      value={formData.subCategory}
-                      onChange={(e) => setFormData({ ...formData, subCategory: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                      disabled={!formData.mainCategory}
-                    >
-                      <option value="">Select sub category</option>
-                      {getSubCategories().map(sub => (
-                        <option key={sub} value={sub}>{sub}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Detail Category (Optional)</label>
-                    <input
-                      type="text"
-                      value={formData.detailCategory}
-                      onChange={(e) => setFormData({ ...formData, detailCategory: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                      placeholder="Enter detail (optional)"
-                    />
+              {/* Loan Type Selection */}
+              {formData.type === 'Loan' && (
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-4">🏦 Loan Type *</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, loanType: 'Receivable' })}
+                    className={`py-3 px-4 rounded-lg font-medium transition-all ${
+                      formData.loanType === 'Receivable'
+                        ? 'text-black shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                    style={formData.loanType === 'Receivable' ? { backgroundColor: '#66CC66' } : {}}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <TrendingDown size={20} />
+                      Receivable (Money Given)
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, loanType: 'Payable' })}
+                    className={`py-3 px-4 rounded-lg font-medium transition-all ${
+                      formData.loanType === 'Payable'
+                        ? 'text-black shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                    style={formData.loanType === 'Payable' ? { backgroundColor: '#FF6666' } : {}}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <TrendingUp size={20} />
+                      Payable (Money Received)
+                    </div>
+                  </button>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* Category Selection */}
+              {formData.type !== 'Loan' && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-4">📁 Category Selection</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Main Category *</label>
+                      <select
+                        value={formData.mainCategory}
+                        onChange={(e) => setFormData({ ...formData, mainCategory: e.target.value, subCategory: '', detailCategory: '' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                      >
+                        <option value="">Select main category</option>
+                        {getMainCategories().map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Sub Category *</label>
+                      <select
+                        value={formData.subCategory}
+                        onChange={(e) => setFormData({ ...formData, subCategory: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                        disabled={!formData.mainCategory}
+                      >
+                        <option value="">Select sub category</option>
+                        {getSubCategories().map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Detail Category (Optional)</label>
+                      <input
+                        type="text"
+                        value={formData.detailCategory}
+                        onChange={(e) => setFormData({ ...formData, detailCategory: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                        placeholder="Enter detail (optional)"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loan Details */}
+              {formData.type === 'Loan' && (
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-4">🏦 Loan Details</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {formData.loanType === 'Receivable' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Borrower Name / Entity *</label>
+                          <input
+                            type="text"
+                            value={formData.borrowerName}
+                            onChange={(e) => setFormData({ ...formData, borrowerName: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                            placeholder="Enter borrower name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Loan Date *</label>
+                          <input
+                            type="date"
+                            value={formData.loanDate}
+                            onChange={(e) => setFormData({ ...formData, loanDate: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Expected Return Date *</label>
+                          <input
+                            type="date"
+                            value={formData.expectedReturnDate}
+                            onChange={(e) => setFormData({ ...formData, expectedReturnDate: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                          <textarea
+                            value={formData.detailCategory}
+                            onChange={(e) => setFormData({ ...formData, detailCategory: e.target.value })}
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] resize-none"
+                            placeholder="Additional loan notes..."
+                          />
+                        </div>
+                      </>
+                    )}
+                    {formData.loanType === 'Payable' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Lender Name / Entity *</label>
+                          <input
+                            type="text"
+                            value={formData.lenderName}
+                            onChange={(e) => setFormData({ ...formData, lenderName: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                            placeholder="Enter lender name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Loan Date *</label>
+                          <input
+                            type="date"
+                            value={formData.loanDate}
+                            onChange={(e) => setFormData({ ...formData, loanDate: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
+                          <input
+                            type="date"
+                            value={formData.dueDate}
+                            onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                          <textarea
+                            value={formData.detailCategory}
+                            onChange={(e) => setFormData({ ...formData, detailCategory: e.target.value })}
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] resize-none"
+                            placeholder="Additional loan notes..."
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Multi-row toggle */}
               {!editingTransaction && (
@@ -839,7 +1085,7 @@ export function Transactions({ transactions, setTransactions, banks, setBanks }:
                           </div>
 
                           {row.mode === 'Bank' && (
-                            <div className="col-span-2">
+                              <div className="col-span-2">
                               <label className="block text-sm font-medium text-gray-700 mb-1">Select Bank *</label>
                               <select
                                 value={row.bankId || ''}

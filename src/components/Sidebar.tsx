@@ -41,7 +41,7 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(['finance', 'operations', 'reports']);
 
   const sectionChildren: { [key: string]: string[] } = {
-    operations: ['employees', 'inventory-entry', 'commission-slabs', 'commission-calculation', 'invoices', 'product-transfer'],
+    operations: ['employees', 'inventory-entry', 'invoices', 'product-transfer'],
     finance: ['transactions', 'pending-payments', 'bills', 'salary', 'budgets'],
     loans: ['loans-payable', 'loans-receivable', 'loans'],
     banking: ['banks', 'bank-transfers', 'cash-in-hand'],
@@ -71,8 +71,6 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
       children: [
         { id: 'employees', name: 'Employees', icon: Users },
         { id: 'inventory-entry', name: 'Inventory Entry', icon: Package },
-        { id: 'commission-slabs', name: 'Commission Slabs', icon: Percent },
-        { id: 'commission-calculation', name: 'Commission Calculation', icon: Calculator },
         { id: 'invoices', name: 'Invoices', icon: FileText },
       { id: 'product-transfer', name: 'Product Transfer', icon: ArrowLeftRight }
 
