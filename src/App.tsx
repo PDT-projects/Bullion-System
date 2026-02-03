@@ -119,6 +119,10 @@ export type Invoice = {
   imageUrl?: string;
   paidBy?: string;
   paidTo?: string;
+  digitalStamp?: boolean; // NEW: Digital stamp option for invoices
+  clientDealBy?: string; // NEW: Referral to field
+  referralBy?: string; // NEW: Referral from field
+  productLocation?: string; // NEW: Product location field
 };
 
 export type PartialPayment = {
@@ -148,12 +152,15 @@ export type Transaction = {
   date: string;
   time: string; // Added: time component
   company: string;
-  mainCategory: 'Cash Inflow' | 'Cash Outflow' | 'Loans & Advances' | 'Salary' | 'Bills';
+  mainCategory: 'Cash Inflow' | 'Cash Outflow' | 'Loans & Advances' | 'Salary' | 'Bills' | 'Loan';
   subCategory: string;
   amount: number;
   mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method
   bankName?: string;
   bankId?: string; // Added for better bank tracking
+  chequeNumber?: string; // For cheque payments
+  chequeDate?: string; // For cheque payments
+  transactionReference?: string; // For bank transfer payments
   note: string;
   paidBy?: string; // Person/company who paid (e.g., "Ahmed Khan", "Pakistan Detectors - Islamabad")
   paidTo?: string; // Person/company/vendor who received payment
@@ -174,6 +181,14 @@ export type Transaction = {
   advanceAmount?: number; // Amount paid as advance
   remainingSalary?: number; // Remaining salary after advance
   salaryMonth?: string; // Month for which advance was given
+
+  // Loan fields
+  loanType?: 'Receivable' | 'Payable'; // For loan transactions
+  borrowerName?: string; // For loan receivable (person/entity receiving money)
+  lenderName?: string; // For loan payable (person/entity giving money)
+  loanDate?: string; // Date when loan was given/taken
+  expectedReturnDate?: string; // For loan receivable
+  dueDate?: string; // For loan payable
 
   // New payment tracking fields
   partialPayments?: PartialPayment[]; // Track all partial payments under same transaction ID
@@ -1078,7 +1093,7 @@ export default function App() {
       case 'transaction-history-report':
         return <TransactionHistoryReport transactions={data.transactions} />;
       case 'commission-slabs':
-        return <CommissionSlabs commissionSlabs={data.commissionSlabs} setCommissionSlabs={(commissionSlabs) => setData({ ...data, commissionSlabs })} employees={data.employees} />;
+        return <CommissionSlabs commissionSlabs={data.commissionSlabs} setCommissionSlabs={(commissionSlabs) => setData({ ...data, commissionSlabs })} employees={data.employees} setActiveModule={setActiveModule} />;
       case 'commission-calculation':
         return <CommissionCalculation
           commissions={data.commissions}
@@ -1086,6 +1101,7 @@ export default function App() {
           commissionSlabs={data.commissionSlabs}
           invoices={data.invoices}
           employees={data.employees}
+          setActiveModule={setActiveModule}
         />;
       case 'commission-report':
         return <CommissionReport commissions={data.commissions} />;

@@ -202,6 +202,24 @@ export function InvoiceView({ invoice, onClose, onEdit }: InvoiceViewProps) {
             </div>
           )}
 
+          {/* Digital Stamp */}
+          {invoice.digitalStamp && (
+            <div className="flex justify-end mt-8 mb-4">
+              <div className="border-2 border-gray-400 p-3 bg-gray-50 rounded-lg">
+                <div className="text-center">
+                  <img
+                    src="/src/assets/PDT-logo.png"
+                    alt="PDT Digital Stamp"
+                    className="w-16 h-16 mx-auto mb-2"
+                  />
+                  <p className="text-xs font-bold text-gray-700">DIGITAL STAMP</p>
+                  <p className="text-xs text-gray-600">PAK-DET</p>
+                  <p className="text-xs text-gray-600">{new Date().toLocaleDateString('en-PK')}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="border-t border-gray-200 pt-6 mt-8 text-center text-sm text-gray-600">
             <p>Thank you for your business!</p>

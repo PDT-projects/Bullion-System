@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calculator, Check, Edit, X, FileText, Percent, DollarSign, Calendar, MapPin, User, Maximize2, Minimize2, TrendingUp, Award, Target, BarChart3 } from 'lucide-react';
+import { Calculator, Check, Edit, X, FileText, Percent, DollarSign, Calendar, MapPin, User, Maximize2, Minimize2, TrendingUp, Award, Target, BarChart3, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Commission = {
@@ -84,7 +84,8 @@ export function CommissionCalculation({
   setCommissions,
   commissionSlabs,
   invoices,
-  employees
+  employees,
+  setActiveModule
 }: CommissionCalculationProps) {
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
@@ -289,9 +290,19 @@ export function CommissionCalculation({
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Commission Calculation</h2>
-          <p className="text-sm text-gray-600 mt-1">Calculate and manage salesperson commissions</p>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setActiveModule('salary')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
+            title="Back to Salary"
+          >
+            <ArrowLeft size={20} />
+            Back
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold">Commission Calculation</h2>
+            <p className="text-sm text-gray-600 mt-1">Calculate and manage salesperson commissions</p>
+          </div>
         </div>
       </div>
 
