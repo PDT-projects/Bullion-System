@@ -68,7 +68,7 @@ const categories = [
 const cities = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'];
 
 export function InventoryEntry({ products, productCosting, setProducts, setProductCosting }: InventoryEntryProps) {
-  const [currentStep, setCurrentStep] = useState<'type' | 'costing' | 'form' | 'payment' | 'show'>('type');
+  const [currentStep, setCurrentStep] = useState<'type' | 'costing' | 'form' | 'payment' | 'show' | 'receivable'>('type');
   const [formData, setFormData] = useState<InventoryEntryForm>({
     inventoryType: 'new',
     costingOption: 'with',
@@ -562,6 +562,17 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
                 <h4 className="text-lg font-medium text-gray-900">Add to Existing Inventory</h4>
               </div>
               <p className="text-gray-600">Add more units to an existing product in inventory</p>
+            </button>
+
+            <button
+              onClick={() => setCurrentStep('receivable')}
+              className="p-6 border-2 border-gray-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
+            >
+              <div className="flex items-center mb-3">
+                <Package className="w-8 h-8 text-orange-600 mr-3" />
+                <h4 className="text-lg font-medium text-gray-900">Receivable Stock</h4>
+              </div>
+              <p className="text-gray-600">View shipments on the way but not yet received</p>
             </button>
 
             <button
