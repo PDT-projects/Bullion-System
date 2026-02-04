@@ -491,48 +491,61 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
   const models = getUniqueModels(formData.brandName);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto relative">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Inventory Entry</h2>
-        <p className="text-gray-600">Smart inventory intake flow with conditional costing and payment tracking</p>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold">Inventory Entry</h2>
+          <p className="text-sm text-gray-600 mt-1">Smart inventory intake flow with conditional costing and payment tracking</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setCurrentStep('show')}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <Package size={20} />
+            View Inventory
+          </button>
+        </div>
       </div>
 
-      {/* Progress Indicator */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div className={`flex items-center ${currentStep === 'type' ? 'text-blue-600' : 'text-green-600'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 'type' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'}`}>
-              {currentStep !== 'type' ? <CheckCircle size={16} /> : '1'}
+
+
+      {/* Progress Indicator - Always Visible */}
+      <div className="mb-16 bg-white rounded-2xl shadow-xl border-4 border-blue-200 p-10">
+        <div className="flex items-center justify-center max-w-6xl mx-auto">
+          {/* Step 1 - Always Visible */}
+          <div className={`flex flex-col items-center ${currentStep === 'type' ? 'text-blue-700' : 'text-green-700'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'type' ? 'bg-white text-blue-600 border-blue-600 ring-4 ring-blue-300' : 'bg-green-600 text-white'}`}>
+              {currentStep !== 'type' ? <CheckCircle size={32} /> : '1'}
             </div>
-            <span className="ml-2 text-sm font-medium">Inventory Type</span>
+            <span className={`text-lg font-bold text-center ${currentStep === 'type' ? 'text-blue-700' : 'text-green-700'}`}>Inventory Type</span>
           </div>
-          <div className={`flex-1 h-0.5 mx-4 ${currentStep !== 'type' ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+          <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep !== 'type' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
 
-          {formData.inventoryType === 'new' && (
-            <>
-              <div className={`flex items-center ${currentStep === 'costing' ? 'text-blue-600' : currentStep === 'form' || currentStep === 'payment' ? 'text-green-600' : 'text-gray-400'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 'costing' ? 'bg-blue-600 text-white' : currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                  {currentStep === 'form' || currentStep === 'payment' ? <CheckCircle size={16} /> : '2'}
-                </div>
-                <span className="ml-2 text-sm font-medium">Costing Option</span>
-              </div>
-              <div className={`flex-1 h-0.5 mx-4 ${currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600' : 'bg-gray-200'}`}></div>
-            </>
-          )}
-
-          <div className={`flex items-center ${currentStep === 'form' ? 'text-blue-600' : currentStep === 'payment' ? 'text-green-600' : 'text-gray-400'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 'form' ? 'bg-blue-600 text-white' : currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-              {currentStep === 'payment' ? <CheckCircle size={16} /> : formData.inventoryType === 'new' ? '3' : '2'}
+          {/* Step 2 - Always Visible */}
+          <div className={`flex flex-col items-center ${currentStep === 'costing' ? 'text-blue-700' : currentStep === 'form' || currentStep === 'payment' ? 'text-green-700' : 'text-black'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'costing' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-200 text-black'}`}>
+              {currentStep === 'form' || currentStep === 'payment' ? <CheckCircle size={32} /> : '2'}
             </div>
-            <span className="ml-2 text-sm font-medium">Product Details</span>
+            <span className={`text-lg font-bold text-center ${currentStep === 'costing' ? 'text-blue-700' : currentStep === 'form' || currentStep === 'payment' ? 'text-green-700' : 'text-black'}`}>Costing Option</span>
           </div>
+          <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
 
-          <div className={`flex-1 h-0.5 mx-4 ${currentStep === 'payment' ? 'bg-green-600' : 'bg-gray-200'}`}></div>
-          <div className={`flex items-center ${currentStep === 'payment' ? 'text-blue-600' : 'text-gray-400'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep === 'payment' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-              {formData.costingOption === 'with' ? '4' : '3'}
+          {/* Step 3 - Always Visible */}
+          <div className={`flex flex-col items-center ${currentStep === 'form' ? 'text-blue-700' : currentStep === 'payment' ? 'text-green-700' : 'text-black'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'form' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-200 text-black'}`}>
+              {currentStep === 'payment' ? <CheckCircle size={32} /> : '3'}
             </div>
-            <span className="ml-2 text-sm font-medium">Payment</span>
+            <span className={`text-lg font-bold text-center ${currentStep === 'form' ? 'text-blue-700' : currentStep === 'payment' ? 'text-green-700' : 'text-black'}`}>Product Details</span>
+          </div>
+          <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep === 'payment' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
+
+          {/* Step 4 - Always Visible */}
+          <div className={`flex flex-col items-center ${currentStep === 'payment' ? 'text-blue-700' : 'text-black'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'payment' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : 'bg-gray-200 text-black'}`}>
+              4
+            </div>
+            <span className={`text-lg font-bold text-center ${currentStep === 'payment' ? 'text-blue-700' : 'text-black'}`}>Payment</span>
           </div>
         </div>
       </div>
@@ -540,7 +553,7 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
       {/* Step 1: Inventory Type Selection */}
       {currentStep === 'type' && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-6">What type of inventory entry?</h3>
+          <h3 className="text-xl font-bold text-slate-950 mt-8 mb-5">What type of inventory entry?</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <button
               onClick={() => handleInventoryTypeSelect('new')}
