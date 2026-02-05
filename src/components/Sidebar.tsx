@@ -29,7 +29,7 @@ type MenuItem = {
   id: string;
   name: string;
   icon?: any;
-  children?: { id: string; name: string; icon?: any }[];
+  children?: MenuItem[];
 };
 
 type SidebarProps = {
@@ -38,24 +38,24 @@ type SidebarProps = {
 };
 
 export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
-  const [expandedSections, setExpandedSections] = useState<string[]>(['finance', 'operations', 'reports']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['finance', 'operations']);
 
   const sectionChildren: { [key: string]: string[] } = {
     operations: ['employees', 'inventory-entry', 'invoices', 'product-transfer'],
-    finance: ['transactions', 'pending-payments', 'bills', 'salary', 'budgets'],
-    loans: ['loans-payable', 'loans-receivable', 'loans'],
-    banking: ['banks', 'bank-transfers', 'cash-in-hand'],
-    reports: ['sales-report', 'referral-report', 'commission-report', 'inventory-report', 'inventory-audit-log', 'transaction-history-report', 'transaction-history', 'loan-history', 'transfer-history']
+    finance: ['transaction-menu', 'banking-menu', 'budgets', 'transactions', 'pending-payments', 'bills', 'salary', 'banks', 'bank-transfers', 'cash-in-hand'],
+    loans: ['loans-payable', 'loans-receivable', 'loans']
   };
 
   useEffect(() => {
-    const sectionsToExpand: string[] = ['finance', 'operations', 'reports']; // default expanded
-    Object.entries(sectionChildren).forEach(([section, children]) => {
-      if (children.includes(activeModule)) {
-        sectionsToExpand.push(section);
-      }
+    setExpandedSections(prev => {
+      const sectionsToExpand: string[] = [...prev]; // preserve existing
+      Object.entries(sectionChildren).forEach(([section, children]) => {
+        if (children.includes(activeModule) && !sectionsToExpand.includes(section)) {
+          sectionsToExpand.push(section);
+        }
+      });
+      return [...new Set(sectionsToExpand)];
     });
-    setExpandedSections([...new Set(sectionsToExpand)]);
   }, [activeModule]);
 
   const menuItems: MenuItem[] = [
@@ -81,10 +81,27 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
       name: 'Finance',
       icon: Banknote,
       children: [
-        { id: 'transactions', name: 'Transactions', icon: Receipt },
-        { id: 'pending-payments', name: 'Pending Payments', icon: CreditCard },
-        { id: 'bills', name: 'Bills', icon: Zap },
-        { id: 'salary', name: 'Salary', icon: UserCheck },
+        {
+          id: 'transaction-menu',
+          name: 'Transactions',
+          icon: Receipt,
+          children: [
+            { id: 'transactions', name: 'Add Transaction', icon: Receipt },
+            { id: 'pending-payments', name: 'Pending Payments', icon: CreditCard },
+            { id: 'bills', name: 'Bills', icon: Zap },
+            { id: 'salary', name: 'Salary', icon: UserCheck }
+          ]
+        },
+        {
+          id: 'banking-menu',
+          name: 'Banking',
+          icon: Building2,
+          children: [
+            { id: 'banks', name: 'Bank Balances', icon: Building2 },
+            { id: 'bank-transfers', name: 'Bank Transfers', icon: ArrowLeftRight },
+            { id: 'cash-in-hand', name: 'Cash in Hand', icon: Wallet }
+          ]
+        },
         { id: 'budgets', name: 'Budgets', icon: PieChart }
       ]
     },
@@ -97,32 +114,7 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
         { id: 'loans-receivable', name: 'Receivable', icon: TrendingUp },
         { id: 'loans', name: 'All Loans', icon: Banknote }
       ]
-    },
-    {
-      id: 'banking',
-      name: 'Banking',
-      icon: Building2,
-      children: [
-        { id: 'banks', name: 'Bank Balances', icon: Building2 },
-        { id: 'bank-transfers', name: 'Bank Transfers', icon: ArrowLeftRight },
-        { id: 'cash-in-hand', name: 'Cash in Hand', icon: Wallet }
-      ]
-    },
-    {
-      id: 'reports',
-      name: 'Reports & History',
-      icon: BarChart3,
-      children: [
-        { id: 'sales-report', name: 'Sales Report', icon: PieChart },
-        { id: 'referral-report', name: 'Referral Report', icon: UserPlus },
-        { id: 'commission-report', name: 'Commission Report', icon: Calculator },
-        { id: 'inventory-report', name: 'Inventory Report', icon: Package },
-        { id: 'inventory-audit-log', name: 'Inventory Audit Log', icon: FileSpreadsheet },
-        { id: 'transaction-history-report', name: 'Transaction History Report', icon: FileSpreadsheet },
-        { id: 'transaction-history', name: 'Transaction History', icon: Receipt },
-        { id: 'loan-history', name: 'Loan History', icon: Banknote },
-        { id: 'transfer-history', name: 'Transfer History', icon: ArrowLeftRight }
-      ]
+
     }
   ];
 
@@ -182,19 +174,54 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
                 <div className="ml-4 mt-1 space-y-1">
                   {item.children?.map((child) => {
                     const ChildIcon = child.icon;
+                    const childHasChildren = child.children && child.children.length > 0;
+                    const childIsExpanded = expandedSections.includes(child.id);
+
                     return (
-                      <button
-                        key={child.id}
-                        onClick={() => setActiveModule(child.id)}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
-                          activeModule === child.id
-                            ? 'bg-[#4f46e5] text-white'
-                            : 'text-gray-600 hover:bg-gray-100'
-                        }`}
-                      >
-                        {ChildIcon && <ChildIcon size={16} />}
-                        <span>{child.name}</span>
-                      </button>
+                      <div key={child.id}>
+                        <button
+                          onClick={() => handleMenuClick(child.id, childHasChildren ?? false)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-sm ${
+                            activeModule === child.id && !childHasChildren
+                              ? 'bg-[#4f46e5] text-white'
+                              : 'text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {ChildIcon && <ChildIcon size={16} />}
+                            <span>{child.name}</span>
+                          </div>
+                          {childHasChildren && (
+                            childIsExpanded ? (
+                              <ChevronDown size={14} className="text-gray-500" />
+                            ) : (
+                              <ChevronRight size={14} className="text-gray-500" />
+                            )
+                          )}
+                        </button>
+
+                        {childHasChildren && childIsExpanded && (
+                          <div className="ml-4 mt-1 space-y-1">
+                            {child.children?.map((grandChild) => {
+                              const GrandChildIcon = grandChild.icon;
+                              return (
+                                <button
+                                  key={grandChild.id}
+                                  onClick={() => setActiveModule(grandChild.id)}
+                                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
+                                    activeModule === grandChild.id
+                                      ? 'bg-[#4f46e5] text-white'
+                                      : 'text-gray-600 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  {GrandChildIcon && <GrandChildIcon size={14} />}
+                                  <span>{grandChild.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

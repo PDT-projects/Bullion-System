@@ -721,8 +721,10 @@ export function InventoryEntry({ products, productCosting, receivableStock, setP
   const brands = getUniqueBrands();
   const models = getUniqueModels(formData.brandName);
 
+
+
   return (
-    <div className="p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <style dangerouslySetInnerHTML={{
         __html: `
           .inventory-entry-container button {
@@ -772,70 +774,81 @@ export function InventoryEntry({ products, productCosting, receivableStock, setP
           }
         `
       }} />
-      <div className="inventory-entry-container">
+      <div className="inventory-entry-container max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-8">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-900 tracking-wide mb-4">Inventory Entry</h2>
-          <p className="text-base text-gray-500 leading-relaxed">Smart inventory intake flow with conditional costing and payment tracking</p>
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
+            <Package className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent tracking-tight mb-2">Inventory Entry</h2>
+            <p className="text-lg text-gray-600 leading-relaxed">Smart inventory intake flow with conditional costing and payment tracking</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setCurrentStep('show')}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            className="flex items-center gap-3 px-6 py-3 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200 shadow-md hover:shadow-lg border border-gray-200"
           >
             <Package size={20} />
-            View Inventory
+            <span className="font-medium">View Inventory</span>
           </button>
         </div>
       </div>
 
 
 
-      {/* Progress Indicator - Always Visible */}
-      <div className="mb-8 pb-6 border-b border-gray-200 bg-white rounded-2xl shadow-xl border-4 border-blue-200 p-10">
-        <div className="flex items-center justify-center max-w-6xl mx-auto">
-          {/* Step 1 - Always Visible */}
+      {/* Progress Indicator - Compact and Visible */}
+      <div className="mb-6 bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          {/* Step 1 */}
           <div className={`flex flex-col items-center ${currentStep === 'type' ? 'text-blue-700' : currentStep !== 'type' ? 'text-green-700' : 'text-gray-700'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'type' ? 'bg-white text-blue-600 border-blue-600 ring-4 ring-blue-300' : currentStep !== 'type' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2 shadow-lg border-2 border-white ${currentStep === 'type' ? 'bg-blue-600 text-white ring-2 ring-blue-300' : currentStep !== 'type' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
               {currentStep !== 'type' ? <CheckCircle size={32} /> : '1'}
             </div>
-            <span className={`text-lg text-center ${currentStep === 'type' ? 'font-bold text-blue-600' : currentStep !== 'type' ? 'font-medium text-green-600' : 'font-normal text-gray-400'}`}>Inventory Type</span>
+            <span className={`text-sm font-medium text-center leading-tight ${currentStep === 'type' ? 'text-blue-600' : currentStep !== 'type' ? 'text-green-600' : 'text-gray-500'}`}>Inventory Type</span>
           </div>
-          <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep !== 'type' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
 
-          {/* Step 2 - Always Visible */}
+          {/* Connector 1-2 */}
+          <div className={`flex-1 h-1 mx-4 rounded-full ${currentStep !== 'type' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gray-300'}`}></div>
+
+          {/* Step 2 */}
           <div className={`flex flex-col items-center ${currentStep === 'costing' ? 'text-blue-700' : currentStep === 'form' || currentStep === 'payment' ? 'text-green-700' : 'text-gray-700'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'costing' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2 shadow-lg border-2 border-white ${currentStep === 'costing' ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white ring-2 ring-blue-300' : currentStep === 'form' || currentStep === 'payment' ? 'bg-gradient-to-r from-green-500 to-green-600 text-white' : 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800'}`}>
               {currentStep === 'form' || currentStep === 'payment' ? <CheckCircle size={32} /> : '2'}
             </div>
-            <span className={`text-lg text-center ${currentStep === 'costing' ? 'font-bold text-blue-600' : currentStep === 'form' || currentStep === 'payment' ? 'font-medium text-green-600' : 'font-normal text-gray-400'}`}>Costing Option</span>
+            <span className={`text-sm font-medium text-center leading-tight ${currentStep === 'costing' ? 'text-blue-600' : currentStep === 'form' || currentStep === 'payment' ? 'text-green-600' : 'text-gray-500'}`}>Costing Option</span>
           </div>
-          <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
 
-          {/* Step 3 - Always Visible */}
+          {/* Connector 2-3 */}
+          <div className={`flex-1 h-1 mx-4 rounded-full ${currentStep === 'form' || currentStep === 'payment' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gray-300'}`}></div>
+
+          {/* Step 3 */}
           <div className={`flex flex-col items-center ${currentStep === 'form' ? 'text-blue-700' : currentStep === 'payment' ? 'text-green-700' : 'text-gray-700'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'form' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
-              {currentStep === 'payment' ? <CheckCircle size={32} /> : '3'}
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-lg border-2 border-white ${currentStep === 'form' ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white ring-2 ring-blue-300' : currentStep === 'payment' ? 'bg-gradient-to-r from-green-500 to-green-600 text-white' : 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800'}`}>
+              {currentStep === 'payment' ? <CheckCircle size={28} /> : '3'}
             </div>
-            <span className={`text-lg text-center ${currentStep === 'form' ? 'font-bold text-blue-600' : currentStep === 'payment' ? 'font-medium text-green-600' : 'font-normal text-gray-400'}`}>Product Details</span>
+            <span className={`text-sm font-medium text-center leading-tight ${currentStep === 'form' ? 'text-blue-600' : currentStep === 'payment' ? 'text-green-600' : 'text-gray-500'}`}>Product Details</span>
           </div>
-          <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep === 'payment' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
 
-          {/* Step 4 - Always Visible */}
+          {/* Connector 3-4 */}
+          <div className={`flex-1 h-1 mx-4 rounded-full ${currentStep === 'payment' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gray-300'}`}></div>
+
+          {/* Step 4 */}
           <div className={`flex flex-col items-center ${currentStep === 'payment' ? 'text-blue-700' : 'text-gray-700'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'payment' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : 'bg-gray-300 text-gray-700'}`}>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-lg border-2 border-white ${currentStep === 'payment' ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white ring-2 ring-blue-300' : 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800'}`}>
               4
             </div>
-            <span className={`text-lg text-center ${currentStep === 'payment' ? 'font-bold text-blue-600' : 'font-normal text-gray-400'}`}>Payment</span>
+            <span className={`text-sm font-medium text-center leading-tight ${currentStep === 'payment' ? 'text-blue-600' : 'text-gray-500'}`}>Payment</span>
           </div>
         </div>
       </div>
 
       {/* Step 1: Inventory Type Selection */}
       {currentStep === 'type' && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-          <h3 className="text-xl font-bold text-slate-950 mt-8 mb-5">What type of inventory entry?</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-16">
+          <h3 className="text-3xl font-bold text-slate-950 mt-8 mb-12">What type of inventory entry?</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             <button
               onClick={() => handleInventoryTypeSelect('new')}
               className="p-6 bg-gray-100 text-gray-700 border-2 border-gray-200 rounded-lg hover:bg-blue-600 hover:text-white hover:border-blue-500 transition-colors text-left"
@@ -1359,9 +1372,9 @@ export function InventoryEntry({ products, productCosting, receivableStock, setP
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {products.map((product) => (
-                  <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div key={product.id} className="border border-gray-200 rounded-lg p-12 hover:shadow-lg transition-shadow bg-white">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h4 className="font-medium text-gray-900">{product.brandName} {product.modelName}</h4>
