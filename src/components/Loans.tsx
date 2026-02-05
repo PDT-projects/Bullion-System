@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Loan, Employee, Bank } from '../App';
 import { Plus, Eye, Edit, Trash2, X, Printer, Download, FileText, DollarSign, Maximize2, Minimize2, User, Users } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 type LoansProps = {
   loans: Loan[];
@@ -20,6 +20,7 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
   const [paymentLoan, setPaymentLoan] = useState<Loan | null>(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentBankId, setPaymentBankId] = useState('');
+  const [paymentMode, setPaymentMode] = useState<'Cash' | 'Cheque' | 'Bank Transfer'>('Cash');
   const [isFullScreen, setIsFullScreen] = useState(false);
   
   const [formData, setFormData] = useState<Partial<Loan>>({
@@ -138,6 +139,7 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
 
     const newLoan: Loan = {
       id: editingLoan?.id || Date.now().toString(),
+      entityName: formData.receiverName!, // Add entityName for backward compatibility
       receiverType: formData.receiverType!,
       receiverName: formData.receiverName!,
       receiverId: formData.receiverId,
@@ -149,9 +151,9 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
       loanType: formData.loanType!,
       status,
       date: formData.date!,
-      mode: formData.mode || 'Bank',
-      bankId: formData.bankId,
-      bankName: formData.bankName
+      mode: formData.mode!,
+      bankId: formData.bankId!,
+      bankName: formData.bankName!
     };
 
     if (editingLoan) {
@@ -190,12 +192,18 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
     setPaymentLoan(loan);
     setPaymentAmount(0);
     setPaymentBankId('');
+    setPaymentMode('Cash');
     setIsPaymentModal(true);
   };
 
   const handlePaymentSave = () => {
-    if (!paymentLoan || !paymentAmount || !paymentBankId) {
-      toast.error('Please enter payment amount and select bank');
+    if (!paymentLoan || !paymentAmount || !paymentBankId || !paymentMode) {
+      toast.error('Please fill in all required fields: amount, payment mode, and bank');
+      return;
+    }
+
+    if (paymentAmount <= 0) {
+      toast.error('Payment amount must be greater than 0');
       return;
     }
 
@@ -237,6 +245,16 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
       toast.success(`Payment made. ${formatCurrency(paymentAmount)} deducted from ${bank.name}`);
     }
 
+    // Create payment record
+    const paymentRecord = {
+      id: Date.now().toString(),
+      amount: paymentAmount,
+      mode: paymentMode,
+      date: new Date().toISOString().split('T')[0],
+      bankId: paymentBankId,
+      bankName: bank.name
+    };
+
     // Update loan
     const newPaid = paymentLoan.paid + paymentAmount;
     const newRemaining = paymentLoan.loanAmount - newPaid;
@@ -246,10 +264,13 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
       ...paymentLoan,
       paid: newPaid,
       remaining: newRemaining,
-      status: newStatus
+      status: newStatus,
+      paymentHistory: [...(paymentLoan.paymentHistory || []), paymentRecord]
     };
 
-    setLoans(loans.map(l => l.id === paymentLoan.id ? updatedLoan : l));
+    // Update the loan in the current loans array (which may be filtered)
+    const updatedLoans = loans.map(l => l.id === paymentLoan.id ? updatedLoan : l);
+    setLoans(updatedLoans);
     setIsPaymentModal(false);
   };
 
@@ -357,52 +378,35 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setViewLoan(loan)}
-                        className="p-2 text-[#4f46e5] hover:bg-[#4f46e5]/10 rounded-lg transition-colors"
-                        title="View"
+                        className="p-2 text-[#4f46e5] hover:bg-[#4f46e5]/10 rounded-lg transition-colors cursor-pointer"
+                        title="View Details"
+                        type="button"
                       >
                         <Eye size={16} />
-                      </button>
-                      <button
-                        onClick={() => setViewSlip(loan)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="View Slip"
-                      >
-                        <FileText size={16} />
                       </button>
                       {loan.remaining > 0 && (
                         <button
                           onClick={() => handleMakePayment(loan)}
-                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                          title="Make Payment"
+                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors cursor-pointer"
+                          title="Pay Remaining"
+                          type="button"
                         >
                           <DollarSign size={16} />
                         </button>
                       )}
                       <button
                         onClick={() => handleEdit(loan)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                         title="Edit"
+                        type="button"
                       >
                         <Edit size={16} />
                       </button>
                       <button
-                        onClick={() => handlePrint(loan)}
-                        className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                        title="Print Slip"
-                      >
-                        <Printer size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDownload(loan)}
-                        className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                        title="Download Slip"
-                      >
-                        <Download size={16} />
-                      </button>
-                      <button
                         onClick={() => handleDelete(loan.id)}
-                        className="p-2 text-[#ef4444] hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-2 text-[#ef4444] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                         title="Delete"
+                        type="button"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -665,9 +669,27 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
                   value={paymentAmount || ''}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
                   max={paymentLoan.remaining}
+                  min={0.01}
+                  step={0.01}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                   placeholder="Enter amount"
                 />
+                {paymentAmount > paymentLoan.remaining && (
+                  <p className="text-xs text-red-600 mt-1">Amount cannot exceed remaining balance</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Mode *</label>
+                <select
+                  value={paymentMode}
+                  onChange={(e) => setPaymentMode(e.target.value as 'Cash' | 'Cheque' | 'Bank Transfer')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                >
+                  <option value="">Select payment mode</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Select Bank *</label>
@@ -684,8 +706,8 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
-                  {paymentLoan.type === 'Receivable' 
-                    ? '💰 Payment will be added to selected bank' 
+                  {paymentLoan.type === 'Receivable'
+                    ? '💰 Payment will be added to selected bank'
                     : '💸 Payment will be deducted from selected bank'}
                 </p>
               </div>
@@ -711,6 +733,7 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
       {/* View Loan Modal */}
       {viewLoan && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          {console.log('View modal is rendering for loan:', viewLoan.id)}
           <div className="bg-white rounded-lg max-w-2xl w-full">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-xl font-bold">Loan Details</h3>
@@ -767,6 +790,44 @@ export function Loans({ loans, setLoans, employees, banks, setBanks }: LoansProp
                       <p className="text-lg font-bold text-red-600">{formatCurrency(viewLoan.remaining)}</p>
                     </div>
                   </div>
+                </div>
+                {/* Payment History */}
+                <div className="col-span-2">
+                  <h4 className="text-lg font-semibold mb-3">Payment History</h4>
+                  {viewLoan.paymentHistory && viewLoan.paymentHistory.length > 0 ? (
+                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mode</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Bank</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {viewLoan.paymentHistory.map((payment) => (
+                            <tr key={payment.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">
+                                {new Date(payment.date).toLocaleDateString('en-PK')}
+                              </td>
+                              <td className="px-4 py-2 text-sm font-medium text-green-600">
+                                {formatCurrency(payment.amount)}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-gray-900">
+                                {payment.mode}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-gray-900">
+                                {payment.bankName}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">No payments yet</p>
+                  )}
                 </div>
               </div>
             </div>

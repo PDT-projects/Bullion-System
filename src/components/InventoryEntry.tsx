@@ -1,15 +1,71 @@
 import { useState } from 'react';
 import { Plus, Package, CreditCard, Calculator, Hash, MapPin, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from './ui/dialog';
 
 type InventoryType = 'new' | 'existing';
 type CostingOption = 'with' | 'without';
 type PaymentStatus = 'paid' | 'unpaid' | 'partial';
 type InventoryStatus = 'New' | 'Used' | 'Returned' | 'Damaged';
+type StockAvailability = 'present' | 'receivable';
+
+type ModelPricing = {
+  modelName: string;
+  unitPrice: number;
+  quantity: number;
+  total: number;
+};
+
+type ReceivableStockForm = {
+  shipmentMadeDate: string;
+  expectedDeliveryDate: string;
+  supplierFrom: string;
+  stockQuantity: number;
+  brandName: string;
+  models: ModelPricing[];
+  totalAmount: number;
+  paymentStatus: PaymentStatus;
+  transactionId: string;
+  paidAmount: number;
+  remainingAmount: number;
+};
+
+type PaymentHistory = {
+  id: string;
+  amount: number;
+  mode: 'Cash' | 'Cheque' | 'Bank Transfer';
+  date: string;
+};
+
+type ReceivableStock = {
+  id: string;
+  shipmentMadeDate: string;
+  expectedDeliveryDate: string;
+  supplierFrom: string;
+  stockQuantity: number;
+  brandName: string;
+  models: ModelPricing[];
+  totalAmount: number;
+  paymentStatus: PaymentStatus;
+  transactionId: string;
+  paidAmount: number;
+  remainingAmount: number;
+  status: 'On the Way';
+  paymentHistory: PaymentHistory[];
+};
 
 type InventoryEntryForm = {
   // Inventory Type Selection
   inventoryType: InventoryType;
+  stockAvailability: StockAvailability;
 
   // Costing Option
   costingOption: CostingOption;
@@ -52,8 +108,10 @@ type InventoryEntryForm = {
 type InventoryEntryProps = {
   products: any[];
   productCosting: any[];
+  receivableStock: ReceivableStock[];
   setProducts: (products: any[]) => void;
   setProductCosting: (productCosting: any[]) => void;
+  setReceivableStock: (receivableStock: ReceivableStock[]) => void;
 };
 
 const categories = [
@@ -67,10 +125,63 @@ const categories = [
 
 const cities = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'];
 
-export function InventoryEntry({ products, productCosting, setProducts, setProductCosting }: InventoryEntryProps) {
+const mockReceivableStocks: ReceivableStock[] = [
+  {
+    id: "RS-001",
+    shipmentMadeDate: "2026-01-20",
+    expectedDeliveryDate: "2026-02-12",
+    supplierFrom: "China",
+    stockQuantity: 80,
+    brandName: "Samsung",
+    models: [
+      { modelName: "A15", unitPrice: 5000, quantity: 50, total: 250000 },
+      { modelName: "A25", unitPrice: 6000, quantity: 30, total: 180000 }
+    ],
+    totalAmount: 500000,
+    paymentStatus: 'partial',
+    transactionId: "TXN-001",
+    paidAmount: 250000,
+    remainingAmount: 250000,
+    status: 'On the Way',
+    paymentHistory: [
+      {
+        id: "PH-001",
+        amount: 250000,
+        mode: "Bank Transfer",
+        date: "2026-01-15"
+      }
+    ]
+  },
+  {
+    id: "RS-002",
+    shipmentMadeDate: "2026-01-25",
+    expectedDeliveryDate: "2026-02-18",
+    supplierFrom: "USA",
+    stockQuantity: 20,
+    brandName: "Dell",
+    models: [
+      { modelName: "Inspiron 15", unitPrice: 15000, quantity: 20, total: 300000 }
+    ],
+    totalAmount: 300000,
+    paymentStatus: 'unpaid',
+    transactionId: "",
+    paidAmount: 0,
+    remainingAmount: 300000,
+    status: 'On the Way',
+    paymentHistory: []
+  }
+];
+
+export function InventoryEntry({ products, productCosting, receivableStock, setProducts, setProductCosting, setReceivableStock }: InventoryEntryProps) {
   const [currentStep, setCurrentStep] = useState<'type' | 'costing' | 'form' | 'payment' | 'show' | 'receivable'>('type');
+  const [selectedStock, setSelectedStock] = useState<ReceivableStock | null>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState<'Cash' | 'Cheque' | 'Bank Transfer'>('Bank Transfer');
   const [formData, setFormData] = useState<InventoryEntryForm>({
     inventoryType: 'new',
+    stockAvailability: 'present',
     costingOption: 'with',
     brandName: '',
     modelName: '',
@@ -134,6 +245,20 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
     });
     if (type === 'existing') {
       setCurrentStep('form');
+    } else {
+      setCurrentStep('costing');
+    }
+  };
+
+  // Handle stock availability selection
+  const handleStockAvailabilitySelect = (availability: StockAvailability) => {
+    setFormData({
+      ...formData,
+      stockAvailability: availability,
+      costingOption: availability === 'receivable' ? 'with' : formData.costingOption
+    });
+    if (availability === 'receivable') {
+      setCurrentStep('receivable');
     } else {
       setCurrentStep('costing');
     }
@@ -247,6 +372,7 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
     // Populate form with product data
     setFormData({
       inventoryType: 'existing',
+      stockAvailability: 'present',
       costingOption: 'without', // Assume editing without costing for simplicity
       brandName: product.brandName,
       modelName: product.modelName,
@@ -293,6 +419,108 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
       setProducts(products.filter(p => p.id !== productId));
       toast.success('Product deleted successfully!');
     }
+  };
+
+  // Handle view receivable stock
+  const handleViewStock = (stock: ReceivableStock) => {
+    setSelectedStock(stock);
+    setViewModalOpen(true);
+  };
+
+  // Handle pay remaining amount
+  const handlePayRemaining = (stock: ReceivableStock) => {
+    setSelectedStock(stock);
+    setPaymentAmount(stock.remainingAmount.toString());
+    setPayModalOpen(true);
+  };
+
+  // Handle payment submission
+  const handlePaymentSubmit = () => {
+    if (!selectedStock || !paymentAmount || !paymentMode) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    const amount = parseFloat(paymentAmount);
+    if (amount <= 0 || amount > selectedStock.remainingAmount) {
+      toast.error('Invalid payment amount');
+      return;
+    }
+
+    // Create new payment record
+    const newPayment: PaymentHistory = {
+      id: Date.now().toString(),
+      amount: amount,
+      mode: paymentMode,
+      date: new Date().toISOString().split('T')[0]
+    };
+
+    // Update the selected stock
+    const updatedStock: ReceivableStock = {
+      ...selectedStock,
+      paidAmount: selectedStock.paidAmount + amount,
+      remainingAmount: selectedStock.remainingAmount - amount,
+      paymentHistory: [...selectedStock.paymentHistory, newPayment],
+      paymentStatus: selectedStock.remainingAmount - amount === 0 ? 'paid' : 'partial'
+    };
+
+    // Update the receivable stock array
+    const updatedReceivableStock = receivableStock.map(stock =>
+      stock.id === selectedStock.id ? updatedStock : stock
+    );
+
+    setReceivableStock(updatedReceivableStock);
+
+    toast.success(`Payment of ${formatCurrency(amount)} processed successfully!`);
+
+    setPayModalOpen(false);
+    setPaymentAmount('');
+    setPaymentMode('Bank Transfer');
+    setSelectedStock(null);
+  };
+
+  // Check if form is complete for enabling submit button
+  const isFormComplete = () => {
+    if (formData.costingOption === 'with') {
+      if (!formData.brandName || !formData.modelName || !formData.category) {
+        return false;
+      }
+    }
+
+    if (!formData.description) {
+      return false;
+    }
+
+    // Validate serial numbers
+    const validSerials = serialInputs.filter(s => s.trim() !== '');
+    if (validSerials.length !== (formData.stock || 0)) {
+      return false;
+    }
+
+    // Check for duplicate serial numbers
+    const uniqueSerials = new Set(validSerials);
+    if (uniqueSerials.size !== validSerials.length) {
+      return false;
+    }
+
+    // Check if serial numbers already exist in other products
+    const existingSerials = products
+      .flatMap(p => p.serialNumbers || []);
+    const duplicates = validSerials.filter(s => existingSerials.includes(s));
+    if (duplicates.length > 0) {
+      return false;
+    }
+
+    // Payment validation
+    if ((formData.paymentStatus === 'paid' || formData.paymentStatus === 'partial') && !formData.transactionId) {
+      return false;
+    }
+
+    if (formData.paymentStatus === 'partial' && formData.paidAmount <= 0) {
+      return false;
+    }
+
+    return true;
   };
 
   // Validation
@@ -443,16 +671,19 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
       description: formData.description,
       status: formData.isDamaged ? 'Damaged' : formData.status,
       createdDate: new Date().toISOString().split('T')[0],
+      inventoryType: formData.inventoryType,
+      paymentStatus: formData.paymentStatus,
     };
 
     setProducts([...products, productData]);
 
-    toast.success('Inventory entry created successfully!');
+    toast.success('Inventory added successfully!');
 
-    // Reset form
-    setCurrentStep('type');
+    // Reset form and redirect to View Inventory
+    setCurrentStep('show');
     setFormData({
       inventoryType: 'new',
+      stockAvailability: 'present',
       costingOption: 'with',
       brandName: '',
       modelName: '',
@@ -492,10 +723,60 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .inventory-entry-container button {
+            all: initial !important;
+            display: inline-block !important;
+            padding: 0.5rem 1rem !important;
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 0.375rem !important;
+            font-size: 0.875rem !important;
+            font-weight: 500 !important;
+            text-align: center !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+          }
+          .inventory-entry-container button:hover {
+            background-color: #e2e8f0 !important;
+          }
+          .inventory-entry-container button.bg-blue-600,
+          .inventory-entry-container button.bg-green-600,
+          .inventory-entry-container button.bg-red-600,
+          .inventory-entry-container button.bg-purple-600,
+          .inventory-entry-container button.bg-orange-600,
+          .inventory-entry-container button.bg-yellow-600 {
+            background-color: #4f46e5 !important;
+            color: #ffffff !important;
+          }
+          .inventory-entry-container button.bg-blue-600:hover,
+          .inventory-entry-container button.bg-green-600:hover,
+          .inventory-entry-container button.bg-red-600:hover,
+          .inventory-entry-container button.bg-purple-600:hover,
+          .inventory-entry-container button.bg-orange-600:hover,
+          .inventory-entry-container button.bg-yellow-600:hover {
+            background-color: #4338ca !important;
+          }
+          .inventory-entry-container button.bg-gray-300 {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+          }
+          .inventory-entry-container button.text-transparent,
+          .inventory-entry-container button.bg-transparent {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+          }
+        `
+      }} />
+      <div className="inventory-entry-container">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-2xl font-bold">Inventory Entry</h2>
-          <p className="text-sm text-gray-600 mt-1">Smart inventory intake flow with conditional costing and payment tracking</p>
+          <h2 className="text-3xl font-bold text-gray-900 tracking-wide mb-4">Inventory Entry</h2>
+          <p className="text-base text-gray-500 leading-relaxed">Smart inventory intake flow with conditional costing and payment tracking</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -511,41 +792,41 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
 
 
       {/* Progress Indicator - Always Visible */}
-      <div className="mb-16 bg-white rounded-2xl shadow-xl border-4 border-blue-200 p-10">
+      <div className="mb-8 pb-6 border-b border-gray-200 bg-white rounded-2xl shadow-xl border-4 border-blue-200 p-10">
         <div className="flex items-center justify-center max-w-6xl mx-auto">
           {/* Step 1 - Always Visible */}
-          <div className={`flex flex-col items-center ${currentStep === 'type' ? 'text-blue-700' : 'text-green-700'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'type' ? 'bg-white text-blue-600 border-blue-600 ring-4 ring-blue-300' : 'bg-green-600 text-white'}`}>
+          <div className={`flex flex-col items-center ${currentStep === 'type' ? 'text-blue-700' : currentStep !== 'type' ? 'text-green-700' : 'text-gray-700'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'type' ? 'bg-white text-blue-600 border-blue-600 ring-4 ring-blue-300' : currentStep !== 'type' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
               {currentStep !== 'type' ? <CheckCircle size={32} /> : '1'}
             </div>
-            <span className={`text-lg font-bold text-center ${currentStep === 'type' ? 'text-blue-700' : 'text-green-700'}`}>Inventory Type</span>
+            <span className={`text-lg text-center ${currentStep === 'type' ? 'font-bold text-blue-600' : currentStep !== 'type' ? 'font-medium text-green-600' : 'font-normal text-gray-400'}`}>Inventory Type</span>
           </div>
           <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep !== 'type' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
 
           {/* Step 2 - Always Visible */}
-          <div className={`flex flex-col items-center ${currentStep === 'costing' ? 'text-blue-700' : currentStep === 'form' || currentStep === 'payment' ? 'text-green-700' : 'text-black'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'costing' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-200 text-black'}`}>
+          <div className={`flex flex-col items-center ${currentStep === 'costing' ? 'text-blue-700' : currentStep === 'form' || currentStep === 'payment' ? 'text-green-700' : 'text-gray-700'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'costing' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
               {currentStep === 'form' || currentStep === 'payment' ? <CheckCircle size={32} /> : '2'}
             </div>
-            <span className={`text-lg font-bold text-center ${currentStep === 'costing' ? 'text-blue-700' : currentStep === 'form' || currentStep === 'payment' ? 'text-green-700' : 'text-black'}`}>Costing Option</span>
+            <span className={`text-lg text-center ${currentStep === 'costing' ? 'font-bold text-blue-600' : currentStep === 'form' || currentStep === 'payment' ? 'font-medium text-green-600' : 'font-normal text-gray-400'}`}>Costing Option</span>
           </div>
           <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep === 'form' || currentStep === 'payment' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
 
           {/* Step 3 - Always Visible */}
-          <div className={`flex flex-col items-center ${currentStep === 'form' ? 'text-blue-700' : currentStep === 'payment' ? 'text-green-700' : 'text-black'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'form' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-200 text-black'}`}>
+          <div className={`flex flex-col items-center ${currentStep === 'form' ? 'text-blue-700' : currentStep === 'payment' ? 'text-green-700' : 'text-gray-700'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'form' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : currentStep === 'payment' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
               {currentStep === 'payment' ? <CheckCircle size={32} /> : '3'}
             </div>
-            <span className={`text-lg font-bold text-center ${currentStep === 'form' ? 'text-blue-700' : currentStep === 'payment' ? 'text-green-700' : 'text-black'}`}>Product Details</span>
+            <span className={`text-lg text-center ${currentStep === 'form' ? 'font-bold text-blue-600' : currentStep === 'payment' ? 'font-medium text-green-600' : 'font-normal text-gray-400'}`}>Product Details</span>
           </div>
           <div className={`flex-1 h-3 mx-8 rounded-full ${currentStep === 'payment' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
 
           {/* Step 4 - Always Visible */}
-          <div className={`flex flex-col items-center ${currentStep === 'payment' ? 'text-blue-700' : 'text-black'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'payment' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : 'bg-gray-200 text-black'}`}>
+          <div className={`flex flex-col items-center ${currentStep === 'payment' ? 'text-blue-700' : 'text-gray-700'}`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 border-white ${currentStep === 'payment' ? 'bg-blue-600 text-white ring-4 ring-blue-300' : 'bg-gray-300 text-gray-700'}`}>
               4
             </div>
-            <span className={`text-lg font-bold text-center ${currentStep === 'payment' ? 'text-blue-700' : 'text-black'}`}>Payment</span>
+            <span className={`text-lg text-center ${currentStep === 'payment' ? 'font-bold text-blue-600' : 'font-normal text-gray-400'}`}>Payment</span>
           </div>
         </div>
       </div>
@@ -557,44 +838,44 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <button
               onClick={() => handleInventoryTypeSelect('new')}
-              className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+              className="p-6 bg-gray-100 text-gray-700 border-2 border-gray-200 rounded-lg hover:bg-blue-600 hover:text-white hover:border-blue-500 transition-colors text-left"
             >
               <div className="flex items-center mb-3">
                 <Plus className="w-8 h-8 text-blue-600 mr-3" />
-                <h4 className="text-lg font-medium text-gray-900">Add New Inventory</h4>
+                <h4 className="text-lg font-medium">Add New Inventory</h4>
               </div>
               <p className="text-gray-600">Create a new product entry with optional costing information</p>
             </button>
 
             <button
               onClick={() => handleInventoryTypeSelect('existing')}
-              className="p-6 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors text-left"
+              className="p-6 bg-gray-100 text-gray-700 border-2 border-gray-200 rounded-lg hover:bg-green-600 hover:text-white hover:border-green-500 transition-colors text-left"
             >
               <div className="flex items-center mb-3">
                 <Package className="w-8 h-8 text-green-600 mr-3" />
-                <h4 className="text-lg font-medium text-gray-900">Add to Existing Inventory</h4>
+                <h4 className="text-lg font-medium">Add to Existing Inventory</h4>
               </div>
               <p className="text-gray-600">Add more units to an existing product in inventory</p>
             </button>
 
             <button
               onClick={() => setCurrentStep('receivable')}
-              className="p-6 border-2 border-gray-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
+              className="p-6 bg-gray-100 text-gray-700 border-2 border-gray-200 rounded-lg hover:bg-orange-600 hover:text-white hover:border-orange-500 transition-colors text-left"
             >
               <div className="flex items-center mb-3">
                 <Package className="w-8 h-8 text-orange-600 mr-3" />
-                <h4 className="text-lg font-medium text-gray-900">Receivable Stock</h4>
+                <h4 className="text-lg font-medium">Receivable Stock</h4>
               </div>
               <p className="text-gray-600">View shipments on the way but not yet received</p>
             </button>
 
             <button
               onClick={() => setCurrentStep('show')}
-              className="p-6 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors text-left"
+              className="p-6 bg-gray-100 text-gray-700 border-2 border-gray-200 rounded-lg hover:bg-purple-600 hover:text-white hover:border-purple-500 transition-colors text-left"
             >
               <div className="flex items-center mb-3">
                 <Package className="w-8 h-8 text-purple-600 mr-3" />
-                <h4 className="text-lg font-medium text-gray-900">View Inventory</h4>
+                <h4 className="text-lg font-medium">View Inventory</h4>
               </div>
               <p className="text-gray-600">View existing inventory items</p>
             </button>
@@ -1032,14 +1313,8 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
               </button>
               <div className="flex items-center gap-4">
                 <button
-                  onClick={handleSubmit}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  Skip Payment & Create Entry
-                </button>
-                <button
                   onClick={() => setCurrentStep('payment')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg shadow-lg"
                 >
                   Next: Payment →
                 </button>
@@ -1169,8 +1444,8 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
                   onClick={() => handlePaymentStatusChange('paid')}
                   className={`p-4 border-2 rounded-lg transition-colors ${
                     formData.paymentStatus === 'paid'
-                      ? 'border-green-500 bg-green-50 text-green-700'
-                      : 'border-gray-200 hover:border-green-500 hover:bg-green-50'
+                      ? 'border-green-600 bg-white text-green-600'
+                      : 'border-gray-200 text-gray-700 hover:border-green-500 hover:bg-green-50'
                   }`}
                 >
                   <div className="flex items-center justify-center mb-2">
@@ -1186,8 +1461,8 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
                   onClick={() => handlePaymentStatusChange('unpaid')}
                   className={`p-4 border-2 rounded-lg transition-colors ${
                     formData.paymentStatus === 'unpaid'
-                      ? 'border-red-500 bg-red-50 text-red-700'
-                      : 'border-gray-200 hover:border-red-500 hover:bg-red-50'
+                      ? 'border-red-600 bg-white text-red-600'
+                      : 'border-gray-200 text-gray-700 hover:border-red-500 hover:bg-red-50'
                   }`}
                 >
                   <div className="flex items-center justify-center mb-2">
@@ -1203,8 +1478,8 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
                   onClick={() => handlePaymentStatusChange('partial')}
                   className={`p-4 border-2 rounded-lg transition-colors ${
                     formData.paymentStatus === 'partial'
-                      ? 'border-yellow-500 bg-yellow-50 text-yellow-700'
-                      : 'border-gray-200 hover:border-yellow-500 hover:bg-yellow-50'
+                      ? 'border-yellow-600 bg-white text-yellow-600'
+                      : 'border-gray-200 text-gray-700 hover:border-yellow-500 hover:bg-yellow-50'
                   }`}
                 >
                   <div className="flex items-center justify-center mb-2">
@@ -1271,16 +1546,285 @@ export function InventoryEntry({ products, productCosting, setProducts, setProdu
             <div className="flex items-center justify-end pt-6 border-t border-gray-200">
               <button
                 onClick={handleSubmit}
-                className="px-8 py-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold text-lg shadow-xl border-2 border-red-500"
+                disabled={!isFormComplete()}
+                className={`px-8 py-4 rounded-lg font-semibold text-lg shadow-xl border-2 ${
+                  isFormComplete()
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-500'
+                    : 'bg-gray-300 text-gray-500 border-gray-300 cursor-not-allowed'
+                }`}
               >
-                Create Inventory Entry
+                Submit Inventory
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Receivable Stock Step */}
+      {currentStep === 'receivable' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-semibold text-gray-900">Receivable Stock</h3>
+            <button
+              onClick={() => setCurrentStep('type')}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+            >
+              ← Back
+            </button>
+          </div>
 
+          <div className="space-y-6">
+            {mockReceivableStocks.map(stock => (
+              <div key={stock.id} className="receivable-stock-card border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">{stock.brandName}</h3>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-gray-600">From:</p>
+                    <p className="font-medium">{stock.supplierFrom}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Shipment Date:</p>
+                    <p className="font-medium">{stock.shipmentMadeDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Expected Delivery:</p>
+                    <p className="font-medium">{stock.expectedDeliveryDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Status:</p>
+                    <p className="font-medium">{stock.paymentStatus}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Paid:</p>
+                    <p className="font-medium text-green-600">{formatCurrency(stock.paidAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Remaining:</p>
+                    <p className="font-medium text-red-600">{formatCurrency(stock.remainingAmount)}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleViewStock(stock)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    View
+                  </button>
+                  {stock.remainingAmount > 0 && (
+                    <button
+                      onClick={() => handlePayRemaining(stock)}
+                      className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                    >
+                      Pay Remaining
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Footer Total */}
+            <div className="border-t pt-6">
+              <div className="text-center">
+                <h4 className="text-lg font-semibold text-gray-900">
+                  Total Receivable Payable: {formatCurrency(mockReceivableStocks.reduce((sum, s) => sum + s.remainingAmount, 0))}
+                </h4>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* View Modal */}
+      <Dialog open={viewModalOpen} onOpenChange={setViewModalOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Receivable Stock Details</DialogTitle>
+            <DialogDescription>
+              Detailed information about the receivable stock shipment
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedStock && (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Shipment Information</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Brand:</span>
+                      <span className="font-medium">{selectedStock.brandName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">From:</span>
+                      <span className="font-medium">{selectedStock.supplierFrom}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Shipment Date:</span>
+                      <span className="font-medium">{selectedStock.shipmentMadeDate}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Expected Delivery:</span>
+                      <span className="font-medium">{selectedStock.expectedDeliveryDate}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Payment Information</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Amount:</span>
+                      <span className="font-medium">{formatCurrency(selectedStock.totalAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Paid Amount:</span>
+                      <span className="font-medium text-green-600">{formatCurrency(selectedStock.paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Remaining Amount:</span>
+                      <span className="font-medium text-red-600">{formatCurrency(selectedStock.remainingAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status:</span>
+                      <span className={`font-medium ${
+                        selectedStock.paymentStatus === 'paid' ? 'text-green-600' :
+                        selectedStock.paymentStatus === 'partial' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {selectedStock.paymentStatus}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Models */}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Models & Quantities</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedStock.models.map((model, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{model.modelName}</span>
+                        <span className="text-sm text-gray-600">Qty: {model.quantity}</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-sm text-gray-600">Unit Price:</span>
+                        <span className="font-medium">{formatCurrency(model.unitPrice)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Total:</span>
+                        <span className="font-medium">{formatCurrency(model.total)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Payment History */}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Payment History</h4>
+                {selectedStock.paymentHistory.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedStock.paymentHistory.map((payment, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <span className="font-medium">{formatCurrency(payment.amount)}</span>
+                          <span className="text-sm text-gray-600 ml-2">({payment.mode})</span>
+                        </div>
+                        <span className="text-sm text-gray-600">{payment.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-600">No payment history available</p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pay Remaining Modal */}
+      <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pay Remaining Amount</DialogTitle>
+            <DialogDescription>
+              Process payment for the remaining balance
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedStock && (
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600">Total Amount:</span>
+                  <span className="font-medium">{formatCurrency(selectedStock.totalAmount)}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600">Paid Amount:</span>
+                  <span className="font-medium text-green-600">{formatCurrency(selectedStock.paidAmount)}</span>
+                </div>
+                <div className="flex justify-between items-center border-t pt-2">
+                  <span className="text-gray-600">Remaining Amount:</span>
+                  <span className="font-medium text-red-600">{formatCurrency(selectedStock.remainingAmount)}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payment Amount *
+                </label>
+                <input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter payment amount"
+                  min="0"
+                  max={selectedStock.remainingAmount}
+                  step="0.01"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payment Mode *
+                </label>
+                <select
+                  value={paymentMode}
+                  onChange={(e) => setPaymentMode(e.target.value as 'Cash' | 'Cheque' | 'Bank Transfer')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Cheque">Cheque</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <button
+              onClick={() => setPayModalOpen(false)}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handlePaymentSubmit}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Process Payment
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      </div>
     </div>
   );
 }
