@@ -8,6 +8,11 @@ import { TransactionHistoryReport } from './TransactionHistoryReport';
 import { ReferralReport } from './ReferralReport';
 import { CommissionReport } from './CommissionReport';
 import { InvoiceReport } from './InvoiceReport';
+import { InventoryAuditLogComponent } from './InventoryAuditLog';
+import { ProfitLossReport } from './ProfitLossReport';
+import { BalanceSheetReport } from './BalanceSheetReport';
+import { LoanHistory } from './LoanHistory';
+import { TransferHistory } from './TransferHistory';
 import { useState } from 'react';
 
 type DashboardProps = {
@@ -64,13 +69,22 @@ export function Dashboard({ data }: DashboardProps) {
             transactions: { transactions: data.transactions },
             referral: { invoices: data.invoices },
             commission: { commissions: data.commissions },
-            invoices: { invoices: data.invoices, products: data.products }
+            invoices: { invoices: data.invoices, products: data.products },
+            'inventory-audit-log': { auditLogs: [] },
+            'transaction-history-report': { transactions: data.transactions },
+            'transaction-history': { transactions: data.transactions },
+            'loan-history': { loans: data.loans },
+            'transfer-history': { transfers: data.bankTransfers }
           };
 
           const renderReport = () => {
             switch (selectedReport) {
               case 'sales':
                 return <SalesReport {...reportProps.sales} />;
+              case 'profit-loss':
+                return <ProfitLossReport onBack={() => setSelectedReport(null)} />;
+              case 'balance-sheet':
+                return <BalanceSheetReport onBack={() => setSelectedReport(null)} />;
               case 'inventory':
                 return <InventoryReport {...reportProps.inventory} />;
               case 'transactions':
@@ -112,6 +126,26 @@ export function Dashboard({ data }: DashboardProps) {
               bgColor: 'bg-indigo-50',
               textColor: 'text-indigo-700',
               stats: 'Revenue & Analytics'
+            },
+            {
+              id: 'profit-loss',
+              name: 'Profit & Loss Report',
+              description: 'Analyze financial performance with revenue, expenses, and profit calculations',
+              icon: DollarSign,
+              color: 'from-green-500 to-green-600',
+              bgColor: 'bg-green-50',
+              textColor: 'text-green-700',
+              stats: 'Financial Analysis'
+            },
+            {
+              id: 'balance-sheet',
+              name: 'Balance Sheet',
+              description: 'View financial position with assets, liabilities, and equity statement',
+              icon: FileText,
+              color: 'from-blue-500 to-blue-600',
+              bgColor: 'bg-blue-50',
+              textColor: 'text-blue-700',
+              stats: 'Financial Position'
             },
             {
               id: 'inventory',
@@ -162,6 +196,56 @@ export function Dashboard({ data }: DashboardProps) {
               bgColor: 'bg-indigo-50',
               textColor: 'text-indigo-700',
               stats: 'Performance Bonus'
+            },
+            {
+              id: 'inventory-audit-log',
+              name: 'Inventory Audit Log',
+              description: 'Monitor inventory changes, audits, and stock adjustments',
+              icon: FileText,
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Audit Trail'
+            },
+            {
+              id: 'transaction-history-report',
+              name: 'Transaction History Report',
+              description: 'Detailed transaction history with filtering and export options',
+              icon: Receipt,
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Detailed History'
+            },
+            {
+              id: 'transaction-history',
+              name: 'Transaction History',
+              description: 'Complete transaction history with search and filter capabilities',
+              icon: Receipt,
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Complete History'
+            },
+            {
+              id: 'loan-history',
+              name: 'Loan History',
+              description: 'Track loan transactions, payments, and outstanding balances',
+              icon: DollarSign,
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Loan Tracking'
+            },
+            {
+              id: 'transfer-history',
+              name: 'Transfer History',
+              description: 'Monitor bank transfers and inter-account movements',
+              icon: Building2,
+              color: 'from-indigo-500 to-indigo-600',
+              bgColor: 'bg-indigo-50',
+              textColor: 'text-indigo-700',
+              stats: 'Transfer Records'
             }
           ];
 
