@@ -218,6 +218,15 @@ export type ProductTransfer = {
   receiptDataUrl?: string;
 };
 
+export type PaymentRecord = {
+  id: string;
+  amount: number;
+  mode: 'Cash' | 'Cheque' | 'Bank Transfer';
+  date: string;
+  bankId?: string;
+  bankName?: string;
+};
+
 export type Loan = {
   id: string;
   entityName: string;
@@ -237,6 +246,7 @@ export type Loan = {
   receiverPhone?: string;
   employeeId?: string;
   employeeName?: string;
+  paymentHistory?: PaymentRecord[];
 };
 
 export type Bank = {
