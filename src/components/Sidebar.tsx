@@ -61,11 +61,6 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
 
   const menuItems: MenuItem[] = [
     {
-      id: 'firestore-test',
-      name: 'Firestore Test',
-      icon: Database
-    },
-    {
       id: 'dashboard',
       name: 'Dashboard',
       icon: LayoutDashboard

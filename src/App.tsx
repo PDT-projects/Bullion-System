@@ -37,7 +37,8 @@ import { InventoryAuditLogComponent } from './components/InventoryAuditLog';
 import { InventoryEntry } from './components/InventoryEntry';
 import { Budgets } from './components/budgets/Budgets';
 import { Budget } from './types/Budget';
-import { FirestoreTestScreen } from './components/FirestoreTestScreen';
+import { Login } from './components/Login';
+import { Signup } from './components/Signup';
 
 
 
@@ -974,16 +975,19 @@ const initialData: AppData = {
     }
   ]
 };
-
+ 
 export default function App() {
-  const [activeModule, setActiveModule] = useState('firestore-test');
+  const [activeModule, setActiveModule] = useState('login');
+  const [user, setUser] = useState<any>(null);
   const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const renderModule = () => {
     switch (activeModule) {
-      case 'firestore-test':
-        return <FirestoreTestScreen />;
+      case 'login':
+        return <Login onNavigateToSignup={() => setActiveModule('signup')} onLoginSuccess={(user) => { setUser(user); setActiveModule('dashboard'); }} />;
+      case 'signup':
+        return <Signup onNavigateToLogin={() => setActiveModule('login')} onSignupSuccess={(user) => { setUser(user); setActiveModule('dashboard'); }} />;
       case 'dashboard':
         return <Dashboard data={data} />;
       case 'employees':
@@ -1129,12 +1133,21 @@ export default function App() {
     }
   };
 
+if (!user) {
+  return (
+    <div className="min-h-screen bg-[#f0f2f5]">
+      {renderModule()}
+      <Toaster position="top-right" />
+    </div>
+  );
+}
+
 return (
   <div className="flex h-screen bg-[#f0f2f5]">
     <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} />
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-        <TopBar notifications={notifications} setNotifications={setNotifications} activeModule={activeModule} />
+        <TopBar notifications={notifications} setNotifications={setNotifications} activeModule={activeModule} user={user} />
       </header>
 
       <main className="flex-1 overflow-y-auto">
