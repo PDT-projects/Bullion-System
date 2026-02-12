@@ -5,6 +5,7 @@ type Props = {
   notifications: Notification[];
   setNotifications: (n: Notification[]) => void;
   activeModule: string;
+  user?: any;
 };
 
 const getModuleTitle = (moduleId: string): string => {
@@ -49,7 +50,7 @@ const getModuleTitle = (moduleId: string): string => {
   return moduleTitles[moduleId] || 'Dashboard';
 };
 
-export function TopBar({ notifications, setNotifications, activeModule }: Props) {
+export function TopBar({ notifications, setNotifications, activeModule, user }: Props) {
   const title = getModuleTitle(activeModule);
 
   return (
@@ -67,9 +68,9 @@ export function TopBar({ notifications, setNotifications, activeModule }: Props)
         {/* User Profile */}
         <div className="flex items-center gap-2 cursor-pointer">
           <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white font-bold">
-            AD
+            {user?.email?.charAt(0).toUpperCase() || 'U'}
           </div>
-          <span className="text-gray-700 font-medium">Admin</span>
+          <span className="text-gray-700 font-medium">{user?.email || 'User'}</span>
         </div>
       </div>
     </div>
