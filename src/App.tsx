@@ -37,6 +37,7 @@ import { InventoryAuditLogComponent } from './components/InventoryAuditLog';
 import { InventoryEntry } from './components/InventoryEntry';
 import { Budgets } from './components/budgets/Budgets';
 import { Budget } from './types/Budget';
+import { FirestoreTestScreen } from './components/FirestoreTestScreen';
 
 
 
@@ -98,7 +99,7 @@ export type Invoice = {
   warrantyLocation?: string;
   products: InvoiceProduct[];
   exchangeWarrantyNote: string;
-  deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Self-delivered';
+  deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered';
   deliveryReceivedStatus: 'Pending' | 'In Process' | 'Received'; // UPDATED: Dynamic delivery tracking with multiple statuses
   totalAmount: number;
   status: 'Paid' | 'Unpaid';
@@ -328,6 +329,7 @@ export type AppData = {
   productCosting: ProductCostingType[];
   commissions: Commission[];
   budgets: Budget[];
+  receivableStock: any[];
 };
 
 const normalizeInitialData = (data: AppData): AppData => {
@@ -383,6 +385,7 @@ const normalizeInitialData = (data: AppData): AppData => {
 };
 
 const initialData: AppData = {
+  receivableStock: [],
   employees: [
     {
       id: '1',
@@ -725,7 +728,7 @@ const initialData: AppData = {
         }
       ],
       exchangeWarrantyNote: '2 years warranty, no exchange after 7 days',
-      deliveryStatus: 'Self-delivered',
+      deliveryStatus: 'Delivered',
       deliveryReceivedStatus: 'Received', // NEW: Delivery tracking
       totalAmount: 250000,
       status: 'Paid',
@@ -973,18 +976,20 @@ const initialData: AppData = {
 };
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState('dashboard');
+  const [activeModule, setActiveModule] = useState('firestore-test');
   const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const renderModule = () => {
     switch (activeModule) {
+      case 'firestore-test':
+        return <FirestoreTestScreen />;
       case 'dashboard':
         return <Dashboard data={data} />;
       case 'employees':
         return <Employees employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
       case 'inventory-entry':
-        return <InventoryEntry products={data.products} productCosting={data.productCosting} setProducts={(products) => setData({ ...data, products })} setProductCosting={(productCosting) => setData({ ...data, productCosting })} />;
+        return <InventoryEntry products={data.products} productCosting={data.productCosting} receivableStock={data.receivableStock} setProducts={(products) => setData({ ...data, products })} setProductCosting={(productCosting) => setData({ ...data, productCosting })} setReceivableStock={(receivableStock) => setData({ ...data, receivableStock })} />;
       case 'transactions':
         return <Transactions 
           transactions={data.transactions} 
@@ -1124,14 +1129,13 @@ export default function App() {
     }
   };
 
-// In your App.tsx, find the header section and replace it with this:
 return (
   <div className="flex h-screen bg-[#f0f2f5]">
     <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} />
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-  <TopBar notifications={notifications} setNotifications={setNotifications} />
-</header>
+        <TopBar notifications={notifications} setNotifications={setNotifications} activeModule={activeModule} />
+      </header>
 
       <main className="flex-1 overflow-y-auto">
         {renderModule()}

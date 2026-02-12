@@ -75,6 +75,7 @@ type CommissionCalculationProps = {
   commissionSlabs: CommissionSlab[];
   invoices: Invoice[];
   employees: any[];
+  setActiveModule: (module: string) => void;
 };
 
 const cities = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'];
