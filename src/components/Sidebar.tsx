@@ -22,7 +22,8 @@ import {
   PieChart,
   UserPlus,
   Percent,
-  Calculator
+  Calculator,
+  Database
 } from 'lucide-react';
 
 type MenuItem = {
@@ -59,6 +60,11 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
   }, [activeModule]);
 
   const menuItems: MenuItem[] = [
+    {
+      id: 'firestore-test',
+      name: 'Firestore Test',
+      icon: Database
+    },
     {
       id: 'dashboard',
       name: 'Dashboard',
@@ -137,8 +143,10 @@ export function Sidebar({ activeModule, setActiveModule }: SidebarProps) {
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
       <div className="p-6 border-b border-gray-200">
-        <h1 className="font-bold text-xl text-[#4f46e5]">ERP System</h1>
-        <p className="text-sm text-gray-600 mt-1">Pakistan Detectors</p>
+        <div className="flex items-center justify-between">
+          <h1 className="font-bold text-xl text-[#4f46e5]">ERP System</h1>
+          <p className="text-sm text-gray-600">Pakistan Detectors</p>
+        </div>
       </div>
       
       <nav className="flex-1 p-4 overflow-y-auto">
