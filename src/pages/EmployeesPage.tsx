@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Employees } from '../components/Employees';
+import { Employees } from '../features/hr/Employees';
 import { Employee } from '../App';
 
 // Dummy employees data

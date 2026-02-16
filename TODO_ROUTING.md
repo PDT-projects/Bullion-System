@@ -1,13 +1,15 @@
-# React Router Implementation TODO
+# Routing Implementation TODO
 
-## Steps to Complete:
-- [ ] 1. Create routes.tsx with route definitions
-- [ ] 2. Update main.tsx to wrap app with Router
-- [ ] 3. Create Layout components (AuthLayout, AppLayout)
-- [ ] 4. Create CreateEmployee page component
-- [ ] 5. Update App.tsx to remove state-based routing
-- [ ] 6. Update Login.tsx to use useNavigate
-- [ ] 7. Update Signup.tsx to use useNavigate
-- [ ] 8. Update Sidebar.tsx to use NavLink/useNavigate
-- [ ] 9. Update Employees.tsx to navigate to create route
-- [ ] 10. Test routing functionality
+## Task: Add /employees route while maintaining existing state logic
+
+### Steps:
+- [ ] 1. Create DataContext to share App.tsx data with routes.tsx
+- [ ] 2. Update routes.tsx to use DataContext and add /employees route
+- [ ] 3. Update Sidebar.tsx with correct path for employees (/employees)
+- [ ] 4. Verify the implementation
+
+## Requirements:
+- Pass exact same props: employees={data.employees} and setEmployees={(emps) => setData({ ...data, employees: emps })}
+- Keep all Tailwind CSS classes for layout
+- Use NavLink with isActive for active styling
+- Protected route: If user is null, redirect to /login

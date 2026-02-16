@@ -1,16 +1,12 @@
-# Firebase Removal TODO
+# Fix Dashboard TypeError: Cannot read properties of null (reading 'transactions')
 
-## Steps to Complete Firebase Removal
+## Problem
+The Dashboard component crashes with "TypeError: Cannot read properties of null (reading 'transactions')" at line 38 because `data.transactions` is null when the component first renders.
 
-- [ ] Remove Firebase dependency from package.json
-- [ ] Delete Firebase-related files:
-  - src/firebase/firebase.ts
-  - firebase.json
-  - firestore.rules
-  - firestore.indexes.json
-  - test-firestore-connection.ts
-- [ ] Update src/services/firestoreTest.service.ts to use mock data instead of Firebase
-- [ ] Update src/components/FirestoreTestScreen.tsx to work with mock data
-- [ ] Remove Firestore Test menu item from src/components/Sidebar.tsx
-- [ ] Run npm install to update dependencies
-- [ ] Test that app builds and runs without Firebase errors
+## Solution
+Add null checks and provide default empty arrays in Dashboard.tsx
+
+## Tasks
+- [ ] Add null check for `data` prop in Dashboard component
+- [ ] Add fallback empty arrays for `data.transactions`, `data.banks`, etc.
+- [ ] Test the fix by running the dev server

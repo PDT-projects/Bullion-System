@@ -1,44 +1,43 @@
 import { useState } from 'react';
-import { Dashboard } from './components/Dashboard';
-import { Employees } from './components/Employees';
-import { Products } from './components/Products';
-import { Transactions } from './components/Transactions';
-import { Loans } from './components/Loans';
-import { Banks } from './components/Banks';
-import { Invoices } from './components/Invoices';
-import { BankTransfers } from './components/BankTransfers';
-import { TransactionHistory } from './components/TransactionHistory';
-import { LoanHistory } from './components/LoanHistory';
-import { TransferHistory } from './components/TransferHistory';
-import { CashInflow } from './components/CashInflow';
-import { CashOutflow } from './components/CashOutflow';
-import { Bills } from './components/Bills';
-import { Salary } from './components/Salary';
-import { LoansPayable } from './components/LoansPayable';
-import { LoansReceivable } from './components/LoansReceivable';
-import { CashInHand } from './components/CashInHand';
-import { ProductTransfers } from './components/ProductTransfer';
-import { SalesReport } from './components/SalesReport';
-import { ReferralReport } from './components/ReferralReport';
-import { InventoryReport } from './components/InventoryReport';
-import { TransactionHistoryReport } from './components/TransactionHistoryReport';
-import { PendingPayments } from './components/PendingPayments';
-import { Sidebar } from './components/Sidebar';
-import { TopBar } from './components/TopBar';
-import { NotificationBell } from './components/NotificationBell';
+import { Dashboard } from './features/finance/Dashboard';
+import { Employees } from './features/hr/Employees';
+import { Products } from './features/inventory/Products';
+import { Transactions } from './features/finance/Transactions';
+import { Loans } from './features/finance/Loans';
+import { Banks } from './features/finance/Banks';
+import { Invoices } from './features/sales/Invoices';
+import { BankTransfers } from './features/finance/BankTransfers';
+import { TransactionHistory } from './features/finance/TransactionHistory';
+import { LoanHistory } from './features/finance/LoanHistory';
+import { CashInflow } from './features/finance/CashInflow';
+import { CashOutflow } from './features/finance/CashOutflow';
+import { Bills } from './features/finance/Bills';
+import { Salary } from './features/hr/Salary';
+import { LoansPayable } from './features/finance/LoansPayable';
+import { LoansReceivable } from './features/finance/LoansReceivable';
+import { CashInHand } from './features/finance/CashInHand';
+import { ProductTransfers } from './features/inventory/ProductTransfer';
+import { SalesReport } from './features/sales/SalesReport';
+import { ReferralReport } from './features/sales/ReferralReport';
+import { InventoryReport } from './features/inventory/InventoryReport';
+import { TransactionHistoryReport } from './features/finance/TransactionHistoryReport';
+import { PendingPayments } from './features/finance/PendingPayments';
+import { Sidebar } from './layouts/Sidebar';
+import { TopBar } from './layouts/TopBar';
+import { NotificationBell } from './layouts/NotificationBell';
 import { Toaster } from './components/ui/sonner';
 import { Notification } from './types/Notification';
 
-import { AdvanceSalary } from './components/AdvanceSalary';
-import { CommissionSlabs } from './components/CommissionSlabs';
-import { CommissionCalculation } from './components/CommissionCalculation';
-import { CommissionReport } from './components/CommissionReport';
-import { InventoryAuditLogComponent } from './components/InventoryAuditLog';
-import { InventoryEntry } from './components/InventoryEntry';
-import { Budgets } from './components/budgets/Budgets';
+import { AdvanceSalary } from './features/hr/AdvanceSalary';
+import { CommissionSlabs } from './features/sales/CommissionSlabs';
+import { CommissionCalculation } from './features/sales/CommissionCalculation';
+import { CommissionReport } from './features/sales/CommissionReport';
+import { InventoryAuditLogComponent } from './features/inventory/InventoryAuditLog';
+import { InventoryEntry } from './features/inventory/InventoryEntry';
+import { Budgets } from './features/finance/budgets/Budgets';
 import { Budget } from './types/Budget';
-import { Login } from './components/Login';
-import { Signup } from './components/Signup';
+import { Login } from './pages/Login';
+import { Signup } from './pages/Signup';
 
 
 
@@ -333,7 +332,7 @@ export type AppData = {
   receivableStock: any[];
 };
 
-const normalizeInitialData = (data: AppData): AppData => {
+export const normalizeInitialData = (data: AppData): AppData => {
   const productsById = new Map<string, Product>();
   data.products.forEach((p) => {
     const initialStatus: { [serial: string]: 'Available' } = {};
@@ -385,7 +384,7 @@ const normalizeInitialData = (data: AppData): AppData => {
   };
 };
 
-const initialData: AppData = {
+export const initialData: AppData = {
   receivableStock: [],
   employees: [
     {
