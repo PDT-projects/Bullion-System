@@ -6,6 +6,8 @@ import { EmployeesPage } from './pages/employee/EmployeesPage';
 import { CreateEmployeePage } from './pages/employee/CreateEmployeePage';
 import { EditEmployeePage } from './pages/employee/EditEmployeePage';
 import { DeleteEmployeePage } from './pages/employee/DeleteEmployeePage';
+import { ProductTransferPage } from './pages/inventory/ProductTransferPage';
+import { NewProductTransferPage } from './pages/inventory/NewProductTransferPage';
 import { InventoryPage } from './pages/inventory/InventoryPage';
 import { CreateNewInventoryPage } from './pages/inventory/CreateNewInventoryPage';
 import { ProductDetailsPage } from './pages/inventory/ProductDetailsPage';
@@ -106,6 +108,8 @@ function EmployeesLayout() {
   );
 }
 
+// --- PRODUCT TRANSFER LAYOUT WITH SIDEBAR AND TOPBAR ---
+function ProductTransferLayout() {
 // --- INVENTORY LAYOUT WITH SIDEBAR AND TOPBAR ---
 function InventoryLayout() {
   const { user } = useAuth();
@@ -115,6 +119,7 @@ function InventoryLayout() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule="product-transfer" user={user} />
           <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
         </header>
         <main className="flex-1 overflow-y-auto">
@@ -174,6 +179,10 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    path: "/product-transfer",
+    element: (
+      <ProtectedRoute>
+        <ProductTransferLayout />
     path: "/inventory",
     element: (
       <ProtectedRoute>
@@ -183,6 +192,12 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
+        element: <ProductTransferPage />,
+      },
+      {
+        path: "new",
+        element: <NewProductTransferPage />,
+      },
         element: <InventoryPage />,
       },
       {
