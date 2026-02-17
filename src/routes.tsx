@@ -2,8 +2,10 @@ import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Dashboard } from './features/finance/Dashboard';
-import { EmployeesPage } from './pages/EmployeesPage';
-import { CreateEmployeePage } from './pages/CreateEmployeePage';
+import { EmployeesPage } from './pages/employee/EmployeesPage';
+import { CreateEmployeePage } from './pages/employee/CreateEmployeePage';
+import { EditEmployeePage } from './pages/employee/EditEmployeePage';
+import { DeleteEmployeePage } from './pages/employee/DeleteEmployeePage';
 import { Sidebar } from './layouts/Sidebar';
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
@@ -129,6 +131,14 @@ export const router = createBrowserRouter([
       {
         path: "create",
         element: <CreateEmployeePage />,
+      },
+      {
+        path: ":id/edit",
+        element: <EditEmployeePage />,
+      },
+       {
+        path: ":id/delete",
+        element: <DeleteEmployeePage />,
       }
     ],
   }
