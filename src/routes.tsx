@@ -6,11 +6,22 @@ import { EmployeesPage } from './pages/employee/EmployeesPage';
 import { CreateEmployeePage } from './pages/employee/CreateEmployeePage';
 import { EditEmployeePage } from './pages/employee/EditEmployeePage';
 import { DeleteEmployeePage } from './pages/employee/DeleteEmployeePage';
+import { InventoryPage } from './pages/inventory/InventoryPage';
+import { CreateNewInventoryPage } from './pages/inventory/CreateNewInventoryPage';
+import { ProductDetailsPage } from './pages/inventory/ProductDetailsPage';
+import { PaymentPage } from './pages/inventory/PaymentPage';
+import { AddExistingInventoryPage } from './pages/inventory/AddExistingInventoryPage';
+import { ReceivableStockPage } from './pages/inventory/ReceivableStockPage';
+import { ViewInventoryPage } from './pages/inventory/ViewInventoryPage';
+
 import { Sidebar } from './layouts/Sidebar';
+
+
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
 import { useState } from 'react';
 import { AppData, initialData, normalizeInitialData, Employee } from './App';
+
 
 // --- PROTECTED ROUTE WRAPPER ---
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -95,6 +106,26 @@ function EmployeesLayout() {
   );
 }
 
+// --- INVENTORY LAYOUT WITH SIDEBAR AND TOPBAR ---
+function InventoryLayout() {
+  const { user } = useAuth();
+
+  return (
+    <div className="flex h-screen bg-[#f0f2f5]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
+
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -141,5 +172,45 @@ export const router = createBrowserRouter([
         element: <DeleteEmployeePage />,
       }
     ],
+  },
+  {
+    path: "/inventory",
+    element: (
+      <ProtectedRoute>
+        <InventoryLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <InventoryPage />,
+      },
+      {
+        path: "create-new",
+        element: <CreateNewInventoryPage />,
+      },
+      {
+        path: "create-new/details",
+        element: <ProductDetailsPage />,
+      },
+      {
+        path: "create-new/payment",
+        element: <PaymentPage />,
+      },
+      {
+        path: "add-existing",
+        element: <AddExistingInventoryPage />,
+      },
+      {
+        path: "receivable",
+        element: <ReceivableStockPage />,
+      },
+      {
+        path: "view",
+        element: <ViewInventoryPage />,
+      }
+    ],
   }
+
+
 ]);

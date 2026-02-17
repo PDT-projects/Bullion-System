@@ -33,8 +33,8 @@ import { CommissionSlabs } from './features/sales/CommissionSlabs';
 import { CommissionCalculation } from './features/sales/CommissionCalculation';
 import { CommissionReport } from './features/sales/CommissionReport';
 import { InventoryAuditLogComponent } from './features/inventory/InventoryAuditLog';
-import { InventoryEntry } from './features/inventory/InventoryEntry';
 import { Budgets } from './features/finance/budgets/Budgets';
+
 import { Budget } from './types/Budget';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
@@ -950,9 +950,8 @@ export default function App() {
         return <Dashboard data={data} />;
       case 'employees':
         return <Employees employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
-      case 'inventory-entry':
-        return <InventoryEntry products={data.products} productCosting={data.productCosting} receivableStock={data.receivableStock} setProducts={(products) => setData({ ...data, products })} setProductCosting={(productCosting) => setData({ ...data, productCosting })} setReceivableStock={(receivableStock) => setData({ ...data, receivableStock })} />;
       case 'transactions':
+
         return <Transactions 
           transactions={data.transactions} 
           setTransactions={(transactions) => setData({ ...data, transactions })} 
