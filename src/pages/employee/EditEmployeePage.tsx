@@ -1,17 +1,19 @@
-import { useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Employee } from '../App';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
+import { Employee } from '../../App';
 import { ArrowLeft, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-type CreateEmployeePageProps = {
+type EditEmployeePageProps = {
   employees: Employee[];
   setEmployees: (employees: Employee[]) => void;
 };
 
-export function CreateEmployeePage() {
+export function EditEmployeePage() {
   const { employees, setEmployees } = useOutletContext<{ employees: Employee[]; setEmployees: (employees: Employee[]) => void }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  
   const [formData, setFormData] = useState<Partial<Employee>>({
     name: '',
     position: '',
@@ -22,27 +24,37 @@ export function CreateEmployeePage() {
     status: 'active'
   });
 
+  // Find the employee and pre-populate form on mount
+  useEffect(() => {
+    if (id && employees.length > 0) {
+      const employee = employees.find(e => e.id === id);
+      if (employee) {
+        setFormData(employee);
+      } else {
+        toast.error('Employee not found');
+        navigate('/employees');
+      }
+    }
+  }, [id, employees, navigate]);
+
   const handleSave = () => {
     if (!formData.name || !formData.position || !formData.email) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    const newEmployee: Employee = {
-      ...formData,
-      id: Date.now().toString()
-    } as Employee;
-    
-    setEmployees([...employees, newEmployee]);
-    toast.success('Employee added successfully');
-    navigate('/employees');
+    if (id) {
+      setEmployees(employees.map(e => e.id === id ? { ...formData, id: e.id } as Employee : e));
+      toast.success('Employee updated successfully');
+      navigate('/employees');
+    }
   };
 
   const handleCancel = () => {
     navigate('/employees');
   };
 
-  // Render form content (same as in Employees.tsx)
+  // Render form content (same as in CreateEmployeePage.tsx)
   const renderFormContent = () => (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -122,7 +134,7 @@ export function CreateEmployeePage() {
 
   return (
     <div className="p-6">
-      {/* Full-Screen Form View - Same UI as Employees.tsx */}
+      {/* Full-Screen Form View - Same UI as CreateEmployeePage.tsx */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-[#4f46e5] text-white">
@@ -134,7 +146,7 @@ export function CreateEmployeePage() {
             >
               <ArrowLeft size={20} />
             </button>
-            <h3 className="text-xl font-bold">Add Employee</h3>
+            <h3 className="text-xl font-bold">Edit Employee</h3>
           </div>
         </div>
 
@@ -157,7 +169,7 @@ export function CreateEmployeePage() {
             className="px-6 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors flex items-center gap-2"
           >
             <Save size={18} />
-            Save Employee
+            Update Employee
           </button>
         </div>
       </div>
