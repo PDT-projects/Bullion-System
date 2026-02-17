@@ -45,6 +45,8 @@ export function Sidebar() {
         { id: 'employees', name: 'Employees', icon: Users, path: '/employees' }, // Link to /employees
         { id: 'product-transfer', name: 'Product Transfer', icon: Package, path: '/product-transfer' },
         { id: 'inventory-entry', name: 'Inventory Entry', icon: Package, path: '/inventory-entry' },
+        { id: 'inventory-entry', name: 'Inventory Entry', icon: Package, path: '/inventory' },
+
         // ... rest of your items
       ]
     },

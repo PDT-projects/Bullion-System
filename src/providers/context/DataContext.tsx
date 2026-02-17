@@ -17,10 +17,10 @@ export const useData = () => {
 };
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
 
   return (
-    <DataContext.Provider value={{ employees, setEmployees }}>
+    <DataContext.Provider value={{ data, setData }}>
       {children}
     </DataContext.Provider>
   );

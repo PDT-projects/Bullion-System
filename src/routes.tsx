@@ -8,11 +8,22 @@ import { EditEmployeePage } from './pages/employee/EditEmployeePage';
 import { DeleteEmployeePage } from './pages/employee/DeleteEmployeePage';
 import { ProductTransferPage } from './pages/inventory/ProductTransferPage';
 import { NewProductTransferPage } from './pages/inventory/NewProductTransferPage';
+import { InventoryPage } from './pages/inventory/InventoryPage';
+import { CreateNewInventoryPage } from './pages/inventory/CreateNewInventoryPage';
+import { ProductDetailsPage } from './pages/inventory/ProductDetailsPage';
+import { PaymentPage } from './pages/inventory/PaymentPage';
+import { AddExistingInventoryPage } from './pages/inventory/AddExistingInventoryPage';
+import { ReceivableStockPage } from './pages/inventory/ReceivableStockPage';
+import { ViewInventoryPage } from './pages/inventory/ViewInventoryPage';
+
 import { Sidebar } from './layouts/Sidebar';
+
+
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
 import { useState } from 'react';
 import { AppData, initialData, normalizeInitialData, Employee } from './App';
+
 
 // --- PROTECTED ROUTE WRAPPER ---
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -99,6 +110,8 @@ function EmployeesLayout() {
 
 // --- PRODUCT TRANSFER LAYOUT WITH SIDEBAR AND TOPBAR ---
 function ProductTransferLayout() {
+// --- INVENTORY LAYOUT WITH SIDEBAR AND TOPBAR ---
+function InventoryLayout() {
   const { user } = useAuth();
 
   return (
@@ -107,6 +120,7 @@ function ProductTransferLayout() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
           <TopBar notifications={[]} setNotifications={() => {}} activeModule="product-transfer" user={user} />
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
         </header>
         <main className="flex-1 overflow-y-auto">
           <Outlet />
@@ -115,6 +129,7 @@ function ProductTransferLayout() {
     </div>
   );
 }
+
 
 export const router = createBrowserRouter([
   {
@@ -168,6 +183,10 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <ProductTransferLayout />
+    path: "/inventory",
+    element: (
+      <ProtectedRoute>
+        <InventoryLayout />
       </ProtectedRoute>
     ),
     children: [
@@ -179,6 +198,34 @@ export const router = createBrowserRouter([
         path: "new",
         element: <NewProductTransferPage />,
       },
+        element: <InventoryPage />,
+      },
+      {
+        path: "create-new",
+        element: <CreateNewInventoryPage />,
+      },
+      {
+        path: "create-new/details",
+        element: <ProductDetailsPage />,
+      },
+      {
+        path: "create-new/payment",
+        element: <PaymentPage />,
+      },
+      {
+        path: "add-existing",
+        element: <AddExistingInventoryPage />,
+      },
+      {
+        path: "receivable",
+        element: <ReceivableStockPage />,
+      },
+      {
+        path: "view",
+        element: <ViewInventoryPage />,
+      }
     ],
   }
+
+
 ]);
