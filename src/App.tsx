@@ -33,9 +33,8 @@ import { CommissionSlabs } from './features/sales/CommissionSlabs';
 import { CommissionCalculation } from './features/sales/CommissionCalculation';
 import { CommissionReport } from './features/sales/CommissionReport';
 import { InventoryAuditLogComponent } from './features/inventory/InventoryAuditLog';
-import { Budgets } from './features/finance/budgets/Budgets';
-
 import { Budget } from './types/Budget';
+
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 
@@ -661,82 +660,7 @@ export const initialData: AppData = {
       accountNumber: 'MCB-5556667777'
     }
   ],
-  invoices: [
-    {
-      id: '1',
-      invoiceNumber: 'INV-2024-001',
-      date: '2024-01-15',
-      customerName: 'ABC Corporation',
-      customerPhone: '+92 300 1234567',
-      customerCNIC: '42101-1234567-1',
-      customerProvince: 'Sindh',
-      customerCity: 'Karachi',
-      products: [
-        {
-          id: '1',
-          productId: '1',
-          productName: 'Metal Detector Pro X1',
-          brandName: 'Metal Detector',
-          modelName: 'Pro X1',
-          category: 'Detection Equipment',
-          description: 'Professional grade metal detector with advanced sensitivity',
-          quantity: 2,
-          price: 125000,
-          total: 250000,
-          serialNumbers: ['MDX1-001', 'MDX1-002']
-        }
-      ],
-      exchangeWarrantyNote: '2 years warranty, no exchange after 7 days',
-      deliveryStatus: 'Delivered',
-      deliveryReceivedStatus: 'Received', // NEW: Delivery tracking
-      totalAmount: 250000,
-      status: 'Paid',
-      salesperson: '1', // Employee ID for Ahmed Khan
-      salespersonLocation: 'Karachi',
-      referFrom: 'Ahmed Khan', // NEW: Required field replacing clientDealBy
-      referTo: 'Lahore Branch', // NEW: Optional referral destination
-      createdBy: 'Admin',
-      collectionMethod: 'Self Collection', // NEW: Collection method
-      deductionCharges: 0 // NEW: Manually editable deduction
-    },
-    {
-      id: '2',
-      invoiceNumber: 'INV-2024-002',
-      date: '2024-01-14',
-      customerName: 'XYZ Enterprises',
-      customerPhone: '+92 321 7654321',
-      customerCNIC: '42101-7654321-9',
-      customerProvince: 'Punjab',
-      customerCity: 'Lahore',
-      products: [
-        {
-          id: '1',
-          productId: '3',
-          productName: 'Handheld Detector HD-50',
-          brandName: 'Handheld Detector',
-          modelName: 'HD-50',
-          category: 'Detection Equipment',
-          description: 'Portable handheld metal detector',
-          quantity: 5,
-          price: 45000,
-          total: 225000,
-          serialNumbers: ['HD50-001', 'HD50-002', 'HD50-003', 'HD50-004', 'HD50-005']
-        }
-      ],
-      exchangeWarrantyNote: '1 year warranty',
-      deliveryStatus: 'Self-collect',
-      deliveryReceivedStatus: 'Pending', // NEW: Delivery tracking
-      totalAmount: 225000,
-      status: 'Paid', // Changed to Paid so it can be used for commission calculation
-      salesperson: '3', // Employee ID for Hassan Raza
-      salespersonLocation: 'Lahore',
-      referFrom: 'Hassan Raza', // NEW: Required field replacing clientDealBy
-      referTo: '', // NEW: Optional referral destination
-      createdBy: 'Admin',
-      collectionMethod: 'Self Collection', // NEW: Collection method
-      deductionCharges: 0 // NEW: Manually editable deduction
-    }
-  ],
+  invoices: [],
   bankTransfers: [
     {
       id: '1',
@@ -1083,9 +1007,8 @@ export default function App() {
         return <CommissionReport commissions={data.commissions} />;
       case 'inventory-audit-log':
         return <InventoryAuditLogComponent auditLogs={[]} />;
-      case 'budgets':
-        return <Budgets budgets={data.budgets} setBudgets={(budgets) => setData({ ...data, budgets })} />;
       default:
+
         return <Dashboard data={data} />;
     }
   };

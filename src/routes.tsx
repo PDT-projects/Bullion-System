@@ -16,10 +16,17 @@ import { AddExistingInventoryPage } from './pages/inventory/AddExistingInventory
 import { ReceivableStockPage } from './pages/inventory/ReceivableStockPage';
 import { ViewInventoryPage } from './pages/inventory/ViewInventoryPage';
 import { InvoicesPage } from './pages/invoices/InvoicesPage';
+import { CreateInvoicePage } from './pages/invoices/CreateInvoicePage';
+import { CreateDevicePage } from './pages/devices/CreateDevicePage';
+import { BudgetsPage } from './pages/budgets/BudgetsPage';
+import { CreateBudgetPage } from './pages/budgets/CreateBudgetPage';
+
+
 
 import { Sidebar } from './layouts/Sidebar';
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
+import { DataProvider } from './providers/context/DataContext';
 import { useState } from 'react';
 import { AppData, initialData, normalizeInitialData, Employee } from './App';
 
@@ -131,17 +138,19 @@ function InventoryLayout() {
   const { user } = useAuth();
 
   return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
-        </main>
+    <DataProvider>
+      <div className="flex h-screen bg-[#f0f2f5]">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+            <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
+          </header>
+          <main className="flex-1 overflow-y-auto">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </DataProvider>
   );
 }
 
@@ -163,6 +172,26 @@ function InvoicesLayout() {
     </div>
   );
 }
+
+// --- BUDGETS LAYOUT WITH SIDEBAR AND TOPBAR ---
+function BudgetsLayout() {
+  const { user } = useAuth();
+
+  return (
+    <div className="flex h-screen bg-[#f0f2f5]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule="budgets" user={user} />
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
+
 
 
 
@@ -281,6 +310,47 @@ export const router = createBrowserRouter([
         index: true,
         element: <InvoicesPage />,
       },
+      {
+        path: "new",
+        element: <CreateInvoicePage />,
+      },
+      {
+        path: ":id/edit",
+        element: <CreateInvoicePage />,
+      },
+    ],
+  },
+  {
+    path: "/devices/new",
+    element: (
+      <ProtectedRoute>
+        <InvoicesLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <CreateDevicePage />,
+      },
+    ],
+  },
+  {
+    path: "/budgets",
+    element: (
+      <ProtectedRoute>
+        <BudgetsLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <BudgetsPage />,
+      },
+      {
+        path: "new",
+        element: <CreateBudgetPage />,
+      },
     ],
   }
+
 ]);

@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Budget } from '../../../types/Budget';
+import { useNavigate } from 'react-router-dom';
+import { Budget } from '../../types/Budget';
 import { BudgetSummaryCards } from './BudgetSummaryCards';
 import { AddBudgetModal } from './AddBudgetModal';
-import { Button } from '../../../components/ui/button';
+import { Button } from '../../components/ui/button';
 import { Plus, AlertTriangle } from 'lucide-react';
+
 
 interface BudgetsProps {
   budgets: Budget[];
@@ -11,7 +13,9 @@ interface BudgetsProps {
 }
 
 export function Budgets({ budgets, setBudgets }: BudgetsProps) {
+  const navigate = useNavigate();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
 
   const handleAddBudget = (newBudget: Omit<Budget, 'id' | 'spent' | 'createdAt' | 'updatedAt'>) => {
     const budget: Budget = {
@@ -42,10 +46,11 @@ export function Budgets({ budgets, setBudgets }: BudgetsProps) {
           <h1 className="text-2xl font-bold text-gray-900">Budget Management</h1>
           <p className="text-gray-600">Set spending limits and track your progress</p>
         </div>
-        <Button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2">
+        <Button onClick={() => navigate('/budgets/new')} className="flex items-center gap-2">
           <Plus size={16} />
           Add Budget
         </Button>
+
       </div>
 
       <BudgetSummaryCards budgets={budgets} />

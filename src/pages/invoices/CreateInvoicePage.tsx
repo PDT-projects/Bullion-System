@@ -278,7 +278,9 @@ export function CreateInvoicePage() {
       products: selectedProducts,
       exchangeWarrantyNote: formData.exchangeWarrantyNote || '',
       deliveryStatus: formData.deliveryStatus || 'Self-collect',
+      deliveryReceivedStatus: 'Pending',
       totalAmount: calculateTotal(),
+
       status: formData.status || 'Unpaid',
       salesperson: formData.salesperson || '',
       salespersonLocation: formData.salespersonLocation || '',
@@ -495,13 +497,8 @@ export function CreateInvoicePage() {
         <div className="border-b pb-4">
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold text-gray-900">Products</h4>
-            <button
-              onClick={addProduct}
-              className="flex items-center gap-1 text-sm bg-[#4f46e5] text-white px-3 py-1.5 rounded-lg hover:bg-[#4338ca] transition-colors"
-            >
-              <Plus size={16} />
-              Add Product
-            </button>
+<div className="flex items-center gap-2"><button onClick={() => navigate("/devices/new")} className="flex items-center gap-1 text-sm bg-[#10b981] text-white px-3 py-1.5 rounded-lg hover:bg-[#059669] transition-colors"><Plus size={16} />Create New Device</button><button onClick={addProduct} className="flex items-center gap-1 text-sm bg-[#4f46e5] text-white px-3 py-1.5 rounded-lg hover:bg-[#4338ca] transition-colors"><Plus size={16} />Add Product</button></div>
+
           </div>
 
           {selectedProducts.length === 0 ? (
@@ -757,3 +754,51 @@ export function CreateInvoicePage() {
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Paid Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.paidAmount || 0}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      paidAmount: Number(e.target.value), 
+                      remainingAmount: calculateTotal() - Number(e.target.value) 
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Remaining Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.remainingAmount || 0}
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end gap-3 pt-4">
+          <button
+            onClick={() => navigate('/invoices')}
+            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors"
+          >
+            {editingInvoice ? 'Update Invoice' : 'Create Invoice'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
