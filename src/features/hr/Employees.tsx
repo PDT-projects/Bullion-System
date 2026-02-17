@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Employee } from '../../App';
 import { Plus, Eye, Edit, Trash2, X, Maximize2, Minimize2, ArrowLeft, Save, Filter } from 'lucide-react';
 import { toast } from 'sonner';
@@ -32,6 +33,7 @@ export function Employees({ employees, setEmployees }: EmployeesProps) {
   const [emailSearch, setEmailSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const navigate = useNavigate();
 
   // Get unique positions for dropdown
   const uniquePositions = Array.from(new Set(employees.map(emp => emp.position))).sort();
@@ -250,7 +252,7 @@ export function Employees({ employees, setEmployees }: EmployeesProps) {
                 Filters {(nameSearch || positionFilter || minSalary || maxSalary || phoneSearch || emailSearch || statusFilter) && `(${(nameSearch ? 1 : 0) + (positionFilter ? 1 : 0) + (minSalary ? 1 : 0) + (maxSalary ? 1 : 0) + (phoneSearch ? 1 : 0) + (emailSearch ? 1 : 0) + (statusFilter ? 1 : 0)})`}
               </button>
               <button
-                onClick={handleAdd}
+                onClick={() => navigate('/employees/create')}
                 className="flex items-center gap-2 bg-[#4f46e5] text-white px-4 py-2 rounded-lg hover:bg-[#4338ca] transition-colors"
               >
                 <Plus size={20} />

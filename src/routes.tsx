@@ -1,12 +1,14 @@
-import { createBrowserRouter, useNavigate, Navigate } from 'react-router-dom';
+import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Dashboard } from './features/finance/Dashboard';
+import { EmployeesPage } from './pages/EmployeesPage';
+import { CreateEmployeePage } from './pages/CreateEmployeePage';
 import { Sidebar } from './layouts/Sidebar';
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
 import { useState } from 'react';
-import { AppData, initialData, normalizeInitialData } from './App';
+import { AppData, initialData, normalizeInitialData, Employee } from './App';
 
 // --- PROTECTED ROUTE WRAPPER ---
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -71,6 +73,26 @@ function DashboardLayout() {
   );
 }
 
+// --- EMPLOYEES LAYOUT WITH SIDEBAR AND TOPBAR ---
+function EmployeesLayout() {
+  const { user } = useAuth();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  return (
+    <div className="flex h-screen bg-[#f0f2f5]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule="employees" user={user} />
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <Outlet context={{ employees, setEmployees }} />
+        </main>
+      </div>
+    </div>
+  );
+}
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -91,5 +113,23 @@ export const router = createBrowserRouter([
         <DashboardLayout />
       </ProtectedRoute>
     ),
+  },
+  {
+    path: "/employees",
+    element: (
+      <ProtectedRoute>
+        <EmployeesLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <EmployeesPage />,
+      },
+      {
+        path: "create",
+        element: <CreateEmployeePage />,
+      }
+    ],
   }
 ]);
