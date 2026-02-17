@@ -1,3 +1,135 @@
+// Mock data for the application
+export const mockData = {
+  products: [
+    {
+      id: '1',
+      brandName: 'Metal Detector',
+      modelName: 'Pro X1',
+      category: 'Detection Equipment',
+      costPrice: 100000,
+      sellPrice: 125000,
+      buyType: 'Import' as const,
+      warrantyYears: 2,
+      stock: 13,
+      serialNumbers: ['MDX1-003', 'MDX1-004', 'MDX1-005', 'MDX1-006', 'MDX1-007', 'MDX1-008', 'MDX1-009', 'MDX1-010', 'MDX1-011', 'MDX1-012', 'MDX1-013', 'MDX1-014', 'MDX1-015'],
+      serialCities: {
+        'MDX1-003': 'Karachi',
+        'MDX1-004': 'Lahore',
+        'MDX1-005': 'Islamabad',
+        'MDX1-006': 'Karachi',
+        'MDX1-007': 'Lahore',
+        'MDX1-008': 'Islamabad',
+        'MDX1-009': 'Karachi',
+        'MDX1-010': 'Lahore',
+        'MDX1-011': 'Islamabad',
+        'MDX1-012': 'Karachi',
+        'MDX1-013': 'Lahore',
+        'MDX1-014': 'Islamabad',
+        'MDX1-015': 'Karachi'
+      },
+      description: 'Professional grade metal detector with advanced sensitivity',
+      status: 'New' as const
+    },
+    {
+      id: '2',
+      brandName: 'Security Scanner',
+      modelName: 'S200',
+      category: 'Security Equipment',
+      costPrice: 200000,
+      sellPrice: 250000,
+      buyType: 'Export' as const,
+      warrantyYears: 3,
+      stock: 8,
+      serialNumbers: ['SS200-001', 'SS200-002', 'SS200-003', 'SS200-004', 'SS200-005', 'SS200-006', 'SS200-007', 'SS200-008'],
+      serialCities: {
+        'SS200-001': 'Karachi',
+        'SS200-002': 'Lahore',
+        'SS200-003': 'Islamabad',
+        'SS200-004': 'Karachi',
+        'SS200-005': 'Lahore',
+        'SS200-006': 'Islamabad',
+        'SS200-007': 'Karachi',
+        'SS200-008': 'Lahore'
+      },
+      description: 'High-precision security scanning system',
+      status: 'New' as const
+    },
+    {
+      id: '3',
+      brandName: 'Handheld Detector',
+      modelName: 'HD-50',
+      category: 'Detection Equipment',
+      costPrice: 30000,
+      sellPrice: 45000,
+      buyType: 'Import' as const,
+      warrantyYears: 1,
+      stock: 20,
+      serialNumbers: ['HD50-006', 'HD50-007', 'HD50-008', 'HD50-009', 'HD50-010', 'HD50-011', 'HD50-012', 'HD50-013', 'HD50-014', 'HD50-015', 'HD50-016', 'HD50-017', 'HD50-018', 'HD50-019', 'HD50-020', 'HD50-021', 'HD50-022', 'HD50-023', 'HD50-024', 'HD50-025'],
+      serialCities: {
+        'HD50-006': 'Karachi',
+        'HD50-007': 'Lahore',
+        'HD50-008': 'Islamabad',
+        'HD50-009': 'Karachi',
+        'HD50-010': 'Lahore',
+        'HD50-011': 'Islamabad',
+        'HD50-012': 'Karachi',
+        'HD50-013': 'Lahore',
+        'HD50-014': 'Islamabad',
+        'HD50-015': 'Karachi',
+        'HD50-016': 'Lahore',
+        'HD50-017': 'Islamabad',
+        'HD50-018': 'Karachi',
+        'HD50-019': 'Lahore',
+        'HD50-020': 'Islamabad',
+        'HD50-021': 'Karachi',
+        'HD50-022': 'Lahore',
+        'HD50-023': 'Islamabad',
+        'HD50-024': 'Karachi',
+        'HD50-025': 'Lahore'
+      },
+      description: 'Portable handheld metal detector',
+      status: 'New' as const
+    },
+    {
+      id: '4',
+      brandName: 'X-Ray Scanner',
+      modelName: 'XR-100',
+      category: 'Imaging Equipment',
+      costPrice: 400000,
+      sellPrice: 450000,
+      buyType: 'Export' as const,
+      warrantyYears: 5,
+      stock: 5,
+      serialNumbers: ['XR100-001', 'XR100-002', 'XR100-003', 'XR100-004', 'XR100-005'],
+      serialCities: {
+        'XR100-001': 'Karachi',
+        'XR100-002': 'Lahore',
+        'XR100-003': 'Islamabad',
+        'XR100-004': 'Karachi',
+        'XR100-005': 'Lahore'
+      },
+      description: 'Advanced X-ray baggage scanner',
+      status: 'New' as const
+    }
+  ],
+  productTransfers: [
+    {
+      id: '1',
+      date: '2024-01-15',
+      productId: '1',
+      productName: 'Metal Detector Pro X1',
+      brandName: 'Metal Detector',
+      modelName: 'Pro X1',
+      serialNumbers: ['MDX1-003', 'MDX1-004'],
+      fromLocation: 'Karachi',
+      toLocation: 'Lahore',
+      quantity: 2,
+      transferredBy: 'Ahmed Khan',
+      note: 'Transfer for sales'
+    }
+  ]
+};
+
 // Mock data for charts and visualizations
 export const mockCashFlowData = [
   { month: 'Jul', inflow: 450000, outflow: 320000 },
