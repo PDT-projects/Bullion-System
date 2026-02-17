@@ -18,8 +18,10 @@ import {
   PieChart,
   TrendingUp,
   TrendingDown,
-  Wallet
+  Wallet,
+  FileInvoice
 } from 'lucide-react';
+
 
 // ... (MenuItem type remains the same)
 
@@ -46,10 +48,12 @@ export function Sidebar() {
         { id: 'product-transfer', name: 'Product Transfer', icon: Package, path: '/product-transfer' },
         { id: 'inventory-entry', name: 'Inventory Entry', icon: Package, path: '/inventory-entry' },
         { id: 'inventory-entry', name: 'Inventory Entry', icon: Package, path: '/inventory' },
+        { id: 'invoices', name: 'Invoices', icon: FileText, path: '/invoices' },
 
         // ... rest of your items
       ]
     },
+
     // ... (Keep the rest of your menuItems structure)
   ];
 
