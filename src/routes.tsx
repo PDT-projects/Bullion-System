@@ -18,9 +18,6 @@ import { ViewInventoryPage } from './pages/inventory/ViewInventoryPage';
 import { InvoicesPage } from './pages/invoices/InvoicesPage';
 
 import { Sidebar } from './layouts/Sidebar';
-
-
-
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
 import { useState } from 'react';
@@ -112,6 +109,23 @@ function EmployeesLayout() {
 
 // --- PRODUCT TRANSFER LAYOUT WITH SIDEBAR AND TOPBAR ---
 function ProductTransferLayout() {
+  const { user } = useAuth();
+
+  return (
+    <div className="flex h-screen bg-[#f0f2f5]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule="product-transfer" user={user} />
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
+
 // --- INVENTORY LAYOUT WITH SIDEBAR AND TOPBAR ---
 function InventoryLayout() {
   const { user } = useAuth();
@@ -121,7 +135,6 @@ function InventoryLayout() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="product-transfer" user={user} />
           <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
         </header>
         <main className="flex-1 overflow-y-auto">
@@ -194,7 +207,7 @@ export const router = createBrowserRouter([
         path: ":id/edit",
         element: <EditEmployeePage />,
       },
-       {
+      {
         path: ":id/delete",
         element: <DeleteEmployeePage />,
       }
@@ -205,10 +218,6 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <ProductTransferLayout />
-    path: "/inventory",
-    element: (
-      <ProtectedRoute>
-        <InventoryLayout />
       </ProtectedRoute>
     ),
     children: [
@@ -220,6 +229,18 @@ export const router = createBrowserRouter([
         path: "new",
         element: <NewProductTransferPage />,
       },
+    ],
+  },
+  {
+    path: "/inventory",
+    element: (
+      <ProtectedRoute>
+        <InventoryLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
         element: <InventoryPage />,
       },
       {
@@ -262,6 +283,4 @@ export const router = createBrowserRouter([
       },
     ],
   }
-
-
 ]);
