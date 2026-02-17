@@ -13,8 +13,10 @@ import { PaymentPage } from './pages/inventory/PaymentPage';
 import { AddExistingInventoryPage } from './pages/inventory/AddExistingInventoryPage';
 import { ReceivableStockPage } from './pages/inventory/ReceivableStockPage';
 import { ViewInventoryPage } from './pages/inventory/ViewInventoryPage';
+import { InvoicesPage } from './pages/invoices/InvoicesPage';
 
 import { Sidebar } from './layouts/Sidebar';
+
 
 
 import { TopBar } from './layouts/TopBar';
@@ -125,6 +127,26 @@ function InventoryLayout() {
   );
 }
 
+// --- INVOICES LAYOUT WITH SIDEBAR AND TOPBAR ---
+function InvoicesLayout() {
+  const { user } = useAuth();
+
+  return (
+    <div className="flex h-screen bg-[#f0f2f5]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule="invoices" user={user} />
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
+
+
 
 export const router = createBrowserRouter([
   {
@@ -209,6 +231,20 @@ export const router = createBrowserRouter([
         path: "view",
         element: <ViewInventoryPage />,
       }
+    ],
+  },
+  {
+    path: "/invoices",
+    element: (
+      <ProtectedRoute>
+        <InvoicesLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <InvoicesPage />,
+      },
     ],
   }
 
