@@ -6,7 +6,8 @@ import { InventoryReport } from '../../features/inventory/InventoryReport';
 import { TransactionHistoryReport } from './TransactionHistoryReport';
 import { ReferralReport } from '../sales/ReferralReport';
 import { CommissionReport } from '../sales/CommissionReport';
-import { InvoiceReport } from '../sales/InvoiceReport';
+import { InvoiceReport } from '../../pages/invoices/InvoiceReport';
+
 import { InventoryAuditLogComponent } from '../inventory/InventoryAuditLog';
 import { ProfitLossReport } from './ProfitLossReport';
 import { BalanceSheetReport } from './BalanceSheetReport';

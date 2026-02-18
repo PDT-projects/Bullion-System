@@ -1,22 +1,20 @@
 import { useState } from 'react';
 import { Dashboard } from './features/finance/Dashboard';
-import { Employees } from './features/hr/Employees';
-import { Products } from './features/inventory/Products';
+import { EmployeesPage } from './pages/employee/EmployeesPage';
+
+
 import { Transactions } from './features/finance/Transactions';
-import { Loans } from './features/finance/Loans';
-import { Banks } from './features/finance/Banks';
-import { Invoices } from './features/sales/Invoices';
-import { BankTransfers } from './features/finance/BankTransfers';
+import { InvoicesPage } from './pages/invoices/InvoicesPage';
+
 import { TransactionHistory } from './features/finance/TransactionHistory';
 import { LoanHistory } from './features/finance/LoanHistory';
 import { CashInflow } from './features/finance/CashInflow';
 import { CashOutflow } from './features/finance/CashOutflow';
 import { Bills } from './features/finance/Bills';
 import { Salary } from './features/hr/Salary';
-import { LoansPayable } from './features/finance/LoansPayable';
-import { LoansReceivable } from './features/finance/LoansReceivable';
-import { CashInHand } from './features/finance/CashInHand';
-import { ProductTransfers } from './features/inventory/ProductTransfer';
+import { ProductTransferPage } from './pages/inventory/ProductTransferPage';
+
+
 import { SalesReport } from './features/sales/SalesReport';
 import { ReferralReport } from './features/sales/ReferralReport';
 import { InventoryReport } from './features/inventory/InventoryReport';
@@ -873,7 +871,8 @@ export default function App() {
       case 'dashboard':
         return <Dashboard data={data} />;
       case 'employees':
-        return <Employees employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
+        return <EmployeesPage employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
+
       case 'transactions':
 
         return <Transactions 
@@ -882,40 +881,15 @@ export default function App() {
           banks={data.banks}
           setBanks={(banks) => setData({ ...data, banks })}
         />;
-      case 'loans':
-        return <Loans 
-          loans={data.loans} 
-          setLoans={(loans) => setData({ ...data, loans })} 
-          employees={data.employees}
-          banks={data.banks}
-          setBanks={(banks) => setData({ ...data, banks })}
-        />;
-      case 'banks':
-        return <Banks banks={data.banks} setBanks={(banks) => setData({ ...data, banks })} />;
+
       case 'invoices':
-        return <Invoices 
-          invoices={data.invoices} 
-          setInvoices={(invoices) => setData({ ...data, invoices })}
-          products={data.products}
-          setProducts={(products) => setData({ ...data, products })}
-          banks={data.banks}
-          employees={data.employees}
-        />;
+        return <InvoicesPage />;
+
       case 'product-transfer':
-        return <ProductTransfers
-          products={data.products}
-          setProducts={(products) => setData({ ...data, products })}
-          transfers={data.productTransfers}
-          setTransfers={(transfers) => setData({ ...data, productTransfers: transfers })}
-        />;
+        return <ProductTransferPage />;
+
   
-      case 'bank-transfers':
-        return <BankTransfers 
-          transfers={data.bankTransfers}
-          setTransfers={(transfers) => setData({ ...data, bankTransfers: transfers })}
-          banks={data.banks}
-          setBanks={(banks) => setData({ ...data, banks })}
-        />;
+
       case 'transaction-history':
         return <TransactionHistory transactions={data.transactions} />;
       case 'pending-payments':
@@ -926,9 +900,8 @@ export default function App() {
         />;
       case 'loan-history':
         return <LoanHistory loans={data.loans} />;
-      case 'transfer-history':
-        return <TransferHistory transfers={data.bankTransfers} />;
       case 'cash-inflow':
+
         return <CashInflow 
           transactions={data.transactions} 
           setTransactions={(transactions) => setData({ ...data, transactions })}
@@ -966,24 +939,7 @@ export default function App() {
           setTransactions={(transactions) => setData({ ...data, transactions })}
           setBanks={(banks) => setData({ ...data, banks })}
         />;
-      case 'loans-payable':
-        return <LoansPayable 
-          loans={data.loans} 
-          setLoans={(loans) => setData({ ...data, loans })}
-          employees={data.employees}
-          banks={data.banks}
-          setBanks={(banks) => setData({ ...data, banks })}
-        />;
-      case 'loans-receivable':
-        return <LoansReceivable 
-          loans={data.loans} 
-          setLoans={(loans) => setData({ ...data, loans })}
-          employees={data.employees}
-          banks={data.banks}
-          setBanks={(banks) => setData({ ...data, banks })}
-        />;
-      case 'cash-in-hand':
-        return <CashInHand transactions={data.transactions} />;
+
       case 'sales-report':
         return <SalesReport invoices={data.invoices} products={data.products} />;
       case 'referral-report':

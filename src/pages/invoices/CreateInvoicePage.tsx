@@ -497,7 +497,8 @@ export function CreateInvoicePage() {
         <div className="border-b pb-4">
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold text-gray-900">Products</h4>
-<div className="flex items-center gap-2"><button onClick={() => navigate("/devices/new")} className="flex items-center gap-1 text-sm bg-[#10b981] text-white px-3 py-1.5 rounded-lg hover:bg-[#059669] transition-colors"><Plus size={16} />Create New Device</button><button onClick={addProduct} className="flex items-center gap-1 text-sm bg-[#4f46e5] text-white px-3 py-1.5 rounded-lg hover:bg-[#4338ca] transition-colors"><Plus size={16} />Add Product</button></div>
+<button onClick={addProduct} className="flex items-center gap-1 text-sm bg-[#4f46e5] text-white px-3 py-1.5 rounded-lg hover:bg-[#4338ca] transition-colors"><Plus size={16} />Add Product</button>
+
 
           </div>
 

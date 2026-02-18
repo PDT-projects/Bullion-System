@@ -18,15 +18,33 @@ import {
   PieChart,
   TrendingUp,
   TrendingDown,
-  Wallet
+  Wallet,
+  PlusCircle,
+  Clock,
+  FileTextIcon,
+  DollarSign,
+  Landmark,
+  ArrowRightLeft,
+  BanknoteIcon,
+  HandCoins,
+  Percent,
+  Calculator
 } from 'lucide-react';
+
+
+
+
 
 
 
 // ... (MenuItem type remains the same)
 
 export function Sidebar() {
-  const [expandedSections, setExpandedSections] = useState<string[]>(['finance', 'operations']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['finance', 'operations', 'transaction', 'banking', 'loans', 'commission']);
+
+
+
+
   const location = useLocation(); // This tracks what is in the URL bar
 
   // Helper to check if a link is active (for styling)
@@ -40,11 +58,41 @@ export function Sidebar() {
       path: '/dashboard' // Add real paths
     },
     {
-      id: 'budgets',
-      name: 'Budgets',
-      icon: Banknote,
-      path: '/budgets'
+      id: 'finance',
+      name: 'Finance',
+      icon: Wallet,
+      children: [
+        { 
+          id: 'transaction', 
+          name: 'Transaction', 
+          icon: ArrowLeftRight,
+          children: [
+            { id: 'add-transaction', name: 'Add Transaction', icon: PlusCircle, path: '/transactions' },
+
+            { id: 'pending-payment', name: 'Pending Payment', icon: Clock, path: '/finance/pending-payments' },
+            { id: 'bills', name: 'Bills', icon: FileTextIcon, path: '/bills' },
+
+            { id: 'salary', name: 'Salary', icon: DollarSign, path: '/salary' },
+
+          ]
+        },
+        { 
+          id: 'banking', 
+          name: 'Banking', 
+          icon: Building2,
+          children: [
+            { id: 'banking-overview', name: 'Overview', icon: FileText, path: '/banking' },
+            { id: 'bank-accounts', name: 'Bank Accounts', icon: Building2, path: '/banking/banks' },
+            { id: 'transfers', name: 'Bank Transfers', icon: ArrowRightLeft, path: '/banking/transfers' },
+            { id: 'cash-in-hand', name: 'Cash in Hand', icon: Wallet, path: '/banking/cash-in-hand' },
+          ]
+        },
+
+        { id: 'budgets', name: 'Budgets', icon: Banknote, path: '/budgets' },
+
+      ]
     },
+
     {
       id: 'operations',
       name: 'Operations',
@@ -57,8 +105,34 @@ export function Sidebar() {
       ]
     },
 
+    {
+      id: 'loans',
+      name: 'Loans',
+      icon: HandCoins,
+      children: [
+        { id: 'all-loans', name: 'All Loans', icon: FileText, path: '/loans' },
+        { id: 'payable', name: 'Payable', icon: TrendingDown, path: '/loans/payable' },
+        { id: 'receivable', name: 'Receivable', icon: TrendingUp, path: '/loans/receivable' },
+      ]
+    },
+    {
+      id: 'commission',
+      name: 'Commission',
+      icon: Percent,
+      children: [
+        { id: 'commission-overview', name: 'Overview', icon: FileText, path: '/commission' },
+        { id: 'commission-slabs', name: 'Commission Slabs', icon: Percent, path: '/commission/slabs' },
+        { id: 'commission-calculate', name: 'Calculate Commission', icon: Calculator, path: '/commission/calculate' },
+        { id: 'commission-reports', name: 'Commission Reports', icon: TrendingUp, path: '/commission/reports' },
+      ]
+    },
+
+
     // ... (Keep the rest of your menuItems structure)
+
   ];
+
+
 
 
   return (
@@ -108,22 +182,68 @@ export function Sidebar() {
 
               {expandedSections.includes(item.id) && (
                 <div className="ml-4 mt-1 space-y-1">
-                  {item.children?.map((child) => (
-                    <NavLink
-                      key={child.id}
-                      to={child.path || '#'} // It will look for /employees
-                      className={({ isActive }) =>
-                        `w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
-                          isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-600 hover:bg-gray-100'
-                        }`
-                      }
-                    >
-                      {child.icon && <child.icon size={16} />}
-                      <span>{child.name}</span>
-                    </NavLink>
-                  ))}
+                  {item.children?.map((child) => {
+                    const ChildIcon = child.icon;
+                    const hasNestedChildren = child.children && child.children.length > 0;
+                    
+                    // If child has nested children (like Transaction dropdown)
+                    if (hasNestedChildren) {
+                      return (
+                        <div key={child.id} className="mb-1">
+                          <button
+                            onClick={() => setExpandedSections(prev => 
+                              prev.includes(child.id) ? prev.filter(i => i !== child.id) : [...prev, child.id]
+                            )}
+                            className="w-full flex items-center justify-between px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
+                          >
+                            <div className="flex items-center gap-3">
+                              {ChildIcon && <ChildIcon size={16} />}
+                              <span>{child.name}</span>
+                            </div>
+                            {expandedSections.includes(child.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
+                          
+                          {expandedSections.includes(child.id) && (
+                            <div className="ml-4 mt-1 space-y-1">
+                              {child.children?.map((nestedChild) => (
+                                <NavLink
+                                  key={nestedChild.id}
+                                  to={nestedChild.path || '#'}
+                                  className={({ isActive }) =>
+                                    `w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
+                                      isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-600 hover:bg-gray-100'
+                                    }`
+                                  }
+                                >
+                                  {nestedChild.icon && <nestedChild.icon size={14} />}
+                                  <span>{nestedChild.name}</span>
+                                </NavLink>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    
+                    // Regular child without nested children
+                    return (
+                      <NavLink
+                        key={child.id}
+                        to={child.path || '#'}
+                        className={({ isActive }) =>
+                          `w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
+                            isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-600 hover:bg-gray-100'
+                          }`
+                        }
+                      >
+                        {ChildIcon && <ChildIcon size={16} />}
+                        <span>{child.name}</span>
+                      </NavLink>
+                    );
+                  })}
                 </div>
               )}
+
             </div>
           );
         })}
