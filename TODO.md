@@ -1,26 +1,24 @@
-# TODO: Add Device Creation Routing from Invoice
+# Loans Dropdown Implementation
 
-## Task
-In invoices, when creating new invoice, add routing to create new device and separate the code from invoices too.
+## Tasks:
+- [x] 1. Update `src/layouts/Sidebar.tsx` - Add loans dropdown menu with All Loans, Payable, and Receivable options
 
-## Plan
+- [x] 2. Update `src/routes.tsx` - Add loan routes and layout components
+- [x] 3. Test navigation and verify all loan pages work correctly
 
-### Step 1: Create Device Types
-- [ ] Add Device type in App.tsx or create separate types file
 
-### Step 2: Create Device Creation Page
-- [ ] Create `src/pages/devices/CreateDevicePage.tsx`
-- [ ] Create a simplified form for adding new device with serial numbers
+## Implementation Details:
 
-### Step 3: Add Routing
-- [ ] Add route in `src/routes.tsx` for `/devices/new`
-- [ ] Include route params for return URL
+### Sidebar Changes:
+- Add `HandCoins` icon import from lucide-react
+- Add new loans menu item with children:
+  - All Loans → /loans
+  - Payable → /loans/payable
+  - Receivable → /loans/receivable
+- Add 'loans' to expandedSections state
 
-### Step 4: Update CreateInvoicePage
-- [ ] Add "Create New Device" button in products section
-- [ ] Handle navigation to device creation page
-- [ ] Handle return from device creation with new device selected
-
-### Step 5: Test and Verify
-- [ ] Test creating device from invoice page
-- [ ] Verify device appears in product list after creation
+### Routes Changes:
+- Import loan components (Loans, LoansPayable, LoansReceivable)
+- Create LoansLayout component
+- Add /loans route with children for payable and receivable
+- Create wrapper components for each loan route
