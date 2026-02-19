@@ -1,53 +1,75 @@
-import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
+import { createBrowserRouter, useNavigate, Navigate, Outlet, useParams } from 'react-router-dom';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Dashboard } from './features/finance/Dashboard';
-import { EmployeesPage } from './pages/employee/EmployeesPage';
-import { CreateEmployeePage } from './pages/employee/CreateEmployeePage';
-import { EditEmployeePage } from './pages/employee/EditEmployeePage';
-import { DeleteEmployeePage } from './pages/employee/DeleteEmployeePage';
-import { ProductTransferPage } from './pages/inventory/ProductTransferPage';
-import { NewProductTransferPage } from './pages/inventory/NewProductTransferPage';
-import { InventoryPage } from './pages/inventory/InventoryPage';
-import { CreateNewInventoryPage } from './pages/inventory/CreateNewInventoryPage';
-import { ProductDetailsPage } from './pages/inventory/ProductDetailsPage';
-import { PaymentPage } from './pages/inventory/PaymentPage';
-import { AddExistingInventoryPage } from './pages/inventory/AddExistingInventoryPage';
-import { ReceivableStockPage } from './pages/inventory/ReceivableStockPage';
-import { ViewInventoryPage } from './pages/inventory/ViewInventoryPage';
-import { InvoicesPage } from './pages/invoices/InvoicesPage';
-import { CreateInvoicePage } from './pages/invoices/CreateInvoicePage';
+
+// Employee Module - MVVM Architecture
+import { 
+  EmployeeListWrapper, 
+  EmployeeCreateWrapper, 
+  EmployeeEditWrapper, 
+  EmployeeDeleteWrapper 
+} from './modules/employee';
 
 
-import { BudgetsPage } from './pages/budgets/BudgetsPage';
-import { CreateBudgetPage } from './pages/budgets/CreateBudgetPage';
+// Inventory Module - MVVM Architecture (4-Step Flow)
+import { InventoryDashboardView } from './modules/inventory/views/InventoryDashboardView';
+import { InventoryListView } from './modules/inventory/views/InventoryListView';
+import { ProductTransferWrapper } from './modules/inventory/views/ProductTransferWrapper';
+import { ProductTransferCreateWrapper } from './modules/inventory/views/ProductTransferCreateWrapper';
+import { InventoryCostingOptionWrapper } from './modules/inventory/views/InventoryCostingOptionWrapper';
+import { InventoryProductDetailsWrapper } from './modules/inventory/views/InventoryProductDetailsWrapper';
+import { InventoryPaymentWrapper } from './modules/inventory/views/InventoryPaymentWrapper';
+import { useInventoryDashboardViewModel } from './modules/inventory/viewModels/useInventoryDashboardViewModel';
+import { useInventoryListViewModel } from './modules/inventory/viewModels/useInventoryListViewModel';
+
+
+// Invoice Module - MVVM Architecture
+import { 
+  InvoiceListWrapper, 
+  InvoiceFormWrapper, 
+  InvoiceDeleteWrapper,
+  InvoiceReportWrapper 
+} from './modules/invoices';
+
+
+// Budget Module - MVVM Architecture
+import {
+  BudgetListWrapper,
+  BudgetCreateWrapper,
+  BudgetEditWrapper,
+  BudgetDeleteWrapper,
+  Budget
+} from './modules/budget';
+
+
 import { Transactions } from './features/finance/Transactions';
 import { PendingPayments } from './features/finance/PendingPayments';
 import { Bills } from './features/finance/Bills';
-import { Salary } from './features/hr/Salary';
 
-import { LoansPage } from './pages/loans/LoansPage';
-import { AllLoansPage } from './pages/loans/AllLoansPage';
-import { PayableLoansPage } from './pages/loans/PayableLoansPage';
-import { ReceivableLoansPage } from './pages/loans/ReceivableLoansPage';
-import { CreatePayableLoanPage } from './pages/loans/CreatePayableLoanPage';
-import { CreateReceivableLoanPage } from './pages/loans/CreateReceivableLoanPage';
-import { EditLoanPage } from './pages/loans/EditLoanPage';
-import { DeleteLoanPage } from './pages/loans/DeleteLoanPage';
 
-// Banking Pages
-import { BankingPage } from './pages/banking/BankingPage';
-import { BanksPage } from './pages/banking/BanksPage';
-import { CreateBankPage } from './pages/banking/CreateBankPage';
-import { EditBankPage } from './pages/banking/EditBankPage';
-import { DeleteBankPage } from './pages/banking/DeleteBankPage';
-import { BankTransfersPage } from './pages/banking/BankTransfersPage';
-import { CreateTransferPage } from './pages/banking/CreateTransferPage';
-import { CashInHandPage } from './pages/banking/CashInHandPage';
+// Banking Module - MVVM Architecture
+import {
+  BankingDashboardWrapper,
+  BankListWrapper,
+  BankCreateWrapper,
+  BankEditWrapper,
+  BankDeleteWrapper,
+  TransferListWrapper,
+  TransferCreateWrapper,
+  CashListWrapper,
+  CashCreateWrapper
+} from './modules/banking';
 
-// Bills Pages
-import { BillsPage } from './pages/bills/BillsPage';
-import { CreateBillPage } from './pages/bills/CreateBillPage';
+
+// Bills Module - MVVM Architecture
+import {
+  BillsListWrapper,
+  BillsCreateWrapper,
+  BillsEditWrapper,
+  BillsDeleteWrapper
+} from './modules/bills';
+
 
 // Transactions Pages
 import { TransactionsPage } from './pages/transactions/TransactionsPage';
@@ -55,26 +77,31 @@ import { CreateTransactionPage } from './pages/transactions/CreateTransactionPag
 import { EditTransactionPage } from './pages/transactions/EditTransactionPage';
 import { DeleteTransactionPage } from './pages/transactions/DeleteTransactionPage';
 
-// Salary Pages
-import { SalaryPage } from './pages/salary/SalaryPage';
-import { AllSalariesPage } from './pages/salary/AllSalariesPage';
-import { RegularSalariesPage } from './pages/salary/RegularSalariesPage';
-import { AdvanceSalariesPage } from './pages/salary/AdvanceSalariesPage';
-import { CreateRegularSalaryPage } from './pages/salary/CreateRegularSalaryPage';
-import { CreateAdvanceSalaryPage } from './pages/salary/CreateAdvanceSalaryPage';
-import { EditSalaryPage } from './pages/salary/EditSalaryPage';
-import { DeleteSalaryPage } from './pages/salary/DeleteSalaryPage';
-
-// Commission Pages
-import { CommissionPage } from './pages/commission/CommissionPage';
-import { CommissionSlabsPage } from './pages/commission/CommissionSlabsPage';
-import { CommissionCalculationPage } from './pages/commission/CommissionCalculationPage';
-import { CommissionReportsPage } from './pages/commission/CommissionReportsPage';
+// Salary Module - MVVM Architecture
+import {
+  SalaryListWrapper,
+  SalaryCreateWrapper,
+  SalaryEditWrapper,
+  SalaryDeleteWrapper
+} from './modules/salary';
 
 
 
 
+// Commission Module - MVVM Architecture
+import { 
+  CommissionSlabListWrapper,
+  CommissionCalculationWrapper,
+  CommissionReportWrapper
+} from './modules/commission';
 
+// Loans Module - MVVM Architecture
+import {
+  LoanDashboardWrapper,
+  LoanListWrapper,
+  LoanFormWrapper,
+  LoanPaymentWrapper
+} from './modules/loans';
 
 
 
@@ -86,6 +113,8 @@ import { DataProvider } from './providers/context/DataContext';
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { AppData, initialData, normalizeInitialData, Employee, Bank, Transaction, Loan, BankTransfer } from './App';
+import { CashTransaction } from './modules/banking/models/types';
+
 
 
 
@@ -173,6 +202,33 @@ function EmployeesLayout() {
   );
 }
 
+
+
+// --- INVENTORY MVVM WRAPPER COMPONENTS ---
+
+function InventoryDashboardWrapper() {
+  const viewModel = useInventoryDashboardViewModel();
+  return <InventoryDashboardView {...viewModel} />;
+}
+
+function InventoryListWrapper() {
+  const viewModel = useInventoryListViewModel();
+  return <InventoryListView {...viewModel} />;
+}
+
+// New 4-Step Inventory Flow Wrappers
+function InventoryCostingOptionRoute() {
+  return <InventoryCostingOptionWrapper />;
+}
+
+function InventoryProductDetailsRoute() {
+  return <InventoryProductDetailsWrapper />;
+}
+
+function InventoryPaymentRoute() {
+  return <InventoryPaymentWrapper />;
+}
+
 // --- PRODUCT TRANSFER LAYOUT WITH SIDEBAR AND TOPBAR ---
 function ProductTransferLayout() {
   const { user } = useAuth();
@@ -195,27 +251,29 @@ function ProductTransferLayout() {
 // --- INVENTORY LAYOUT WITH SIDEBAR AND TOPBAR ---
 function InventoryLayout() {
   const { user } = useAuth();
+  const [products, setProducts] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
 
   return (
-    <DataProvider>
-      <div className="flex h-screen bg-[#f0f2f5]">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-            <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
-          </header>
-          <main className="flex-1 overflow-y-auto">
-            <Outlet />
-          </main>
-        </div>
+    <div className="flex h-screen bg-[#f0f2f5]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <Outlet context={{ products, setProducts, transfers, setTransfers }} />
+        </main>
       </div>
-    </DataProvider>
+    </div>
   );
 }
+
 
 // --- INVOICES LAYOUT WITH SIDEBAR AND TOPBAR ---
 function InvoicesLayout() {
   const { user } = useAuth();
+  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
@@ -225,16 +283,96 @@ function InvoicesLayout() {
           <TopBar notifications={[]} setNotifications={() => {}} activeModule="invoices" user={user} />
         </header>
         <main className="flex-1 overflow-y-auto">
-          <Outlet />
+          <Outlet context={{ 
+            invoices: data.invoices || [], 
+            setInvoices: (invoices: any[]) => setData({ ...data, invoices }),
+            products: data.products || [],
+            setProducts: (products: any[]) => setData({ ...data, products }),
+            employees: data.employees,
+            banks: data.banks
+          }} />
         </main>
       </div>
     </div>
   );
 }
 
+// --- INVOICE MVVM WRAPPER COMPONENTS ---
+
+function InvoiceListRoute() {
+  const { invoices, setInvoices, products, setProducts } = useOutletContext<{
+    invoices: any[];
+    setInvoices: (invoices: any[]) => void;
+    products: any[];
+    setProducts: (products: any[]) => void;
+  }>();
+  
+  return (
+    <InvoiceListWrapper 
+      invoices={invoices}
+      products={products}
+      setInvoices={setInvoices}
+      setProducts={setProducts}
+    />
+  );
+}
+
+function InvoiceFormRoute() {
+  const { invoices, setInvoices, products, setProducts, employees, banks } = useOutletContext<{
+    invoices: any[];
+    setInvoices: (invoices: any[]) => void;
+    products: any[];
+    setProducts: (products: any[]) => void;
+    employees: Employee[];
+    banks: Bank[];
+  }>();
+  
+  return (
+    <InvoiceFormWrapper 
+      invoices={invoices}
+      products={products}
+      employees={employees}
+      banks={banks}
+      setInvoices={setInvoices}
+      setProducts={setProducts}
+    />
+  );
+}
+
+function InvoiceDeleteRoute() {
+  const { invoices, setInvoices, products, setProducts } = useOutletContext<{
+    invoices: any[];
+    setInvoices: (invoices: any[]) => void;
+    products: any[];
+    setProducts: (products: any[]) => void;
+  }>();
+  
+  return (
+    <InvoiceDeleteWrapper 
+      invoices={invoices}
+      products={products}
+      setInvoices={setInvoices}
+      setProducts={setProducts}
+    />
+  );
+}
+
+function InvoiceReportRoute() {
+  const { invoices } = useOutletContext<{
+    invoices: any[];
+  }>();
+  
+  return (
+    <InvoiceReportWrapper 
+      invoices={invoices}
+    />
+  );
+}
+
 // --- BUDGETS LAYOUT WITH SIDEBAR AND TOPBAR ---
 function BudgetsLayout() {
   const { user } = useAuth();
+  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
@@ -244,11 +382,32 @@ function BudgetsLayout() {
           <TopBar notifications={[]} setNotifications={() => {}} activeModule="budgets" user={user} />
         </header>
         <main className="flex-1 overflow-y-auto">
-          <Outlet />
+          <Outlet context={{
+            budgets: data.budgets,
+            setBudgets: (budgets: Budget[]) => setData({ ...data, budgets })
+          }} />
         </main>
       </div>
     </div>
   );
+}
+
+// --- BUDGET MVVM WRAPPER COMPONENTS ---
+
+function BudgetListRoute() {
+  return <BudgetListWrapper />;
+}
+
+function BudgetCreateRoute() {
+  return <BudgetCreateWrapper />;
+}
+
+function BudgetEditRoute() {
+  return <BudgetEditWrapper />;
+}
+
+function BudgetDeleteRoute() {
+  return <BudgetDeleteWrapper />;
 }
 
 // --- FINANCE LAYOUT WITH SIDEBAR AND TOPBAR ---
@@ -317,27 +476,59 @@ function FinanceBillsWrapper() {
   );
 }
 
+// --- BILLS MVVM WRAPPER COMPONENTS ---
+
+function BillsListRoute() {
+  return <BillsListWrapper />;
+}
+
+function BillsCreateRoute() {
+  return <BillsCreateWrapper />;
+}
+
+function BillsEditRoute() {
+  return <BillsEditWrapper />;
+}
+
+function BillsDeleteRoute() {
+  return <BillsDeleteWrapper />;
+}
+
 function FinanceSalaryWrapper() {
-  const { transactions, setTransactions, banks, setBanks } = useOutletContext<{
-    transactions: Transaction[];
-    setTransactions: (transactions: Transaction[]) => void;
-    banks: Bank[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
+  // Salary feature component - redirects to salary page
+  return <Navigate to="/salary" replace />;
+}
 
-  // Get employees from context or use empty array
-  const [employees, setEmployees] = useState<Employee[]>([]);
 
-  return (
-    <Salary 
-      transactions={transactions}
-      setTransactions={setTransactions}
-      banks={banks}
-      setBanks={setBanks}
-      employees={employees}
-      setActiveModule={() => {}}
-    />
-  );
+// --- SALARY MVVM WRAPPER COMPONENTS ---
+
+
+function SalaryAllListRoute() {
+  return <SalaryListWrapper type="all" title="All Salaries" />;
+}
+
+function SalaryRegularListRoute() {
+  return <SalaryListWrapper type="regular" title="Regular Salaries" />;
+}
+
+function SalaryAdvanceListRoute() {
+  return <SalaryListWrapper type="advance" title="Advance Salaries" />;
+}
+
+function SalaryCreateRegularRoute() {
+  return <SalaryCreateWrapper type="regular" />;
+}
+
+function SalaryCreateAdvanceRoute() {
+  return <SalaryCreateWrapper type="advance" />;
+}
+
+function SalaryEditRoute() {
+  return <SalaryEditWrapper />;
+}
+
+function SalaryDeleteRoute() {
+  return <SalaryDeleteWrapper />;
 }
 
 // --- SALARY LAYOUT WITH SIDEBAR AND TOPBAR ---
@@ -369,8 +560,6 @@ function SalaryLayout() {
 function CommissionLayout() {
   const { user } = useAuth();
   const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
-  const [commissions, setCommissions] = useState<any[]>([]);
-  const [commissionSlabs, setCommissionSlabs] = useState<any[]>([]);
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
@@ -381,10 +570,6 @@ function CommissionLayout() {
         </header>
         <main className="flex-1 overflow-y-auto">
           <Outlet context={{ 
-            commissions,
-            setCommissions,
-            commissionSlabs,
-            setCommissionSlabs,
             invoices: data.invoices || [],
             employees: data.employees
           }} />
@@ -394,6 +579,41 @@ function CommissionLayout() {
   );
 }
 
+// --- COMMISSION MVVM WRAPPER COMPONENTS ---
+
+function CommissionSlabsRoute() {
+  const { employees } = useOutletContext<{
+    employees: Employee[];
+  }>();
+  
+  return <CommissionSlabListWrapper employees={employees} />;
+}
+
+function CommissionCalculationRoute() {
+  const { invoices, employees } = useOutletContext<{
+    invoices: any[];
+    employees: Employee[];
+  }>();
+  
+  return (
+    <CommissionCalculationWrapper 
+      employees={employees}
+      invoices={invoices}
+      onCommissionsSaved={() => {
+        // Could add toast notification here
+        console.log('Commissions saved successfully');
+      }}
+    />
+  );
+}
+
+function CommissionReportsRoute() {
+  const { employees } = useOutletContext<{
+    employees: Employee[];
+  }>();
+  
+  return <CommissionReportWrapper employees={employees} />;
+}
 
 
 
@@ -424,11 +644,93 @@ function LoansLayout() {
   );
 }
 
+// --- LOANS MVVM WRAPPER COMPONENTS ---
+
+function LoanDashboardRoute() {
+  const { banks, employees } = useOutletContext<{
+    banks: Bank[];
+    employees: Employee[];
+  }>();
+  
+  return <LoanDashboardWrapper banks={banks} employees={employees} />;
+}
+
+function LoanListRoute() {
+  const { banks, employees, setBanks } = useOutletContext<{
+    banks: Bank[];
+    employees: Employee[];
+    setBanks: (banks: Bank[]) => void;
+  }>();
+  
+  return <LoanListWrapper banks={banks} employees={employees} setBanks={setBanks} />;
+}
+
+function LoanPayableListRoute() {
+  const { banks, employees, setBanks } = useOutletContext<{
+    banks: Bank[];
+    employees: Employee[];
+    setBanks: (banks: Bank[]) => void;
+  }>();
+  
+  return <LoanListWrapper banks={banks} employees={employees} setBanks={setBanks} initialType="Payable" />;
+}
+
+function LoanReceivableListRoute() {
+  const { banks, employees, setBanks } = useOutletContext<{
+    banks: Bank[];
+    employees: Employee[];
+    setBanks: (banks: Bank[]) => void;
+  }>();
+  
+  return <LoanListWrapper banks={banks} employees={employees} setBanks={setBanks} initialType="Receivable" />;
+}
+
+function LoanCreatePayableRoute() {
+  const { banks, employees, setBanks } = useOutletContext<{
+    banks: Bank[];
+    employees: Employee[];
+    setBanks: (banks: Bank[]) => void;
+  }>();
+  
+  return <LoanFormWrapper banks={banks} employees={employees} setBanks={setBanks} defaultType="Payable" />;
+}
+
+function LoanCreateReceivableRoute() {
+  const { banks, employees, setBanks } = useOutletContext<{
+    banks: Bank[];
+    employees: Employee[];
+    setBanks: (banks: Bank[]) => void;
+  }>();
+  
+  return <LoanFormWrapper banks={banks} employees={employees} setBanks={setBanks} defaultType="Receivable" />;
+}
+
+function LoanEditRoute() {
+  const { banks, employees, setBanks } = useOutletContext<{
+    banks: Bank[];
+    employees: Employee[];
+    setBanks: (banks: Bank[]) => void;
+  }>();
+  
+  return <LoanFormWrapper banks={banks} employees={employees} setBanks={setBanks} />;
+}
+
+function LoanPaymentRoute() {
+  const { banks, setBanks } = useOutletContext<{
+    banks: Bank[];
+    setBanks: (banks: Bank[]) => void;
+  }>();
+  
+  return <LoanPaymentWrapper banks={banks} setBanks={setBanks} />;
+}
+
+
 // --- BANKING LAYOUT WITH SIDEBAR AND TOPBAR ---
 function BankingLayout() {
   const { user } = useAuth();
   const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
   const [transfers, setTransfers] = useState<BankTransfer[]>([]);
+  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
@@ -443,7 +745,9 @@ function BankingLayout() {
             setBanks: (banks: Bank[]) => setData({ ...data, banks }),
             transactions: data.transactions,
             transfers,
-            setTransfers
+            setTransfers,
+            cashTransactions,
+            setCashTransactions
           }} />
         </main>
       </div>
@@ -451,15 +755,43 @@ function BankingLayout() {
   );
 }
 
+// --- BANKING MVVM WRAPPER COMPONENTS ---
 
+function BankingDashboardRoute() {
+  return <BankingDashboardWrapper />;
+}
 
+function BankListRoute() {
+  return <BankListWrapper />;
+}
 
+function BankCreateRoute() {
+  return <BankCreateWrapper />;
+}
 
+function BankEditRoute() {
+  return <BankEditWrapper />;
+}
 
+function BankDeleteRoute() {
+  return <BankDeleteWrapper />;
+}
 
+function TransferListRoute() {
+  return <TransferListWrapper />;
+}
 
+function TransferCreateRoute() {
+  return <TransferCreateWrapper />;
+}
 
+function CashListRoute() {
+  return <CashListWrapper />;
+}
 
+function CashCreateRoute() {
+  return <CashCreateWrapper />;
+}
 
 
 export const router = createBrowserRouter([
@@ -493,40 +825,44 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <EmployeesPage />,
+        element: <EmployeeListWrapper />,
       },
       {
         path: "create",
-        element: <CreateEmployeePage />,
+        element: <EmployeeCreateWrapper />,
       },
       {
         path: ":id/edit",
-        element: <EditEmployeePage />,
+        element: <EmployeeEditWrapper />,
       },
       {
         path: ":id/delete",
-        element: <DeleteEmployeePage />,
+        element: <EmployeeDeleteWrapper />,
       }
     ],
   },
+
   {
     path: "/product-transfer",
     element: (
       <ProtectedRoute>
-        <ProductTransferLayout />
+        <InventoryLayout />
       </ProtectedRoute>
     ),
     children: [
       {
         index: true,
-        element: <ProductTransferPage />,
+        element: <ProductTransferWrapper />,
       },
       {
         path: "new",
-        element: <NewProductTransferPage />,
+        element: <ProductTransferCreateWrapper />,
       },
+
     ],
   },
+
+
   {
     path: "/inventory",
     element: (
@@ -537,34 +873,36 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <InventoryPage />,
+        element: <InventoryDashboardWrapper />,
       },
       {
         path: "create-new",
-        element: <CreateNewInventoryPage />,
+        element: <InventoryCostingOptionRoute />,
       },
       {
         path: "create-new/details",
-        element: <ProductDetailsPage />,
+        element: <InventoryProductDetailsRoute />,
       },
       {
         path: "create-new/payment",
-        element: <PaymentPage />,
+        element: <InventoryPaymentRoute />,
       },
       {
         path: "add-existing",
-        element: <AddExistingInventoryPage />,
+        element: <InventoryListWrapper />,
       },
       {
         path: "receivable",
-        element: <ReceivableStockPage />,
+        element: <InventoryListWrapper />,
       },
       {
         path: "view",
-        element: <ViewInventoryPage />,
+        element: <InventoryListWrapper />,
       }
     ],
   },
+
+
   {
     path: "/invoices",
     element: (
@@ -575,18 +913,27 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <InvoicesPage />,
+        element: <InvoiceListRoute />,
       },
       {
         path: "new",
-        element: <CreateInvoicePage />,
+        element: <InvoiceFormRoute />,
       },
       {
         path: ":id/edit",
-        element: <CreateInvoicePage />,
+        element: <InvoiceFormRoute />,
+      },
+      {
+        path: ":id/delete",
+        element: <InvoiceDeleteRoute />,
+      },
+      {
+        path: "reports",
+        element: <InvoiceReportRoute />,
       },
     ],
   },
+
 
 
   {
@@ -599,14 +946,23 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <BudgetsPage />,
+        element: <BudgetListRoute />,
       },
       {
-        path: "new",
-        element: <CreateBudgetPage />,
+        path: "create",
+        element: <BudgetCreateRoute />,
+      },
+      {
+        path: ":id/edit",
+        element: <BudgetEditRoute />,
+      },
+      {
+        path: ":id/delete",
+        element: <BudgetDeleteRoute />,
       },
     ],
   },
+
   {
     path: "/finance",
     element: (
@@ -659,38 +1015,39 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <LoansPage />,
+        element: <LoanDashboardRoute />,
       },
       {
         path: "all",
-        element: <AllLoansPage />,
+        element: <LoanListRoute />,
       },
       {
         path: "payable",
-        element: <PayableLoansPage />,
+        element: <LoanPayableListRoute />,
       },
       {
         path: "receivable",
-        element: <ReceivableLoansPage />,
+        element: <LoanReceivableListRoute />,
       },
       {
         path: "create-payable",
-        element: <CreatePayableLoanPage />,
+        element: <LoanCreatePayableRoute />,
       },
       {
         path: "create-receivable",
-        element: <CreateReceivableLoanPage />,
+        element: <LoanCreateReceivableRoute />,
       },
       {
         path: ":id/edit",
-        element: <EditLoanPage />,
+        element: <LoanEditRoute />,
       },
       {
-        path: ":id/delete",
-        element: <DeleteLoanPage />,
+        path: ":id/payment",
+        element: <LoanPaymentRoute />,
       },
     ],
   },
+
   {
     path: "/banking",
     element: (
@@ -701,38 +1058,43 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <BankingPage />,
+        element: <BankingDashboardRoute />,
       },
       {
         path: "banks",
-        element: <BanksPage />,
+        element: <BankListRoute />,
       },
       {
         path: "banks/new",
-        element: <CreateBankPage />,
+        element: <BankCreateRoute />,
       },
       {
         path: "banks/:id/edit",
-        element: <EditBankPage />,
+        element: <BankEditRoute />,
       },
       {
         path: "banks/:id/delete",
-        element: <DeleteBankPage />,
+        element: <BankDeleteRoute />,
       },
       {
         path: "transfers",
-        element: <BankTransfersPage />,
+        element: <TransferListRoute />,
       },
       {
         path: "transfers/new",
-        element: <CreateTransferPage />,
+        element: <TransferCreateRoute />,
       },
       {
-        path: "cash-in-hand",
-        element: <CashInHandPage />,
+        path: "cash",
+        element: <CashListRoute />,
+      },
+      {
+        path: "cash/new",
+        element: <CashCreateRoute />,
       },
     ],
   },
+
   {
     path: "/bills",
     element: (
@@ -743,14 +1105,23 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <BillsPage />,
+        element: <BillsListRoute />,
       },
       {
-        path: "new",
-        element: <CreateBillPage />,
+        path: "create",
+        element: <BillsCreateRoute />,
+      },
+      {
+        path: ":id/edit",
+        element: <BillsEditRoute />,
+      },
+      {
+        path: ":id/delete",
+        element: <BillsDeleteRoute />,
       },
     ],
   },
+
   {
     path: "/transactions",
     element: (
@@ -787,36 +1158,38 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <SalaryPage />,
+        element: <SalaryAllListRoute />,
       },
+
       {
         path: "all",
-        element: <AllSalariesPage />,
+        element: <SalaryAllListRoute />,
       },
       {
         path: "regular",
-        element: <RegularSalariesPage />,
+        element: <SalaryRegularListRoute />,
       },
       {
         path: "advance",
-        element: <AdvanceSalariesPage />,
+        element: <SalaryAdvanceListRoute />,
       },
       {
         path: "create-regular",
-        element: <CreateRegularSalaryPage />,
+        element: <SalaryCreateRegularRoute />,
       },
       {
         path: "create-advance",
-        element: <CreateAdvanceSalaryPage />,
+        element: <SalaryCreateAdvanceRoute />,
       },
       {
         path: ":id/edit",
-        element: <EditSalaryPage />,
+        element: <SalaryEditRoute />,
       },
       {
         path: ":id/delete",
-        element: <DeleteSalaryPage />,
+        element: <SalaryDeleteRoute />,
       },
+
     ],
   },
   {
@@ -829,33 +1202,21 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <CommissionPage />,
+        element: <CommissionSlabsRoute />,
       },
       {
         path: "slabs",
-        element: <CommissionSlabsPage />,
-      },
-      {
-        path: "slabs/new",
-        element: <CommissionSlabsPage />,
+        element: <CommissionSlabsRoute />,
       },
       {
         path: "calculate",
-        element: <CommissionCalculationPage />,
+        element: <CommissionCalculationRoute />,
       },
       {
         path: "reports",
-        element: <CommissionReportsPage />,
+        element: <CommissionReportsRoute />,
       },
     ],
   }
-
-
-
-
-
-
-
-
 
 ]);

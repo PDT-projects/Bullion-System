@@ -6,7 +6,8 @@ import { InventoryReport } from '../../features/inventory/InventoryReport';
 import { TransactionHistoryReport } from './TransactionHistoryReport';
 import { ReferralReport } from '../sales/ReferralReport';
 import { CommissionReport } from '../sales/CommissionReport';
-import { InvoiceReport } from '../../pages/invoices/InvoiceReport';
+import { InvoiceReportView } from '../../modules/invoices';
+
 
 import { InventoryAuditLogComponent } from '../inventory/InventoryAuditLog';
 import { ProfitLossReport } from './ProfitLossReport';
@@ -102,7 +103,8 @@ const reportProps = {
               case 'commission':
                 return <CommissionReport {...reportProps.commission} />;
               case 'invoices':
-                return <InvoiceReport {...reportProps.invoices} />;
+                return <InvoiceReportView {...reportProps.invoices} />;
+
               default:
                 return null;
             }

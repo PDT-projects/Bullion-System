@@ -84,7 +84,8 @@ export function Sidebar() {
             { id: 'banking-overview', name: 'Overview', icon: FileText, path: '/banking' },
             { id: 'bank-accounts', name: 'Bank Accounts', icon: Building2, path: '/banking/banks' },
             { id: 'transfers', name: 'Bank Transfers', icon: ArrowRightLeft, path: '/banking/transfers' },
-            { id: 'cash-in-hand', name: 'Cash in Hand', icon: Wallet, path: '/banking/cash-in-hand' },
+            { id: 'cash-in-hand', name: 'Cash in Hand', icon: Wallet, path: '/banking/cash' },
+
           ]
         },
 
