@@ -1,18 +1,23 @@
 import { useState } from 'react';
 import { Dashboard } from './features/finance/Dashboard';
-import { EmployeesPage } from './pages/employee/EmployeesPage';
 
+// Employee Module - MVVM Architecture
+import { EmployeeListWrapper } from './modules/employee';
+
+// Invoice Module - MVVM Architecture
+import { InvoiceListWrapper, InvoiceFormWrapper } from './modules/invoices';
 
 import { Transactions } from './features/finance/Transactions';
-import { InvoicesPage } from './pages/invoices/InvoicesPage';
 
 import { TransactionHistory } from './features/finance/TransactionHistory';
 import { LoanHistory } from './features/finance/LoanHistory';
 import { CashInflow } from './features/finance/CashInflow';
 import { CashOutflow } from './features/finance/CashOutflow';
 import { Bills } from './features/finance/Bills';
-import { Salary } from './features/hr/Salary';
-import { ProductTransferPage } from './pages/inventory/ProductTransferPage';
+// Note: Salary feature component not yet implemented
+// import { Salary } from './features/hr/Salary';
+import { ProductTransferWrapper } from './modules/inventory';
+
 
 
 import { SalesReport } from './features/sales/SalesReport';
@@ -26,7 +31,6 @@ import { NotificationBell } from './layouts/NotificationBell';
 import { Toaster } from './components/ui/sonner';
 import { Notification } from './types/Notification';
 
-import { AdvanceSalary } from './features/hr/AdvanceSalary';
 import { CommissionSlabs } from './features/sales/CommissionSlabs';
 import { CommissionCalculation } from './features/sales/CommissionCalculation';
 import { CommissionReport } from './features/sales/CommissionReport';
@@ -35,8 +39,6 @@ import { Budget } from './types/Budget';
 
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
-
-
 
 export type Employee = {
   id: string;
@@ -871,7 +873,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard data={data} />;
       case 'employees':
-        return <EmployeesPage employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
+        return <EmployeeListWrapper employees={data.employees} setEmployees={(employees) => setData({ ...data, employees })} />;
 
       case 'transactions':
 
@@ -883,10 +885,16 @@ export default function App() {
         />;
 
       case 'invoices':
-        return <InvoicesPage />;
+        return <InvoiceListWrapper 
+          invoices={data.invoices || []} 
+          products={data.products}
+          setInvoices={(invoices) => setData({ ...data, invoices })}
+          setProducts={(products) => setData({ ...data, products })}
+        />;
 
       case 'product-transfer':
-        return <ProductTransferPage />;
+        return <ProductTransferWrapper />;
+
 
   
 
@@ -923,14 +931,9 @@ export default function App() {
           setBanks={(banks) => setData({ ...data, banks })}
         />;
       case 'salary':
-        return <Salary
-          transactions={data.transactions}
-          setTransactions={(transactions) => setData({ ...data, transactions })}
-          banks={data.banks}
-          setBanks={(banks) => setData({ ...data, banks })}
-          employees={data.employees}
-          setActiveModule={setActiveModule}
-        />;
+        // Salary feature component not yet implemented
+        return <div className="p-6">Salary module coming soon...</div>;
+
       case 'advance-salary':
         return <AdvanceSalary
           employees={data.employees}
