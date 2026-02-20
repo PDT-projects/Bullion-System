@@ -8,18 +8,19 @@ import { getAuth } from "firebase/auth";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBpHnEM6bjOnGYzUqQBSDZxJUEerBz3PjE",
-  authDomain: "cashflow-system-9088f.firebaseapp.com",
-  projectId: "cashflow-system-9088f",
-  storageBucket: "cashflow-system-9088f.firebasestorage.app",
-  messagingSenderId: "352663626458",
-  appId: "1:352663626458:web:1b3a038255cc72f5807be3",
-  measurementId: "G-1V5ZTH8JHX"
+  apiKey: "AIzaSyCsK63gcLaAKTBGmUUWNGbbyJm7tJNGTSI",
+  authDomain: "erp-system-e0e74.firebaseapp.com",
+  projectId: "erp-system-e0e74",
+  storageBucket: "erp-system-e0e74.firebasestorage.app",
+  messagingSenderId: "580944226067",
+  appId: "1:580944226067:web:b25eb124dcde229c829ce6",
+  measurementId: "G-KEMS5LRB7T"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+
 
 //authentication 
 export const auth = getAuth(app);
