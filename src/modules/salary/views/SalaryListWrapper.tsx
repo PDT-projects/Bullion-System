@@ -23,13 +23,17 @@ export function SalaryListWrapper({ type, title }: SalaryListWrapperProps) {
   const viewModel = useSalaryListViewModel();
   
   // Filter salaries by type if needed
+  // Handle case-insensitive matching for subCategory
   const filteredSalaries = type === 'all' 
     ? viewModel.salaries 
-    : viewModel.salaries.filter(s => 
-        type === 'regular' 
-          ? s.subCategory === 'Employee salary'
-          : s.subCategory === 'Advance salary'
-      );
+    : viewModel.salaries.filter(s => {
+        const subCat = s.subCategory?.toLowerCase() || '';
+        if (type === 'regular') {
+          return subCat.includes('employee salary') || subCat === 'salary';
+        } else {
+          return subCat.includes('advance salary');
+        }
+      });
 
   return (
     <SalaryListView

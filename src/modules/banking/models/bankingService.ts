@@ -62,7 +62,7 @@ export class BankingService {
   }
 
   // Calculate cash statistics
-  static calculateCashStats(transactions: CashTransaction[]): CashStats {
+  static calculateCashStats(transactions: CashTransaction[], openingBalance: number = 0): CashStats {
     const inflowTransactions = transactions.filter(t => t.mainCategory === 'Cash Inflow');
     const outflowTransactions = transactions.filter(t => t.mainCategory === 'Cash Outflow');
     
@@ -70,14 +70,16 @@ export class BankingService {
     const totalOutflow = outflowTransactions.reduce((sum, t) => sum + t.amount, 0);
 
     return {
-      totalCashInHand: totalInflow - totalOutflow,
+      totalCashInHand: openingBalance + totalInflow - totalOutflow,
       totalInflow,
       totalOutflow,
       transactionCount: transactions.length,
       inflowCount: inflowTransactions.length,
-      outflowCount: outflowTransactions.length
+      outflowCount: outflowTransactions.length,
+      openingBalance
     };
   }
+
 
   // Calculate dashboard statistics
   static calculateDashboardStats(banks: Bank[], cashTransactions: CashTransaction[]): DashboardStats {
