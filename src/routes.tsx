@@ -43,8 +43,6 @@ import {
 } from './modules/budget';
 
 
-import { Transactions } from './features/finance/Transactions';
-import { PendingPayments } from './features/finance/PendingPayments';
 import { Bills } from './features/finance/Bills';
 
 
@@ -71,11 +69,14 @@ import {
 } from './modules/bills';
 
 
-// Transactions Pages
-import { TransactionsPage } from './pages/transactions/TransactionsPage';
-import { CreateTransactionPage } from './pages/transactions/CreateTransactionPage';
-import { EditTransactionPage } from './pages/transactions/EditTransactionPage';
-import { DeleteTransactionPage } from './pages/transactions/DeleteTransactionPage';
+// Transactions Module - MVVM Architecture
+import {
+  TransactionListWrapper,
+  TransactionCreateWrapper,
+  TransactionEditWrapper,
+  TransactionDeleteWrapper,
+  PendingPaymentsWrapper
+} from './modules/transactions';
 
 // Salary Module - MVVM Architecture
 import {
@@ -113,6 +114,8 @@ import { DataProvider } from './providers/context/DataContext';
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { AppData, initialData, normalizeInitialData, Employee, Bank, Transaction, Loan, BankTransfer } from './App';
+import type { Transaction as ModuleTransaction } from './modules/transactions/models/types';
+
 import { CashTransaction } from './modules/banking/models/types';
 
 
@@ -438,7 +441,7 @@ function FinanceLayout() {
 // --- WRAPPER COMPONENTS FOR FINANCE ROUTES ---
 function FinanceTransactionsWrapper() {
   // Transactions component manages its own state internally
-  return <Transactions />;
+  return <TransactionListWrapper />;
 }
 
 function FinancePendingPaymentsWrapper() {
@@ -450,13 +453,14 @@ function FinancePendingPaymentsWrapper() {
   }>();
 
   return (
-    <PendingPayments 
-      transactions={transactions}
-      setTransactions={setTransactions}
+    <PendingPaymentsWrapper 
+      transactions={transactions as ModuleTransaction[]}
+      setTransactions={setTransactions as (transactions: ModuleTransaction[]) => void}
       banks={banks}
     />
   );
 }
+
 
 function FinanceBillsWrapper() {
   const { transactions, setTransactions, banks, setBanks } = useOutletContext<{
@@ -493,6 +497,60 @@ function BillsEditRoute() {
 function BillsDeleteRoute() {
   return <BillsDeleteWrapper />;
 }
+
+// --- TRANSACTIONS MVVM WRAPPER COMPONENTS ---
+
+function TransactionListRoute() {
+  return <TransactionListWrapper />;
+}
+
+
+
+
+function TransactionCreateRoute() {
+  const { transactions, setTransactions } = useOutletContext<{
+    transactions: Transaction[];
+    setTransactions: (transactions: Transaction[]) => void;
+  }>();
+  
+  return (
+    <TransactionCreateWrapper 
+      transactions={transactions as ModuleTransaction[]}
+      setTransactions={setTransactions as (transactions: ModuleTransaction[]) => void}
+    />
+  );
+}
+
+
+function TransactionEditRoute() {
+  const { transactions, setTransactions } = useOutletContext<{
+    transactions: Transaction[];
+    setTransactions: (transactions: Transaction[]) => void;
+  }>();
+  
+  return (
+    <TransactionEditWrapper 
+      transactions={transactions as ModuleTransaction[]}
+      setTransactions={setTransactions as (transactions: ModuleTransaction[]) => void}
+    />
+  );
+}
+
+
+function TransactionDeleteRoute() {
+  const { transactions, setTransactions } = useOutletContext<{
+    transactions: Transaction[];
+    setTransactions: (transactions: Transaction[]) => void;
+  }>();
+  
+  return (
+    <TransactionDeleteWrapper 
+      transactions={transactions as ModuleTransaction[]}
+      setTransactions={setTransactions as (transactions: ModuleTransaction[]) => void}
+    />
+  );
+}
+
 
 function FinanceSalaryWrapper() {
   // Salary feature component - redirects to salary page
@@ -1132,22 +1190,23 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <TransactionsPage />,
+        element: <TransactionListRoute />,
       },
       {
         path: "new",
-        element: <CreateTransactionPage />,
+        element: <TransactionCreateRoute />,
       },
       {
         path: ":id/edit",
-        element: <EditTransactionPage />,
+        element: <TransactionEditRoute />,
       },
       {
         path: ":id/delete",
-        element: <DeleteTransactionPage />,
+        element: <TransactionDeleteRoute />,
       },
     ],
   },
+
   {
     path: "/salary",
     element: (
