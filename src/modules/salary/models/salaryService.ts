@@ -37,12 +37,14 @@ export class SalaryService {
         if (!matchesSearch) return false;
       }
 
-      // Type filter (regular vs advance)
+      // Type filter (regular vs advance) - case insensitive
       if (filters.typeFilter !== 'all') {
-        const isRegular = salary.subCategory === SALARY_TYPES.REGULAR;
+        const subCat = salary.subCategory?.toLowerCase() || '';
+        const isRegular = subCat.includes('employee salary') || subCat === 'salary';
         if (filters.typeFilter === 'regular' && !isRegular) return false;
         if (filters.typeFilter === 'advance' && isRegular) return false;
       }
+
 
       // Date range filter
       if (filters.dateFrom && salary.date < filters.dateFrom) {
@@ -229,8 +231,16 @@ export class SalaryService {
     const totalRecords = salaries.length;
     const totalAmount = salaries.reduce((sum, s) => sum + s.amount, 0);
 
-    const regularSalaries = salaries.filter(s => s.subCategory === SALARY_TYPES.REGULAR);
-    const advanceSalaries = salaries.filter(s => s.subCategory === SALARY_TYPES.ADVANCE);
+    // Handle case-insensitive filtering for regular and advance salaries
+    const regularSalaries = salaries.filter(s => {
+      const subCat = s.subCategory?.toLowerCase() || '';
+      return subCat.includes('employee salary') || subCat === 'salary';
+    });
+    const advanceSalaries = salaries.filter(s => {
+      const subCat = s.subCategory?.toLowerCase() || '';
+      return subCat.includes('advance salary');
+    });
+
 
     const cashSalaries = salaries.filter(s => s.mode === 'Cash');
     const bankSalaries = salaries.filter(s => s.mode === 'Bank');
@@ -377,15 +387,20 @@ export class SalaryService {
    * Get salary type label
    */
   static getSalaryTypeLabel(subCategory: string): string {
-    return subCategory === SALARY_TYPES.REGULAR ? 'Regular' : 'Advance';
+    const subCat = subCategory?.toLowerCase() || '';
+    const isRegular = subCat.includes('employee salary') || subCat === 'salary';
+    return isRegular ? 'Regular' : 'Advance';
   }
 
   /**
    * Get salary type color
    */
   static getSalaryTypeColor(subCategory: string): string {
-    return subCategory === SALARY_TYPES.REGULAR 
+    const subCat = subCategory?.toLowerCase() || '';
+    const isRegular = subCat.includes('employee salary') || subCat === 'salary';
+    return isRegular 
       ? 'bg-green-100 text-green-800' 
       : 'bg-orange-100 text-orange-800';
   }
+
 }

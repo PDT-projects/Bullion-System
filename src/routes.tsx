@@ -83,7 +83,8 @@ import {
   SalaryListWrapper,
   SalaryCreateWrapper,
   SalaryEditWrapper,
-  SalaryDeleteWrapper
+  SalaryDeleteWrapper,
+  SalaryDashboardWrapper
 } from './modules/salary';
 
 
@@ -104,9 +105,6 @@ import {
   LoanPaymentWrapper
 } from './modules/loans';
 
-
-
-
 import { Sidebar } from './layouts/Sidebar';
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
@@ -117,9 +115,6 @@ import { AppData, initialData, normalizeInitialData, Employee, Bank, Transaction
 import type { Transaction as ModuleTransaction } from './modules/transactions/models/types';
 
 import { CashTransaction } from './modules/banking/models/types';
-
-
-
 
 
 // --- PROTECTED ROUTE WRAPPER ---
@@ -560,6 +555,10 @@ function FinanceSalaryWrapper() {
 
 // --- SALARY MVVM WRAPPER COMPONENTS ---
 
+
+function SalaryDashboardRoute() {
+  return <SalaryDashboardWrapper />;
+}
 
 function SalaryAllListRoute() {
   return <SalaryListWrapper type="all" title="All Salaries" />;
@@ -1214,10 +1213,10 @@ export const router = createBrowserRouter([
         <SalaryLayout />
       </ProtectedRoute>
     ),
-    children: [
+children: [
       {
         index: true,
-        element: <SalaryAllListRoute />,
+        element: <SalaryDashboardRoute />,
       },
 
       {

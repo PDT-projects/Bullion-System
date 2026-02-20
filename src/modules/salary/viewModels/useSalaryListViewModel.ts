@@ -62,8 +62,16 @@ export function useSalaryListViewModel(): UseSalaryListViewModelReturn {
   const { transactions, setTransactions, employees, banks, setBanks } = useOutletContext<SalaryContext>();
 
   // Filter salary transactions from all transactions
+  // Salary transactions can have mainCategory as 'Cash Outflow' with subCategory containing 'salary'
   const allSalaries = useMemo(() => {
-    return transactions.filter((t: any) => t.mainCategory === 'Salary') as Salary[];
+    return transactions.filter((t: any) => {
+      // Check if mainCategory is 'Salary' OR if it's 'Cash Outflow' with salary-related subCategory
+      if (t.mainCategory === 'Salary') return true;
+      if (t.mainCategory === 'Cash Outflow' && t.subCategory && 
+          (t.subCategory.toLowerCase().includes('salary') || 
+           t.subCategory.toLowerCase() === 'advance salary')) return true;
+      return false;
+    }) as Salary[];
   }, [transactions]);
 
   // State

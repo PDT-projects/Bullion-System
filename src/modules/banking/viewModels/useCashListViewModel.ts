@@ -8,6 +8,8 @@ import { BankingService } from '../models/bankingService';
 interface UseCashListViewModelProps {
   cashTransactions: CashTransaction[];
   setCashTransactions: (transactions: CashTransaction[]) => void;
+  openingBalance?: number;
+  setOpeningBalance?: (balance: number) => void;
 }
 
 interface UseCashListViewModelReturn {
@@ -23,21 +25,26 @@ interface UseCashListViewModelReturn {
   
   // Actions
   handleDeleteTransaction: (id: string) => void;
+  handleSetOpeningBalance: (amount: number) => void;
   
   // Utils
   formatCurrency: (amount: number) => string;
   formatDate: (date: string) => string;
 }
 
+
 export function useCashListViewModel({
   cashTransactions,
-  setCashTransactions
+  setCashTransactions,
+  openingBalance = 0,
+  setOpeningBalance
 }: UseCashListViewModelProps): UseCashListViewModelReturn {
   // Filters state
   const [filters, setFilters] = useState<CashFilters>({
     searchTerm: '',
     filterType: 'all'
   });
+
 
   // Filter transactions
   const filteredTransactions = useMemo(() => {
@@ -50,8 +57,9 @@ export function useCashListViewModel({
 
   // Calculate statistics
   const stats = useMemo(() => {
-    return BankingService.calculateCashStats(cashTransactions);
-  }, [cashTransactions]);
+    return BankingService.calculateCashStats(cashTransactions, openingBalance);
+  }, [cashTransactions, openingBalance]);
+
 
   // Set search term
   const setSearchTerm = useCallback((term: string) => {
@@ -73,6 +81,14 @@ export function useCashListViewModel({
     }
   }, [cashTransactions, setCashTransactions]);
 
+  // Set opening balance
+  const handleSetOpeningBalance = useCallback((amount: number) => {
+    if (setOpeningBalance) {
+      setOpeningBalance(amount);
+    }
+  }, [setOpeningBalance]);
+
+
   // Format currency
   const formatCurrency = useCallback((amount: number) => {
     return BankingService.formatCurrency(amount);
@@ -91,7 +107,9 @@ export function useCashListViewModel({
     setSearchTerm,
     setFilterType,
     handleDeleteTransaction,
+    handleSetOpeningBalance,
     formatCurrency,
     formatDate
   };
+
 }

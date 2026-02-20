@@ -1,7 +1,7 @@
 // Banking Module - Cash List View
 // UI component for displaying cash transactions
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   ArrowLeft, 
   Search, 
@@ -10,9 +10,12 @@ import {
   DollarSign,
   TrendingUp,
   TrendingDown,
-  Wallet
+  Wallet,
+  X,
+  Save
 } from 'lucide-react';
 import { CashTransaction, CashStats, CashFilters } from '../models/types';
+
 
 interface CashListViewProps {
   // Data
@@ -28,11 +31,13 @@ interface CashListViewProps {
   onAddTransaction: () => void;
   onDeleteTransaction: (id: string) => void;
   onBack: () => void;
+  onSetOpeningBalance: (amount: number) => void;
   
   // Utils
   formatCurrency: (amount: number) => string;
   formatDate: (date: string) => string;
 }
+
 
 export const CashListView: React.FC<CashListViewProps> = ({
   filteredTransactions,
@@ -43,9 +48,13 @@ export const CashListView: React.FC<CashListViewProps> = ({
   onAddTransaction,
   onDeleteTransaction,
   onBack,
+  onSetOpeningBalance,
   formatCurrency,
   formatDate
 }) => {
+  const [showOpeningBalanceDialog, setShowOpeningBalanceDialog] = useState(false);
+  const [openingBalanceInput, setOpeningBalanceInput] = useState('');
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -63,22 +72,30 @@ export const CashListView: React.FC<CashListViewProps> = ({
           </div>
         </div>
         <button
-          onClick={onAddTransaction}
+          onClick={() => setShowOpeningBalanceDialog(true)}
           className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors"
         >
-          <Plus size={18} />
-          Add Cash
+          <Wallet size={18} />
+          Opening Balance
         </button>
+
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
             <Wallet size={18} className="text-[#4f46e5]" />
             <p className="text-sm text-gray-600">Cash in Hand</p>
           </div>
           <p className="text-2xl font-bold text-[#4f46e5]">{formatCurrency(stats.totalCashInHand)}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign size={18} className="text-blue-600" />
+            <p className="text-sm text-gray-600">Opening Balance</p>
+          </div>
+          <p className="text-2xl font-bold text-blue-600">{formatCurrency(stats.openingBalance)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
@@ -102,6 +119,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
           <p className="text-2xl font-bold text-gray-900">{stats.transactionCount}</p>
         </div>
       </div>
+
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
@@ -192,13 +210,74 @@ export const CashListView: React.FC<CashListViewProps> = ({
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <DollarSign className="mx-auto mb-3 text-gray-300" size={48} />
           <p className="text-lg font-medium text-gray-900">No transactions found</p>
-          <p className="text-sm text-gray-500 mt-1">Record a cash transaction to get started</p>
+          <p className="text-sm text-gray-500 mt-1">Set opening balance to get started</p>
           <button
-            onClick={onAddTransaction}
+            onClick={() => setShowOpeningBalanceDialog(true)}
             className="mt-4 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca]"
           >
-            Add Cash Transaction
+            Set Opening Balance
           </button>
+        </div>
+      )}
+
+      {/* Opening Balance Dialog */}
+      {showOpeningBalanceDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Set Opening Balance</h3>
+              <button
+                onClick={() => setShowOpeningBalanceDialog(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-gray-600 mb-4">
+              Enter the initial cash balance when starting the software. This will be the starting point for all cash transactions.
+            </p>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Opening Balance Amount
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
+                  PKR
+                </span>
+                <input
+                  type="number"
+                  value={openingBalanceInput}
+                  onChange={(e) => setOpeningBalanceInput(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]"
+                  placeholder="0"
+                  min="0"
+                  step="0.01"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowOpeningBalanceDialog(false)}
+                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const amount = parseFloat(openingBalanceInput) || 0;
+                  onSetOpeningBalance(amount);
+                  setShowOpeningBalanceDialog(false);
+                  setOpeningBalanceInput('');
+                }}
+                disabled={!openingBalanceInput || parseFloat(openingBalanceInput) < 0}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save size={18} />
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

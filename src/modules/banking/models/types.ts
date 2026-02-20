@@ -50,7 +50,9 @@ export interface CashStats {
   transactionCount: number;
   inflowCount: number;
   outflowCount: number;
+  openingBalance: number;
 }
+
 
 export interface DashboardStats {
   totalBankBalance: number;
