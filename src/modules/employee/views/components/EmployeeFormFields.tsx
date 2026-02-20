@@ -118,6 +118,66 @@ export function EmployeeFormFields({
           <option value="inactive">Inactive</option>
         </select>
       </div>
+
+      {/* Location */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Location
+        </label>
+        <select
+          value={formData.location || 'Karachi'}
+          onChange={(e) => onFieldChange('location', e.target.value as 'Karachi' | 'Islamabad' | 'Lahore')}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+        >
+          <option value="Karachi">Karachi</option>
+          <option value="Islamabad">Islamabad</option>
+          <option value="Lahore">Lahore</option>
+        </select>
+      </div>
+
+      {/* Account Number */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Account Number
+        </label>
+        <input
+          type="text"
+          value={formData.accountNumber || ''}
+          onChange={(e) => onFieldChange('accountNumber', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+          placeholder="Enter account number"
+        />
+      </div>
+
+      {/* Bank Name */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Bank Name
+        </label>
+        <input
+          type="text"
+          value={formData.bankName || ''}
+          onChange={(e) => onFieldChange('bankName', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+          placeholder="Enter bank name"
+        />
+      </div>
+
+      {/* Account Title */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Account Title
+        </label>
+        <input
+          type="text"
+          value={formData.accountTitle || ''}
+          onChange={(e) => onFieldChange('accountTitle', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+          placeholder="Enter account title"
+        />
+      </div>
     </div>
+
+
   );
 }

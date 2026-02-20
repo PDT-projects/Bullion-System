@@ -13,7 +13,13 @@ export interface Employee {
   email: string;
   joinDate: string;
   status: 'active' | 'inactive';
+  location: 'Karachi' | 'Islamabad' | 'Lahore';
+  accountNumber: string;
+  bankName: string;
+  accountTitle: string;
 }
+
+
 
 /**
  * DTO for creating a new employee
@@ -26,7 +32,13 @@ export interface CreateEmployeeDTO {
   email: string;
   joinDate: string;
   status: 'active' | 'inactive';
+  location: 'Karachi' | 'Islamabad' | 'Lahore';
+  accountNumber: string;
+  bankName: string;
+  accountTitle: string;
 }
+
+
 
 /**
  * DTO for updating an existing employee
