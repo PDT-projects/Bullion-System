@@ -4,7 +4,8 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ProductFormData, CostingOption, BuyType, ProductStatus, CreateProductDTO } from '../models/types';
+import { ProductFormData, CostingOption, BuyType, ProductStatus, CreateProductDTO, InventoryEntryType } from '../models/types';
+
 import { InventoryService } from '../models/inventoryService';
 
 export type PaymentStatus = 'paid' | 'unpaid' | 'partial';
@@ -13,7 +14,9 @@ export interface UseInventoryPaymentViewModelReturn {
   // Form data from previous steps
   formData: Partial<ProductFormData>;
   costingOption: CostingOption;
+  inventoryType: InventoryEntryType;
   totalAmount: number;
+
   
   // Payment state
   paymentStatus: PaymentStatus;
@@ -52,7 +55,9 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   
   // Parse form data from URL params
   const costingOption = (searchParams.get('costing') as CostingOption) || 'without';
+  const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
   const brandName = searchParams.get('brandName') || '';
+
   const modelName = searchParams.get('modelName') || '';
   const category = searchParams.get('category') || '';
   const sellPrice = Number(searchParams.get('sellPrice')) || 0;
@@ -193,8 +198,42 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
 
   // Back handler
   const handleBack = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
+    // Navigate back to product details with all params
+    const queryParams = new URLSearchParams({
+      type: inventoryType,
+      costing: costingOption,
+      brandName,
+      modelName,
+      category,
+      sellPrice: sellPrice.toString(),
+      buyType,
+      warrantyYears: warrantyYears.toString(),
+      stock: stock.toString(),
+      description,
+      status,
+      isDamaged: isDamaged.toString(),
+      serialNumbers: JSON.stringify(serialNumbers),
+      serialCities: JSON.stringify(serialCities),
+    });
+    
+    // Add costing fields if applicable
+    if (costingOption === 'with' && costing) {
+      queryParams.set('costingUnits', costing.units.toString());
+      queryParams.set('unitCostUSD', costing.unitCostUSD.toString());
+      queryParams.set('totalCostUSD', costing.totalCostUSD.toString());
+      queryParams.set('percentage', costing.percentage.toString());
+      queryParams.set('customPerModel', costing.customPerModel.toString());
+      queryParams.set('customPerUnit', costing.customPerUnit.toString());
+      queryParams.set('freightPerModel', costing.freightPerModel.toString());
+      queryParams.set('freightPerUnit', costing.freightPerUnit.toString());
+      queryParams.set('unitCostPKR', costing.unitCostPKR.toString());
+      queryParams.set('totalUnitCost', costing.totalUnitCost.toString());
+      queryParams.set('totalShipmentValuePKR', costing.totalShipmentValuePKR.toString());
+    }
+    
+    navigate(`/inventory/create-new/details?${queryParams.toString()}`);
+  }, [navigate, inventoryType, costingOption, brandName, modelName, category, sellPrice, buyType, warrantyYears, stock, description, status, isDamaged, serialNumbers, serialCities, costing]);
+
 
   // Product summary for display
   const productSummary = useMemo(() => ({
@@ -209,7 +248,9 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   return {
     formData,
     costingOption,
+    inventoryType,
     totalAmount,
+
     paymentStatus,
     transactionId,
     paidAmount,

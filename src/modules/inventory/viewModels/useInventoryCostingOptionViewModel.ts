@@ -1,9 +1,10 @@
 // Inventory Module - ViewModel Layer
-// useInventoryCostingOptionViewModel - Step 1: Choose costing option
+// useInventoryCostingOptionViewModel - Step 2: Choose costing option
 
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CostingOption } from '../models/types';
+
 
 export interface UseInventoryCostingOptionViewModelReturn {
   // State
@@ -20,7 +21,11 @@ export interface UseInventoryCostingOptionViewModelReturn {
 
 export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionViewModelReturn {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [selectedOption, setSelectedOption] = useState<CostingOption | null>(null);
+
+  // Get inventory type from URL (passed from step 1)
+  const inventoryType = searchParams.get('type') || 'in-stock';
 
   const selectOption = useCallback((option: CostingOption) => {
     setSelectedOption(option);
@@ -28,14 +33,16 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
 
   const handleContinue = useCallback(() => {
     if (selectedOption) {
-      // Navigate to product details with costing option in URL
-      navigate(`/inventory/create-new/details?costing=${selectedOption}`);
+      // Navigate to product details with both inventory type and costing option in URL
+      navigate(`/inventory/create-new/details?type=${inventoryType}&costing=${selectedOption}`);
     }
-  }, [navigate, selectedOption]);
+  }, [navigate, selectedOption, inventoryType]);
 
   const handleBack = useCallback(() => {
-    navigate('/inventory');
+    // Go back to inventory type selection step
+    navigate('/inventory/create-new');
   }, [navigate]);
+
 
   return {
     selectedOption,
