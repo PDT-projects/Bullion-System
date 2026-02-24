@@ -3,13 +3,16 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ProductFormData, CostingOption, BuyType, ProductStatus } from '../models/types';
+import { ProductFormData, CostingOption, BuyType, ProductStatus, InventoryEntryType } from '../models/types';
+
 import { InventoryService } from '../models/inventoryService';
 
 export interface UseInventoryProductDetailsViewModelReturn {
   // State
   formData: ProductFormData;
   costingOption: CostingOption;
+  inventoryType: InventoryEntryType;
+
   
   // Serial number management
   serialInputs: string[];
@@ -72,6 +75,8 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const costingOption = (searchParams.get('costing') as CostingOption) || 'without';
+  const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
+
 
   // Initialize form data
   const [formData, setFormData] = useState<ProductFormData>({
@@ -275,11 +280,13 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   const handleNext = useCallback(() => {
     if (!validateForm()) return;
     
-    // Build query params for payment step
+  // Build query params for payment step
     const validSerials = serialInputs.filter(s => s.trim() !== '');
     const queryParams = new URLSearchParams({
+      type: inventoryType,
       costing: costingOption,
       brandName: formData.brandName,
+
       modelName: formData.modelName,
       category: formData.category,
       sellPrice: formData.sellPrice.toString(),
@@ -312,13 +319,17 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   }, [navigate, formData, serialInputs, costingOption, validateForm]);
 
   const handleBack = useCallback(() => {
-    navigate('/inventory/create-new');
-  }, [navigate]);
+    // Go back to costing option step with inventory type
+    navigate(`/inventory/create-new/costing?type=${inventoryType}`);
+  }, [navigate, inventoryType]);
+
 
   return {
     formData,
     costingOption,
+    inventoryType,
     serialInputs,
+
     validationErrors,
     isValid,
     setBrandName,

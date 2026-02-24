@@ -23,11 +23,12 @@ export function useInventoryDashboardViewModel(): UseInventoryDashboardViewModel
   const navigate = useNavigate();
 
   /**
-   * Navigate to create new inventory page
+   * Navigate to create new inventory page (starts with type selection)
    */
   const onAddNewInventory = useCallback(() => {
     navigate('/inventory/create-new');
   }, [navigate]);
+
 
   /**
    * Navigate to add to existing inventory page

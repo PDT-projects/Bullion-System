@@ -27,6 +27,12 @@ export type PaymentStatus = 'Pending' | 'Partial' | 'Complete';
 export type CostingOption = 'with' | 'without';
 
 /**
+ * Inventory entry type - determines if product is in stock or on order
+ */
+export type InventoryEntryType = 'in-stock' | 'on-order';
+
+
+/**
  * Costing information (when costingOption === 'with')
  */
 export interface CostingInfo {

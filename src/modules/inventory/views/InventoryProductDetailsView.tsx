@@ -10,7 +10,9 @@ interface InventoryProductDetailsViewProps extends UseInventoryProductDetailsVie
 export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewProps> = ({
   formData,
   costingOption,
+  inventoryType,
   serialInputs,
+
   validationErrors,
   isValid,
   setBrandName,

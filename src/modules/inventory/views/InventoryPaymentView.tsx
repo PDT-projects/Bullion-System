@@ -9,7 +9,9 @@ interface InventoryPaymentViewProps extends UseInventoryPaymentViewModelReturn {
 
 export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   costingOption,
+  inventoryType,
   totalAmount,
+
   paymentStatus,
   transactionId,
   paidAmount,
@@ -260,8 +262,15 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                     {costingOption === 'with' ? 'With Costing' : 'Without Costing'}
                   </span>
                 </div>
+                <div>
+                  <span className="text-blue-700">Type:</span>
+                  <span className="ml-2 font-medium text-blue-900">
+                    {inventoryType === 'in-stock' ? 'In-Stock / Received' : 'On-Order / Pending'}
+                  </span>
+                </div>
               </div>
             </div>
+
 
             {/* Submit Button */}
             <div className="flex items-center justify-between pt-6 border-t border-gray-200">

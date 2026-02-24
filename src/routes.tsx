@@ -12,16 +12,18 @@ import {
 } from './modules/employee';
 
 
-// Inventory Module - MVVM Architecture (4-Step Flow)
+// Inventory Module - MVVM Architecture (5-Step Flow)
 import { InventoryDashboardView } from './modules/inventory/views/InventoryDashboardView';
 import { InventoryListView } from './modules/inventory/views/InventoryListView';
 import { ProductTransferWrapper } from './modules/inventory/views/ProductTransferWrapper';
 import { ProductTransferCreateWrapper } from './modules/inventory/views/ProductTransferCreateWrapper';
+import { InventoryTypeSelectionWrapper } from './modules/inventory/views/InventoryTypeSelectionWrapper';
 import { InventoryCostingOptionWrapper } from './modules/inventory/views/InventoryCostingOptionWrapper';
 import { InventoryProductDetailsWrapper } from './modules/inventory/views/InventoryProductDetailsWrapper';
 import { InventoryPaymentWrapper } from './modules/inventory/views/InventoryPaymentWrapper';
 import { useInventoryDashboardViewModel } from './modules/inventory/viewModels/useInventoryDashboardViewModel';
 import { useInventoryListViewModel } from './modules/inventory/viewModels/useInventoryListViewModel';
+
 
 
 // Invoice Module - MVVM Architecture
@@ -214,10 +216,15 @@ function InventoryListWrapper() {
   return <InventoryListView {...viewModel} />;
 }
 
-// New 4-Step Inventory Flow Wrappers
+// New 5-Step Inventory Flow Wrappers
+function InventoryTypeSelectionRoute() {
+  return <InventoryTypeSelectionWrapper />;
+}
+
 function InventoryCostingOptionRoute() {
   return <InventoryCostingOptionWrapper />;
 }
+
 
 function InventoryProductDetailsRoute() {
   return <InventoryProductDetailsWrapper />;
@@ -934,12 +941,17 @@ export const router = createBrowserRouter([
       },
       {
         path: "create-new",
+        element: <InventoryTypeSelectionRoute />,
+      },
+      {
+        path: "create-new/costing",
         element: <InventoryCostingOptionRoute />,
       },
       {
         path: "create-new/details",
         element: <InventoryProductDetailsRoute />,
       },
+
       {
         path: "create-new/payment",
         element: <InventoryPaymentRoute />,
