@@ -1,19 +1,12 @@
 // Employee Module - ViewModel Layer
-// useEmployeeFormViewModel - Business logic for employee form (Create/Edit)
+// useEmployeeFormViewModel - Business logic for employee form (Create/Edit) with Firebase
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Employee, CreateEmployeeDTO, UpdateEmployeeDTO } from '../models/types';
 import { EmployeeService } from '../models/employeeService';
-
-/**
- * Context type from EmployeesLayout
- */
-interface EmployeeContext {
-  employees: Employee[];
-  setEmployees: (employees: Employee[]) => void;
-}
+import { EmployeeFirebaseService } from '../models/employeeFirebaseService';
 
 /**
  * Props for useEmployeeFormViewModel
@@ -31,6 +24,7 @@ interface UseEmployeeFormViewModelReturn {
   isValid: boolean;
   errorMessage: string | null;
   isLoading: boolean;
+  isSaving: boolean;
   
   // Meta
   isEditMode: boolean;
@@ -47,13 +41,13 @@ interface UseEmployeeFormViewModelReturn {
 /**
  * ViewModel hook for Employee Form page (Create/Edit)
  * Shared logic for both creating and editing employees
+ * Now integrated with Firebase Data Connect
  */
 export function useEmployeeFormViewModel({ 
   mode 
 }: UseEmployeeFormViewModelProps): UseEmployeeFormViewModelReturn {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { employees, setEmployees } = useOutletContext<EmployeeContext>();
 
   // ==================== STATE ====================
   
@@ -61,6 +55,7 @@ export function useEmployeeFormViewModel({
     EmployeeService.getDefaultFormData()
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // ==================== COMPUTED VALUES ====================
   
@@ -80,16 +75,33 @@ export function useEmployeeFormViewModel({
   
   // Load existing employee data when in edit mode
   useEffect(() => {
-    if (isEditMode && id && employees.length > 0) {
-      const employee = EmployeeService.findById(employees, id);
-      if (employee) {
-        setFormData(employee);
-      } else {
-        toast.error('Employee not found');
-        navigate('/employees');
-      }
+    if (isEditMode && id) {
+      const loadEmployee = async () => {
+        try {
+          setIsLoading(true);
+          console.log(`🔄 Loading employee ${id} for editing...`);
+          
+          const employee = await EmployeeFirebaseService.fetchEmployeeById(id);
+          
+          if (employee) {
+            setFormData(employee);
+            console.log('✅ Employee loaded for editing:', employee.name);
+          } else {
+            toast.error('Employee not found');
+            navigate('/employees');
+          }
+        } catch (error) {
+          console.error('❌ Error loading employee:', error);
+          toast.error('Failed to load employee');
+          navigate('/employees');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      loadEmployee();
     }
-  }, [isEditMode, id, employees, navigate]);
+  }, [isEditMode, id, navigate]);
 
   // ==================== ACTIONS ====================
   
@@ -103,7 +115,7 @@ export function useEmployeeFormViewModel({
   /**
    * Handle form submission
    */
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     console.log('🔘 Save button clicked');
     console.log('📋 Form data:', formData);
     
@@ -117,7 +129,7 @@ export function useEmployeeFormViewModel({
       return;
     }
 
-    setIsLoading(true);
+    setIsSaving(true);
 
     try {
       if (isEditMode && id) {
@@ -127,15 +139,13 @@ export function useEmployeeFormViewModel({
           ...(formData as CreateEmployeeDTO),
           id
         };
-        const updatedEmployees = EmployeeService.updateEmployee(employees, id, updateData);
-        setEmployees(updatedEmployees);
+        await EmployeeFirebaseService.updateEmployee(updateData);
         toast.success('Employee updated successfully');
       } else {
         // Create new employee
         console.log('➕ Creating new employee');
         const createData: CreateEmployeeDTO = formData as CreateEmployeeDTO;
-        const updatedEmployees = EmployeeService.createEmployee(employees, createData);
-        setEmployees(updatedEmployees);
+        await EmployeeFirebaseService.createEmployee(createData);
         toast.success('Employee added successfully');
       }
 
@@ -145,9 +155,9 @@ export function useEmployeeFormViewModel({
       console.error('❌ Error saving employee:', error);
       toast.error('An error occurred while saving the employee');
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
-  }, [formData, isEditMode, id, employees, setEmployees, navigate]);
+  }, [formData, isEditMode, id, navigate]);
 
 
   /**
@@ -165,6 +175,7 @@ export function useEmployeeFormViewModel({
     isValid,
     errorMessage,
     isLoading,
+    isSaving,
     
     // Meta
     isEditMode,
@@ -178,3 +189,4 @@ export function useEmployeeFormViewModel({
   };
 
 }
+

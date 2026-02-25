@@ -1,18 +1,12 @@
 // Employee Module - ViewModel Layer
-// useEmployeeListViewModel - Business logic for employee list page
+// useEmployeeListViewModel - Business logic for employee list page with Firebase
 
-import { useState, useMemo, useCallback } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Employee, EmployeeFilters } from '../models/types';
 import { EmployeeService } from '../models/employeeService';
-
-/**
- * Context type from EmployeesLayout
- */
-interface EmployeeContext {
-  employees: Employee[];
-  setEmployees: (employees: Employee[]) => void;
-}
+import { EmployeeFirebaseService } from '../models/employeeFirebaseService';
 
 /**
  * Return type for useEmployeeListViewModel
@@ -20,8 +14,11 @@ interface EmployeeContext {
 interface UseEmployeeListViewModelReturn {
   // Data
   employees: Employee[];
-  allEmployees: Employee[];
   uniquePositions: string[];
+  
+  // Loading & Error States
+  isLoading: boolean;
+  error: string | null;
   
   // Filter State
   filters: EmployeeFilters;
@@ -44,17 +41,23 @@ interface UseEmployeeListViewModelReturn {
   handleEdit: (id: string) => void;
   handleDelete: (id: string) => void;
   handleAddEmployee: () => void;
+  refreshEmployees: () => Promise<void>;
 }
 
 /**
  * ViewModel hook for Employee List page
  * Encapsulates all business logic, state management, and navigation
+ * Now integrated with Firebase Data Connect
  */
 export function useEmployeeListViewModel(): UseEmployeeListViewModelReturn {
   const navigate = useNavigate();
-  const { employees: allEmployees, setEmployees } = useOutletContext<EmployeeContext>();
 
   // ==================== STATE ====================
+  
+  // Employee data from Firebase
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Filter states
   const [filters, setFilters] = useState<EmployeeFilters>({
@@ -70,6 +73,35 @@ export function useEmployeeListViewModel(): UseEmployeeListViewModelReturn {
   // UI states
   const [showFilters, setShowFilters] = useState(false);
   const [viewEmployee, setViewEmployee] = useState<Employee | null>(null);
+
+  // ==================== DATA FETCHING ====================
+  
+  /**
+   * Fetch employees from Firebase
+   */
+  const fetchEmployees = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      console.log('🔄 Fetching employees from Firebase...');
+      
+      const employees = await EmployeeFirebaseService.fetchAllEmployees();
+      setAllEmployees(employees);
+      
+      console.log(`✅ Loaded ${employees.length} employees`);
+    } catch (err) {
+      console.error('❌ Error loading employees:', err);
+      setError('Failed to load employees. Please try again.');
+      toast.error('Failed to load employees');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   // ==================== COMPUTED VALUES ====================
   
@@ -145,13 +177,24 @@ export function useEmployeeListViewModel(): UseEmployeeListViewModelReturn {
     navigate('/employees/create');
   }, [navigate]);
 
+  /**
+   * Refresh employees list
+   */
+  const refreshEmployees = useCallback(async () => {
+    await fetchEmployees();
+    toast.success('Employee list refreshed');
+  }, [fetchEmployees]);
+
   // ==================== RETURN ====================
   
   return {
     // Data
     employees,
-    allEmployees,
     uniquePositions,
+    
+    // Loading & Error
+    isLoading,
+    error,
     
     // Filter State
     filters,
@@ -173,6 +216,8 @@ export function useEmployeeListViewModel(): UseEmployeeListViewModelReturn {
     setViewEmployee,
     handleEdit,
     handleDelete,
-    handleAddEmployee
+    handleAddEmployee,
+    refreshEmployees,
   };
 }
+

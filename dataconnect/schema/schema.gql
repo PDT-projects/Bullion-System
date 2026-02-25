@@ -1,0 +1,18 @@
+# Employee Model for ERP System
+# Corresponds to src/modules/employee/models/types.ts
+
+type Employee @table {
+  id: String! @col(name: "id")
+
+  name: String @col(name: "name")
+  position: String @col(name: "position")
+  salary: Float @col(name: "salary")
+  phone: String @col(name: "phone")
+  email: String @col(name: "email")
+  joinDate: String @col(name: "join_date")
+  status: String @col(name: "status")
+  location: String @col(name: "location")
+  accountNumber: String @col(name: "account_number")
+  bankName: String @col(name: "bank_name")
+  accountTitle: String @col(name: "account_title")
+}

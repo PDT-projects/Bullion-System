@@ -3,7 +3,7 @@ import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Dashboard } from './features/finance/Dashboard';
 
-// Employee Module - MVVM Architecture
+// Employee Module - MVVM Architecture with Firebase Data Connect
 import { 
   EmployeeListWrapper, 
   EmployeeCreateWrapper, 
@@ -183,9 +183,9 @@ function DashboardLayout() {
 }
 
 // --- EMPLOYEES LAYOUT WITH SIDEBAR AND TOPBAR ---
+// Now uses Firebase Data Connect - no outlet context needed
 function EmployeesLayout() {
   const { user } = useAuth();
-  const [employees, setEmployees] = useState<Employee[]>([]);
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
@@ -195,7 +195,7 @@ function EmployeesLayout() {
           <TopBar notifications={[]} setNotifications={() => {}} activeModule="employees" user={user} />
         </header>
         <main className="flex-1 overflow-y-auto">
-          <Outlet context={{ employees, setEmployees }} />
+          <Outlet />
         </main>
       </div>
     </div>
