@@ -1,10 +1,11 @@
 // Transactions Module - Transaction Form View
 // UI exactly same as src/pages/transactions/CreateTransactionPage.tsx
+// Updated to use banks from props instead of hardcoded BANKS constant
 
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from 'react-router-dom';
 import { Transaction } from '../models/types';
-import { COMPANIES, SUB_CATEGORIES, BANKS } from '../models/types';
+import { COMPANIES, SUB_CATEGORIES } from '../models/types';
 import { 
   ArrowLeft, 
   Plus, 
@@ -38,13 +39,21 @@ type TransactionItem = {
   receipt?: File | null;
 };
 
+// Bank type for transactions
+interface BankInfo {
+  id: string;
+  name: string;
+  balance: number;
+}
+
 interface TransactionFormViewProps {
   transactions: Transaction[];
   setTransactions: (transactions: Transaction[]) => void;
+  banks: BankInfo[];
   existingTransaction?: Transaction;
 }
 
-export function TransactionFormView({ transactions, setTransactions, existingTransaction }: TransactionFormViewProps) {
+export function TransactionFormView({ transactions, setTransactions, banks, existingTransaction }: TransactionFormViewProps) {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditing = !!id && !!existingTransaction;
@@ -90,7 +99,7 @@ export function TransactionFormView({ transactions, setTransactions, existingTra
       setPaymentMode(existingTransaction.mode as 'Cash' | 'Bank' | 'Cheque');
       
       if (existingTransaction.bankName) {
-        const bankId = BANKS.find(b => existingTransaction.bankName?.includes(b.name))?.id || '';
+        const bankId = banks.find(b => existingTransaction.bankName?.includes(b.name))?.id || '';
         setSelectedBank(bankId);
       }
       
@@ -110,10 +119,10 @@ export function TransactionFormView({ transactions, setTransactions, existingTra
         note: existingTransaction.note || ''
       }]);
     }
-  }, [existingTransaction]);
+  }, [existingTransaction, banks]);
 
-  // Get selected bank balance
-  const selectedBankData = BANKS.find(b => b.id === selectedBank);
+  // Get selected bank balance from passed banks array
+  const selectedBankData = banks.find(b => b.id === selectedBank);
   const currentBankBalance = selectedBankData?.balance || 0;
 
   const handleTransactionTypeChange = (type: 'Cash Inflow' | 'Cash Outflow' | 'Loan') => {
@@ -344,7 +353,7 @@ export function TransactionFormView({ transactions, setTransactions, existingTra
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                   >
                     <option value="">Select a bank</option>
-                    {BANKS.map(bank => (
+                    {banks.map(bank => (
                       <option key={bank.id} value={bank.id}>
                         {bank.name} - {formatCurrency(bank.balance)}
                       </option>

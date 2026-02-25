@@ -1,10 +1,11 @@
 // Banking Module - Bank Form ViewModel
-// Manages state and logic for create/edit bank form
+// Manages state and logic for create/edit bank form with Firebase integration
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Bank, BankFormData } from '../models/types';
 import { BankingService } from '../models/bankingService';
+import { BankFirebaseService } from '../models/bankFirebaseService';
 
 interface UseBankFormViewModelProps {
   banks: Bank[];
@@ -17,6 +18,7 @@ interface UseBankFormViewModelReturn {
   formData: BankFormData;
   errors: Record<string, string>;
   isLoading: boolean;
+  isSaving: boolean;
   bank: Bank | null;
   
   // Meta
@@ -27,7 +29,7 @@ interface UseBankFormViewModelReturn {
   // Actions
   setFormField: (field: keyof BankFormData, value: any) => void;
   clearFieldError: (field: string) => void;
-  handleSubmit: () => boolean;
+  handleSubmit: () => Promise<boolean>;
   handleCancel: () => void;
   
   // Utils
@@ -48,6 +50,7 @@ export function useBankFormViewModel({
   // Find existing bank if in edit mode
   const [bank, setBank] = useState<Bank | null>(null);
   const [isLoading, setIsLoading] = useState(isEditMode);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState<BankFormData>(
@@ -103,24 +106,42 @@ export function useBankFormViewModel({
     return formData.name.trim() !== '' && formData.accountNumber.trim() !== '';
   }, [formData]);
 
-  // Handle form submission
-  const handleSubmit = useCallback((): boolean => {
+  // Handle form submission with Firebase
+  const handleSubmit = useCallback(async (): Promise<boolean> => {
     if (!validateForm()) {
       return false;
     }
 
-    if (isEditMode && bank) {
-      // Update existing bank
-      const updatedBank = BankingService.updateBank(bank, formData);
-      setBanks(banks.map(b => b.id === bank.id ? updatedBank : b));
-    } else {
-      // Create new bank
-      const newBank = BankingService.createBank(formData);
-      setBanks([...banks, newBank]);
-    }
+    try {
+      setIsSaving(true);
 
-    navigate('/banking/banks');
-    return true;
+      if (isEditMode && bank) {
+        // Update existing bank in Firebase
+        const updatedBank = await BankingService.updateBankInFirebase(bank, formData);
+        
+        // Update local state
+        setBanks(banks.map(b => b.id === bank.id ? updatedBank : b));
+        
+        console.log('✅ Bank updated successfully:', updatedBank.id);
+      } else {
+        // Create new bank in Firebase
+        const newBank = await BankingService.createBankInFirebase(formData);
+        
+        // Update local state
+        setBanks([...banks, newBank]);
+        
+        console.log('✅ Bank created successfully:', newBank.id);
+      }
+
+      navigate('/banking/banks');
+      return true;
+    } catch (err) {
+      console.error('Error saving bank:', err);
+      alert('Failed to save bank. Please try again.');
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
   }, [validateForm, isEditMode, bank, formData, banks, setBanks, navigate]);
 
   // Handle cancel
@@ -141,6 +162,7 @@ export function useBankFormViewModel({
     formData,
     errors,
     isLoading,
+    isSaving,
     bank,
     isEditMode,
     pageTitle,

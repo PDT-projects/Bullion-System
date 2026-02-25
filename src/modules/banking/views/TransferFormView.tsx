@@ -9,7 +9,8 @@ import {
   Calendar,
   DollarSign,
   Save,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { TransferFormData, Bank } from '../models/types';
 
@@ -18,6 +19,7 @@ interface TransferFormViewProps {
   formData: TransferFormData;
   errors: Record<string, string>;
   isLoading: boolean;
+  isSaving: boolean;
   
   // Meta
   pageTitle: string;
@@ -30,7 +32,7 @@ interface TransferFormViewProps {
   // Actions
   setFormField: (field: keyof TransferFormData, value: any) => void;
   clearFieldError: (field: string) => void;
-  handleSubmit: () => void;
+  handleSubmit: () => Promise<boolean>;
   handleCancel: () => void;
   
   // Utils
@@ -42,6 +44,7 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
   formData,
   errors,
   isLoading,
+  isSaving,
   pageTitle,
   submitButtonText,
   banks,
@@ -53,9 +56,9 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
   formatCurrency,
   isValid
 }) => {
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    handleSubmit();
+    await handleSubmit();
   };
 
   const fromBank = banks.find(b => b.id === formData.fromBankId);
@@ -95,11 +98,12 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                     setFormField('fromBankId', e.target.value);
                     clearFieldError('fromBankId');
                   }}
+                  disabled={isSaving}
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.fromBankId 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
-                  }`}
+                  } ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 >
                   <option value="">Select source bank</option>
                   {availableBanks.map(bank => (
@@ -132,11 +136,12 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                     setFormField('toBankId', e.target.value);
                     clearFieldError('toBankId');
                   }}
+                  disabled={isSaving}
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.toBankId 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
-                  }`}
+                  } ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 >
                   <option value="">Select destination bank</option>
                   {banks.map(bank => (
@@ -167,11 +172,12 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                     setFormField('amount', Number(e.target.value));
                     clearFieldError('amount');
                   }}
+                  disabled={isSaving}
                   className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.amount || hasInsufficientFunds
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
-                  }`}
+                  } ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                   placeholder="0"
                   min="1"
                   step="0.01"
@@ -202,11 +208,12 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                     setFormField('date', e.target.value);
                     clearFieldError('date');
                   }}
+                  disabled={isSaving}
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.date 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
-                  }`}
+                  } ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
               {errors.date && (
@@ -222,8 +229,9 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
               <textarea
                 value={formData.note}
                 onChange={(e) => setFormField('note', e.target.value)}
+                disabled={isSaving}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]"
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 placeholder="Add any additional notes about this transfer..."
               />
             </div>
@@ -269,17 +277,27 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
               <button
                 type="button"
                 onClick={handleCancel}
-                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                disabled={isSaving}
+                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={!isValid || hasInsufficientFunds}
+                disabled={!isValid || hasInsufficientFunds || isSaving}
                 className="flex items-center gap-2 px-6 py-3 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save size={20} />
-                {submitButtonText}
+                {isSaving ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    {submitButtonText}
+                  </>
+                )}
               </button>
             </div>
           </form>

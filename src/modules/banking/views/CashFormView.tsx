@@ -1,5 +1,6 @@
 // Banking Module - Cash Form View
 // UI component for creating cash transactions
+// Updated with loading states and location selector for Firebase integration
 
 import React from 'react';
 import { 
@@ -9,7 +10,10 @@ import {
   Building2,
   Save,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Loader2,
+  MapPin,
+  Database
 } from 'lucide-react';
 
 interface CashFormData {
@@ -19,6 +23,7 @@ interface CashFormData {
   subCategory: string;
   amount: number;
   note: string;
+  location: string;
 }
 
 interface CashFormViewProps {
@@ -26,10 +31,14 @@ interface CashFormViewProps {
   formData: CashFormData;
   errors: Record<string, string>;
   isLoading: boolean;
+  isSaving: boolean;
   
   // Meta
   pageTitle: string;
   submitButtonText: string;
+  
+  // Data
+  availableLocations: string[];
   
   // Actions
   setFormField: (field: keyof CashFormData, value: any) => void;
@@ -49,8 +58,10 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
   formData,
   errors,
   isLoading,
+  isSaving,
   pageTitle,
   submitButtonText,
+  availableLocations,
   setFormField,
   clearFieldError,
   handleSubmit,
@@ -69,6 +80,21 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
 
   const isInflow = formData.mainCategory === 'Cash Inflow';
 
+  // Loading State
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="p-4 bg-[#4f46e5]/10 rounded-full inline-block mb-4">
+            <Loader2 className="animate-spin text-[#4f46e5]" size={48} />
+          </div>
+          <p className="text-lg font-medium text-gray-900">Loading...</p>
+          <p className="text-sm text-gray-500 mt-1">Fetching data from database</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-2xl mx-auto">
@@ -76,7 +102,8 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={handleCancel}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
+            disabled={isSaving}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
           >
             <ArrowLeft size={24} />
           </button>
@@ -98,7 +125,8 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setFormField('mainCategory', 'Cash Inflow')}
-                  className={`flex items-center justify-center gap-2 py-3 rounded-lg border-2 transition-colors ${
+                  disabled={isSaving}
+                  className={`flex items-center justify-center gap-2 py-3 rounded-lg border-2 transition-colors disabled:opacity-50 ${
                     formData.mainCategory === 'Cash Inflow'
                       ? 'border-green-500 bg-green-50 text-green-700'
                       : 'border-gray-200 hover:border-green-200'
@@ -110,7 +138,8 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setFormField('mainCategory', 'Cash Outflow')}
-                  className={`flex items-center justify-center gap-2 py-3 rounded-lg border-2 transition-colors ${
+                  disabled={isSaving}
+                  className={`flex items-center justify-center gap-2 py-3 rounded-lg border-2 transition-colors disabled:opacity-50 ${
                     formData.mainCategory === 'Cash Outflow'
                       ? 'border-red-500 bg-red-50 text-red-700'
                       : 'border-gray-200 hover:border-red-200'
@@ -120,6 +149,40 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                   Cash Outflow
                 </button>
               </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Location *
+              </label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <select
+                  value={formData.location}
+                  onChange={(e) => {
+                    setFormField('location', e.target.value);
+                    clearFieldError('location');
+                  }}
+                  disabled={isSaving}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
+                    errors.location 
+                      ? 'border-red-300 focus:ring-red-200' 
+                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                  }`}
+                >
+                  <option value="">Select location</option>
+                  {availableLocations.map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.location && (
+                <p className="mt-1 text-sm text-red-600">{errors.location}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                Cash balance will be tracked for this location
+              </p>
             </div>
 
             {/* Date */}
@@ -136,7 +199,8 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                     setFormField('date', e.target.value);
                     clearFieldError('date');
                   }}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                  disabled={isSaving}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.date 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
@@ -162,7 +226,8 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                     setFormField('company', e.target.value);
                     clearFieldError('company');
                   }}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                  disabled={isSaving}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.company 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
@@ -186,7 +251,8 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                   setFormField('subCategory', e.target.value);
                   clearFieldError('subCategory');
                 }}
-                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                disabled={isSaving}
+                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                   errors.subCategory 
                     ? 'border-red-300 focus:ring-red-200' 
                     : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
@@ -218,7 +284,8 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                     setFormField('amount', Number(e.target.value));
                     clearFieldError('amount');
                   }}
-                  className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                  disabled={isSaving}
+                  className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.amount 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
@@ -241,10 +308,24 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
               <textarea
                 value={formData.note}
                 onChange={(e) => setFormField('note', e.target.value)}
+                disabled={isSaving}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] disabled:bg-gray-50 disabled:cursor-not-allowed"
                 placeholder="Add any additional notes..."
               />
+            </div>
+
+            {/* Database Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Database className="text-blue-500 mt-0.5" size={20} />
+                <div>
+                  <h4 className="font-medium text-blue-900">Database Storage</h4>
+                  <p className="text-sm text-blue-700 mt-1">
+                    This transaction will update the cash balance for {formData.location || 'the selected location'} and will be securely stored in Firebase.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Transaction Preview */}
@@ -265,6 +346,12 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                     <span className="text-gray-600">Type:</span>
                     <span className={`font-medium ${isInflow ? 'text-green-700' : 'text-red-700'}`}>
                       {formData.mainCategory}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Location:</span>
+                    <span className="font-medium text-gray-900">
+                      {formData.location || 'Not selected'}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -298,17 +385,27 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
               <button
                 type="button"
                 onClick={handleCancel}
-                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                disabled={isSaving}
+                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={!isValid}
+                disabled={!isValid || isSaving}
                 className="flex items-center gap-2 px-6 py-3 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save size={20} />
-                {submitButtonText}
+                {isSaving ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    {submitButtonText}
+                  </>
+                )}
               </button>
             </div>
           </form>

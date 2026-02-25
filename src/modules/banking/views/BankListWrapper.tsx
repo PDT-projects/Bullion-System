@@ -22,6 +22,8 @@ export const BankListWrapper: React.FC = () => {
       banks={viewModel.banks}
       filteredBanks={viewModel.filteredBanks}
       stats={viewModel.stats}
+      isLoading={viewModel.isLoading}
+      error={viewModel.error}
       filters={viewModel.filters}
       setSearchTerm={viewModel.setSearchTerm}
       viewingBank={viewModel.viewingBank}
@@ -35,6 +37,7 @@ export const BankListWrapper: React.FC = () => {
       onBack={() => navigate('/banking')}
       handleDeleteBank={viewModel.handleDeleteBank}
       handleTransfer={viewModel.handleTransfer}
+      refreshBanks={viewModel.refreshBanks}
       formatCurrency={viewModel.formatCurrency}
     />
   );

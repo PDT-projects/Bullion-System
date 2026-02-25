@@ -12,7 +12,7 @@ For each operation, there is a wrapper hook that can be used to call the operati
 
 Here are all of the hooks that get generated:
 ```ts
-import { useGetEmployees, useGetEmployeeById, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from '@dataconnect/generated/react';
+import { useGetEmployees, useGetEmployeeById, useCreateEmployee, useUpdateEmployee, useDeleteEmployee, useGetBanks, useGetBankById, useCreateBank, useUpdateBank, useDeleteBank } from '@dataconnect/generated/react';
 // The types of these hooks are available in react/index.d.ts
 
 const { data, isPending, isSuccess, isError, error } = useGetEmployees();
@@ -24,6 +24,16 @@ const { data, isPending, isSuccess, isError, error } = useCreateEmployee(createE
 const { data, isPending, isSuccess, isError, error } = useUpdateEmployee(updateEmployeeVars);
 
 const { data, isPending, isSuccess, isError, error } = useDeleteEmployee(deleteEmployeeVars);
+
+const { data, isPending, isSuccess, isError, error } = useGetBanks();
+
+const { data, isPending, isSuccess, isError, error } = useGetBankById(getBankByIdVars);
+
+const { data, isPending, isSuccess, isError, error } = useCreateBank(createBankVars);
+
+const { data, isPending, isSuccess, isError, error } = useUpdateBank(updateBankVars);
+
+const { data, isPending, isSuccess, isError, error } = useDeleteBank(deleteBankVars);
 
 ```
 
@@ -62,7 +72,7 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { getEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee } from '@dataconnect/generated';
+import { getEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getBanks, getBankById, createBank, updateBank, deleteBank } from '@dataconnect/generated';
 
 
 // Operation GetEmployees: 
@@ -79,6 +89,21 @@ const { data } = await UpdateEmployee(dataConnect, updateEmployeeVars);
 
 // Operation DeleteEmployee:  For variables, look at type DeleteEmployeeVars in ../index.d.ts
 const { data } = await DeleteEmployee(dataConnect, deleteEmployeeVars);
+
+// Operation GetBanks: 
+const { data } = await GetBanks(dataConnect);
+
+// Operation GetBankById:  For variables, look at type GetBankByIdVars in ../index.d.ts
+const { data } = await GetBankById(dataConnect, getBankByIdVars);
+
+// Operation CreateBank:  For variables, look at type CreateBankVars in ../index.d.ts
+const { data } = await CreateBank(dataConnect, createBankVars);
+
+// Operation UpdateBank:  For variables, look at type UpdateBankVars in ../index.d.ts
+const { data } = await UpdateBank(dataConnect, updateBankVars);
+
+// Operation DeleteBank:  For variables, look at type DeleteBankVars in ../index.d.ts
+const { data } = await DeleteBank(dataConnect, deleteBankVars);
 
 
 ```

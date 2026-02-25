@@ -1,10 +1,11 @@
 // Banking Module - Transfer Form ViewModel
-// Manages state and logic for create transfer form
+// Manages state and logic for create transfer form with Firebase integration
 
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bank, BankTransfer, TransferFormData } from '../models/types';
 import { BankingService } from '../models/bankingService';
+import { BankFirebaseService } from '../models/bankFirebaseService';
 
 interface UseTransferFormViewModelProps {
   banks: Bank[];
@@ -18,6 +19,7 @@ interface UseTransferFormViewModelReturn {
   formData: TransferFormData;
   errors: Record<string, string>;
   isLoading: boolean;
+  isSaving: boolean;
   
   // Meta
   pageTitle: string;
@@ -26,7 +28,7 @@ interface UseTransferFormViewModelReturn {
   // Actions
   setFormField: (field: keyof TransferFormData, value: any) => void;
   clearFieldError: (field: string) => void;
-  handleSubmit: () => boolean;
+  handleSubmit: () => Promise<boolean>;
   handleCancel: () => void;
   
   // Utils
@@ -51,6 +53,7 @@ export function useTransferFormViewModel({
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Available banks (with balance > 0 for source)
   const availableBanks = useMemo(() => {
@@ -90,7 +93,7 @@ export function useTransferFormViewModel({
   }, [formData]);
 
   // Handle form submission
-  const handleSubmit = useCallback((): boolean => {
+  const handleSubmit = useCallback(async (): Promise<boolean> => {
     if (!validateForm()) {
       return false;
     }
@@ -103,32 +106,52 @@ export function useTransferFormViewModel({
       return false;
     }
 
-    // Create transfer record
-    const newTransfer: BankTransfer = {
-      id: BankingService.generateId(),
-      date: formData.date,
-      fromBankId: formData.fromBankId,
-      fromBankName: fromBank.name,
-      toBankId: formData.toBankId,
-      toBankName: toBank.name,
-      amount: formData.amount,
-      note: formData.note
-    };
+    try {
+      setIsSaving(true);
 
-    // Update bank balances
-    const updatedBanks = BankingService.updateBankBalancesForTransfer(
-      banks,
-      formData.fromBankId,
-      formData.toBankId,
-      formData.amount
-    );
+      // Update bank balances in Firebase
+      const fromBankNewBalance = fromBank.balance - formData.amount;
+      const toBankNewBalance = toBank.balance + formData.amount;
+      
+      await BankFirebaseService.updateBankBalance(formData.fromBankId, fromBankNewBalance);
+      await BankFirebaseService.updateBankBalance(formData.toBankId, toBankNewBalance);
 
-    // Save changes
-    setTransfers([newTransfer, ...transfers]);
-    setBanks(updatedBanks);
+      // Create transfer record
+      const newTransfer: BankTransfer = {
+        id: BankingService.generateId(),
+        date: formData.date,
+        fromBankId: formData.fromBankId,
+        fromBankName: fromBank.name,
+        toBankId: formData.toBankId,
+        toBankName: toBank.name,
+        amount: formData.amount,
+        note: formData.note
+      };
 
-    navigate('/banking/transfers');
-    return true;
+      // Update local state
+      const updatedBanks = banks.map(bank => {
+        if (bank.id === formData.fromBankId) {
+          return { ...bank, balance: fromBankNewBalance };
+        }
+        if (bank.id === formData.toBankId) {
+          return { ...bank, balance: toBankNewBalance };
+        }
+        return bank;
+      });
+
+      setTransfers([newTransfer, ...transfers]);
+      setBanks(updatedBanks);
+
+      console.log('✅ Transfer completed successfully');
+      navigate('/banking/transfers');
+      return true;
+    } catch (error) {
+      console.error('Error creating transfer:', error);
+      setErrors({ submit: 'Failed to complete transfer. Please try again.' });
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
   }, [validateForm, formData, banks, transfers, setTransfers, setBanks, navigate]);
 
   // Handle cancel
@@ -149,6 +172,7 @@ export function useTransferFormViewModel({
     formData,
     errors,
     isLoading,
+    isSaving,
     pageTitle,
     submitButtonText,
     setFormField,
