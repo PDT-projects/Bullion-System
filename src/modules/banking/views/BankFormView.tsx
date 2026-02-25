@@ -1,12 +1,15 @@
 // Banking Module - Bank Form View
 // UI component for create/edit bank account
+// Updated with loading states for Firebase integration
 
 import React from 'react';
 import { 
   ArrowLeft, 
   Building2, 
   Landmark,
-  Save
+  Save,
+  Loader2,
+  Database
 } from 'lucide-react';
 import { BankFormData } from '../models/types';
 
@@ -15,6 +18,7 @@ interface BankFormViewProps {
   formData: BankFormData;
   errors: Record<string, string>;
   isLoading: boolean;
+  isSaving: boolean;
   
   // Meta
   isEditMode: boolean;
@@ -36,6 +40,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
   formData,
   errors,
   isLoading,
+  isSaving,
   isEditMode,
   pageTitle,
   submitButtonText,
@@ -51,12 +56,16 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
     handleSubmit();
   };
 
-  if (isLoading) {
+  // Loading State (for edit mode when fetching data)
+  if (isLoading && isEditMode) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4f46e5] mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading bank details...</p>
+          <div className="p-4 bg-[#4f46e5]/10 rounded-full inline-block mb-4">
+            <Loader2 className="animate-spin text-[#4f46e5]" size={48} />
+          </div>
+          <p className="text-lg font-medium text-gray-900">Loading bank details...</p>
+          <p className="text-sm text-gray-500 mt-1">Fetching data from database</p>
         </div>
       </div>
     );
@@ -69,7 +78,8 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={handleCancel}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
+            disabled={isSaving}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
           >
             <ArrowLeft size={24} />
           </button>
@@ -98,7 +108,8 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                     setFormField('name', e.target.value);
                     clearFieldError('name');
                   }}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                  disabled={isSaving}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.name 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
@@ -125,7 +136,8 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                     setFormField('accountNumber', e.target.value);
                     clearFieldError('accountNumber');
                   }}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                  disabled={isSaving}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.accountNumber 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
@@ -157,7 +169,8 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                     setFormField('balance', Number(e.target.value));
                     clearFieldError('balance');
                   }}
-                  className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                  disabled={isSaving}
+                  className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.balance 
                       ? 'border-red-300 focus:ring-red-200' 
                       : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
@@ -175,6 +188,19 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                   ? 'Balance is updated automatically through transactions and transfers' 
                   : 'Starting balance for this account (can be 0)'}
               </p>
+            </div>
+
+            {/* Database Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Database className="text-blue-500 mt-0.5" size={20} />
+                <div>
+                  <h4 className="font-medium text-blue-900">Database Storage</h4>
+                  <p className="text-sm text-blue-700 mt-1">
+                    This bank account will be securely stored in Firebase and will be available across all devices.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Summary Preview */}
@@ -207,17 +233,27 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
               <button
                 type="button"
                 onClick={handleCancel}
-                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                disabled={isSaving}
+                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={!isValid}
+                disabled={!isValid || isSaving}
                 className="flex items-center gap-2 px-6 py-3 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save size={20} />
-                {submitButtonText}
+                {isSaving ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    {submitButtonText}
+                  </>
+                )}
               </button>
             </div>
           </form>

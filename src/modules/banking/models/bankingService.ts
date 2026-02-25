@@ -1,5 +1,6 @@
 // Banking Module - Service Layer
 // Business logic, calculations, and formatting
+// Updated to work with Firebase Data Connect
 
 import {
   Bank,
@@ -12,6 +13,8 @@ import {
   BankFormData,
   TransferFormData
 } from './types';
+import { BankFirebaseService } from './bankFirebaseService';
+import { CashFirebaseService, CashInHandRecord } from './cashFirebaseService';
 
 export class BankingService {
   // Format currency for display
@@ -36,6 +39,77 @@ export class BankingService {
   static generateId(): string {
     return Date.now().toString();
   }
+
+  // ==================== FIREBASE INTEGRATION METHODS ====================
+
+  /**
+   * Fetch all banks from Firebase
+   */
+  static async fetchBanksFromFirebase(): Promise<Bank[]> {
+    return await BankFirebaseService.fetchAllBanks();
+  }
+
+  /**
+   * Create a new bank in Firebase
+   */
+  static async createBankInFirebase(formData: BankFormData): Promise<Bank> {
+    const bankData: Omit<Bank, 'id'> = {
+      name: formData.name.trim(),
+      accountNumber: formData.accountNumber.trim(),
+      balance: formData.balance
+    };
+    return await BankFirebaseService.createBank(bankData);
+  }
+
+  /**
+   * Update a bank in Firebase
+   */
+  static async updateBankInFirebase(bank: Bank, formData: BankFormData): Promise<Bank> {
+    const updatedBank: Bank = {
+      ...bank,
+      name: formData.name.trim(),
+      accountNumber: formData.accountNumber.trim(),
+      balance: formData.balance
+    };
+    return await BankFirebaseService.updateBank(updatedBank);
+  }
+
+  /**
+   * Delete a bank from Firebase
+   */
+  static async deleteBankFromFirebase(id: string): Promise<void> {
+    return await BankFirebaseService.deleteBank(id);
+  }
+
+  /**
+   * Fetch all cash records from Firebase
+   */
+  static async fetchCashRecordsFromFirebase(): Promise<CashInHandRecord[]> {
+    return await CashFirebaseService.fetchAllCashRecords();
+  }
+
+  /**
+   * Get or create cash record for a location
+   */
+  static async getOrCreateCashForLocation(location: string): Promise<CashInHandRecord> {
+    return await CashFirebaseService.getOrCreateCashForLocation(location);
+  }
+
+  /**
+   * Update cash balance in Firebase
+   */
+  static async updateCashBalance(id: string, newBalance: number, updatedBy?: string): Promise<CashInHandRecord> {
+    return await CashFirebaseService.updateCashBalance(id, newBalance, updatedBy);
+  }
+
+  /**
+   * Adjust cash balance (add/subtract) in Firebase
+   */
+  static async adjustCashBalance(id: string, amount: number, updatedBy?: string): Promise<CashInHandRecord> {
+    return await CashFirebaseService.adjustCashBalance(id, amount, updatedBy);
+  }
+
+  // ==================== CALCULATION METHODS ====================
 
   // Calculate bank statistics
   static calculateBankStats(banks: Bank[]): BankStats {
@@ -80,7 +154,6 @@ export class BankingService {
     };
   }
 
-
   // Calculate dashboard statistics
   static calculateDashboardStats(banks: Bank[], cashTransactions: CashTransaction[]): DashboardStats {
     const totalBankBalance = banks.reduce((sum, bank) => sum + bank.balance, 0);
@@ -93,6 +166,8 @@ export class BankingService {
       bankCount: banks.length
     };
   }
+
+  // ==================== FILTER METHODS ====================
 
   // Filter banks by search term
   static filterBanks(banks: Bank[], searchTerm: string): Bank[] {
@@ -137,6 +212,8 @@ export class BankingService {
       return matchesSearch && matchesType;
     });
   }
+
+  // ==================== VALIDATION METHODS ====================
 
   // Validate bank form
   static validateBankForm(formData: BankFormData, existingBanks: Bank[], excludeId?: string): Record<string, string> {
@@ -197,7 +274,9 @@ export class BankingService {
     return errors;
   }
 
-  // Create new bank
+  // ==================== FACTORY METHODS ====================
+
+  // Create new bank object (local)
   static createBank(formData: BankFormData): Bank {
     return {
       id: this.generateId(),
@@ -207,7 +286,7 @@ export class BankingService {
     };
   }
 
-  // Update bank
+  // Update bank object (local)
   static updateBank(bank: Bank, formData: BankFormData): Bank {
     return {
       ...bank,
@@ -217,7 +296,7 @@ export class BankingService {
     };
   }
 
-  // Create new transfer
+  // Create new transfer object (local)
   static createTransfer(formData: TransferFormData, banks: Bank[]): BankTransfer {
     const fromBank = banks.find(b => b.id === formData.fromBankId)!;
     const toBank = banks.find(b => b.id === formData.toBankId)!;
@@ -234,7 +313,9 @@ export class BankingService {
     };
   }
 
-  // Update bank balances after transfer
+  // ==================== BANK BALANCE OPERATIONS ====================
+
+  // Update bank balances after transfer (local)
   static updateBankBalancesForTransfer(
     banks: Bank[], 
     fromBankId: string, 
@@ -251,6 +332,29 @@ export class BankingService {
       return bank;
     });
   }
+
+  // Update single bank balance (local)
+  static updateBankBalance(banks: Bank[], bankId: string, newBalance: number): Bank[] {
+    return banks.map(bank => 
+      bank.id === bankId ? { ...bank, balance: newBalance } : bank
+    );
+  }
+
+  // Add to bank balance (local)
+  static addToBankBalance(banks: Bank[], bankId: string, amount: number): Bank[] {
+    return banks.map(bank => 
+      bank.id === bankId ? { ...bank, balance: bank.balance + amount } : bank
+    );
+  }
+
+  // Subtract from bank balance (local)
+  static subtractFromBankBalance(banks: Bank[], bankId: string, amount: number): Bank[] {
+    return banks.map(bank => 
+      bank.id === bankId ? { ...bank, balance: Math.max(0, bank.balance - amount) } : bank
+    );
+  }
+
+  // ==================== DEFAULT DATA ====================
 
   // Get default bank form data
   static getDefaultBankFormData(): BankFormData {

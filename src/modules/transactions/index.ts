@@ -17,9 +17,9 @@ export type {
 export {
   COMPANIES,
   MAIN_CATEGORIES,
-  SUB_CATEGORIES,
-  BANKS
+  SUB_CATEGORIES
 } from './models/types';
+
 
 // Service
 export { TransactionService } from './models/transactionsService';

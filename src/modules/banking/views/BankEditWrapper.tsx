@@ -21,6 +21,7 @@ export const BankEditWrapper: React.FC = () => {
       formData={viewModel.formData}
       errors={viewModel.errors}
       isLoading={viewModel.isLoading}
+      isSaving={viewModel.isSaving}
       isEditMode={viewModel.isEditMode}
       pageTitle={viewModel.pageTitle}
       submitButtonText={viewModel.submitButtonText}

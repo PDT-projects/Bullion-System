@@ -16,8 +16,12 @@ export type {
   CashFilters
 } from './models/types';
 
-// Service
+// Services
 export { BankingService } from './models/bankingService';
+export { BankFirebaseService } from './models/bankFirebaseService';
+export { CashFirebaseService } from './models/cashFirebaseService';
+export type { CashInHandRecord } from './models/cashFirebaseService';
+
 
 // ViewModels
 export { useBankListViewModel } from './viewModels/useBankListViewModel';

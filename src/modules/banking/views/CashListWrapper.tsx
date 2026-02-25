@@ -24,17 +24,26 @@ export const CashListWrapper: React.FC = () => {
     setOpeningBalance
   });
 
+  // Handle opening balance with async support
+  const handleSetOpeningBalance = async (amount: number) => {
+    await viewModel.handleSetOpeningBalance(amount);
+  };
+
   return (
     <CashListView
       filteredTransactions={viewModel.filteredTransactions}
       stats={viewModel.stats}
+      cashRecords={viewModel.cashRecords}
+      isLoading={viewModel.isLoading}
+      error={viewModel.error}
       filters={viewModel.filters}
       setSearchTerm={viewModel.setSearchTerm}
       setFilterType={viewModel.setFilterType}
       onAddTransaction={() => navigate('/banking/cash/new')}
       onDeleteTransaction={viewModel.handleDeleteTransaction}
       onBack={() => navigate('/banking')}
-      onSetOpeningBalance={viewModel.handleSetOpeningBalance}
+      onSetOpeningBalance={handleSetOpeningBalance}
+      refreshCashData={viewModel.refreshCashData}
       formatCurrency={viewModel.formatCurrency}
       formatDate={viewModel.formatDate}
     />

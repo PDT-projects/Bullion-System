@@ -104,3 +104,222 @@ mutation UpdateEmployee(
 mutation DeleteEmployee($id: String!) @auth(level: PUBLIC) {
   employee_delete(key: { id: $id })
 }
+
+# ==================== BANK QUERIES ====================
+
+# Query to fetch all banks
+# @auth(level: PUBLIC) - Allow public access for development
+query GetBanks @auth(level: PUBLIC) {
+  banks {
+    id
+    name
+    accountNumber
+    balance
+    createdAt
+    updatedAt
+  }
+}
+
+# Query to fetch a single bank by ID
+# @auth(level: PUBLIC) - Allow public access for development
+query GetBankById($id: String!) @auth(level: PUBLIC) {
+  bank(id: $id) {
+    id
+    name
+    accountNumber
+    balance
+    createdAt
+    updatedAt
+  }
+}
+
+# Mutation to create a new bank
+# @auth(level: PUBLIC) - Allow public access for development
+mutation CreateBank(
+  $id: String!,
+  $name: String,
+  $accountNumber: String,
+  $balance: Float,
+  $createdAt: String,
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  bank_insert(data: {
+    id: $id,
+    name: $name,
+    accountNumber: $accountNumber,
+    balance: $balance,
+    createdAt: $createdAt,
+    updatedAt: $updatedAt
+  })
+}
+
+# Mutation to update an existing bank
+# @auth(level: PUBLIC) - Allow public access for development
+mutation UpdateBank(
+  $id: String!,
+  $name: String,
+  $accountNumber: String,
+  $balance: Float,
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  bank_update(key: { id: $id }, data: {
+    name: $name,
+    accountNumber: $accountNumber,
+    balance: $balance,
+    updatedAt: $updatedAt
+  })
+}
+
+# Mutation to delete a bank
+# @auth(level: PUBLIC) - Allow public access for development
+mutation DeleteBank($id: String!) @auth(level: PUBLIC) {
+  bank_delete(key: { id: $id })
+}
+
+# ==================== CASH IN HAND QUERIES ====================
+
+# Query to fetch all cash in hand records
+# @auth(level: PUBLIC) - Allow public access for development
+query GetCashInHandRecords @auth(level: PUBLIC) {
+  cashInHands {
+    id
+    location
+    balance
+    lastUpdated
+    updatedBy
+  }
+}
+
+# Query to fetch cash in hand by location
+# @auth(level: PUBLIC) - Allow public access for development
+query GetCashInHandByLocation($location: String!) @auth(level: PUBLIC) {
+  cashInHands(where: { location: { eq: $location } }) {
+    id
+    location
+    balance
+    lastUpdated
+    updatedBy
+  }
+}
+
+# Query to fetch a single cash in hand record by ID
+# @auth(level: PUBLIC) - Allow public access for development
+query GetCashInHandById($id: String!) @auth(level: PUBLIC) {
+  cashInHand(id: $id) {
+    id
+    location
+    balance
+    lastUpdated
+    updatedBy
+  }
+}
+
+# Mutation to create a new cash in hand record
+# @auth(level: PUBLIC) - Allow public access for development
+mutation CreateCashInHand(
+  $id: String!,
+  $location: String,
+  $balance: Float,
+  $lastUpdated: String,
+  $updatedBy: String
+) @auth(level: PUBLIC) {
+  cashInHand_insert(data: {
+    id: $id,
+    location: $location,
+    balance: $balance,
+    lastUpdated: $lastUpdated,
+    updatedBy: $updatedBy
+  })
+}
+
+# Mutation to update cash in hand balance
+# @auth(level: PUBLIC) - Allow public access for development
+mutation UpdateCashInHand(
+  $id: String!,
+  $balance: Float,
+  $lastUpdated: String,
+  $updatedBy: String
+) @auth(level: PUBLIC) {
+  cashInHand_update(key: { id: $id }, data: {
+    balance: $balance,
+    lastUpdated: $lastUpdated,
+    updatedBy: $updatedBy
+  })
+}
+
+# Mutation to delete a cash in hand record
+# @auth(level: PUBLIC) - Allow public access for development
+mutation DeleteCashInHand($id: String!) @auth(level: PUBLIC) {
+  cashInHand_delete(key: { id: $id })
+}
+
+# ==================== BANK TRANSFER QUERIES ====================
+
+# Query to fetch all bank transfers
+# @auth(level: PUBLIC) - Allow public access for development
+query GetBankTransfers @auth(level: PUBLIC) {
+  bankTransfers {
+    id
+    date
+    fromBankId
+    fromBankName
+    toBankId
+    toBankName
+    amount
+    note
+    createdAt
+  }
+}
+
+# Query to fetch transfers for a specific bank
+# @auth(level: PUBLIC) - Allow public access for development
+query GetBankTransfersByBank($bankId: String!) @auth(level: PUBLIC) {
+  bankTransfers(where: {
+    _or: [
+      { fromBankId: { eq: $bankId } },
+      { toBankId: { eq: $bankId } }
+    ]
+  }) {
+    id
+    date
+    fromBankId
+    fromBankName
+    toBankId
+    toBankName
+    amount
+    note
+    createdAt
+  }
+}
+
+# Mutation to create a new bank transfer
+# @auth(level: PUBLIC) - Allow public access for development
+mutation CreateBankTransfer(
+  $id: String!,
+  $date: String,
+  $fromBankId: String,
+  $fromBankName: String,
+  $toBankId: String,
+  $toBankName: String,
+  $amount: Float,
+  $note: String,
+  $createdAt: String
+) @auth(level: PUBLIC) {
+  bankTransfer_insert(data: {
+    id: $id,
+    date: $date,
+    fromBankId: $fromBankId,
+    fromBankName: $fromBankName,
+    toBankId: $toBankId,
+    toBankName: $toBankName,
+    amount: $amount,
+    note: $note,
+    createdAt: $createdAt
+  })
+}
+
+# Mutation to delete a bank transfer
+# @auth(level: PUBLIC) - Allow public access for development
+mutation DeleteBankTransfer($id: String!) @auth(level: PUBLIC) {
+  bankTransfer_delete(key: { id: $id })
+}

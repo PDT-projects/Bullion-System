@@ -16,3 +16,44 @@ type Employee @table {
   bankName: String @col(name: "bank_name")
   accountTitle: String @col(name: "account_title")
 }
+
+# Bank Model for ERP System
+# Corresponds to src/modules/banking/models/types.ts
+
+type Bank @table {
+  id: String! @col(name: "id")
+  
+  name: String @col(name: "name")
+  accountNumber: String @col(name: "account_number")
+  balance: Float @col(name: "balance")
+  createdAt: String @col(name: "created_at")
+  updatedAt: String @col(name: "updated_at")
+}
+
+# Cash In Hand Model for ERP System
+# Tracks cash balance for each location
+
+type CashInHand @table {
+  id: String! @col(name: "id")
+  
+  location: String @col(name: "location")
+  balance: Float @col(name: "balance")
+  lastUpdated: String @col(name: "last_updated")
+  updatedBy: String @col(name: "updated_by")
+}
+
+# Bank Transfer Model for ERP System
+# Tracks transfers between banks
+
+type BankTransfer @table {
+  id: String! @col(name: "id")
+  
+  date: String @col(name: "date")
+  fromBankId: String @col(name: "from_bank_id")
+  fromBankName: String @col(name: "from_bank_name")
+  toBankId: String @col(name: "to_bank_id")
+  toBankName: String @col(name: "to_bank_name")
+  amount: Float @col(name: "amount")
+  note: String @col(name: "note")
+  createdAt: String @col(name: "created_at")
+}

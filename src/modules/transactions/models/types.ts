@@ -190,11 +190,5 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
   ]
 };
 
-export const BANKS = [
-  { id: 'hbl', name: 'HBL Main Branch', balance: 1850000 },
-  { id: 'mcb', name: 'MCB Bank', balance: 950000 },
-  { id: 'abl', name: 'Allied Bank', balance: 750000 },
-  { id: 'ubl', name: 'United Bank Limited', balance: 1200000 },
-  { id: 'meezan', name: 'Meezan Bank', balance: 500000 },
-  { id: 'alfalah', name: 'Bank Alfalah', balance: 850000 }
-];
+// Note: BANKS constant removed - banks are now loaded from Firebase Data Connect
+// Use BankFirebaseService to fetch banks dynamically

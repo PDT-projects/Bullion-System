@@ -24,7 +24,10 @@ export const BankingDashboardWrapper: React.FC = () => {
       stats={viewModel.stats}
       recentTransfers={viewModel.recentTransfers}
       recentCashTransactions={viewModel.recentCashTransactions}
-      banks={banks}
+      banks={viewModel.firebaseBanks}
+      cashRecords={viewModel.cashRecords}
+      isLoading={viewModel.isLoading}
+      error={viewModel.error}
       showTransferModal={viewModel.showTransferModal}
       setShowTransferModal={viewModel.setShowTransferModal}
       onViewBanks={() => navigate('/banking/banks')}
@@ -33,6 +36,7 @@ export const BankingDashboardWrapper: React.FC = () => {
       onAddBank={() => navigate('/banking/banks/new')}
       onAddTransfer={() => navigate('/banking/transfers/new')}
       onAddCash={() => navigate('/banking/cash/new')}
+      refreshData={viewModel.refreshData}
       formatCurrency={viewModel.formatCurrency}
       formatDate={viewModel.formatDate}
     />

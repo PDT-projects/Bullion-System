@@ -23,6 +23,7 @@ export const TransferCreateWrapper: React.FC = () => {
       formData={viewModel.formData}
       errors={viewModel.errors}
       isLoading={viewModel.isLoading}
+      isSaving={viewModel.isSaving}
       pageTitle={viewModel.pageTitle}
       submitButtonText={viewModel.submitButtonText}
       banks={banks}

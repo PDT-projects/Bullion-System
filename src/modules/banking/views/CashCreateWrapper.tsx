@@ -21,8 +21,10 @@ export const CashCreateWrapper: React.FC = () => {
       formData={viewModel.formData}
       errors={viewModel.errors}
       isLoading={viewModel.isLoading}
+      isSaving={viewModel.isSaving}
       pageTitle={viewModel.pageTitle}
       submitButtonText={viewModel.submitButtonText}
+      availableLocations={viewModel.availableLocations}
       setFormField={viewModel.setFormField}
       clearFieldError={viewModel.clearFieldError}
       handleSubmit={viewModel.handleSubmit}

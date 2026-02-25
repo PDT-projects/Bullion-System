@@ -1,8 +1,16 @@
 // Transactions Module - Transaction Form ViewModel
+// Updated to use banks from props instead of hardcoded BANKS constant
 
 import { useState, useCallback, useMemo } from 'react';
-import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES, BANKS } from '../models/types';
+import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES } from '../models/types';
 import { TransactionService } from '../models/transactionsService';
+
+// Bank type for transactions
+interface BankInfo {
+  id: string;
+  name: string;
+  balance: number;
+}
 
 export interface TransactionFormViewModel {
   // State
@@ -36,7 +44,7 @@ export interface TransactionFormViewModel {
   // Constants
   companies: typeof COMPANIES;
   subCategories: typeof SUB_CATEGORIES;
-  banks: typeof BANKS;
+  banks: BankInfo[];
   
   // Actions
   setOffice: (office: string) => void;
@@ -94,6 +102,7 @@ const getInitialTransactionItem = (transactionType: 'Cash Inflow' | 'Cash Outflo
 export const useTransactionFormViewModel = (
   transactions: Transaction[],
   setTransactions: (transactions: Transaction[]) => void,
+  banks: BankInfo[],
   existingTransaction?: Transaction
 ): TransactionFormViewModel => {
   const isEditing = !!existingTransaction;
@@ -119,8 +128,11 @@ export const useTransactionFormViewModel = (
 
   const [availableSubCategories, setAvailableSubCategories] = useState<string[]>([]);
 
-  // Get selected bank balance
-  const selectedBankData = BANKS.find(b => b.id === selectedBank);
+  // Get selected bank balance from passed banks array
+  const selectedBankData = useMemo(() => {
+    return banks.find(b => b.id === selectedBank);
+  }, [banks, selectedBank]);
+  
   const currentBankBalance = selectedBankData?.balance || 0;
 
   // Load existing transaction for editing
@@ -133,7 +145,7 @@ export const useTransactionFormViewModel = (
     setPaymentMode(transaction.mode as 'Cash' | 'Bank' | 'Cheque');
     
     if (transaction.bankName) {
-      const bankId = BANKS.find(b => transaction.bankName?.includes(b.name))?.id || '';
+      const bankId = banks.find(b => transaction.bankName?.includes(b.name))?.id || '';
       setSelectedBank(bankId);
     }
     
@@ -163,7 +175,7 @@ export const useTransactionFormViewModel = (
       paidTo: (transaction as any).paidTo || '',
       note: transaction.note || ''
     }]);
-  }, []);
+  }, [banks]);
 
   // Handle transaction type change
   const handleTransactionTypeChange = useCallback((type: 'Cash Inflow' | 'Cash Outflow' | 'Loan') => {
@@ -274,7 +286,7 @@ export const useTransactionFormViewModel = (
       throw new Error(validation.errors.join(', '));
     }
 
-    const selectedBankData = BANKS.find(b => b.id === selectedBank);
+    const selectedBankData = banks.find(b => b.id === selectedBank);
 
     // Create transactions for each item
     const newTransactions: Transaction[] = transactionItems.map((item, index) => ({
@@ -309,7 +321,7 @@ export const useTransactionFormViewModel = (
     }
 
     return newTransactions;
-  }, [transactions, setTransactions, transactionItems, date, office, transactionType, paymentMode, selectedBank, isEditing, existingTransaction, validateForm]);
+  }, [transactions, setTransactions, transactionItems, date, office, transactionType, paymentMode, selectedBank, isEditing, existingTransaction, validateForm, banks]);
 
   return {
     // State
@@ -334,7 +346,7 @@ export const useTransactionFormViewModel = (
     // Constants
     companies: COMPANIES,
     subCategories: SUB_CATEGORIES,
-    banks: BANKS,
+    banks,
     
     // Actions
     setOffice,
