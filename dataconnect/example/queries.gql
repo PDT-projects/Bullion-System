@@ -1,0 +1,106 @@
+# Query to fetch all employees
+# @auth(level: PUBLIC) - Allow public access for development
+query GetEmployees @auth(level: PUBLIC) {
+  employees {
+    id
+    name
+    position
+    salary
+    phone
+    email
+    joinDate
+    status
+    location
+    accountNumber
+    bankName
+    accountTitle
+  }
+}
+
+# Query to fetch a single employee by ID
+# @auth(level: PUBLIC) - Allow public access for development
+query GetEmployeeById($id: String!) @auth(level: PUBLIC) {
+  employee(id: $id) {
+    id
+    name
+    position
+    salary
+    phone
+    email
+    joinDate
+    status
+    location
+    accountNumber
+    bankName
+    accountTitle
+  }
+}
+
+# Mutation to create a new employee
+# @auth(level: PUBLIC) - Allow public access for development
+mutation CreateEmployee(
+  $id: String!,
+  $name: String,
+  $position: String,
+  $salary: Float,
+  $phone: String,
+  $email: String,
+  $joinDate: String,
+  $status: String,
+  $location: String,
+  $accountNumber: String,
+  $bankName: String,
+  $accountTitle: String
+) @auth(level: PUBLIC) {
+  employee_insert(data: {
+    id: $id,
+    name: $name,
+    position: $position,
+    salary: $salary,
+    phone: $phone,
+    email: $email,
+    joinDate: $joinDate,
+    status: $status,
+    location: $location,
+    accountNumber: $accountNumber,
+    bankName: $bankName,
+    accountTitle: $accountTitle
+  })
+}
+
+# Mutation to update an existing employee
+# @auth(level: PUBLIC) - Allow public access for development
+mutation UpdateEmployee(
+  $id: String!,
+  $name: String,
+  $position: String,
+  $salary: Float,
+  $phone: String,
+  $email: String,
+  $joinDate: String,
+  $status: String,
+  $location: String,
+  $accountNumber: String,
+  $bankName: String,
+  $accountTitle: String
+) @auth(level: PUBLIC) {
+  employee_update(key: { id: $id }, data: {
+    name: $name,
+    position: $position,
+    salary: $salary,
+    phone: $phone,
+    email: $email,
+    joinDate: $joinDate,
+    status: $status,
+    location: $location,
+    accountNumber: $accountNumber,
+    bankName: $bankName,
+    accountTitle: $accountTitle
+  })
+}
+
+# Mutation to delete an employee
+# @auth(level: PUBLIC) - Allow public access for development
+mutation DeleteEmployee($id: String!) @auth(level: PUBLIC) {
+  employee_delete(key: { id: $id })
+}

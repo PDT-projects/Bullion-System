@@ -4,6 +4,7 @@
 // Models
 export * from './models/types';
 export { EmployeeService } from './models/employeeService';
+export { EmployeeFirebaseService } from './models/employeeFirebaseService';
 
 // ViewModels
 export { useEmployeeListViewModel } from './viewModels/useEmployeeListViewModel';
@@ -27,3 +28,4 @@ export { EmployeeFilters } from './views/components/EmployeeFilters';
 export { EmployeeTable } from './views/components/EmployeeTable';
 export { EmployeeViewModal } from './views/components/EmployeeViewModal';
 export { EmployeeFormFields } from './views/components/EmployeeFormFields';
+
