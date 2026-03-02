@@ -10,6 +10,7 @@ import {
   BudgetStatus,
   ValidationResult 
 } from './types';
+import { BudgetDataConnectService } from '../../../api/dataconnect/budgetDataConnectService';
 
 /**
  * BudgetService - Contains all business logic for budget operations
@@ -68,7 +69,7 @@ export class BudgetService {
   // ==================== CRUD OPERATIONS ====================
 
   /**
-   * Create a new budget
+   * Create a new budget (local only - for backward compatibility)
    */
   static createBudget(budgets: Budget[], data: CreateBudgetDTO): Budget[] {
     const newBudget: Budget = {
@@ -82,7 +83,7 @@ export class BudgetService {
   }
 
   /**
-   * Update an existing budget
+   * Update an existing budget (local only - for backward compatibility)
    */
   static updateBudget(budgets: Budget[], id: string, data: UpdateBudgetDTO): Budget[] {
     return budgets.map(b => 
@@ -95,10 +96,52 @@ export class BudgetService {
   }
 
   /**
-   * Delete a budget by ID
+   * Delete a budget by ID (local only - for backward compatibility)
    */
   static deleteBudget(budgets: Budget[], id: string): Budget[] {
     return budgets.filter(b => b.id !== id);
+  }
+
+  // ==================== DATA CONNECT OPERATIONS ====================
+  
+  /**
+   * Fetch all budgets from Data Connect
+   */
+  static async fetchBudgetsFromDataConnect(): Promise<Budget[]> {
+    return await BudgetDataConnectService.fetchAllBudgets();
+  }
+
+  /**
+   * Create a new budget in Data Connect
+   */
+  static async createBudgetInDataConnect(data: CreateBudgetDTO): Promise<Budget> {
+    return await BudgetDataConnectService.createBudget({
+      category: data.category,
+      subCategory: data.subCategory,
+      period: data.period,
+      budgetLimit: data.budgetLimit,
+      spent: 0
+    });
+  }
+
+  /**
+   * Update a budget in Data Connect
+   */
+  static async updateBudgetInDataConnect(budget: Budget, data: UpdateBudgetDTO): Promise<Budget> {
+    return await BudgetDataConnectService.updateBudget({
+      ...budget,
+      category: data.category,
+      subCategory: data.subCategory,
+      period: data.period,
+      budgetLimit: data.budgetLimit
+    });
+  }
+
+  /**
+   * Delete a budget from Data Connect
+   */
+  static async deleteBudgetFromDataConnect(id: string): Promise<void> {
+    return await BudgetDataConnectService.deleteBudget(id);
   }
 
   /**

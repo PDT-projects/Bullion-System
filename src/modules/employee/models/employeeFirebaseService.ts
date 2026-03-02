@@ -1,68 +1,40 @@
-// Employee Module - Firebase Data Connect Service Layer
-// Handles all Firebase Data Connect operations for employees
+// Employee Module - Firebase Firestore Service Layer
+// Handles all Firebase Firestore operations for employees
 
-import { getDataConnect, DataConnect } from 'firebase/data-connect';
-import { initializeApp } from 'firebase/app';
-import {
-  connectorConfig,
-  getEmployees,
-  getEmployeeById,
-  createEmployee,
-  updateEmployee,
-  deleteEmployee,
-  CreateEmployeeVariables,
-  UpdateEmployeeVariables,
-  DeleteEmployeeVariables,
-  GetEmployeesData,
-  GetEmployeeByIdData,
-  CreateEmployeeData,
-  UpdateEmployeeData,
-  DeleteEmployeeData,
-} from '../../../dataconnect-generated';
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where,
+  orderBy,
+  QueryConstraint
+} from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
 import { Employee, CreateEmployeeDTO, UpdateEmployeeDTO } from './types';
 
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAcTOJImNIZ1luoGVIbRmTMfRjKyHc3o-Y",
-  authDomain: "erp-system-baacb.firebaseapp.com",
-  projectId: "erp-system-baacb",
-  storageBucket: "erp-system-baacb.firebasestorage.app",
-  messagingSenderId: "637818110198",
-  appId: "1:637818110198:web:623aa945d32788b20fecd7"
-};
-
-// Initialize Firebase app for Data Connect
-const firebaseApp = initializeApp(firebaseConfig);
+// Collection name for employees
+const EMPLOYEES_COLLECTION = 'employees';
 
 /**
- * Firebase Data Connect instance for employee operations
+ * Transform Firestore document to Employee type
  */
-let dataConnectInstance: DataConnect | null = null;
-
-/**
- * Get or initialize the Data Connect instance
- */
-function getDataConnectInstance(): DataConnect {
-  if (!dataConnectInstance) {
-    dataConnectInstance = getDataConnect(firebaseApp, connectorConfig);
-  }
-  return dataConnectInstance;
-}
-
-/**
- * Transform Firebase employee data to our Employee type
- */
-function transformEmployeeData(data: any): Employee {
+function transformDocToEmployee(docSnap: any): Employee {
+  const data = docSnap.data();
   return {
-    id: data.id,
+    id: docSnap.id,
     name: data.name || '',
     position: data.position || '',
     salary: data.salary || 0,
     phone: data.phone || '',
     email: data.email || '',
     joinDate: data.joinDate || '',
-    status: (data.status as 'active' | 'inactive') || 'active',
-    location: (data.location as 'Karachi' | 'Islamabad' | 'Lahore') || 'Karachi',
+    status: data.status || 'active',
+    location: data.location || 'Karachi',
     accountNumber: data.accountNumber || '',
     bankName: data.bankName || '',
     accountTitle: data.accountTitle || '',
@@ -70,72 +42,37 @@ function transformEmployeeData(data: any): Employee {
 }
 
 /**
- * Transform CreateEmployeeDTO to Firebase variables
- */
-function transformCreateVariables(data: CreateEmployeeDTO, id: string): CreateEmployeeVariables {
-  return {
-    id,
-    name: data.name,
-    position: data.position,
-    salary: data.salary,
-    phone: data.phone,
-    email: data.email,
-    joinDate: data.joinDate,
-    status: data.status,
-    location: data.location,
-    accountNumber: data.accountNumber,
-    bankName: data.bankName,
-    accountTitle: data.accountTitle,
-  };
-}
-
-/**
- * Transform UpdateEmployeeDTO to Firebase variables
- */
-function transformUpdateVariables(data: UpdateEmployeeDTO): UpdateEmployeeVariables {
-  return {
-    id: data.id,
-    name: data.name,
-    position: data.position,
-    salary: data.salary,
-    phone: data.phone,
-    email: data.email,
-    joinDate: data.joinDate,
-    status: data.status,
-    location: data.location,
-    accountNumber: data.accountNumber,
-    bankName: data.bankName,
-    accountTitle: data.accountTitle,
-  };
-}
-
-/**
- * EmployeeFirebaseService - Firebase Data Connect operations
+ * EmployeeFirebaseService - Firebase Firestore operations
  */
 export class EmployeeFirebaseService {
 
   // ==================== READ OPERATIONS ====================
 
   /**
-   * Fetch all employees from Firebase
+   * Fetch all employees from Firestore
    */
   static async fetchAllEmployees(): Promise<Employee[]> {
     try {
-      console.log('🔥 Fetching all employees from Firebase...');
-      const dc = getDataConnectInstance();
-      const result = await getEmployees(dc);
+      console.log('🔥 Fetching all employees from Firestore...');
       
-      if (!result.data || !result.data.employees) {
-        console.log('⚠️ No employees found');
-        return [];
-      }
+      const employeesRef = collection(db, EMPLOYEES_COLLECTION);
+      const queryConstraints: QueryConstraint[] = [
+        orderBy('name', 'asc')
+      ];
+      
+      const q = query(employeesRef, ...queryConstraints);
+      const querySnapshot = await getDocs(q);
+      
+      const employees: Employee[] = [];
+      querySnapshot.forEach((doc) => {
+        employees.push(transformDocToEmployee(doc));
+      });
 
-      const employees = result.data.employees.map(transformEmployeeData);
-      console.log(`✅ Fetched ${employees.length} employees`);
+      console.log(`✅ Fetched ${employees.length} employees from Firestore`);
       return employees;
     } catch (error) {
-      console.error('❌ Error fetching employees:', error);
-      throw new Error('Failed to fetch employees from Firebase');
+      console.error('❌ Error fetching employees from Firestore:', error);
+      throw new Error('Failed to fetch employees from Firestore');
     }
   }
 
@@ -144,123 +81,134 @@ export class EmployeeFirebaseService {
    */
   static async fetchEmployeeById(id: string): Promise<Employee | null> {
     try {
-      console.log(`🔥 Fetching employee ${id} from Firebase...`);
-      const dc = getDataConnectInstance();
-      const result = await getEmployeeById(dc, { id });
+      console.log(`🔥 Fetching employee ${id} from Firestore...`);
       
-      if (!result.data || !result.data.employee) {
+      const employeeRef = doc(db, EMPLOYEES_COLLECTION, id);
+      const docSnap = await getDoc(employeeRef);
+      
+      if (!docSnap.exists()) {
         console.log('⚠️ Employee not found');
         return null;
       }
 
-      const employee = transformEmployeeData(result.data.employee);
+      const employee = transformDocToEmployee(docSnap);
       console.log('✅ Employee fetched:', employee.name);
       return employee;
     } catch (error) {
-      console.error(`❌ Error fetching employee ${id}:`, error);
-      throw new Error('Failed to fetch employee from Firebase');
+      console.error(`❌ Error fetching employee ${id} from Firestore:`, error);
+      throw new Error('Failed to fetch employee from Firestore');
+    }
+  }
+
+  /**
+   * Fetch employees by status
+   */
+  static async fetchEmployeesByStatus(status: 'active' | 'inactive'): Promise<Employee[]> {
+    try {
+      console.log(`🔥 Fetching ${status} employees from Firestore...`);
+      
+      const employeesRef = collection(db, EMPLOYEES_COLLECTION);
+      const q = query(
+        employeesRef,
+        where('status', '==', status),
+        orderBy('name', 'asc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      const employees: Employee[] = [];
+      querySnapshot.forEach((doc) => {
+        employees.push(transformDocToEmployee(doc));
+      });
+
+      console.log(`✅ Fetched ${employees.length} ${status} employees`);
+      return employees;
+    } catch (error) {
+      console.error(`❌ Error fetching ${status} employees:`, error);
+      throw new Error(`Failed to fetch ${status} employees`);
     }
   }
 
   // ==================== WRITE OPERATIONS ====================
 
   /**
-   * Create a new employee in Firebase
+   * Create a new employee in Firestore
    */
   static async createEmployee(data: CreateEmployeeDTO): Promise<Employee> {
     try {
-      console.log('🔥 Creating employee in Firebase:', data.name);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Creating employee in Firestore:', data.name);
       
-      // Generate a unique ID
-      const id = `emp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const variables = transformCreateVariables(data, id);
-      const result = await createEmployee(dc, variables);
-      
-      if (!result.data || !result.data.employee_insert) {
-        throw new Error('Failed to create employee - no data returned');
-      }
+      const employeesRef = collection(db, EMPLOYEES_COLLECTION);
+      const docRef = await addDoc(employeesRef, {
+        ...data,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
 
-      // Return the created employee with the generated ID
       const createdEmployee: Employee = {
         ...data,
-        id: result.data.employee_insert.id,
+        id: docRef.id,
       };
       
       console.log('✅ Employee created with ID:', createdEmployee.id);
       return createdEmployee;
     } catch (error) {
-      console.error('❌ Error creating employee:', error);
-      throw new Error('Failed to create employee in Firebase');
+      console.error('❌ Error creating employee in Firestore:', error);
+      throw new Error('Failed to create employee in Firestore');
     }
   }
 
   /**
-   * Update an existing employee in Firebase
+   * Update an existing employee in Firestore
    */
   static async updateEmployee(data: UpdateEmployeeDTO): Promise<Employee> {
     try {
-      console.log('🔥 Updating employee in Firebase:', data.id);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Updating employee in Firestore:', data.id);
       
-      const variables = transformUpdateVariables(data);
-      const result = await updateEmployee(dc, variables);
-      
-      if (!result.data || !result.data.employee_update) {
-        throw new Error('Failed to update employee - no data returned');
-      }
-
-      // Return the updated employee
-      const updatedEmployee: Employee = {
+      const employeeRef = doc(db, EMPLOYEES_COLLECTION, data.id);
+      await updateDoc(employeeRef, {
         ...data,
-        id: result.data.employee_update.id,
-      };
-      
-      console.log('✅ Employee updated:', updatedEmployee.id);
-      return updatedEmployee;
+        updatedAt: new Date().toISOString(),
+      });
+
+      console.log('✅ Employee updated:', data.id);
+      return data as Employee;
     } catch (error) {
       console.error(`❌ Error updating employee ${data.id}:`, error);
-      throw new Error('Failed to update employee in Firebase');
+      throw new Error('Failed to update employee in Firestore');
     }
   }
 
   /**
-   * Delete an employee from Firebase
+   * Delete an employee from Firestore
    */
   static async deleteEmployee(id: string): Promise<void> {
     try {
-      console.log('🔥 Deleting employee from Firebase:', id);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Deleting employee from Firestore:', id);
       
-      const variables: DeleteEmployeeVariables = { id };
-      const result = await deleteEmployee(dc, variables);
-      
-      if (!result.data || !result.data.employee_delete) {
-        throw new Error('Failed to delete employee - no confirmation returned');
-      }
+      const employeeRef = doc(db, EMPLOYEES_COLLECTION, id);
+      await deleteDoc(employeeRef);
       
       console.log('✅ Employee deleted:', id);
     } catch (error) {
       console.error(`❌ Error deleting employee ${id}:`, error);
-      throw new Error('Failed to delete employee from Firebase');
+      throw new Error('Failed to delete employee from Firestore');
     }
   }
 
   // ==================== UTILITY METHODS ====================
 
   /**
-   * Check if Firebase is connected
+   * Check if Firestore is connected
    */
   static isConnected(): boolean {
-    return !!dataConnectInstance;
+    return !!db;
   }
 
   /**
-   * Reset the Data Connect instance (useful for testing)
+   * Reset the connection (useful for testing)
    */
   static resetConnection(): void {
-    dataConnectInstance = null;
+    // Firestore doesn't need reset as it's a singleton
   }
 }
-

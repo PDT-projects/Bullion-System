@@ -11,13 +11,17 @@ import { BankingDashboardView } from './BankingDashboardView';
 
 export const BankingDashboardWrapper: React.FC = () => {
   const navigate = useNavigate();
-  const { banks, transfers, cashTransactions } = useOutletContext<{
+  const { banks, transfers: outletTransfers, cashTransactions: outletCashTransactions } = useOutletContext<{
     banks: Bank[];
     transfers: BankTransfer[];
     cashTransactions: CashTransaction[];
   }>();
 
-  const viewModel = useBankingDashboardViewModel({ banks, transfers, cashTransactions });
+  const viewModel = useBankingDashboardViewModel({ 
+    banks, 
+    transfers: outletTransfers, 
+    cashTransactions: outletCashTransactions 
+  });
 
   return (
     <BankingDashboardView

@@ -1,11 +1,9 @@
 // Banking Module - Dashboard ViewModel
-// Manages state and logic for banking dashboard with Firebase integration
+// Manages state and logic for banking dashboard with Data Connect integration
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Bank, BankTransfer, CashTransaction, DashboardStats } from '../models/types';
 import { BankingService } from '../models/bankingService';
-import { CashFirebaseService, CashInHandRecord } from '../models/cashFirebaseService';
-import { BankFirebaseService } from '../models/bankFirebaseService';
 
 interface UseBankingDashboardViewModelProps {
   banks: Bank[];
@@ -18,7 +16,7 @@ interface UseBankingDashboardViewModelReturn {
   stats: DashboardStats;
   recentTransfers: BankTransfer[];
   recentCashTransactions: CashTransaction[];
-  cashRecords: CashInHandRecord[];
+  cashRecords: CashTransaction[];
   firebaseBanks: Bank[];
   
   // Loading State
@@ -49,31 +47,31 @@ export function useBankingDashboardViewModel({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Data from Firebase
-  const [cashRecords, setCashRecords] = useState<CashInHandRecord[]>([]);
-  const [firebaseBanks, setFirebaseBanks] = useState<Bank[]>([]);
+  // Data from Data Connect
+  const [cashRecords, setCashRecords] = useState<CashTransaction[]>([]);
+  const [dataConnectBanks, setDataConnectBanks] = useState<Bank[]>([]);
 
-  // Fetch all data from Firebase on mount
+  // Fetch all data from Data Connect on mount
   useEffect(() => {
     fetchAllData();
   }, []);
 
-  // Fetch all data from Firebase
+  // Fetch all data from Data Connect
   const fetchAllData = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // Fetch both cash records and banks from Firebase in parallel
-      const [cashRecordsData, banksData] = await Promise.all([
-        CashFirebaseService.fetchAllCashRecords(),
-        BankFirebaseService.fetchAllBanks()
+      // Fetch both cash transactions and banks from Data Connect in parallel
+      const [cashData, banksData] = await Promise.all([
+        BankingService.fetchCashTransactionsFromDataConnect(),
+        BankingService.fetchBanksFromDataConnect()
       ]);
       
-      setCashRecords(cashRecordsData);
-      setFirebaseBanks(banksData);
+      setCashRecords(cashData);
+      setDataConnectBanks(banksData);
       
-      console.log(`✅ Dashboard fetched ${cashRecordsData.length} cash records and ${banksData.length} banks`);
+      console.log(`✅ Dashboard fetched ${cashData.length} cash transactions and ${banksData.length} banks from Data Connect`);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load data from database');
@@ -87,25 +85,26 @@ export function useBankingDashboardViewModel({
     await fetchAllData();
   }, []);
 
-  // Calculate total cash balance from Firebase records
+  // Calculate total cash balance from cash transactions
   const totalCashBalance = useMemo(() => {
-    return cashRecords.reduce((sum, record) => sum + record.balance, 0);
+    const stats = BankingService.calculateCashStats(cashRecords, 0);
+    return stats.totalCashInHand;
   }, [cashRecords]);
 
-  // Calculate total bank balance from Firebase banks
+  // Calculate total bank balance from Data Connect banks
   const totalBankBalance = useMemo(() => {
-    return firebaseBanks.reduce((sum, bank) => sum + bank.balance, 0);
-  }, [firebaseBanks]);
+    return dataConnectBanks.reduce((sum, bank) => sum + bank.balance, 0);
+  }, [dataConnectBanks]);
 
-  // Calculate dashboard statistics using Firebase data
+  // Calculate dashboard statistics using Data Connect data
   const stats = useMemo(() => {
     return {
       totalBankBalance,
       totalCashInHand: totalCashBalance,
       totalLiquidity: totalBankBalance + totalCashBalance,
-      bankCount: firebaseBanks.length
+      bankCount: dataConnectBanks.length
     };
-  }, [totalBankBalance, totalCashBalance, firebaseBanks.length]);
+  }, [totalBankBalance, totalCashBalance, dataConnectBanks.length]);
 
   // Get recent transfers (last 5)
   const recentTransfers = useMemo(() => {
@@ -132,7 +131,7 @@ export function useBankingDashboardViewModel({
     recentTransfers,
     recentCashTransactions,
     cashRecords,
-    firebaseBanks,
+    firebaseBanks: dataConnectBanks,
     isLoading,
     error,
     showTransferModal,

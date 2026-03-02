@@ -16,11 +16,8 @@ export type {
   CashFilters
 } from './models/types';
 
-// Services
+// Services (Data Connect based)
 export { BankingService } from './models/bankingService';
-export { BankFirebaseService } from './models/bankFirebaseService';
-export { CashFirebaseService } from './models/cashFirebaseService';
-export type { CashInHandRecord } from './models/cashFirebaseService';
 
 
 // ViewModels

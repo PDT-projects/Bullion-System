@@ -1,12 +1,12 @@
 // Employee Module - ViewModel Layer
-// useEmployeeFormViewModel - Business logic for employee form (Create/Edit) with Firebase
+// useEmployeeFormViewModel - Business logic for employee form (Create/Edit) with Data Connect
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Employee, CreateEmployeeDTO, UpdateEmployeeDTO } from '../models/types';
 import { EmployeeService } from '../models/employeeService';
-import { EmployeeFirebaseService } from '../models/employeeFirebaseService';
+import { EmployeeDataConnectService } from '../../../api/dataconnect/employeeDataConnectService';
 
 /**
  * Props for useEmployeeFormViewModel
@@ -81,7 +81,7 @@ export function useEmployeeFormViewModel({
           setIsLoading(true);
           console.log(`🔄 Loading employee ${id} for editing...`);
           
-          const employee = await EmployeeFirebaseService.fetchEmployeeById(id);
+const employee = await EmployeeDataConnectService.fetchEmployeeById(id);
           
           if (employee) {
             setFormData(employee);
@@ -139,13 +139,13 @@ export function useEmployeeFormViewModel({
           ...(formData as CreateEmployeeDTO),
           id
         };
-        await EmployeeFirebaseService.updateEmployee(updateData);
+await EmployeeDataConnectService.updateEmployee(updateData);
         toast.success('Employee updated successfully');
       } else {
         // Create new employee
         console.log('➕ Creating new employee');
         const createData: CreateEmployeeDTO = formData as CreateEmployeeDTO;
-        await EmployeeFirebaseService.createEmployee(createData);
+await EmployeeDataConnectService.createEmployee(createData);
         toast.success('Employee added successfully');
       }
 

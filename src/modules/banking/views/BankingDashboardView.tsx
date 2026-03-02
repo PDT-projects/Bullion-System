@@ -1,6 +1,6 @@
 // Banking Module - Dashboard View
 // UI component for banking dashboard overview
-// Updated with Firebase integration for cash balance
+// Updated with Data Connect integration
 
 import React from 'react';
 import { 
@@ -16,7 +16,6 @@ import {
   MapPin
 } from 'lucide-react';
 import { Bank, BankTransfer, CashTransaction, DashboardStats } from '../models/types';
-import { CashInHandRecord } from '../models/cashFirebaseService';
 
 interface BankingDashboardViewProps {
   // Data
@@ -24,7 +23,7 @@ interface BankingDashboardViewProps {
   recentTransfers: BankTransfer[];
   recentCashTransactions: CashTransaction[];
   banks: Bank[];
-  cashRecords: CashInHandRecord[];
+  cashRecords: CashTransaction[];
   
   // Loading State
   isLoading: boolean;
@@ -125,7 +124,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
             <p className="text-3xl font-bold">{formatCurrency(stats.totalCashInHand)}</p>
             {isLoading && <Loader2 size={20} className="animate-spin" />}
           </div>
-          <p className="text-sm text-white/60 mt-1">From {cashRecords.length} location(s)</p>
+          <p className="text-sm text-white/60 mt-1">From {cashRecords.length} transaction(s)</p>
         </div>
 
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-lg text-white">
@@ -139,25 +138,6 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
           <p className="text-sm text-white/60 mt-1">Combined bank + cash</p>
         </div>
       </div>
-
-      {/* Cash Records by Location */}
-      {cashRecords.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <MapPin size={18} className="text-[#4f46e5]" />
-            Cash Balance by Location
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cashRecords.map((record) => (
-              <div key={record.id} className="p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">{record.location}</p>
-                <p className="text-lg font-bold text-green-600">{formatCurrency(record.balance)}</p>
-                <p className="text-xs text-gray-500">Updated: {formatDate(record.lastUpdated)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Quick Actions Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

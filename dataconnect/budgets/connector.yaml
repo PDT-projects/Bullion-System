@@ -1,0 +1,8 @@
+connectorId: budgets
+
+generate:
+  javascriptSdk:
+    - outputDir: ..\..\src\dataconnect-generated\budgets
+      package: "@erp-system/budgets"
+      packageJsonDir: ..\..
+      react: true

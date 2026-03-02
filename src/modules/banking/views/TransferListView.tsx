@@ -10,7 +10,9 @@ import {
   ArrowRightLeft,
   Calendar,
   Building2,
-  TrendingUp
+  TrendingUp,
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import { BankTransfer, TransferStats, TransferFilters } from '../models/types';
 
@@ -19,6 +21,10 @@ interface TransferListViewProps {
   transfers: BankTransfer[];
   filteredTransfers: BankTransfer[];
   stats: TransferStats;
+  
+  // Loading State
+  isLoading?: boolean;
+  error?: string | null;
   
   // Filters
   filters: TransferFilters;
@@ -29,6 +35,7 @@ interface TransferListViewProps {
   onAddTransfer: () => void;
   onDeleteTransfer: (id: string) => void;
   onBack: () => void;
+  refreshTransfers?: () => void;
   
   // Utils
   formatCurrency: (amount: number) => string;
@@ -36,14 +43,18 @@ interface TransferListViewProps {
 }
 
 export const TransferListView: React.FC<TransferListViewProps> = ({
+  transfers,
   filteredTransfers,
   stats,
+  isLoading,
+  error,
   filters,
   setSearchTerm,
   setDateRange,
   onAddTransfer,
   onDeleteTransfer,
   onBack,
+  refreshTransfers,
   formatCurrency,
   formatDate
 }) => {
@@ -63,14 +74,34 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
             <p className="text-gray-600">View and manage inter-bank transfers</p>
           </div>
         </div>
-        <button
-          onClick={onAddTransfer}
-          className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors"
-        >
-          <Plus size={18} />
-          New Transfer
-        </button>
+        <div className="flex items-center gap-2">
+          {refreshTransfers && (
+            <button
+              onClick={refreshTransfers}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              title="Refresh transfers"
+            >
+              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          )}
+          <button
+            onClick={onAddTransfer}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors disabled:opacity-50"
+          >
+            <Plus size={18} />
+            New Transfer
+          </button>
+        </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -140,60 +171,70 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
         </div>
       </div>
 
-      {/* Transfers Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">From Bank</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">To Bank</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredTransfers.map((transfer) => (
-                <tr key={transfer.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    {formatDate(transfer.date)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Building2 size={16} className="text-red-500" />
-                      <span className="text-sm text-gray-900">{transfer.fromBankName}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Building2 size={16} className="text-green-500" />
-                      <span className="text-sm text-gray-900">{transfer.toBankName}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-sm font-semibold text-[#4f46e5]">
-                      {formatCurrency(transfer.amount)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => onDeleteTransfer(transfer.id)}
-                      className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                      title="Delete transfer record"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="animate-spin text-[#4f46e5]" size={32} />
+          <span className="ml-2 text-gray-600">Loading transfers...</span>
         </div>
-      </div>
+      )}
+
+      {/* Transfers Table */}
+      {!isLoading && (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">From Bank</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">To Bank</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredTransfers.map((transfer) => (
+                  <tr key={transfer.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {formatDate(transfer.date)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Building2 size={16} className="text-red-500" />
+                        <span className="text-sm text-gray-900">{transfer.fromBankName}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Building2 size={16} className="text-green-500" />
+                        <span className="text-sm text-gray-900">{transfer.toBankName}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="text-sm font-semibold text-[#4f46e5]">
+                        {formatCurrency(transfer.amount)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => onDeleteTransfer(transfer.id)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                        title="Delete transfer record"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Empty State */}
-      {filteredTransfers.length === 0 && (
+      {!isLoading && filteredTransfers.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <ArrowRightLeft className="mx-auto mb-3 text-gray-300" size={48} />
           <p className="text-lg font-medium text-gray-900">No transfers found</p>

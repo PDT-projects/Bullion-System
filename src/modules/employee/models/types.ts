@@ -17,6 +17,8 @@ export interface Employee {
   accountNumber: string;
   bankName: string;
   accountTitle: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 

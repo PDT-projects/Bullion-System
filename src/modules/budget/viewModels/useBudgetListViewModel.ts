@@ -1,7 +1,7 @@
 // Budget Module - ViewModel Layer
-// List page logic and state management
+// List page logic and state management with Firebase Data Connect
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Budget, BudgetFilters } from '../models/types';
 import { BudgetService } from '../models/budgetService';
@@ -23,6 +23,8 @@ interface UseBudgetListViewModelReturn {
   
   // View State
   viewBudget: Budget | null;
+  isLoading: boolean;
+  error: string | null;
   
   // Stats
   stats: {
@@ -44,6 +46,7 @@ interface UseBudgetListViewModelReturn {
   handleEdit: (id: string) => void;
   handleDelete: (id: string) => void;
   handleAdd: () => void;
+  refreshBudgets: () => Promise<void>;
   getBudgetStatus: (budget: Budget) => {
     status: 'On Track' | 'Close to Limit' | 'Over Budget';
     color: string;
@@ -66,6 +69,33 @@ export function useBudgetListViewModel(): UseBudgetListViewModelReturn {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [viewBudget, setViewBudget] = useState<Budget | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch budgets from Data Connect on mount
+  useEffect(() => {
+    const fetchBudgets = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        console.log('📡 Fetching budgets from Data Connect...');
+        const fetchedBudgets = await BudgetService.fetchBudgetsFromDataConnect();
+        setBudgets(fetchedBudgets);
+        console.log(`✅ Loaded ${fetchedBudgets.length} budgets from Data Connect`);
+      } catch (err) {
+        console.error('Error fetching budgets:', err);
+        setError('Failed to load budgets from database');
+        // Fall back to local data if Data Connect fails
+        if (allBudgets.length === 0) {
+          console.log('Using local data as fallback');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBudgets();
+  }, []);
 
   // Computed
   const budgets = useMemo(() => {
@@ -79,6 +109,23 @@ export function useBudgetListViewModel(): UseBudgetListViewModelReturn {
   const activeFilterCount = useMemo(() => {
     return BudgetService.countActiveFilters(filters);
   }, [filters]);
+
+  // Refresh budgets from Data Connect
+  const refreshBudgets = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      console.log('📡 Refreshing budgets from Data Connect...');
+      const fetchedBudgets = await BudgetService.fetchBudgetsFromDataConnect();
+      setBudgets(fetchedBudgets);
+      console.log(`✅ Refreshed ${fetchedBudgets.length} budgets from Data Connect`);
+    } catch (err) {
+      console.error('Error refreshing budgets:', err);
+      setError('Failed to refresh budgets from database');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setBudgets]);
 
   // Actions
   const setFilter = useCallback((key: keyof BudgetFilters, value: any) => {
@@ -122,6 +169,8 @@ export function useBudgetListViewModel(): UseBudgetListViewModelReturn {
     showFilters,
     activeFilterCount,
     viewBudget,
+    isLoading,
+    error,
     stats: {
       totalCount: stats.totalCount,
       totalBudget: stats.totalBudget,
@@ -139,6 +188,7 @@ export function useBudgetListViewModel(): UseBudgetListViewModelReturn {
     handleEdit,
     handleDelete,
     handleAdd,
+    refreshBudgets,
     getBudgetStatus
   };
 }

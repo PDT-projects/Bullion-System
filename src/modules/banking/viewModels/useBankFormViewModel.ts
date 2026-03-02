@@ -1,11 +1,10 @@
 // Banking Module - Bank Form ViewModel
-// Manages state and logic for create/edit bank form with Firebase integration
+// Manages state and logic for create/edit bank form with Data Connect integration
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Bank, BankFormData } from '../models/types';
 import { BankingService } from '../models/bankingService';
-import { BankFirebaseService } from '../models/bankFirebaseService';
 
 interface UseBankFormViewModelProps {
   banks: Bank[];
@@ -106,7 +105,7 @@ export function useBankFormViewModel({
     return formData.name.trim() !== '' && formData.accountNumber.trim() !== '';
   }, [formData]);
 
-  // Handle form submission with Firebase
+  // Handle form submission with Data Connect
   const handleSubmit = useCallback(async (): Promise<boolean> => {
     if (!validateForm()) {
       return false;
@@ -116,7 +115,7 @@ export function useBankFormViewModel({
       setIsSaving(true);
 
       if (isEditMode && bank) {
-        // Update existing bank in Firebase
+        // Update existing bank in Data Connect
         const updatedBank = await BankingService.updateBankInFirebase(bank, formData);
         
         // Update local state
@@ -124,7 +123,7 @@ export function useBankFormViewModel({
         
         console.log('✅ Bank updated successfully:', updatedBank.id);
       } else {
-        // Create new bank in Firebase
+        // Create new bank in Data Connect
         const newBank = await BankingService.createBankInFirebase(formData);
         
         // Update local state

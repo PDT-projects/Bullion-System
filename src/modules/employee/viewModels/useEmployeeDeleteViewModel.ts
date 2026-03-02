@@ -1,5 +1,5 @@
 // Employee Module - ViewModel Layer
-// useEmployeeDeleteViewModel - Business logic for employee delete confirmation with Firebase
+// useEmployeeDeleteViewModel - Business logic for employee delete confirmation with Data Connect
 
 import { useEffect, useCallback, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -46,7 +46,7 @@ export function useEmployeeDeleteViewModel(): UseEmployeeDeleteViewModelReturn {
           setIsLoading(true);
           console.log(`🔄 Loading employee ${id} for deletion...`);
           
-          const emp = await EmployeeFirebaseService.fetchEmployeeById(id);
+const emp = await EmployeeFirebaseService.fetchEmployeeById(id);
           
           if (emp) {
             setEmployee(emp);
@@ -86,7 +86,7 @@ export function useEmployeeDeleteViewModel(): UseEmployeeDeleteViewModelReturn {
 
     try {
       console.log('🗑️ Deleting employee:', id);
-      await EmployeeFirebaseService.deleteEmployee(id);
+await EmployeeFirebaseService.deleteEmployee(id);
       
       toast.success('Employee deleted successfully');
       console.log('✅ Employee deleted, navigating to /employees');

@@ -1,6 +1,6 @@
 // Banking Module - Cash List View
 // UI component for displaying cash transactions
-// Updated with loading states and empty states for Firebase integration
+// Updated with Data Connect integration
 
 import React, { useState } from 'react';
 import { 
@@ -16,8 +16,7 @@ import {
   Save,
   Loader2,
   Database,
-  RefreshCw,
-  MapPin
+  RefreshCw
 } from 'lucide-react';
 import { CashTransaction, CashStats, CashFilters } from '../models/types';
 
@@ -25,7 +24,7 @@ interface CashListViewProps {
   // Data
   filteredTransactions: CashTransaction[];
   stats: CashStats;
-  cashRecords: { id: string; location: string; balance: number; lastUpdated: string }[];
+  cashRecords: CashTransaction[];
   
   // Loading State
   isLoading: boolean;
@@ -168,7 +167,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
           </button>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Cash in Hand</h2>
-            <p className="text-gray-600">Manage cash transactions and balances by location</p>
+            <p className="text-gray-600">Manage cash transactions from database</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -189,26 +188,16 @@ export const CashListView: React.FC<CashListViewProps> = ({
             <Wallet size={18} />
             Set Opening Balance
           </button>
+          <button
+            onClick={onAddTransaction}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            <Plus size={18} />
+            Add Cash
+          </button>
         </div>
       </div>
-
-      {/* Cash Records by Location */}
-      {cashRecords.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {cashRecords.map((record) => (
-            <div key={record.id} className="bg-white p-4 rounded-lg border border-gray-200">
-              <div className="flex items-center gap-2 mb-2">
-                <MapPin size={18} className="text-[#4f46e5]" />
-                <p className="text-sm text-gray-600">{record.location}</p>
-              </div>
-              <p className="text-2xl font-bold text-[#4f46e5]">{formatCurrency(record.balance)}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                Last updated: {formatDate(record.lastUpdated)}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -285,6 +274,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Category</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Company</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mode</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
                 </tr>
@@ -311,6 +301,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900">{txn.subCategory}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{txn.company}</td>
+                    <td className="px-4 py-3 text-sm text-gray-500">{txn.mode}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`font-semibold ${
                         txn.mainCategory === 'Cash Inflow' ? 'text-green-600' : 'text-red-600'
@@ -341,15 +332,15 @@ export const CashListView: React.FC<CashListViewProps> = ({
           </div>
           <p className="text-xl font-semibold text-gray-900 mb-2">No cash transactions yet</p>
           <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
-            Get started by setting an opening balance. All cash data will be securely stored in the database.
+            Get started by adding a cash transaction. All cash data will be securely stored in the database.
           </p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => setShowOpeningBalanceDialog(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca]"
+              onClick={onAddTransaction}
+              className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
-              <Wallet size={20} />
-              Set Opening Balance
+              <Plus size={20} />
+              Add Cash Transaction
             </button>
           </div>
         </div>

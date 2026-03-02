@@ -1106,9 +1106,18 @@ export const router = createBrowserRouter([
         path: "create-receivable",
         element: <LoanCreateReceivableRoute />,
       },
+      { path: "create", element: <LoanEditRoute /> },
       {
         path: ":id/edit",
         element: <LoanEditRoute />,
+      },
+      {
+        path: "create",
+        element: <LoanEditRoute />, 
+      },
+      {
+        path: "payable",
+        element: <LoanPayableListRoute />,
       },
       {
         path: ":id/payment",

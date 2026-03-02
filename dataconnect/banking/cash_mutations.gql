@@ -1,0 +1,30 @@
+# Cash In Hand Mutations - Write operations for Cash In Hand
+
+mutation cashInHandInsert(
+  $id: String! = "cash001"
+  $date: String! = "2024-01-01"
+  $company: String! = "ABC Corp"
+  $mainCategory: String! = "Cash Inflow"
+  $subCategory: String! = "Sales"
+  $amount: Float! = 5000.0
+  $mode: String! = "Cash"
+  $note: String = "Test transaction"
+) @auth(level: PUBLIC) {
+  cashInHand_insert(
+    data: {
+      id: $id
+      date: $date
+      company: $company
+      mainCategory: $mainCategory
+      subCategory: $subCategory
+      amount: $amount
+      mode: $mode
+      note: $note
+      createdAt: "now()"
+    }
+  )
+}
+
+mutation cashInHandDelete($id: String! = "cash001") @auth(level: PUBLIC) {
+  cashInHand_delete(id: $id)
+}

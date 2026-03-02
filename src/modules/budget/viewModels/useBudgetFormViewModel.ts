@@ -1,7 +1,7 @@
 // Budget Module - ViewModel Layer
-// Create/Edit form logic and state management
+// Create/Edit form logic and state management with Firebase Data Connect
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Budget, CreateBudgetDTO, UpdateBudgetDTO } from '../models/types';
@@ -24,7 +24,7 @@ interface UseBudgetFormViewModelReturn {
   
   // Actions
   setFormField: (field: keyof Budget, value: any) => void;
-  handleSubmit: () => void;
+  handleSubmit: () => Promise<void>;
   handleCancel: () => void;
 }
 
@@ -43,7 +43,7 @@ export function useBudgetFormViewModel(): UseBudgetFormViewModelReturn {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   // Get unique sub-categories for dropdown
-  const subCategories = useCallback(() => {
+  const subCategories = useMemo(() => {
     const existing = BudgetService.getUniqueSubCategories(budgets);
     const defaults = [
       'Salaries',
@@ -56,7 +56,7 @@ export function useBudgetFormViewModel(): UseBudgetFormViewModelReturn {
       'Miscellaneous'
     ];
     return Array.from(new Set([...defaults, ...existing])).sort();
-  }, [budgets])();
+  }, [budgets]);
 
   // Load existing budget data if editing
   useEffect(() => {
@@ -83,21 +83,20 @@ export function useBudgetFormViewModel(): UseBudgetFormViewModelReturn {
     }
   }, [errors]);
 
-  const handleSubmit = useCallback(() => {
-    setIsSubmitting(true);
-    
+  const handleSubmit = useCallback(async () => {
     // Validate
     const validation = BudgetService.validateBudget(formData);
     if (!validation.isValid) {
       setErrors(validation.fieldErrors || {});
-      setIsSubmitting(false);
       toast.error(validation.error || 'Please fix the errors');
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
       if (isEditing && id) {
-        // Update existing budget
+        // Update existing budget in Data Connect
         const updateData: UpdateBudgetDTO = {
           id,
           category: 'Expenses',
@@ -105,19 +104,34 @@ export function useBudgetFormViewModel(): UseBudgetFormViewModelReturn {
           period: formData.period!,
           budgetLimit: formData.budgetLimit!
         };
-        const updatedBudgets = BudgetService.updateBudget(budgets, id, updateData);
-        setBudgets(updatedBudgets);
-        toast.success('Budget updated successfully!');
+        
+        const existingBudget = BudgetService.findById(budgets, id);
+        if (existingBudget) {
+          const updatedBudget = await BudgetService.updateBudgetInDataConnect(existingBudget, updateData);
+          
+          // Update local state
+          const updatedBudgets = BudgetService.updateBudget(budgets, id, updateData);
+          setBudgets(updatedBudgets);
+          
+          console.log('✅ Budget updated in Data Connect:', updatedBudget.id);
+          toast.success('Budget updated successfully!');
+        }
       } else {
-        // Create new budget
+        // Create new budget in Data Connect
         const createData: CreateBudgetDTO = {
           category: 'Expenses',
           subCategory: formData.subCategory!,
           period: formData.period!,
           budgetLimit: formData.budgetLimit!
         };
+        
+        const createdBudget = await BudgetService.createBudgetInDataConnect(createData);
+        
+        // Update local state
         const updatedBudgets = BudgetService.createBudget(budgets, createData);
         setBudgets(updatedBudgets);
+        
+        console.log('✅ Budget created in Data Connect:', createdBudget.id);
         toast.success('Budget created successfully!');
       }
       

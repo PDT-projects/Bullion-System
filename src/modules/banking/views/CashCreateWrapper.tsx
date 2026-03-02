@@ -16,18 +16,23 @@ export const CashCreateWrapper: React.FC = () => {
 
   const viewModel = useCashFormViewModel({ cashTransactions, setCashTransactions });
 
+  // Cast handleSubmit to match expected type
+  const handleSubmit = async () => {
+    await viewModel.handleSubmit();
+  };
+
   return (
     <CashFormView
       formData={viewModel.formData}
-      errors={viewModel.errors}
+      errors={viewModel.errors as Record<string, string>}
       isLoading={viewModel.isLoading}
       isSaving={viewModel.isSaving}
       pageTitle={viewModel.pageTitle}
       submitButtonText={viewModel.submitButtonText}
       availableLocations={viewModel.availableLocations}
       setFormField={viewModel.setFormField}
-      clearFieldError={viewModel.clearFieldError}
-      handleSubmit={viewModel.handleSubmit}
+      clearFieldError={viewModel.clearFieldError as (field: string) => void}
+      handleSubmit={handleSubmit}
       handleCancel={viewModel.handleCancel}
       formatCurrency={viewModel.formatCurrency}
       isValid={viewModel.isValid}

@@ -1,12 +1,12 @@
 // Employee Module - ViewModel Layer
-// useEmployeeListViewModel - Business logic for employee list page with Firebase
+// useEmployeeListViewModel - Business logic for employee list page with Data Connect
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Employee, EmployeeFilters } from '../models/types';
 import { EmployeeService } from '../models/employeeService';
-import { EmployeeFirebaseService } from '../models/employeeFirebaseService';
+import { EmployeeDataConnectService } from '../../../api/dataconnect/employeeDataConnectService';
 
 /**
  * Return type for useEmployeeListViewModel
@@ -85,7 +85,7 @@ export function useEmployeeListViewModel(): UseEmployeeListViewModelReturn {
       setError(null);
       console.log('🔄 Fetching employees from Firebase...');
       
-      const employees = await EmployeeFirebaseService.fetchAllEmployees();
+const employees = await EmployeeDataConnectService.fetchAllEmployees();
       setAllEmployees(employees);
       
       console.log(`✅ Loaded ${employees.length} employees`);

@@ -1,0 +1,524 @@
+extend type Query {
+  """
+  ✨ Look up a single `Bank` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  bank(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Bank_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Bank_FirstRow
+  ): Bank @fdc_generated(from: "Bank", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `BankTransfer` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  bankTransfer(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: BankTransfer_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: BankTransfer_FirstRow
+  ): BankTransfer @fdc_generated(from: "BankTransfer", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `Budget` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  budget(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Budget_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Budget_FirstRow
+  ): Budget @fdc_generated(from: "Budget", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `CashInHand` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  cashInHand(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: CashInHand_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: CashInHand_FirstRow
+  ): CashInHand @fdc_generated(from: "CashInHand", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `Employee` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  employee(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Employee_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Employee_FirstRow
+  ): Employee @fdc_generated(from: "Employee", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `Loan` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  loan(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Loan_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Loan_FirstRow
+  ): Loan @fdc_generated(from: "Loan", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `LoanPayment` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  loanPayment(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: LoanPayment_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: LoanPayment_FirstRow
+  ): LoanPayment @fdc_generated(from: "LoanPayment", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `Product` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  product(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Product_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Product_FirstRow
+  ): Product @fdc_generated(from: "Product", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `ProductTransfer` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  productTransfer(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: ProductTransfer_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: ProductTransfer_FirstRow
+  ): ProductTransfer @fdc_generated(from: "ProductTransfer", purpose: QUERY_SINGLE)
+  """
+  ✨ List `Bank` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  banks(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Bank_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Bank_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Bank_Having
+  ): [Bank!]! @fdc_generated(from: "Bank", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `BankTransfer` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  bankTransfers(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: BankTransfer_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [BankTransfer_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: BankTransfer_Having
+  ): [BankTransfer!]! @fdc_generated(from: "BankTransfer", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Budget` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  budgets(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Budget_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Budget_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Budget_Having
+  ): [Budget!]! @fdc_generated(from: "Budget", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `CashInHand` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  cashInHands(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: CashInHand_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [CashInHand_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: CashInHand_Having
+  ): [CashInHand!]! @fdc_generated(from: "CashInHand", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Employee` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  employees(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Employee_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Employee_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Employee_Having
+  ): [Employee!]! @fdc_generated(from: "Employee", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Loan` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  loans(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Loan_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Loan_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Loan_Having
+  ): [Loan!]! @fdc_generated(from: "Loan", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `LoanPayment` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  loanPayments(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: LoanPayment_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [LoanPayment_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: LoanPayment_Having
+  ): [LoanPayment!]! @fdc_generated(from: "LoanPayment", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Product` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  products(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Product_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Product_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Product_Having
+  ): [Product!]! @fdc_generated(from: "Product", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `ProductTransfer` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  productTransfers(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: ProductTransfer_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [ProductTransfer_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: ProductTransfer_Having
+  ): [ProductTransfer!]! @fdc_generated(from: "ProductTransfer", purpose: QUERY_MULTIPLE)
+}

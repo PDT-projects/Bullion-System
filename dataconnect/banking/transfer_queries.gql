@@ -1,0 +1,32 @@
+# Bank Transfer Queries - Read operations for Bank Transfers
+
+query listTransfers(
+  $limit: Int = 100
+  $offset: Int = 0
+) @auth(level: PUBLIC) {
+  bankTransfers(limit: $limit, offset: $offset, orderBy: { date: DESC }) {
+    id
+    date
+    fromBankId
+    fromBankName
+    toBankId
+    toBankName
+    amount
+    note
+    createdAt
+  }
+}
+
+query getTransferById($id: String!) @auth(level: PUBLIC) {
+  bankTransfer(id: $id) {
+    id
+    date
+    fromBankId
+    fromBankName
+    toBankId
+    toBankName
+    amount
+    note
+    createdAt
+  }
+}

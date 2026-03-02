@@ -21,12 +21,15 @@ export const TransferListWrapper: React.FC = () => {
       transfers={viewModel.transfers}
       filteredTransfers={viewModel.filteredTransfers}
       stats={viewModel.stats}
+      isLoading={viewModel.isLoading}
+      error={viewModel.error}
       filters={viewModel.filters}
       setSearchTerm={viewModel.setSearchTerm}
       setDateRange={viewModel.setDateRange}
       onAddTransfer={() => navigate('/banking/transfers/new')}
       onDeleteTransfer={viewModel.handleDeleteTransfer}
       onBack={() => navigate('/banking')}
+      refreshTransfers={viewModel.refreshTransfers}
       formatCurrency={viewModel.formatCurrency}
       formatDate={viewModel.formatDate}
     />

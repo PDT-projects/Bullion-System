@@ -1,0 +1,26 @@
+# Bank Queries - Read operations for Bank accounts
+
+query listBanks(
+  $limit: Int = 100
+  $offset: Int = 0
+) @auth(level: PUBLIC) {
+  banks(limit: $limit, offset: $offset) {
+    id
+    name
+    accountNumber
+    balance
+    createdAt
+    updatedAt
+  }
+}
+
+query getBankById($id: String!) @auth(level: PUBLIC) {
+  bank(id: $id) {
+    id
+    name
+    accountNumber
+    balance
+    createdAt
+    updatedAt
+  }
+}

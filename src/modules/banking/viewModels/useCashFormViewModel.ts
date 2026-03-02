@@ -1,11 +1,10 @@
 // Banking Module - Cash Form ViewModel
-// Manages state and logic for cash transaction form with Firebase integration
+// Manages state and logic for cash transaction form with Data Connect integration
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CashTransaction } from '../models/types';
 import { BankingService } from '../models/bankingService';
-import { CashFirebaseService } from '../models/cashFirebaseService';
 
 interface UseCashFormViewModelProps {
   cashTransactions: CashTransaction[];
@@ -149,7 +148,7 @@ export function useCashFormViewModel({
            !!formData.location;
   }, [formData]);
 
-  // Handle form submission
+  // Handle form submission with Data Connect
   const handleSubmit = useCallback(async () => {
     if (!validateForm()) {
       return;
@@ -158,9 +157,8 @@ export function useCashFormViewModel({
     try {
       setIsSaving(true);
       
-      // Create transaction object
-      const newTransaction: CashTransaction = {
-        id: Date.now().toString(),
+      // Create transaction object for Data Connect
+      const newTransaction: Omit<CashTransaction, 'id'> = {
         date: formData.date,
         company: formData.company,
         mainCategory: formData.mainCategory,
@@ -170,20 +168,13 @@ export function useCashFormViewModel({
         note: formData.note
       };
 
-      // Update cash balance in Firebase
-      const cashRecord = await CashFirebaseService.getOrCreateCashForLocation(formData.location);
-      const balanceChange = formData.mainCategory === 'Cash Inflow' ? formData.amount : -formData.amount;
-      
-      await CashFirebaseService.adjustCashBalance(
-        cashRecord.id,
-        balanceChange,
-        'System'
-      );
+      // Create transaction in Data Connect
+      const createdTransaction = await BankingService.createCashTransactionInDataConnect(newTransaction);
 
       // Add transaction to local state
-      setCashTransactions([newTransaction, ...cashTransactions]);
+      setCashTransactions([createdTransaction, ...cashTransactions]);
       
-      console.log('✅ Cash transaction created and balance updated');
+      console.log('✅ Cash transaction created in Data Connect');
       navigate('/banking/cash');
     } catch (error) {
       console.error('Error creating cash transaction:', error);

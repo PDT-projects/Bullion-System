@@ -1,10 +1,9 @@
 // Banking Module - Bank List ViewModel
-// Manages state and logic for bank list page with Firebase integration
+// Manages state and logic for bank list page with Firebase Data Connect integration
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Bank, BankStats, BankFilters } from '../models/types';
 import { BankingService } from '../models/bankingService';
-import { BankFirebaseService } from '../models/bankFirebaseService';
 
 interface UseBankListViewModelProps {
   banks: Bank[];
@@ -58,12 +57,12 @@ export function useBankListViewModel({
   const [viewingBank, setViewingBank] = useState<Bank | null>(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
-  // Fetch banks from Firebase on mount
+  // Fetch banks from Data Connect on mount
   useEffect(() => {
     fetchBanks();
   }, []);
 
-  // Fetch banks from Firebase
+  // Fetch banks from Data Connect
   const fetchBanks = async () => {
     try {
       setIsLoading(true);
@@ -107,7 +106,7 @@ export function useBankListViewModel({
     setIsTransferModalOpen(false);
   }, []);
 
-  // Delete bank with Firebase
+  // Delete bank with Data Connect
   const handleDeleteBank = useCallback(async (id: string) => {
     const bankToDelete = banks.find(b => b.id === id);
     if (!bankToDelete) return;
@@ -120,7 +119,7 @@ export function useBankListViewModel({
       setIsLoading(true);
       setError(null);
       
-      // Delete from Firebase
+      // Delete from Data Connect
       await BankingService.deleteBankFromFirebase(id);
       
       // Update local state
@@ -136,7 +135,7 @@ export function useBankListViewModel({
     }
   }, [banks, setBanks]);
 
-  // Handle transfer between banks with Firebase
+  // Handle transfer between banks with Data Connect
   const handleTransfer = useCallback(async (fromBankId: string, toBankId: string, amount: number) => {
     if (!fromBankId || !toBankId || amount <= 0) return;
     if (fromBankId === toBankId) return;
@@ -163,8 +162,8 @@ export function useBankListViewModel({
       const updatedFromBank = updatedBanks.find(b => b.id === fromBankId)!;
       const updatedToBank = updatedBanks.find(b => b.id === toBankId)!;
 
-      // Update both banks in Firebase
-      await BankFirebaseService.updateMultipleBanks([updatedFromBank, updatedToBank]);
+      // Update both banks in Data Connect
+      await BankingService.updateMultipleBanks([updatedFromBank, updatedToBank]);
 
       // Update local state
       setBanks(updatedBanks);

@@ -13,8 +13,9 @@ import {
   BankFormData,
   TransferFormData
 } from './types';
-import { BankFirebaseService } from './bankFirebaseService';
-import { CashFirebaseService, CashInHandRecord } from './cashFirebaseService';
+import { BankDataConnectService } from '../../../api/dataconnect/bankDataConnectService';
+import { CashDataConnectService } from '../../../api/dataconnect/cashDataConnectService';
+import { TransferDataConnectService } from '../../../api/dataconnect/transferDataConnectService';
 
 export class BankingService {
   // Format currency for display
@@ -40,73 +41,143 @@ export class BankingService {
     return Date.now().toString();
   }
 
-  // ==================== FIREBASE INTEGRATION METHODS ====================
+  // ==================== DATA CONNECT METHODS ====================
 
   /**
-   * Fetch all banks from Firebase
+   * Fetch all banks from Data Connect
    */
-  static async fetchBanksFromFirebase(): Promise<Bank[]> {
-    return await BankFirebaseService.fetchAllBanks();
+  static async fetchBanksFromDataConnect(): Promise<Bank[]> {
+    return await BankDataConnectService.fetchAllBanks();
   }
 
   /**
-   * Create a new bank in Firebase
+   * Create a new bank in Data Connect
    */
-  static async createBankInFirebase(formData: BankFormData): Promise<Bank> {
+  static async createBankInDataConnect(formData: BankFormData): Promise<Bank> {
     const bankData: Omit<Bank, 'id'> = {
       name: formData.name.trim(),
       accountNumber: formData.accountNumber.trim(),
       balance: formData.balance
     };
-    return await BankFirebaseService.createBank(bankData);
+    return await BankDataConnectService.createBank(bankData);
   }
 
   /**
-   * Update a bank in Firebase
+   * Update a bank in Data Connect
    */
-  static async updateBankInFirebase(bank: Bank, formData: BankFormData): Promise<Bank> {
+  static async updateBankInDataConnect(bank: Bank, formData: BankFormData): Promise<Bank> {
     const updatedBank: Bank = {
       ...bank,
       name: formData.name.trim(),
       accountNumber: formData.accountNumber.trim(),
       balance: formData.balance
     };
-    return await BankFirebaseService.updateBank(updatedBank);
+    return await BankDataConnectService.updateBank(updatedBank);
   }
 
   /**
-   * Delete a bank from Firebase
+   * Delete a bank from Data Connect
    */
+  static async deleteBankFromDataConnect(id: string): Promise<void> {
+    return await BankDataConnectService.deleteBank(id);
+  }
+
+  /**
+   * Update multiple banks in Data Connect
+   */
+  static async updateMultipleBanksInDataConnect(banks: Bank[]): Promise<Bank[]> {
+    const updatedBanks: Bank[] = [];
+    for (const bank of banks) {
+      const updated = await BankDataConnectService.updateBank(bank);
+      updatedBanks.push(updated);
+    }
+    return updatedBanks;
+  }
+
+  /**
+   * Fetch all cash transactions from Data Connect
+   */
+  static async fetchCashTransactionsFromDataConnect(): Promise<CashTransaction[]> {
+    return await CashDataConnectService.fetchAllCashTransactions();
+  }
+
+  /**
+   * Create a cash transaction in Data Connect
+   */
+  static async createCashTransactionInDataConnect(transaction: Omit<CashTransaction, 'id' | 'createdAt'>): Promise<CashTransaction> {
+    return await CashDataConnectService.createCashTransaction(transaction);
+  }
+
+  /**
+   * Delete a cash transaction from Data Connect
+   */
+  static async deleteCashTransactionFromDataConnect(id: string): Promise<void> {
+    return await CashDataConnectService.deleteCashTransaction(id);
+  }
+
+  /**
+   * Fetch all transfers from Data Connect
+   */
+  static async fetchTransfersFromDataConnect(): Promise<BankTransfer[]> {
+    return await TransferDataConnectService.fetchAllTransfers();
+  }
+
+  /**
+   * Create a transfer in Data Connect
+   */
+  static async createTransferInDataConnect(transfer: Omit<BankTransfer, 'id' | 'createdAt'>): Promise<BankTransfer> {
+    return await TransferDataConnectService.createTransfer(transfer);
+  }
+
+  /**
+   * Delete a transfer from Data Connect
+   */
+  static async deleteTransferFromDataConnect(id: string): Promise<void> {
+    return await TransferDataConnectService.deleteTransfer(id);
+  }
+
+  // Alias methods for backward compatibility
+  static async fetchBanksFromFirebase(): Promise<Bank[]> {
+    return await this.fetchBanksFromDataConnect();
+  }
+
+  static async createBankInFirebase(formData: BankFormData): Promise<Bank> {
+    return await this.createBankInDataConnect(formData);
+  }
+
+  static async updateBankInFirebase(bank: Bank, formData: BankFormData): Promise<Bank> {
+    return await this.updateBankInDataConnect(bank, formData);
+  }
+
   static async deleteBankFromFirebase(id: string): Promise<void> {
-    return await BankFirebaseService.deleteBank(id);
+    return await this.deleteBankFromDataConnect(id);
   }
 
-  /**
-   * Fetch all cash records from Firebase
-   */
-  static async fetchCashRecordsFromFirebase(): Promise<CashInHandRecord[]> {
-    return await CashFirebaseService.fetchAllCashRecords();
+  static async updateMultipleBanks(banks: Bank[]): Promise<Bank[]> {
+    return await this.updateMultipleBanksInDataConnect(banks);
   }
 
-  /**
-   * Get or create cash record for a location
-   */
-  static async getOrCreateCashForLocation(location: string): Promise<CashInHandRecord> {
-    return await CashFirebaseService.getOrCreateCashForLocation(location);
+  static async fetchCashRecordsFromFirebase(): Promise<CashTransaction[]> {
+    return await this.fetchCashTransactionsFromDataConnect();
   }
 
-  /**
-   * Update cash balance in Firebase
-   */
-  static async updateCashBalance(id: string, newBalance: number, updatedBy?: string): Promise<CashInHandRecord> {
-    return await CashFirebaseService.updateCashBalance(id, newBalance, updatedBy);
+  static async getOrCreateCashForLocation(_location: string): Promise<CashTransaction | null> {
+    const transactions = await this.fetchCashTransactionsFromDataConnect();
+    return transactions[0] || null;
   }
 
-  /**
-   * Adjust cash balance (add/subtract) in Firebase
-   */
-  static async adjustCashBalance(id: string, amount: number, updatedBy?: string): Promise<CashInHandRecord> {
-    return await CashFirebaseService.adjustCashBalance(id, amount, updatedBy);
+  static async updateCashBalance(id: string, newBalance: number, _updatedBy?: string): Promise<CashTransaction> {
+    const transactions = await this.fetchCashTransactionsFromDataConnect();
+    const transaction = transactions.find(t => t.id === id);
+    if (!transaction) throw new Error('Transaction not found');
+    return { ...transaction, amount: newBalance };
+  }
+
+  static async adjustCashBalance(id: string, amount: number, _updatedBy?: string): Promise<CashTransaction> {
+    const transactions = await this.fetchCashTransactionsFromDataConnect();
+    const transaction = transactions.find(t => t.id === id);
+    if (!transaction) throw new Error('Transaction not found');
+    return { ...transaction, amount: transaction.amount + amount };
   }
 
   // ==================== CALCULATION METHODS ====================

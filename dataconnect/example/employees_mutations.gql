@@ -1,0 +1,71 @@
+# Employee Mutations - Using auto-generated operation names from Firebase Data Connect
+# Note: insert/update/delete return only the Key (ID), not the full object
+# Added @auth directive to make operations accessible
+
+mutation employeeInsert(
+  $id: String! = "emp001"
+  $name: String! = "John Doe"
+  $position: String! = "Manager"
+  $salary: Float! = 50000.0
+  $phone: String! = "+1234567890"
+  $email: String! = "john@example.com"
+  $joinDate: String! = "2024-01-01"
+  $status: String! = "active"
+  $location: String! = "Office"
+  $accountNumber: String = "1234567890"
+  $bankName: String = "Test Bank"
+  $accountTitle: String = "John Doe"
+) @auth(level: PUBLIC) {
+  employee_insert(
+    data: {
+      id: $id
+      name: $name
+      position: $position
+      salary: $salary
+      phone: $phone
+      email: $email
+      joinDate: $joinDate
+      status: $status
+      location: $location
+      accountNumber: $accountNumber
+      bankName: $bankName
+      accountTitle: $accountTitle
+    }
+  )
+}
+
+mutation employeeUpdate(
+  $id: String! = "emp001"
+  $name: String! = "John Doe"
+  $position: String! = "Manager"
+  $salary: Float! = 50000.0
+  $phone: String! = "+1234567890"
+  $email: String! = "john@example.com"
+  $joinDate: String! = "2024-01-01"
+  $status: String! = "active"
+  $location: String! = "Office"
+  $accountNumber: String = "1234567890"
+  $bankName: String = "Test Bank"
+  $accountTitle: String = "John Doe"
+) @auth(level: PUBLIC) {
+  employee_update(
+    id: $id,
+    data: {
+      name: $name
+      position: $position
+      salary: $salary
+      phone: $phone
+      email: $email
+      joinDate: $joinDate
+      status: $status
+      location: $location
+      accountNumber: $accountNumber
+      bankName: $bankName
+      accountTitle: $accountTitle
+    }
+  )
+}
+
+mutation employeeDelete($id: String! = "emp001") @auth(level: PUBLIC) {
+  employee_delete(id: $id)
+}

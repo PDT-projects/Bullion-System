@@ -1,11 +1,10 @@
 // Banking Module - Bank Delete ViewModel
-// Manages state and logic for delete bank confirmation with Firebase integration
+// Manages state and logic for delete bank confirmation with Data Connect integration
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Bank } from '../models/types';
 import { BankingService } from '../models/bankingService';
-import { BankFirebaseService } from '../models/bankFirebaseService';
 
 interface UseBankDeleteViewModelProps {
   banks: Bank[];
@@ -63,8 +62,8 @@ export function useBankDeleteViewModel({
     }
     
     try {
-      // Delete from Firebase
-      await BankFirebaseService.deleteBank(bank.id);
+      // Delete from Data Connect
+      await BankingService.deleteBankFromFirebase(bank.id);
       
       // Update local state
       setBanks(banks.filter(b => b.id !== bank.id));

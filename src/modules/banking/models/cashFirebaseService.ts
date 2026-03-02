@@ -1,54 +1,26 @@
-// Banking Module - Firebase Data Connect Service Layer
-// Handles all Firebase Data Connect operations for Cash In Hand
+// Banking Module - Firebase Firestore Service Layer
+// Handles all Firebase Firestore operations for Cash In Hand
 
-import { getDataConnect, DataConnect } from 'firebase/data-connect';
-import { initializeApp } from 'firebase/app';
-import {
-  connectorConfig,
-  getCashInHandRecords,
-  getCashInHandById,
-  getCashInHandByLocation,
-  createCashInHand,
-  updateCashInHand,
-  deleteCashInHand,
-  CreateCashInHandVariables,
-  UpdateCashInHandVariables,
-  DeleteCashInHandVariables,
-  GetCashInHandRecordsData,
-  GetCashInHandByIdData,
-  GetCashInHandByLocationData,
-  CreateCashInHandData,
-  UpdateCashInHandData,
-  DeleteCashInHandData,
-} from '../../../dataconnect-generated';
-
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAcTOJImNIZ1luoGVIbRmTMfRjKyHc3o-Y",
-  authDomain: "erp-system-baacb.firebaseapp.com",
-  projectId: "erp-system-baacb",
-  storageBucket: "erp-system-baacb.firebasestorage.app",
-  messagingSenderId: "637818110198",
-  appId: "1:637818110198:web:623aa945d32788b20fecd7"
-};
-
-// Initialize Firebase app for Data Connect
-const firebaseApp = initializeApp(firebaseConfig);
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where,
+  orderBy,
+  QueryConstraint,
+  serverTimestamp
+} from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
 
 /**
- * Firebase Data Connect instance for cash operations
+ * Firebase Firestore instance for cash operations
  */
-let dataConnectInstance: DataConnect | null = null;
-
-/**
- * Get or initialize the Data Connect instance
- */
-function getDataConnectInstance(): DataConnect {
-  if (!dataConnectInstance) {
-    dataConnectInstance = getDataConnect(firebaseApp, connectorConfig);
-  }
-  return dataConnectInstance;
-}
+const CASH_COLLECTION = 'cashInHand';
 
 /**
  * Cash In Hand record interface
@@ -62,11 +34,12 @@ export interface CashInHandRecord {
 }
 
 /**
- * Transform Firebase cash data to our CashInHandRecord type
+ * Transform Firestore document to CashInHandRecord type
  */
-function transformCashData(data: any): CashInHandRecord {
+function transformDocToCashInHand(docSnap: any): CashInHandRecord {
+  const data = docSnap.data();
   return {
-    id: data.id,
+    id: docSnap.id,
     location: data.location || 'Head Office',
     balance: data.balance || 0,
     lastUpdated: data.lastUpdated || new Date().toISOString(),
@@ -75,55 +48,37 @@ function transformCashData(data: any): CashInHandRecord {
 }
 
 /**
- * CashFirebaseService - Firebase Data Connect operations for Cash In Hand
+ * CashFirebaseService - Firebase Firestore operations for Cash In Hand
  */
 export class CashFirebaseService {
 
   // ==================== READ OPERATIONS ====================
 
   /**
-   * Fetch all cash in hand records from Firebase
+   * Fetch all cash in hand records from Firestore
    */
   static async fetchAllCashRecords(): Promise<CashInHandRecord[]> {
     try {
-      console.log('🔥 Fetching all cash in hand records from Firebase...');
-      const dc = getDataConnectInstance();
-      const result = await getCashInHandRecords(dc);
+      console.log('🔥 Fetching all cash in hand records from Firestore...');
       
-      if (!result.data || !result.data.cashInHands) {
-        console.log('⚠️ No cash records found');
-        return [];
-      }
+      const cashRef = collection(db, CASH_COLLECTION);
+      const queryConstraints: QueryConstraint[] = [
+        orderBy('location', 'asc')
+      ];
+      
+      const q = query(cashRef, ...queryConstraints);
+      const querySnapshot = await getDocs(q);
+      
+      const records: CashInHandRecord[] = [];
+      querySnapshot.forEach((doc) => {
+        records.push(transformDocToCashInHand(doc));
+      });
 
-      const records = result.data.cashInHands.map(transformCashData);
-      console.log(`✅ Fetched ${records.length} cash records`);
+      console.log(`✅ Fetched ${records.length} cash records from Firestore`);
       return records;
     } catch (error) {
-      console.error('❌ Error fetching cash records:', error);
-      throw new Error('Failed to fetch cash records from Firebase');
-    }
-  }
-
-  /**
-   * Fetch cash in hand by location
-   */
-  static async fetchCashByLocation(location: string): Promise<CashInHandRecord | null> {
-    try {
-      console.log(`🔥 Fetching cash in hand for location: ${location}...`);
-      const dc = getDataConnectInstance();
-      const result = await getCashInHandByLocation(dc, { location });
-      
-      if (!result.data || !result.data.cashInHands || result.data.cashInHands.length === 0) {
-        console.log('⚠️ No cash record found for location:', location);
-        return null;
-      }
-
-      const record = transformCashData(result.data.cashInHands[0]);
-      console.log('✅ Cash record fetched:', record.location, 'Balance:', record.balance);
-      return record;
-    } catch (error) {
-      console.error(`❌ Error fetching cash for location ${location}:`, error);
-      throw new Error('Failed to fetch cash record from Firebase');
+      console.error('❌ Error fetching cash records from Firestore:', error);
+      throw new Error('Failed to fetch cash records from Firestore');
     }
   }
 
@@ -132,74 +87,89 @@ export class CashFirebaseService {
    */
   static async fetchCashById(id: string): Promise<CashInHandRecord | null> {
     try {
-      console.log(`🔥 Fetching cash record ${id} from Firebase...`);
-      const dc = getDataConnectInstance();
-      const result = await getCashInHandById(dc, { id });
+      console.log(`🔥 Fetching cash record ${id} from Firestore...`);
       
-      if (!result.data || !result.data.cashInHand) {
+      const cashRef = doc(db, CASH_COLLECTION, id);
+      const docSnap = await getDoc(cashRef);
+      
+      if (!docSnap.exists()) {
         console.log('⚠️ Cash record not found');
         return null;
       }
 
-      const record = transformCashData(result.data.cashInHand);
+      const record = transformDocToCashInHand(docSnap);
       console.log('✅ Cash record fetched:', record.location);
       return record;
     } catch (error) {
-      console.error(`❌ Error fetching cash record ${id}:`, error);
-      throw new Error('Failed to fetch cash record from Firebase');
+      console.error(`❌ Error fetching cash record ${id} from Firestore:`, error);
+      throw new Error('Failed to fetch cash record from Firestore');
+    }
+  }
+
+  /**
+   * Fetch cash record by location
+   */
+  static async fetchCashByLocation(location: string): Promise<CashInHandRecord | null> {
+    try {
+      console.log(`🔥 Fetching cash record for location: ${location}...`);
+      
+      const cashRef = collection(db, CASH_COLLECTION);
+      const q = query(cashRef, where('location', '==', location));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.log('⚠️ No cash record found for location');
+        return null;
+      }
+
+      const doc = querySnapshot.docs[0];
+      return transformDocToCashInHand(doc);
+    } catch (error) {
+      console.error(`❌ Error fetching cash for location ${location}:`, error);
+      throw new Error('Failed to fetch cash record by location');
     }
   }
 
   // ==================== WRITE OPERATIONS ====================
 
   /**
-   * Create a new cash in hand record in Firebase
+   * Create a new cash record in Firestore
    */
   static async createCashRecord(
     location: string, 
-    balance: number = 0, 
-    updatedBy: string = 'System'
+    balance: number, 
+    updatedBy: string
   ): Promise<CashInHandRecord> {
     try {
-      console.log('🔥 Creating cash in hand record in Firebase:', location);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Creating cash record in Firestore:', location);
       
-      // Generate a unique ID
-      const id = `cash_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const now = new Date().toISOString();
-      
-      const variables: CreateCashInHandVariables = {
-        id,
+      const cashRef = collection(db, CASH_COLLECTION);
+      const docRef = await addDoc(cashRef, {
         location,
         balance,
-        lastUpdated: now,
         updatedBy,
-      };
-      
-      const result = await createCashInHand(dc, variables);
-      
-      if (!result.data || !result.data.cashInHand_insert) {
-        throw new Error('Failed to create cash record - no data returned');
-      }
+        lastUpdated: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
 
       const createdRecord: CashInHandRecord = {
-        id: result.data.cashInHand_insert.id,
+        id: docRef.id,
         location,
         balance,
-        lastUpdated: now,
+        lastUpdated: new Date().toISOString(),
         updatedBy,
       };
       
       console.log('✅ Cash record created with ID:', createdRecord.id);
       return createdRecord;
     } catch (error) {
-      console.error('❌ Error creating cash record:', error);
-      throw new Error('Failed to create cash record in Firebase');
+      console.error('❌ Error creating cash record in Firestore:', error);
+      throw new Error('Failed to create cash record in Firestore');
     }
   }
 
   /**
-   * Update cash in hand balance
+   * Update cash balance in Firestore
    */
   static async updateCashBalance(
     id: string, 
@@ -207,38 +177,31 @@ export class CashFirebaseService {
     updatedBy: string = 'System'
   ): Promise<CashInHandRecord> {
     try {
-      console.log('🔥 Updating cash balance in Firebase:', id, 'New balance:', newBalance);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Updating cash balance in Firestore:', id, 'New balance:', newBalance);
       
-      const variables: UpdateCashInHandVariables = {
+      const cashRef = doc(db, CASH_COLLECTION, id);
+      await updateDoc(cashRef, {
+        balance: newBalance,
+        updatedBy,
+        lastUpdated: new Date().toISOString(),
+      });
+
+      console.log('✅ Cash balance updated:', id);
+      return {
         id,
         balance: newBalance,
-        lastUpdated: new Date().toISOString(),
         updatedBy,
+        lastUpdated: new Date().toISOString(),
+        location: '' // Will be filled by caller
       };
-      
-      const result = await updateCashInHand(dc, variables);
-      
-      if (!result.data || !result.data.cashInHand_update) {
-        throw new Error('Failed to update cash balance - no data returned');
-      }
-
-      // Fetch the updated record
-      const updatedRecord = await this.fetchCashById(id);
-      if (!updatedRecord) {
-        throw new Error('Failed to fetch updated cash record');
-      }
-      
-      console.log('✅ Cash balance updated:', updatedRecord.balance);
-      return updatedRecord;
     } catch (error) {
       console.error(`❌ Error updating cash balance ${id}:`, error);
-      throw new Error('Failed to update cash balance in Firebase');
+      throw new Error('Failed to update cash balance in Firestore');
     }
   }
 
   /**
-   * Add/subtract from cash balance (for transactions)
+   * Adjust cash balance by amount (for deposits/withdrawals)
    */
   static async adjustCashBalance(
     id: string, 
@@ -270,24 +233,19 @@ export class CashFirebaseService {
   }
 
   /**
-   * Delete a cash in hand record from Firebase
+   * Delete a cash record from Firestore
    */
   static async deleteCashRecord(id: string): Promise<void> {
     try {
-      console.log('🔥 Deleting cash record from Firebase:', id);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Deleting cash record from Firestore:', id);
       
-      const variables: DeleteCashInHandVariables = { id };
-      const result = await deleteCashInHand(dc, variables);
-      
-      if (!result.data || !result.data.cashInHand_delete) {
-        throw new Error('Failed to delete cash record - no confirmation returned');
-      }
+      const cashRef = doc(db, CASH_COLLECTION, id);
+      await deleteDoc(cashRef);
       
       console.log('✅ Cash record deleted:', id);
     } catch (error) {
       console.error(`❌ Error deleting cash record ${id}:`, error);
-      throw new Error('Failed to delete cash record from Firebase');
+      throw new Error('Failed to delete cash record from Firestore');
     }
   }
 
@@ -318,16 +276,16 @@ export class CashFirebaseService {
   }
 
   /**
-   * Check if Firebase is connected
+   * Check if Firestore is connected
    */
   static isConnected(): boolean {
-    return !!dataConnectInstance;
+    return !!db;
   }
 
   /**
-   * Reset the Data Connect instance (useful for testing)
+   * Reset the connection (useful for testing)
    */
   static resetConnection(): void {
-    dataConnectInstance = null;
+    // Firestore doesn't need reset as it's a singleton
   }
 }

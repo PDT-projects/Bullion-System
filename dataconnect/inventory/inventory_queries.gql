@@ -1,0 +1,119 @@
+# Inventory Queries - Read operations for Products and Product Transfers
+
+query listProducts @auth(level: PUBLIC) {
+  products(orderBy: { createdAt: DESC }) {
+    id
+    brandName
+    modelName
+    category
+    costPrice
+    sellPrice
+    buyType
+    warrantyYears
+    stock
+    description
+    status
+    isDamaged
+    serialNumbers
+    serialCities
+    serialStatus
+    costingOption
+    costingUnits
+    costingUnitCostUSD
+    costingTotalCostUSD
+    costingPercentage
+    costingCustomPerModel
+    costingCustomPerUnit
+    costingFreightPerModel
+    costingFreightPerUnit
+    costingUnitCostPKR
+    costingTotalUnitCost
+    costingTotalShipmentValuePKR
+    createdAt
+    updatedAt
+  }
+}
+
+query getProductById($id: String!) @auth(level: PUBLIC) {
+  product(id: $id) {
+    id
+    brandName
+    modelName
+    category
+    costPrice
+    sellPrice
+    buyType
+    warrantyYears
+    stock
+    description
+    status
+    isDamaged
+    serialNumbers
+    serialCities
+    serialStatus
+    costingOption
+    costingUnits
+    costingUnitCostUSD
+    costingTotalCostUSD
+    costingPercentage
+    costingCustomPerModel
+    costingCustomPerUnit
+    costingFreightPerModel
+    costingFreightPerUnit
+    costingUnitCostPKR
+    costingTotalUnitCost
+    costingTotalShipmentValuePKR
+    createdAt
+    updatedAt
+  }
+}
+
+query listProductTransfers @auth(level: PUBLIC) {
+  productTransfers(orderBy: { date: DESC }) {
+    id
+    productId
+    productName
+    brandName
+    modelName
+    fromLocation
+    toLocation
+    quantity
+    serialNumbers
+    date
+    transferDate
+    status
+    transferredBy
+    note
+    notes
+    receiptName
+    receiptType
+    receiptDataUrl
+    createdAt
+    receivedAt
+  }
+}
+
+query getProductTransferById($id: String!) @auth(level: PUBLIC) {
+  productTransfer(id: $id) {
+    id
+    productId
+    productName
+    brandName
+    modelName
+    fromLocation
+    toLocation
+    quantity
+    serialNumbers
+    date
+    transferDate
+    status
+    transferredBy
+    note
+    notes
+    receiptName
+    receiptType
+    receiptDataUrl
+    createdAt
+    receivedAt
+  }
+}

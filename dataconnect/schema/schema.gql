@@ -1,59 +1,169 @@
-# Employee Model for ERP System
-# Corresponds to src/modules/employee/models/types.ts
+# Firebase Data Connect Schema for ERP System
 
+# ==================== Employee Module ====================
 type Employee @table {
-  id: String! @col(name: "id")
-
-  name: String @col(name: "name")
-  position: String @col(name: "position")
-  salary: Float @col(name: "salary")
-  phone: String @col(name: "phone")
-  email: String @col(name: "email")
-  joinDate: String @col(name: "join_date")
-  status: String @col(name: "status")
-  location: String @col(name: "location")
-  accountNumber: String @col(name: "account_number")
-  bankName: String @col(name: "bank_name")
-  accountTitle: String @col(name: "account_title")
+  id: String!
+  name: String!
+  position: String!
+  salary: Float!
+  phone: String!
+  email: String!
+  joinDate: String!
+  status: String!
+  location: String!
+  accountNumber: String
+  bankName: String
+  accountTitle: String
+  createdAt: String
+  updatedAt: String
 }
 
-# Bank Model for ERP System
-# Corresponds to src/modules/banking/models/types.ts
-
+# ==================== Banking Module ====================
 type Bank @table {
-  id: String! @col(name: "id")
-  
-  name: String @col(name: "name")
-  accountNumber: String @col(name: "account_number")
-  balance: Float @col(name: "balance")
-  createdAt: String @col(name: "created_at")
-  updatedAt: String @col(name: "updated_at")
+  id: String!
+  name: String!
+  accountNumber: String!
+  balance: Float!
+  createdAt: String
+  updatedAt: String
 }
-
-# Cash In Hand Model for ERP System
-# Tracks cash balance for each location
-
-type CashInHand @table {
-  id: String! @col(name: "id")
-  
-  location: String @col(name: "location")
-  balance: Float @col(name: "balance")
-  lastUpdated: String @col(name: "last_updated")
-  updatedBy: String @col(name: "updated_by")
-}
-
-# Bank Transfer Model for ERP System
-# Tracks transfers between banks
 
 type BankTransfer @table {
-  id: String! @col(name: "id")
+  id: String!
+  date: String!
+  fromBankId: String!
+  fromBankName: String!
+  toBankId: String!
+  toBankName: String!
+  amount: Float!
+  note: String
+  createdAt: String
+}
+
+type CashInHand @table {
+  id: String!
+  date: String!
+  company: String!
+  mainCategory: String!
+  subCategory: String!
+  amount: Float!
+  mode: String!
+  note: String
+  createdAt: String
+}
+
+# ==================== Loans Module ====================
+
+type Loan @table {
+  id: String!
   
-  date: String @col(name: "date")
-  fromBankId: String @col(name: "from_bank_id")
-  fromBankName: String @col(name: "from_bank_name")
-  toBankId: String @col(name: "to_bank_id")
-  toBankName: String @col(name: "to_bank_name")
-  amount: Float @col(name: "amount")
-  note: String @col(name: "note")
-  createdAt: String @col(name: "created_at")
+  # Requirement: Payable (lender_name) & Receivable (borrower_name)
+  # We use generic names here or specific ones; lender/borrower logic 
+  # is determined by the 'type' field.
+  lenderName: String      # Required for Payable
+  borrowerName: String    # Required for Receivable
+  
+  # Core Fields
+  loanDate: String!
+  dueDate: String         # due_date for Payable / expected_return_date for Receivable
+  totalAmount: Float!
+  paid: Float!            # Current total paid/returned
+  remaining: Float!       # totalAmount - paid
+  
+  # Metadata & Status
+  type: String!           # "Payable" | "Receivable"
+  category: String!       # "Official" | "Personal" | "Other"
+  status: String!         # "Full" | "Partial" | "Pending"
+  notes: String
+  
+  # References for "All Loans" view
+  bankId: String          # Link to Bank table if disbursed via bank
+  bankName: String
+  employeeId: String      # Link to Employee if the loan is internal
+  employeeName: String
+  
+  createdAt: String
+  updatedAt: String
+}
+
+type LoanPayment @table {
+  id: String!
+  loanId: String!         # Foreign key to main Loan table
+  amount: Float!
+  mode: String!           # "Cash" | "Bank Transfer"
+  date: String!
+  bankId: String          # If mode is Bank
+  bankName: String
+  notes: String
+  createdAt: String
+}
+
+# ==================== Budget Module ====================
+
+type Budget @table {
+  id: String!
+  category: String!       # "Expenses"
+  subCategory: String!
+  period: String!        # "Monthly" | "Quarterly" | "Yearly"
+  budgetLimit: Float!
+  spent: Float!
+  createdAt: String
+  updatedAt: String
+}
+
+# ==================== Inventory Module ====================
+
+type Product @table {
+  id: String!
+  brandName: String!
+  modelName: String!
+  category: String!
+  costPrice: Float!
+  sellPrice: Float!
+  buyType: String!
+  warrantyYears: Int!
+  stock: Int!
+  description: String
+  status: String!
+  isDamaged: Boolean
+  serialNumbers: String
+  serialCities: String
+  serialStatus: String
+  costingOption: String
+  costingUnits: Float
+  costingUnitCostUSD: Float
+  costingTotalCostUSD: Float
+  costingPercentage: Float
+  costingCustomPerModel: Float
+  costingCustomPerUnit: Float
+  costingFreightPerModel: Float
+  costingFreightPerUnit: Float
+  costingUnitCostPKR: Float
+  costingTotalUnitCost: Float
+  costingTotalShipmentValuePKR: Float
+  createdAt: String
+  updatedAt: String
+}
+
+type ProductTransfer @table {
+  id: String!
+  productId: String!
+  productName: String!
+  brandName: String
+  modelName: String
+  fromLocation: String!
+  toLocation: String!
+  quantity: Int!
+  serialNumbers: String
+  date: String!
+  transferDate: String
+  status: String!
+  transferredBy: String
+  note: String
+  notes: String
+  receiptName: String
+  receiptType: String
+  receiptDataUrl: String
+  createdAt: String
+  receivedAt: String
 }

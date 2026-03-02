@@ -140,6 +140,16 @@ export class EmployeeService {
       }
     }
 
+    // Location validation
+    if (!data.location) {
+      return { isValid: false, error: 'Location is required' };
+    }
+
+    const validLocations = ['Karachi', 'Islamabad', 'Lahore'];
+    if (!validLocations.includes(data.location)) {
+      return { isValid: false, error: 'Please select a valid location' };
+    }
+
     return { isValid: true, error: null };
   }
 
@@ -200,7 +210,11 @@ export class EmployeeService {
       phone: '',
       email: '',
       joinDate: new Date().toISOString().split('T')[0],
-      status: 'active'
+      status: 'active',
+      location: 'Karachi',
+      accountNumber: '',
+      bankName: '',
+      accountTitle: ''
     };
   }
 

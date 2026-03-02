@@ -1,11 +1,10 @@
 // Banking Module - Transfer Form ViewModel
-// Manages state and logic for create transfer form with Firebase integration
+// Manages state and logic for create transfer form with Data Connect integration
 
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bank, BankTransfer, TransferFormData } from '../models/types';
 import { BankingService } from '../models/bankingService';
-import { BankFirebaseService } from '../models/bankFirebaseService';
 
 interface UseTransferFormViewModelProps {
   banks: Bank[];
@@ -92,7 +91,7 @@ export function useTransferFormViewModel({
     );
   }, [formData]);
 
-  // Handle form submission
+  // Handle form submission with Data Connect
   const handleSubmit = useCallback(async (): Promise<boolean> => {
     if (!validateForm()) {
       return false;
@@ -109,16 +108,28 @@ export function useTransferFormViewModel({
     try {
       setIsSaving(true);
 
-      // Update bank balances in Firebase
+      // Calculate new balances
       const fromBankNewBalance = fromBank.balance - formData.amount;
       const toBankNewBalance = toBank.balance + formData.amount;
       
-      await BankFirebaseService.updateBankBalance(formData.fromBankId, fromBankNewBalance);
-      await BankFirebaseService.updateBankBalance(formData.toBankId, toBankNewBalance);
+      // Update banks in Data Connect
+      const updatedFromBank = { ...fromBank, balance: fromBankNewBalance };
+      const updatedToBank = { ...toBank, balance: toBankNewBalance };
+      
+      await BankingService.updateBankInDataConnect(updatedFromBank, {
+        name: fromBank.name,
+        accountNumber: fromBank.accountNumber,
+        balance: fromBankNewBalance
+      });
+      
+      await BankingService.updateBankInDataConnect(updatedToBank, {
+        name: toBank.name,
+        accountNumber: toBank.accountNumber,
+        balance: toBankNewBalance
+      });
 
-      // Create transfer record
-      const newTransfer: BankTransfer = {
-        id: BankingService.generateId(),
+      // Create transfer record in Data Connect
+      const newTransfer: Omit<BankTransfer, 'id'> = {
         date: formData.date,
         fromBankId: formData.fromBankId,
         fromBankName: fromBank.name,
@@ -127,6 +138,8 @@ export function useTransferFormViewModel({
         amount: formData.amount,
         note: formData.note
       };
+
+      const createdTransfer = await BankingService.createTransferInDataConnect(newTransfer);
 
       // Update local state
       const updatedBanks = banks.map(bank => {
@@ -139,10 +152,10 @@ export function useTransferFormViewModel({
         return bank;
       });
 
-      setTransfers([newTransfer, ...transfers]);
+      setTransfers([createdTransfer, ...transfers]);
       setBanks(updatedBanks);
 
-      console.log('✅ Transfer completed successfully');
+      console.log('✅ Transfer completed successfully in Data Connect');
       navigate('/banking/transfers');
       return true;
     } catch (error) {

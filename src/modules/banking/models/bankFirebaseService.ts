@@ -1,60 +1,32 @@
-// Banking Module - Firebase Data Connect Service Layer
-// Handles all Firebase Data Connect operations for banks
+// Banking Module - Firebase Firestore Service Layer
+// Handles all Firebase Firestore operations for banks
 
-import { getDataConnect, DataConnect } from 'firebase/data-connect';
-import { initializeApp } from 'firebase/app';
-import {
-  connectorConfig,
-  getBanks,
-  getBankById,
-  createBank,
-  updateBank,
-  deleteBank,
-  CreateBankVariables,
-  UpdateBankVariables,
-  DeleteBankVariables,
-  GetBanksData,
-  GetBankByIdData,
-  CreateBankData,
-  UpdateBankData,
-  DeleteBankData,
-} from '../../../dataconnect-generated';
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where,
+  orderBy,
+  QueryConstraint
+} from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
 import { Bank } from './types';
 
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAcTOJImNIZ1luoGVIbRmTMfRjKyHc3o-Y",
-  authDomain: "erp-system-baacb.firebaseapp.com",
-  projectId: "erp-system-baacb",
-  storageBucket: "erp-system-baacb.firebasestorage.app",
-  messagingSenderId: "637818110198",
-  appId: "1:637818110198:web:623aa945d32788b20fecd7"
-};
-
-// Initialize Firebase app for Data Connect
-const firebaseApp = initializeApp(firebaseConfig);
+// Collection name for banks
+const BANKS_COLLECTION = 'banks';
 
 /**
- * Firebase Data Connect instance for banking operations
+ * Transform Firestore document to Bank type
  */
-let dataConnectInstance: DataConnect | null = null;
-
-/**
- * Get or initialize the Data Connect instance
- */
-function getDataConnectInstance(): DataConnect {
-  if (!dataConnectInstance) {
-    dataConnectInstance = getDataConnect(firebaseApp, connectorConfig);
-  }
-  return dataConnectInstance;
-}
-
-/**
- * Transform Firebase bank data to our Bank type
- */
-function transformBankData(data: any): Bank {
+function transformDocToBank(docSnap: any): Bank {
+  const data = docSnap.data();
   return {
-    id: data.id,
+    id: docSnap.id,
     name: data.name || '',
     accountNumber: data.accountNumber || '',
     balance: data.balance || 0,
@@ -62,60 +34,37 @@ function transformBankData(data: any): Bank {
 }
 
 /**
- * Transform Bank to Firebase create variables
- */
-function transformCreateVariables(bank: Omit<Bank, 'id'>, id: string): CreateBankVariables {
-  const now = new Date().toISOString();
-  return {
-    id,
-    name: bank.name,
-    accountNumber: bank.accountNumber,
-    balance: bank.balance,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-/**
- * Transform Bank to Firebase update variables
- */
-function transformUpdateVariables(bank: Bank): UpdateBankVariables {
-  return {
-    id: bank.id,
-    name: bank.name,
-    accountNumber: bank.accountNumber,
-    balance: bank.balance,
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-/**
- * BankFirebaseService - Firebase Data Connect operations for banks
+ * BankFirebaseService - Firebase Firestore operations for banks
  */
 export class BankFirebaseService {
 
   // ==================== READ OPERATIONS ====================
 
   /**
-   * Fetch all banks from Firebase
+   * Fetch all banks from Firestore
    */
   static async fetchAllBanks(): Promise<Bank[]> {
     try {
-      console.log('🔥 Fetching all banks from Firebase...');
-      const dc = getDataConnectInstance();
-      const result = await getBanks(dc);
+      console.log('🔥 Fetching all banks from Firestore...');
       
-      if (!result.data || !result.data.banks) {
-        console.log('⚠️ No banks found');
-        return [];
-      }
+      const banksRef = collection(db, BANKS_COLLECTION);
+      const queryConstraints: QueryConstraint[] = [
+        orderBy('name', 'asc')
+      ];
+      
+      const q = query(banksRef, ...queryConstraints);
+      const querySnapshot = await getDocs(q);
+      
+      const banks: Bank[] = [];
+      querySnapshot.forEach((doc) => {
+        banks.push(transformDocToBank(doc));
+      });
 
-      const banks = result.data.banks.map(transformBankData);
-      console.log(`✅ Fetched ${banks.length} banks`);
+      console.log(`✅ Fetched ${banks.length} banks from Firestore`);
       return banks;
     } catch (error) {
-      console.error('❌ Error fetching banks:', error);
-      throw new Error('Failed to fetch banks from Firebase');
+      console.error('❌ Error fetching banks from Firestore:', error);
+      throw new Error('Failed to fetch banks from Firestore');
     }
   }
 
@@ -124,87 +73,83 @@ export class BankFirebaseService {
    */
   static async fetchBankById(id: string): Promise<Bank | null> {
     try {
-      console.log(`🔥 Fetching bank ${id} from Firebase...`);
-      const dc = getDataConnectInstance();
-      const result = await getBankById(dc, { id });
+      console.log(`🔥 Fetching bank ${id} from Firestore...`);
       
-      if (!result.data || !result.data.bank) {
+      const bankRef = doc(db, BANKS_COLLECTION, id);
+      const docSnap = await getDoc(bankRef);
+      
+      if (!docSnap.exists()) {
         console.log('⚠️ Bank not found');
         return null;
       }
 
-      const bank = transformBankData(result.data.bank);
+      const bank = transformDocToBank(docSnap);
       console.log('✅ Bank fetched:', bank.name);
       return bank;
     } catch (error) {
-      console.error(`❌ Error fetching bank ${id}:`, error);
-      throw new Error('Failed to fetch bank from Firebase');
+      console.error(`❌ Error fetching bank ${id} from Firestore:`, error);
+      throw new Error('Failed to fetch bank from Firestore');
     }
   }
 
   // ==================== WRITE OPERATIONS ====================
 
   /**
-   * Create a new bank in Firebase
+   * Create a new bank in Firestore
    */
-  static async createBank(bankData: Omit<Bank, 'id'>): Promise<Bank> {
+  static async createBank(bank: Omit<Bank, 'id'>): Promise<Bank> {
     try {
-      console.log('🔥 Creating bank in Firebase:', bankData.name);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Creating bank in Firestore:', bank.name);
       
-      // Generate a unique ID
-      const id = `bank_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const variables = transformCreateVariables(bankData, id);
-      const result = await createBank(dc, variables);
-      
-      if (!result.data || !result.data.bank_insert) {
-        throw new Error('Failed to create bank - no data returned');
-      }
+      const banksRef = collection(db, BANKS_COLLECTION);
+      const docRef = await addDoc(banksRef, {
+        ...bank,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
 
-      // Return the created bank with the generated ID
       const createdBank: Bank = {
-        ...bankData,
-        id: result.data.bank_insert.id,
+        ...bank,
+        id: docRef.id,
       };
       
       console.log('✅ Bank created with ID:', createdBank.id);
       return createdBank;
     } catch (error) {
-      console.error('❌ Error creating bank:', error);
-      throw new Error('Failed to create bank in Firebase');
+      console.error('❌ Error creating bank in Firestore:', error);
+      throw new Error('Failed to create bank in Firestore');
     }
   }
 
   /**
-   * Update an existing bank in Firebase
+   * Update an existing bank in Firestore
    */
   static async updateBank(bank: Bank): Promise<Bank> {
     try {
-      console.log('🔥 Updating bank in Firebase:', bank.id);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Updating bank in Firestore:', bank.id);
       
-      const variables = transformUpdateVariables(bank);
-      const result = await updateBank(dc, variables);
-      
-      if (!result.data || !result.data.bank_update) {
-        throw new Error('Failed to update bank - no data returned');
-      }
+      const bankRef = doc(db, BANKS_COLLECTION, bank.id);
+      await updateDoc(bankRef, {
+        name: bank.name,
+        accountNumber: bank.accountNumber,
+        balance: bank.balance,
+        updatedAt: new Date().toISOString(),
+      });
 
       console.log('✅ Bank updated:', bank.id);
       return bank;
     } catch (error) {
       console.error(`❌ Error updating bank ${bank.id}:`, error);
-      throw new Error('Failed to update bank in Firebase');
+      throw new Error('Failed to update bank in Firestore');
     }
   }
 
   /**
-   * Update only the balance of a bank (for transfers)
+   * Update bank balance in Firestore
    */
   static async updateBankBalance(id: string, newBalance: number): Promise<Bank> {
     try {
-      console.log('🔥 Updating bank balance in Firebase:', id, 'New balance:', newBalance);
+      console.log('🔥 Updating bank balance in Firestore:', id, 'New balance:', newBalance);
       
       // Fetch the current bank
       const bank = await this.fetchBankById(id);
@@ -221,29 +166,24 @@ export class BankFirebaseService {
       return await this.updateBank(updatedBank);
     } catch (error) {
       console.error(`❌ Error updating bank balance ${id}:`, error);
-      throw new Error('Failed to update bank balance in Firebase');
+      throw new Error('Failed to update bank balance in Firestore');
     }
   }
 
   /**
-   * Delete a bank from Firebase
+   * Delete a bank from Firestore
    */
   static async deleteBank(id: string): Promise<void> {
     try {
-      console.log('🔥 Deleting bank from Firebase:', id);
-      const dc = getDataConnectInstance();
+      console.log('🔥 Deleting bank from Firestore:', id);
       
-      const variables: DeleteBankVariables = { id };
-      const result = await deleteBank(dc, variables);
-      
-      if (!result.data || !result.data.bank_delete) {
-        throw new Error('Failed to delete bank - no confirmation returned');
-      }
+      const bankRef = doc(db, BANKS_COLLECTION, id);
+      await deleteDoc(bankRef);
       
       console.log('✅ Bank deleted:', id);
     } catch (error) {
       console.error(`❌ Error deleting bank ${id}:`, error);
-      throw new Error('Failed to delete bank from Firebase');
+      throw new Error('Failed to delete bank from Firestore');
     }
   }
 
@@ -254,7 +194,7 @@ export class BankFirebaseService {
    */
   static async updateMultipleBanks(banks: Bank[]): Promise<Bank[]> {
     try {
-      console.log(`🔥 Updating ${banks.length} banks in Firebase...`);
+      console.log(`🔥 Updating ${banks.length} banks in Firestore...`);
       
       // Update banks sequentially to avoid conflicts
       const updatedBanks: Bank[] = [];
@@ -267,23 +207,23 @@ export class BankFirebaseService {
       return updatedBanks;
     } catch (error) {
       console.error('❌ Error updating multiple banks:', error);
-      throw new Error('Failed to update banks in Firebase');
+      throw new Error('Failed to update banks in Firestore');
     }
   }
 
   // ==================== UTILITY METHODS ====================
 
   /**
-   * Check if Firebase is connected
+   * Check if Firestore is connected
    */
   static isConnected(): boolean {
-    return !!dataConnectInstance;
+    return !!db;
   }
 
   /**
-   * Reset the Data Connect instance (useful for testing)
+   * Reset the connection (useful for testing)
    */
   static resetConnection(): void {
-    dataConnectInstance = null;
+    // Firestore doesn't need reset as it's a singleton
   }
 }
