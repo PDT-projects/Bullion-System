@@ -1,12 +1,23 @@
 // Inventory Module - ViewModel Layer
 // useInventoryPaymentViewModel - Step 3: Payment information
+// Updated to handle multi-model costing
 
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ProductFormData, CostingOption, BuyType, ProductStatus, CreateProductDTO, InventoryEntryType } from '../models/types';
+import { 
+  ProductFormData, 
+  CostingOption, 
+  BuyType, 
+  ProductStatus, 
+  CreateProductDTO, 
+  InventoryEntryType, 
+  Product,
+  CostingInfo,
+  CostingModel
+} from '../models/types';
 
-import { InventoryService } from '../models/inventoryService';
+import { InventoryDataConnectService } from '../../../api/dataconnect/inventoryDataConnectService';
 
 export type PaymentStatus = 'paid' | 'unpaid' | 'partial';
 
@@ -46,6 +57,8 @@ export interface UseInventoryPaymentViewModelReturn {
     stock: number;
     sellPrice: number;
     status: string;
+    totalValueOfBrand?: number;
+    modelCount?: number;
   };
 }
 
@@ -70,20 +83,24 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const serialNumbers = JSON.parse(searchParams.get('serialNumbers') || '[]');
   const serialCities = JSON.parse(searchParams.get('serialCities') || '{}');
   
-  // Parse costing fields if applicable
-  const costing = costingOption === 'with' ? {
-    units: Number(searchParams.get('costingUnits')) || 0,
-    unitCostUSD: Number(searchParams.get('unitCostUSD')) || 0,
-    totalCostUSD: Number(searchParams.get('totalCostUSD')) || 0,
-    percentage: Number(searchParams.get('percentage')) || 0,
-    customPerModel: Number(searchParams.get('customPerModel')) || 0,
-    customPerUnit: Number(searchParams.get('customPerUnit')) || 0,
-    freightPerModel: Number(searchParams.get('freightPerModel')) || 0,
-    freightPerUnit: Number(searchParams.get('freightPerUnit')) || 0,
-    unitCostPKR: Number(searchParams.get('unitCostPKR')) || 0,
-    totalUnitCost: Number(searchParams.get('totalUnitCost')) || 0,
-    totalShipmentValuePKR: Number(searchParams.get('totalShipmentValuePKR')) || 0,
-  } : undefined;
+  // Parse new multi-model costing fields if applicable
+  let costing: CostingInfo | undefined;
+  
+  if (costingOption === 'with') {
+    // Parse the models array from URL
+    const costingModelsJson = searchParams.get('costingModels');
+    const models: CostingModel[] = costingModelsJson ? JSON.parse(costingModelsJson) : [];
+    
+    costing = {
+      usdRate: Number(searchParams.get('usdRate')) || 0,
+      totalCustomsValue: Number(searchParams.get('totalCustomsValue')) || 0,
+      totalFreightValue: Number(searchParams.get('totalFreightValue')) || 0,
+      models: models,
+      shipmentTotalUSD: Number(searchParams.get('shipmentTotalUSD')) || 0,
+      consignmentValue: Number(searchParams.get('consignmentValue')) || 0,
+      totalValueOfBrand: Number(searchParams.get('totalValueOfBrand')) || 0,
+    };
+  }
 
   const formData: Partial<ProductFormData> = {
     costingOption,
@@ -108,8 +125,14 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const [paidAmount, setPaidAmountState] = useState(0);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
-  // Calculate totals
-  const totalAmount = useMemo(() => sellPrice * stock, [sellPrice, stock]);
+  // Calculate totals - use totalValueOfBrand for costing products
+  const totalAmount = useMemo(() => {
+    if (costingOption === 'with' && costing?.totalValueOfBrand) {
+      return costing.totalValueOfBrand;
+    }
+    return sellPrice * stock;
+  }, [costingOption, costing?.totalValueOfBrand, sellPrice, stock]);
+  
   const remainingAmount = useMemo(() => totalAmount - paidAmount, [totalAmount, paidAmount]);
 
   // Payment status change handler
@@ -166,37 +189,45 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     return false;
   }, [paymentStatus, transactionId, paidAmount]);
 
-  // Submit handler
-  const handleSubmit = useCallback(() => {
+  // Submit handler - Now saves to Data Connect
+  const handleSubmit = useCallback(async () => {
     if (!validateForm()) return;
 
-    // Create the product DTO
-    const productData: CreateProductDTO = {
-      brandName,
-      modelName,
-      category,
-      sellPrice,
-      buyType,
-      warrantyYears,
-      stock,
-      serialNumbers,
-      serialCities,
-      description,
-      status,
-      isDamaged,
-      costingOption,
-      costing,
-    };
+    try {
+      // Create the product object for Data Connect
+      const productData: Omit<Product, 'id'> = {
+        brandName,
+        modelName,
+        category,
+        costPrice: 0, // Will be calculated from costing if needed
+        sellPrice,
+        buyType,
+        warrantyYears,
+        stock,
+        serialNumbers,
+        serialCities,
+        description,
+        status,
+        isDamaged,
+        costingOption,
+        costing,
+      };
 
-    // In a real app, this would call an API
-    // For now, we'll just show success and navigate
-    console.log('Creating product:', productData);
-    
-    toast.success('Inventory created successfully!');
-    navigate('/inventory/view');
-  }, [validateForm, formData, navigate, brandName, modelName, category, sellPrice, buyType, warrantyYears, stock, serialNumbers, serialCities, description, status, isDamaged, costingOption, costing]);
+      console.log('Creating product in Data Connect:', productData);
+      
+      // Save to Firebase Data Connect
+      const createdProduct = await InventoryDataConnectService.createProduct(productData);
+      
+      console.log('✅ Product created in Data Connect:', createdProduct.id);
+      toast.success('Inventory created successfully!');
+      navigate('/inventory/view');
+    } catch (error) {
+      console.error('❌ Error creating product in Data Connect:', error);
+      toast.error('Failed to create inventory. Please try again.');
+    }
+  }, [validateForm, navigate, brandName, modelName, category, sellPrice, buyType, warrantyYears, stock, serialNumbers, serialCities, description, status, isDamaged, costingOption, costing]);
 
-  // Back handler
+  // Back handler - Updated for multi-model costing
   const handleBack = useCallback(() => {
     // Navigate back to product details with all params
     const queryParams = new URLSearchParams({
@@ -216,26 +247,24 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       serialCities: JSON.stringify(serialCities),
     });
     
-    // Add costing fields if applicable
+    // Add new multi-model costing fields if applicable
     if (costingOption === 'with' && costing) {
-      queryParams.set('costingUnits', costing.units.toString());
-      queryParams.set('unitCostUSD', costing.unitCostUSD.toString());
-      queryParams.set('totalCostUSD', costing.totalCostUSD.toString());
-      queryParams.set('percentage', costing.percentage.toString());
-      queryParams.set('customPerModel', costing.customPerModel.toString());
-      queryParams.set('customPerUnit', costing.customPerUnit.toString());
-      queryParams.set('freightPerModel', costing.freightPerModel.toString());
-      queryParams.set('freightPerUnit', costing.freightPerUnit.toString());
-      queryParams.set('unitCostPKR', costing.unitCostPKR.toString());
-      queryParams.set('totalUnitCost', costing.totalUnitCost.toString());
-      queryParams.set('totalShipmentValuePKR', costing.totalShipmentValuePKR.toString());
+      queryParams.set('usdRate', costing.usdRate.toString());
+      queryParams.set('totalCustomsValue', costing.totalCustomsValue.toString());
+      queryParams.set('totalFreightValue', costing.totalFreightValue.toString());
+      queryParams.set('shipmentTotalUSD', costing.shipmentTotalUSD.toString());
+      queryParams.set('consignmentValue', costing.consignmentValue.toString());
+      queryParams.set('totalValueOfBrand', costing.totalValueOfBrand.toString());
+      
+      // Serialize models array
+      queryParams.set('costingModels', JSON.stringify(costing.models));
     }
     
     navigate(`/inventory/create-new/details?${queryParams.toString()}`);
   }, [navigate, inventoryType, costingOption, brandName, modelName, category, sellPrice, buyType, warrantyYears, stock, description, status, isDamaged, serialNumbers, serialCities, costing]);
 
 
-  // Product summary for display
+  // Product summary for display - Updated for multi-model
   const productSummary = useMemo(() => ({
     brandName,
     modelName,
@@ -243,7 +272,9 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     stock,
     sellPrice,
     status,
-  }), [brandName, modelName, category, stock, sellPrice, status]);
+    totalValueOfBrand: costingOption === 'with' ? costing?.totalValueOfBrand : undefined,
+    modelCount: costingOption === 'with' ? costing?.models.length : undefined,
+  }), [brandName, modelName, category, stock, sellPrice, status, costingOption, costing?.totalValueOfBrand, costing?.models.length]);
 
   return {
     formData,

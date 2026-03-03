@@ -168,6 +168,13 @@ export interface ListProductsData {
     costingUnitCostPKR?: number | null;
     costingTotalUnitCost?: number | null;
     costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
   } & Product_Key)[];
@@ -273,6 +280,13 @@ export interface GetProductByIdData {
     costingUnitCostPKR?: number | null;
     costingTotalUnitCost?: number | null;
     costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
   } & Product_Key;
@@ -590,6 +604,13 @@ export interface ProductInsertVariables {
   costingUnitCostPKR?: number | null;
   costingTotalUnitCost?: number | null;
   costingTotalShipmentValuePKR?: number | null;
+  costingUsdRate?: number | null;
+  costingTotalCustomsValue?: number | null;
+  costingTotalFreightValue?: number | null;
+  costingShipmentTotalUSD?: number | null;
+  costingConsignmentValue?: number | null;
+  costingTotalValueOfBrand?: number | null;
+  costingModelsJson?: string | null;
 }
 ```
 ### Return Type
@@ -666,10 +687,17 @@ export default function ProductInsertComponent() {
     costingUnitCostPKR: ..., // optional
     costingTotalUnitCost: ..., // optional
     costingTotalShipmentValuePKR: ..., // optional
+    costingUsdRate: ..., // optional
+    costingTotalCustomsValue: ..., // optional
+    costingTotalFreightValue: ..., // optional
+    costingShipmentTotalUSD: ..., // optional
+    costingConsignmentValue: ..., // optional
+    costingTotalValueOfBrand: ..., // optional
+    costingModelsJson: ..., // optional
   };
   mutation.mutate(productInsertVars);
   // Variables can be defined inline as well.
-  mutation.mutate({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., });
+  mutation.mutate({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., costingUsdRate: ..., costingTotalCustomsValue: ..., costingTotalFreightValue: ..., costingShipmentTotalUSD: ..., costingConsignmentValue: ..., costingTotalValueOfBrand: ..., costingModelsJson: ..., });
 
   // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
   const options = {
@@ -736,6 +764,13 @@ export interface ProductUpdateVariables {
   costingUnitCostPKR?: number | null;
   costingTotalUnitCost?: number | null;
   costingTotalShipmentValuePKR?: number | null;
+  costingUsdRate?: number | null;
+  costingTotalCustomsValue?: number | null;
+  costingTotalFreightValue?: number | null;
+  costingShipmentTotalUSD?: number | null;
+  costingConsignmentValue?: number | null;
+  costingTotalValueOfBrand?: number | null;
+  costingModelsJson?: string | null;
 }
 ```
 ### Return Type
@@ -812,10 +847,17 @@ export default function ProductUpdateComponent() {
     costingUnitCostPKR: ..., // optional
     costingTotalUnitCost: ..., // optional
     costingTotalShipmentValuePKR: ..., // optional
+    costingUsdRate: ..., // optional
+    costingTotalCustomsValue: ..., // optional
+    costingTotalFreightValue: ..., // optional
+    costingShipmentTotalUSD: ..., // optional
+    costingConsignmentValue: ..., // optional
+    costingTotalValueOfBrand: ..., // optional
+    costingModelsJson: ..., // optional
   };
   mutation.mutate(productUpdateVars);
   // Variables can be defined inline as well.
-  mutation.mutate({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., });
+  mutation.mutate({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., costingUsdRate: ..., costingTotalCustomsValue: ..., costingTotalFreightValue: ..., costingShipmentTotalUSD: ..., costingConsignmentValue: ..., costingTotalValueOfBrand: ..., costingModelsJson: ..., });
 
   // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
   const options = {

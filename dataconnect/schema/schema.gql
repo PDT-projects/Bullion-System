@@ -141,6 +141,13 @@ type Product @table {
   costingUnitCostPKR: Float
   costingTotalUnitCost: Float
   costingTotalShipmentValuePKR: Float
+  costingUsdRate: Float
+  costingTotalCustomsValue: Float
+  costingTotalFreightValue: Float
+  costingShipmentTotalUSD: Float
+  costingConsignmentValue: Float
+  costingTotalValueOfBrand: Float
+  costingModelsJson: String
   createdAt: String
   updatedAt: String
 }

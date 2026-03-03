@@ -29,6 +29,13 @@ query listProducts @auth(level: PUBLIC) {
     costingUnitCostPKR
     costingTotalUnitCost
     costingTotalShipmentValuePKR
+    costingUsdRate
+    costingTotalCustomsValue
+    costingTotalFreightValue
+    costingShipmentTotalUSD
+    costingConsignmentValue
+    costingTotalValueOfBrand
+    costingModelsJson
     createdAt
     updatedAt
   }
@@ -63,6 +70,13 @@ query getProductById($id: String!) @auth(level: PUBLIC) {
     costingUnitCostPKR
     costingTotalUnitCost
     costingTotalShipmentValuePKR
+    costingUsdRate
+    costingTotalCustomsValue
+    costingTotalFreightValue
+    costingShipmentTotalUSD
+    costingConsignmentValue
+    costingTotalValueOfBrand
+    costingModelsJson
     createdAt
     updatedAt
   }

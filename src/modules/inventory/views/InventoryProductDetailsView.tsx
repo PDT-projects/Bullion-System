@@ -1,9 +1,12 @@
 // Inventory Module - View Layer
 // InventoryProductDetailsView - Step 2: Product details with conditional costing fields
 
-import React from 'react';
-import { Package, Hash, MapPin, ArrowLeft, ArrowRight, Calculator } from 'lucide-react';
+import React, { useState } from 'react';
+import { Package, Hash, MapPin, ArrowLeft, ArrowRight, Calculator, ChevronDown } from 'lucide-react';
 import { UseInventoryProductDetailsViewModelReturn } from '../viewModels/useInventoryProductDetailsViewModel';
+import { CostingGlobalInputs } from '../components/CostingGlobalInputs';
+import { CostingTable } from '../components/CostingTable';
+import { BrandSummary } from '../components/BrandSummary';
 
 interface InventoryProductDetailsViewProps extends UseInventoryProductDetailsViewModelReturn {}
 
@@ -25,17 +28,15 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   setDescription,
   setStatus,
   setIsDamaged,
-  setCostingUnits,
-  setUnitCostUSD,
-  setTotalCostUSD,
-  setPercentage,
-  setCustomPerModel,
-  setCustomPerUnit,
-  setFreightPerModel,
-  setFreightPerUnit,
-  setUnitCostPKR,
-  setTotalUnitCost,
-  setTotalShipmentValuePKR,
+  
+  // Multi-Model Costing Props
+  setUsdRate,
+  setTotalCustomsValue,
+  setTotalFreightValue,
+  addModel,
+  updateModelField,
+  removeModel,
+  
   updateSerialNumber,
   updateSerialCity,
   handleNext,
@@ -43,7 +44,39 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   showCostingFields,
   categories,
   cities,
+  costingSummary,
 }) => {
+  // Local state for dropdowns
+  const [selectedBrand, setSelectedBrand] = useState<string>(formData.brandName || '');
+  const [selectedModel, setSelectedModel] = useState<string>(formData.modelName || '');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [isOtherBrand, setIsOtherBrand] = useState(false);
+
+  // Handle brand selection
+  const handleBrandSelect = (brand: string) => {
+    setSelectedBrand(brand);
+    setSelectedModel('');
+    setAvailableModels([]);
+    setIsOtherBrand(brand === 'Other');
+    setBrandName(brand);
+    setModelName('');
+    setIsBrandDropdownOpen(false);
+  };
+
+  // Handle model selection
+  const handleModelSelect = (model: string) => {
+    setSelectedModel(model);
+    setModelName(model);
+    setIsModelDropdownOpen(false);
+  };
+
+  // Get brand options - allow manual entry
+  const getBrandOptions = (): string[] => {
+    return ['Other'];
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <div className="inventory-entry-container max-w-7xl mx-auto">
@@ -125,190 +158,45 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
           <div className="space-y-8">
             {/* Costing Fields - Only shown when costingOption === 'with' */}
-            {showCostingFields && (
+            {showCostingFields && formData.costing && (
               <div className="border-b pb-6">
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
                   <Calculator className="w-5 h-5 mr-2 text-purple-600" />
-                  Costing Information
+                  Multi-Model Costing Information
                 </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Brand Name *</label>
-                    <input
-                      type="text"
-                      value={formData.brandName}
-                      onChange={(e) => setBrandName(e.target.value)}
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                        validationErrors.brandName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-purple-500'
-                      }`}
-                      placeholder="Enter brand name"
-                    />
-                    {validationErrors.brandName && (
-                      <p className="text-red-500 text-xs mt-1">{validationErrors.brandName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Model Name *</label>
-                    <input
-                      type="text"
-                      value={formData.modelName}
-                      onChange={(e) => setModelName(e.target.value)}
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                        validationErrors.modelName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-purple-500'
-                      }`}
-                      placeholder="Enter model name"
-                    />
-                    {validationErrors.modelName && (
-                      <p className="text-red-500 text-xs mt-1">{validationErrors.modelName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                    <input
-                      type="text"
-                      value={formData.category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                        validationErrors.category ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-purple-500'
-                      }`}
-                      placeholder="Enter category"
-                    />
-                    {validationErrors.category && (
-                      <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Units</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.costing?.units || ''}
-                      onChange={(e) => setCostingUnits(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit Cost (USD)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.unitCostUSD || ''}
-                      onChange={(e) => setUnitCostUSD(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Cost (USD)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.totalCostUSD || ''}
-                      onChange={(e) => setTotalCostUSD(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Percentage (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.percentage || ''}
-                      onChange={(e) => setPercentage(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Custom per Model</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.customPerModel || ''}
-                      onChange={(e) => setCustomPerModel(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Custom per Unit</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.customPerUnit || ''}
-                      onChange={(e) => setCustomPerUnit(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Freight per Model</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.freightPerModel || ''}
-                      onChange={(e) => setFreightPerModel(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Freight per Unit</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.freightPerUnit || ''}
-                      onChange={(e) => setFreightPerUnit(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit Cost (PKR)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.unitCostPKR || ''}
-                      onChange={(e) => setUnitCostPKR(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Unit Cost</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.totalUnitCost || ''}
-                      onChange={(e) => setTotalUnitCost(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Shipment Value (PKR)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.costing?.totalShipmentValuePKR || ''}
-                      onChange={(e) => setTotalShipmentValuePKR(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
+                
+                {/* Global Inputs Component */}
+                <CostingGlobalInputs
+                  usdRate={formData.costing.usdRate}
+                  totalCustomsValue={formData.costing.totalCustomsValue}
+                  totalFreightValue={formData.costing.totalFreightValue}
+                  onUsdRateChange={setUsdRate}
+                  onCustomsChange={setTotalCustomsValue}
+                  onFreightChange={setTotalFreightValue}
+                />
+
+                {/* Models Table Component */}
+                <CostingTable
+                  models={formData.costing.models}
+                  onAddModel={addModel}
+                  onUpdateModelField={updateModelField}
+                  onRemoveModel={removeModel}
+                />
+
+                {/* Brand Summary Component */}
+                <BrandSummary
+                  totalUnitCostUSD={costingSummary.totalUnitCostUSD}
+                  shipmentTotalUSD={costingSummary.shipmentTotalUSD}
+                  consignmentValue={costingSummary.consignmentValue}
+                  totalValueOfBrand={costingSummary.totalValueOfBrand}
+                  totalCustomsValue={formData.costing.totalCustomsValue}
+                  totalFreightValue={formData.costing.totalFreightValue}
+                />
+
+                {/* Show errors if any */}
+                {validationErrors.models && (
+                  <p className="text-red-500 text-sm mt-2">{validationErrors.models}</p>
+                )}
               </div>
             )}
 
@@ -319,15 +207,18 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                 Inventory Details
               </h4>
               <div className="grid grid-cols-2 gap-4">
-                {/* Show Brand/Model/Category only when WITHOUT costing (when WITH costing, they're in costing section) */}
+                {/* Show Brand/Model/Category only when WITHOUT costing */}
                 {!showCostingFields && (
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Brand Name *</label>
                       <input
                         type="text"
-                        value={formData.brandName}
-                        onChange={(e) => setBrandName(e.target.value)}
+                        value={formData.brandName || ''}
+                        onChange={(e) => {
+                          setBrandName(e.target.value);
+                          setSelectedBrand(e.target.value);
+                        }}
                         className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
                           validationErrors.brandName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
                         }`}
@@ -341,8 +232,11 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                       <label className="block text-sm font-medium text-gray-700 mb-1">Model Name *</label>
                       <input
                         type="text"
-                        value={formData.modelName}
-                        onChange={(e) => setModelName(e.target.value)}
+                        value={formData.modelName || ''}
+                        onChange={(e) => {
+                          setModelName(e.target.value);
+                          setSelectedModel(e.target.value);
+                        }}
                         className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
                           validationErrors.modelName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
                         }`}
@@ -372,6 +266,49 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                     </div>
                   </>
                 )}
+                
+                {/* When WITH costing, show Brand/Model/Category from first model */}
+                {showCostingFields && formData.costing && formData.costing.models.length > 0 && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Brand Name *</label>
+                      <input
+                        type="text"
+                        value={formData.brandName || ''}
+                        onChange={(e) => {
+                          setBrandName(e.target.value);
+                          setSelectedBrand(e.target.value);
+                        }}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                          validationErrors.brandName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                        placeholder="Enter brand name"
+                      />
+                      {validationErrors.brandName && (
+                        <p className="text-red-500 text-xs mt-1">{validationErrors.brandName}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                      <select
+                        value={formData.category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                          validationErrors.category ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                      >
+                        <option value="">Select category</option>
+                        {categories.map(category => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
+                      </select>
+                      {validationErrors.category && (
+                        <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price *</label>
                   <input
@@ -522,7 +459,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                 disabled={!isValid}
                 className={`px-8 py-4 rounded-lg transition-colors font-medium text-lg shadow-lg flex items-center gap-2 ${
                   isValid
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    ? 'bg-[#4f46e5] text-white hover:bg-[#4338ca]'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >

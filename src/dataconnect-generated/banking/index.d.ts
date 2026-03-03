@@ -245,30 +245,6 @@ export interface UpdateBankBalanceVariables {
   newBalance?: number;
 }
 
-interface CashInHandInsertRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: CashInHandInsertVariables): MutationRef<CashInHandInsertData, CashInHandInsertVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars?: CashInHandInsertVariables): MutationRef<CashInHandInsertData, CashInHandInsertVariables>;
-  operationName: string;
-}
-export const cashInHandInsertRef: CashInHandInsertRef;
-
-export function cashInHandInsert(vars?: CashInHandInsertVariables): MutationPromise<CashInHandInsertData, CashInHandInsertVariables>;
-export function cashInHandInsert(dc: DataConnect, vars?: CashInHandInsertVariables): MutationPromise<CashInHandInsertData, CashInHandInsertVariables>;
-
-interface CashInHandDeleteRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: CashInHandDeleteVariables): MutationRef<CashInHandDeleteData, CashInHandDeleteVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars?: CashInHandDeleteVariables): MutationRef<CashInHandDeleteData, CashInHandDeleteVariables>;
-  operationName: string;
-}
-export const cashInHandDeleteRef: CashInHandDeleteRef;
-
-export function cashInHandDelete(vars?: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
-export function cashInHandDelete(dc: DataConnect, vars?: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
-
 interface ListCashInHandRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars?: ListCashInHandVariables): QueryRef<ListCashInHandData, ListCashInHandVariables>;
@@ -412,4 +388,28 @@ export const getBankByIdRef: GetBankByIdRef;
 
 export function getBankById(vars: GetBankByIdVariables): QueryPromise<GetBankByIdData, GetBankByIdVariables>;
 export function getBankById(dc: DataConnect, vars: GetBankByIdVariables): QueryPromise<GetBankByIdData, GetBankByIdVariables>;
+
+interface CashInHandInsertRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: CashInHandInsertVariables): MutationRef<CashInHandInsertData, CashInHandInsertVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars?: CashInHandInsertVariables): MutationRef<CashInHandInsertData, CashInHandInsertVariables>;
+  operationName: string;
+}
+export const cashInHandInsertRef: CashInHandInsertRef;
+
+export function cashInHandInsert(vars?: CashInHandInsertVariables): MutationPromise<CashInHandInsertData, CashInHandInsertVariables>;
+export function cashInHandInsert(dc: DataConnect, vars?: CashInHandInsertVariables): MutationPromise<CashInHandInsertData, CashInHandInsertVariables>;
+
+interface CashInHandDeleteRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: CashInHandDeleteVariables): MutationRef<CashInHandDeleteData, CashInHandDeleteVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars?: CashInHandDeleteVariables): MutationRef<CashInHandDeleteData, CashInHandDeleteVariables>;
+  operationName: string;
+}
+export const cashInHandDeleteRef: CashInHandDeleteRef;
+
+export function cashInHandDelete(vars?: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
+export function cashInHandDelete(dc: DataConnect, vars?: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
 

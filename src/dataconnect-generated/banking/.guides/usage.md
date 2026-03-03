@@ -12,12 +12,8 @@ For each operation, there is a wrapper hook that can be used to call the operati
 
 Here are all of the hooks that get generated:
 ```ts
-import { useCashInHandInsert, useCashInHandDelete, useListCashInHand, useGetCashInHandById, useTransferInsert, useTransferDelete, useListTransfers, useGetTransferById, useBankInsert, useBankUpdate } from '@erp-system/banking/react';
+import { useListCashInHand, useGetCashInHandById, useTransferInsert, useTransferDelete, useListTransfers, useGetTransferById, useBankInsert, useBankUpdate, useBankDelete, useUpdateBankBalance } from '@erp-system/banking/react';
 // The types of these hooks are available in react/index.d.ts
-
-const { data, isPending, isSuccess, isError, error } = useCashInHandInsert(cashInHandInsertVars);
-
-const { data, isPending, isSuccess, isError, error } = useCashInHandDelete(cashInHandDeleteVars);
 
 const { data, isPending, isSuccess, isError, error } = useListCashInHand(listCashInHandVars);
 
@@ -34,6 +30,10 @@ const { data, isPending, isSuccess, isError, error } = useGetTransferById(getTra
 const { data, isPending, isSuccess, isError, error } = useBankInsert(bankInsertVars);
 
 const { data, isPending, isSuccess, isError, error } = useBankUpdate(bankUpdateVars);
+
+const { data, isPending, isSuccess, isError, error } = useBankDelete(bankDeleteVars);
+
+const { data, isPending, isSuccess, isError, error } = useUpdateBankBalance(updateBankBalanceVars);
 
 ```
 
@@ -72,14 +72,8 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { cashInHandInsert, cashInHandDelete, listCashInHand, getCashInHandById, transferInsert, transferDelete, listTransfers, getTransferById, bankInsert, bankUpdate } from '@erp-system/banking';
+import { listCashInHand, getCashInHandById, transferInsert, transferDelete, listTransfers, getTransferById, bankInsert, bankUpdate, bankDelete, updateBankBalance } from '@erp-system/banking';
 
-
-// Operation cashInHandInsert:  For variables, look at type CashInHandInsertVars in ../index.d.ts
-const { data } = await CashInHandInsert(dataConnect, cashInHandInsertVars);
-
-// Operation cashInHandDelete:  For variables, look at type CashInHandDeleteVars in ../index.d.ts
-const { data } = await CashInHandDelete(dataConnect, cashInHandDeleteVars);
 
 // Operation listCashInHand:  For variables, look at type ListCashInHandVars in ../index.d.ts
 const { data } = await ListCashInHand(dataConnect, listCashInHandVars);
@@ -104,6 +98,12 @@ const { data } = await BankInsert(dataConnect, bankInsertVars);
 
 // Operation bankUpdate:  For variables, look at type BankUpdateVars in ../index.d.ts
 const { data } = await BankUpdate(dataConnect, bankUpdateVars);
+
+// Operation bankDelete:  For variables, look at type BankDeleteVars in ../index.d.ts
+const { data } = await BankDelete(dataConnect, bankDeleteVars);
+
+// Operation updateBankBalance:  For variables, look at type UpdateBankBalanceVars in ../index.d.ts
+const { data } = await UpdateBankBalance(dataConnect, updateBankBalanceVars);
 
 
 ```

@@ -6,28 +6,6 @@ export const connectorConfig = {
   location: 'asia-south1'
 };
 
-export const listBudgetsRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'listBudgets', inputVars);
-}
-listBudgetsRef.operationName = 'listBudgets';
-
-export function listBudgets(dcOrVars, vars) {
-  return executeQuery(listBudgetsRef(dcOrVars, vars));
-}
-
-export const getBudgetByIdRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'getBudgetById', inputVars);
-}
-getBudgetByIdRef.operationName = 'getBudgetById';
-
-export function getBudgetById(dcOrVars, vars) {
-  return executeQuery(getBudgetByIdRef(dcOrVars, vars));
-}
-
 export const budgetInsertRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
@@ -70,5 +48,27 @@ budgetUpdateSpentRef.operationName = 'budgetUpdateSpent';
 
 export function budgetUpdateSpent(dcOrVars, vars) {
   return executeMutation(budgetUpdateSpentRef(dcOrVars, vars));
+}
+
+export const listBudgetsRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'listBudgets', inputVars);
+}
+listBudgetsRef.operationName = 'listBudgets';
+
+export function listBudgets(dcOrVars, vars) {
+  return executeQuery(listBudgetsRef(dcOrVars, vars));
+}
+
+export const getBudgetByIdRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'getBudgetById', inputVars);
+}
+getBudgetByIdRef.operationName = 'getBudgetById';
+
+export function getBudgetById(dcOrVars, vars) {
+  return executeQuery(getBudgetByIdRef(dcOrVars, vars));
 }
 

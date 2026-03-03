@@ -33,11 +33,15 @@ export type InventoryEntryType = 'in-stock' | 'on-order';
 
 
 /**
- * Costing information (when costingOption === 'with')
+ * Single Model Costing - for multi-model support
+ * Each model in the costing list has these calculated values
  */
-export interface CostingInfo {
+export interface CostingModel {
+  id: string;
+  modelName: string;
   units: number;
   unitCostUSD: number;
+  // Calculated fields
   totalCostUSD: number;
   percentage: number;
   customPerModel: number;
@@ -45,8 +49,30 @@ export interface CostingInfo {
   freightPerModel: number;
   freightPerUnit: number;
   unitCostPKR: number;
-  totalUnitCost: number;
+  totalLandedUnitCost: number;
   totalShipmentValuePKR: number;
+}
+
+/**
+ * Costing information (when costingOption === 'with')
+ * Supports multiple models per brand
+ */
+export interface CostingInfo {
+  // Global inputs for multi-model costing
+  usdRate: number;
+  totalCustomsValue: number;
+  totalFreightValue: number;
+  
+  // Array of models
+  models: CostingModel[];
+  
+  // Calculated summary
+  // Total Unit Cost USD = sum of all models' unitCostUSD (for percentage calculation)
+  totalUnitCostUSD: number;
+  // Shipment Total USD = sum of all models' (units * unitCostUSD)
+  shipmentTotalUSD: number;
+  consignmentValue: number;
+  totalValueOfBrand: number;
 }
 
 /**
@@ -73,7 +99,46 @@ export interface Product {
   // Costing fields (when costingOption === 'with')
   costingOption?: CostingOption;
   costing?: CostingInfo;
+  // Flat costing fields for Data Connect compatibility
+  costingUnits?: number;
+  costingUnitCostUSD?: number;
+  costingTotalCostUSD?: number;
+  costingPercentage?: number;
+  costingCustomPerModel?: number;
+  costingCustomPerUnit?: number;
+  costingFreightPerModel?: number;
+  costingFreightPerUnit?: number;
+  costingUnitCostPKR?: number;
+  costingTotalUnitCost?: number;
+  costingTotalShipmentValuePKR?: number;
+  costingUsdRate?: number;
+  costingTotalCustomsValue?: number;
+  costingTotalFreightValue?: number;
+  costingShipmentTotalUSD?: number;
+  costingConsignmentValue?: number;
+  costingTotalValueOfBrand?: number;
+  costingModelsJson?: string;
 }
+
+/**
+ * Brand-Model relationship for dropdown selection
+ */
+export interface BrandModel {
+  id: string;
+  brandName: string;
+  modelName: string;
+  category: string;
+  createdAt?: string;
+}
+
+/**
+ * Brand with models for dropdown grouping
+ */
+export interface BrandWithModels {
+  brandName: string;
+  models: string[];
+}
+
 /**
  * DTO for creating a new product
  */
@@ -96,20 +161,9 @@ export interface CreateProductDTO {
   costingOption?: CostingOption;
   
   // Costing fields (when costingOption === 'with')
-  costing?: {
-    units: number;
-    unitCostUSD: number;
-    totalCostUSD: number;
-    percentage: number;
-    customPerModel: number;
-    customPerUnit: number;
-    freightPerModel: number;
-    freightPerUnit: number;
-    unitCostPKR: number;
-    totalUnitCost: number;
-    totalShipmentValuePKR: number;
-  };
+  costing?: CostingInfo;
 }
+
 /**
  * Product form data (partial for wizard)
  */
@@ -137,19 +191,7 @@ export interface ProductFormData {
   serialCities: { [serialNumber: string]: string };
   
   // Costing fields (when costingOption === 'with')
-  costing?: {
-    units: number;
-    unitCostUSD: number;
-    totalCostUSD: number;
-    percentage: number;
-    customPerModel: number;
-    customPerUnit: number;
-    freightPerModel: number;
-    freightPerUnit: number;
-    unitCostPKR: number;
-    totalUnitCost: number;
-    totalShipmentValuePKR: number;
-  };
+  costing?: CostingInfo;
   
   // Payment fields
   paymentStatus?: 'paid' | 'unpaid' | 'partial';

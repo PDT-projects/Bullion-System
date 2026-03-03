@@ -27,7 +27,14 @@ mutation productInsert(
   $costingFreightPerUnit: Float,
   $costingUnitCostPKR: Float,
   $costingTotalUnitCost: Float,
-  $costingTotalShipmentValuePKR: Float
+  $costingTotalShipmentValuePKR: Float,
+  $costingUsdRate: Float,
+  $costingTotalCustomsValue: Float,
+  $costingTotalFreightValue: Float,
+  $costingShipmentTotalUSD: Float,
+  $costingConsignmentValue: Float,
+  $costingTotalValueOfBrand: Float,
+  $costingModelsJson: String
 ) @auth(level: PUBLIC) {
   product_insert(
     data: {
@@ -58,6 +65,13 @@ mutation productInsert(
       costingUnitCostPKR: $costingUnitCostPKR
       costingTotalUnitCost: $costingTotalUnitCost
       costingTotalShipmentValuePKR: $costingTotalShipmentValuePKR
+      costingUsdRate: $costingUsdRate
+      costingTotalCustomsValue: $costingTotalCustomsValue
+      costingTotalFreightValue: $costingTotalFreightValue
+      costingShipmentTotalUSD: $costingShipmentTotalUSD
+      costingConsignmentValue: $costingConsignmentValue
+      costingTotalValueOfBrand: $costingTotalValueOfBrand
+      costingModelsJson: $costingModelsJson
       createdAt: "now()"
       updatedAt: "now()"
     }
@@ -91,7 +105,14 @@ mutation productUpdate(
   $costingFreightPerUnit: Float,
   $costingUnitCostPKR: Float,
   $costingTotalUnitCost: Float,
-  $costingTotalShipmentValuePKR: Float
+  $costingTotalShipmentValuePKR: Float,
+  $costingUsdRate: Float,
+  $costingTotalCustomsValue: Float,
+  $costingTotalFreightValue: Float,
+  $costingShipmentTotalUSD: Float,
+  $costingConsignmentValue: Float,
+  $costingTotalValueOfBrand: Float,
+  $costingModelsJson: String
 ) @auth(level: PUBLIC) {
   product_update(
     id: $id,
@@ -122,6 +143,13 @@ mutation productUpdate(
       costingUnitCostPKR: $costingUnitCostPKR
       costingTotalUnitCost: $costingTotalUnitCost
       costingTotalShipmentValuePKR: $costingTotalShipmentValuePKR
+      costingUsdRate: $costingUsdRate
+      costingTotalCustomsValue: $costingTotalCustomsValue
+      costingTotalFreightValue: $costingTotalFreightValue
+      costingShipmentTotalUSD: $costingShipmentTotalUSD
+      costingConsignmentValue: $costingConsignmentValue
+      costingTotalValueOfBrand: $costingTotalValueOfBrand
+      costingModelsJson: $costingModelsJson
       updatedAt: "now()"
     }
   )

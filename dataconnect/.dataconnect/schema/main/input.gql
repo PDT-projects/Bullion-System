@@ -2878,6 +2878,18 @@ input Product_Data {
   """
   costPrice_update: [Float_Update!]
   """
+  ✨ Generated from Field `Product`.`costingConsignmentValue` of type `Float`
+  """
+  costingConsignmentValue: Float
+  """
+  ✨ `_expr` server value variant of `costingConsignmentValue` (✨ Generated from Field `Product`.`costingConsignmentValue` of type `Float`)
+  """
+  costingConsignmentValue_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `costingConsignmentValue` (✨ Generated from Field `Product`.`costingConsignmentValue` of type `Float`)
+  """
+  costingConsignmentValue_update: [Float_Update!]
+  """
   ✨ Generated from Field `Product`.`costingCustomPerModel` of type `Float`
   """
   costingCustomPerModel: Float
@@ -2926,6 +2938,14 @@ input Product_Data {
   """
   costingFreightPerUnit_update: [Float_Update!]
   """
+  ✨ Generated from Field `Product`.`costingModelsJson` of type `String`
+  """
+  costingModelsJson: String
+  """
+  ✨ `_expr` server value variant of `costingModelsJson` (✨ Generated from Field `Product`.`costingModelsJson` of type `String`)
+  """
+  costingModelsJson_expr: String_Expr
+  """
   ✨ Generated from Field `Product`.`costingOption` of type `String`
   """
   costingOption: String
@@ -2946,6 +2966,18 @@ input Product_Data {
   """
   costingPercentage_update: [Float_Update!]
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD` of type `Float`
+  """
+  costingShipmentTotalUSD: Float
+  """
+  ✨ `_expr` server value variant of `costingShipmentTotalUSD` (✨ Generated from Field `Product`.`costingShipmentTotalUSD` of type `Float`)
+  """
+  costingShipmentTotalUSD_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `costingShipmentTotalUSD` (✨ Generated from Field `Product`.`costingShipmentTotalUSD` of type `Float`)
+  """
+  costingShipmentTotalUSD_update: [Float_Update!]
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD` of type `Float`
   """
   costingTotalCostUSD: Float
@@ -2957,6 +2989,30 @@ input Product_Data {
   ✨ `_update` server value variant of `costingTotalCostUSD` (✨ Generated from Field `Product`.`costingTotalCostUSD` of type `Float`)
   """
   costingTotalCostUSD_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue` of type `Float`
+  """
+  costingTotalCustomsValue: Float
+  """
+  ✨ `_expr` server value variant of `costingTotalCustomsValue` (✨ Generated from Field `Product`.`costingTotalCustomsValue` of type `Float`)
+  """
+  costingTotalCustomsValue_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `costingTotalCustomsValue` (✨ Generated from Field `Product`.`costingTotalCustomsValue` of type `Float`)
+  """
+  costingTotalCustomsValue_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue` of type `Float`
+  """
+  costingTotalFreightValue: Float
+  """
+  ✨ `_expr` server value variant of `costingTotalFreightValue` (✨ Generated from Field `Product`.`costingTotalFreightValue` of type `Float`)
+  """
+  costingTotalFreightValue_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `costingTotalFreightValue` (✨ Generated from Field `Product`.`costingTotalFreightValue` of type `Float`)
+  """
+  costingTotalFreightValue_update: [Float_Update!]
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR` of type `Float`
   """
@@ -2981,6 +3037,18 @@ input Product_Data {
   ✨ `_update` server value variant of `costingTotalUnitCost` (✨ Generated from Field `Product`.`costingTotalUnitCost` of type `Float`)
   """
   costingTotalUnitCost_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand` of type `Float`
+  """
+  costingTotalValueOfBrand: Float
+  """
+  ✨ `_expr` server value variant of `costingTotalValueOfBrand` (✨ Generated from Field `Product`.`costingTotalValueOfBrand` of type `Float`)
+  """
+  costingTotalValueOfBrand_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `costingTotalValueOfBrand` (✨ Generated from Field `Product`.`costingTotalValueOfBrand` of type `Float`)
+  """
+  costingTotalValueOfBrand_update: [Float_Update!]
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR` of type `Float`
   """
@@ -3017,6 +3085,18 @@ input Product_Data {
   ✨ `_update` server value variant of `costingUnits` (✨ Generated from Field `Product`.`costingUnits` of type `Float`)
   """
   costingUnits_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate` of type `Float`
+  """
+  costingUsdRate: Float
+  """
+  ✨ `_expr` server value variant of `costingUsdRate` (✨ Generated from Field `Product`.`costingUsdRate` of type `Float`)
+  """
+  costingUsdRate_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `costingUsdRate` (✨ Generated from Field `Product`.`costingUsdRate` of type `Float`)
+  """
+  costingUsdRate_update: [Float_Update!]
   """
   ✨ Generated from Field `Product`.`createdAt` of type `String`
   """
@@ -3163,6 +3243,10 @@ input Product_Filter {
   """
   costPrice: Float_Filter
   """
+  ✨ Generated from Field `Product`.`costingConsignmentValue` of type `Float`
+  """
+  costingConsignmentValue: Float_Filter
+  """
   ✨ Generated from Field `Product`.`costingCustomPerModel` of type `Float`
   """
   costingCustomPerModel: Float_Filter
@@ -3179,6 +3263,10 @@ input Product_Filter {
   """
   costingFreightPerUnit: Float_Filter
   """
+  ✨ Generated from Field `Product`.`costingModelsJson` of type `String`
+  """
+  costingModelsJson: String_Filter
+  """
   ✨ Generated from Field `Product`.`costingOption` of type `String`
   """
   costingOption: String_Filter
@@ -3187,9 +3275,21 @@ input Product_Filter {
   """
   costingPercentage: Float_Filter
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD` of type `Float`
+  """
+  costingShipmentTotalUSD: Float_Filter
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD` of type `Float`
   """
   costingTotalCostUSD: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue` of type `Float`
+  """
+  costingTotalCustomsValue: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue` of type `Float`
+  """
+  costingTotalFreightValue: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR` of type `Float`
   """
@@ -3198,6 +3298,10 @@ input Product_Filter {
   ✨ Generated from Field `Product`.`costingTotalUnitCost` of type `Float`
   """
   costingTotalUnitCost: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand` of type `Float`
+  """
+  costingTotalValueOfBrand: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR` of type `Float`
   """
@@ -3210,6 +3314,10 @@ input Product_Filter {
   ✨ Generated from Field `Product`.`costingUnits` of type `Float`
   """
   costingUnits: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate` of type `Float`
+  """
+  costingUsdRate: Float_Filter
   """
   ✨ Generated from Field `Product`.`createdAt` of type `String`
   """
@@ -3313,6 +3421,10 @@ input Product_Having {
   """
   costPrice_count: Int_Filter
   """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_count` of type `Int!`
+  """
+  costingConsignmentValue_count: Int_Filter
+  """
   ✨ Generated from Field `Product`.`costingCustomPerModel_count` of type `Int!`
   """
   costingCustomPerModel_count: Int_Filter
@@ -3329,6 +3441,10 @@ input Product_Having {
   """
   costingFreightPerUnit_count: Int_Filter
   """
+  ✨ Generated from Field `Product`.`costingModelsJson_count` of type `Int!`
+  """
+  costingModelsJson_count: Int_Filter
+  """
   ✨ Generated from Field `Product`.`costingOption_count` of type `Int!`
   """
   costingOption_count: Int_Filter
@@ -3337,9 +3453,21 @@ input Product_Having {
   """
   costingPercentage_count: Int_Filter
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_count` of type `Int!`
+  """
+  costingShipmentTotalUSD_count: Int_Filter
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_count` of type `Int!`
   """
   costingTotalCostUSD_count: Int_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_count` of type `Int!`
+  """
+  costingTotalCustomsValue_count: Int_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_count` of type `Int!`
+  """
+  costingTotalFreightValue_count: Int_Filter
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_count` of type `Int!`
   """
@@ -3348,6 +3476,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_count` of type `Int!`
   """
   costingTotalUnitCost_count: Int_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_count` of type `Int!`
+  """
+  costingTotalValueOfBrand_count: Int_Filter
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_count` of type `Int!`
   """
@@ -3360,6 +3492,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingUnits_count` of type `Int!`
   """
   costingUnits_count: Int_Filter
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_count` of type `Int!`
+  """
+  costingUsdRate_count: Int_Filter
   """
   ✨ Generated from Field `Product`.`createdAt_count` of type `Int!`
   """
@@ -3417,6 +3553,10 @@ input Product_Having {
   """
   costPrice_sum: Float_Filter
   """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_sum` of type `Float`
+  """
+  costingConsignmentValue_sum: Float_Filter
+  """
   ✨ Generated from Field `Product`.`costingCustomPerModel_sum` of type `Float`
   """
   costingCustomPerModel_sum: Float_Filter
@@ -3437,9 +3577,21 @@ input Product_Having {
   """
   costingPercentage_sum: Float_Filter
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_sum` of type `Float`
+  """
+  costingShipmentTotalUSD_sum: Float_Filter
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_sum` of type `Float`
   """
   costingTotalCostUSD_sum: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_sum` of type `Float`
+  """
+  costingTotalCustomsValue_sum: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_sum` of type `Float`
+  """
+  costingTotalFreightValue_sum: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_sum` of type `Float`
   """
@@ -3448,6 +3600,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_sum` of type `Float`
   """
   costingTotalUnitCost_sum: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_sum` of type `Float`
+  """
+  costingTotalValueOfBrand_sum: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_sum` of type `Float`
   """
@@ -3460,6 +3616,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingUnits_sum` of type `Float`
   """
   costingUnits_sum: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_sum` of type `Float`
+  """
+  costingUsdRate_sum: Float_Filter
   """
   ✨ Generated from Field `Product`.`sellPrice_sum` of type `Float`
   """
@@ -3476,6 +3636,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costPrice_avg` of type `Float`
   """
   costPrice_avg: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_avg` of type `Float`
+  """
+  costingConsignmentValue_avg: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingCustomPerModel_avg` of type `Float`
   """
@@ -3497,9 +3661,21 @@ input Product_Having {
   """
   costingPercentage_avg: Float_Filter
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_avg` of type `Float`
+  """
+  costingShipmentTotalUSD_avg: Float_Filter
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_avg` of type `Float`
   """
   costingTotalCostUSD_avg: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_avg` of type `Float`
+  """
+  costingTotalCustomsValue_avg: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_avg` of type `Float`
+  """
+  costingTotalFreightValue_avg: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_avg` of type `Float`
   """
@@ -3508,6 +3684,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_avg` of type `Float`
   """
   costingTotalUnitCost_avg: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_avg` of type `Float`
+  """
+  costingTotalValueOfBrand_avg: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_avg` of type `Float`
   """
@@ -3520,6 +3700,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingUnits_avg` of type `Float`
   """
   costingUnits_avg: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_avg` of type `Float`
+  """
+  costingUsdRate_avg: Float_Filter
   """
   ✨ Generated from Field `Product`.`sellPrice_avg` of type `Float`
   """
@@ -3536,6 +3720,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costPrice_min` of type `Float`
   """
   costPrice_min: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_min` of type `Float`
+  """
+  costingConsignmentValue_min: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingCustomPerModel_min` of type `Float`
   """
@@ -3557,9 +3745,21 @@ input Product_Having {
   """
   costingPercentage_min: Float_Filter
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_min` of type `Float`
+  """
+  costingShipmentTotalUSD_min: Float_Filter
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_min` of type `Float`
   """
   costingTotalCostUSD_min: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_min` of type `Float`
+  """
+  costingTotalCustomsValue_min: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_min` of type `Float`
+  """
+  costingTotalFreightValue_min: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_min` of type `Float`
   """
@@ -3568,6 +3768,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_min` of type `Float`
   """
   costingTotalUnitCost_min: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_min` of type `Float`
+  """
+  costingTotalValueOfBrand_min: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_min` of type `Float`
   """
@@ -3580,6 +3784,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingUnits_min` of type `Float`
   """
   costingUnits_min: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_min` of type `Float`
+  """
+  costingUsdRate_min: Float_Filter
   """
   ✨ Generated from Field `Product`.`sellPrice_min` of type `Float`
   """
@@ -3596,6 +3804,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costPrice_max` of type `Float`
   """
   costPrice_max: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_max` of type `Float`
+  """
+  costingConsignmentValue_max: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingCustomPerModel_max` of type `Float`
   """
@@ -3617,9 +3829,21 @@ input Product_Having {
   """
   costingPercentage_max: Float_Filter
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_max` of type `Float`
+  """
+  costingShipmentTotalUSD_max: Float_Filter
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_max` of type `Float`
   """
   costingTotalCostUSD_max: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_max` of type `Float`
+  """
+  costingTotalCustomsValue_max: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_max` of type `Float`
+  """
+  costingTotalFreightValue_max: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_max` of type `Float`
   """
@@ -3628,6 +3852,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_max` of type `Float`
   """
   costingTotalUnitCost_max: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_max` of type `Float`
+  """
+  costingTotalValueOfBrand_max: Float_Filter
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_max` of type `Float`
   """
@@ -3640,6 +3868,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingUnits_max` of type `Float`
   """
   costingUnits_max: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_max` of type `Float`
+  """
+  costingUsdRate_max: Float_Filter
   """
   ✨ Generated from Field `Product`.`sellPrice_max` of type `Float`
   """
@@ -3704,6 +3936,10 @@ input Product_Order {
   """
   costPrice: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingConsignmentValue` of type `Float`
+  """
+  costingConsignmentValue: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingCustomPerModel` of type `Float`
   """
   costingCustomPerModel: OrderDirection
@@ -3720,6 +3956,10 @@ input Product_Order {
   """
   costingFreightPerUnit: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingModelsJson` of type `String`
+  """
+  costingModelsJson: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingOption` of type `String`
   """
   costingOption: OrderDirection
@@ -3728,9 +3968,21 @@ input Product_Order {
   """
   costingPercentage: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD` of type `Float`
+  """
+  costingShipmentTotalUSD: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD` of type `Float`
   """
   costingTotalCostUSD: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue` of type `Float`
+  """
+  costingTotalCustomsValue: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue` of type `Float`
+  """
+  costingTotalFreightValue: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR` of type `Float`
   """
@@ -3739,6 +3991,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingTotalUnitCost` of type `Float`
   """
   costingTotalUnitCost: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand` of type `Float`
+  """
+  costingTotalValueOfBrand: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR` of type `Float`
   """
@@ -3751,6 +4007,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingUnits` of type `Float`
   """
   costingUnits: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate` of type `Float`
+  """
+  costingUsdRate: OrderDirection
   """
   ✨ Generated from Field `Product`.`createdAt` of type `String`
   """
@@ -3820,6 +4080,10 @@ input Product_Order {
   """
   costPrice_count: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_count` of type `Int!`
+  """
+  costingConsignmentValue_count: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingCustomPerModel_count` of type `Int!`
   """
   costingCustomPerModel_count: OrderDirection
@@ -3836,6 +4100,10 @@ input Product_Order {
   """
   costingFreightPerUnit_count: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingModelsJson_count` of type `Int!`
+  """
+  costingModelsJson_count: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingOption_count` of type `Int!`
   """
   costingOption_count: OrderDirection
@@ -3844,9 +4112,21 @@ input Product_Order {
   """
   costingPercentage_count: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_count` of type `Int!`
+  """
+  costingShipmentTotalUSD_count: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_count` of type `Int!`
   """
   costingTotalCostUSD_count: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_count` of type `Int!`
+  """
+  costingTotalCustomsValue_count: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_count` of type `Int!`
+  """
+  costingTotalFreightValue_count: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_count` of type `Int!`
   """
@@ -3855,6 +4135,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_count` of type `Int!`
   """
   costingTotalUnitCost_count: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_count` of type `Int!`
+  """
+  costingTotalValueOfBrand_count: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_count` of type `Int!`
   """
@@ -3867,6 +4151,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingUnits_count` of type `Int!`
   """
   costingUnits_count: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_count` of type `Int!`
+  """
+  costingUsdRate_count: OrderDirection
   """
   ✨ Generated from Field `Product`.`createdAt_count` of type `Int!`
   """
@@ -3924,6 +4212,10 @@ input Product_Order {
   """
   costPrice_sum: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_sum` of type `Float`
+  """
+  costingConsignmentValue_sum: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingCustomPerModel_sum` of type `Float`
   """
   costingCustomPerModel_sum: OrderDirection
@@ -3944,9 +4236,21 @@ input Product_Order {
   """
   costingPercentage_sum: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_sum` of type `Float`
+  """
+  costingShipmentTotalUSD_sum: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_sum` of type `Float`
   """
   costingTotalCostUSD_sum: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_sum` of type `Float`
+  """
+  costingTotalCustomsValue_sum: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_sum` of type `Float`
+  """
+  costingTotalFreightValue_sum: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_sum` of type `Float`
   """
@@ -3955,6 +4259,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_sum` of type `Float`
   """
   costingTotalUnitCost_sum: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_sum` of type `Float`
+  """
+  costingTotalValueOfBrand_sum: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_sum` of type `Float`
   """
@@ -3967,6 +4275,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingUnits_sum` of type `Float`
   """
   costingUnits_sum: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_sum` of type `Float`
+  """
+  costingUsdRate_sum: OrderDirection
   """
   ✨ Generated from Field `Product`.`sellPrice_sum` of type `Float`
   """
@@ -3983,6 +4295,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costPrice_avg` of type `Float`
   """
   costPrice_avg: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_avg` of type `Float`
+  """
+  costingConsignmentValue_avg: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingCustomPerModel_avg` of type `Float`
   """
@@ -4004,9 +4320,21 @@ input Product_Order {
   """
   costingPercentage_avg: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_avg` of type `Float`
+  """
+  costingShipmentTotalUSD_avg: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_avg` of type `Float`
   """
   costingTotalCostUSD_avg: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_avg` of type `Float`
+  """
+  costingTotalCustomsValue_avg: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_avg` of type `Float`
+  """
+  costingTotalFreightValue_avg: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_avg` of type `Float`
   """
@@ -4015,6 +4343,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_avg` of type `Float`
   """
   costingTotalUnitCost_avg: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_avg` of type `Float`
+  """
+  costingTotalValueOfBrand_avg: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_avg` of type `Float`
   """
@@ -4027,6 +4359,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingUnits_avg` of type `Float`
   """
   costingUnits_avg: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_avg` of type `Float`
+  """
+  costingUsdRate_avg: OrderDirection
   """
   ✨ Generated from Field `Product`.`sellPrice_avg` of type `Float`
   """
@@ -4043,6 +4379,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costPrice_min` of type `Float`
   """
   costPrice_min: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_min` of type `Float`
+  """
+  costingConsignmentValue_min: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingCustomPerModel_min` of type `Float`
   """
@@ -4064,9 +4404,21 @@ input Product_Order {
   """
   costingPercentage_min: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_min` of type `Float`
+  """
+  costingShipmentTotalUSD_min: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_min` of type `Float`
   """
   costingTotalCostUSD_min: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_min` of type `Float`
+  """
+  costingTotalCustomsValue_min: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_min` of type `Float`
+  """
+  costingTotalFreightValue_min: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_min` of type `Float`
   """
@@ -4075,6 +4427,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_min` of type `Float`
   """
   costingTotalUnitCost_min: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_min` of type `Float`
+  """
+  costingTotalValueOfBrand_min: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_min` of type `Float`
   """
@@ -4087,6 +4443,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingUnits_min` of type `Float`
   """
   costingUnits_min: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_min` of type `Float`
+  """
+  costingUsdRate_min: OrderDirection
   """
   ✨ Generated from Field `Product`.`sellPrice_min` of type `Float`
   """
@@ -4103,6 +4463,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costPrice_max` of type `Float`
   """
   costPrice_max: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingConsignmentValue_max` of type `Float`
+  """
+  costingConsignmentValue_max: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingCustomPerModel_max` of type `Float`
   """
@@ -4124,9 +4488,21 @@ input Product_Order {
   """
   costingPercentage_max: OrderDirection
   """
+  ✨ Generated from Field `Product`.`costingShipmentTotalUSD_max` of type `Float`
+  """
+  costingShipmentTotalUSD_max: OrderDirection
+  """
   ✨ Generated from Field `Product`.`costingTotalCostUSD_max` of type `Float`
   """
   costingTotalCostUSD_max: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalCustomsValue_max` of type `Float`
+  """
+  costingTotalCustomsValue_max: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalFreightValue_max` of type `Float`
+  """
+  costingTotalFreightValue_max: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingTotalShipmentValuePKR_max` of type `Float`
   """
@@ -4135,6 +4511,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingTotalUnitCost_max` of type `Float`
   """
   costingTotalUnitCost_max: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingTotalValueOfBrand_max` of type `Float`
+  """
+  costingTotalValueOfBrand_max: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingUnitCostPKR_max` of type `Float`
   """
@@ -4147,6 +4527,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingUnits_max` of type `Float`
   """
   costingUnits_max: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingUsdRate_max` of type `Float`
+  """
+  costingUsdRate_max: OrderDirection
   """
   ✨ Generated from Field `Product`.`sellPrice_max` of type `Float`
   """

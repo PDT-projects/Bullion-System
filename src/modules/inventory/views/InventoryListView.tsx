@@ -76,10 +76,10 @@ export function InventoryListView({
         <div className="flex items-center gap-3">
           <button
             onClick={toggleFilters}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-sm ${
               showFilters 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-[#4f46e5] text-white hover:bg-[#4338ca] hover:shadow-md' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md'
             }`}
           >
             <Filter size={20} />
@@ -87,14 +87,14 @@ export function InventoryListView({
           </button>
           <button
             onClick={onAddToExisting}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg font-medium hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
           >
             <Plus size={20} />
             Add Stock
           </button>
           <button
             onClick={onAddNew}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 bg-gradient-to-r from-[#4f46e5] to-[#6366f1] text-white px-4 py-2 rounded-lg font-medium hover:from-[#4338ca] hover:to-[#4f46e5] transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
           >
             <Plus size={20} />
             New Product
@@ -328,6 +328,112 @@ export function InventoryListView({
                   <p className="mt-1 text-sm">{viewProduct.description}</p>
                 </div>
               )}
+              
+              {/* Costing Information */}
+              {(viewProduct.costingOption === 'with' || viewProduct.costingUsdRate) && (
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h4 className="font-medium text-blue-900 mb-3">Costing Information</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {viewProduct.costingUsdRate && (
+                      <div>
+                        <span className="text-blue-700">USD Rate:</span>
+                        <span className="ml-2 font-medium">{viewProduct.costingUsdRate}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingTotalCustomsValue !== undefined && viewProduct.costingTotalCustomsValue > 0 && (
+                      <div>
+                        <span className="text-blue-700">Total Customs:</span>
+                        <span className="ml-2 font-medium">{InventoryService.formatCurrency(viewProduct.costingTotalCustomsValue)}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingTotalFreightValue !== undefined && viewProduct.costingTotalFreightValue > 0 && (
+                      <div>
+                        <span className="text-blue-700">Total Freight:</span>
+                        <span className="ml-2 font-medium">{InventoryService.formatCurrency(viewProduct.costingTotalFreightValue)}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingShipmentTotalUSD !== undefined && viewProduct.costingShipmentTotalUSD > 0 && (
+                      <div>
+                        <span className="text-blue-700">Shipment Total (USD):</span>
+                        <span className="ml-2 font-medium">{InventoryService.formatCurrency(viewProduct.costingShipmentTotalUSD)}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingConsignmentValue !== undefined && viewProduct.costingConsignmentValue > 0 && (
+                      <div>
+                        <span className="text-blue-700">Consignment Value:</span>
+                        <span className="ml-2 font-medium">{InventoryService.formatCurrency(viewProduct.costingConsignmentValue)}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingTotalValueOfBrand !== undefined && viewProduct.costingTotalValueOfBrand > 0 && (
+                      <div className="col-span-2 border-t border-blue-200 pt-2 mt-2">
+                        <span className="text-blue-900 font-bold">Total Brand Value:</span>
+                        <span className="ml-2 font-bold text-blue-900">{InventoryService.formatCurrency(viewProduct.costingTotalValueOfBrand)}</span>
+                      </div>
+                    )}
+                    
+                    {/* Legacy single-model costing fields */}
+                    {viewProduct.costingUnits && (
+                      <div>
+                        <span className="text-blue-700">Units:</span>
+                        <span className="ml-2 font-medium">{viewProduct.costingUnits}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingUnitCostUSD !== undefined && viewProduct.costingUnitCostUSD > 0 && (
+                      <div>
+                        <span className="text-blue-700">Unit Cost (USD):</span>
+                        <span className="ml-2 font-medium">{InventoryService.formatCurrency(viewProduct.costingUnitCostUSD)}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingTotalCostUSD !== undefined && viewProduct.costingTotalCostUSD > 0 && (
+                      <div>
+                        <span className="text-blue-700">Total Cost (USD):</span>
+                        <span className="ml-2 font-medium">{InventoryService.formatCurrency(viewProduct.costingTotalCostUSD)}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingUnitCostPKR !== undefined && viewProduct.costingUnitCostPKR > 0 && (
+                      <div>
+                        <span className="text-blue-700">Unit Cost (PKR):</span>
+                        <span className="ml-2 font-medium">{InventoryService.formatCurrency(viewProduct.costingUnitCostPKR)}</span>
+                      </div>
+                    )}
+                    {viewProduct.costingTotalUnitCost !== undefined && viewProduct.costingTotalUnitCost > 0 && (
+                      <div>
+                        <span className="text-blue-700">Total Unit Cost:</span>
+                        <span className="ml-2 font-medium">{InventoryService.formatCurrency(viewProduct.costingTotalUnitCost)}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Multi-Model Costing Display */}
+                  {viewProduct.costingModelsJson && (
+                    <div className="mt-4">
+                      <h5 className="font-medium text-blue-900 mb-2">Model Details</h5>
+                      <div className="bg-white rounded-lg overflow-hidden border border-blue-200">
+                        <table className="w-full text-sm">
+                          <thead className="bg-blue-100">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-blue-800">Model</th>
+                              <th className="px-3 py-2 text-right text-blue-800">Units</th>
+                              <th className="px-3 py-2 text-right text-blue-800">Unit USD</th>
+                              <th className="px-3 py-2 text-right text-blue-800">Total USD</th>
+                              <th className="px-3 py-2 text-right text-blue-800">Customs</th>
+                              <th className="px-3 py-2 text-right text-blue-800">Freight</th>
+                              <th className="px-3 py-2 text-right text-blue-800">Total PKR</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-blue-100">
+                            <tr>
+                              <td colSpan={7} className="px-3 py-2 text-center text-gray-500">
+                                {viewProduct.modelName} (Primary)
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
               <button
@@ -341,7 +447,7 @@ export function InventoryListView({
                   setViewProduct(null);
                   onTransfer(viewProduct.id);
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-[#4f46e5] to-[#6366f1] text-white rounded-lg font-medium hover:from-[#4338ca] hover:to-[#4f46e5] transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
               >
                 Transfer
               </button>

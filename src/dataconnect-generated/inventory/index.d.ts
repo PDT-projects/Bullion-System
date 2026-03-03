@@ -64,6 +64,13 @@ export interface GetProductByIdData {
     costingUnitCostPKR?: number | null;
     costingTotalUnitCost?: number | null;
     costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
   } & Product_Key;
@@ -156,6 +163,13 @@ export interface ListProductsData {
     costingUnitCostPKR?: number | null;
     costingTotalUnitCost?: number | null;
     costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
   } & Product_Key)[];
@@ -211,6 +225,13 @@ export interface ProductInsertVariables {
   costingUnitCostPKR?: number | null;
   costingTotalUnitCost?: number | null;
   costingTotalShipmentValuePKR?: number | null;
+  costingUsdRate?: number | null;
+  costingTotalCustomsValue?: number | null;
+  costingTotalFreightValue?: number | null;
+  costingShipmentTotalUSD?: number | null;
+  costingConsignmentValue?: number | null;
+  costingTotalValueOfBrand?: number | null;
+  costingModelsJson?: string | null;
 }
 
 export interface ProductTransferDeleteData {
@@ -308,6 +329,13 @@ export interface ProductUpdateVariables {
   costingUnitCostPKR?: number | null;
   costingTotalUnitCost?: number | null;
   costingTotalShipmentValuePKR?: number | null;
+  costingUsdRate?: number | null;
+  costingTotalCustomsValue?: number | null;
+  costingTotalFreightValue?: number | null;
+  costingShipmentTotalUSD?: number | null;
+  costingConsignmentValue?: number | null;
+  costingTotalValueOfBrand?: number | null;
+  costingModelsJson?: string | null;
 }
 
 export interface Product_Key {

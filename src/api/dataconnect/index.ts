@@ -6,3 +6,4 @@ export { BankDataConnectService } from './bankDataConnectService';
 export { TransferDataConnectService } from './transferDataConnectService';
 export { CashDataConnectService } from './cashDataConnectService';
 export { BudgetDataConnectService } from './budgetDataConnectService';
+export { InventoryDataConnectService } from './inventoryDataConnectService';

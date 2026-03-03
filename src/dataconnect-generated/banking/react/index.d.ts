@@ -1,15 +1,9 @@
-import { CashInHandInsertData, CashInHandInsertVariables, CashInHandDeleteData, CashInHandDeleteVariables, ListCashInHandData, ListCashInHandVariables, GetCashInHandByIdData, GetCashInHandByIdVariables, TransferInsertData, TransferInsertVariables, TransferDeleteData, TransferDeleteVariables, ListTransfersData, ListTransfersVariables, GetTransferByIdData, GetTransferByIdVariables, BankInsertData, BankInsertVariables, BankUpdateData, BankUpdateVariables, BankDeleteData, BankDeleteVariables, UpdateBankBalanceData, UpdateBankBalanceVariables, ListBanksData, ListBanksVariables, GetBankByIdData, GetBankByIdVariables } from '../';
+import { ListCashInHandData, ListCashInHandVariables, GetCashInHandByIdData, GetCashInHandByIdVariables, TransferInsertData, TransferInsertVariables, TransferDeleteData, TransferDeleteVariables, ListTransfersData, ListTransfersVariables, GetTransferByIdData, GetTransferByIdVariables, BankInsertData, BankInsertVariables, BankUpdateData, BankUpdateVariables, BankDeleteData, BankDeleteVariables, UpdateBankBalanceData, UpdateBankBalanceVariables, ListBanksData, ListBanksVariables, GetBankByIdData, GetBankByIdVariables, CashInHandInsertData, CashInHandInsertVariables, CashInHandDeleteData, CashInHandDeleteVariables } from '../';
 import { UseDataConnectQueryResult, useDataConnectQueryOptions, UseDataConnectMutationResult, useDataConnectMutationOptions} from '@tanstack-query-firebase/react/data-connect';
 import { UseQueryResult, UseMutationResult} from '@tanstack/react-query';
 import { DataConnect } from 'firebase/data-connect';
 import { FirebaseError } from 'firebase/app';
 
-
-export function useCashInHandInsert(options?: useDataConnectMutationOptions<CashInHandInsertData, FirebaseError, CashInHandInsertVariables | void>): UseDataConnectMutationResult<CashInHandInsertData, CashInHandInsertVariables>;
-export function useCashInHandInsert(dc: DataConnect, options?: useDataConnectMutationOptions<CashInHandInsertData, FirebaseError, CashInHandInsertVariables | void>): UseDataConnectMutationResult<CashInHandInsertData, CashInHandInsertVariables>;
-
-export function useCashInHandDelete(options?: useDataConnectMutationOptions<CashInHandDeleteData, FirebaseError, CashInHandDeleteVariables | void>): UseDataConnectMutationResult<CashInHandDeleteData, CashInHandDeleteVariables>;
-export function useCashInHandDelete(dc: DataConnect, options?: useDataConnectMutationOptions<CashInHandDeleteData, FirebaseError, CashInHandDeleteVariables | void>): UseDataConnectMutationResult<CashInHandDeleteData, CashInHandDeleteVariables>;
 
 export function useListCashInHand(vars?: ListCashInHandVariables, options?: useDataConnectQueryOptions<ListCashInHandData>): UseDataConnectQueryResult<ListCashInHandData, ListCashInHandVariables>;
 export function useListCashInHand(dc: DataConnect, vars?: ListCashInHandVariables, options?: useDataConnectQueryOptions<ListCashInHandData>): UseDataConnectQueryResult<ListCashInHandData, ListCashInHandVariables>;
@@ -46,3 +40,9 @@ export function useListBanks(dc: DataConnect, vars?: ListBanksVariables, options
 
 export function useGetBankById(vars: GetBankByIdVariables, options?: useDataConnectQueryOptions<GetBankByIdData>): UseDataConnectQueryResult<GetBankByIdData, GetBankByIdVariables>;
 export function useGetBankById(dc: DataConnect, vars: GetBankByIdVariables, options?: useDataConnectQueryOptions<GetBankByIdData>): UseDataConnectQueryResult<GetBankByIdData, GetBankByIdVariables>;
+
+export function useCashInHandInsert(options?: useDataConnectMutationOptions<CashInHandInsertData, FirebaseError, CashInHandInsertVariables | void>): UseDataConnectMutationResult<CashInHandInsertData, CashInHandInsertVariables>;
+export function useCashInHandInsert(dc: DataConnect, options?: useDataConnectMutationOptions<CashInHandInsertData, FirebaseError, CashInHandInsertVariables | void>): UseDataConnectMutationResult<CashInHandInsertData, CashInHandInsertVariables>;
+
+export function useCashInHandDelete(options?: useDataConnectMutationOptions<CashInHandDeleteData, FirebaseError, CashInHandDeleteVariables | void>): UseDataConnectMutationResult<CashInHandDeleteData, CashInHandDeleteVariables>;
+export function useCashInHandDelete(dc: DataConnect, options?: useDataConnectMutationOptions<CashInHandDeleteData, FirebaseError, CashInHandDeleteVariables | void>): UseDataConnectMutationResult<CashInHandDeleteData, CashInHandDeleteVariables>;

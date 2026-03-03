@@ -17,14 +17,14 @@ This README will guide you through the process of using the generated JavaScript
   - [*listBanks*](#listbanks)
   - [*getBankById*](#getbankbyid)
 - [**Mutations**](#mutations)
-  - [*cashInHandInsert*](#cashinhandinsert)
-  - [*cashInHandDelete*](#cashinhanddelete)
   - [*transferInsert*](#transferinsert)
   - [*transferDelete*](#transferdelete)
   - [*bankInsert*](#bankinsert)
   - [*bankUpdate*](#bankupdate)
   - [*bankDelete*](#bankdelete)
   - [*updateBankBalance*](#updatebankbalance)
+  - [*cashInHandInsert*](#cashinhandinsert)
+  - [*cashInHandDelete*](#cashinhanddelete)
 
 # Accessing the connector
 A connector is a collection of Queries and Mutations. One SDK is generated for each connector - this SDK is generated for the connector `banking`. You can find more information about connectors in the [Data Connect documentation](https://firebase.google.com/docs/data-connect#how-does).
@@ -815,253 +815,6 @@ The following is true for both the action shortcut function and the `MutationRef
 
 Below are examples of how to use the `banking` connector's generated functions to execute each mutation. You can also follow the examples from the [Data Connect documentation](https://firebase.google.com/docs/data-connect/web-sdk#using-mutations).
 
-## cashInHandInsert
-You can execute the `cashInHandInsert` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
-```typescript
-cashInHandInsert(vars?: CashInHandInsertVariables): MutationPromise<CashInHandInsertData, CashInHandInsertVariables>;
-
-interface CashInHandInsertRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: CashInHandInsertVariables): MutationRef<CashInHandInsertData, CashInHandInsertVariables>;
-}
-export const cashInHandInsertRef: CashInHandInsertRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
-```typescript
-cashInHandInsert(dc: DataConnect, vars?: CashInHandInsertVariables): MutationPromise<CashInHandInsertData, CashInHandInsertVariables>;
-
-interface CashInHandInsertRef {
-  ...
-  (dc: DataConnect, vars?: CashInHandInsertVariables): MutationRef<CashInHandInsertData, CashInHandInsertVariables>;
-}
-export const cashInHandInsertRef: CashInHandInsertRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the cashInHandInsertRef:
-```typescript
-const name = cashInHandInsertRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `cashInHandInsert` mutation has an optional argument of type `CashInHandInsertVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface CashInHandInsertVariables {
-  id?: string;
-  date?: string;
-  company?: string;
-  mainCategory?: string;
-  subCategory?: string;
-  amount?: number;
-  mode?: string;
-  note?: string | null;
-}
-```
-### Return Type
-Recall that executing the `cashInHandInsert` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `CashInHandInsertData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface CashInHandInsertData {
-  cashInHand_insert: CashInHand_Key;
-}
-```
-### Using `cashInHandInsert`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, cashInHandInsert, CashInHandInsertVariables } from '@erp-system/banking';
-
-// The `cashInHandInsert` mutation has an optional argument of type `CashInHandInsertVariables`:
-const cashInHandInsertVars: CashInHandInsertVariables = {
-  id: ..., // optional
-  date: ..., // optional
-  company: ..., // optional
-  mainCategory: ..., // optional
-  subCategory: ..., // optional
-  amount: ..., // optional
-  mode: ..., // optional
-  note: ..., // optional
-};
-
-// Call the `cashInHandInsert()` function to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await cashInHandInsert(cashInHandInsertVars);
-// Variables can be defined inline as well.
-const { data } = await cashInHandInsert({ id: ..., date: ..., company: ..., mainCategory: ..., subCategory: ..., amount: ..., mode: ..., note: ..., });
-// Since all variables are optional for this mutation, you can omit the `CashInHandInsertVariables` argument.
-const { data } = await cashInHandInsert();
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await cashInHandInsert(dataConnect, cashInHandInsertVars);
-
-console.log(data.cashInHand_insert);
-
-// Or, you can use the `Promise` API.
-cashInHandInsert(cashInHandInsertVars).then((response) => {
-  const data = response.data;
-  console.log(data.cashInHand_insert);
-});
-```
-
-### Using `cashInHandInsert`'s `MutationRef` function
-
-```typescript
-import { getDataConnect, executeMutation } from 'firebase/data-connect';
-import { connectorConfig, cashInHandInsertRef, CashInHandInsertVariables } from '@erp-system/banking';
-
-// The `cashInHandInsert` mutation has an optional argument of type `CashInHandInsertVariables`:
-const cashInHandInsertVars: CashInHandInsertVariables = {
-  id: ..., // optional
-  date: ..., // optional
-  company: ..., // optional
-  mainCategory: ..., // optional
-  subCategory: ..., // optional
-  amount: ..., // optional
-  mode: ..., // optional
-  note: ..., // optional
-};
-
-// Call the `cashInHandInsertRef()` function to get a reference to the mutation.
-const ref = cashInHandInsertRef(cashInHandInsertVars);
-// Variables can be defined inline as well.
-const ref = cashInHandInsertRef({ id: ..., date: ..., company: ..., mainCategory: ..., subCategory: ..., amount: ..., mode: ..., note: ..., });
-// Since all variables are optional for this mutation, you can omit the `CashInHandInsertVariables` argument.
-const ref = cashInHandInsertRef();
-
-// You can also pass in a `DataConnect` instance to the `MutationRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = cashInHandInsertRef(dataConnect, cashInHandInsertVars);
-
-// Call `executeMutation()` on the reference to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeMutation(ref);
-
-console.log(data.cashInHand_insert);
-
-// Or, you can use the `Promise` API.
-executeMutation(ref).then((response) => {
-  const data = response.data;
-  console.log(data.cashInHand_insert);
-});
-```
-
-## cashInHandDelete
-You can execute the `cashInHandDelete` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
-```typescript
-cashInHandDelete(vars?: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
-
-interface CashInHandDeleteRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: CashInHandDeleteVariables): MutationRef<CashInHandDeleteData, CashInHandDeleteVariables>;
-}
-export const cashInHandDeleteRef: CashInHandDeleteRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
-```typescript
-cashInHandDelete(dc: DataConnect, vars?: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
-
-interface CashInHandDeleteRef {
-  ...
-  (dc: DataConnect, vars?: CashInHandDeleteVariables): MutationRef<CashInHandDeleteData, CashInHandDeleteVariables>;
-}
-export const cashInHandDeleteRef: CashInHandDeleteRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the cashInHandDeleteRef:
-```typescript
-const name = cashInHandDeleteRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `cashInHandDelete` mutation has an optional argument of type `CashInHandDeleteVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface CashInHandDeleteVariables {
-  id?: string;
-}
-```
-### Return Type
-Recall that executing the `cashInHandDelete` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `CashInHandDeleteData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface CashInHandDeleteData {
-  cashInHand_delete?: CashInHand_Key | null;
-}
-```
-### Using `cashInHandDelete`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, cashInHandDelete, CashInHandDeleteVariables } from '@erp-system/banking';
-
-// The `cashInHandDelete` mutation has an optional argument of type `CashInHandDeleteVariables`:
-const cashInHandDeleteVars: CashInHandDeleteVariables = {
-  id: ..., // optional
-};
-
-// Call the `cashInHandDelete()` function to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await cashInHandDelete(cashInHandDeleteVars);
-// Variables can be defined inline as well.
-const { data } = await cashInHandDelete({ id: ..., });
-// Since all variables are optional for this mutation, you can omit the `CashInHandDeleteVariables` argument.
-const { data } = await cashInHandDelete();
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await cashInHandDelete(dataConnect, cashInHandDeleteVars);
-
-console.log(data.cashInHand_delete);
-
-// Or, you can use the `Promise` API.
-cashInHandDelete(cashInHandDeleteVars).then((response) => {
-  const data = response.data;
-  console.log(data.cashInHand_delete);
-});
-```
-
-### Using `cashInHandDelete`'s `MutationRef` function
-
-```typescript
-import { getDataConnect, executeMutation } from 'firebase/data-connect';
-import { connectorConfig, cashInHandDeleteRef, CashInHandDeleteVariables } from '@erp-system/banking';
-
-// The `cashInHandDelete` mutation has an optional argument of type `CashInHandDeleteVariables`:
-const cashInHandDeleteVars: CashInHandDeleteVariables = {
-  id: ..., // optional
-};
-
-// Call the `cashInHandDeleteRef()` function to get a reference to the mutation.
-const ref = cashInHandDeleteRef(cashInHandDeleteVars);
-// Variables can be defined inline as well.
-const ref = cashInHandDeleteRef({ id: ..., });
-// Since all variables are optional for this mutation, you can omit the `CashInHandDeleteVariables` argument.
-const ref = cashInHandDeleteRef();
-
-// You can also pass in a `DataConnect` instance to the `MutationRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = cashInHandDeleteRef(dataConnect, cashInHandDeleteVars);
-
-// Call `executeMutation()` on the reference to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeMutation(ref);
-
-console.log(data.cashInHand_delete);
-
-// Or, you can use the `Promise` API.
-executeMutation(ref).then((response) => {
-  const data = response.data;
-  console.log(data.cashInHand_delete);
-});
-```
-
 ## transferInsert
 You can execute the `transferInsert` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
 ```typescript
@@ -1779,6 +1532,253 @@ console.log(data.bank_update);
 executeMutation(ref).then((response) => {
   const data = response.data;
   console.log(data.bank_update);
+});
+```
+
+## cashInHandInsert
+You can execute the `cashInHandInsert` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
+```typescript
+cashInHandInsert(vars?: CashInHandInsertVariables): MutationPromise<CashInHandInsertData, CashInHandInsertVariables>;
+
+interface CashInHandInsertRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: CashInHandInsertVariables): MutationRef<CashInHandInsertData, CashInHandInsertVariables>;
+}
+export const cashInHandInsertRef: CashInHandInsertRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+cashInHandInsert(dc: DataConnect, vars?: CashInHandInsertVariables): MutationPromise<CashInHandInsertData, CashInHandInsertVariables>;
+
+interface CashInHandInsertRef {
+  ...
+  (dc: DataConnect, vars?: CashInHandInsertVariables): MutationRef<CashInHandInsertData, CashInHandInsertVariables>;
+}
+export const cashInHandInsertRef: CashInHandInsertRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the cashInHandInsertRef:
+```typescript
+const name = cashInHandInsertRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `cashInHandInsert` mutation has an optional argument of type `CashInHandInsertVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface CashInHandInsertVariables {
+  id?: string;
+  date?: string;
+  company?: string;
+  mainCategory?: string;
+  subCategory?: string;
+  amount?: number;
+  mode?: string;
+  note?: string | null;
+}
+```
+### Return Type
+Recall that executing the `cashInHandInsert` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `CashInHandInsertData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface CashInHandInsertData {
+  cashInHand_insert: CashInHand_Key;
+}
+```
+### Using `cashInHandInsert`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, cashInHandInsert, CashInHandInsertVariables } from '@erp-system/banking';
+
+// The `cashInHandInsert` mutation has an optional argument of type `CashInHandInsertVariables`:
+const cashInHandInsertVars: CashInHandInsertVariables = {
+  id: ..., // optional
+  date: ..., // optional
+  company: ..., // optional
+  mainCategory: ..., // optional
+  subCategory: ..., // optional
+  amount: ..., // optional
+  mode: ..., // optional
+  note: ..., // optional
+};
+
+// Call the `cashInHandInsert()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await cashInHandInsert(cashInHandInsertVars);
+// Variables can be defined inline as well.
+const { data } = await cashInHandInsert({ id: ..., date: ..., company: ..., mainCategory: ..., subCategory: ..., amount: ..., mode: ..., note: ..., });
+// Since all variables are optional for this mutation, you can omit the `CashInHandInsertVariables` argument.
+const { data } = await cashInHandInsert();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await cashInHandInsert(dataConnect, cashInHandInsertVars);
+
+console.log(data.cashInHand_insert);
+
+// Or, you can use the `Promise` API.
+cashInHandInsert(cashInHandInsertVars).then((response) => {
+  const data = response.data;
+  console.log(data.cashInHand_insert);
+});
+```
+
+### Using `cashInHandInsert`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, cashInHandInsertRef, CashInHandInsertVariables } from '@erp-system/banking';
+
+// The `cashInHandInsert` mutation has an optional argument of type `CashInHandInsertVariables`:
+const cashInHandInsertVars: CashInHandInsertVariables = {
+  id: ..., // optional
+  date: ..., // optional
+  company: ..., // optional
+  mainCategory: ..., // optional
+  subCategory: ..., // optional
+  amount: ..., // optional
+  mode: ..., // optional
+  note: ..., // optional
+};
+
+// Call the `cashInHandInsertRef()` function to get a reference to the mutation.
+const ref = cashInHandInsertRef(cashInHandInsertVars);
+// Variables can be defined inline as well.
+const ref = cashInHandInsertRef({ id: ..., date: ..., company: ..., mainCategory: ..., subCategory: ..., amount: ..., mode: ..., note: ..., });
+// Since all variables are optional for this mutation, you can omit the `CashInHandInsertVariables` argument.
+const ref = cashInHandInsertRef();
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = cashInHandInsertRef(dataConnect, cashInHandInsertVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.cashInHand_insert);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.cashInHand_insert);
+});
+```
+
+## cashInHandDelete
+You can execute the `cashInHandDelete` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
+```typescript
+cashInHandDelete(vars?: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
+
+interface CashInHandDeleteRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: CashInHandDeleteVariables): MutationRef<CashInHandDeleteData, CashInHandDeleteVariables>;
+}
+export const cashInHandDeleteRef: CashInHandDeleteRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+cashInHandDelete(dc: DataConnect, vars?: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
+
+interface CashInHandDeleteRef {
+  ...
+  (dc: DataConnect, vars?: CashInHandDeleteVariables): MutationRef<CashInHandDeleteData, CashInHandDeleteVariables>;
+}
+export const cashInHandDeleteRef: CashInHandDeleteRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the cashInHandDeleteRef:
+```typescript
+const name = cashInHandDeleteRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `cashInHandDelete` mutation has an optional argument of type `CashInHandDeleteVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface CashInHandDeleteVariables {
+  id?: string;
+}
+```
+### Return Type
+Recall that executing the `cashInHandDelete` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `CashInHandDeleteData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface CashInHandDeleteData {
+  cashInHand_delete?: CashInHand_Key | null;
+}
+```
+### Using `cashInHandDelete`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, cashInHandDelete, CashInHandDeleteVariables } from '@erp-system/banking';
+
+// The `cashInHandDelete` mutation has an optional argument of type `CashInHandDeleteVariables`:
+const cashInHandDeleteVars: CashInHandDeleteVariables = {
+  id: ..., // optional
+};
+
+// Call the `cashInHandDelete()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await cashInHandDelete(cashInHandDeleteVars);
+// Variables can be defined inline as well.
+const { data } = await cashInHandDelete({ id: ..., });
+// Since all variables are optional for this mutation, you can omit the `CashInHandDeleteVariables` argument.
+const { data } = await cashInHandDelete();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await cashInHandDelete(dataConnect, cashInHandDeleteVars);
+
+console.log(data.cashInHand_delete);
+
+// Or, you can use the `Promise` API.
+cashInHandDelete(cashInHandDeleteVars).then((response) => {
+  const data = response.data;
+  console.log(data.cashInHand_delete);
+});
+```
+
+### Using `cashInHandDelete`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, cashInHandDeleteRef, CashInHandDeleteVariables } from '@erp-system/banking';
+
+// The `cashInHandDelete` mutation has an optional argument of type `CashInHandDeleteVariables`:
+const cashInHandDeleteVars: CashInHandDeleteVariables = {
+  id: ..., // optional
+};
+
+// Call the `cashInHandDeleteRef()` function to get a reference to the mutation.
+const ref = cashInHandDeleteRef(cashInHandDeleteVars);
+// Variables can be defined inline as well.
+const ref = cashInHandDeleteRef({ id: ..., });
+// Since all variables are optional for this mutation, you can omit the `CashInHandDeleteVariables` argument.
+const ref = cashInHandDeleteRef();
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = cashInHandDeleteRef(dataConnect, cashInHandDeleteVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.cashInHand_delete);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.cashInHand_delete);
 });
 ```
 

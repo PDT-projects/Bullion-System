@@ -1,22 +1,6 @@
-const { cashInHandInsertRef, cashInHandDeleteRef, listCashInHandRef, getCashInHandByIdRef, transferInsertRef, transferDeleteRef, listTransfersRef, getTransferByIdRef, bankInsertRef, bankUpdateRef, bankDeleteRef, updateBankBalanceRef, listBanksRef, getBankByIdRef, connectorConfig } = require('../index.cjs.js');
+const { listCashInHandRef, getCashInHandByIdRef, transferInsertRef, transferDeleteRef, listTransfersRef, getTransferByIdRef, bankInsertRef, bankUpdateRef, bankDeleteRef, updateBankBalanceRef, listBanksRef, getBankByIdRef, cashInHandInsertRef, cashInHandDeleteRef, connectorConfig } = require('../index.cjs.js');
 const { validateArgs, CallerSdkTypeEnum } = require('firebase/data-connect');
 const { useDataConnectQuery, useDataConnectMutation, validateReactArgs } = require('@tanstack-query-firebase/react/data-connect');
-
-exports.useCashInHandInsert = function useCashInHandInsert(dcOrOptions, options) {
-  const { dc: dcInstance, vars: inputOpts } = validateArgs(connectorConfig, dcOrOptions, options);
-  function refFactory(vars) {
-    return cashInHandInsertRef(dcInstance, vars);
-  }
-  return useDataConnectMutation(refFactory, inputOpts, CallerSdkTypeEnum.GeneratedReact);
-}
-
-exports.useCashInHandDelete = function useCashInHandDelete(dcOrOptions, options) {
-  const { dc: dcInstance, vars: inputOpts } = validateArgs(connectorConfig, dcOrOptions, options);
-  function refFactory(vars) {
-    return cashInHandDeleteRef(dcInstance, vars);
-  }
-  return useDataConnectMutation(refFactory, inputOpts, CallerSdkTypeEnum.GeneratedReact);
-}
 
 
 exports.useListCashInHand = function useListCashInHand(dcOrVars, varsOrOptions, options) {
@@ -101,4 +85,19 @@ exports.useGetBankById = function useGetBankById(dcOrVars, varsOrOptions, option
   const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateReactArgs(connectorConfig, dcOrVars, varsOrOptions, options, true, true);
   const ref = getBankByIdRef(dcInstance, inputVars);
   return useDataConnectQuery(ref, inputOpts, CallerSdkTypeEnum.GeneratedReact);
+}
+exports.useCashInHandInsert = function useCashInHandInsert(dcOrOptions, options) {
+  const { dc: dcInstance, vars: inputOpts } = validateArgs(connectorConfig, dcOrOptions, options);
+  function refFactory(vars) {
+    return cashInHandInsertRef(dcInstance, vars);
+  }
+  return useDataConnectMutation(refFactory, inputOpts, CallerSdkTypeEnum.GeneratedReact);
+}
+
+exports.useCashInHandDelete = function useCashInHandDelete(dcOrOptions, options) {
+  const { dc: dcInstance, vars: inputOpts } = validateArgs(connectorConfig, dcOrOptions, options);
+  function refFactory(vars) {
+    return cashInHandDeleteRef(dcInstance, vars);
+  }
+  return useDataConnectMutation(refFactory, inputOpts, CallerSdkTypeEnum.GeneratedReact);
 }

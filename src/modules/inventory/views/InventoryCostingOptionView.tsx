@@ -133,7 +133,7 @@ export const InventoryCostingOptionView: React.FC<InventoryCostingOptionViewProp
               disabled={!canContinue}
               className={`px-8 py-4 rounded-lg font-medium text-lg shadow-lg flex items-center gap-2 transition-colors ${
                 canContinue
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-[#4f46e5] text-white hover:bg-[#4338ca]'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >

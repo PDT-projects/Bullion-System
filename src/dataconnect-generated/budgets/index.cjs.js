@@ -7,30 +7,6 @@ const connectorConfig = {
 };
 exports.connectorConfig = connectorConfig;
 
-const listBudgetsRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'listBudgets', inputVars);
-}
-listBudgetsRef.operationName = 'listBudgets';
-exports.listBudgetsRef = listBudgetsRef;
-
-exports.listBudgets = function listBudgets(dcOrVars, vars) {
-  return executeQuery(listBudgetsRef(dcOrVars, vars));
-};
-
-const getBudgetByIdRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'getBudgetById', inputVars);
-}
-getBudgetByIdRef.operationName = 'getBudgetById';
-exports.getBudgetByIdRef = getBudgetByIdRef;
-
-exports.getBudgetById = function getBudgetById(dcOrVars, vars) {
-  return executeQuery(getBudgetByIdRef(dcOrVars, vars));
-};
-
 const budgetInsertRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
@@ -77,4 +53,28 @@ exports.budgetUpdateSpentRef = budgetUpdateSpentRef;
 
 exports.budgetUpdateSpent = function budgetUpdateSpent(dcOrVars, vars) {
   return executeMutation(budgetUpdateSpentRef(dcOrVars, vars));
+};
+
+const listBudgetsRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'listBudgets', inputVars);
+}
+listBudgetsRef.operationName = 'listBudgets';
+exports.listBudgetsRef = listBudgetsRef;
+
+exports.listBudgets = function listBudgets(dcOrVars, vars) {
+  return executeQuery(listBudgetsRef(dcOrVars, vars));
+};
+
+const getBudgetByIdRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'getBudgetById', inputVars);
+}
+getBudgetByIdRef.operationName = 'getBudgetById';
+exports.getBudgetByIdRef = getBudgetByIdRef;
+
+exports.getBudgetById = function getBudgetById(dcOrVars, vars) {
+  return executeQuery(getBudgetByIdRef(dcOrVars, vars));
 };

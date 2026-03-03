@@ -7,30 +7,6 @@ const connectorConfig = {
 };
 exports.connectorConfig = connectorConfig;
 
-const cashInHandInsertRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
-  dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'cashInHandInsert', inputVars);
-}
-cashInHandInsertRef.operationName = 'cashInHandInsert';
-exports.cashInHandInsertRef = cashInHandInsertRef;
-
-exports.cashInHandInsert = function cashInHandInsert(dcOrVars, vars) {
-  return executeMutation(cashInHandInsertRef(dcOrVars, vars));
-};
-
-const cashInHandDeleteRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
-  dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'cashInHandDelete', inputVars);
-}
-cashInHandDeleteRef.operationName = 'cashInHandDelete';
-exports.cashInHandDeleteRef = cashInHandDeleteRef;
-
-exports.cashInHandDelete = function cashInHandDelete(dcOrVars, vars) {
-  return executeMutation(cashInHandDeleteRef(dcOrVars, vars));
-};
-
 const listCashInHandRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
   dcInstance._useGeneratedSdk();
@@ -173,4 +149,28 @@ exports.getBankByIdRef = getBankByIdRef;
 
 exports.getBankById = function getBankById(dcOrVars, vars) {
   return executeQuery(getBankByIdRef(dcOrVars, vars));
+};
+
+const cashInHandInsertRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'cashInHandInsert', inputVars);
+}
+cashInHandInsertRef.operationName = 'cashInHandInsert';
+exports.cashInHandInsertRef = cashInHandInsertRef;
+
+exports.cashInHandInsert = function cashInHandInsert(dcOrVars, vars) {
+  return executeMutation(cashInHandInsertRef(dcOrVars, vars));
+};
+
+const cashInHandDeleteRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'cashInHandDelete', inputVars);
+}
+cashInHandDeleteRef.operationName = 'cashInHandDelete';
+exports.cashInHandDeleteRef = cashInHandDeleteRef;
+
+exports.cashInHandDelete = function cashInHandDelete(dcOrVars, vars) {
+  return executeMutation(cashInHandDeleteRef(dcOrVars, vars));
 };

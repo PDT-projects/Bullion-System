@@ -59,7 +59,7 @@ export function CreateInventoryView({
         <div key={step.id} className="flex items-center">
           <div className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold ${
             currentStep === step.id 
-              ? 'bg-blue-600 text-white' 
+              ? 'bg-[#4f46e5] text-white' 
               : steps.findIndex(s => s.id === currentStep) > index 
                 ? 'bg-green-600 text-white'
                 : 'bg-gray-200 text-gray-600'
@@ -71,7 +71,7 @@ export function CreateInventoryView({
             )}
           </div>
           <span className={`ml-2 mr-4 text-sm font-medium ${
-            currentStep === step.id ? 'text-blue-600' : 'text-gray-500'
+            currentStep === step.id ? 'text-[#4f46e5]' : 'text-gray-500'
           }`}>
             {step.label}
           </span>
@@ -254,7 +254,7 @@ export function CreateInventoryView({
           </div>
           <button
             onClick={addSerialNumber}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors flex items-center gap-2"
           >
             <Plus size={18} />
             Add
@@ -462,7 +462,7 @@ export function CreateInventoryView({
             {currentStep !== 'confirmation' ? (
               <button
                 onClick={goToNextStep}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="px-6 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors flex items-center gap-2"
               >
                 Next
                 <ArrowRight size={18} />

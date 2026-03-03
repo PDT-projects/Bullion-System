@@ -129,14 +129,14 @@ export class TransferDataConnectService {
    */
   static async createTransfer(transfer: Omit<BankTransfer, 'id'>): Promise<BankTransfer> {
     try {
-      console.log('📡 Creating transfer in Data Connect:', transfer.amount);
+      console.log('📡 Creating transfer in Data Connect:', JSON.stringify(transfer, null, 2));
       
       // Generate a unique ID
       const id = `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // Prepare variables for Data Connect
       const variables: TransferInsertVariables = {
-        id,
+        id: id,
         date: transfer.date,
         fromBankId: transfer.fromBankId,
         fromBankName: transfer.fromBankName,
@@ -146,20 +146,30 @@ export class TransferDataConnectService {
         note: transfer.note || null
       };
 
-      // Get Data Connect instance and execute the mutation
+      console.log('📡 Transfer variables:', JSON.stringify(variables, null, 2));
+
+      // Get Data Connect instance
       const dc = getDC();
-      await transferInsert(dc, variables);
+      console.log('📡 Data Connect instance obtained');
+      
+      // Execute the mutation
+      const result = await transferInsert(dc, variables);
+      console.log('📡 Transfer insert result:', result);
       
       const createdTransfer: BankTransfer = {
         ...transfer,
-        id: variables.id!
+        id: id
       };
       
       console.log('✅ Transfer created with ID:', createdTransfer.id);
       return createdTransfer;
     } catch (error) {
       console.error('❌ Error creating transfer in Data Connect:', error);
-      throw new Error('Failed to create transfer in Data Connect');
+      if (error instanceof Error) {
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+      }
+      throw new Error(`Failed to create transfer in Data Connect: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

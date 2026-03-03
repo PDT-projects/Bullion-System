@@ -24,14 +24,14 @@ You can also follow the instructions from the [Data Connect documentation](https
   - [*listBanks*](#listbanks)
   - [*getBankById*](#getbankbyid)
 - [**Mutations**](#mutations)
-  - [*cashInHandInsert*](#cashinhandinsert)
-  - [*cashInHandDelete*](#cashinhanddelete)
   - [*transferInsert*](#transferinsert)
   - [*transferDelete*](#transferdelete)
   - [*bankInsert*](#bankinsert)
   - [*bankUpdate*](#bankupdate)
   - [*bankDelete*](#bankdelete)
   - [*updateBankBalance*](#updatebankbalance)
+  - [*cashInHandInsert*](#cashinhandinsert)
+  - [*cashInHandDelete*](#cashinhanddelete)
 
 # TanStack Query Firebase & TanStack React Query
 This SDK provides [React](https://react.dev/) hooks generated specific to your application, for the operations found in the connector `banking`. These hooks are generated using [TanStack Query Firebase](https://react-query-firebase.invertase.dev/) by our partners at Invertase, a library built on top of [TanStack React Query v5](https://tanstack.com/query/v5/docs/framework/react/overview).
@@ -718,216 +718,6 @@ Here's a general overview of how to use the generated Mutation hooks in your cod
 
 Below are examples of how to use the `banking` connector's generated Mutation hook functions to execute each Mutation. You can also follow the examples from the [Data Connect documentation](https://firebase.google.com/docs/data-connect/web-sdk#operations-react-angular).
 
-## cashInHandInsert
-You can execute the `cashInHandInsert` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
-```javascript
-useCashInHandInsert(options?: useDataConnectMutationOptions<CashInHandInsertData, FirebaseError, CashInHandInsertVariables | void>): UseDataConnectMutationResult<CashInHandInsertData, CashInHandInsertVariables>;
-```
-You can also pass in a `DataConnect` instance to the Mutation hook function.
-```javascript
-useCashInHandInsert(dc: DataConnect, options?: useDataConnectMutationOptions<CashInHandInsertData, FirebaseError, CashInHandInsertVariables | void>): UseDataConnectMutationResult<CashInHandInsertData, CashInHandInsertVariables>;
-```
-
-### Variables
-The `cashInHandInsert` Mutation has an optional argument of type `CashInHandInsertVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-
-```javascript
-export interface CashInHandInsertVariables {
-  id?: string;
-  date?: string;
-  company?: string;
-  mainCategory?: string;
-  subCategory?: string;
-  amount?: number;
-  mode?: string;
-  note?: string | null;
-}
-```
-### Return Type
-Recall that calling the `cashInHandInsert` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
-
-To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
-
-To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
-
-To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `cashInHandInsert` Mutation is of type `CashInHandInsertData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-```javascript
-export interface CashInHandInsertData {
-  cashInHand_insert: CashInHand_Key;
-}
-```
-
-To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
-
-### Using `cashInHandInsert`'s Mutation hook function
-
-```javascript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, CashInHandInsertVariables } from '@erp-system/banking';
-import { useCashInHandInsert } from '@erp-system/banking/react'
-
-export default function CashInHandInsertComponent() {
-  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
-  const mutation = useCashInHandInsert();
-
-  // You can also pass in a `DataConnect` instance to the Mutation hook function.
-  const dataConnect = getDataConnect(connectorConfig);
-  const mutation = useCashInHandInsert(dataConnect);
-
-  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  const mutation = useCashInHandInsert(options);
-
-  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
-  const dataConnect = getDataConnect(connectorConfig);
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  const mutation = useCashInHandInsert(dataConnect, options);
-
-  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
-  // The `useCashInHandInsert` Mutation has an optional argument of type `CashInHandInsertVariables`:
-  const cashInHandInsertVars: CashInHandInsertVariables = {
-    id: ..., // optional
-    date: ..., // optional
-    company: ..., // optional
-    mainCategory: ..., // optional
-    subCategory: ..., // optional
-    amount: ..., // optional
-    mode: ..., // optional
-    note: ..., // optional
-  };
-  mutation.mutate(cashInHandInsertVars);
-  // Variables can be defined inline as well.
-  mutation.mutate({ id: ..., date: ..., company: ..., mainCategory: ..., subCategory: ..., amount: ..., mode: ..., note: ..., });
-  // Since all variables are optional for this Mutation, you can omit the `CashInHandInsertVariables` argument.
-  mutation.mutate();
-
-  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
-  // Since all variables are optional for this Mutation, you can provide options without providing any variables.
-  // To do so, you must pass `undefined` where you would normally pass the variables.
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  mutation.mutate(cashInHandInsertVars /** or undefined */, options);
-
-  // Then, you can render your component dynamically based on the status of the Mutation.
-  if (mutation.isPending) {
-    return <div>Loading...</div>;
-  }
-
-  if (mutation.isError) {
-    return <div>Error: {mutation.error.message}</div>;
-  }
-
-  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
-  if (mutation.isSuccess) {
-    console.log(mutation.data.cashInHand_insert);
-  }
-  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
-}
-```
-
-## cashInHandDelete
-You can execute the `cashInHandDelete` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
-```javascript
-useCashInHandDelete(options?: useDataConnectMutationOptions<CashInHandDeleteData, FirebaseError, CashInHandDeleteVariables | void>): UseDataConnectMutationResult<CashInHandDeleteData, CashInHandDeleteVariables>;
-```
-You can also pass in a `DataConnect` instance to the Mutation hook function.
-```javascript
-useCashInHandDelete(dc: DataConnect, options?: useDataConnectMutationOptions<CashInHandDeleteData, FirebaseError, CashInHandDeleteVariables | void>): UseDataConnectMutationResult<CashInHandDeleteData, CashInHandDeleteVariables>;
-```
-
-### Variables
-The `cashInHandDelete` Mutation has an optional argument of type `CashInHandDeleteVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-
-```javascript
-export interface CashInHandDeleteVariables {
-  id?: string;
-}
-```
-### Return Type
-Recall that calling the `cashInHandDelete` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
-
-To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
-
-To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
-
-To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `cashInHandDelete` Mutation is of type `CashInHandDeleteData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-```javascript
-export interface CashInHandDeleteData {
-  cashInHand_delete?: CashInHand_Key | null;
-}
-```
-
-To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
-
-### Using `cashInHandDelete`'s Mutation hook function
-
-```javascript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, CashInHandDeleteVariables } from '@erp-system/banking';
-import { useCashInHandDelete } from '@erp-system/banking/react'
-
-export default function CashInHandDeleteComponent() {
-  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
-  const mutation = useCashInHandDelete();
-
-  // You can also pass in a `DataConnect` instance to the Mutation hook function.
-  const dataConnect = getDataConnect(connectorConfig);
-  const mutation = useCashInHandDelete(dataConnect);
-
-  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  const mutation = useCashInHandDelete(options);
-
-  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
-  const dataConnect = getDataConnect(connectorConfig);
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  const mutation = useCashInHandDelete(dataConnect, options);
-
-  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
-  // The `useCashInHandDelete` Mutation has an optional argument of type `CashInHandDeleteVariables`:
-  const cashInHandDeleteVars: CashInHandDeleteVariables = {
-    id: ..., // optional
-  };
-  mutation.mutate(cashInHandDeleteVars);
-  // Variables can be defined inline as well.
-  mutation.mutate({ id: ..., });
-  // Since all variables are optional for this Mutation, you can omit the `CashInHandDeleteVariables` argument.
-  mutation.mutate();
-
-  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
-  // Since all variables are optional for this Mutation, you can provide options without providing any variables.
-  // To do so, you must pass `undefined` where you would normally pass the variables.
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  mutation.mutate(cashInHandDeleteVars /** or undefined */, options);
-
-  // Then, you can render your component dynamically based on the status of the Mutation.
-  if (mutation.isPending) {
-    return <div>Loading...</div>;
-  }
-
-  if (mutation.isError) {
-    return <div>Error: {mutation.error.message}</div>;
-  }
-
-  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
-  if (mutation.isSuccess) {
-    console.log(mutation.data.cashInHand_delete);
-  }
-  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
-}
-```
-
 ## transferInsert
 You can execute the `transferInsert` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
 ```javascript
@@ -1539,6 +1329,216 @@ export default function UpdateBankBalanceComponent() {
   // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
   if (mutation.isSuccess) {
     console.log(mutation.data.bank_update);
+  }
+  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## cashInHandInsert
+You can execute the `cashInHandInsert` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
+```javascript
+useCashInHandInsert(options?: useDataConnectMutationOptions<CashInHandInsertData, FirebaseError, CashInHandInsertVariables | void>): UseDataConnectMutationResult<CashInHandInsertData, CashInHandInsertVariables>;
+```
+You can also pass in a `DataConnect` instance to the Mutation hook function.
+```javascript
+useCashInHandInsert(dc: DataConnect, options?: useDataConnectMutationOptions<CashInHandInsertData, FirebaseError, CashInHandInsertVariables | void>): UseDataConnectMutationResult<CashInHandInsertData, CashInHandInsertVariables>;
+```
+
+### Variables
+The `cashInHandInsert` Mutation has an optional argument of type `CashInHandInsertVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface CashInHandInsertVariables {
+  id?: string;
+  date?: string;
+  company?: string;
+  mainCategory?: string;
+  subCategory?: string;
+  amount?: number;
+  mode?: string;
+  note?: string | null;
+}
+```
+### Return Type
+Recall that calling the `cashInHandInsert` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
+
+To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
+
+To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
+
+To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `cashInHandInsert` Mutation is of type `CashInHandInsertData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface CashInHandInsertData {
+  cashInHand_insert: CashInHand_Key;
+}
+```
+
+To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
+
+### Using `cashInHandInsert`'s Mutation hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, CashInHandInsertVariables } from '@erp-system/banking';
+import { useCashInHandInsert } from '@erp-system/banking/react'
+
+export default function CashInHandInsertComponent() {
+  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
+  const mutation = useCashInHandInsert();
+
+  // You can also pass in a `DataConnect` instance to the Mutation hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const mutation = useCashInHandInsert(dataConnect);
+
+  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCashInHandInsert(options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCashInHandInsert(dataConnect, options);
+
+  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
+  // The `useCashInHandInsert` Mutation has an optional argument of type `CashInHandInsertVariables`:
+  const cashInHandInsertVars: CashInHandInsertVariables = {
+    id: ..., // optional
+    date: ..., // optional
+    company: ..., // optional
+    mainCategory: ..., // optional
+    subCategory: ..., // optional
+    amount: ..., // optional
+    mode: ..., // optional
+    note: ..., // optional
+  };
+  mutation.mutate(cashInHandInsertVars);
+  // Variables can be defined inline as well.
+  mutation.mutate({ id: ..., date: ..., company: ..., mainCategory: ..., subCategory: ..., amount: ..., mode: ..., note: ..., });
+  // Since all variables are optional for this Mutation, you can omit the `CashInHandInsertVariables` argument.
+  mutation.mutate();
+
+  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
+  // Since all variables are optional for this Mutation, you can provide options without providing any variables.
+  // To do so, you must pass `undefined` where you would normally pass the variables.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  mutation.mutate(cashInHandInsertVars /** or undefined */, options);
+
+  // Then, you can render your component dynamically based on the status of the Mutation.
+  if (mutation.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (mutation.isError) {
+    return <div>Error: {mutation.error.message}</div>;
+  }
+
+  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
+  if (mutation.isSuccess) {
+    console.log(mutation.data.cashInHand_insert);
+  }
+  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## cashInHandDelete
+You can execute the `cashInHandDelete` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
+```javascript
+useCashInHandDelete(options?: useDataConnectMutationOptions<CashInHandDeleteData, FirebaseError, CashInHandDeleteVariables | void>): UseDataConnectMutationResult<CashInHandDeleteData, CashInHandDeleteVariables>;
+```
+You can also pass in a `DataConnect` instance to the Mutation hook function.
+```javascript
+useCashInHandDelete(dc: DataConnect, options?: useDataConnectMutationOptions<CashInHandDeleteData, FirebaseError, CashInHandDeleteVariables | void>): UseDataConnectMutationResult<CashInHandDeleteData, CashInHandDeleteVariables>;
+```
+
+### Variables
+The `cashInHandDelete` Mutation has an optional argument of type `CashInHandDeleteVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface CashInHandDeleteVariables {
+  id?: string;
+}
+```
+### Return Type
+Recall that calling the `cashInHandDelete` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
+
+To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
+
+To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
+
+To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `cashInHandDelete` Mutation is of type `CashInHandDeleteData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface CashInHandDeleteData {
+  cashInHand_delete?: CashInHand_Key | null;
+}
+```
+
+To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
+
+### Using `cashInHandDelete`'s Mutation hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, CashInHandDeleteVariables } from '@erp-system/banking';
+import { useCashInHandDelete } from '@erp-system/banking/react'
+
+export default function CashInHandDeleteComponent() {
+  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
+  const mutation = useCashInHandDelete();
+
+  // You can also pass in a `DataConnect` instance to the Mutation hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const mutation = useCashInHandDelete(dataConnect);
+
+  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCashInHandDelete(options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCashInHandDelete(dataConnect, options);
+
+  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
+  // The `useCashInHandDelete` Mutation has an optional argument of type `CashInHandDeleteVariables`:
+  const cashInHandDeleteVars: CashInHandDeleteVariables = {
+    id: ..., // optional
+  };
+  mutation.mutate(cashInHandDeleteVars);
+  // Variables can be defined inline as well.
+  mutation.mutate({ id: ..., });
+  // Since all variables are optional for this Mutation, you can omit the `CashInHandDeleteVariables` argument.
+  mutation.mutate();
+
+  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
+  // Since all variables are optional for this Mutation, you can provide options without providing any variables.
+  // To do so, you must pass `undefined` where you would normally pass the variables.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  mutation.mutate(cashInHandDeleteVars /** or undefined */, options);
+
+  // Then, you can render your component dynamically based on the status of the Mutation.
+  if (mutation.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (mutation.isError) {
+    return <div>Error: {mutation.error.message}</div>;
+  }
+
+  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
+  if (mutation.isSuccess) {
+    console.log(mutation.data.cashInHand_delete);
   }
   return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
 }

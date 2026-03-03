@@ -268,6 +268,25 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                     {inventoryType === 'in-stock' ? 'In-Stock / Received' : 'On-Order / Pending'}
                   </span>
                 </div>
+                
+                {/* Multi-model costing summary */}
+                {costingOption === 'with' && productSummary.modelCount !== undefined && productSummary.modelCount > 0 && (
+                  <>
+                    <div className="col-span-2 border-t border-blue-200 pt-2 mt-2">
+                      <span className="text-blue-700 font-medium">Multi-Model Costing Summary:</span>
+                    </div>
+                    <div>
+                      <span className="text-blue-700">Models:</span>
+                      <span className="ml-2 font-medium text-blue-900">{productSummary.modelCount}</span>
+                    </div>
+                    {productSummary.totalValueOfBrand !== undefined && (
+                      <div>
+                        <span className="text-blue-700">Total Brand Value:</span>
+                        <span className="ml-2 font-bold text-blue-900">{formatCurrency(productSummary.totalValueOfBrand)}</span>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 
@@ -285,7 +304,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                 disabled={!isValid}
                 className={`px-8 py-4 rounded-lg transition-colors font-medium text-lg shadow-lg flex items-center gap-2 ${
                   isValid
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    ? 'bg-[#4f46e5] text-white hover:bg-[#4338ca]'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >

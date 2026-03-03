@@ -1059,6 +1059,15 @@ extend type Product {
     distinct: Boolean = false
   ): Int! @fdc_generated(from: "Product.costPrice", purpose: QUERY_COUNT)
   """
+  ✨ Count the number of rows in the `Product` table where the `costingConsignmentValue` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costingConsignmentValue_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.costingConsignmentValue", purpose: QUERY_COUNT)
+  """
   ✨ Count the number of rows in the `Product` table where the `costingCustomPerModel` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """
   costingCustomPerModel_count(
@@ -1095,6 +1104,15 @@ extend type Product {
     distinct: Boolean = false
   ): Int! @fdc_generated(from: "Product.costingFreightPerUnit", purpose: QUERY_COUNT)
   """
+  ✨ Count the number of rows in the `Product` table where the `costingModelsJson` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costingModelsJson_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.costingModelsJson", purpose: QUERY_COUNT)
+  """
   ✨ Count the number of rows in the `Product` table where the `costingOption` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """
   costingOption_count(
@@ -1113,6 +1131,15 @@ extend type Product {
     distinct: Boolean = false
   ): Int! @fdc_generated(from: "Product.costingPercentage", purpose: QUERY_COUNT)
   """
+  ✨ Count the number of rows in the `Product` table where the `costingShipmentTotalUSD` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costingShipmentTotalUSD_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.costingShipmentTotalUSD", purpose: QUERY_COUNT)
+  """
   ✨ Count the number of rows in the `Product` table where the `costingTotalCostUSD` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """
   costingTotalCostUSD_count(
@@ -1121,6 +1148,24 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Int! @fdc_generated(from: "Product.costingTotalCostUSD", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Product` table where the `costingTotalCustomsValue` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costingTotalCustomsValue_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.costingTotalCustomsValue", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Product` table where the `costingTotalFreightValue` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costingTotalFreightValue_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.costingTotalFreightValue", purpose: QUERY_COUNT)
   """
   ✨ Count the number of rows in the `Product` table where the `costingTotalShipmentValuePKR` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """
@@ -1139,6 +1184,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Int! @fdc_generated(from: "Product.costingTotalUnitCost", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Product` table where the `costingTotalValueOfBrand` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costingTotalValueOfBrand_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.costingTotalValueOfBrand", purpose: QUERY_COUNT)
   """
   ✨ Count the number of rows in the `Product` table where the `costingUnitCostPKR` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """
@@ -1166,6 +1220,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Int! @fdc_generated(from: "Product.costingUnits", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Product` table where the `costingUsdRate` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costingUsdRate_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.costingUsdRate", purpose: QUERY_COUNT)
   """
   ✨ Count the number of rows in the `Product` table where the `createdAt` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """
@@ -1293,6 +1356,15 @@ extend type Product {
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costPrice", purpose: QUERY_SUM)
   """
+  ✨ Sum the `costingConsignmentValue` field in the `Product` table.
+  """
+  costingConsignmentValue_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingConsignmentValue", purpose: QUERY_SUM)
+  """
   ✨ Sum the `costingCustomPerModel` field in the `Product` table.
   """
   costingCustomPerModel_sum(
@@ -1338,6 +1410,15 @@ extend type Product {
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costingPercentage", purpose: QUERY_SUM)
   """
+  ✨ Sum the `costingShipmentTotalUSD` field in the `Product` table.
+  """
+  costingShipmentTotalUSD_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingShipmentTotalUSD", purpose: QUERY_SUM)
+  """
   ✨ Sum the `costingTotalCostUSD` field in the `Product` table.
   """
   costingTotalCostUSD_sum(
@@ -1346,6 +1427,24 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costingTotalCostUSD", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `costingTotalCustomsValue` field in the `Product` table.
+  """
+  costingTotalCustomsValue_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingTotalCustomsValue", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `costingTotalFreightValue` field in the `Product` table.
+  """
+  costingTotalFreightValue_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingTotalFreightValue", purpose: QUERY_SUM)
   """
   ✨ Sum the `costingTotalShipmentValuePKR` field in the `Product` table.
   """
@@ -1364,6 +1463,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costingTotalUnitCost", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `costingTotalValueOfBrand` field in the `Product` table.
+  """
+  costingTotalValueOfBrand_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingTotalValueOfBrand", purpose: QUERY_SUM)
   """
   ✨ Sum the `costingUnitCostPKR` field in the `Product` table.
   """
@@ -1391,6 +1499,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costingUnits", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `costingUsdRate` field in the `Product` table.
+  """
+  costingUsdRate_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingUsdRate", purpose: QUERY_SUM)
   """
   ✨ Sum the `sellPrice` field in the `Product` table.
   """
@@ -1427,6 +1544,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costPrice", purpose: QUERY_AVG)
+  """
+  ✨ Average the `costingConsignmentValue` field in the `Product` table.
+  """
+  costingConsignmentValue_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingConsignmentValue", purpose: QUERY_AVG)
   """
   ✨ Average the `costingCustomPerModel` field in the `Product` table.
   """
@@ -1473,6 +1599,15 @@ extend type Product {
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costingPercentage", purpose: QUERY_AVG)
   """
+  ✨ Average the `costingShipmentTotalUSD` field in the `Product` table.
+  """
+  costingShipmentTotalUSD_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingShipmentTotalUSD", purpose: QUERY_AVG)
+  """
   ✨ Average the `costingTotalCostUSD` field in the `Product` table.
   """
   costingTotalCostUSD_avg(
@@ -1481,6 +1616,24 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costingTotalCostUSD", purpose: QUERY_AVG)
+  """
+  ✨ Average the `costingTotalCustomsValue` field in the `Product` table.
+  """
+  costingTotalCustomsValue_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingTotalCustomsValue", purpose: QUERY_AVG)
+  """
+  ✨ Average the `costingTotalFreightValue` field in the `Product` table.
+  """
+  costingTotalFreightValue_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingTotalFreightValue", purpose: QUERY_AVG)
   """
   ✨ Average the `costingTotalShipmentValuePKR` field in the `Product` table.
   """
@@ -1499,6 +1652,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costingTotalUnitCost", purpose: QUERY_AVG)
+  """
+  ✨ Average the `costingTotalValueOfBrand` field in the `Product` table.
+  """
+  costingTotalValueOfBrand_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingTotalValueOfBrand", purpose: QUERY_AVG)
   """
   ✨ Average the `costingUnitCostPKR` field in the `Product` table.
   """
@@ -1526,6 +1688,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Float @fdc_generated(from: "Product.costingUnits", purpose: QUERY_AVG)
+  """
+  ✨ Average the `costingUsdRate` field in the `Product` table.
+  """
+  costingUsdRate_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Product.costingUsdRate", purpose: QUERY_AVG)
   """
   ✨ Average the `sellPrice` field in the `Product` table.
   """
@@ -1558,6 +1729,10 @@ extend type Product {
   """
   costPrice_min: Float @fdc_generated(from: "Product.costPrice", purpose: QUERY_MIN)
   """
+  ✨ Minimum of the `costingConsignmentValue` field in the `Product` table.
+  """
+  costingConsignmentValue_min: Float @fdc_generated(from: "Product.costingConsignmentValue", purpose: QUERY_MIN)
+  """
   ✨ Minimum of the `costingCustomPerModel` field in the `Product` table.
   """
   costingCustomPerModel_min: Float @fdc_generated(from: "Product.costingCustomPerModel", purpose: QUERY_MIN)
@@ -1578,9 +1753,21 @@ extend type Product {
   """
   costingPercentage_min: Float @fdc_generated(from: "Product.costingPercentage", purpose: QUERY_MIN)
   """
+  ✨ Minimum of the `costingShipmentTotalUSD` field in the `Product` table.
+  """
+  costingShipmentTotalUSD_min: Float @fdc_generated(from: "Product.costingShipmentTotalUSD", purpose: QUERY_MIN)
+  """
   ✨ Minimum of the `costingTotalCostUSD` field in the `Product` table.
   """
   costingTotalCostUSD_min: Float @fdc_generated(from: "Product.costingTotalCostUSD", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `costingTotalCustomsValue` field in the `Product` table.
+  """
+  costingTotalCustomsValue_min: Float @fdc_generated(from: "Product.costingTotalCustomsValue", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `costingTotalFreightValue` field in the `Product` table.
+  """
+  costingTotalFreightValue_min: Float @fdc_generated(from: "Product.costingTotalFreightValue", purpose: QUERY_MIN)
   """
   ✨ Minimum of the `costingTotalShipmentValuePKR` field in the `Product` table.
   """
@@ -1589,6 +1776,10 @@ extend type Product {
   ✨ Minimum of the `costingTotalUnitCost` field in the `Product` table.
   """
   costingTotalUnitCost_min: Float @fdc_generated(from: "Product.costingTotalUnitCost", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `costingTotalValueOfBrand` field in the `Product` table.
+  """
+  costingTotalValueOfBrand_min: Float @fdc_generated(from: "Product.costingTotalValueOfBrand", purpose: QUERY_MIN)
   """
   ✨ Minimum of the `costingUnitCostPKR` field in the `Product` table.
   """
@@ -1601,6 +1792,10 @@ extend type Product {
   ✨ Minimum of the `costingUnits` field in the `Product` table.
   """
   costingUnits_min: Float @fdc_generated(from: "Product.costingUnits", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `costingUsdRate` field in the `Product` table.
+  """
+  costingUsdRate_min: Float @fdc_generated(from: "Product.costingUsdRate", purpose: QUERY_MIN)
   """
   ✨ Minimum of the `sellPrice` field in the `Product` table.
   """
@@ -1617,6 +1812,10 @@ extend type Product {
   ✨ Maximum of the `costPrice` field in the `Product` table.
   """
   costPrice_max: Float @fdc_generated(from: "Product.costPrice", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `costingConsignmentValue` field in the `Product` table.
+  """
+  costingConsignmentValue_max: Float @fdc_generated(from: "Product.costingConsignmentValue", purpose: QUERY_MAX)
   """
   ✨ Maximum of the `costingCustomPerModel` field in the `Product` table.
   """
@@ -1638,9 +1837,21 @@ extend type Product {
   """
   costingPercentage_max: Float @fdc_generated(from: "Product.costingPercentage", purpose: QUERY_MAX)
   """
+  ✨ Maximum of the `costingShipmentTotalUSD` field in the `Product` table.
+  """
+  costingShipmentTotalUSD_max: Float @fdc_generated(from: "Product.costingShipmentTotalUSD", purpose: QUERY_MAX)
+  """
   ✨ Maximum of the `costingTotalCostUSD` field in the `Product` table.
   """
   costingTotalCostUSD_max: Float @fdc_generated(from: "Product.costingTotalCostUSD", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `costingTotalCustomsValue` field in the `Product` table.
+  """
+  costingTotalCustomsValue_max: Float @fdc_generated(from: "Product.costingTotalCustomsValue", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `costingTotalFreightValue` field in the `Product` table.
+  """
+  costingTotalFreightValue_max: Float @fdc_generated(from: "Product.costingTotalFreightValue", purpose: QUERY_MAX)
   """
   ✨ Maximum of the `costingTotalShipmentValuePKR` field in the `Product` table.
   """
@@ -1649,6 +1860,10 @@ extend type Product {
   ✨ Maximum of the `costingTotalUnitCost` field in the `Product` table.
   """
   costingTotalUnitCost_max: Float @fdc_generated(from: "Product.costingTotalUnitCost", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `costingTotalValueOfBrand` field in the `Product` table.
+  """
+  costingTotalValueOfBrand_max: Float @fdc_generated(from: "Product.costingTotalValueOfBrand", purpose: QUERY_MAX)
   """
   ✨ Maximum of the `costingUnitCostPKR` field in the `Product` table.
   """
@@ -1661,6 +1876,10 @@ extend type Product {
   ✨ Maximum of the `costingUnits` field in the `Product` table.
   """
   costingUnits_max: Float @fdc_generated(from: "Product.costingUnits", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `costingUsdRate` field in the `Product` table.
+  """
+  costingUsdRate_max: Float @fdc_generated(from: "Product.costingUsdRate", purpose: QUERY_MAX)
   """
   ✨ Maximum of the `sellPrice` field in the `Product` table.
   """

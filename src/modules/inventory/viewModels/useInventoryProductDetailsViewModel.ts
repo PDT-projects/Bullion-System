@@ -1,18 +1,24 @@
 // Inventory Module - ViewModel Layer
 // useInventoryProductDetailsViewModel - Step 2: Product details with conditional costing fields
+// Supports multi-model costing with real-time calculations
+// Updated: Percentage calculation now uses unitCostUSD / totalUnitCostUSD
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ProductFormData, CostingOption, BuyType, ProductStatus, InventoryEntryType } from '../models/types';
-
-import { InventoryService } from '../models/inventoryService';
+import { ProductFormData, CostingOption, BuyType, ProductStatus, InventoryEntryType, CostingModel, CostingInfo, BrandWithModels } from '../models/types';
+import { 
+  createEmptyCostingModel, 
+  recalculateAllModels, 
+  createInitialCostingInfo,
+  generateModelId,
+  calculateModelCosts
+} from '../models/costingCalculator';
 
 export interface UseInventoryProductDetailsViewModelReturn {
   // State
   formData: ProductFormData;
   costingOption: CostingOption;
   inventoryType: InventoryEntryType;
-
   
   // Serial number management
   serialInputs: string[];
@@ -33,18 +39,15 @@ export interface UseInventoryProductDetailsViewModelReturn {
   setStatus: (value: ProductStatus) => void;
   setIsDamaged: (value: boolean) => void;
   
-  // Actions - Costing fields (only when costingOption === 'with')
-  setCostingUnits: (value: number) => void;
-  setUnitCostUSD: (value: number) => void;
-  setTotalCostUSD: (value: number) => void;
-  setPercentage: (value: number) => void;
-  setCustomPerModel: (value: number) => void;
-  setCustomPerUnit: (value: number) => void;
-  setFreightPerModel: (value: number) => void;
-  setFreightPerUnit: (value: number) => void;
-  setUnitCostPKR: (value: number) => void;
-  setTotalUnitCost: (value: number) => void;
-  setTotalShipmentValuePKR: (value: number) => void;
+  // Actions - Multi-Model Costing Global Inputs
+  setUsdRate: (value: number) => void;
+  setTotalCustomsValue: (value: number) => void;
+  setTotalFreightValue: (value: number) => void;
+  
+  // Actions - Model Management
+  addModel: () => void;
+  updateModelField: (modelId: string, field: keyof CostingModel, value: string | number) => void;
+  removeModel: (modelId: string) => void;
   
   // Actions - Serial numbers
   updateSerialNumber: (index: number, value: string) => void;
@@ -58,6 +61,14 @@ export interface UseInventoryProductDetailsViewModelReturn {
   showCostingFields: boolean;
   categories: string[];
   cities: string[];
+  
+  // Costing summary (calculated)
+  costingSummary: {
+    totalUnitCostUSD: number;
+    shipmentTotalUSD: number;
+    consignmentValue: number;
+    totalValueOfBrand: number;
+  };
 }
 
 const CATEGORIES = [
@@ -77,8 +88,7 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   const costingOption = (searchParams.get('costing') as CostingOption) || 'without';
   const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
 
-
-  // Initialize form data
+  // Initialize form data with new multi-model costing structure
   const [formData, setFormData] = useState<ProductFormData>({
     currentStep: 2,
     costingOption,
@@ -94,24 +104,46 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     isDamaged: false,
     serialNumbers: [],
     serialCities: {},
-    costing: costingOption === 'with' ? {
-      units: 0,
-      unitCostUSD: 0,
-      totalCostUSD: 0,
-      percentage: 0,
-      customPerModel: 0,
-      customPerUnit: 0,
-      freightPerModel: 0,
-      freightPerUnit: 0,
-      unitCostPKR: 0,
-      totalUnitCost: 0,
-      totalShipmentValuePKR: 0,
-    } : undefined,
+    costing: costingOption === 'with' ? createInitialCostingInfo() : undefined,
   });
 
   // Serial inputs state
   const [serialInputs, setSerialInputs] = useState<string[]>([]);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
+  
+  // Brand-Model dropdown state
+  const [selectedBrand, setSelectedBrand] = useState<string>('');
+  const [availableModelsForBrand, setAvailableModelsForBrand] = useState<string[]>([]);
+  
+  // Sample brand-model data (in production, this would come from Data Connect)
+  const availableBrands: BrandWithModels[] = [
+    { brandName: 'Hikvision', models: ['DS-2CD2043G2', 'DS-2CD2347G2', 'DS-2CD2643G2', 'DS-2CD2T36G2'] },
+    { brandName: 'Dahua', models: ['IPC-HFW2831S', 'IPC-HDBW2831R', 'IPC-HFW2831T', 'IPC-HDBW2831'] },
+    { brandName: 'Bosch', models: ['NIN-733V', 'NIN-732V', 'NIN-630', 'NIN-730'] },
+    { brandName: 'Axis', models: ['P3245-V', 'P3245-LVE', 'Q6135-LE', 'Q6135-LE'] },
+    { brandName: 'Sony', models: ['SNC-EM632', 'SNC-EM652', 'SNC-VB770', 'SNC-EB602'] },
+    { brandName: 'Panasonic', models: ['WV-S2131', 'WV-S2130', 'WV-S2531', 'WV-S2520'] },
+  ];
+
+  // Auto-recalculate when costing inputs change
+  useEffect(() => {
+    if (costingOption === 'with' && formData.costing && formData.costing.models.length > 0) {
+      const { models, usdRate, totalCustomsValue, totalFreightValue } = formData.costing;
+      const result = recalculateAllModels(models, usdRate, totalCustomsValue, totalFreightValue);
+      
+      setFormData(prev => ({
+        ...prev,
+        costing: prev.costing ? {
+          ...prev.costing,
+          models: result.models,
+          totalUnitCostUSD: result.summary.totalUnitCostUSD,
+          shipmentTotalUSD: result.summary.shipmentTotalUSD,
+          consignmentValue: result.summary.consignmentValue,
+          totalValueOfBrand: result.summary.totalValueOfBrand,
+        } : undefined,
+      }));
+    }
+  }, [formData.costing?.usdRate, formData.costing?.totalCustomsValue, formData.costing?.totalFreightValue, costingOption]);
 
   // Update serial inputs when stock changes
   const handleStockChange = useCallback((newStock: number) => {
@@ -119,15 +151,12 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     
     setSerialInputs(prev => {
       if (newStock > prev.length) {
-        // Add empty slots
         const toAdd = newStock - prev.length;
         return [...prev, ...Array(toAdd).fill('')];
       } else if (newStock < prev.length) {
-        // Remove excess slots
         const removedSerials = prev.slice(newStock);
         const keptSerials = prev.slice(0, newStock);
         
-        // Clean up serialCities for removed serials
         setFormData(prevData => {
           const updatedCities = { ...prevData.serialCities };
           removedSerials.forEach(serial => {
@@ -185,25 +214,145 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     setFormData(prev => ({ ...prev, isDamaged: value }));
   }, []);
 
-  // Costing field setters
-  const setCostingField = useCallback((field: keyof NonNullable<ProductFormData['costing']>, value: number) => {
+  // Brand-Model selection handlers
+  const handleBrandChange = useCallback((brand: string) => {
+    setSelectedBrand(brand);
+    setAvailableModelsForBrand([]);
+    setFormData(prev => ({ ...prev, brandName: brand, modelName: '' }));
+    
+    // Find models for the selected brand
+    const brandData = availableBrands.find(b => b.brandName === brand);
+    if (brandData) {
+      setAvailableModelsForBrand(brandData.models);
+    }
+  }, [availableBrands]);
+
+  const handleModelChange = useCallback((model: string) => {
+    setFormData(prev => ({ ...prev, modelName: model }));
+  }, []);
+
+  // Multi-Model Costing Global Input Setters
+  const setUsdRate = useCallback((value: number) => {
     setFormData(prev => ({
       ...prev,
-      costing: prev.costing ? { ...prev.costing, [field]: value } : undefined,
+      costing: prev.costing ? { ...prev.costing, usdRate: value } : undefined,
     }));
   }, []);
 
-  const setCostingUnits = useCallback((value: number) => setCostingField('units', value), [setCostingField]);
-  const setUnitCostUSD = useCallback((value: number) => setCostingField('unitCostUSD', value), [setCostingField]);
-  const setTotalCostUSD = useCallback((value: number) => setCostingField('totalCostUSD', value), [setCostingField]);
-  const setPercentage = useCallback((value: number) => setCostingField('percentage', value), [setCostingField]);
-  const setCustomPerModel = useCallback((value: number) => setCostingField('customPerModel', value), [setCostingField]);
-  const setCustomPerUnit = useCallback((value: number) => setCostingField('customPerUnit', value), [setCostingField]);
-  const setFreightPerModel = useCallback((value: number) => setCostingField('freightPerModel', value), [setCostingField]);
-  const setFreightPerUnit = useCallback((value: number) => setCostingField('freightPerUnit', value), [setCostingField]);
-  const setUnitCostPKR = useCallback((value: number) => setCostingField('unitCostPKR', value), [setCostingField]);
-  const setTotalUnitCost = useCallback((value: number) => setCostingField('totalUnitCost', value), [setCostingField]);
-  const setTotalShipmentValuePKR = useCallback((value: number) => setCostingField('totalShipmentValuePKR', value), [setCostingField]);
+  const setTotalCustomsValue = useCallback((value: number) => {
+    setFormData(prev => ({
+      ...prev,
+      costing: prev.costing ? { ...prev.costing, totalCustomsValue: value } : undefined,
+    }));
+  }, []);
+
+  const setTotalFreightValue = useCallback((value: number) => {
+    setFormData(prev => ({
+      ...prev,
+      costing: prev.costing ? { ...prev.costing, totalFreightValue: value } : undefined,
+    }));
+  }, []);
+
+  // Model Management Functions
+  const addModel = useCallback(() => {
+    const newModel = createEmptyCostingModel();
+    setFormData(prev => ({
+      ...prev,
+      costing: prev.costing 
+        ? { ...prev.costing, models: [...prev.costing.models, newModel] }
+        : undefined,
+    }));
+  }, []);
+
+  const updateModelField = useCallback((modelId: string, field: keyof CostingModel, value: string | number) => {
+    setFormData(prev => {
+      if (!prev.costing) return prev;
+      
+      // Calculate totals for percentage calculation
+      const totalUnitCostUSD = prev.costing.models.reduce((sum, m) => sum + m.unitCostUSD, 0);
+      const shipmentTotalUSD = prev.costing.models.reduce((sum, m) => sum + m.units * m.unitCostUSD, 0);
+      
+      const updatedModels = prev.costing.models.map(model => {
+        if (model.id === modelId) {
+          const updatedModel = { ...model, [field]: value };
+          
+          // Recalculate this model's costs with 6 arguments
+          return calculateModelCosts(
+            updatedModel,
+            totalUnitCostUSD,
+            shipmentTotalUSD,
+            prev.costing!.usdRate,
+            prev.costing!.totalCustomsValue,
+            prev.costing!.totalFreightValue
+          );
+        }
+        return model;
+      });
+      
+      // Recalculate summary
+      const result = recalculateAllModels(
+        updatedModels,
+        prev.costing!.usdRate,
+        prev.costing!.totalCustomsValue,
+        prev.costing!.totalFreightValue
+      );
+      
+      return {
+        ...prev,
+        costing: {
+          ...prev.costing,
+          models: result.models,
+          totalUnitCostUSD: result.summary.totalUnitCostUSD,
+          shipmentTotalUSD: result.summary.shipmentTotalUSD,
+          consignmentValue: result.summary.consignmentValue,
+          totalValueOfBrand: result.summary.totalValueOfBrand,
+        },
+      };
+    });
+  }, []);
+
+  const removeModel = useCallback((modelId: string) => {
+    setFormData(prev => {
+      if (!prev.costing) return prev;
+      
+      const updatedModels = prev.costing.models.filter(m => m.id !== modelId);
+      
+      // Recalculate if there are remaining models
+      if (updatedModels.length > 0) {
+        const result = recalculateAllModels(
+          updatedModels,
+          prev.costing!.usdRate,
+          prev.costing!.totalCustomsValue,
+          prev.costing!.totalFreightValue
+        );
+        
+        return {
+          ...prev,
+          costing: {
+            ...prev.costing,
+            models: result.models,
+            totalUnitCostUSD: result.summary.totalUnitCostUSD,
+            shipmentTotalUSD: result.summary.shipmentTotalUSD,
+            consignmentValue: result.summary.consignmentValue,
+            totalValueOfBrand: result.summary.totalValueOfBrand,
+          },
+        };
+      }
+      
+      // If no models left, reset summary
+      return {
+        ...prev,
+        costing: {
+          ...prev.costing,
+          models: [],
+          totalUnitCostUSD: 0,
+          shipmentTotalUSD: 0,
+          consignmentValue: 0,
+          totalValueOfBrand: 0,
+        },
+      };
+    });
+  }, []);
 
   // Serial number management
   const updateSerialNumber = useCallback((index: number, value: string) => {
@@ -212,7 +361,6 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
       const oldSerial = updated[index];
       updated[index] = value;
       
-      // Update serialCities if old serial had a city
       if (oldSerial && formData.serialCities[oldSerial]) {
         setFormData(prevData => {
           const updatedCities = { ...prevData.serialCities };
@@ -259,6 +407,25 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
       errors.description = 'Description is required';
     }
     
+    // Validate costing if enabled
+    if (costingOption === 'with' && formData.costing) {
+      if (formData.costing.models.length === 0) {
+        errors.models = 'At least one model is required';
+      }
+      
+      formData.costing.models.forEach((model, index) => {
+        if (!model.modelName.trim()) {
+          errors[`model_${index}`] = `Model ${index + 1} name is required`;
+        }
+        if (model.units <= 0) {
+          errors[`units_${index}`] = `Model ${index + 1} units must be greater than 0`;
+        }
+        if (model.unitCostUSD <= 0) {
+          errors[`unitCost_${index}`] = `Model ${index + 1} unit cost must be greater than 0`;
+        }
+      });
+    }
+    
     const validSerials = serialInputs.filter(s => s.trim() !== '');
     if (validSerials.length !== formData.stock) {
       errors.serialNumbers = `Please provide ${formData.stock} unique serial numbers`;
@@ -266,27 +433,42 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [formData, serialInputs]);
+  }, [formData, serialInputs, costingOption]);
 
   const isValid = useMemo(() => {
-    return formData.brandName.trim() !== '' &&
+    const hasBasic = formData.brandName.trim() !== '' &&
            formData.modelName.trim() !== '' &&
            formData.category.trim() !== '' &&
            formData.description.trim() !== '' &&
            serialInputs.filter(s => s.trim() !== '').length === formData.stock;
-  }, [formData, serialInputs]);
+    
+    if (costingOption !== 'with') return hasBasic;
+    
+    // Additional validation for costing
+    if (!formData.costing || formData.costing.models.length === 0) return false;
+    
+    return formData.costing.models.every(model => 
+      model.modelName.trim() !== '' && model.units > 0 && model.unitCostUSD > 0
+    ) && hasBasic;
+  }, [formData, serialInputs, costingOption]);
+
+  // Costing summary for display
+  const costingSummary = useMemo(() => ({
+    totalUnitCostUSD: formData.costing?.totalUnitCostUSD || 0,
+    shipmentTotalUSD: formData.costing?.shipmentTotalUSD || 0,
+    consignmentValue: formData.costing?.consignmentValue || 0,
+    totalValueOfBrand: formData.costing?.totalValueOfBrand || 0,
+  }), [formData.costing?.totalUnitCostUSD, formData.costing?.shipmentTotalUSD, formData.costing?.consignmentValue, formData.costing?.totalValueOfBrand]);
 
   // Navigation
   const handleNext = useCallback(() => {
     if (!validateForm()) return;
     
-  // Build query params for payment step
     const validSerials = serialInputs.filter(s => s.trim() !== '');
     const queryParams = new URLSearchParams({
       type: inventoryType,
       costing: costingOption,
       brandName: formData.brandName,
-
       modelName: formData.modelName,
       category: formData.category,
       sellPrice: formData.sellPrice.toString(),
@@ -302,34 +484,30 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     
     // Add costing fields if applicable
     if (costingOption === 'with' && formData.costing) {
-      queryParams.set('costingUnits', formData.costing.units.toString());
-      queryParams.set('unitCostUSD', formData.costing.unitCostUSD.toString());
-      queryParams.set('totalCostUSD', formData.costing.totalCostUSD.toString());
-      queryParams.set('percentage', formData.costing.percentage.toString());
-      queryParams.set('customPerModel', formData.costing.customPerModel.toString());
-      queryParams.set('customPerUnit', formData.costing.customPerUnit.toString());
-      queryParams.set('freightPerModel', formData.costing.freightPerModel.toString());
-      queryParams.set('freightPerUnit', formData.costing.freightPerUnit.toString());
-      queryParams.set('unitCostPKR', formData.costing.unitCostPKR.toString());
-      queryParams.set('totalUnitCost', formData.costing.totalUnitCost.toString());
-      queryParams.set('totalShipmentValuePKR', formData.costing.totalShipmentValuePKR.toString());
+      queryParams.set('usdRate', formData.costing.usdRate.toString());
+      queryParams.set('totalCustomsValue', formData.costing.totalCustomsValue.toString());
+      queryParams.set('totalFreightValue', formData.costing.totalFreightValue.toString());
+      queryParams.set('totalUnitCostUSD', formData.costing.totalUnitCostUSD.toString());
+      queryParams.set('shipmentTotalUSD', formData.costing.shipmentTotalUSD.toString());
+      queryParams.set('consignmentValue', formData.costing.consignmentValue.toString());
+      queryParams.set('totalValueOfBrand', formData.costing.totalValueOfBrand.toString());
+      
+      // Serialize models array
+      queryParams.set('costingModels', JSON.stringify(formData.costing.models));
     }
     
     navigate(`/inventory/create-new/payment?${queryParams.toString()}`);
-  }, [navigate, formData, serialInputs, costingOption, validateForm]);
+  }, [navigate, formData, serialInputs, costingOption, validateForm, inventoryType]);
 
   const handleBack = useCallback(() => {
-    // Go back to costing option step with inventory type
     navigate(`/inventory/create-new/costing?type=${inventoryType}`);
   }, [navigate, inventoryType]);
-
 
   return {
     formData,
     costingOption,
     inventoryType,
     serialInputs,
-
     validationErrors,
     isValid,
     setBrandName,
@@ -342,17 +520,12 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     setDescription,
     setStatus,
     setIsDamaged,
-    setCostingUnits,
-    setUnitCostUSD,
-    setTotalCostUSD,
-    setPercentage,
-    setCustomPerModel,
-    setCustomPerUnit,
-    setFreightPerModel,
-    setFreightPerUnit,
-    setUnitCostPKR,
-    setTotalUnitCost,
-    setTotalShipmentValuePKR,
+    setUsdRate,
+    setTotalCustomsValue,
+    setTotalFreightValue,
+    addModel,
+    updateModelField,
+    removeModel,
     updateSerialNumber,
     updateSerialCity,
     handleNext,
@@ -360,5 +533,6 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     showCostingFields: costingOption === 'with',
     categories: CATEGORIES,
     cities: CITIES,
+    costingSummary,
   };
 }

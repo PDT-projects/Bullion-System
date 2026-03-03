@@ -129,14 +129,14 @@ export class CashDataConnectService {
    */
   static async createCashTransaction(txn: Omit<CashTransaction, 'id'>): Promise<CashTransaction> {
     try {
-      console.log('📡 Creating cash transaction in Data Connect:', txn.amount);
+      console.log('📡 Creating cash transaction in Data Connect:', JSON.stringify(txn, null, 2));
       
       // Generate a unique ID
       const id = `cash_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // Prepare variables for Data Connect
       const variables: CashInHandInsertVariables = {
-        id,
+        id: id,
         date: txn.date,
         company: txn.company,
         mainCategory: txn.mainCategory,
@@ -146,20 +146,30 @@ export class CashDataConnectService {
         note: txn.note || null
       };
 
-      // Get Data Connect instance and execute the mutation
+      console.log('📡 Cash transaction variables:', JSON.stringify(variables, null, 2));
+
+      // Get Data Connect instance
       const dc = getDC();
-      await cashInHandInsert(dc, variables);
+      console.log('📡 Data Connect instance obtained');
+      
+      // Execute the mutation
+      const result = await cashInHandInsert(dc, variables);
+      console.log('📡 Cash insert result:', result);
       
       const createdTransaction: CashTransaction = {
         ...txn,
-        id: variables.id!
+        id: id
       };
       
       console.log('✅ Cash transaction created with ID:', createdTransaction.id);
       return createdTransaction;
     } catch (error) {
       console.error('❌ Error creating cash transaction in Data Connect:', error);
-      throw new Error('Failed to create cash transaction in Data Connect');
+      if (error instanceof Error) {
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+      }
+      throw new Error(`Failed to create cash transaction in Data Connect: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

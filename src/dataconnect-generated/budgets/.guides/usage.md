@@ -12,12 +12,8 @@ For each operation, there is a wrapper hook that can be used to call the operati
 
 Here are all of the hooks that get generated:
 ```ts
-import { useListBudgets, useGetBudgetById, useBudgetInsert, useBudgetUpdate, useBudgetDelete, useBudgetUpdateSpent } from '@erp-system/budgets/react';
+import { useBudgetInsert, useBudgetUpdate, useBudgetDelete, useBudgetUpdateSpent, useListBudgets, useGetBudgetById } from '@erp-system/budgets/react';
 // The types of these hooks are available in react/index.d.ts
-
-const { data, isPending, isSuccess, isError, error } = useListBudgets(listBudgetsVars);
-
-const { data, isPending, isSuccess, isError, error } = useGetBudgetById(getBudgetByIdVars);
 
 const { data, isPending, isSuccess, isError, error } = useBudgetInsert(budgetInsertVars);
 
@@ -26,6 +22,10 @@ const { data, isPending, isSuccess, isError, error } = useBudgetUpdate(budgetUpd
 const { data, isPending, isSuccess, isError, error } = useBudgetDelete(budgetDeleteVars);
 
 const { data, isPending, isSuccess, isError, error } = useBudgetUpdateSpent(budgetUpdateSpentVars);
+
+const { data, isPending, isSuccess, isError, error } = useListBudgets(listBudgetsVars);
+
+const { data, isPending, isSuccess, isError, error } = useGetBudgetById(getBudgetByIdVars);
 
 ```
 
@@ -64,14 +64,8 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { listBudgets, getBudgetById, budgetInsert, budgetUpdate, budgetDelete, budgetUpdateSpent } from '@erp-system/budgets';
+import { budgetInsert, budgetUpdate, budgetDelete, budgetUpdateSpent, listBudgets, getBudgetById } from '@erp-system/budgets';
 
-
-// Operation listBudgets:  For variables, look at type ListBudgetsVars in ../index.d.ts
-const { data } = await ListBudgets(dataConnect, listBudgetsVars);
-
-// Operation getBudgetById:  For variables, look at type GetBudgetByIdVars in ../index.d.ts
-const { data } = await GetBudgetById(dataConnect, getBudgetByIdVars);
 
 // Operation budgetInsert:  For variables, look at type BudgetInsertVars in ../index.d.ts
 const { data } = await BudgetInsert(dataConnect, budgetInsertVars);
@@ -84,6 +78,12 @@ const { data } = await BudgetDelete(dataConnect, budgetDeleteVars);
 
 // Operation budgetUpdateSpent:  For variables, look at type BudgetUpdateSpentVars in ../index.d.ts
 const { data } = await BudgetUpdateSpent(dataConnect, budgetUpdateSpentVars);
+
+// Operation listBudgets:  For variables, look at type ListBudgetsVars in ../index.d.ts
+const { data } = await ListBudgets(dataConnect, listBudgetsVars);
+
+// Operation getBudgetById:  For variables, look at type GetBudgetByIdVars in ../index.d.ts
+const { data } = await GetBudgetById(dataConnect, getBudgetByIdVars);
 
 
 ```

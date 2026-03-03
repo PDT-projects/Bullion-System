@@ -133,30 +133,6 @@ export interface Product_Key {
   __typename?: 'Product_Key';
 }
 
-interface ListBudgetsRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: ListBudgetsVariables): QueryRef<ListBudgetsData, ListBudgetsVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars?: ListBudgetsVariables): QueryRef<ListBudgetsData, ListBudgetsVariables>;
-  operationName: string;
-}
-export const listBudgetsRef: ListBudgetsRef;
-
-export function listBudgets(vars?: ListBudgetsVariables): QueryPromise<ListBudgetsData, ListBudgetsVariables>;
-export function listBudgets(dc: DataConnect, vars?: ListBudgetsVariables): QueryPromise<ListBudgetsData, ListBudgetsVariables>;
-
-interface GetBudgetByIdRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: GetBudgetByIdVariables): QueryRef<GetBudgetByIdData, GetBudgetByIdVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: GetBudgetByIdVariables): QueryRef<GetBudgetByIdData, GetBudgetByIdVariables>;
-  operationName: string;
-}
-export const getBudgetByIdRef: GetBudgetByIdRef;
-
-export function getBudgetById(vars: GetBudgetByIdVariables): QueryPromise<GetBudgetByIdData, GetBudgetByIdVariables>;
-export function getBudgetById(dc: DataConnect, vars: GetBudgetByIdVariables): QueryPromise<GetBudgetByIdData, GetBudgetByIdVariables>;
-
 interface BudgetInsertRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars: BudgetInsertVariables): MutationRef<BudgetInsertData, BudgetInsertVariables>;
@@ -204,4 +180,28 @@ export const budgetUpdateSpentRef: BudgetUpdateSpentRef;
 
 export function budgetUpdateSpent(vars: BudgetUpdateSpentVariables): MutationPromise<BudgetUpdateSpentData, BudgetUpdateSpentVariables>;
 export function budgetUpdateSpent(dc: DataConnect, vars: BudgetUpdateSpentVariables): MutationPromise<BudgetUpdateSpentData, BudgetUpdateSpentVariables>;
+
+interface ListBudgetsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: ListBudgetsVariables): QueryRef<ListBudgetsData, ListBudgetsVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars?: ListBudgetsVariables): QueryRef<ListBudgetsData, ListBudgetsVariables>;
+  operationName: string;
+}
+export const listBudgetsRef: ListBudgetsRef;
+
+export function listBudgets(vars?: ListBudgetsVariables): QueryPromise<ListBudgetsData, ListBudgetsVariables>;
+export function listBudgets(dc: DataConnect, vars?: ListBudgetsVariables): QueryPromise<ListBudgetsData, ListBudgetsVariables>;
+
+interface GetBudgetByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetBudgetByIdVariables): QueryRef<GetBudgetByIdData, GetBudgetByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetBudgetByIdVariables): QueryRef<GetBudgetByIdData, GetBudgetByIdVariables>;
+  operationName: string;
+}
+export const getBudgetByIdRef: GetBudgetByIdRef;
+
+export function getBudgetById(vars: GetBudgetByIdVariables): QueryPromise<GetBudgetByIdData, GetBudgetByIdVariables>;
+export function getBudgetById(dc: DataConnect, vars: GetBudgetByIdVariables): QueryPromise<GetBudgetByIdData, GetBudgetByIdVariables>;
 

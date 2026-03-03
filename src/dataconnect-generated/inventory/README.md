@@ -132,6 +132,13 @@ export interface ListProductsData {
     costingUnitCostPKR?: number | null;
     costingTotalUnitCost?: number | null;
     costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
   } & Product_Key)[];
@@ -259,6 +266,13 @@ export interface GetProductByIdData {
     costingUnitCostPKR?: number | null;
     costingTotalUnitCost?: number | null;
     costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
   } & Product_Key;
@@ -645,6 +659,13 @@ export interface ProductInsertVariables {
   costingUnitCostPKR?: number | null;
   costingTotalUnitCost?: number | null;
   costingTotalShipmentValuePKR?: number | null;
+  costingUsdRate?: number | null;
+  costingTotalCustomsValue?: number | null;
+  costingTotalFreightValue?: number | null;
+  costingShipmentTotalUSD?: number | null;
+  costingConsignmentValue?: number | null;
+  costingTotalValueOfBrand?: number | null;
+  costingModelsJson?: string | null;
 }
 ```
 ### Return Type
@@ -691,13 +712,20 @@ const productInsertVars: ProductInsertVariables = {
   costingUnitCostPKR: ..., // optional
   costingTotalUnitCost: ..., // optional
   costingTotalShipmentValuePKR: ..., // optional
+  costingUsdRate: ..., // optional
+  costingTotalCustomsValue: ..., // optional
+  costingTotalFreightValue: ..., // optional
+  costingShipmentTotalUSD: ..., // optional
+  costingConsignmentValue: ..., // optional
+  costingTotalValueOfBrand: ..., // optional
+  costingModelsJson: ..., // optional
 };
 
 // Call the `productInsert()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await productInsert(productInsertVars);
 // Variables can be defined inline as well.
-const { data } = await productInsert({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., });
+const { data } = await productInsert({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., costingUsdRate: ..., costingTotalCustomsValue: ..., costingTotalFreightValue: ..., costingShipmentTotalUSD: ..., costingConsignmentValue: ..., costingTotalValueOfBrand: ..., costingModelsJson: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -747,12 +775,19 @@ const productInsertVars: ProductInsertVariables = {
   costingUnitCostPKR: ..., // optional
   costingTotalUnitCost: ..., // optional
   costingTotalShipmentValuePKR: ..., // optional
+  costingUsdRate: ..., // optional
+  costingTotalCustomsValue: ..., // optional
+  costingTotalFreightValue: ..., // optional
+  costingShipmentTotalUSD: ..., // optional
+  costingConsignmentValue: ..., // optional
+  costingTotalValueOfBrand: ..., // optional
+  costingModelsJson: ..., // optional
 };
 
 // Call the `productInsertRef()` function to get a reference to the mutation.
 const ref = productInsertRef(productInsertVars);
 // Variables can be defined inline as well.
-const ref = productInsertRef({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., });
+const ref = productInsertRef({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., costingUsdRate: ..., costingTotalCustomsValue: ..., costingTotalFreightValue: ..., costingShipmentTotalUSD: ..., costingConsignmentValue: ..., costingTotalValueOfBrand: ..., costingModelsJson: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -832,6 +867,13 @@ export interface ProductUpdateVariables {
   costingUnitCostPKR?: number | null;
   costingTotalUnitCost?: number | null;
   costingTotalShipmentValuePKR?: number | null;
+  costingUsdRate?: number | null;
+  costingTotalCustomsValue?: number | null;
+  costingTotalFreightValue?: number | null;
+  costingShipmentTotalUSD?: number | null;
+  costingConsignmentValue?: number | null;
+  costingTotalValueOfBrand?: number | null;
+  costingModelsJson?: string | null;
 }
 ```
 ### Return Type
@@ -878,13 +920,20 @@ const productUpdateVars: ProductUpdateVariables = {
   costingUnitCostPKR: ..., // optional
   costingTotalUnitCost: ..., // optional
   costingTotalShipmentValuePKR: ..., // optional
+  costingUsdRate: ..., // optional
+  costingTotalCustomsValue: ..., // optional
+  costingTotalFreightValue: ..., // optional
+  costingShipmentTotalUSD: ..., // optional
+  costingConsignmentValue: ..., // optional
+  costingTotalValueOfBrand: ..., // optional
+  costingModelsJson: ..., // optional
 };
 
 // Call the `productUpdate()` function to execute the mutation.
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await productUpdate(productUpdateVars);
 // Variables can be defined inline as well.
-const { data } = await productUpdate({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., });
+const { data } = await productUpdate({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., costingUsdRate: ..., costingTotalCustomsValue: ..., costingTotalFreightValue: ..., costingShipmentTotalUSD: ..., costingConsignmentValue: ..., costingTotalValueOfBrand: ..., costingModelsJson: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -934,12 +983,19 @@ const productUpdateVars: ProductUpdateVariables = {
   costingUnitCostPKR: ..., // optional
   costingTotalUnitCost: ..., // optional
   costingTotalShipmentValuePKR: ..., // optional
+  costingUsdRate: ..., // optional
+  costingTotalCustomsValue: ..., // optional
+  costingTotalFreightValue: ..., // optional
+  costingShipmentTotalUSD: ..., // optional
+  costingConsignmentValue: ..., // optional
+  costingTotalValueOfBrand: ..., // optional
+  costingModelsJson: ..., // optional
 };
 
 // Call the `productUpdateRef()` function to get a reference to the mutation.
 const ref = productUpdateRef(productUpdateVars);
 // Variables can be defined inline as well.
-const ref = productUpdateRef({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., });
+const ref = productUpdateRef({ id: ..., brandName: ..., modelName: ..., category: ..., costPrice: ..., sellPrice: ..., buyType: ..., warrantyYears: ..., stock: ..., description: ..., status: ..., isDamaged: ..., serialNumbers: ..., serialCities: ..., serialStatus: ..., costingOption: ..., costingUnits: ..., costingUnitCostUSD: ..., costingTotalCostUSD: ..., costingPercentage: ..., costingCustomPerModel: ..., costingCustomPerUnit: ..., costingFreightPerModel: ..., costingFreightPerUnit: ..., costingUnitCostPKR: ..., costingTotalUnitCost: ..., costingTotalShipmentValuePKR: ..., costingUsdRate: ..., costingTotalCustomsValue: ..., costingTotalFreightValue: ..., costingShipmentTotalUSD: ..., costingConsignmentValue: ..., costingTotalValueOfBrand: ..., costingModelsJson: ..., });
 
 // You can also pass in a `DataConnect` instance to the `MutationRef` function.
 const dataConnect = getDataConnect(connectorConfig);

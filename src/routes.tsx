@@ -111,7 +111,7 @@ import { Sidebar } from './layouts/Sidebar';
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
 import { DataProvider } from './providers/context/DataContext';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { AppData, initialData, normalizeInitialData, Employee, Bank, Transaction, Loan, BankTransfer } from './App';
 import type { Transaction as ModuleTransaction } from './modules/transactions/models/types';
@@ -258,6 +258,25 @@ function InventoryLayout() {
   const { user } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch products from Data Connect on mount
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const { InventoryDataConnectService } = await import('./api/dataconnect/inventoryDataConnectService');
+        const fetchedProducts = await InventoryDataConnectService.fetchAllProducts();
+        setProducts(fetchedProducts);
+        console.log('📡 Fetched products from Data Connect:', fetchedProducts.length);
+      } catch (error) {
+        console.error('❌ Error fetching products from Data Connect:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
@@ -267,7 +286,13 @@ function InventoryLayout() {
           <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
         </header>
         <main className="flex-1 overflow-y-auto">
-          <Outlet context={{ products, setProducts, transfers, setTransfers }} />
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-gray-500">Loading products...</div>
+            </div>
+          ) : (
+            <Outlet context={{ products, setProducts, transfers, setTransfers }} />
+          )}
         </main>
       </div>
     </div>
