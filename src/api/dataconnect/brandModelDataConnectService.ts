@@ -1,0 +1,127 @@
+/**
+ * Brand Model Data Connect Service
+ * Functions to fetch brands and models from Firebase Data Connect
+ */
+import { listBrands, listModels, getModelById, brandInsert, modelInsert } from '@erp-system/inventory';
+
+/**
+ * Brand interface - defined locally for type safety
+ */
+export interface Brand {
+  id: string;
+  name: string;
+  createdAt?: string;
+}
+
+/**
+ * Model interface with costPrice and sellPrice - defined locally
+ */
+export interface Model {
+  id: string;
+  brandId: string;
+  name: string;
+  category?: string;
+  description?: string;
+  costPrice?: number;
+  sellPrice?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Fetch all brands from the database
+ */
+export async function fetchBrands(): Promise<Brand[]> {
+  try {
+    const { data } = await listBrands({ limit: 100, offset: 0 });
+    const brands: Brand[] = ((data as any).brands || []).map((b: any) => ({
+      id: b.id,
+      name: b.name,
+      createdAt: b.createdAt
+    }));
+    return brands;
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch all models and filter by brandId client-side
+ * (Firebase Data Connect doesn't support server-side filtering for models)
+ */
+export async function fetchModelsByBrand(brandId: string): Promise<Model[]> {
+  try {
+    const { data } = await listModels({ limit: 100, offset: 0 });
+    // Filter client-side by brandId
+    const models: Model[] = ((data as any).models || []).filter((m: any) => m.brandId === brandId);
+    return models;
+  } catch (error) {
+    console.error('Error fetching models:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch a single model by ID
+ */
+export async function fetchModelById(modelId: string): Promise<Model | null> {
+  try {
+    const { data } = await getModelById({ id: modelId });
+    if (!data.model) return null;
+    return {
+      id: data.model.id,
+      brandId: data.model.brandId || '',
+      name: data.model.name || '',
+      category: data.model.category || undefined,
+      description: data.model.description || undefined,
+      costPrice: data.model.costPrice || undefined,
+      sellPrice: data.model.sellPrice || undefined,
+      createdAt: data.model.createdAt || undefined,
+      updatedAt: data.model.updatedAt || undefined
+    };
+  } catch (error) {
+    console.error('Error fetching model:', error);
+    return null;
+  }
+}
+
+/**
+ * Create a new brand
+ */
+export async function createBrand(vars: { name: string }): Promise<Brand | null> {
+  try {
+    const id = `brand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await brandInsert({ id, name: vars.name });
+    return { id, name: vars.name };
+  } catch (error) {
+    console.error('Error creating brand:', error);
+    return null;
+  }
+}
+
+/**
+ * Create a new model
+ */
+export async function createModel(vars: { name: string; brandId: string; costPrice?: number; sellPrice?: number }): Promise<Model | null> {
+  try {
+    const id = `model_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await modelInsert({ 
+      id, 
+      name: vars.name, 
+      brandId: vars.brandId,
+      costPrice: vars.costPrice || 0,
+      sellPrice: vars.sellPrice || 0
+    });
+    return { 
+      id, 
+      name: vars.name, 
+      brandId: vars.brandId,
+      costPrice: vars.costPrice,
+      sellPrice: vars.sellPrice
+    };
+  } catch (error) {
+    console.error('Error creating model:', error);
+    return null;
+  }
+}

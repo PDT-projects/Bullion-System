@@ -1,10 +1,10 @@
 # Bank Mutations - Write operations for Bank accounts
 
-mutation bankInsert(
-  $id: String! = "bank001"
-  $name: String! = "Test Bank"
-  $accountNumber: String! = "1234567890"
-  $balance: Float! = 0.0
+mutation BankInsert(
+  $id: String!
+  $name: String!
+  $accountNumber: String!
+  $balance: Float!
 ) @auth(level: PUBLIC) {
   bank_insert(
     data: {
@@ -18,11 +18,11 @@ mutation bankInsert(
   )
 }
 
-mutation bankUpdate(
-  $id: String! = "bank001"
-  $name: String! = "Test Bank"
-  $accountNumber: String! = "1234567890"
-  $balance: Float! = 1000.0
+mutation BankUpdate(
+  $id: String!
+  $name: String!
+  $accountNumber: String!
+  $balance: Float!
 ) @auth(level: PUBLIC) {
   bank_update(
     id: $id,
@@ -35,13 +35,13 @@ mutation bankUpdate(
   )
 }
 
-mutation bankDelete($id: String! = "bank001") @auth(level: PUBLIC) {
+mutation BankDelete($id: String!) @auth(level: PUBLIC) {
   bank_delete(id: $id)
 }
 
-mutation updateBankBalance(
-  $id: String! = "bank001"
-  $newBalance: Float! = 1000.0
+mutation UpdateBankBalance(
+  $id: String!
+  $newBalance: Float!
 ) @auth(level: PUBLIC) {
   bank_update(
     id: $id,

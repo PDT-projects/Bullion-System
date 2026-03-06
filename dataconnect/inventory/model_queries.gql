@@ -1,0 +1,33 @@
+# Model Queries - Read operations for Models
+
+query ListModels(
+  $limit: Int = 100
+  $offset: Int = 0
+) @auth(level: PUBLIC) {
+  models(limit: $limit, offset: $offset, orderBy: { name: ASC }) {
+    id
+    brandId
+    name
+    category
+    description
+    costPrice
+    sellPrice
+    createdAt
+    updatedAt
+  }
+}
+
+query GetModelById($id: String!) @auth(level: PUBLIC) {
+  model(id: $id) {
+    id
+    brandId
+    name
+    category
+    description
+    costPrice
+    sellPrice
+    createdAt
+    updatedAt
+  }
+}
+

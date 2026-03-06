@@ -4,6 +4,7 @@
 import { ArrowLeft, ArrowRight, Check, Plus, Trash2 } from 'lucide-react';
 import { ProductFormData, ValidationResult, InventoryEntryStep } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
+import { BrandModelSelector } from '../components/BrandModelSelector';
 
 /**
  * Props for CreateInventoryView
@@ -88,41 +89,31 @@ export function CreateInventoryView({
   const renderProductDetailsStep = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Brand Name */}
-        <div>
+        {/* Brand/Model Selector - Dropdown from Firebase Data Connect */}
+        <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Brand Name *
+            Select Brand & Model *
           </label>
-          <input
-            type="text"
-            value={formData.brandName || ''}
-            onChange={(e) => setField('brandName', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              validation.fieldErrors?.brandName ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="Enter brand name"
+          <BrandModelSelector
+            onBrandChange={(brandId: string, brandName: string) => {
+              setField('brandId', brandId);
+              setField('brandName', brandName);
+            }}
+            onModelChange={(modelId: string, modelName: string, costPrice?: number, sellPrice?: number) => {
+              setField('modelId', modelId);
+              setField('modelName', modelName);
+              // Auto-fill sellPrice from model if available
+              if (sellPrice !== undefined && sellPrice > 0) {
+                setField('sellPrice', sellPrice);
+              }
+              // Optionally fill costPrice from model
+              if (costPrice !== undefined && costPrice > 0) {
+                setField('costPrice', costPrice);
+              }
+            }}
           />
-          {validation.fieldErrors?.brandName && (
-            <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.brandName}</p>
-          )}
-        </div>
-
-        {/* Model Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Model Name *
-          </label>
-          <input
-            type="text"
-            value={formData.modelName || ''}
-            onChange={(e) => setField('modelName', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              validation.fieldErrors?.modelName ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="Enter model name"
-          />
-          {validation.fieldErrors?.modelName && (
-            <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.modelName}</p>
+          {(validation.fieldErrors?.brandName || validation.fieldErrors?.modelName) && (
+            <p className="text-red-500 text-sm mt-1">Please select a brand and model</p>
           )}
         </div>
 

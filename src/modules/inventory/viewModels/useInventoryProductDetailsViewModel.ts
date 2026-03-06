@@ -40,6 +40,7 @@ export interface UseInventoryProductDetailsViewModelReturn {
   setIsDamaged: (value: boolean) => void;
   
   // Actions - Multi-Model Costing Global Inputs
+  setCostingBrandName: (value: string) => void;
   setUsdRate: (value: number) => void;
   setTotalCustomsValue: (value: number) => void;
   setTotalFreightValue: (value: number) => void;
@@ -232,6 +233,13 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   }, []);
 
   // Multi-Model Costing Global Input Setters
+  const setCostingBrandName = useCallback((value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      costing: prev.costing ? { ...prev.costing, brandName: value } : undefined,
+    }));
+  }, []);
+
   const setUsdRate = useCallback((value: number) => {
     setFormData(prev => ({
       ...prev,
@@ -395,7 +403,8 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
       errors.brandName = 'Brand name is required';
     }
     
-    if (!formData.modelName.trim()) {
+    // Only require modelName when costing option is WITHOUT
+    if (costingOption !== 'with' && !formData.modelName.trim()) {
       errors.modelName = 'Model name is required';
     }
     
@@ -437,13 +446,16 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
 
   const isValid = useMemo(() => {
     const hasBasic = formData.brandName.trim() !== '' &&
-           formData.modelName.trim() !== '' &&
            formData.category.trim() !== '' &&
            formData.description.trim() !== '' &&
            serialInputs.filter(s => s.trim() !== '').length === formData.stock;
     
-    if (costingOption !== 'with') return hasBasic;
+    if (costingOption !== 'with') {
+      // For without costing, modelName is required
+      return formData.modelName.trim() !== '' && hasBasic;
+    }
     
+    // For with costing, modelName is optional (handled in CostingTable)
     // Additional validation for costing
     if (!formData.costing || formData.costing.models.length === 0) return false;
     
@@ -520,6 +532,7 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     setDescription,
     setStatus,
     setIsDamaged,
+    setCostingBrandName,
     setUsdRate,
     setTotalCustomsValue,
     setTotalFreightValue,

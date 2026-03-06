@@ -1,14 +1,14 @@
 # Bank Transfer Mutations - Write operations for Bank Transfers
 
-mutation transferInsert(
-  $id: String! = "transfer001"
-  $date: String! = "2024-01-01"
-  $fromBankId: String! = "bank001"
-  $fromBankName: String! = "Bank A"
-  $toBankId: String! = "bank002"
-  $toBankName: String! = "Bank B"
-  $amount: Float! = 1000.0
-  $note: String = "Test transfer"
+mutation TransferInsert(
+  $id: String!
+  $date: String!
+  $fromBankId: String!
+  $fromBankName: String!
+  $toBankId: String!
+  $toBankName: String!
+  $amount: Float!
+  $note: String
 ) @auth(level: PUBLIC) {
   bankTransfer_insert(
     data: {
@@ -25,6 +25,6 @@ mutation transferInsert(
   )
 }
 
-mutation transferDelete($id: String! = "transfer001") @auth(level: PUBLIC) {
+mutation TransferDelete($id: String!) @auth(level: PUBLIC) {
   bankTransfer_delete(id: $id)
 }

@@ -1,7 +1,7 @@
 # Cash In Hand Queries - Read operations for Cash In Hand
 
 query listCashInHand(
-  $limit: Int = 100
+  $limit: Int = 10
   $offset: Int = 0
 ) @auth(level: PUBLIC) {
   cashInHands(limit: $limit, offset: $offset, orderBy: { date: DESC }) {

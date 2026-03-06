@@ -12,8 +12,18 @@ For each operation, there is a wrapper hook that can be used to call the operati
 
 Here are all of the hooks that get generated:
 ```ts
-import { useProductInsert, useProductUpdate, useProductDelete, useProductTransferInsert, useProductTransferUpdate, useProductTransferDelete, useListProducts, useGetProductById, useListProductTransfers, useGetProductTransferById } from '@erp-system/inventory/react';
+import { useBrandInsert, useBrandUpdate, useBrandDelete, useListBrands, useGetBrandById, useProductInsert, useProductUpdate, useProductDelete, useProductTransferInsert, useProductTransferUpdate } from '@erp-system/inventory/react';
 // The types of these hooks are available in react/index.d.ts
+
+const { data, isPending, isSuccess, isError, error } = useBrandInsert(brandInsertVars);
+
+const { data, isPending, isSuccess, isError, error } = useBrandUpdate(brandUpdateVars);
+
+const { data, isPending, isSuccess, isError, error } = useBrandDelete(brandDeleteVars);
+
+const { data, isPending, isSuccess, isError, error } = useListBrands(listBrandsVars);
+
+const { data, isPending, isSuccess, isError, error } = useGetBrandById(getBrandByIdVars);
 
 const { data, isPending, isSuccess, isError, error } = useProductInsert(productInsertVars);
 
@@ -24,16 +34,6 @@ const { data, isPending, isSuccess, isError, error } = useProductDelete(productD
 const { data, isPending, isSuccess, isError, error } = useProductTransferInsert(productTransferInsertVars);
 
 const { data, isPending, isSuccess, isError, error } = useProductTransferUpdate(productTransferUpdateVars);
-
-const { data, isPending, isSuccess, isError, error } = useProductTransferDelete(productTransferDeleteVars);
-
-const { data, isPending, isSuccess, isError, error } = useListProducts();
-
-const { data, isPending, isSuccess, isError, error } = useGetProductById(getProductByIdVars);
-
-const { data, isPending, isSuccess, isError, error } = useListProductTransfers();
-
-const { data, isPending, isSuccess, isError, error } = useGetProductTransferById(getProductTransferByIdVars);
 
 ```
 
@@ -72,8 +72,23 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { productInsert, productUpdate, productDelete, productTransferInsert, productTransferUpdate, productTransferDelete, listProducts, getProductById, listProductTransfers, getProductTransferById } from '@erp-system/inventory';
+import { brandInsert, brandUpdate, brandDelete, listBrands, getBrandById, productInsert, productUpdate, productDelete, productTransferInsert, productTransferUpdate } from '@erp-system/inventory';
 
+
+// Operation brandInsert:  For variables, look at type BrandInsertVars in ../index.d.ts
+const { data } = await BrandInsert(dataConnect, brandInsertVars);
+
+// Operation brandUpdate:  For variables, look at type BrandUpdateVars in ../index.d.ts
+const { data } = await BrandUpdate(dataConnect, brandUpdateVars);
+
+// Operation brandDelete:  For variables, look at type BrandDeleteVars in ../index.d.ts
+const { data } = await BrandDelete(dataConnect, brandDeleteVars);
+
+// Operation ListBrands:  For variables, look at type ListBrandsVars in ../index.d.ts
+const { data } = await ListBrands(dataConnect, listBrandsVars);
+
+// Operation GetBrandById:  For variables, look at type GetBrandByIdVars in ../index.d.ts
+const { data } = await GetBrandById(dataConnect, getBrandByIdVars);
 
 // Operation productInsert:  For variables, look at type ProductInsertVars in ../index.d.ts
 const { data } = await ProductInsert(dataConnect, productInsertVars);
@@ -89,21 +104,6 @@ const { data } = await ProductTransferInsert(dataConnect, productTransferInsertV
 
 // Operation productTransferUpdate:  For variables, look at type ProductTransferUpdateVars in ../index.d.ts
 const { data } = await ProductTransferUpdate(dataConnect, productTransferUpdateVars);
-
-// Operation productTransferDelete:  For variables, look at type ProductTransferDeleteVars in ../index.d.ts
-const { data } = await ProductTransferDelete(dataConnect, productTransferDeleteVars);
-
-// Operation listProducts: 
-const { data } = await ListProducts(dataConnect);
-
-// Operation getProductById:  For variables, look at type GetProductByIdVars in ../index.d.ts
-const { data } = await GetProductById(dataConnect, getProductByIdVars);
-
-// Operation listProductTransfers: 
-const { data } = await ListProductTransfers(dataConnect);
-
-// Operation getProductTransferById:  For variables, look at type GetProductTransferByIdVars in ../index.d.ts
-const { data } = await GetProductTransferById(dataConnect, getProductTransferByIdVars);
 
 
 ```

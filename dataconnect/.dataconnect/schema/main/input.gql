@@ -11,6 +11,12 @@ It has the same format as `BankTransfer_Key`, but is only used as mutation retur
 """
 scalar BankTransfer_KeyOutput
 """
+✨ `Brand_KeyOutput` returns the primary key fields of table type `Brand`.
+
+It has the same format as `Brand_Key`, but is only used as mutation return value.
+"""
+scalar Brand_KeyOutput
+"""
 ✨ `Budget_KeyOutput` returns the primary key fields of table type `Budget`.
 
 It has the same format as `Budget_Key`, but is only used as mutation return value.
@@ -40,6 +46,12 @@ scalar Loan_KeyOutput
 It has the same format as `LoanPayment_Key`, but is only used as mutation return value.
 """
 scalar LoanPayment_KeyOutput
+"""
+✨ `Model_KeyOutput` returns the primary key fields of table type `Model`.
+
+It has the same format as `Model_Key`, but is only used as mutation return value.
+"""
+scalar Model_KeyOutput
 """
 ✨ `Product_KeyOutput` returns the primary key fields of table type `Product`.
 
@@ -673,6 +685,245 @@ input BankTransfer_Order {
   ✨ Generated from Field `BankTransfer`.`amount_max` of type `Float`
   """
   amount_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'Brand'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input Brand_Data {
+  """
+  ✨ Generated from Field `Brand`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Brand`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `Brand`.`category` of type `String`
+  """
+  category: String
+  """
+  ✨ `_expr` server value variant of `category` (✨ Generated from Field `Brand`.`category` of type `String`)
+  """
+  category_expr: String_Expr
+  """
+  ✨ Generated from Field `Brand`.`createdAt` of type `String`
+  """
+  createdAt: String
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `Brand`.`createdAt` of type `String`)
+  """
+  createdAt_expr: String_Expr
+  """
+  ✨ Generated from Field `Brand`.`description` of type `String`
+  """
+  description: String
+  """
+  ✨ `_expr` server value variant of `description` (✨ Generated from Field `Brand`.`description` of type `String`)
+  """
+  description_expr: String_Expr
+  """
+  ✨ Generated from Field `Brand`.`name` of type `String!`
+  """
+  name: String
+  """
+  ✨ `_expr` server value variant of `name` (✨ Generated from Field `Brand`.`name` of type `String!`)
+  """
+  name_expr: String_Expr
+  """
+  ✨ Generated from Field `Brand`.`updatedAt` of type `String`
+  """
+  updatedAt: String
+  """
+  ✨ `_expr` server value variant of `updatedAt` (✨ Generated from Field `Brand`.`updatedAt` of type `String`)
+  """
+  updatedAt_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'Brand'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Brand_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [Brand_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: Brand_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [Brand_Filter!]
+  """
+  ✨ Generated from Field `Brand`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `Brand`.`category` of type `String`
+  """
+  category: String_Filter
+  """
+  ✨ Generated from Field `Brand`.`createdAt` of type `String`
+  """
+  createdAt: String_Filter
+  """
+  ✨ Generated from Field `Brand`.`description` of type `String`
+  """
+  description: String_Filter
+  """
+  ✨ Generated from Field `Brand`.`name` of type `String!`
+  """
+  name: String_Filter
+  """
+  ✨ Generated from Field `Brand`.`updatedAt` of type `String`
+  """
+  updatedAt: String_Filter
+}
+"""
+✨ Generated first-row input type for table 'Brand'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input Brand_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [Brand_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: Brand_Filter
+}
+"""
+✨ Generated having input type for table 'Brand'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Brand_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [Brand_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: Brand_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [Brand_Having!]
+  """
+  ✨ Generated from Field `Brand`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `Brand`.`category_count` of type `Int!`
+  """
+  category_count: Int_Filter
+  """
+  ✨ Generated from Field `Brand`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `Brand`.`description_count` of type `Int!`
+  """
+  description_count: Int_Filter
+  """
+  ✨ Generated from Field `Brand`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `Brand`.`name_count` of type `Int!`
+  """
+  name_count: Int_Filter
+  """
+  ✨ Generated from Field `Brand`.`updatedAt_count` of type `Int!`
+  """
+  updatedAt_count: Int_Filter
+}
+"""
+✨ Generated key input type for table 'Brand'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input Brand_Key {
+  """
+  ✨ Generated from Field `Brand`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Brand`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'Brand'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input Brand_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: Brand_Filter
+}
+"""
+✨ Generated order input type for table 'Brand'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input Brand_Order {
+  """
+  ✨ Generated from Field `Brand`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`category` of type `String`
+  """
+  category: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`createdAt` of type `String`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`description` of type `String`
+  """
+  description: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`name` of type `String!`
+  """
+  name: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`updatedAt` of type `String`
+  """
+  updatedAt: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`category_count` of type `Int!`
+  """
+  category_count: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`description_count` of type `Int!`
+  """
+  description_count: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`name_count` of type `Int!`
+  """
+  name_count: OrderDirection
+  """
+  ✨ Generated from Field `Brand`.`updatedAt_count` of type `Int!`
+  """
+  updatedAt_count: OrderDirection
 }
 """
 ✨ Generated data input type for table 'Budget'. It includes all necessary fields for creating or upserting rows into table.
@@ -2830,6 +3081,389 @@ input LoanPayment_Order {
   amount_max: OrderDirection
 }
 """
+✨ Generated data input type for table 'Model'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input Model_Data {
+  """
+  ✨ Generated from Field `Model`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Model`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `Model`.`brandId` of type `String!`
+  """
+  brandId: String
+  """
+  ✨ `_expr` server value variant of `brandId` (✨ Generated from Field `Model`.`brandId` of type `String!`)
+  """
+  brandId_expr: String_Expr
+  """
+  ✨ Generated from Field `Model`.`category` of type `String`
+  """
+  category: String
+  """
+  ✨ `_expr` server value variant of `category` (✨ Generated from Field `Model`.`category` of type `String`)
+  """
+  category_expr: String_Expr
+  """
+  ✨ Generated from Field `Model`.`costPrice` of type `Float`
+  """
+  costPrice: Float
+  """
+  ✨ `_expr` server value variant of `costPrice` (✨ Generated from Field `Model`.`costPrice` of type `Float`)
+  """
+  costPrice_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `costPrice` (✨ Generated from Field `Model`.`costPrice` of type `Float`)
+  """
+  costPrice_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Model`.`createdAt` of type `String`
+  """
+  createdAt: String
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `Model`.`createdAt` of type `String`)
+  """
+  createdAt_expr: String_Expr
+  """
+  ✨ Generated from Field `Model`.`description` of type `String`
+  """
+  description: String
+  """
+  ✨ `_expr` server value variant of `description` (✨ Generated from Field `Model`.`description` of type `String`)
+  """
+  description_expr: String_Expr
+  """
+  ✨ Generated from Field `Model`.`name` of type `String!`
+  """
+  name: String
+  """
+  ✨ `_expr` server value variant of `name` (✨ Generated from Field `Model`.`name` of type `String!`)
+  """
+  name_expr: String_Expr
+  """
+  ✨ Generated from Field `Model`.`sellPrice` of type `Float`
+  """
+  sellPrice: Float
+  """
+  ✨ `_expr` server value variant of `sellPrice` (✨ Generated from Field `Model`.`sellPrice` of type `Float`)
+  """
+  sellPrice_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `sellPrice` (✨ Generated from Field `Model`.`sellPrice` of type `Float`)
+  """
+  sellPrice_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Model`.`updatedAt` of type `String`
+  """
+  updatedAt: String
+  """
+  ✨ `_expr` server value variant of `updatedAt` (✨ Generated from Field `Model`.`updatedAt` of type `String`)
+  """
+  updatedAt_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'Model'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Model_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [Model_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: Model_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [Model_Filter!]
+  """
+  ✨ Generated from Field `Model`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `Model`.`brandId` of type `String!`
+  """
+  brandId: String_Filter
+  """
+  ✨ Generated from Field `Model`.`category` of type `String`
+  """
+  category: String_Filter
+  """
+  ✨ Generated from Field `Model`.`costPrice` of type `Float`
+  """
+  costPrice: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`createdAt` of type `String`
+  """
+  createdAt: String_Filter
+  """
+  ✨ Generated from Field `Model`.`description` of type `String`
+  """
+  description: String_Filter
+  """
+  ✨ Generated from Field `Model`.`name` of type `String!`
+  """
+  name: String_Filter
+  """
+  ✨ Generated from Field `Model`.`sellPrice` of type `Float`
+  """
+  sellPrice: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`updatedAt` of type `String`
+  """
+  updatedAt: String_Filter
+}
+"""
+✨ Generated first-row input type for table 'Model'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input Model_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [Model_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: Model_Filter
+}
+"""
+✨ Generated having input type for table 'Model'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Model_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [Model_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: Model_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [Model_Having!]
+  """
+  ✨ Generated from Field `Model`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`brandId_count` of type `Int!`
+  """
+  brandId_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`category_count` of type `Int!`
+  """
+  category_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`costPrice_count` of type `Int!`
+  """
+  costPrice_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`description_count` of type `Int!`
+  """
+  description_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`name_count` of type `Int!`
+  """
+  name_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`sellPrice_count` of type `Int!`
+  """
+  sellPrice_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`updatedAt_count` of type `Int!`
+  """
+  updatedAt_count: Int_Filter
+  """
+  ✨ Generated from Field `Model`.`costPrice_sum` of type `Float`
+  """
+  costPrice_sum: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`sellPrice_sum` of type `Float`
+  """
+  sellPrice_sum: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`costPrice_avg` of type `Float`
+  """
+  costPrice_avg: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`sellPrice_avg` of type `Float`
+  """
+  sellPrice_avg: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`costPrice_min` of type `Float`
+  """
+  costPrice_min: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`sellPrice_min` of type `Float`
+  """
+  sellPrice_min: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`costPrice_max` of type `Float`
+  """
+  costPrice_max: Float_Filter
+  """
+  ✨ Generated from Field `Model`.`sellPrice_max` of type `Float`
+  """
+  sellPrice_max: Float_Filter
+}
+"""
+✨ Generated key input type for table 'Model'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input Model_Key {
+  """
+  ✨ Generated from Field `Model`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Model`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'Model'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input Model_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: Model_Filter
+}
+"""
+✨ Generated order input type for table 'Model'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input Model_Order {
+  """
+  ✨ Generated from Field `Model`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`brandId` of type `String!`
+  """
+  brandId: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`category` of type `String`
+  """
+  category: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`costPrice` of type `Float`
+  """
+  costPrice: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`createdAt` of type `String`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`description` of type `String`
+  """
+  description: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`name` of type `String!`
+  """
+  name: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`sellPrice` of type `Float`
+  """
+  sellPrice: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`updatedAt` of type `String`
+  """
+  updatedAt: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`brandId_count` of type `Int!`
+  """
+  brandId_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`category_count` of type `Int!`
+  """
+  category_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`costPrice_count` of type `Int!`
+  """
+  costPrice_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`description_count` of type `Int!`
+  """
+  description_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`name_count` of type `Int!`
+  """
+  name_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`sellPrice_count` of type `Int!`
+  """
+  sellPrice_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`updatedAt_count` of type `Int!`
+  """
+  updatedAt_count: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`costPrice_sum` of type `Float`
+  """
+  costPrice_sum: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`sellPrice_sum` of type `Float`
+  """
+  sellPrice_sum: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`costPrice_avg` of type `Float`
+  """
+  costPrice_avg: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`sellPrice_avg` of type `Float`
+  """
+  sellPrice_avg: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`costPrice_min` of type `Float`
+  """
+  costPrice_min: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`sellPrice_min` of type `Float`
+  """
+  sellPrice_min: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`costPrice_max` of type `Float`
+  """
+  costPrice_max: OrderDirection
+  """
+  ✨ Generated from Field `Model`.`sellPrice_max` of type `Float`
+  """
+  sellPrice_max: OrderDirection
+}
+"""
 ✨ Generated data input type for table 'Product'. It includes all necessary fields for creating or upserting rows into table.
 """
 input Product_Data {
@@ -2841,6 +3475,14 @@ input Product_Data {
   ✨ `_expr` server value variant of `id` (✨ Generated from Field `Product`.`id` of type `String!`)
   """
   id_expr: String_Expr
+  """
+  ✨ Generated from Field `Product`.`brandId` of type `String`
+  """
+  brandId: String
+  """
+  ✨ `_expr` server value variant of `brandId` (✨ Generated from Field `Product`.`brandId` of type `String`)
+  """
+  brandId_expr: String_Expr
   """
   ✨ Generated from Field `Product`.`brandName` of type `String!`
   """
@@ -2937,6 +3579,14 @@ input Product_Data {
   ✨ `_update` server value variant of `costingFreightPerUnit` (✨ Generated from Field `Product`.`costingFreightPerUnit` of type `Float`)
   """
   costingFreightPerUnit_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Product`.`costingId` of type `String`
+  """
+  costingId: String
+  """
+  ✨ `_expr` server value variant of `costingId` (✨ Generated from Field `Product`.`costingId` of type `String`)
+  """
+  costingId_expr: String_Expr
   """
   ✨ Generated from Field `Product`.`costingModelsJson` of type `String`
   """
@@ -3122,6 +3772,14 @@ input Product_Data {
   """
   isDamaged_expr: Boolean_Expr
   """
+  ✨ Generated from Field `Product`.`modelId` of type `String`
+  """
+  modelId: String
+  """
+  ✨ `_expr` server value variant of `modelId` (✨ Generated from Field `Product`.`modelId` of type `String`)
+  """
+  modelId_expr: String_Expr
+  """
   ✨ Generated from Field `Product`.`modelName` of type `String!`
   """
   modelName: String
@@ -3227,6 +3885,10 @@ input Product_Filter {
   """
   id: String_Filter
   """
+  ✨ Generated from Field `Product`.`brandId` of type `String`
+  """
+  brandId: String_Filter
+  """
   ✨ Generated from Field `Product`.`brandName` of type `String!`
   """
   brandName: String_Filter
@@ -3262,6 +3924,10 @@ input Product_Filter {
   ✨ Generated from Field `Product`.`costingFreightPerUnit` of type `Float`
   """
   costingFreightPerUnit: Float_Filter
+  """
+  ✨ Generated from Field `Product`.`costingId` of type `String`
+  """
+  costingId: String_Filter
   """
   ✨ Generated from Field `Product`.`costingModelsJson` of type `String`
   """
@@ -3330,6 +3996,10 @@ input Product_Filter {
   ✨ Generated from Field `Product`.`isDamaged` of type `Boolean`
   """
   isDamaged: Boolean_Filter
+  """
+  ✨ Generated from Field `Product`.`modelId` of type `String`
+  """
+  modelId: String_Filter
   """
   ✨ Generated from Field `Product`.`modelName` of type `String!`
   """
@@ -3405,6 +4075,10 @@ input Product_Having {
   """
   _count: Int_Filter
   """
+  ✨ Generated from Field `Product`.`brandId_count` of type `Int!`
+  """
+  brandId_count: Int_Filter
+  """
   ✨ Generated from Field `Product`.`brandName_count` of type `Int!`
   """
   brandName_count: Int_Filter
@@ -3440,6 +4114,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`costingFreightPerUnit_count` of type `Int!`
   """
   costingFreightPerUnit_count: Int_Filter
+  """
+  ✨ Generated from Field `Product`.`costingId_count` of type `Int!`
+  """
+  costingId_count: Int_Filter
   """
   ✨ Generated from Field `Product`.`costingModelsJson_count` of type `Int!`
   """
@@ -3512,6 +4190,10 @@ input Product_Having {
   ✨ Generated from Field `Product`.`isDamaged_count` of type `Int!`
   """
   isDamaged_count: Int_Filter
+  """
+  ✨ Generated from Field `Product`.`modelId_count` of type `Int!`
+  """
+  modelId_count: Int_Filter
   """
   ✨ Generated from Field `Product`.`modelName_count` of type `Int!`
   """
@@ -3920,6 +4602,10 @@ input Product_Order {
   """
   id: OrderDirection
   """
+  ✨ Generated from Field `Product`.`brandId` of type `String`
+  """
+  brandId: OrderDirection
+  """
   ✨ Generated from Field `Product`.`brandName` of type `String!`
   """
   brandName: OrderDirection
@@ -3955,6 +4641,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingFreightPerUnit` of type `Float`
   """
   costingFreightPerUnit: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingId` of type `String`
+  """
+  costingId: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingModelsJson` of type `String`
   """
@@ -4024,6 +4714,10 @@ input Product_Order {
   """
   isDamaged: OrderDirection
   """
+  ✨ Generated from Field `Product`.`modelId` of type `String`
+  """
+  modelId: OrderDirection
+  """
   ✨ Generated from Field `Product`.`modelName` of type `String!`
   """
   modelName: OrderDirection
@@ -4064,6 +4758,10 @@ input Product_Order {
   """
   _count: OrderDirection
   """
+  ✨ Generated from Field `Product`.`brandId_count` of type `Int!`
+  """
+  brandId_count: OrderDirection
+  """
   ✨ Generated from Field `Product`.`brandName_count` of type `Int!`
   """
   brandName_count: OrderDirection
@@ -4099,6 +4797,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`costingFreightPerUnit_count` of type `Int!`
   """
   costingFreightPerUnit_count: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`costingId_count` of type `Int!`
+  """
+  costingId_count: OrderDirection
   """
   ✨ Generated from Field `Product`.`costingModelsJson_count` of type `Int!`
   """
@@ -4171,6 +4873,10 @@ input Product_Order {
   ✨ Generated from Field `Product`.`isDamaged_count` of type `Int!`
   """
   isDamaged_count: OrderDirection
+  """
+  ✨ Generated from Field `Product`.`modelId_count` of type `Int!`
+  """
+  modelId_count: OrderDirection
   """
   ✨ Generated from Field `Product`.`modelName_count` of type `Int!`
   """

@@ -113,6 +113,29 @@ type Budget @table {
 
 # ==================== Inventory Module ====================
 
+# Brand table - stores brand information
+type Brand @table {
+  id: String!
+  name: String!
+  category: String
+  description: String
+  createdAt: String
+  updatedAt: String
+}
+
+# Model table - stores model information, linked to Brand
+type Model @table {
+  id: String!
+  brandId: String!  # Foreign key to Brand
+  name: String!
+  category: String
+  description: String
+  costPrice: Float      # Cost price for this model
+  sellPrice: Float      # Sell price for this model - fetched when model is selected
+  createdAt: String
+  updatedAt: String
+}
+
 type Product @table {
   id: String!
   brandName: String!
@@ -129,6 +152,14 @@ type Product @table {
   serialNumbers: String
   serialCities: String
   serialStatus: String
+  
+  # New optional fields for brand/model/costing linking
+  # These are OPTIONAL for backward compatibility with existing products
+  brandId: String      # Optional link to Brand table
+  modelId: String      # Optional link to Model table
+  costingId: String    # Optional link to costing (for multi-model costing)
+  
+  # Existing costing fields (flattened in Product for backward compatibility)
   costingOption: String
   costingUnits: Float
   costingUnitCostUSD: Float

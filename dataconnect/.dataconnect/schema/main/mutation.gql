@@ -18,6 +18,15 @@ extend type Mutation {
     data: BankTransfer_Data!
   ): BankTransfer_KeyOutput! @fdc_generated(from: "BankTransfer", purpose: INSERT_SINGLE)
   """
+  ✨ Insert a single `Brand` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  brand_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: Brand_Data!
+  ): Brand_KeyOutput! @fdc_generated(from: "Brand", purpose: INSERT_SINGLE)
+  """
   ✨ Insert a single `Budget` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
   """
   budget_insert(
@@ -63,6 +72,15 @@ extend type Mutation {
     data: LoanPayment_Data!
   ): LoanPayment_KeyOutput! @fdc_generated(from: "LoanPayment", purpose: INSERT_SINGLE)
   """
+  ✨ Insert a single `Model` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  model_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: Model_Data!
+  ): Model_KeyOutput! @fdc_generated(from: "Model", purpose: INSERT_SINGLE)
+  """
   ✨ Insert a single `Product` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
   """
   product_insert(
@@ -98,6 +116,15 @@ extend type Mutation {
     """
     data: [BankTransfer_Data!]!
   ): [BankTransfer_KeyOutput!]! @fdc_generated(from: "BankTransfer", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `Brand` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  brand_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [Brand_Data!]!
+  ): [Brand_KeyOutput!]! @fdc_generated(from: "Brand", purpose: INSERT_MULTIPLE)
   """
   ✨ Insert `Budget` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
   """
@@ -144,6 +171,15 @@ extend type Mutation {
     data: [LoanPayment_Data!]!
   ): [LoanPayment_KeyOutput!]! @fdc_generated(from: "LoanPayment", purpose: INSERT_MULTIPLE)
   """
+  ✨ Insert `Model` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  model_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [Model_Data!]!
+  ): [Model_KeyOutput!]! @fdc_generated(from: "Model", purpose: INSERT_MULTIPLE)
+  """
   ✨ Insert `Product` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
   """
   product_insertMany(
@@ -179,6 +215,15 @@ extend type Mutation {
     """
     data: BankTransfer_Data!
   ): BankTransfer_KeyOutput! @fdc_generated(from: "BankTransfer", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update a single `Brand` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Brand`.
+  """
+  brand_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: Brand_Data!
+  ): Brand_KeyOutput! @fdc_generated(from: "Brand", purpose: UPSERT_SINGLE)
   """
   ✨ Insert or update a single `Budget` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Budget`.
   """
@@ -225,6 +270,15 @@ extend type Mutation {
     data: LoanPayment_Data!
   ): LoanPayment_KeyOutput! @fdc_generated(from: "LoanPayment", purpose: UPSERT_SINGLE)
   """
+  ✨ Insert or update a single `Model` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Model`.
+  """
+  model_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: Model_Data!
+  ): Model_KeyOutput! @fdc_generated(from: "Model", purpose: UPSERT_SINGLE)
+  """
   ✨ Insert or update a single `Product` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Product`.
   """
   product_upsert(
@@ -260,6 +314,15 @@ extend type Mutation {
     """
     data: [BankTransfer_Data!]!
   ): [BankTransfer_KeyOutput!]! @fdc_generated(from: "BankTransfer", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `Brand` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Brand`.
+  """
+  brand_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [Brand_Data!]!
+  ): [Brand_KeyOutput!]! @fdc_generated(from: "Brand", purpose: UPSERT_MULTIPLE)
   """
   ✨ Insert or update `Budget` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Budget`.
   """
@@ -305,6 +368,15 @@ extend type Mutation {
     """
     data: [LoanPayment_Data!]!
   ): [LoanPayment_KeyOutput!]! @fdc_generated(from: "LoanPayment", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `Model` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Model`.
+  """
+  model_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [Model_Data!]!
+  ): [Model_KeyOutput!]! @fdc_generated(from: "Model", purpose: UPSERT_MULTIPLE)
   """
   ✨ Insert or update `Product` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Product`.
   """
@@ -381,6 +453,35 @@ extend type Mutation {
     """
     data: BankTransfer_Data!
   ): BankTransfer_KeyOutput @fdc_generated(from: "BankTransfer", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `Brand` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Brand` or `null` if not found.
+  """
+  brand_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Brand_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Brand_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: Brand_Data!
+  ): Brand_KeyOutput @fdc_generated(from: "Brand", purpose: UPDATE_SINGLE)
   """
   ✨ Update a single `Budget` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Budget` or `null` if not found.
   """
@@ -527,6 +628,35 @@ extend type Mutation {
     data: LoanPayment_Data!
   ): LoanPayment_KeyOutput @fdc_generated(from: "LoanPayment", purpose: UPDATE_SINGLE)
   """
+  ✨ Update a single `Model` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Model` or `null` if not found.
+  """
+  model_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Model_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Model_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: Model_Data!
+  ): Model_KeyOutput @fdc_generated(from: "Model", purpose: UPDATE_SINGLE)
+  """
   ✨ Update a single `Product` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Product` or `null` if not found.
   """
   product_update(
@@ -623,6 +753,25 @@ extend type Mutation {
     data: BankTransfer_Data!
   ): Int! @fdc_generated(from: "BankTransfer", purpose: UPDATE_MULTIPLE)
   """
+  ✨ Update `Brand` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  brand_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: Brand_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: Brand_Data!
+  ): Int! @fdc_generated(from: "Brand", purpose: UPDATE_MULTIPLE)
+  """
   ✨ Update `Budget` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
   """
   budget_updateMany(
@@ -718,6 +867,25 @@ extend type Mutation {
     data: LoanPayment_Data!
   ): Int! @fdc_generated(from: "LoanPayment", purpose: UPDATE_MULTIPLE)
   """
+  ✨ Update `Model` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  model_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: Model_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: Model_Data!
+  ): Int! @fdc_generated(from: "Model", purpose: UPDATE_MULTIPLE)
+  """
   ✨ Update `Product` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
   """
   product_updateMany(
@@ -803,6 +971,30 @@ extend type Mutation {
     """
     first: BankTransfer_FirstRow
   ): BankTransfer_KeyOutput @fdc_generated(from: "BankTransfer", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete a single `Brand` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  brand_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Brand_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Brand_FirstRow
+  ): Brand_KeyOutput @fdc_generated(from: "Brand", purpose: DELETE_SINGLE)
   """
   ✨ Delete a single `Budget` based on `id`, `key` or `first` and return its key (or `null` if not found).
   """
@@ -924,6 +1116,30 @@ extend type Mutation {
     first: LoanPayment_FirstRow
   ): LoanPayment_KeyOutput @fdc_generated(from: "LoanPayment", purpose: DELETE_SINGLE)
   """
+  ✨ Delete a single `Model` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  model_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Model_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Model_FirstRow
+  ): Model_KeyOutput @fdc_generated(from: "Model", purpose: DELETE_SINGLE)
+  """
   ✨ Delete a single `Product` based on `id`, `key` or `first` and return its key (or `null` if not found).
   """
   product_delete(
@@ -1000,6 +1216,20 @@ extend type Mutation {
     all: Boolean = false
   ): Int! @fdc_generated(from: "BankTransfer", purpose: DELETE_MULTIPLE)
   """
+  ✨ Delete `Brand` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  brand_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: Brand_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "Brand", purpose: DELETE_MULTIPLE)
+  """
   ✨ Delete `Budget` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
   """
   budget_deleteMany(
@@ -1069,6 +1299,20 @@ extend type Mutation {
     """
     all: Boolean = false
   ): Int! @fdc_generated(from: "LoanPayment", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `Model` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  model_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: Model_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "Model", purpose: DELETE_MULTIPLE)
   """
   ✨ Delete `Product` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
   """

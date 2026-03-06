@@ -30,6 +30,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   setIsDamaged,
   
   // Multi-Model Costing Props
+  setCostingBrandName,
   setUsdRate,
   setTotalCustomsValue,
   setTotalFreightValue,
@@ -167,9 +168,11 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                 
                 {/* Global Inputs Component */}
                 <CostingGlobalInputs
+                  brandName={formData.costing.brandName}
                   usdRate={formData.costing.usdRate}
                   totalCustomsValue={formData.costing.totalCustomsValue}
                   totalFreightValue={formData.costing.totalFreightValue}
+                  onBrandNameChange={setCostingBrandName}
                   onUsdRateChange={setUsdRate}
                   onCustomsChange={setTotalCustomsValue}
                   onFreightChange={setTotalFreightValue}

@@ -16,6 +16,10 @@ mutation productInsert(
   $serialNumbers: String,
   $serialCities: String,
   $serialStatus: String,
+  # New linking fields
+  $brandId: String,
+  $modelId: String,
+  $costingId: String,
   $costingOption: String,
   $costingUnits: Float,
   $costingUnitCostUSD: Float,
@@ -53,6 +57,9 @@ mutation productInsert(
       serialNumbers: $serialNumbers
       serialCities: $serialCities
       serialStatus: $serialStatus
+      brandId: $brandId
+      modelId: $modelId
+      costingId: $costingId
       costingOption: $costingOption
       costingUnits: $costingUnits
       costingUnitCostUSD: $costingUnitCostUSD
@@ -94,6 +101,10 @@ mutation productUpdate(
   $serialNumbers: String,
   $serialCities: String,
   $serialStatus: String,
+  # New linking fields
+  $brandId: String,
+  $modelId: String,
+  $costingId: String,
   $costingOption: String,
   $costingUnits: Float,
   $costingUnitCostUSD: Float,
@@ -131,6 +142,9 @@ mutation productUpdate(
       serialNumbers: $serialNumbers
       serialCities: $serialCities
       serialStatus: $serialStatus
+      brandId: $brandId
+      modelId: $modelId
+      costingId: $costingId
       costingOption: $costingOption
       costingUnits: $costingUnits
       costingUnitCostUSD: $costingUnitCostUSD
@@ -253,3 +267,4 @@ mutation productTransferUpdate(
 mutation productTransferDelete($id: String!) @auth(level: PUBLIC) {
   productTransfer_delete(id: $id)
 }
+

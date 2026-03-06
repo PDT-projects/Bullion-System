@@ -1,21 +1,25 @@
 // Inventory Module - Costing Global Inputs Component
-// Global input fields for multi-model costing (USD Rate, Customs, Freight)
+// Global input fields for multi-model costing (Brand, USD Rate, Customs, Freight)
 
 import React from 'react';
 
 interface CostingGlobalInputsProps {
+  brandName: string;
   usdRate: number;
   totalCustomsValue: number;
   totalFreightValue: number;
+  onBrandNameChange: (value: string) => void;
   onUsdRateChange: (value: number) => void;
   onCustomsChange: (value: number) => void;
   onFreightChange: (value: number) => void;
 }
 
 export function CostingGlobalInputs({
+  brandName,
   usdRate,
   totalCustomsValue,
   totalFreightValue,
+  onBrandNameChange,
   onUsdRateChange,
   onCustomsChange,
   onFreightChange,
@@ -27,7 +31,23 @@ export function CostingGlobalInputs({
   return (
     <div className="bg-gray-50 p-4 rounded-lg mb-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Global Costing Inputs</h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Brand Name - NEW FIELD */}
+        <div>
+          <label htmlFor="costingBrandName" className={labelStyle}>
+            Brand Name
+          </label>
+          <input
+            id="costingBrandName"
+            type="text"
+            className={inputStyle}
+            value={brandName || ''}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onBrandNameChange(e.target.value)}
+            placeholder="e.g., Apple, Samsung, Honda"
+          />
+          <p className={helpTextStyle}>Brand being costed</p>
+        </div>
+
         {/* USD Rate */}
         <div>
           <label htmlFor="usdRate" className={labelStyle}>

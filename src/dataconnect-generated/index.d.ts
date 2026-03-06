@@ -20,6 +20,11 @@ export interface Bank_Key {
   __typename?: 'Bank_Key';
 }
 
+export interface Brand_Key {
+  id: string;
+  __typename?: 'Brand_Key';
+}
+
 export interface Budget_Key {
   id: string;
   __typename?: 'Budget_Key';
@@ -136,6 +141,11 @@ export interface LoanPayment_Key {
 export interface Loan_Key {
   id: string;
   __typename?: 'Loan_Key';
+}
+
+export interface Model_Key {
+  id: string;
+  __typename?: 'Model_Key';
 }
 
 export interface ProductTransfer_Key {

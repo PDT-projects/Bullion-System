@@ -58,6 +58,9 @@ export interface CostingModel {
  * Supports multiple models per brand
  */
 export interface CostingInfo {
+  // Brand name for this costing batch - NEW FIELD
+  brandName: string;
+  
   // Global inputs for multi-model costing
   usdRate: number;
   totalCustomsValue: number;
@@ -96,6 +99,12 @@ export interface Product {
   isDamaged?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  
+    // Optional fields for linking to brand/model/costing
+  brandId?: string;
+  modelId?: string;
+  costingId?: string;
+
   // Costing fields (when costingOption === 'with')
   costingOption?: CostingOption;
   costing?: CostingInfo;
@@ -331,4 +340,20 @@ export interface CreatePaymentDTO {
   bankId?: string;
   transactionId?: string;
   notes?: string;
+}
+
+
+// Brand with Models - for brand selection
+export interface BrandWithModels {
+  id: string;
+  name: string;
+  models: ModelWithCosting[];
+}
+
+// Model with Costing - for model selection
+export interface ModelWithCosting {
+  id: string;
+  name: string;
+  brandId: string;
+  costingDetails: string;
 }

@@ -260,23 +260,25 @@ function InventoryLayout() {
   const [transfers, setTransfers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch products from Data Connect
+  const fetchProducts = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { InventoryDataConnectService } = await import('./api/dataconnect/inventoryDataConnectService');
+      const fetchedProducts = await InventoryDataConnectService.fetchAllProducts();
+      setProducts(fetchedProducts);
+      console.log('📡 Fetched products from Data Connect:', fetchedProducts.length);
+    } catch (error) {
+      console.error('❌ Error fetching products from Data Connect:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Fetch products from Data Connect on mount
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const { InventoryDataConnectService } = await import('./api/dataconnect/inventoryDataConnectService');
-        const fetchedProducts = await InventoryDataConnectService.fetchAllProducts();
-        setProducts(fetchedProducts);
-        console.log('📡 Fetched products from Data Connect:', fetchedProducts.length);
-      } catch (error) {
-        console.error('❌ Error fetching products from Data Connect:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchProducts();
-  }, []);
+  }, [fetchProducts]);
 
   return (
     <div className="flex h-screen bg-[#f0f2f5]">
@@ -291,7 +293,7 @@ function InventoryLayout() {
               <div className="text-gray-500">Loading products...</div>
             </div>
           ) : (
-            <Outlet context={{ products, setProducts, transfers, setTransfers }} />
+            <Outlet context={{ products, setProducts, transfers, setTransfers, refreshProducts: fetchProducts }} />
           )}
         </main>
       </div>

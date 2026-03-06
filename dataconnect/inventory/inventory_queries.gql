@@ -1,7 +1,10 @@
 # Inventory Queries - Read operations for Products and Product Transfers
 
-query listProducts @auth(level: PUBLIC) {
-  products(orderBy: { createdAt: DESC }) {
+query ListProducts(
+  $limit: Int = 50
+  $offset: Int = 0
+) @auth(level: PUBLIC) {
+  products(limit: $limit, offset: $offset, orderBy: { createdAt: DESC }) {
     id
     brandName
     modelName
@@ -17,6 +20,10 @@ query listProducts @auth(level: PUBLIC) {
     serialNumbers
     serialCities
     serialStatus
+    # New linking fields
+    brandId
+    modelId
+    costingId
     costingOption
     costingUnits
     costingUnitCostUSD
@@ -41,7 +48,7 @@ query listProducts @auth(level: PUBLIC) {
   }
 }
 
-query getProductById($id: String!) @auth(level: PUBLIC) {
+query GetProductById($id: String!) @auth(level: PUBLIC) {
   product(id: $id) {
     id
     brandName
@@ -58,6 +65,10 @@ query getProductById($id: String!) @auth(level: PUBLIC) {
     serialNumbers
     serialCities
     serialStatus
+    # New linking fields
+    brandId
+    modelId
+    costingId
     costingOption
     costingUnits
     costingUnitCostUSD
@@ -82,8 +93,11 @@ query getProductById($id: String!) @auth(level: PUBLIC) {
   }
 }
 
-query listProductTransfers @auth(level: PUBLIC) {
-  productTransfers(orderBy: { date: DESC }) {
+query ListProductTransfers(
+  $limit: Int = 50
+  $offset: Int = 0
+) @auth(level: PUBLIC) {
+  productTransfers(limit: $limit, offset: $offset, orderBy: { date: DESC }) {
     id
     productId
     productName
@@ -107,7 +121,7 @@ query listProductTransfers @auth(level: PUBLIC) {
   }
 }
 
-query getProductTransferById($id: String!) @auth(level: PUBLIC) {
+query GetProductTransferById($id: String!) @auth(level: PUBLIC) {
   productTransfer(id: $id) {
     id
     productId

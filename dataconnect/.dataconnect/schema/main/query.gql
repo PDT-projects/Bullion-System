@@ -48,6 +48,30 @@ extend type Query {
     first: BankTransfer_FirstRow
   ): BankTransfer @fdc_generated(from: "BankTransfer", purpose: QUERY_SINGLE)
   """
+  ✨ Look up a single `Brand` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  brand(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Brand_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Brand_FirstRow
+  ): Brand @fdc_generated(from: "Brand", purpose: QUERY_SINGLE)
+  """
   ✨ Look up a single `Budget` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
   """
   budget(
@@ -168,6 +192,30 @@ extend type Query {
     first: LoanPayment_FirstRow
   ): LoanPayment @fdc_generated(from: "LoanPayment", purpose: QUERY_SINGLE)
   """
+  ✨ Look up a single `Model` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  model(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Model_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Model_FirstRow
+  ): Model @fdc_generated(from: "Model", purpose: QUERY_SINGLE)
+  """
   ✨ Look up a single `Product` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
   """
   product(
@@ -283,6 +331,40 @@ extend type Query {
     """
     having: BankTransfer_Having
   ): [BankTransfer!]! @fdc_generated(from: "BankTransfer", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Brand` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  brands(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Brand_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Brand_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Brand_Having
+  ): [Brand!]! @fdc_generated(from: "Brand", purpose: QUERY_MULTIPLE)
   """
   ✨ List `Budget` objects in the table and return selected fields, optionally filtered by `where` conditions
   """
@@ -453,6 +535,40 @@ extend type Query {
     """
     having: LoanPayment_Having
   ): [LoanPayment!]! @fdc_generated(from: "LoanPayment", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Model` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  models(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Model_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Model_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Model_Having
+  ): [Model!]! @fdc_generated(from: "Model", purpose: QUERY_MULTIPLE)
   """
   ✨ List `Product` objects in the table and return selected fields, optionally filtered by `where` conditions
   """

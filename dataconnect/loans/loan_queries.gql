@@ -1,8 +1,8 @@
 # Loan Queries - Read operations for Loans
 
 query listLoans(
-  $limit: Int = 100
-  $offset: Int = 0
+  $limit: Int
+  $offset: Int
 ) @auth(level: PUBLIC) {
   loans(limit: $limit, offset: $offset, orderBy: { loanDate: DESC }) {
     id
@@ -50,7 +50,7 @@ query getLoanById($id: String!) @auth(level: PUBLIC) {
 }
 
 query listLoanPayments(
-  $limit: Int = 100
+  $limit: Int = 10
   $offset: Int = 0
 ) @auth(level: PUBLIC) {
   loanPayments(limit: $limit, offset: $offset, orderBy: { date: DESC }) {

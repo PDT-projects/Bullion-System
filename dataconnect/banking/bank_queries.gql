@@ -1,7 +1,7 @@
 # Bank Queries - Read operations for Bank accounts
 
 query listBanks(
-  $limit: Int = 100
+  $limit: Int = 10
   $offset: Int = 0
 ) @auth(level: PUBLIC) {
   banks(limit: $limit, offset: $offset) {

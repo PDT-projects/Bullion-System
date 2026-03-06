@@ -1,9 +1,11 @@
 // Inventory Module - View Layer
 // InventoryListView - Product list with filters and actions
 
-import { Plus, Filter, Package, Eye, ArrowRightLeft } from 'lucide-react';
+import { Plus, Filter, Package, Eye, ArrowRightLeft, DollarSign } from 'lucide-react';
 import { Product, ProductFilters } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
+import { AddCostingDialog } from '../components/AddCostingDialog';
+import { useState } from 'react';
 
 /**
  * Props for InventoryListView
@@ -51,6 +53,10 @@ export function InventoryListView({
   onAddToExisting,
   onTransfer
 }: InventoryListViewProps) {
+  // State for Add Costing dialog
+  const [showAddCostingDialog, setShowAddCostingDialog] = useState(false);
+  const [selectedProductForCosting, setSelectedProductForCosting] = useState<Product | null>(null);
+
   const getStatusColor = (status: string) => {
     const colors: { [key: string]: string } = {
       'New': 'bg-blue-100 text-blue-800',
@@ -435,26 +441,60 @@ export function InventoryListView({
                 </div>
               )}
             </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => setViewProduct(null)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  setViewProduct(null);
-                  onTransfer(viewProduct.id);
-                }}
-                className="px-4 py-2 bg-gradient-to-r from-[#4f46e5] to-[#6366f1] text-white rounded-lg font-medium hover:from-[#4338ca] hover:to-[#4f46e5] transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-              >
-                Transfer
-              </button>
+            <div className="p-6 border-t border-gray-200 flex justify-between">
+              <div>
+                {/* Add Costing Button - Show only if costing is not linked */}
+                {(!viewProduct.costingOption || viewProduct.costingOption !== 'with') && !viewProduct.costingUsdRate && (
+                  <button
+                    onClick={() => {
+                      setSelectedProductForCosting(viewProduct);
+                      setShowAddCostingDialog(true);
+                      setViewProduct(null);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-medium hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center gap-2"
+                  >
+                    <DollarSign size={18} />
+                    Add Costing
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setViewProduct(null)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setViewProduct(null);
+                    onTransfer(viewProduct.id);
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-[#4f46e5] to-[#6366f1] text-white rounded-lg font-medium hover:from-[#4338ca] hover:to-[#4f46e5] transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                >
+                  Transfer
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Add Costing Dialog */}
+      <AddCostingDialog
+        isOpen={showAddCostingDialog}
+        onClose={() => {
+          setShowAddCostingDialog(false);
+          setSelectedProductForCosting(null);
+        }}
+        onSave={(data) => {
+          // Handle saving the costing - this would update the product via props or API
+          console.log('Link costing to product:', selectedProductForCosting?.id, data);
+          setShowAddCostingDialog(false);
+          setSelectedProductForCosting(null);
+        }}
+        productName={selectedProductForCosting ? `${selectedProductForCosting.brandName} ${selectedProductForCosting.modelName}` : ''}
+      />
     </div>
   );
 }

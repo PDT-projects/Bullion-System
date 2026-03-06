@@ -1,7 +1,7 @@
 # Bank Transfer Queries - Read operations for Bank Transfers
 
 query listTransfers(
-  $limit: Int = 100
+  $limit: Int = 10
   $offset: Int = 0
 ) @auth(level: PUBLIC) {
   bankTransfers(limit: $limit, offset: $offset, orderBy: { date: DESC }) {

@@ -213,6 +213,74 @@ extend type BankTransfer {
   """
   _id: ID! @fdc_generated(from: "BankTransfer.id", purpose: GLOBAL_ID)
 }
+extend type Brand {
+  """
+  Implicit metadata field that cannot be written. It provides extra information about query results.
+  """
+  _metadata: _Metadata @fdc_generated(from: "Brand", purpose: METADATA_FIELD)
+  """
+  ✨ Count the number of rows in the `Brand` table.
+  """
+  _count: Int! @fdc_generated(from: "Brand.", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Brand` table where the `category` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  category_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Brand.category", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Brand` table where the `createdAt` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  createdAt_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Brand.createdAt", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Brand` table where the `description` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  description_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Brand.description", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Brand` table where the `id` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  id_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Brand.id", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Brand` table where the `name` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  name_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Brand.name", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Brand` table where the `updatedAt` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  updatedAt_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Brand.updatedAt", purpose: QUERY_COUNT)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "Brand.id", purpose: GLOBAL_ID)
+}
 extend type Budget {
   """
   Implicit metadata field that cannot be written. It provides extra information about query results.
@@ -1013,6 +1081,153 @@ extend type LoanPayment {
   """
   _id: ID! @fdc_generated(from: "LoanPayment.id", purpose: GLOBAL_ID)
 }
+extend type Model {
+  """
+  Implicit metadata field that cannot be written. It provides extra information about query results.
+  """
+  _metadata: _Metadata @fdc_generated(from: "Model", purpose: METADATA_FIELD)
+  """
+  ✨ Count the number of rows in the `Model` table.
+  """
+  _count: Int! @fdc_generated(from: "Model.", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `brandId` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  brandId_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.brandId", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `category` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  category_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.category", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `costPrice` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costPrice_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.costPrice", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `createdAt` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  createdAt_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.createdAt", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `description` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  description_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.description", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `id` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  id_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.id", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `name` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  name_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.name", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `sellPrice` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  sellPrice_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.sellPrice", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Model` table where the `updatedAt` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  updatedAt_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Model.updatedAt", purpose: QUERY_COUNT)
+  """
+  ✨ Sum the `costPrice` field in the `Model` table.
+  """
+  costPrice_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Model.costPrice", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `sellPrice` field in the `Model` table.
+  """
+  sellPrice_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Model.sellPrice", purpose: QUERY_SUM)
+  """
+  ✨ Average the `costPrice` field in the `Model` table.
+  """
+  costPrice_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Model.costPrice", purpose: QUERY_AVG)
+  """
+  ✨ Average the `sellPrice` field in the `Model` table.
+  """
+  sellPrice_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Model.sellPrice", purpose: QUERY_AVG)
+  """
+  ✨ Minimum of the `costPrice` field in the `Model` table.
+  """
+  costPrice_min: Float @fdc_generated(from: "Model.costPrice", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `sellPrice` field in the `Model` table.
+  """
+  sellPrice_min: Float @fdc_generated(from: "Model.sellPrice", purpose: QUERY_MIN)
+  """
+  ✨ Maximum of the `costPrice` field in the `Model` table.
+  """
+  costPrice_max: Float @fdc_generated(from: "Model.costPrice", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `sellPrice` field in the `Model` table.
+  """
+  sellPrice_max: Float @fdc_generated(from: "Model.sellPrice", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "Model.id", purpose: GLOBAL_ID)
+}
 extend type Product {
   """
   Implicit metadata field that cannot be written. It provides extra information about query results.
@@ -1022,6 +1237,15 @@ extend type Product {
   ✨ Count the number of rows in the `Product` table.
   """
   _count: Int! @fdc_generated(from: "Product.", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Product` table where the `brandId` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  brandId_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.brandId", purpose: QUERY_COUNT)
   """
   ✨ Count the number of rows in the `Product` table where the `brandName` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """
@@ -1103,6 +1327,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Int! @fdc_generated(from: "Product.costingFreightPerUnit", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Product` table where the `costingId` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  costingId_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.costingId", purpose: QUERY_COUNT)
   """
   ✨ Count the number of rows in the `Product` table where the `costingModelsJson` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """
@@ -1265,6 +1498,15 @@ extend type Product {
     """
     distinct: Boolean = false
   ): Int! @fdc_generated(from: "Product.isDamaged", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Product` table where the `modelId` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  modelId_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Product.modelId", purpose: QUERY_COUNT)
   """
   ✨ Count the number of rows in the `Product` table where the `modelName` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
   """

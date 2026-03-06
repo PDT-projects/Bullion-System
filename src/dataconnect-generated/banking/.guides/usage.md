@@ -12,12 +12,8 @@ For each operation, there is a wrapper hook that can be used to call the operati
 
 Here are all of the hooks that get generated:
 ```ts
-import { useListCashInHand, useGetCashInHandById, useTransferInsert, useTransferDelete, useListTransfers, useGetTransferById, useBankInsert, useBankUpdate, useBankDelete, useUpdateBankBalance } from '@erp-system/banking/react';
+import { useTransferInsert, useTransferDelete, useListTransfers, useGetTransferById, useBankInsert, useBankUpdate, useBankDelete, useUpdateBankBalance, useListBanks, useGetBankById } from '@erp-system/banking/react';
 // The types of these hooks are available in react/index.d.ts
-
-const { data, isPending, isSuccess, isError, error } = useListCashInHand(listCashInHandVars);
-
-const { data, isPending, isSuccess, isError, error } = useGetCashInHandById(getCashInHandByIdVars);
 
 const { data, isPending, isSuccess, isError, error } = useTransferInsert(transferInsertVars);
 
@@ -34,6 +30,10 @@ const { data, isPending, isSuccess, isError, error } = useBankUpdate(bankUpdateV
 const { data, isPending, isSuccess, isError, error } = useBankDelete(bankDeleteVars);
 
 const { data, isPending, isSuccess, isError, error } = useUpdateBankBalance(updateBankBalanceVars);
+
+const { data, isPending, isSuccess, isError, error } = useListBanks(listBanksVars);
+
+const { data, isPending, isSuccess, isError, error } = useGetBankById(getBankByIdVars);
 
 ```
 
@@ -72,19 +72,13 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { listCashInHand, getCashInHandById, transferInsert, transferDelete, listTransfers, getTransferById, bankInsert, bankUpdate, bankDelete, updateBankBalance } from '@erp-system/banking';
+import { transferInsert, transferDelete, listTransfers, getTransferById, bankInsert, bankUpdate, bankDelete, updateBankBalance, listBanks, getBankById } from '@erp-system/banking';
 
 
-// Operation listCashInHand:  For variables, look at type ListCashInHandVars in ../index.d.ts
-const { data } = await ListCashInHand(dataConnect, listCashInHandVars);
-
-// Operation getCashInHandById:  For variables, look at type GetCashInHandByIdVars in ../index.d.ts
-const { data } = await GetCashInHandById(dataConnect, getCashInHandByIdVars);
-
-// Operation transferInsert:  For variables, look at type TransferInsertVars in ../index.d.ts
+// Operation TransferInsert:  For variables, look at type TransferInsertVars in ../index.d.ts
 const { data } = await TransferInsert(dataConnect, transferInsertVars);
 
-// Operation transferDelete:  For variables, look at type TransferDeleteVars in ../index.d.ts
+// Operation TransferDelete:  For variables, look at type TransferDeleteVars in ../index.d.ts
 const { data } = await TransferDelete(dataConnect, transferDeleteVars);
 
 // Operation listTransfers:  For variables, look at type ListTransfersVars in ../index.d.ts
@@ -93,17 +87,23 @@ const { data } = await ListTransfers(dataConnect, listTransfersVars);
 // Operation getTransferById:  For variables, look at type GetTransferByIdVars in ../index.d.ts
 const { data } = await GetTransferById(dataConnect, getTransferByIdVars);
 
-// Operation bankInsert:  For variables, look at type BankInsertVars in ../index.d.ts
+// Operation BankInsert:  For variables, look at type BankInsertVars in ../index.d.ts
 const { data } = await BankInsert(dataConnect, bankInsertVars);
 
-// Operation bankUpdate:  For variables, look at type BankUpdateVars in ../index.d.ts
+// Operation BankUpdate:  For variables, look at type BankUpdateVars in ../index.d.ts
 const { data } = await BankUpdate(dataConnect, bankUpdateVars);
 
-// Operation bankDelete:  For variables, look at type BankDeleteVars in ../index.d.ts
+// Operation BankDelete:  For variables, look at type BankDeleteVars in ../index.d.ts
 const { data } = await BankDelete(dataConnect, bankDeleteVars);
 
-// Operation updateBankBalance:  For variables, look at type UpdateBankBalanceVars in ../index.d.ts
+// Operation UpdateBankBalance:  For variables, look at type UpdateBankBalanceVars in ../index.d.ts
 const { data } = await UpdateBankBalance(dataConnect, updateBankBalanceVars);
+
+// Operation listBanks:  For variables, look at type ListBanksVars in ../index.d.ts
+const { data } = await ListBanks(dataConnect, listBanksVars);
+
+// Operation getBankById:  For variables, look at type GetBankByIdVars in ../index.d.ts
+const { data } = await GetBankById(dataConnect, getBankByIdVars);
 
 
 ```

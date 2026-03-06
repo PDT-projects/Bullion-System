@@ -3,7 +3,7 @@
 // Updated to handle multi-model costing
 
 import { useState, useCallback, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { 
   ProductFormData, 
@@ -66,6 +66,9 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
+  // Get refreshProducts from context (if available)
+  const { refreshProducts } = (useOutletContext<{ refreshProducts?: () => Promise<void> }>()) || {};
+  
   // Parse form data from URL params
   const costingOption = (searchParams.get('costing') as CostingOption) || 'without';
   const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
@@ -96,6 +99,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       totalCustomsValue: Number(searchParams.get('totalCustomsValue')) || 0,
       totalFreightValue: Number(searchParams.get('totalFreightValue')) || 0,
       models: models,
+      totalUnitCostUSD: Number(searchParams.get('totalUnitCostUSD')) || 0,
       shipmentTotalUSD: Number(searchParams.get('shipmentTotalUSD')) || 0,
       consignmentValue: Number(searchParams.get('consignmentValue')) || 0,
       totalValueOfBrand: Number(searchParams.get('totalValueOfBrand')) || 0,
@@ -220,12 +224,18 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       
       console.log('✅ Product created in Data Connect:', createdProduct.id);
       toast.success('Inventory created successfully!');
+      
+      // Refresh products list if function is available
+      if (refreshProducts) {
+        await refreshProducts();
+      }
+      
       navigate('/inventory/view');
     } catch (error) {
       console.error('❌ Error creating product in Data Connect:', error);
       toast.error('Failed to create inventory. Please try again.');
     }
-  }, [validateForm, navigate, brandName, modelName, category, sellPrice, buyType, warrantyYears, stock, serialNumbers, serialCities, description, status, isDamaged, costingOption, costing]);
+  }, [validateForm, navigate, brandName, modelName, category, sellPrice, buyType, warrantyYears, stock, serialNumbers, serialCities, description, status, isDamaged, costingOption, costing, refreshProducts]);
 
   // Back handler - Updated for multi-model costing
   const handleBack = useCallback(() => {
