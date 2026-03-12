@@ -19,6 +19,7 @@ import { ProductTransferWrapper } from './modules/inventory/views/ProductTransfe
 import { ProductTransferCreateWrapper } from './modules/inventory/views/ProductTransferCreateWrapper';
 import { InventoryTypeSelectionWrapper } from './modules/inventory/views/InventoryTypeSelectionWrapper';
 import { InventoryCostingOptionWrapper } from './modules/inventory/views/InventoryCostingOptionWrapper';
+import { InventoryCostingDetailsWrapper } from './modules/inventory/views/InventoryCostingDetailsWrapper';
 import { InventoryProductDetailsWrapper } from './modules/inventory/views/InventoryProductDetailsWrapper';
 import { InventoryPaymentWrapper } from './modules/inventory/views/InventoryPaymentWrapper';
 import { useInventoryDashboardViewModel } from './modules/inventory/viewModels/useInventoryDashboardViewModel';
@@ -225,6 +226,10 @@ function InventoryCostingOptionRoute() {
   return <InventoryCostingOptionWrapper />;
 }
 
+function InventoryCostingDetailsRoute() {
+  return <InventoryCostingDetailsWrapper />;
+}
+
 
 function InventoryProductDetailsRoute() {
   return <InventoryProductDetailsWrapper />;
@@ -262,12 +267,10 @@ function InventoryLayout() {
 
   // Fetch products from Data Connect
   const fetchProducts = useCallback(async () => {
-    setIsLoading(true);
+    // setIsLoading(true); DISABLED
     try {
-      const { InventoryDataConnectService } = await import('./api/dataconnect/inventoryDataConnectService');
-      const fetchedProducts = await InventoryDataConnectService.fetchAllProducts();
-      setProducts(fetchedProducts);
-      console.log('📡 Fetched products from Data Connect:', fetchedProducts.length);
+      console.log('📡 Products fetch DISABLED - pending DC schema (NORMAL)');
+      setProducts([]);
     } catch (error) {
       console.error('❌ Error fetching products from Data Connect:', error);
     } finally {
@@ -973,6 +976,10 @@ export const router = createBrowserRouter([
       {
         path: "create-new/costing",
         element: <InventoryCostingOptionRoute />,
+      },
+      {
+        path: "create-new/costing-details",
+        element: <InventoryCostingDetailsRoute />,
       },
       {
         path: "create-new/details",

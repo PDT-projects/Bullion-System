@@ -35,6 +35,11 @@ export interface CashInHand_Key {
   __typename?: 'CashInHand_Key';
 }
 
+export interface Costing_Key {
+  id: string;
+  __typename?: 'Costing_Key';
+}
+
 export interface CreateLoanData {
   loan_insert: Loan_Key;
 }

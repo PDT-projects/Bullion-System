@@ -1,24 +1,29 @@
-# Loans Dropdown Implementation
+# Employee DataConnect Fix Progress
 
-## Tasks:
-- [x] 1. Update `src/layouts/Sidebar.tsx` - Add loans dropdown menu with All Loans, Payable, and Receivable options
+## Completed ✅
+- [x] Created dataconnect/employees/employees.gql (queries)
+- [x] Created dataconnect/employees/employees_mutations.gql (mutations)  
+- [x] Updated dataconnect/dataconnect.yaml (added employees to connectorDirs)
+- [x] Fixed employeeDataConnectService.ts import to '@erp-system/employees'
 
-- [x] 2. Update `src/routes.tsx` - Add loan routes and layout components
-- [x] 3. Test navigation and verify all loan pages work correctly
+## Next Steps ⏳
+1. **Regenerate SDK**: Run SDK generation command
+2. **Restart DataConnect Emulator**: `start-emulator.ps1` or `firebase emulators:start`
+3. **Restart dev server**: `npm run dev`
+4. **Test**: Navigate to employees page, add/fetch employees
 
+## Commands to run:
+```
+# Generate SDK (check regenerate-sdk.ps1 or use CLI)
+./regenerate-sdk.ps1
 
-## Implementation Details:
+# Or Firebase CLI:
+npx firebase dataconnect:sdk-generate
 
-### Sidebar Changes:
-- Add `HandCoins` icon import from lucide-react
-- Add new loans menu item with children:
-  - All Loans → /loans
-  - Payable → /loans/payable
-  - Receivable → /loans/receivable
-- Add 'loans' to expandedSections state
+# Restart emulator if running
+# Ctrl+C then start-emulator.ps1
 
-### Routes Changes:
-- Import loan components (Loans, LoansPayable, LoansReceivable)
-- Create LoansLayout component
-- Add /loans route with children for payable and receivable
-- Create wrapper components for each loan route
+# Dev server
+npm run dev
+```
+

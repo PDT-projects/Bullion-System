@@ -33,8 +33,8 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
 
   const handleContinue = useCallback(() => {
     if (selectedOption) {
-      // Navigate to product details with both inventory type and costing option in URL
-      navigate(`/inventory/create-new/details?type=${inventoryType}&costing=${selectedOption}`);
+      // Navigate to costing details step (step 3) with both inventory type and costing option in URL
+      navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${selectedOption}`);
     }
   }, [navigate, selectedOption, inventoryType]);
 

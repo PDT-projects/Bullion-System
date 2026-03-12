@@ -29,6 +29,12 @@ It has the same format as `CashInHand_Key`, but is only used as mutation return 
 """
 scalar CashInHand_KeyOutput
 """
+✨ `Costing_KeyOutput` returns the primary key fields of table type `Costing`.
+
+It has the same format as `Costing_Key`, but is only used as mutation return value.
+"""
+scalar Costing_KeyOutput
+"""
 ✨ `Employee_KeyOutput` returns the primary key fields of table type `Employee`.
 
 It has the same format as `Employee_Key`, but is only used as mutation return value.
@@ -1630,6 +1636,665 @@ input CashInHand_Order {
   ✨ Generated from Field `CashInHand`.`amount_max` of type `Float`
   """
   amount_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'Costing'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input Costing_Data {
+  """
+  ✨ Generated from Field `Costing`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Costing`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `Costing`.`brandName` of type `String!`
+  """
+  brandName: String
+  """
+  ✨ `_expr` server value variant of `brandName` (✨ Generated from Field `Costing`.`brandName` of type `String!`)
+  """
+  brandName_expr: String_Expr
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue` of type `Float!`
+  """
+  consignmentValue: Float
+  """
+  ✨ `_expr` server value variant of `consignmentValue` (✨ Generated from Field `Costing`.`consignmentValue` of type `Float!`)
+  """
+  consignmentValue_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `consignmentValue` (✨ Generated from Field `Costing`.`consignmentValue` of type `Float!`)
+  """
+  consignmentValue_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Costing`.`createdAt` of type `String`
+  """
+  createdAt: String
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `Costing`.`createdAt` of type `String`)
+  """
+  createdAt_expr: String_Expr
+  """
+  ✨ Generated from Field `Costing`.`modelsJson` of type `String!`
+  """
+  modelsJson: String
+  """
+  ✨ `_expr` server value variant of `modelsJson` (✨ Generated from Field `Costing`.`modelsJson` of type `String!`)
+  """
+  modelsJson_expr: String_Expr
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD` of type `Float!`
+  """
+  shipmentTotalUSD: Float
+  """
+  ✨ `_expr` server value variant of `shipmentTotalUSD` (✨ Generated from Field `Costing`.`shipmentTotalUSD` of type `Float!`)
+  """
+  shipmentTotalUSD_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `shipmentTotalUSD` (✨ Generated from Field `Costing`.`shipmentTotalUSD` of type `Float!`)
+  """
+  shipmentTotalUSD_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Costing`.`status` of type `String!`
+  """
+  status: String
+  """
+  ✨ `_expr` server value variant of `status` (✨ Generated from Field `Costing`.`status` of type `String!`)
+  """
+  status_expr: String_Expr
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue` of type `Float!`
+  """
+  totalCustomsValue: Float
+  """
+  ✨ `_expr` server value variant of `totalCustomsValue` (✨ Generated from Field `Costing`.`totalCustomsValue` of type `Float!`)
+  """
+  totalCustomsValue_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `totalCustomsValue` (✨ Generated from Field `Costing`.`totalCustomsValue` of type `Float!`)
+  """
+  totalCustomsValue_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue` of type `Float!`
+  """
+  totalFreightValue: Float
+  """
+  ✨ `_expr` server value variant of `totalFreightValue` (✨ Generated from Field `Costing`.`totalFreightValue` of type `Float!`)
+  """
+  totalFreightValue_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `totalFreightValue` (✨ Generated from Field `Costing`.`totalFreightValue` of type `Float!`)
+  """
+  totalFreightValue_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD` of type `Float!`
+  """
+  totalUnitCostUSD: Float
+  """
+  ✨ `_expr` server value variant of `totalUnitCostUSD` (✨ Generated from Field `Costing`.`totalUnitCostUSD` of type `Float!`)
+  """
+  totalUnitCostUSD_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `totalUnitCostUSD` (✨ Generated from Field `Costing`.`totalUnitCostUSD` of type `Float!`)
+  """
+  totalUnitCostUSD_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand` of type `Float!`
+  """
+  totalValueOfBrand: Float
+  """
+  ✨ `_expr` server value variant of `totalValueOfBrand` (✨ Generated from Field `Costing`.`totalValueOfBrand` of type `Float!`)
+  """
+  totalValueOfBrand_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `totalValueOfBrand` (✨ Generated from Field `Costing`.`totalValueOfBrand` of type `Float!`)
+  """
+  totalValueOfBrand_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Costing`.`updatedAt` of type `String`
+  """
+  updatedAt: String
+  """
+  ✨ `_expr` server value variant of `updatedAt` (✨ Generated from Field `Costing`.`updatedAt` of type `String`)
+  """
+  updatedAt_expr: String_Expr
+  """
+  ✨ Generated from Field `Costing`.`usdRate` of type `Float!`
+  """
+  usdRate: Float
+  """
+  ✨ `_expr` server value variant of `usdRate` (✨ Generated from Field `Costing`.`usdRate` of type `Float!`)
+  """
+  usdRate_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `usdRate` (✨ Generated from Field `Costing`.`usdRate` of type `Float!`)
+  """
+  usdRate_update: [Float_Update!]
+}
+"""
+✨ Generated filter input type for table 'Costing'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Costing_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [Costing_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: Costing_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [Costing_Filter!]
+  """
+  ✨ Generated from Field `Costing`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `Costing`.`brandName` of type `String!`
+  """
+  brandName: String_Filter
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue` of type `Float!`
+  """
+  consignmentValue: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`createdAt` of type `String`
+  """
+  createdAt: String_Filter
+  """
+  ✨ Generated from Field `Costing`.`modelsJson` of type `String!`
+  """
+  modelsJson: String_Filter
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD` of type `Float!`
+  """
+  shipmentTotalUSD: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`status` of type `String!`
+  """
+  status: String_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue` of type `Float!`
+  """
+  totalCustomsValue: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue` of type `Float!`
+  """
+  totalFreightValue: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD` of type `Float!`
+  """
+  totalUnitCostUSD: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand` of type `Float!`
+  """
+  totalValueOfBrand: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`updatedAt` of type `String`
+  """
+  updatedAt: String_Filter
+  """
+  ✨ Generated from Field `Costing`.`usdRate` of type `Float!`
+  """
+  usdRate: Float_Filter
+}
+"""
+✨ Generated first-row input type for table 'Costing'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input Costing_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [Costing_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: Costing_Filter
+}
+"""
+✨ Generated having input type for table 'Costing'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Costing_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [Costing_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: Costing_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [Costing_Having!]
+  """
+  ✨ Generated from Field `Costing`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`brandName_count` of type `Int!`
+  """
+  brandName_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_count` of type `Int!`
+  """
+  consignmentValue_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`modelsJson_count` of type `Int!`
+  """
+  modelsJson_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_count` of type `Int!`
+  """
+  shipmentTotalUSD_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`status_count` of type `Int!`
+  """
+  status_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_count` of type `Int!`
+  """
+  totalCustomsValue_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_count` of type `Int!`
+  """
+  totalFreightValue_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_count` of type `Int!`
+  """
+  totalUnitCostUSD_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_count` of type `Int!`
+  """
+  totalValueOfBrand_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`updatedAt_count` of type `Int!`
+  """
+  updatedAt_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`usdRate_count` of type `Int!`
+  """
+  usdRate_count: Int_Filter
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_sum` of type `Float`
+  """
+  consignmentValue_sum: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_sum` of type `Float`
+  """
+  shipmentTotalUSD_sum: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_sum` of type `Float`
+  """
+  totalCustomsValue_sum: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_sum` of type `Float`
+  """
+  totalFreightValue_sum: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_sum` of type `Float`
+  """
+  totalUnitCostUSD_sum: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_sum` of type `Float`
+  """
+  totalValueOfBrand_sum: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`usdRate_sum` of type `Float`
+  """
+  usdRate_sum: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_avg` of type `Float`
+  """
+  consignmentValue_avg: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_avg` of type `Float`
+  """
+  shipmentTotalUSD_avg: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_avg` of type `Float`
+  """
+  totalCustomsValue_avg: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_avg` of type `Float`
+  """
+  totalFreightValue_avg: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_avg` of type `Float`
+  """
+  totalUnitCostUSD_avg: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_avg` of type `Float`
+  """
+  totalValueOfBrand_avg: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`usdRate_avg` of type `Float`
+  """
+  usdRate_avg: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_min` of type `Float`
+  """
+  consignmentValue_min: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_min` of type `Float`
+  """
+  shipmentTotalUSD_min: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_min` of type `Float`
+  """
+  totalCustomsValue_min: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_min` of type `Float`
+  """
+  totalFreightValue_min: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_min` of type `Float`
+  """
+  totalUnitCostUSD_min: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_min` of type `Float`
+  """
+  totalValueOfBrand_min: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`usdRate_min` of type `Float`
+  """
+  usdRate_min: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_max` of type `Float`
+  """
+  consignmentValue_max: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_max` of type `Float`
+  """
+  shipmentTotalUSD_max: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_max` of type `Float`
+  """
+  totalCustomsValue_max: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_max` of type `Float`
+  """
+  totalFreightValue_max: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_max` of type `Float`
+  """
+  totalUnitCostUSD_max: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_max` of type `Float`
+  """
+  totalValueOfBrand_max: Float_Filter
+  """
+  ✨ Generated from Field `Costing`.`usdRate_max` of type `Float`
+  """
+  usdRate_max: Float_Filter
+}
+"""
+✨ Generated key input type for table 'Costing'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input Costing_Key {
+  """
+  ✨ Generated from Field `Costing`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Costing`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'Costing'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input Costing_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: Costing_Filter
+}
+"""
+✨ Generated order input type for table 'Costing'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input Costing_Order {
+  """
+  ✨ Generated from Field `Costing`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`brandName` of type `String!`
+  """
+  brandName: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue` of type `Float!`
+  """
+  consignmentValue: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`createdAt` of type `String`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`modelsJson` of type `String!`
+  """
+  modelsJson: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD` of type `Float!`
+  """
+  shipmentTotalUSD: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`status` of type `String!`
+  """
+  status: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue` of type `Float!`
+  """
+  totalCustomsValue: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue` of type `Float!`
+  """
+  totalFreightValue: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD` of type `Float!`
+  """
+  totalUnitCostUSD: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand` of type `Float!`
+  """
+  totalValueOfBrand: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`updatedAt` of type `String`
+  """
+  updatedAt: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`usdRate` of type `Float!`
+  """
+  usdRate: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`brandName_count` of type `Int!`
+  """
+  brandName_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_count` of type `Int!`
+  """
+  consignmentValue_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`modelsJson_count` of type `Int!`
+  """
+  modelsJson_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_count` of type `Int!`
+  """
+  shipmentTotalUSD_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`status_count` of type `Int!`
+  """
+  status_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_count` of type `Int!`
+  """
+  totalCustomsValue_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_count` of type `Int!`
+  """
+  totalFreightValue_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_count` of type `Int!`
+  """
+  totalUnitCostUSD_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_count` of type `Int!`
+  """
+  totalValueOfBrand_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`updatedAt_count` of type `Int!`
+  """
+  updatedAt_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`usdRate_count` of type `Int!`
+  """
+  usdRate_count: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_sum` of type `Float`
+  """
+  consignmentValue_sum: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_sum` of type `Float`
+  """
+  shipmentTotalUSD_sum: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_sum` of type `Float`
+  """
+  totalCustomsValue_sum: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_sum` of type `Float`
+  """
+  totalFreightValue_sum: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_sum` of type `Float`
+  """
+  totalUnitCostUSD_sum: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_sum` of type `Float`
+  """
+  totalValueOfBrand_sum: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`usdRate_sum` of type `Float`
+  """
+  usdRate_sum: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_avg` of type `Float`
+  """
+  consignmentValue_avg: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_avg` of type `Float`
+  """
+  shipmentTotalUSD_avg: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_avg` of type `Float`
+  """
+  totalCustomsValue_avg: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_avg` of type `Float`
+  """
+  totalFreightValue_avg: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_avg` of type `Float`
+  """
+  totalUnitCostUSD_avg: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_avg` of type `Float`
+  """
+  totalValueOfBrand_avg: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`usdRate_avg` of type `Float`
+  """
+  usdRate_avg: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_min` of type `Float`
+  """
+  consignmentValue_min: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_min` of type `Float`
+  """
+  shipmentTotalUSD_min: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_min` of type `Float`
+  """
+  totalCustomsValue_min: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_min` of type `Float`
+  """
+  totalFreightValue_min: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_min` of type `Float`
+  """
+  totalUnitCostUSD_min: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_min` of type `Float`
+  """
+  totalValueOfBrand_min: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`usdRate_min` of type `Float`
+  """
+  usdRate_min: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`consignmentValue_max` of type `Float`
+  """
+  consignmentValue_max: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`shipmentTotalUSD_max` of type `Float`
+  """
+  shipmentTotalUSD_max: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalCustomsValue_max` of type `Float`
+  """
+  totalCustomsValue_max: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalFreightValue_max` of type `Float`
+  """
+  totalFreightValue_max: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalUnitCostUSD_max` of type `Float`
+  """
+  totalUnitCostUSD_max: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`totalValueOfBrand_max` of type `Float`
+  """
+  totalValueOfBrand_max: OrderDirection
+  """
+  ✨ Generated from Field `Costing`.`usdRate_max` of type `Float`
+  """
+  usdRate_max: OrderDirection
 }
 """
 ✨ Generated data input type for table 'Employee'. It includes all necessary fields for creating or upserting rows into table.

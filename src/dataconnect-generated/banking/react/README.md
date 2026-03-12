@@ -17,21 +17,21 @@ You can also follow the instructions from the [Data Connect documentation](https
 - [**Accessing the connector**](#accessing-the-connector)
   - [*Connecting to the local Emulator*](#connecting-to-the-local-emulator)
 - [**Queries**](#queries)
-  - [*listTransfers*](#listtransfers)
-  - [*getTransferById*](#gettransferbyid)
   - [*listBanks*](#listbanks)
   - [*getBankById*](#getbankbyid)
   - [*listCashInHand*](#listcashinhand)
   - [*getCashInHandById*](#getcashinhandbyid)
+  - [*listTransfers*](#listtransfers)
+  - [*getTransferById*](#gettransferbyid)
 - [**Mutations**](#mutations)
-  - [*TransferInsert*](#transferinsert)
-  - [*TransferDelete*](#transferdelete)
   - [*BankInsert*](#bankinsert)
   - [*BankUpdate*](#bankupdate)
   - [*BankDelete*](#bankdelete)
   - [*UpdateBankBalance*](#updatebankbalance)
   - [*CashInHandInsert*](#cashinhandinsert)
   - [*CashInHandDelete*](#cashinhanddelete)
+  - [*TransferInsert*](#transferinsert)
+  - [*TransferDelete*](#transferdelete)
 
 # TanStack Query Firebase & TanStack React Query
 This SDK provides [React](https://react.dev/) hooks generated specific to your application, for the operations found in the connector `banking`. These hooks are generated using [TanStack Query Firebase](https://react-query-firebase.invertase.dev/) by our partners at Invertase, a library built on top of [TanStack React Query v5](https://tanstack.com/query/v5/docs/framework/react/overview).
@@ -122,198 +122,6 @@ Here's a general overview of how to use the generated Query hooks in your code:
   - ***Special case:***  If the Query has all optional variables and you would like to provide an `options` argument to the Query hook function without providing any variables, you must pass `undefined` where you would normally pass the Query's variables, and then may provide the `options` argument.
 
 Below are examples of how to use the `banking` connector's generated Query hook functions to execute each Query. You can also follow the examples from the [Data Connect documentation](https://firebase.google.com/docs/data-connect/web-sdk#operations-react-angular).
-
-## listTransfers
-You can execute the `listTransfers` Query using the following Query hook function, which is defined in [banking/react/index.d.ts](./index.d.ts):
-
-```javascript
-useListTransfers(dc: DataConnect, vars?: ListTransfersVariables, options?: useDataConnectQueryOptions<ListTransfersData>): UseDataConnectQueryResult<ListTransfersData, ListTransfersVariables>;
-```
-You can also pass in a `DataConnect` instance to the Query hook function.
-```javascript
-useListTransfers(vars?: ListTransfersVariables, options?: useDataConnectQueryOptions<ListTransfersData>): UseDataConnectQueryResult<ListTransfersData, ListTransfersVariables>;
-```
-
-### Variables
-The `listTransfers` Query has an optional argument of type `ListTransfersVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-
-```javascript
-export interface ListTransfersVariables {
-  limit?: number | null;
-  offset?: number | null;
-}
-```
-### Return Type
-Recall that calling the `listTransfers` Query hook function returns a `UseQueryResult` object. This object holds the state of your Query, including whether the Query is loading, has completed, or has succeeded/failed, and any data returned by the Query, among other things.
-
-To check the status of a Query, use the `UseQueryResult.status` field. You can also check for pending / success / error status using the `UseQueryResult.isPending`, `UseQueryResult.isSuccess`, and `UseQueryResult.isError` fields.
-
-To access the data returned by a Query, use the `UseQueryResult.data` field. The data for the `listTransfers` Query is of type `ListTransfersData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-```javascript
-export interface ListTransfersData {
-  bankTransfers: ({
-    id: string;
-    date: string;
-    fromBankId: string;
-    fromBankName: string;
-    toBankId: string;
-    toBankName: string;
-    amount: number;
-    note?: string | null;
-    createdAt?: string | null;
-  } & BankTransfer_Key)[];
-}
-```
-
-To learn more about the `UseQueryResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery).
-
-### Using `listTransfers`'s Query hook function
-
-```javascript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, ListTransfersVariables } from '@erp-system/banking';
-import { useListTransfers } from '@erp-system/banking/react'
-
-export default function ListTransfersComponent() {
-  // The `useListTransfers` Query hook has an optional argument of type `ListTransfersVariables`:
-  const listTransfersVars: ListTransfersVariables = {
-    limit: ..., // optional
-    offset: ..., // optional
-  };
-
-  // You don't have to do anything to "execute" the Query.
-  // Call the Query hook function to get a `UseQueryResult` object which holds the state of your Query.
-  const query = useListTransfers(listTransfersVars);
-  // Variables can be defined inline as well.
-  const query = useListTransfers({ limit: ..., offset: ..., });
-  // Since all variables are optional for this Query, you can omit the `ListTransfersVariables` argument.
-  // (as long as you don't want to provide any `options`!)
-  const query = useListTransfers();
-
-  // You can also pass in a `DataConnect` instance to the Query hook function.
-  const dataConnect = getDataConnect(connectorConfig);
-  const query = useListTransfers(dataConnect, listTransfersVars);
-
-  // You can also pass in a `useDataConnectQueryOptions` object to the Query hook function.
-  const options = { staleTime: 5 * 1000 };
-  const query = useListTransfers(listTransfersVars, options);
-  // If you'd like to provide options without providing any variables, you must
-  // pass `undefined` where you would normally pass the variables.
-  const query = useListTransfers(undefined, options);
-
-  // You can also pass both a `DataConnect` instance and a `useDataConnectQueryOptions` object.
-  const dataConnect = getDataConnect(connectorConfig);
-  const options = { staleTime: 5 * 1000 };
-  const query = useListTransfers(dataConnect, listTransfersVars /** or undefined */, options);
-
-  // Then, you can render your component dynamically based on the status of the Query.
-  if (query.isPending) {
-    return <div>Loading...</div>;
-  }
-
-  if (query.isError) {
-    return <div>Error: {query.error.message}</div>;
-  }
-
-  // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
-  if (query.isSuccess) {
-    console.log(query.data.bankTransfers);
-  }
-  return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
-}
-```
-
-## getTransferById
-You can execute the `getTransferById` Query using the following Query hook function, which is defined in [banking/react/index.d.ts](./index.d.ts):
-
-```javascript
-useGetTransferById(dc: DataConnect, vars: GetTransferByIdVariables, options?: useDataConnectQueryOptions<GetTransferByIdData>): UseDataConnectQueryResult<GetTransferByIdData, GetTransferByIdVariables>;
-```
-You can also pass in a `DataConnect` instance to the Query hook function.
-```javascript
-useGetTransferById(vars: GetTransferByIdVariables, options?: useDataConnectQueryOptions<GetTransferByIdData>): UseDataConnectQueryResult<GetTransferByIdData, GetTransferByIdVariables>;
-```
-
-### Variables
-The `getTransferById` Query requires an argument of type `GetTransferByIdVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-
-```javascript
-export interface GetTransferByIdVariables {
-  id: string;
-}
-```
-### Return Type
-Recall that calling the `getTransferById` Query hook function returns a `UseQueryResult` object. This object holds the state of your Query, including whether the Query is loading, has completed, or has succeeded/failed, and any data returned by the Query, among other things.
-
-To check the status of a Query, use the `UseQueryResult.status` field. You can also check for pending / success / error status using the `UseQueryResult.isPending`, `UseQueryResult.isSuccess`, and `UseQueryResult.isError` fields.
-
-To access the data returned by a Query, use the `UseQueryResult.data` field. The data for the `getTransferById` Query is of type `GetTransferByIdData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-```javascript
-export interface GetTransferByIdData {
-  bankTransfer?: {
-    id: string;
-    date: string;
-    fromBankId: string;
-    fromBankName: string;
-    toBankId: string;
-    toBankName: string;
-    amount: number;
-    note?: string | null;
-    createdAt?: string | null;
-  } & BankTransfer_Key;
-}
-```
-
-To learn more about the `UseQueryResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery).
-
-### Using `getTransferById`'s Query hook function
-
-```javascript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, GetTransferByIdVariables } from '@erp-system/banking';
-import { useGetTransferById } from '@erp-system/banking/react'
-
-export default function GetTransferByIdComponent() {
-  // The `useGetTransferById` Query hook requires an argument of type `GetTransferByIdVariables`:
-  const getTransferByIdVars: GetTransferByIdVariables = {
-    id: ..., 
-  };
-
-  // You don't have to do anything to "execute" the Query.
-  // Call the Query hook function to get a `UseQueryResult` object which holds the state of your Query.
-  const query = useGetTransferById(getTransferByIdVars);
-  // Variables can be defined inline as well.
-  const query = useGetTransferById({ id: ..., });
-
-  // You can also pass in a `DataConnect` instance to the Query hook function.
-  const dataConnect = getDataConnect(connectorConfig);
-  const query = useGetTransferById(dataConnect, getTransferByIdVars);
-
-  // You can also pass in a `useDataConnectQueryOptions` object to the Query hook function.
-  const options = { staleTime: 5 * 1000 };
-  const query = useGetTransferById(getTransferByIdVars, options);
-
-  // You can also pass both a `DataConnect` instance and a `useDataConnectQueryOptions` object.
-  const dataConnect = getDataConnect(connectorConfig);
-  const options = { staleTime: 5 * 1000 };
-  const query = useGetTransferById(dataConnect, getTransferByIdVars, options);
-
-  // Then, you can render your component dynamically based on the status of the Query.
-  if (query.isPending) {
-    return <div>Loading...</div>;
-  }
-
-  if (query.isError) {
-    return <div>Error: {query.error.message}</div>;
-  }
-
-  // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
-  if (query.isSuccess) {
-    console.log(query.data.bankTransfer);
-  }
-  return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
-}
-```
 
 ## listBanks
 You can execute the `listBanks` Query using the following Query hook function, which is defined in [banking/react/index.d.ts](./index.d.ts):
@@ -693,6 +501,198 @@ export default function GetCashInHandByIdComponent() {
 }
 ```
 
+## listTransfers
+You can execute the `listTransfers` Query using the following Query hook function, which is defined in [banking/react/index.d.ts](./index.d.ts):
+
+```javascript
+useListTransfers(dc: DataConnect, vars?: ListTransfersVariables, options?: useDataConnectQueryOptions<ListTransfersData>): UseDataConnectQueryResult<ListTransfersData, ListTransfersVariables>;
+```
+You can also pass in a `DataConnect` instance to the Query hook function.
+```javascript
+useListTransfers(vars?: ListTransfersVariables, options?: useDataConnectQueryOptions<ListTransfersData>): UseDataConnectQueryResult<ListTransfersData, ListTransfersVariables>;
+```
+
+### Variables
+The `listTransfers` Query has an optional argument of type `ListTransfersVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface ListTransfersVariables {
+  limit?: number | null;
+  offset?: number | null;
+}
+```
+### Return Type
+Recall that calling the `listTransfers` Query hook function returns a `UseQueryResult` object. This object holds the state of your Query, including whether the Query is loading, has completed, or has succeeded/failed, and any data returned by the Query, among other things.
+
+To check the status of a Query, use the `UseQueryResult.status` field. You can also check for pending / success / error status using the `UseQueryResult.isPending`, `UseQueryResult.isSuccess`, and `UseQueryResult.isError` fields.
+
+To access the data returned by a Query, use the `UseQueryResult.data` field. The data for the `listTransfers` Query is of type `ListTransfersData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface ListTransfersData {
+  bankTransfers: ({
+    id: string;
+    date: string;
+    fromBankId: string;
+    fromBankName: string;
+    toBankId: string;
+    toBankName: string;
+    amount: number;
+    note?: string | null;
+    createdAt?: string | null;
+  } & BankTransfer_Key)[];
+}
+```
+
+To learn more about the `UseQueryResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery).
+
+### Using `listTransfers`'s Query hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, ListTransfersVariables } from '@erp-system/banking';
+import { useListTransfers } from '@erp-system/banking/react'
+
+export default function ListTransfersComponent() {
+  // The `useListTransfers` Query hook has an optional argument of type `ListTransfersVariables`:
+  const listTransfersVars: ListTransfersVariables = {
+    limit: ..., // optional
+    offset: ..., // optional
+  };
+
+  // You don't have to do anything to "execute" the Query.
+  // Call the Query hook function to get a `UseQueryResult` object which holds the state of your Query.
+  const query = useListTransfers(listTransfersVars);
+  // Variables can be defined inline as well.
+  const query = useListTransfers({ limit: ..., offset: ..., });
+  // Since all variables are optional for this Query, you can omit the `ListTransfersVariables` argument.
+  // (as long as you don't want to provide any `options`!)
+  const query = useListTransfers();
+
+  // You can also pass in a `DataConnect` instance to the Query hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const query = useListTransfers(dataConnect, listTransfersVars);
+
+  // You can also pass in a `useDataConnectQueryOptions` object to the Query hook function.
+  const options = { staleTime: 5 * 1000 };
+  const query = useListTransfers(listTransfersVars, options);
+  // If you'd like to provide options without providing any variables, you must
+  // pass `undefined` where you would normally pass the variables.
+  const query = useListTransfers(undefined, options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectQueryOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = { staleTime: 5 * 1000 };
+  const query = useListTransfers(dataConnect, listTransfersVars /** or undefined */, options);
+
+  // Then, you can render your component dynamically based on the status of the Query.
+  if (query.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (query.isError) {
+    return <div>Error: {query.error.message}</div>;
+  }
+
+  // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
+  if (query.isSuccess) {
+    console.log(query.data.bankTransfers);
+  }
+  return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## getTransferById
+You can execute the `getTransferById` Query using the following Query hook function, which is defined in [banking/react/index.d.ts](./index.d.ts):
+
+```javascript
+useGetTransferById(dc: DataConnect, vars: GetTransferByIdVariables, options?: useDataConnectQueryOptions<GetTransferByIdData>): UseDataConnectQueryResult<GetTransferByIdData, GetTransferByIdVariables>;
+```
+You can also pass in a `DataConnect` instance to the Query hook function.
+```javascript
+useGetTransferById(vars: GetTransferByIdVariables, options?: useDataConnectQueryOptions<GetTransferByIdData>): UseDataConnectQueryResult<GetTransferByIdData, GetTransferByIdVariables>;
+```
+
+### Variables
+The `getTransferById` Query requires an argument of type `GetTransferByIdVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface GetTransferByIdVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that calling the `getTransferById` Query hook function returns a `UseQueryResult` object. This object holds the state of your Query, including whether the Query is loading, has completed, or has succeeded/failed, and any data returned by the Query, among other things.
+
+To check the status of a Query, use the `UseQueryResult.status` field. You can also check for pending / success / error status using the `UseQueryResult.isPending`, `UseQueryResult.isSuccess`, and `UseQueryResult.isError` fields.
+
+To access the data returned by a Query, use the `UseQueryResult.data` field. The data for the `getTransferById` Query is of type `GetTransferByIdData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface GetTransferByIdData {
+  bankTransfer?: {
+    id: string;
+    date: string;
+    fromBankId: string;
+    fromBankName: string;
+    toBankId: string;
+    toBankName: string;
+    amount: number;
+    note?: string | null;
+    createdAt?: string | null;
+  } & BankTransfer_Key;
+}
+```
+
+To learn more about the `UseQueryResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery).
+
+### Using `getTransferById`'s Query hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, GetTransferByIdVariables } from '@erp-system/banking';
+import { useGetTransferById } from '@erp-system/banking/react'
+
+export default function GetTransferByIdComponent() {
+  // The `useGetTransferById` Query hook requires an argument of type `GetTransferByIdVariables`:
+  const getTransferByIdVars: GetTransferByIdVariables = {
+    id: ..., 
+  };
+
+  // You don't have to do anything to "execute" the Query.
+  // Call the Query hook function to get a `UseQueryResult` object which holds the state of your Query.
+  const query = useGetTransferById(getTransferByIdVars);
+  // Variables can be defined inline as well.
+  const query = useGetTransferById({ id: ..., });
+
+  // You can also pass in a `DataConnect` instance to the Query hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const query = useGetTransferById(dataConnect, getTransferByIdVars);
+
+  // You can also pass in a `useDataConnectQueryOptions` object to the Query hook function.
+  const options = { staleTime: 5 * 1000 };
+  const query = useGetTransferById(getTransferByIdVars, options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectQueryOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = { staleTime: 5 * 1000 };
+  const query = useGetTransferById(dataConnect, getTransferByIdVars, options);
+
+  // Then, you can render your component dynamically based on the status of the Query.
+  if (query.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (query.isError) {
+    return <div>Error: {query.error.message}</div>;
+  }
+
+  // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
+  if (query.isSuccess) {
+    console.log(query.data.bankTransfer);
+  }
+  return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
 # Mutations
 
 The React generated SDK provides Mutations hook functions that call and return [`useDataConnectMutation`](https://react-query-firebase.invertase.dev/react/data-connect/mutations) hooks from TanStack Query Firebase.
@@ -717,208 +717,6 @@ Here's a general overview of how to use the generated Mutation hooks in your cod
   - ***Special case:*** If the Mutation has no arguments (or all optional arguments and you wish to provide none), and you want to pass `options` to `UseMutationResult.mutate()`, you must pass `undefined` where you would normally pass the Mutation's arguments, and then may provide the options argument.
 
 Below are examples of how to use the `banking` connector's generated Mutation hook functions to execute each Mutation. You can also follow the examples from the [Data Connect documentation](https://firebase.google.com/docs/data-connect/web-sdk#operations-react-angular).
-
-## TransferInsert
-You can execute the `TransferInsert` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
-```javascript
-useTransferInsert(options?: useDataConnectMutationOptions<TransferInsertData, FirebaseError, TransferInsertVariables>): UseDataConnectMutationResult<TransferInsertData, TransferInsertVariables>;
-```
-You can also pass in a `DataConnect` instance to the Mutation hook function.
-```javascript
-useTransferInsert(dc: DataConnect, options?: useDataConnectMutationOptions<TransferInsertData, FirebaseError, TransferInsertVariables>): UseDataConnectMutationResult<TransferInsertData, TransferInsertVariables>;
-```
-
-### Variables
-The `TransferInsert` Mutation requires an argument of type `TransferInsertVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-
-```javascript
-export interface TransferInsertVariables {
-  id: string;
-  date: string;
-  fromBankId: string;
-  fromBankName: string;
-  toBankId: string;
-  toBankName: string;
-  amount: number;
-  note?: string | null;
-}
-```
-### Return Type
-Recall that calling the `TransferInsert` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
-
-To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
-
-To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
-
-To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `TransferInsert` Mutation is of type `TransferInsertData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-```javascript
-export interface TransferInsertData {
-  bankTransfer_insert: BankTransfer_Key;
-}
-```
-
-To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
-
-### Using `TransferInsert`'s Mutation hook function
-
-```javascript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, TransferInsertVariables } from '@erp-system/banking';
-import { useTransferInsert } from '@erp-system/banking/react'
-
-export default function TransferInsertComponent() {
-  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
-  const mutation = useTransferInsert();
-
-  // You can also pass in a `DataConnect` instance to the Mutation hook function.
-  const dataConnect = getDataConnect(connectorConfig);
-  const mutation = useTransferInsert(dataConnect);
-
-  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  const mutation = useTransferInsert(options);
-
-  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
-  const dataConnect = getDataConnect(connectorConfig);
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  const mutation = useTransferInsert(dataConnect, options);
-
-  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
-  // The `useTransferInsert` Mutation requires an argument of type `TransferInsertVariables`:
-  const transferInsertVars: TransferInsertVariables = {
-    id: ..., 
-    date: ..., 
-    fromBankId: ..., 
-    fromBankName: ..., 
-    toBankId: ..., 
-    toBankName: ..., 
-    amount: ..., 
-    note: ..., // optional
-  };
-  mutation.mutate(transferInsertVars);
-  // Variables can be defined inline as well.
-  mutation.mutate({ id: ..., date: ..., fromBankId: ..., fromBankName: ..., toBankId: ..., toBankName: ..., amount: ..., note: ..., });
-
-  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  mutation.mutate(transferInsertVars, options);
-
-  // Then, you can render your component dynamically based on the status of the Mutation.
-  if (mutation.isPending) {
-    return <div>Loading...</div>;
-  }
-
-  if (mutation.isError) {
-    return <div>Error: {mutation.error.message}</div>;
-  }
-
-  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
-  if (mutation.isSuccess) {
-    console.log(mutation.data.bankTransfer_insert);
-  }
-  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
-}
-```
-
-## TransferDelete
-You can execute the `TransferDelete` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
-```javascript
-useTransferDelete(options?: useDataConnectMutationOptions<TransferDeleteData, FirebaseError, TransferDeleteVariables>): UseDataConnectMutationResult<TransferDeleteData, TransferDeleteVariables>;
-```
-You can also pass in a `DataConnect` instance to the Mutation hook function.
-```javascript
-useTransferDelete(dc: DataConnect, options?: useDataConnectMutationOptions<TransferDeleteData, FirebaseError, TransferDeleteVariables>): UseDataConnectMutationResult<TransferDeleteData, TransferDeleteVariables>;
-```
-
-### Variables
-The `TransferDelete` Mutation requires an argument of type `TransferDeleteVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-
-```javascript
-export interface TransferDeleteVariables {
-  id: string;
-}
-```
-### Return Type
-Recall that calling the `TransferDelete` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
-
-To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
-
-To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
-
-To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `TransferDelete` Mutation is of type `TransferDeleteData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
-```javascript
-export interface TransferDeleteData {
-  bankTransfer_delete?: BankTransfer_Key | null;
-}
-```
-
-To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
-
-### Using `TransferDelete`'s Mutation hook function
-
-```javascript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, TransferDeleteVariables } from '@erp-system/banking';
-import { useTransferDelete } from '@erp-system/banking/react'
-
-export default function TransferDeleteComponent() {
-  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
-  const mutation = useTransferDelete();
-
-  // You can also pass in a `DataConnect` instance to the Mutation hook function.
-  const dataConnect = getDataConnect(connectorConfig);
-  const mutation = useTransferDelete(dataConnect);
-
-  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  const mutation = useTransferDelete(options);
-
-  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
-  const dataConnect = getDataConnect(connectorConfig);
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  const mutation = useTransferDelete(dataConnect, options);
-
-  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
-  // The `useTransferDelete` Mutation requires an argument of type `TransferDeleteVariables`:
-  const transferDeleteVars: TransferDeleteVariables = {
-    id: ..., 
-  };
-  mutation.mutate(transferDeleteVars);
-  // Variables can be defined inline as well.
-  mutation.mutate({ id: ..., });
-
-  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
-  const options = {
-    onSuccess: () => { console.log('Mutation succeeded!'); }
-  };
-  mutation.mutate(transferDeleteVars, options);
-
-  // Then, you can render your component dynamically based on the status of the Mutation.
-  if (mutation.isPending) {
-    return <div>Loading...</div>;
-  }
-
-  if (mutation.isError) {
-    return <div>Error: {mutation.error.message}</div>;
-  }
-
-  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
-  if (mutation.isSuccess) {
-    console.log(mutation.data.bankTransfer_delete);
-  }
-  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
-}
-```
 
 ## BankInsert
 You can execute the `BankInsert` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
@@ -1507,6 +1305,208 @@ export default function CashInHandDeleteComponent() {
   // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
   if (mutation.isSuccess) {
     console.log(mutation.data.cashInHand_delete);
+  }
+  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## TransferInsert
+You can execute the `TransferInsert` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
+```javascript
+useTransferInsert(options?: useDataConnectMutationOptions<TransferInsertData, FirebaseError, TransferInsertVariables>): UseDataConnectMutationResult<TransferInsertData, TransferInsertVariables>;
+```
+You can also pass in a `DataConnect` instance to the Mutation hook function.
+```javascript
+useTransferInsert(dc: DataConnect, options?: useDataConnectMutationOptions<TransferInsertData, FirebaseError, TransferInsertVariables>): UseDataConnectMutationResult<TransferInsertData, TransferInsertVariables>;
+```
+
+### Variables
+The `TransferInsert` Mutation requires an argument of type `TransferInsertVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface TransferInsertVariables {
+  id: string;
+  date: string;
+  fromBankId: string;
+  fromBankName: string;
+  toBankId: string;
+  toBankName: string;
+  amount: number;
+  note?: string | null;
+}
+```
+### Return Type
+Recall that calling the `TransferInsert` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
+
+To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
+
+To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
+
+To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `TransferInsert` Mutation is of type `TransferInsertData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface TransferInsertData {
+  bankTransfer_insert: BankTransfer_Key;
+}
+```
+
+To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
+
+### Using `TransferInsert`'s Mutation hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, TransferInsertVariables } from '@erp-system/banking';
+import { useTransferInsert } from '@erp-system/banking/react'
+
+export default function TransferInsertComponent() {
+  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
+  const mutation = useTransferInsert();
+
+  // You can also pass in a `DataConnect` instance to the Mutation hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const mutation = useTransferInsert(dataConnect);
+
+  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useTransferInsert(options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useTransferInsert(dataConnect, options);
+
+  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
+  // The `useTransferInsert` Mutation requires an argument of type `TransferInsertVariables`:
+  const transferInsertVars: TransferInsertVariables = {
+    id: ..., 
+    date: ..., 
+    fromBankId: ..., 
+    fromBankName: ..., 
+    toBankId: ..., 
+    toBankName: ..., 
+    amount: ..., 
+    note: ..., // optional
+  };
+  mutation.mutate(transferInsertVars);
+  // Variables can be defined inline as well.
+  mutation.mutate({ id: ..., date: ..., fromBankId: ..., fromBankName: ..., toBankId: ..., toBankName: ..., amount: ..., note: ..., });
+
+  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  mutation.mutate(transferInsertVars, options);
+
+  // Then, you can render your component dynamically based on the status of the Mutation.
+  if (mutation.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (mutation.isError) {
+    return <div>Error: {mutation.error.message}</div>;
+  }
+
+  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
+  if (mutation.isSuccess) {
+    console.log(mutation.data.bankTransfer_insert);
+  }
+  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## TransferDelete
+You can execute the `TransferDelete` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [banking/react/index.d.ts](./index.d.ts)):
+```javascript
+useTransferDelete(options?: useDataConnectMutationOptions<TransferDeleteData, FirebaseError, TransferDeleteVariables>): UseDataConnectMutationResult<TransferDeleteData, TransferDeleteVariables>;
+```
+You can also pass in a `DataConnect` instance to the Mutation hook function.
+```javascript
+useTransferDelete(dc: DataConnect, options?: useDataConnectMutationOptions<TransferDeleteData, FirebaseError, TransferDeleteVariables>): UseDataConnectMutationResult<TransferDeleteData, TransferDeleteVariables>;
+```
+
+### Variables
+The `TransferDelete` Mutation requires an argument of type `TransferDeleteVariables`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface TransferDeleteVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that calling the `TransferDelete` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
+
+To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
+
+To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
+
+To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `TransferDelete` Mutation is of type `TransferDeleteData`, which is defined in [banking/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface TransferDeleteData {
+  bankTransfer_delete?: BankTransfer_Key | null;
+}
+```
+
+To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
+
+### Using `TransferDelete`'s Mutation hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, TransferDeleteVariables } from '@erp-system/banking';
+import { useTransferDelete } from '@erp-system/banking/react'
+
+export default function TransferDeleteComponent() {
+  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
+  const mutation = useTransferDelete();
+
+  // You can also pass in a `DataConnect` instance to the Mutation hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const mutation = useTransferDelete(dataConnect);
+
+  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useTransferDelete(options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useTransferDelete(dataConnect, options);
+
+  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
+  // The `useTransferDelete` Mutation requires an argument of type `TransferDeleteVariables`:
+  const transferDeleteVars: TransferDeleteVariables = {
+    id: ..., 
+  };
+  mutation.mutate(transferDeleteVars);
+  // Variables can be defined inline as well.
+  mutation.mutate({ id: ..., });
+
+  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  mutation.mutate(transferDeleteVars, options);
+
+  // Then, you can render your component dynamically based on the status of the Mutation.
+  if (mutation.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (mutation.isError) {
+    return <div>Error: {mutation.error.message}</div>;
+  }
+
+  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
+  if (mutation.isSuccess) {
+    console.log(mutation.data.bankTransfer_delete);
   }
   return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
 }

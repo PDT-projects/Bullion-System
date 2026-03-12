@@ -1,8 +1,8 @@
-connectorId: employees
-
+connectorId: example
 generate:
   javascriptSdk:
     - outputDir: ..\..\src\dataconnect-generated
-      package: "@erp-system/dataconnect"
+      package: "@dataconnect/generated"
       packageJsonDir: ..\..
       react: true
+      angular: false

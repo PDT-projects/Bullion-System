@@ -1,4 +1,4 @@
-import { BrandInsertData, BrandInsertVariables, BrandUpdateData, BrandUpdateVariables, BrandDeleteData, BrandDeleteVariables, ListBrandsData, ListBrandsVariables, GetBrandByIdData, GetBrandByIdVariables, ProductInsertData, ProductInsertVariables, ProductUpdateData, ProductUpdateVariables, ProductDeleteData, ProductDeleteVariables, ProductTransferInsertData, ProductTransferInsertVariables, ProductTransferUpdateData, ProductTransferUpdateVariables, ProductTransferDeleteData, ProductTransferDeleteVariables, ListProductsData, ListProductsVariables, GetProductByIdData, GetProductByIdVariables, ListProductTransfersData, ListProductTransfersVariables, GetProductTransferByIdData, GetProductTransferByIdVariables, ModelInsertData, ModelInsertVariables, ModelUpdateData, ModelUpdateVariables, ModelDeleteData, ModelDeleteVariables, ListModelsData, ListModelsVariables, GetModelByIdData, GetModelByIdVariables } from '../';
+import { BrandInsertData, BrandInsertVariables, BrandUpdateData, BrandUpdateVariables, BrandDeleteData, BrandDeleteVariables, ListBrandsData, ListBrandsVariables, GetBrandByIdData, GetBrandByIdVariables, CostingInsertData, CostingInsertVariables, CostingUpdateData, CostingUpdateVariables, CostingDeleteData, CostingDeleteVariables, ProductInsertData, ProductInsertVariables, ProductUpdateData, ProductUpdateVariables, ProductDeleteData, ProductDeleteVariables, ProductTransferInsertData, ProductTransferInsertVariables, ProductTransferUpdateData, ProductTransferUpdateVariables, ProductTransferDeleteData, ProductTransferDeleteVariables, ListProductsData, ListProductsVariables, GetProductByIdData, GetProductByIdVariables, ModelInsertData, ModelInsertVariables, ModelUpdateData, ModelUpdateVariables, ModelDeleteData, ModelDeleteVariables, ListModelsData, ListModelsVariables, GetModelByIdData, GetModelByIdVariables } from '../';
 import { UseDataConnectQueryResult, useDataConnectQueryOptions, UseDataConnectMutationResult, useDataConnectMutationOptions} from '@tanstack-query-firebase/react/data-connect';
 import { UseQueryResult, UseMutationResult} from '@tanstack/react-query';
 import { DataConnect } from 'firebase/data-connect';
@@ -19,6 +19,15 @@ export function useListBrands(dc: DataConnect, vars?: ListBrandsVariables, optio
 
 export function useGetBrandById(vars: GetBrandByIdVariables, options?: useDataConnectQueryOptions<GetBrandByIdData>): UseDataConnectQueryResult<GetBrandByIdData, GetBrandByIdVariables>;
 export function useGetBrandById(dc: DataConnect, vars: GetBrandByIdVariables, options?: useDataConnectQueryOptions<GetBrandByIdData>): UseDataConnectQueryResult<GetBrandByIdData, GetBrandByIdVariables>;
+
+export function useCostingInsert(options?: useDataConnectMutationOptions<CostingInsertData, FirebaseError, CostingInsertVariables>): UseDataConnectMutationResult<CostingInsertData, CostingInsertVariables>;
+export function useCostingInsert(dc: DataConnect, options?: useDataConnectMutationOptions<CostingInsertData, FirebaseError, CostingInsertVariables>): UseDataConnectMutationResult<CostingInsertData, CostingInsertVariables>;
+
+export function useCostingUpdate(options?: useDataConnectMutationOptions<CostingUpdateData, FirebaseError, CostingUpdateVariables>): UseDataConnectMutationResult<CostingUpdateData, CostingUpdateVariables>;
+export function useCostingUpdate(dc: DataConnect, options?: useDataConnectMutationOptions<CostingUpdateData, FirebaseError, CostingUpdateVariables>): UseDataConnectMutationResult<CostingUpdateData, CostingUpdateVariables>;
+
+export function useCostingDelete(options?: useDataConnectMutationOptions<CostingDeleteData, FirebaseError, CostingDeleteVariables>): UseDataConnectMutationResult<CostingDeleteData, CostingDeleteVariables>;
+export function useCostingDelete(dc: DataConnect, options?: useDataConnectMutationOptions<CostingDeleteData, FirebaseError, CostingDeleteVariables>): UseDataConnectMutationResult<CostingDeleteData, CostingDeleteVariables>;
 
 export function useProductInsert(options?: useDataConnectMutationOptions<ProductInsertData, FirebaseError, ProductInsertVariables>): UseDataConnectMutationResult<ProductInsertData, ProductInsertVariables>;
 export function useProductInsert(dc: DataConnect, options?: useDataConnectMutationOptions<ProductInsertData, FirebaseError, ProductInsertVariables>): UseDataConnectMutationResult<ProductInsertData, ProductInsertVariables>;
@@ -43,12 +52,6 @@ export function useListProducts(dc: DataConnect, vars?: ListProductsVariables, o
 
 export function useGetProductById(vars: GetProductByIdVariables, options?: useDataConnectQueryOptions<GetProductByIdData>): UseDataConnectQueryResult<GetProductByIdData, GetProductByIdVariables>;
 export function useGetProductById(dc: DataConnect, vars: GetProductByIdVariables, options?: useDataConnectQueryOptions<GetProductByIdData>): UseDataConnectQueryResult<GetProductByIdData, GetProductByIdVariables>;
-
-export function useListProductTransfers(vars?: ListProductTransfersVariables, options?: useDataConnectQueryOptions<ListProductTransfersData>): UseDataConnectQueryResult<ListProductTransfersData, ListProductTransfersVariables>;
-export function useListProductTransfers(dc: DataConnect, vars?: ListProductTransfersVariables, options?: useDataConnectQueryOptions<ListProductTransfersData>): UseDataConnectQueryResult<ListProductTransfersData, ListProductTransfersVariables>;
-
-export function useGetProductTransferById(vars: GetProductTransferByIdVariables, options?: useDataConnectQueryOptions<GetProductTransferByIdData>): UseDataConnectQueryResult<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-export function useGetProductTransferById(dc: DataConnect, vars: GetProductTransferByIdVariables, options?: useDataConnectQueryOptions<GetProductTransferByIdData>): UseDataConnectQueryResult<GetProductTransferByIdData, GetProductTransferByIdVariables>;
 
 export function useModelInsert(options?: useDataConnectMutationOptions<ModelInsertData, FirebaseError, ModelInsertVariables>): UseDataConnectMutationResult<ModelInsertData, ModelInsertVariables>;
 export function useModelInsert(dc: DataConnect, options?: useDataConnectMutationOptions<ModelInsertData, FirebaseError, ModelInsertVariables>): UseDataConnectMutationResult<ModelInsertData, ModelInsertVariables>;

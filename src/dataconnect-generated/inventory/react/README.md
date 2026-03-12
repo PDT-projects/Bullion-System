@@ -21,14 +21,15 @@ You can also follow the instructions from the [Data Connect documentation](https
   - [*GetBrandById*](#getbrandbyid)
   - [*ListProducts*](#listproducts)
   - [*GetProductById*](#getproductbyid)
-  - [*ListProductTransfers*](#listproducttransfers)
-  - [*GetProductTransferById*](#getproducttransferbyid)
   - [*ListModels*](#listmodels)
   - [*GetModelById*](#getmodelbyid)
 - [**Mutations**](#mutations)
   - [*brandInsert*](#brandinsert)
   - [*brandUpdate*](#brandupdate)
   - [*brandDelete*](#branddelete)
+  - [*costingInsert*](#costinginsert)
+  - [*costingUpdate*](#costingupdate)
+  - [*costingDelete*](#costingdelete)
   - [*productInsert*](#productinsert)
   - [*productUpdate*](#productupdate)
   - [*productDelete*](#productdelete)
@@ -567,220 +568,6 @@ export default function GetProductByIdComponent() {
 }
 ```
 
-## ListProductTransfers
-You can execute the `ListProductTransfers` Query using the following Query hook function, which is defined in [inventory/react/index.d.ts](./index.d.ts):
-
-```javascript
-useListProductTransfers(dc: DataConnect, vars?: ListProductTransfersVariables, options?: useDataConnectQueryOptions<ListProductTransfersData>): UseDataConnectQueryResult<ListProductTransfersData, ListProductTransfersVariables>;
-```
-You can also pass in a `DataConnect` instance to the Query hook function.
-```javascript
-useListProductTransfers(vars?: ListProductTransfersVariables, options?: useDataConnectQueryOptions<ListProductTransfersData>): UseDataConnectQueryResult<ListProductTransfersData, ListProductTransfersVariables>;
-```
-
-### Variables
-The `ListProductTransfers` Query has an optional argument of type `ListProductTransfersVariables`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
-
-```javascript
-export interface ListProductTransfersVariables {
-  limit?: number | null;
-  offset?: number | null;
-}
-```
-### Return Type
-Recall that calling the `ListProductTransfers` Query hook function returns a `UseQueryResult` object. This object holds the state of your Query, including whether the Query is loading, has completed, or has succeeded/failed, and any data returned by the Query, among other things.
-
-To check the status of a Query, use the `UseQueryResult.status` field. You can also check for pending / success / error status using the `UseQueryResult.isPending`, `UseQueryResult.isSuccess`, and `UseQueryResult.isError` fields.
-
-To access the data returned by a Query, use the `UseQueryResult.data` field. The data for the `ListProductTransfers` Query is of type `ListProductTransfersData`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
-```javascript
-export interface ListProductTransfersData {
-  productTransfers: ({
-    id: string;
-    productId: string;
-    productName: string;
-    brandName?: string | null;
-    modelName?: string | null;
-    fromLocation: string;
-    toLocation: string;
-    quantity: number;
-    serialNumbers?: string | null;
-    date: string;
-    transferDate?: string | null;
-    status: string;
-    transferredBy?: string | null;
-    note?: string | null;
-    notes?: string | null;
-    receiptName?: string | null;
-    receiptType?: string | null;
-    receiptDataUrl?: string | null;
-    createdAt?: string | null;
-    receivedAt?: string | null;
-  } & ProductTransfer_Key)[];
-}
-```
-
-To learn more about the `UseQueryResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery).
-
-### Using `ListProductTransfers`'s Query hook function
-
-```javascript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, ListProductTransfersVariables } from '@erp-system/inventory';
-import { useListProductTransfers } from '@erp-system/inventory/react'
-
-export default function ListProductTransfersComponent() {
-  // The `useListProductTransfers` Query hook has an optional argument of type `ListProductTransfersVariables`:
-  const listProductTransfersVars: ListProductTransfersVariables = {
-    limit: ..., // optional
-    offset: ..., // optional
-  };
-
-  // You don't have to do anything to "execute" the Query.
-  // Call the Query hook function to get a `UseQueryResult` object which holds the state of your Query.
-  const query = useListProductTransfers(listProductTransfersVars);
-  // Variables can be defined inline as well.
-  const query = useListProductTransfers({ limit: ..., offset: ..., });
-  // Since all variables are optional for this Query, you can omit the `ListProductTransfersVariables` argument.
-  // (as long as you don't want to provide any `options`!)
-  const query = useListProductTransfers();
-
-  // You can also pass in a `DataConnect` instance to the Query hook function.
-  const dataConnect = getDataConnect(connectorConfig);
-  const query = useListProductTransfers(dataConnect, listProductTransfersVars);
-
-  // You can also pass in a `useDataConnectQueryOptions` object to the Query hook function.
-  const options = { staleTime: 5 * 1000 };
-  const query = useListProductTransfers(listProductTransfersVars, options);
-  // If you'd like to provide options without providing any variables, you must
-  // pass `undefined` where you would normally pass the variables.
-  const query = useListProductTransfers(undefined, options);
-
-  // You can also pass both a `DataConnect` instance and a `useDataConnectQueryOptions` object.
-  const dataConnect = getDataConnect(connectorConfig);
-  const options = { staleTime: 5 * 1000 };
-  const query = useListProductTransfers(dataConnect, listProductTransfersVars /** or undefined */, options);
-
-  // Then, you can render your component dynamically based on the status of the Query.
-  if (query.isPending) {
-    return <div>Loading...</div>;
-  }
-
-  if (query.isError) {
-    return <div>Error: {query.error.message}</div>;
-  }
-
-  // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
-  if (query.isSuccess) {
-    console.log(query.data.productTransfers);
-  }
-  return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
-}
-```
-
-## GetProductTransferById
-You can execute the `GetProductTransferById` Query using the following Query hook function, which is defined in [inventory/react/index.d.ts](./index.d.ts):
-
-```javascript
-useGetProductTransferById(dc: DataConnect, vars: GetProductTransferByIdVariables, options?: useDataConnectQueryOptions<GetProductTransferByIdData>): UseDataConnectQueryResult<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-```
-You can also pass in a `DataConnect` instance to the Query hook function.
-```javascript
-useGetProductTransferById(vars: GetProductTransferByIdVariables, options?: useDataConnectQueryOptions<GetProductTransferByIdData>): UseDataConnectQueryResult<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-```
-
-### Variables
-The `GetProductTransferById` Query requires an argument of type `GetProductTransferByIdVariables`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
-
-```javascript
-export interface GetProductTransferByIdVariables {
-  id: string;
-}
-```
-### Return Type
-Recall that calling the `GetProductTransferById` Query hook function returns a `UseQueryResult` object. This object holds the state of your Query, including whether the Query is loading, has completed, or has succeeded/failed, and any data returned by the Query, among other things.
-
-To check the status of a Query, use the `UseQueryResult.status` field. You can also check for pending / success / error status using the `UseQueryResult.isPending`, `UseQueryResult.isSuccess`, and `UseQueryResult.isError` fields.
-
-To access the data returned by a Query, use the `UseQueryResult.data` field. The data for the `GetProductTransferById` Query is of type `GetProductTransferByIdData`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
-```javascript
-export interface GetProductTransferByIdData {
-  productTransfer?: {
-    id: string;
-    productId: string;
-    productName: string;
-    brandName?: string | null;
-    modelName?: string | null;
-    fromLocation: string;
-    toLocation: string;
-    quantity: number;
-    serialNumbers?: string | null;
-    date: string;
-    transferDate?: string | null;
-    status: string;
-    transferredBy?: string | null;
-    note?: string | null;
-    notes?: string | null;
-    receiptName?: string | null;
-    receiptType?: string | null;
-    receiptDataUrl?: string | null;
-    createdAt?: string | null;
-    receivedAt?: string | null;
-  } & ProductTransfer_Key;
-}
-```
-
-To learn more about the `UseQueryResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery).
-
-### Using `GetProductTransferById`'s Query hook function
-
-```javascript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, GetProductTransferByIdVariables } from '@erp-system/inventory';
-import { useGetProductTransferById } from '@erp-system/inventory/react'
-
-export default function GetProductTransferByIdComponent() {
-  // The `useGetProductTransferById` Query hook requires an argument of type `GetProductTransferByIdVariables`:
-  const getProductTransferByIdVars: GetProductTransferByIdVariables = {
-    id: ..., 
-  };
-
-  // You don't have to do anything to "execute" the Query.
-  // Call the Query hook function to get a `UseQueryResult` object which holds the state of your Query.
-  const query = useGetProductTransferById(getProductTransferByIdVars);
-  // Variables can be defined inline as well.
-  const query = useGetProductTransferById({ id: ..., });
-
-  // You can also pass in a `DataConnect` instance to the Query hook function.
-  const dataConnect = getDataConnect(connectorConfig);
-  const query = useGetProductTransferById(dataConnect, getProductTransferByIdVars);
-
-  // You can also pass in a `useDataConnectQueryOptions` object to the Query hook function.
-  const options = { staleTime: 5 * 1000 };
-  const query = useGetProductTransferById(getProductTransferByIdVars, options);
-
-  // You can also pass both a `DataConnect` instance and a `useDataConnectQueryOptions` object.
-  const dataConnect = getDataConnect(connectorConfig);
-  const options = { staleTime: 5 * 1000 };
-  const query = useGetProductTransferById(dataConnect, getProductTransferByIdVars, options);
-
-  // Then, you can render your component dynamically based on the status of the Query.
-  if (query.isPending) {
-    return <div>Loading...</div>;
-  }
-
-  if (query.isError) {
-    return <div>Error: {query.error.message}</div>;
-  }
-
-  // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
-  if (query.isSuccess) {
-    console.log(query.data.productTransfer);
-  }
-  return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
-}
-```
-
 ## ListModels
 You can execute the `ListModels` Query using the following Query hook function, which is defined in [inventory/react/index.d.ts](./index.d.ts):
 
@@ -1287,6 +1074,328 @@ export default function BrandDeleteComponent() {
   // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
   if (mutation.isSuccess) {
     console.log(mutation.data.brand_delete);
+  }
+  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## costingInsert
+You can execute the `costingInsert` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [inventory/react/index.d.ts](./index.d.ts)):
+```javascript
+useCostingInsert(options?: useDataConnectMutationOptions<CostingInsertData, FirebaseError, CostingInsertVariables>): UseDataConnectMutationResult<CostingInsertData, CostingInsertVariables>;
+```
+You can also pass in a `DataConnect` instance to the Mutation hook function.
+```javascript
+useCostingInsert(dc: DataConnect, options?: useDataConnectMutationOptions<CostingInsertData, FirebaseError, CostingInsertVariables>): UseDataConnectMutationResult<CostingInsertData, CostingInsertVariables>;
+```
+
+### Variables
+The `costingInsert` Mutation requires an argument of type `CostingInsertVariables`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface CostingInsertVariables {
+  id: string;
+  brandName: string;
+  usdRate: number;
+  totalCustomsValue: number;
+  totalFreightValue: number;
+  totalUnitCostUSD: number;
+  shipmentTotalUSD: number;
+  consignmentValue: number;
+  totalValueOfBrand: number;
+  modelsJson: string;
+  status: string;
+}
+```
+### Return Type
+Recall that calling the `costingInsert` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
+
+To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
+
+To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
+
+To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `costingInsert` Mutation is of type `CostingInsertData`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface CostingInsertData {
+  costing_insert: Costing_Key;
+}
+```
+
+To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
+
+### Using `costingInsert`'s Mutation hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, CostingInsertVariables } from '@erp-system/inventory';
+import { useCostingInsert } from '@erp-system/inventory/react'
+
+export default function CostingInsertComponent() {
+  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
+  const mutation = useCostingInsert();
+
+  // You can also pass in a `DataConnect` instance to the Mutation hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const mutation = useCostingInsert(dataConnect);
+
+  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCostingInsert(options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCostingInsert(dataConnect, options);
+
+  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
+  // The `useCostingInsert` Mutation requires an argument of type `CostingInsertVariables`:
+  const costingInsertVars: CostingInsertVariables = {
+    id: ..., 
+    brandName: ..., 
+    usdRate: ..., 
+    totalCustomsValue: ..., 
+    totalFreightValue: ..., 
+    totalUnitCostUSD: ..., 
+    shipmentTotalUSD: ..., 
+    consignmentValue: ..., 
+    totalValueOfBrand: ..., 
+    modelsJson: ..., 
+    status: ..., 
+  };
+  mutation.mutate(costingInsertVars);
+  // Variables can be defined inline as well.
+  mutation.mutate({ id: ..., brandName: ..., usdRate: ..., totalCustomsValue: ..., totalFreightValue: ..., totalUnitCostUSD: ..., shipmentTotalUSD: ..., consignmentValue: ..., totalValueOfBrand: ..., modelsJson: ..., status: ..., });
+
+  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  mutation.mutate(costingInsertVars, options);
+
+  // Then, you can render your component dynamically based on the status of the Mutation.
+  if (mutation.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (mutation.isError) {
+    return <div>Error: {mutation.error.message}</div>;
+  }
+
+  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
+  if (mutation.isSuccess) {
+    console.log(mutation.data.costing_insert);
+  }
+  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## costingUpdate
+You can execute the `costingUpdate` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [inventory/react/index.d.ts](./index.d.ts)):
+```javascript
+useCostingUpdate(options?: useDataConnectMutationOptions<CostingUpdateData, FirebaseError, CostingUpdateVariables>): UseDataConnectMutationResult<CostingUpdateData, CostingUpdateVariables>;
+```
+You can also pass in a `DataConnect` instance to the Mutation hook function.
+```javascript
+useCostingUpdate(dc: DataConnect, options?: useDataConnectMutationOptions<CostingUpdateData, FirebaseError, CostingUpdateVariables>): UseDataConnectMutationResult<CostingUpdateData, CostingUpdateVariables>;
+```
+
+### Variables
+The `costingUpdate` Mutation requires an argument of type `CostingUpdateVariables`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface CostingUpdateVariables {
+  id: string;
+  brandName: string;
+  usdRate: number;
+  totalCustomsValue: number;
+  totalFreightValue: number;
+  totalUnitCostUSD: number;
+  shipmentTotalUSD: number;
+  consignmentValue: number;
+  totalValueOfBrand: number;
+  modelsJson: string;
+  status: string;
+}
+```
+### Return Type
+Recall that calling the `costingUpdate` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
+
+To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
+
+To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
+
+To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `costingUpdate` Mutation is of type `CostingUpdateData`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface CostingUpdateData {
+  costing_update?: Costing_Key | null;
+}
+```
+
+To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
+
+### Using `costingUpdate`'s Mutation hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, CostingUpdateVariables } from '@erp-system/inventory';
+import { useCostingUpdate } from '@erp-system/inventory/react'
+
+export default function CostingUpdateComponent() {
+  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
+  const mutation = useCostingUpdate();
+
+  // You can also pass in a `DataConnect` instance to the Mutation hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const mutation = useCostingUpdate(dataConnect);
+
+  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCostingUpdate(options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCostingUpdate(dataConnect, options);
+
+  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
+  // The `useCostingUpdate` Mutation requires an argument of type `CostingUpdateVariables`:
+  const costingUpdateVars: CostingUpdateVariables = {
+    id: ..., 
+    brandName: ..., 
+    usdRate: ..., 
+    totalCustomsValue: ..., 
+    totalFreightValue: ..., 
+    totalUnitCostUSD: ..., 
+    shipmentTotalUSD: ..., 
+    consignmentValue: ..., 
+    totalValueOfBrand: ..., 
+    modelsJson: ..., 
+    status: ..., 
+  };
+  mutation.mutate(costingUpdateVars);
+  // Variables can be defined inline as well.
+  mutation.mutate({ id: ..., brandName: ..., usdRate: ..., totalCustomsValue: ..., totalFreightValue: ..., totalUnitCostUSD: ..., shipmentTotalUSD: ..., consignmentValue: ..., totalValueOfBrand: ..., modelsJson: ..., status: ..., });
+
+  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  mutation.mutate(costingUpdateVars, options);
+
+  // Then, you can render your component dynamically based on the status of the Mutation.
+  if (mutation.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (mutation.isError) {
+    return <div>Error: {mutation.error.message}</div>;
+  }
+
+  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
+  if (mutation.isSuccess) {
+    console.log(mutation.data.costing_update);
+  }
+  return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## costingDelete
+You can execute the `costingDelete` Mutation using the `UseMutationResult` object returned by the following Mutation hook function (which is defined in [inventory/react/index.d.ts](./index.d.ts)):
+```javascript
+useCostingDelete(options?: useDataConnectMutationOptions<CostingDeleteData, FirebaseError, CostingDeleteVariables>): UseDataConnectMutationResult<CostingDeleteData, CostingDeleteVariables>;
+```
+You can also pass in a `DataConnect` instance to the Mutation hook function.
+```javascript
+useCostingDelete(dc: DataConnect, options?: useDataConnectMutationOptions<CostingDeleteData, FirebaseError, CostingDeleteVariables>): UseDataConnectMutationResult<CostingDeleteData, CostingDeleteVariables>;
+```
+
+### Variables
+The `costingDelete` Mutation requires an argument of type `CostingDeleteVariables`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface CostingDeleteVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that calling the `costingDelete` Mutation hook function returns a `UseMutationResult` object. This object holds the state of your Mutation, including whether the Mutation is loading, has completed, or has succeeded/failed, among other things.
+
+To check the status of a Mutation, use the `UseMutationResult.status` field. You can also check for pending / success / error status using the `UseMutationResult.isPending`, `UseMutationResult.isSuccess`, and `UseMutationResult.isError` fields.
+
+To execute the Mutation, call `UseMutationResult.mutate()`. This function executes the Mutation, but does not return the data from the Mutation.
+
+To access the data returned by a Mutation, use the `UseMutationResult.data` field. The data for the `costingDelete` Mutation is of type `CostingDeleteData`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface CostingDeleteData {
+  costing_delete?: Costing_Key | null;
+}
+```
+
+To learn more about the `UseMutationResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useMutation).
+
+### Using `costingDelete`'s Mutation hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, CostingDeleteVariables } from '@erp-system/inventory';
+import { useCostingDelete } from '@erp-system/inventory/react'
+
+export default function CostingDeleteComponent() {
+  // Call the Mutation hook function to get a `UseMutationResult` object which holds the state of your Mutation.
+  const mutation = useCostingDelete();
+
+  // You can also pass in a `DataConnect` instance to the Mutation hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const mutation = useCostingDelete(dataConnect);
+
+  // You can also pass in a `useDataConnectMutationOptions` object to the Mutation hook function.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCostingDelete(options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectMutationOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  const mutation = useCostingDelete(dataConnect, options);
+
+  // After calling the Mutation hook function, you must call `UseMutationResult.mutate()` to execute the Mutation.
+  // The `useCostingDelete` Mutation requires an argument of type `CostingDeleteVariables`:
+  const costingDeleteVars: CostingDeleteVariables = {
+    id: ..., 
+  };
+  mutation.mutate(costingDeleteVars);
+  // Variables can be defined inline as well.
+  mutation.mutate({ id: ..., });
+
+  // You can also pass in a `useDataConnectMutationOptions` object to `UseMutationResult.mutate()`.
+  const options = {
+    onSuccess: () => { console.log('Mutation succeeded!'); }
+  };
+  mutation.mutate(costingDeleteVars, options);
+
+  // Then, you can render your component dynamically based on the status of the Mutation.
+  if (mutation.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (mutation.isError) {
+    return <div>Error: {mutation.error.message}</div>;
+  }
+
+  // If the Mutation is successful, you can access the data returned using the `UseMutationResult.data` field.
+  if (mutation.isSuccess) {
+    console.log(mutation.data.costing_delete);
   }
   return <div>Mutation execution {mutation.isSuccess ? 'successful' : 'failed'}!</div>;
 }

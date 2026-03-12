@@ -78,6 +78,11 @@ export interface CashInHand_Key {
   __typename?: 'CashInHand_Key';
 }
 
+export interface Costing_Key {
+  id: string;
+  __typename?: 'Costing_Key';
+}
+
 export interface Employee_Key {
   id: string;
   __typename?: 'Employee_Key';

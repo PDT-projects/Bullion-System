@@ -61,6 +61,39 @@ export function getBrandById(dcOrVars, vars) {
   return executeQuery(getBrandByIdRef(dcOrVars, vars));
 }
 
+export const costingInsertRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'costingInsert', inputVars);
+}
+costingInsertRef.operationName = 'costingInsert';
+
+export function costingInsert(dcOrVars, vars) {
+  return executeMutation(costingInsertRef(dcOrVars, vars));
+}
+
+export const costingUpdateRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'costingUpdate', inputVars);
+}
+costingUpdateRef.operationName = 'costingUpdate';
+
+export function costingUpdate(dcOrVars, vars) {
+  return executeMutation(costingUpdateRef(dcOrVars, vars));
+}
+
+export const costingDeleteRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'costingDelete', inputVars);
+}
+costingDeleteRef.operationName = 'costingDelete';
+
+export function costingDelete(dcOrVars, vars) {
+  return executeMutation(costingDeleteRef(dcOrVars, vars));
+}
+
 export const productInsertRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
@@ -147,28 +180,6 @@ getProductByIdRef.operationName = 'GetProductById';
 
 export function getProductById(dcOrVars, vars) {
   return executeQuery(getProductByIdRef(dcOrVars, vars));
-}
-
-export const listProductTransfersRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'ListProductTransfers', inputVars);
-}
-listProductTransfersRef.operationName = 'ListProductTransfers';
-
-export function listProductTransfers(dcOrVars, vars) {
-  return executeQuery(listProductTransfersRef(dcOrVars, vars));
-}
-
-export const getProductTransferByIdRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'GetProductTransferById', inputVars);
-}
-getProductTransferByIdRef.operationName = 'GetProductTransferById';
-
-export function getProductTransferById(dcOrVars, vars) {
-  return executeQuery(getProductTransferByIdRef(dcOrVars, vars));
 }
 
 export const modelInsertRef = (dcOrVars, vars) => {

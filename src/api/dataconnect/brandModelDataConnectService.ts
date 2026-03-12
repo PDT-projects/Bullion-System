@@ -3,6 +3,7 @@
  * Functions to fetch brands and models from Firebase Data Connect
  */
 import { listBrands, listModels, getModelById, brandInsert, modelInsert } from '@erp-system/inventory';
+import type { CostingInfo, CostingModel } from '../../modules/inventory/models/types';
 
 /**
  * Brand interface - defined locally for type safety
@@ -26,6 +27,18 @@ export interface Model {
   sellPrice?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface CostingSaveResult {
+  brandId: string;
+  brandName: string;
+  modelIds: string[];
+}
+
+export interface BrandWithModels {
+  brandId: string;
+  brandName: string;
+  models: Model[];
 }
 
 /**
@@ -123,5 +136,100 @@ export async function createModel(vars: { name: string; brandId: string; costPri
   } catch (error) {
     console.error('Error creating model:', error);
     return null;
+  }
+}
+
+/**
+ * Find brand by name (exact match)
+ */
+export async function findBrandByName(name: string): Promise<Brand | null> {
+  try {
+    const { data } = await listBrands({ limit: 100, offset: 0 });
+    const brands: Brand[] = ((data as any).brands || []);
+    const existing = brands.find(b => b.name.toLowerCase() === name.toLowerCase());
+    return existing || null;
+  } catch (error) {
+    console.error('Error finding brand:', error);
+    return null;
+  }
+}
+
+/**
+ * Save complete costing info to DataConnect
+ * Creates brand if not exists, then all models
+ */
+export async function saveCostingToDataConnect(costingInfo: CostingInfo): Promise<CostingSaveResult> {
+  try {
+    // Step 1: Find or create brand
+    let brandId: string;
+    let brandName = costingInfo.brandName.trim();
+    
+    const existingBrand = await findBrandByName(brandName);
+    if (existingBrand) {
+      brandId = existingBrand.id;
+    } else {
+      const newBrand = await createBrand({ name: brandName });
+      if (!newBrand) {
+        throw new Error('Failed to create brand');
+      }
+      brandId = newBrand.id;
+    }
+
+    // Step 2: Create models from costing info
+    const modelIds: string[] = [];
+    for (const model of costingInfo.models) {
+      if (!model.modelName.trim()) continue;
+      
+      const newModel = await createModel({
+        name: model.modelName,
+        brandId,
+        costPrice: model.totalLandedUnitCost // Save final landed cost per unit
+      });
+      
+      if (newModel) {
+        modelIds.push(newModel.id);
+      }
+    }
+
+    return {
+      brandId,
+      brandName,
+      modelIds
+    };
+  } catch (error) {
+    console.error('Error saving costing to DataConnect:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch all brands with their models (for dropdowns)
+ */
+export async function fetchBrandsWithModels(): Promise<BrandWithModels[]> {
+  try {
+    const brands = await fetchBrands();
+    const brandModelsMap: { [key: string]: Model[] } = {};
+    
+    // Group models by brand
+    const allModels = await listModels({ limit: 100, offset: 0 });
+    const models: Model[] = ((allModels.data as any).models || []);
+    
+    models.forEach(model => {
+      if (model.brandId && !brandModelsMap[model.brandId]) {
+        brandModelsMap[model.brandId] = [];
+      }
+      if (model.brandId) {
+        brandModelsMap[model.brandId].push(model);
+      }
+    });
+    
+    return brands.map(brand => ({
+      brandId: brand.id,
+      brandName: brand.name,
+      models: brandModelsMap[brand.id] || []
+    }));
+  } catch (error) {
+    console.error('Error fetching brands with models:', error);
+    return [];
   }
 }

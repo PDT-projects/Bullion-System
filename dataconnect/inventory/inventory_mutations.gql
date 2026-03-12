@@ -1,5 +1,76 @@
 # Inventory Mutations - Write operations for Products and Product Transfers
 
+# ==================== Costing Mutations ====================
+
+mutation costingInsert(
+  $id: String!,
+  $brandName: String!,
+  $usdRate: Float!,
+  $totalCustomsValue: Float!,
+  $totalFreightValue: Float!,
+  $totalUnitCostUSD: Float!,
+  $shipmentTotalUSD: Float!,
+  $consignmentValue: Float!,
+  $totalValueOfBrand: Float!,
+  $modelsJson: String!,
+  $status: String!
+) @auth(level: PUBLIC) {
+  costing_insert(
+    data: {
+      id: $id
+      brandName: $brandName
+      usdRate: $usdRate
+      totalCustomsValue: $totalCustomsValue
+      totalFreightValue: $totalFreightValue
+      totalUnitCostUSD: $totalUnitCostUSD
+      shipmentTotalUSD: $shipmentTotalUSD
+      consignmentValue: $consignmentValue
+      totalValueOfBrand: $totalValueOfBrand
+      modelsJson: $modelsJson
+      status: $status
+      createdAt: "now()"
+      updatedAt: "now()"
+    }
+  )
+}
+
+mutation costingUpdate(
+  $id: String!,
+  $brandName: String!,
+  $usdRate: Float!,
+  $totalCustomsValue: Float!,
+  $totalFreightValue: Float!,
+  $totalUnitCostUSD: Float!,
+  $shipmentTotalUSD: Float!,
+  $consignmentValue: Float!,
+  $totalValueOfBrand: Float!,
+  $modelsJson: String!,
+  $status: String!
+) @auth(level: PUBLIC) {
+  costing_update(
+    id: $id,
+    data: {
+      brandName: $brandName
+      usdRate: $usdRate
+      totalCustomsValue: $totalCustomsValue
+      totalFreightValue: $totalFreightValue
+      totalUnitCostUSD: $totalUnitCostUSD
+      shipmentTotalUSD: $shipmentTotalUSD
+      consignmentValue: $consignmentValue
+      totalValueOfBrand: $totalValueOfBrand
+      modelsJson: $modelsJson
+      status: $status
+      updatedAt: "now()"
+    }
+  )
+}
+
+mutation costingDelete($id: String!) @auth(level: PUBLIC) {
+  costing_delete(id: $id)
+}
+
+# ==================== Product Mutations ====================
+
 mutation productInsert(
   $id: String!,
   $brandName: String!,

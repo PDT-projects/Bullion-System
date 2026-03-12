@@ -113,18 +113,11 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   
   // Brand-Model dropdown state
-  const [selectedBrand, setSelectedBrand] = useState<string>('');
-  const [availableModelsForBrand, setAvailableModelsForBrand] = useState<string[]>([]);
-  
-  // Sample brand-model data (in production, this would come from Data Connect)
-  const availableBrands: BrandWithModels[] = [
-    { brandName: 'Hikvision', models: ['DS-2CD2043G2', 'DS-2CD2347G2', 'DS-2CD2643G2', 'DS-2CD2T36G2'] },
-    { brandName: 'Dahua', models: ['IPC-HFW2831S', 'IPC-HDBW2831R', 'IPC-HFW2831T', 'IPC-HDBW2831'] },
-    { brandName: 'Bosch', models: ['NIN-733V', 'NIN-732V', 'NIN-630', 'NIN-730'] },
-    { brandName: 'Axis', models: ['P3245-V', 'P3245-LVE', 'Q6135-LE', 'Q6135-LE'] },
-    { brandName: 'Sony', models: ['SNC-EM632', 'SNC-EM652', 'SNC-VB770', 'SNC-EB602'] },
-    { brandName: 'Panasonic', models: ['WV-S2131', 'WV-S2130', 'WV-S2531', 'WV-S2520'] },
-  ];
+// Brand/Model state managed by BrandModelDropdown component
+  // DC brandId/modelIds from URL params (costing screen)
+  const dcBrandId = searchParams.get('brandId') || '';
+  const dcModelIdsStr = searchParams.get('modelIds') || '[]';
+  const dcModelIds: string[] = JSON.parse(dcModelIdsStr);
 
   // Auto-recalculate when costing inputs change
   useEffect(() => {
@@ -216,21 +209,10 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   }, []);
 
   // Brand-Model selection handlers
-  const handleBrandChange = useCallback((brand: string) => {
-    setSelectedBrand(brand);
-    setAvailableModelsForBrand([]);
-    setFormData(prev => ({ ...prev, brandName: brand, modelName: '' }));
-    
-    // Find models for the selected brand
-    const brandData = availableBrands.find(b => b.brandName === brand);
-    if (brandData) {
-      setAvailableModelsForBrand(brandData.models);
-    }
-  }, [availableBrands]);
+// handleBrandChange, handleModelChange handled by BrandModelDropdown component
+  // onBrandChange/onModelChange callbacks update formData.brandName/modelName
 
-  const handleModelChange = useCallback((model: string) => {
-    setFormData(prev => ({ ...prev, modelName: model }));
-  }, []);
+
 
   // Multi-Model Costing Global Input Setters
   const setCostingBrandName = useCallback((value: string) => {
@@ -512,8 +494,13 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   }, [navigate, formData, serialInputs, costingOption, validateForm, inventoryType]);
 
   const handleBack = useCallback(() => {
-    navigate(`/inventory/create-new/costing?type=${inventoryType}`);
-  }, [navigate, inventoryType]);
+    // Go back to costing details step (or costing option if "without costing")
+    if (costingOption === 'with') {
+      navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${costingOption}`);
+    } else {
+      navigate(`/inventory/create-new/costing?type=${inventoryType}`);
+    }
+  }, [navigate, inventoryType, costingOption]);
 
   return {
     formData,
@@ -543,7 +530,7 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     updateSerialCity,
     handleNext,
     handleBack,
-    showCostingFields: costingOption === 'with',
+    showCostingFields: false, // Costing fields are now on separate screen (InventoryCostingDetailsView)
     categories: CATEGORIES,
     cities: CITIES,
     costingSummary,

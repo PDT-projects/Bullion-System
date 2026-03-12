@@ -12,7 +12,7 @@ For each operation, there is a wrapper hook that can be used to call the operati
 
 Here are all of the hooks that get generated:
 ```ts
-import { useBrandInsert, useBrandUpdate, useBrandDelete, useListBrands, useGetBrandById, useProductInsert, useProductUpdate, useProductDelete, useProductTransferInsert, useProductTransferUpdate } from '@erp-system/inventory/react';
+import { useBrandInsert, useBrandUpdate, useBrandDelete, useListBrands, useGetBrandById, useCostingInsert, useCostingUpdate, useCostingDelete, useProductInsert, useProductUpdate } from '@erp-system/inventory/react';
 // The types of these hooks are available in react/index.d.ts
 
 const { data, isPending, isSuccess, isError, error } = useBrandInsert(brandInsertVars);
@@ -25,15 +25,15 @@ const { data, isPending, isSuccess, isError, error } = useListBrands(listBrandsV
 
 const { data, isPending, isSuccess, isError, error } = useGetBrandById(getBrandByIdVars);
 
+const { data, isPending, isSuccess, isError, error } = useCostingInsert(costingInsertVars);
+
+const { data, isPending, isSuccess, isError, error } = useCostingUpdate(costingUpdateVars);
+
+const { data, isPending, isSuccess, isError, error } = useCostingDelete(costingDeleteVars);
+
 const { data, isPending, isSuccess, isError, error } = useProductInsert(productInsertVars);
 
 const { data, isPending, isSuccess, isError, error } = useProductUpdate(productUpdateVars);
-
-const { data, isPending, isSuccess, isError, error } = useProductDelete(productDeleteVars);
-
-const { data, isPending, isSuccess, isError, error } = useProductTransferInsert(productTransferInsertVars);
-
-const { data, isPending, isSuccess, isError, error } = useProductTransferUpdate(productTransferUpdateVars);
 
 ```
 
@@ -72,7 +72,7 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { brandInsert, brandUpdate, brandDelete, listBrands, getBrandById, productInsert, productUpdate, productDelete, productTransferInsert, productTransferUpdate } from '@erp-system/inventory';
+import { brandInsert, brandUpdate, brandDelete, listBrands, getBrandById, costingInsert, costingUpdate, costingDelete, productInsert, productUpdate } from '@erp-system/inventory';
 
 
 // Operation brandInsert:  For variables, look at type BrandInsertVars in ../index.d.ts
@@ -90,20 +90,20 @@ const { data } = await ListBrands(dataConnect, listBrandsVars);
 // Operation GetBrandById:  For variables, look at type GetBrandByIdVars in ../index.d.ts
 const { data } = await GetBrandById(dataConnect, getBrandByIdVars);
 
+// Operation costingInsert:  For variables, look at type CostingInsertVars in ../index.d.ts
+const { data } = await CostingInsert(dataConnect, costingInsertVars);
+
+// Operation costingUpdate:  For variables, look at type CostingUpdateVars in ../index.d.ts
+const { data } = await CostingUpdate(dataConnect, costingUpdateVars);
+
+// Operation costingDelete:  For variables, look at type CostingDeleteVars in ../index.d.ts
+const { data } = await CostingDelete(dataConnect, costingDeleteVars);
+
 // Operation productInsert:  For variables, look at type ProductInsertVars in ../index.d.ts
 const { data } = await ProductInsert(dataConnect, productInsertVars);
 
 // Operation productUpdate:  For variables, look at type ProductUpdateVars in ../index.d.ts
 const { data } = await ProductUpdate(dataConnect, productUpdateVars);
-
-// Operation productDelete:  For variables, look at type ProductDeleteVars in ../index.d.ts
-const { data } = await ProductDelete(dataConnect, productDeleteVars);
-
-// Operation productTransferInsert:  For variables, look at type ProductTransferInsertVars in ../index.d.ts
-const { data } = await ProductTransferInsert(dataConnect, productTransferInsertVars);
-
-// Operation productTransferUpdate:  For variables, look at type ProductTransferUpdateVars in ../index.d.ts
-const { data } = await ProductTransferUpdate(dataConnect, productTransferUpdateVars);
 
 
 ```

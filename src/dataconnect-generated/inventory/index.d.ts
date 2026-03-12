@@ -65,6 +65,55 @@ export interface CashInHand_Key {
   __typename?: 'CashInHand_Key';
 }
 
+export interface CostingDeleteData {
+  costing_delete?: Costing_Key | null;
+}
+
+export interface CostingDeleteVariables {
+  id: string;
+}
+
+export interface CostingInsertData {
+  costing_insert: Costing_Key;
+}
+
+export interface CostingInsertVariables {
+  id: string;
+  brandName: string;
+  usdRate: number;
+  totalCustomsValue: number;
+  totalFreightValue: number;
+  totalUnitCostUSD: number;
+  shipmentTotalUSD: number;
+  consignmentValue: number;
+  totalValueOfBrand: number;
+  modelsJson: string;
+  status: string;
+}
+
+export interface CostingUpdateData {
+  costing_update?: Costing_Key | null;
+}
+
+export interface CostingUpdateVariables {
+  id: string;
+  brandName: string;
+  usdRate: number;
+  totalCustomsValue: number;
+  totalFreightValue: number;
+  totalUnitCostUSD: number;
+  shipmentTotalUSD: number;
+  consignmentValue: number;
+  totalValueOfBrand: number;
+  modelsJson: string;
+  status: string;
+}
+
+export interface Costing_Key {
+  id: string;
+  __typename?: 'Costing_Key';
+}
+
 export interface Employee_Key {
   id: string;
   __typename?: 'Employee_Key';
@@ -151,35 +200,6 @@ export interface GetProductByIdVariables {
   id: string;
 }
 
-export interface GetProductTransferByIdData {
-  productTransfer?: {
-    id: string;
-    productId: string;
-    productName: string;
-    brandName?: string | null;
-    modelName?: string | null;
-    fromLocation: string;
-    toLocation: string;
-    quantity: number;
-    serialNumbers?: string | null;
-    date: string;
-    transferDate?: string | null;
-    status: string;
-    transferredBy?: string | null;
-    note?: string | null;
-    notes?: string | null;
-    receiptName?: string | null;
-    receiptType?: string | null;
-    receiptDataUrl?: string | null;
-    createdAt?: string | null;
-    receivedAt?: string | null;
-  } & ProductTransfer_Key;
-}
-
-export interface GetProductTransferByIdVariables {
-  id: string;
-}
-
 export interface ListBrandsData {
   brands: ({
     id: string;
@@ -211,36 +231,6 @@ export interface ListModelsData {
 }
 
 export interface ListModelsVariables {
-  limit?: number | null;
-  offset?: number | null;
-}
-
-export interface ListProductTransfersData {
-  productTransfers: ({
-    id: string;
-    productId: string;
-    productName: string;
-    brandName?: string | null;
-    modelName?: string | null;
-    fromLocation: string;
-    toLocation: string;
-    quantity: number;
-    serialNumbers?: string | null;
-    date: string;
-    transferDate?: string | null;
-    status: string;
-    transferredBy?: string | null;
-    note?: string | null;
-    notes?: string | null;
-    receiptName?: string | null;
-    receiptType?: string | null;
-    receiptDataUrl?: string | null;
-    createdAt?: string | null;
-    receivedAt?: string | null;
-  } & ProductTransfer_Key)[];
-}
-
-export interface ListProductTransfersVariables {
   limit?: number | null;
   offset?: number | null;
 }
@@ -569,6 +559,42 @@ export const getBrandByIdRef: GetBrandByIdRef;
 export function getBrandById(vars: GetBrandByIdVariables): QueryPromise<GetBrandByIdData, GetBrandByIdVariables>;
 export function getBrandById(dc: DataConnect, vars: GetBrandByIdVariables): QueryPromise<GetBrandByIdData, GetBrandByIdVariables>;
 
+interface CostingInsertRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: CostingInsertVariables): MutationRef<CostingInsertData, CostingInsertVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: CostingInsertVariables): MutationRef<CostingInsertData, CostingInsertVariables>;
+  operationName: string;
+}
+export const costingInsertRef: CostingInsertRef;
+
+export function costingInsert(vars: CostingInsertVariables): MutationPromise<CostingInsertData, CostingInsertVariables>;
+export function costingInsert(dc: DataConnect, vars: CostingInsertVariables): MutationPromise<CostingInsertData, CostingInsertVariables>;
+
+interface CostingUpdateRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: CostingUpdateVariables): MutationRef<CostingUpdateData, CostingUpdateVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: CostingUpdateVariables): MutationRef<CostingUpdateData, CostingUpdateVariables>;
+  operationName: string;
+}
+export const costingUpdateRef: CostingUpdateRef;
+
+export function costingUpdate(vars: CostingUpdateVariables): MutationPromise<CostingUpdateData, CostingUpdateVariables>;
+export function costingUpdate(dc: DataConnect, vars: CostingUpdateVariables): MutationPromise<CostingUpdateData, CostingUpdateVariables>;
+
+interface CostingDeleteRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: CostingDeleteVariables): MutationRef<CostingDeleteData, CostingDeleteVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: CostingDeleteVariables): MutationRef<CostingDeleteData, CostingDeleteVariables>;
+  operationName: string;
+}
+export const costingDeleteRef: CostingDeleteRef;
+
+export function costingDelete(vars: CostingDeleteVariables): MutationPromise<CostingDeleteData, CostingDeleteVariables>;
+export function costingDelete(dc: DataConnect, vars: CostingDeleteVariables): MutationPromise<CostingDeleteData, CostingDeleteVariables>;
+
 interface ProductInsertRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars: ProductInsertVariables): MutationRef<ProductInsertData, ProductInsertVariables>;
@@ -664,30 +690,6 @@ export const getProductByIdRef: GetProductByIdRef;
 
 export function getProductById(vars: GetProductByIdVariables): QueryPromise<GetProductByIdData, GetProductByIdVariables>;
 export function getProductById(dc: DataConnect, vars: GetProductByIdVariables): QueryPromise<GetProductByIdData, GetProductByIdVariables>;
-
-interface ListProductTransfersRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: ListProductTransfersVariables): QueryRef<ListProductTransfersData, ListProductTransfersVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars?: ListProductTransfersVariables): QueryRef<ListProductTransfersData, ListProductTransfersVariables>;
-  operationName: string;
-}
-export const listProductTransfersRef: ListProductTransfersRef;
-
-export function listProductTransfers(vars?: ListProductTransfersVariables): QueryPromise<ListProductTransfersData, ListProductTransfersVariables>;
-export function listProductTransfers(dc: DataConnect, vars?: ListProductTransfersVariables): QueryPromise<ListProductTransfersData, ListProductTransfersVariables>;
-
-interface GetProductTransferByIdRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: GetProductTransferByIdVariables): QueryRef<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: GetProductTransferByIdVariables): QueryRef<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-  operationName: string;
-}
-export const getProductTransferByIdRef: GetProductTransferByIdRef;
-
-export function getProductTransferById(vars: GetProductTransferByIdVariables): QueryPromise<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-export function getProductTransferById(dc: DataConnect, vars: GetProductTransferByIdVariables): QueryPromise<GetProductTransferByIdData, GetProductTransferByIdVariables>;
 
 interface ModelInsertRef {
   /* Allow users to create refs without passing in DataConnect */

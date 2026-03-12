@@ -6,6 +6,7 @@
     "@erp-system/banking": "file:src/dataconnect-generated/banking",
     "@erp-system/budgets": "file:src/dataconnect-generated/budgets",
     "@erp-system/dataconnect": "file:src/dataconnect-generated",
+    "@erp-system/employees": "file:src/dataconnect-generated/employees",
     "@erp-system/inventory": "file:src/dataconnect-generated/inventory",
     "@erp-system/loans": "file:src/dataconnect-generated/loans",
     "@radix-ui/react-accordion": "^1.2.3",
@@ -59,6 +60,7 @@
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^3.10.2",
+    "firebase-tools": "^15.9.1",
     "vite": "6.3.5"
   },
   "scripts": {

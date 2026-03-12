@@ -8,4 +8,4 @@ schema:
       database: "erp-system-database"
       cloudSql:
         instanceId: "erp-system-instance"
-connectorDirs: ["./example", "./banking", "./loans", "./budgets", "./inventory"]
+connectorDirs: ["./banking", "./loans", "./budgets", "./inventory", "./employees"]

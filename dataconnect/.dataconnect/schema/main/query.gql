@@ -120,6 +120,30 @@ extend type Query {
     first: CashInHand_FirstRow
   ): CashInHand @fdc_generated(from: "CashInHand", purpose: QUERY_SINGLE)
   """
+  ✨ Look up a single `Costing` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  costing(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Costing_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Costing_FirstRow
+  ): Costing @fdc_generated(from: "Costing", purpose: QUERY_SINGLE)
+  """
   ✨ Look up a single `Employee` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
   """
   employee(
@@ -433,6 +457,40 @@ extend type Query {
     """
     having: CashInHand_Having
   ): [CashInHand!]! @fdc_generated(from: "CashInHand", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Costing` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  costings(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Costing_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Costing_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Costing_Having
+  ): [Costing!]! @fdc_generated(from: "Costing", purpose: QUERY_MULTIPLE)
   """
   ✨ List `Employee` objects in the table and return selected fields, optionally filtered by `where` conditions
   """

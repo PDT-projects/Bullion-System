@@ -16,7 +16,7 @@ import {
   GetEmployeeByIdVariables,
   ListEmployeesData,
   GetEmployeeByIdData
-} from '@erp-system/dataconnect';
+} from '@erp-system/employees';
 import { Employee as EmployeeType, CreateEmployeeDTO, UpdateEmployeeDTO } from '../../modules/employee/models/types';
 
 // Data Connect client instance

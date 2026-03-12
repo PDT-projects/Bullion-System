@@ -540,6 +540,319 @@ extend type CashInHand {
   """
   _id: ID! @fdc_generated(from: "CashInHand.id", purpose: GLOBAL_ID)
 }
+extend type Costing {
+  """
+  Implicit metadata field that cannot be written. It provides extra information about query results.
+  """
+  _metadata: _Metadata @fdc_generated(from: "Costing", purpose: METADATA_FIELD)
+  """
+  ✨ Count the number of rows in the `Costing` table.
+  """
+  _count: Int! @fdc_generated(from: "Costing.", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `brandName` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  brandName_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.brandName", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `consignmentValue` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  consignmentValue_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.consignmentValue", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `createdAt` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  createdAt_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.createdAt", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `id` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  id_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.id", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `modelsJson` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  modelsJson_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.modelsJson", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `shipmentTotalUSD` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  shipmentTotalUSD_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.shipmentTotalUSD", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `status` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  status_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.status", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `totalCustomsValue` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  totalCustomsValue_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.totalCustomsValue", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `totalFreightValue` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  totalFreightValue_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.totalFreightValue", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `totalUnitCostUSD` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  totalUnitCostUSD_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.totalUnitCostUSD", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `totalValueOfBrand` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  totalValueOfBrand_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.totalValueOfBrand", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `updatedAt` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  updatedAt_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.updatedAt", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Costing` table where the `usdRate` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  usdRate_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Costing.usdRate", purpose: QUERY_COUNT)
+  """
+  ✨ Sum the `consignmentValue` field in the `Costing` table.
+  """
+  consignmentValue_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.consignmentValue", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `shipmentTotalUSD` field in the `Costing` table.
+  """
+  shipmentTotalUSD_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.shipmentTotalUSD", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `totalCustomsValue` field in the `Costing` table.
+  """
+  totalCustomsValue_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.totalCustomsValue", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `totalFreightValue` field in the `Costing` table.
+  """
+  totalFreightValue_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.totalFreightValue", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `totalUnitCostUSD` field in the `Costing` table.
+  """
+  totalUnitCostUSD_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.totalUnitCostUSD", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `totalValueOfBrand` field in the `Costing` table.
+  """
+  totalValueOfBrand_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.totalValueOfBrand", purpose: QUERY_SUM)
+  """
+  ✨ Sum the `usdRate` field in the `Costing` table.
+  """
+  usdRate_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.usdRate", purpose: QUERY_SUM)
+  """
+  ✨ Average the `consignmentValue` field in the `Costing` table.
+  """
+  consignmentValue_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.consignmentValue", purpose: QUERY_AVG)
+  """
+  ✨ Average the `shipmentTotalUSD` field in the `Costing` table.
+  """
+  shipmentTotalUSD_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.shipmentTotalUSD", purpose: QUERY_AVG)
+  """
+  ✨ Average the `totalCustomsValue` field in the `Costing` table.
+  """
+  totalCustomsValue_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.totalCustomsValue", purpose: QUERY_AVG)
+  """
+  ✨ Average the `totalFreightValue` field in the `Costing` table.
+  """
+  totalFreightValue_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.totalFreightValue", purpose: QUERY_AVG)
+  """
+  ✨ Average the `totalUnitCostUSD` field in the `Costing` table.
+  """
+  totalUnitCostUSD_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.totalUnitCostUSD", purpose: QUERY_AVG)
+  """
+  ✨ Average the `totalValueOfBrand` field in the `Costing` table.
+  """
+  totalValueOfBrand_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.totalValueOfBrand", purpose: QUERY_AVG)
+  """
+  ✨ Average the `usdRate` field in the `Costing` table.
+  """
+  usdRate_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Costing.usdRate", purpose: QUERY_AVG)
+  """
+  ✨ Minimum of the `consignmentValue` field in the `Costing` table.
+  """
+  consignmentValue_min: Float @fdc_generated(from: "Costing.consignmentValue", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `shipmentTotalUSD` field in the `Costing` table.
+  """
+  shipmentTotalUSD_min: Float @fdc_generated(from: "Costing.shipmentTotalUSD", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `totalCustomsValue` field in the `Costing` table.
+  """
+  totalCustomsValue_min: Float @fdc_generated(from: "Costing.totalCustomsValue", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `totalFreightValue` field in the `Costing` table.
+  """
+  totalFreightValue_min: Float @fdc_generated(from: "Costing.totalFreightValue", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `totalUnitCostUSD` field in the `Costing` table.
+  """
+  totalUnitCostUSD_min: Float @fdc_generated(from: "Costing.totalUnitCostUSD", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `totalValueOfBrand` field in the `Costing` table.
+  """
+  totalValueOfBrand_min: Float @fdc_generated(from: "Costing.totalValueOfBrand", purpose: QUERY_MIN)
+  """
+  ✨ Minimum of the `usdRate` field in the `Costing` table.
+  """
+  usdRate_min: Float @fdc_generated(from: "Costing.usdRate", purpose: QUERY_MIN)
+  """
+  ✨ Maximum of the `consignmentValue` field in the `Costing` table.
+  """
+  consignmentValue_max: Float @fdc_generated(from: "Costing.consignmentValue", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `shipmentTotalUSD` field in the `Costing` table.
+  """
+  shipmentTotalUSD_max: Float @fdc_generated(from: "Costing.shipmentTotalUSD", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `totalCustomsValue` field in the `Costing` table.
+  """
+  totalCustomsValue_max: Float @fdc_generated(from: "Costing.totalCustomsValue", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `totalFreightValue` field in the `Costing` table.
+  """
+  totalFreightValue_max: Float @fdc_generated(from: "Costing.totalFreightValue", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `totalUnitCostUSD` field in the `Costing` table.
+  """
+  totalUnitCostUSD_max: Float @fdc_generated(from: "Costing.totalUnitCostUSD", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `totalValueOfBrand` field in the `Costing` table.
+  """
+  totalValueOfBrand_max: Float @fdc_generated(from: "Costing.totalValueOfBrand", purpose: QUERY_MAX)
+  """
+  ✨ Maximum of the `usdRate` field in the `Costing` table.
+  """
+  usdRate_max: Float @fdc_generated(from: "Costing.usdRate", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "Costing.id", purpose: GLOBAL_ID)
+}
 extend type Employee {
   """
   Implicit metadata field that cannot be written. It provides extra information about query results.

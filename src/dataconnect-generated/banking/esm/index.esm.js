@@ -6,50 +6,6 @@ export const connectorConfig = {
   location: 'asia-south1'
 };
 
-export const transferInsertRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'TransferInsert', inputVars);
-}
-transferInsertRef.operationName = 'TransferInsert';
-
-export function transferInsert(dcOrVars, vars) {
-  return executeMutation(transferInsertRef(dcOrVars, vars));
-}
-
-export const transferDeleteRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'TransferDelete', inputVars);
-}
-transferDeleteRef.operationName = 'TransferDelete';
-
-export function transferDelete(dcOrVars, vars) {
-  return executeMutation(transferDeleteRef(dcOrVars, vars));
-}
-
-export const listTransfersRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'listTransfers', inputVars);
-}
-listTransfersRef.operationName = 'listTransfers';
-
-export function listTransfers(dcOrVars, vars) {
-  return executeQuery(listTransfersRef(dcOrVars, vars));
-}
-
-export const getTransferByIdRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'getTransferById', inputVars);
-}
-getTransferByIdRef.operationName = 'getTransferById';
-
-export function getTransferById(dcOrVars, vars) {
-  return executeQuery(getTransferByIdRef(dcOrVars, vars));
-}
-
 export const bankInsertRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
@@ -158,5 +114,49 @@ getCashInHandByIdRef.operationName = 'getCashInHandById';
 
 export function getCashInHandById(dcOrVars, vars) {
   return executeQuery(getCashInHandByIdRef(dcOrVars, vars));
+}
+
+export const transferInsertRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'TransferInsert', inputVars);
+}
+transferInsertRef.operationName = 'TransferInsert';
+
+export function transferInsert(dcOrVars, vars) {
+  return executeMutation(transferInsertRef(dcOrVars, vars));
+}
+
+export const transferDeleteRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'TransferDelete', inputVars);
+}
+transferDeleteRef.operationName = 'TransferDelete';
+
+export function transferDelete(dcOrVars, vars) {
+  return executeMutation(transferDeleteRef(dcOrVars, vars));
+}
+
+export const listTransfersRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'listTransfers', inputVars);
+}
+listTransfersRef.operationName = 'listTransfers';
+
+export function listTransfers(dcOrVars, vars) {
+  return executeQuery(listTransfersRef(dcOrVars, vars));
+}
+
+export const getTransferByIdRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'getTransferById', inputVars);
+}
+getTransferByIdRef.operationName = 'getTransferById';
+
+export function getTransferById(dcOrVars, vars) {
+  return executeQuery(getTransferByIdRef(dcOrVars, vars));
 }
 

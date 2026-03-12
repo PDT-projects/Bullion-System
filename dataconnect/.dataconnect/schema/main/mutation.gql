@@ -45,6 +45,15 @@ extend type Mutation {
     data: CashInHand_Data!
   ): CashInHand_KeyOutput! @fdc_generated(from: "CashInHand", purpose: INSERT_SINGLE)
   """
+  ✨ Insert a single `Costing` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  costing_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: Costing_Data!
+  ): Costing_KeyOutput! @fdc_generated(from: "Costing", purpose: INSERT_SINGLE)
+  """
   ✨ Insert a single `Employee` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
   """
   employee_insert(
@@ -143,6 +152,15 @@ extend type Mutation {
     """
     data: [CashInHand_Data!]!
   ): [CashInHand_KeyOutput!]! @fdc_generated(from: "CashInHand", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `Costing` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  costing_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [Costing_Data!]!
+  ): [Costing_KeyOutput!]! @fdc_generated(from: "Costing", purpose: INSERT_MULTIPLE)
   """
   ✨ Insert `Employee` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
   """
@@ -243,6 +261,15 @@ extend type Mutation {
     data: CashInHand_Data!
   ): CashInHand_KeyOutput! @fdc_generated(from: "CashInHand", purpose: UPSERT_SINGLE)
   """
+  ✨ Insert or update a single `Costing` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Costing`.
+  """
+  costing_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: Costing_Data!
+  ): Costing_KeyOutput! @fdc_generated(from: "Costing", purpose: UPSERT_SINGLE)
+  """
   ✨ Insert or update a single `Employee` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Employee`.
   """
   employee_upsert(
@@ -341,6 +368,15 @@ extend type Mutation {
     """
     data: [CashInHand_Data!]!
   ): [CashInHand_KeyOutput!]! @fdc_generated(from: "CashInHand", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `Costing` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Costing`.
+  """
+  costing_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [Costing_Data!]!
+  ): [Costing_KeyOutput!]! @fdc_generated(from: "Costing", purpose: UPSERT_MULTIPLE)
   """
   ✨ Insert or update `Employee` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Employee`.
   """
@@ -540,6 +576,35 @@ extend type Mutation {
     """
     data: CashInHand_Data!
   ): CashInHand_KeyOutput @fdc_generated(from: "CashInHand", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `Costing` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Costing` or `null` if not found.
+  """
+  costing_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Costing_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Costing_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: Costing_Data!
+  ): Costing_KeyOutput @fdc_generated(from: "Costing", purpose: UPDATE_SINGLE)
   """
   ✨ Update a single `Employee` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Employee` or `null` if not found.
   """
@@ -810,6 +875,25 @@ extend type Mutation {
     data: CashInHand_Data!
   ): Int! @fdc_generated(from: "CashInHand", purpose: UPDATE_MULTIPLE)
   """
+  ✨ Update `Costing` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  costing_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: Costing_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: Costing_Data!
+  ): Int! @fdc_generated(from: "Costing", purpose: UPDATE_MULTIPLE)
+  """
   ✨ Update `Employee` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
   """
   employee_updateMany(
@@ -1044,6 +1128,30 @@ extend type Mutation {
     first: CashInHand_FirstRow
   ): CashInHand_KeyOutput @fdc_generated(from: "CashInHand", purpose: DELETE_SINGLE)
   """
+  ✨ Delete a single `Costing` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  costing_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Costing_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Costing_FirstRow
+  ): Costing_KeyOutput @fdc_generated(from: "Costing", purpose: DELETE_SINGLE)
+  """
   ✨ Delete a single `Employee` based on `id`, `key` or `first` and return its key (or `null` if not found).
   """
   employee_delete(
@@ -1257,6 +1365,20 @@ extend type Mutation {
     """
     all: Boolean = false
   ): Int! @fdc_generated(from: "CashInHand", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `Costing` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  costing_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: Costing_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "Costing", purpose: DELETE_MULTIPLE)
   """
   ✨ Delete `Employee` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
   """

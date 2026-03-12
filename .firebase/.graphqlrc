@@ -1,1 +1,1 @@
-{"schema":["dataconnect\\.dataconnect\\**\\*.gql","dataconnect\\schema\\**\\*.gql"],"document":["dataconnect\\example\\**\\*.gql","dataconnect\\banking\\**\\*.gql","dataconnect\\loans\\**\\*.gql","dataconnect\\budgets\\**\\*.gql","dataconnect\\inventory\\**\\*.gql"]}
+{"schema":["dataconnect\\.dataconnect\\**\\*.gql","dataconnect\\schema\\**\\*.gql"],"document":["dataconnect\\banking\\**\\*.gql","dataconnect\\loans\\**\\*.gql","dataconnect\\budgets\\**\\*.gql","dataconnect\\inventory\\**\\*.gql"]}

@@ -113,6 +113,30 @@ type Budget @table {
 
 # ==================== Inventory Module ====================
 
+# Costing table - stores costing batches for multi-model products
+type Costing @table {
+  id: String!
+  brandName: String!
+  
+  # Global inputs for multi-model costing
+  usdRate: Float!
+  totalCustomsValue: Float!
+  totalFreightValue: Float!
+  
+  # Calculated summary
+  totalUnitCostUSD: Float!
+  shipmentTotalUSD: Float!
+  consignmentValue: Float!
+  totalValueOfBrand: Float!
+  
+  # Models JSON - stores array of CostingModel
+  modelsJson: String!
+  
+  status: String!  # "draft" | "used" | "completed"
+  createdAt: String
+  updatedAt: String
+}
+
 # Brand table - stores brand information
 type Brand @table {
   id: String!
@@ -205,3 +229,4 @@ type ProductTransfer @table {
   createdAt: String
   receivedAt: String
 }
+

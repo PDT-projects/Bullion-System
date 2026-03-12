@@ -1,12 +1,8 @@
-// Inventory Module - View Layer
-// InventoryProductDetailsView - Step 2: Product details with conditional costing fields
-
 import React, { useState } from 'react';
-import { Package, Hash, MapPin, ArrowLeft, ArrowRight, Calculator, ChevronDown } from 'lucide-react';
+import { Package, Hash, MapPin, ArrowLeft, ArrowRight } from 'lucide-react';
 import { UseInventoryProductDetailsViewModelReturn } from '../viewModels/useInventoryProductDetailsViewModel';
-import { CostingGlobalInputs } from '../components/CostingGlobalInputs';
-import { CostingTable } from '../components/CostingTable';
-import { BrandSummary } from '../components/BrandSummary';
+import { BrandModelDropdown } from '../components/BrandModelDropdown';
+import { MultiModelInventoryTable } from '../components/MultiModelInventoryTable';
 
 interface InventoryProductDetailsViewProps extends UseInventoryProductDetailsViewModelReturn {}
 
@@ -15,7 +11,6 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   costingOption,
   inventoryType,
   serialInputs,
-
   validationErrors,
   isValid,
   setBrandName,
@@ -28,451 +23,254 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   setDescription,
   setStatus,
   setIsDamaged,
-  
-  // Multi-Model Costing Props
-  setCostingBrandName,
-  setUsdRate,
-  setTotalCustomsValue,
-  setTotalFreightValue,
-  addModel,
-  updateModelField,
-  removeModel,
-  
   updateSerialNumber,
   updateSerialCity,
   handleNext,
   handleBack,
-  showCostingFields,
   categories,
   cities,
-  costingSummary,
 }) => {
-  // Local state for dropdowns
-  const [selectedBrand, setSelectedBrand] = useState<string>(formData.brandName || '');
-  const [selectedModel, setSelectedModel] = useState<string>(formData.modelName || '');
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-  const [isOtherBrand, setIsOtherBrand] = useState(false);
+  const [selectedModels, setSelectedModels] = useState<Array<{
+    modelId: string;
+    modelName: string;
+    costPrice: number;
+    salePrice: number;
+    quantity: number;
+  }>>([]);
 
-  // Handle brand selection
-  const handleBrandSelect = (brand: string) => {
-    setSelectedBrand(brand);
-    setSelectedModel('');
-    setAvailableModels([]);
-    setIsOtherBrand(brand === 'Other');
-    setBrandName(brand);
-    setModelName('');
-    setIsBrandDropdownOpen(false);
+  const handleAddModelToTable = (modelId: string, modelName: string, costPrice: number) => {
+    const newModel = {
+      modelId,
+      modelName,
+      costPrice,
+      salePrice: costPrice * 1.3, // Default 30% margin
+      quantity: 1
+    };
+    setSelectedModels(prev => [...prev, newModel]);
+    setModelName(modelName);
   };
 
-  // Handle model selection
-  const handleModelSelect = (model: string) => {
-    setSelectedModel(model);
-    setModelName(model);
-    setIsModelDropdownOpen(false);
+  const handleUpdateModel = (index: number, field: 'salePrice' | 'quantity', value: number) => {
+    setSelectedModels(prev => prev.map((model, i) => 
+      i === index 
+        ? { ...model, [field]: value }
+        : model
+    ));
   };
 
-  // Get brand options - allow manual entry
-  const getBrandOptions = (): string[] => {
-    return ['Other'];
+  const handleRemoveModel = (index: number) => {
+    setSelectedModels(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEditModel = (index: number) => {
+    // Open BrandModelDropdown prefilled with current model
+    console.log('Edit model:', selectedModels[index]);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-      <div className="inventory-entry-container max-w-7xl mx-auto">
-        {/* Header with Back Button */}
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
             onClick={handleBack}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-md hover:shadow-lg border border-gray-200"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 shadow-md border"
           >
             <ArrowLeft size={20} />
-            <span className="font-medium">Back</span>
+            Back
           </button>
           <div className="flex items-center gap-4">
             <div className="p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
               <Package className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent tracking-tight mb-2">
+              <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                 Product Details
               </h2>
-              <p className="text-lg text-gray-600 leading-relaxed">
-                Enter product information for new inventory
-              </p>
+              <p className="text-lg text-gray-600">Select brands/models from DataConnect and set sale prices</p>
             </div>
           </div>
         </div>
 
-        {/* Progress Indicator */}
-        <div className="mb-6 bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            {/* Step 1 - Completed */}
-            <div className="flex flex-col items-center text-green-700">
-              <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2 shadow-lg border-2 border-white bg-green-600 text-white">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+        {/* Progress */}
+        <div className="mb-6 bg-white rounded-xl shadow-lg border p-6">
+          <div className="flex items-center max-w-4xl mx-auto">
+            {/* Step 1 Complete */}
+            <div className="flex flex-col items-center text-green-700 mr-6">
+              <div className="w-16 h-16 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-lg">
+                ✓
               </div>
-              <span className="text-sm font-medium text-center leading-tight text-green-600">Inventory Type</span>
+              <span className="text-xs font-medium text-green-600 mt-1">Type</span>
             </div>
-
-            {/* Connector 1-2 */}
-            <div className="flex-1 h-1 mx-4 rounded-full bg-gradient-to-r from-green-500 to-green-600"></div>
-
-            {/* Step 2 - Completed */}
-            <div className="flex flex-col items-center text-green-700">
-              <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2 shadow-lg border-2 border-white bg-green-600 text-white">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+            <div className="flex-1 h-1 bg-green-500 rounded-full mx-3"></div>
+            {/* Step 2 Complete */}
+            <div className="flex flex-col items-center text-green-700 mr-6">
+              <div className="w-16 h-16 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-lg">
+                ✓
               </div>
-              <span className="text-sm font-medium text-center leading-tight text-green-600">Costing Option</span>
+              <span className="text-xs font-medium text-green-600 mt-1">Costing</span>
             </div>
-
-            {/* Connector 2-3 */}
-            <div className="flex-1 h-1 mx-4 rounded-full bg-gradient-to-r from-green-500 to-blue-500"></div>
-
-            {/* Step 3 - Active */}
+            <div className="flex-1 h-1 bg-blue-500 rounded-full mx-3"></div>
+            {/* Step 3 Active */}
             <div className="flex flex-col items-center text-blue-700">
-              <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2 shadow-lg border-2 border-white bg-gradient-to-r from-blue-500 to-blue-600 text-white ring-2 ring-blue-300">
+              <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold shadow-lg ring-2 ring-blue-300">
                 3
               </div>
-              <span className="text-sm font-medium text-center leading-tight text-blue-600">Product Details</span>
+              <span className="text-sm font-medium text-blue-600 mt-1">Details</span>
             </div>
-
-            {/* Connector 3-4 */}
-            <div className="flex-1 h-1 mx-4 rounded-full bg-gray-300"></div>
-
+            <div className="flex-1 h-1 bg-gray-300 rounded-full mx-3"></div>
             {/* Step 4 */}
-            <div className="flex flex-col items-center text-gray-700">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-lg border-2 border-white bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800">
+            <div className="flex flex-col items-center text-gray-500">
+              <div className="w-16 h-16 rounded-full bg-gray-400 text-white flex items-center justify-center font-bold shadow-lg">
                 4
               </div>
-              <span className="text-sm font-medium text-center leading-tight text-gray-500">Payment</span>
+              <span className="text-xs font-medium text-gray-500 mt-1">Payment</span>
             </div>
           </div>
         </div>
 
-        {/* Form */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-          <div className="space-y-8">
-            {/* Costing Fields - Only shown when costingOption === 'with' */}
-            {showCostingFields && formData.costing && (
-              <div className="border-b pb-6">
-                <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
-                  <Calculator className="w-5 h-5 mr-2 text-purple-600" />
-                  Multi-Model Costing Information
-                </h4>
-                
-                {/* Global Inputs Component */}
-                <CostingGlobalInputs
-                  brandName={formData.costing.brandName}
-                  usdRate={formData.costing.usdRate}
-                  totalCustomsValue={formData.costing.totalCustomsValue}
-                  totalFreightValue={formData.costing.totalFreightValue}
-                  onBrandNameChange={setCostingBrandName}
-                  onUsdRateChange={setUsdRate}
-                  onCustomsChange={setTotalCustomsValue}
-                  onFreightChange={setTotalFreightValue}
-                />
-
-                {/* Models Table Component */}
-                <CostingTable
-                  models={formData.costing.models}
-                  onAddModel={addModel}
-                  onUpdateModelField={updateModelField}
-                  onRemoveModel={removeModel}
-                />
-
-                {/* Brand Summary Component */}
-                <BrandSummary
-                  totalUnitCostUSD={costingSummary.totalUnitCostUSD}
-                  shipmentTotalUSD={costingSummary.shipmentTotalUSD}
-                  consignmentValue={costingSummary.consignmentValue}
-                  totalValueOfBrand={costingSummary.totalValueOfBrand}
-                  totalCustomsValue={formData.costing.totalCustomsValue}
-                  totalFreightValue={formData.costing.totalFreightValue}
-                />
-
-                {/* Show errors if any */}
-                {validationErrors.models && (
-                  <p className="text-red-500 text-sm mt-2">{validationErrors.models}</p>
-                )}
-              </div>
+        <div className="bg-white rounded-lg shadow-sm border p-8 space-y-8">
+          
+          {/* Brand & Model Selection */}
+          <div>
+            <h4 className="font-semibold text-gray-900 mb-6 flex items-center">
+              <Package className="w-5 h-5 mr-2 text-blue-600" />
+              Select from DataConnect (Brands/Models)
+            </h4>
+            <BrandModelDropdown
+              onBrandChange={(brandId, brandName) => {
+                setBrandName(brandName);
+                console.log('Brand selected:', brandId, brandName);
+              }}
+              onModelChange={handleAddModelToTable}
+            />
+            {validationErrors.brandName && (
+              <p className="text-red-500 text-sm mt-2">{validationErrors.brandName}</p>
             )}
+          </div>
 
-            {/* Basic Information - Always shown */}
+          {/* Multi Model Table */}
+          <div>
+            <MultiModelInventoryTable
+              models={selectedModels}
+              onUpdateModel={handleUpdateModel}
+              onAddModel={() => console.log('Add new model row')}
+              onRemoveModel={handleRemoveModel}
+              onEditModel={handleEditModel}
+            />
+          </div>
+
+          {/* Other Fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
-              <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
-                <Package className="w-5 h-5 mr-2 text-blue-600" />
-                Inventory Details
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Show Brand/Model/Category only when WITHOUT costing */}
-                {!showCostingFields && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Brand Name *</label>
-                      <input
-                        type="text"
-                        value={formData.brandName || ''}
-                        onChange={(e) => {
-                          setBrandName(e.target.value);
-                          setSelectedBrand(e.target.value);
-                        }}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                          validationErrors.brandName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                        }`}
-                        placeholder="Enter brand name"
-                      />
-                      {validationErrors.brandName && (
-                        <p className="text-red-500 text-xs mt-1">{validationErrors.brandName}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Model Name *</label>
-                      <input
-                        type="text"
-                        value={formData.modelName || ''}
-                        onChange={(e) => {
-                          setModelName(e.target.value);
-                          setSelectedModel(e.target.value);
-                        }}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                          validationErrors.modelName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                        }`}
-                        placeholder="Enter model name"
-                      />
-                      {validationErrors.modelName && (
-                        <p className="text-red-500 text-xs mt-1">{validationErrors.modelName}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                      <select
-                        value={formData.category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                          validationErrors.category ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                        }`}
-                      >
-                        <option value="">Select category</option>
-                        {categories.map(category => (
-                          <option key={category} value={category}>{category}</option>
-                        ))}
-                      </select>
-                      {validationErrors.category && (
-                        <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
-                      )}
-                    </div>
-                  </>
-                )}
-                
-                {/* When WITH costing, show Brand/Model/Category from first model */}
-                {showCostingFields && formData.costing && formData.costing.models.length > 0 && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Brand Name *</label>
-                      <input
-                        type="text"
-                        value={formData.brandName || ''}
-                        onChange={(e) => {
-                          setBrandName(e.target.value);
-                          setSelectedBrand(e.target.value);
-                        }}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                          validationErrors.brandName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                        }`}
-                        placeholder="Enter brand name"
-                      />
-                      {validationErrors.brandName && (
-                        <p className="text-red-500 text-xs mt-1">{validationErrors.brandName}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                      <select
-                        value={formData.category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                          validationErrors.category ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                        }`}
-                      >
-                        <option value="">Select category</option>
-                        {categories.map(category => (
-                          <option key={category} value={category}>{category}</option>
-                        ))}
-                      </select>
-                      {validationErrors.category && (
-                        <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
-                      )}
-                    </div>
-                  </>
-                )}
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price *</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.sellPrice || ''}
-                    onChange={(e) => setSellPrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Buy Type *</label>
-                  <select
-                    value={formData.buyType}
-                    onChange={(e) => setBuyType(e.target.value as 'Import' | 'Export')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Import">Import</option>
-                    <option value="Export">Export</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Warranty Years *</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.warrantyYears || ''}
-                    onChange={(e) => setWarrantyYears(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setStatus(e.target.value as 'New' | 'Used' | 'Returned' | 'Damaged')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="New">New</option>
-                    <option value="Used">Used</option>
-                    <option value="Returned">Returned</option>
-                    <option value="Damaged">Damaged</option>
-                  </select>
-                </div>
-                <div className="flex items-center">
-                  <label className="flex items-center mt-6">
-                    <input
-                      type="checkbox"
-                      checked={formData.isDamaged}
-                      onChange={(e) => setIsDamaged(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Is this item damaged?</span>
-                  </label>
-                </div>
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+              <select
+                value={formData.category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select category</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
 
-            {/* Serial Numbers Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Stock Qty</label>
+              <input
+                type="number"
+                value={formData.stock}
+                onChange={(e) => setStock(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                min="0"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setStatus(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="New">New</option>
+                <option value="Used">Used</option>
+                <option value="Returned">Returned</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-vertical"
+              />
+            </div>
+          </div>
+
+          {/* Serial Numbers - Only if stock > 0 */}
+          {formData.stock > 0 && (
             <div className="border-t pt-6">
               <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
                 <Hash className="w-5 h-5 mr-2 text-blue-600" />
-                Serial Numbers & Locations
+                Serial Numbers ({formData.stock} units)
               </h4>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity *</label>
-                <input
-                  type="number"
-                  value={formData.stock || ''}
-                  onChange={(e) => setStock(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0"
-                  min="0"
-                />
-                <p className="text-xs text-gray-500 mt-1">Serial number fields will be generated based on quantity</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto p-4 bg-gray-50 rounded-lg">
+                {serialInputs.map((serial, index) => (
+                  <div key={index} className="bg-white p-4 rounded-lg border shadow-sm">
+                    <label className="block text-xs font-medium text-gray-600 mb-2">
+                      Unit {index + 1}
+                    </label>
+                    <input
+                      type="text"
+                      value={serial}
+                      onChange={(e) => updateSerialNumber(index, e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg mb-2 focus:ring-2 focus:ring-blue-500 text-sm"
+                      placeholder={`Serial #${index + 1}`}
+                    />
+                    <select
+                      value={formData.serialCities[serial] || ''}
+                      onChange={(e) => updateSerialCity(index, e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    >
+                      <option value="">Location</option>
+                      {cities.map(city => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
-
-              {(formData.stock || 0) > 0 && (
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Hash size={18} className="text-blue-600" />
-                    <label className="text-sm font-medium text-gray-700">Serial Numbers * ({formData.stock} units)</label>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    {serialInputs.map((serial, index) => (
-                      <div key={index} className="bg-white p-3 rounded-lg border border-gray-200">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Unit {index + 1}</label>
-                        <input
-                          type="text"
-                          value={serial}
-                          onChange={(e) => updateSerialNumber(index, e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm mb-2"
-                          placeholder={`e.g., ${formData.brandName?.substring(0, 3).toUpperCase() || 'PRD'}-${String(index + 1).padStart(3, '0')}`}
-                        />
-                        <div className="flex items-center gap-1">
-                          <MapPin size={14} className="text-gray-500" />
-                          <select
-                            value={formData.serialCities[serial] || ''}
-                            onChange={(e) => updateSerialCity(index, e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="">Select city/location</option>
-                            {cities.map(city => (
-                              <option key={city} value={city}>{city}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {validationErrors.serialNumbers && (
-                    <p className="text-red-500 text-xs mt-2">{validationErrors.serialNumbers}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-2">💡 Each serial number must be unique across all products</p>
-                </div>
-              )}
             </div>
+          )}
 
-            {/* Description */}
-            <div className="border-t pt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-              <textarea
-                value={formData.description || ''}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 resize-none ${
-                  validationErrors.description ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                }`}
-                placeholder="Enter product description..."
-              />
-              {validationErrors.description && (
-                <p className="text-red-500 text-xs mt-1">{validationErrors.description}</p>
-              )}
-            </div>
-
-            {/* Navigation Buttons */}
-            <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-              <button
-                onClick={handleBack}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={handleNext}
-                disabled={!isValid}
-                className={`px-8 py-4 rounded-lg transition-colors font-medium text-lg shadow-lg flex items-center gap-2 ${
-                  isValid
-                    ? 'bg-[#4f46e5] text-white hover:bg-[#4338ca]'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                Next: Payment
-                <ArrowRight size={20} />
-              </button>
-            </div>
+          {/* Navigation */}
+          <div className="flex items-center justify-between pt-8 border-t">
+            <button
+              onClick={handleBack}
+              className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium transition-colors"
+            >
+              ← Back to Costing
+            </button>
+            <button
+              onClick={handleNext}
+              disabled={!isValid || selectedModels.length === 0}
+              className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-all ${
+                isValid && selectedModels.length > 0
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl hover:scale-[1.02]'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              Next: Payment
+              <ArrowRight size={20} />
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
 };
+

@@ -14,14 +14,15 @@ This README will guide you through the process of using the generated JavaScript
   - [*GetBrandById*](#getbrandbyid)
   - [*ListProducts*](#listproducts)
   - [*GetProductById*](#getproductbyid)
-  - [*ListProductTransfers*](#listproducttransfers)
-  - [*GetProductTransferById*](#getproducttransferbyid)
   - [*ListModels*](#listmodels)
   - [*GetModelById*](#getmodelbyid)
 - [**Mutations**](#mutations)
   - [*brandInsert*](#brandinsert)
   - [*brandUpdate*](#brandupdate)
   - [*brandDelete*](#branddelete)
+  - [*costingInsert*](#costinginsert)
+  - [*costingUpdate*](#costingupdate)
+  - [*costingDelete*](#costingdelete)
   - [*productInsert*](#productinsert)
   - [*productUpdate*](#productupdate)
   - [*productDelete*](#productdelete)
@@ -618,273 +619,6 @@ console.log(data.product);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.product);
-});
-```
-
-## ListProductTransfers
-You can execute the `ListProductTransfers` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [inventory/index.d.ts](./index.d.ts):
-```typescript
-listProductTransfers(vars?: ListProductTransfersVariables): QueryPromise<ListProductTransfersData, ListProductTransfersVariables>;
-
-interface ListProductTransfersRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: ListProductTransfersVariables): QueryRef<ListProductTransfersData, ListProductTransfersVariables>;
-}
-export const listProductTransfersRef: ListProductTransfersRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
-```typescript
-listProductTransfers(dc: DataConnect, vars?: ListProductTransfersVariables): QueryPromise<ListProductTransfersData, ListProductTransfersVariables>;
-
-interface ListProductTransfersRef {
-  ...
-  (dc: DataConnect, vars?: ListProductTransfersVariables): QueryRef<ListProductTransfersData, ListProductTransfersVariables>;
-}
-export const listProductTransfersRef: ListProductTransfersRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listProductTransfersRef:
-```typescript
-const name = listProductTransfersRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `ListProductTransfers` query has an optional argument of type `ListProductTransfersVariables`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface ListProductTransfersVariables {
-  limit?: number | null;
-  offset?: number | null;
-}
-```
-### Return Type
-Recall that executing the `ListProductTransfers` query returns a `QueryPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `ListProductTransfersData`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface ListProductTransfersData {
-  productTransfers: ({
-    id: string;
-    productId: string;
-    productName: string;
-    brandName?: string | null;
-    modelName?: string | null;
-    fromLocation: string;
-    toLocation: string;
-    quantity: number;
-    serialNumbers?: string | null;
-    date: string;
-    transferDate?: string | null;
-    status: string;
-    transferredBy?: string | null;
-    note?: string | null;
-    notes?: string | null;
-    receiptName?: string | null;
-    receiptType?: string | null;
-    receiptDataUrl?: string | null;
-    createdAt?: string | null;
-    receivedAt?: string | null;
-  } & ProductTransfer_Key)[];
-}
-```
-### Using `ListProductTransfers`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, listProductTransfers, ListProductTransfersVariables } from '@erp-system/inventory';
-
-// The `ListProductTransfers` query has an optional argument of type `ListProductTransfersVariables`:
-const listProductTransfersVars: ListProductTransfersVariables = {
-  limit: ..., // optional
-  offset: ..., // optional
-};
-
-// Call the `listProductTransfers()` function to execute the query.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await listProductTransfers(listProductTransfersVars);
-// Variables can be defined inline as well.
-const { data } = await listProductTransfers({ limit: ..., offset: ..., });
-// Since all variables are optional for this query, you can omit the `ListProductTransfersVariables` argument.
-const { data } = await listProductTransfers();
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await listProductTransfers(dataConnect, listProductTransfersVars);
-
-console.log(data.productTransfers);
-
-// Or, you can use the `Promise` API.
-listProductTransfers(listProductTransfersVars).then((response) => {
-  const data = response.data;
-  console.log(data.productTransfers);
-});
-```
-
-### Using `ListProductTransfers`'s `QueryRef` function
-
-```typescript
-import { getDataConnect, executeQuery } from 'firebase/data-connect';
-import { connectorConfig, listProductTransfersRef, ListProductTransfersVariables } from '@erp-system/inventory';
-
-// The `ListProductTransfers` query has an optional argument of type `ListProductTransfersVariables`:
-const listProductTransfersVars: ListProductTransfersVariables = {
-  limit: ..., // optional
-  offset: ..., // optional
-};
-
-// Call the `listProductTransfersRef()` function to get a reference to the query.
-const ref = listProductTransfersRef(listProductTransfersVars);
-// Variables can be defined inline as well.
-const ref = listProductTransfersRef({ limit: ..., offset: ..., });
-// Since all variables are optional for this query, you can omit the `ListProductTransfersVariables` argument.
-const ref = listProductTransfersRef();
-
-// You can also pass in a `DataConnect` instance to the `QueryRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = listProductTransfersRef(dataConnect, listProductTransfersVars);
-
-// Call `executeQuery()` on the reference to execute the query.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeQuery(ref);
-
-console.log(data.productTransfers);
-
-// Or, you can use the `Promise` API.
-executeQuery(ref).then((response) => {
-  const data = response.data;
-  console.log(data.productTransfers);
-});
-```
-
-## GetProductTransferById
-You can execute the `GetProductTransferById` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [inventory/index.d.ts](./index.d.ts):
-```typescript
-getProductTransferById(vars: GetProductTransferByIdVariables): QueryPromise<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-
-interface GetProductTransferByIdRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: GetProductTransferByIdVariables): QueryRef<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-}
-export const getProductTransferByIdRef: GetProductTransferByIdRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
-```typescript
-getProductTransferById(dc: DataConnect, vars: GetProductTransferByIdVariables): QueryPromise<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-
-interface GetProductTransferByIdRef {
-  ...
-  (dc: DataConnect, vars: GetProductTransferByIdVariables): QueryRef<GetProductTransferByIdData, GetProductTransferByIdVariables>;
-}
-export const getProductTransferByIdRef: GetProductTransferByIdRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the getProductTransferByIdRef:
-```typescript
-const name = getProductTransferByIdRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `GetProductTransferById` query requires an argument of type `GetProductTransferByIdVariables`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface GetProductTransferByIdVariables {
-  id: string;
-}
-```
-### Return Type
-Recall that executing the `GetProductTransferById` query returns a `QueryPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `GetProductTransferByIdData`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface GetProductTransferByIdData {
-  productTransfer?: {
-    id: string;
-    productId: string;
-    productName: string;
-    brandName?: string | null;
-    modelName?: string | null;
-    fromLocation: string;
-    toLocation: string;
-    quantity: number;
-    serialNumbers?: string | null;
-    date: string;
-    transferDate?: string | null;
-    status: string;
-    transferredBy?: string | null;
-    note?: string | null;
-    notes?: string | null;
-    receiptName?: string | null;
-    receiptType?: string | null;
-    receiptDataUrl?: string | null;
-    createdAt?: string | null;
-    receivedAt?: string | null;
-  } & ProductTransfer_Key;
-}
-```
-### Using `GetProductTransferById`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, getProductTransferById, GetProductTransferByIdVariables } from '@erp-system/inventory';
-
-// The `GetProductTransferById` query requires an argument of type `GetProductTransferByIdVariables`:
-const getProductTransferByIdVars: GetProductTransferByIdVariables = {
-  id: ..., 
-};
-
-// Call the `getProductTransferById()` function to execute the query.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await getProductTransferById(getProductTransferByIdVars);
-// Variables can be defined inline as well.
-const { data } = await getProductTransferById({ id: ..., });
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await getProductTransferById(dataConnect, getProductTransferByIdVars);
-
-console.log(data.productTransfer);
-
-// Or, you can use the `Promise` API.
-getProductTransferById(getProductTransferByIdVars).then((response) => {
-  const data = response.data;
-  console.log(data.productTransfer);
-});
-```
-
-### Using `GetProductTransferById`'s `QueryRef` function
-
-```typescript
-import { getDataConnect, executeQuery } from 'firebase/data-connect';
-import { connectorConfig, getProductTransferByIdRef, GetProductTransferByIdVariables } from '@erp-system/inventory';
-
-// The `GetProductTransferById` query requires an argument of type `GetProductTransferByIdVariables`:
-const getProductTransferByIdVars: GetProductTransferByIdVariables = {
-  id: ..., 
-};
-
-// Call the `getProductTransferByIdRef()` function to get a reference to the query.
-const ref = getProductTransferByIdRef(getProductTransferByIdVars);
-// Variables can be defined inline as well.
-const ref = getProductTransferByIdRef({ id: ..., });
-
-// You can also pass in a `DataConnect` instance to the `QueryRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = getProductTransferByIdRef(dataConnect, getProductTransferByIdVars);
-
-// Call `executeQuery()` on the reference to execute the query.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeQuery(ref);
-
-console.log(data.productTransfer);
-
-// Or, you can use the `Promise` API.
-executeQuery(ref).then((response) => {
-  const data = response.data;
-  console.log(data.productTransfer);
 });
 ```
 
@@ -1490,6 +1224,393 @@ console.log(data.brand_delete);
 executeMutation(ref).then((response) => {
   const data = response.data;
   console.log(data.brand_delete);
+});
+```
+
+## costingInsert
+You can execute the `costingInsert` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [inventory/index.d.ts](./index.d.ts):
+```typescript
+costingInsert(vars: CostingInsertVariables): MutationPromise<CostingInsertData, CostingInsertVariables>;
+
+interface CostingInsertRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: CostingInsertVariables): MutationRef<CostingInsertData, CostingInsertVariables>;
+}
+export const costingInsertRef: CostingInsertRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+costingInsert(dc: DataConnect, vars: CostingInsertVariables): MutationPromise<CostingInsertData, CostingInsertVariables>;
+
+interface CostingInsertRef {
+  ...
+  (dc: DataConnect, vars: CostingInsertVariables): MutationRef<CostingInsertData, CostingInsertVariables>;
+}
+export const costingInsertRef: CostingInsertRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the costingInsertRef:
+```typescript
+const name = costingInsertRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `costingInsert` mutation requires an argument of type `CostingInsertVariables`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface CostingInsertVariables {
+  id: string;
+  brandName: string;
+  usdRate: number;
+  totalCustomsValue: number;
+  totalFreightValue: number;
+  totalUnitCostUSD: number;
+  shipmentTotalUSD: number;
+  consignmentValue: number;
+  totalValueOfBrand: number;
+  modelsJson: string;
+  status: string;
+}
+```
+### Return Type
+Recall that executing the `costingInsert` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `CostingInsertData`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface CostingInsertData {
+  costing_insert: Costing_Key;
+}
+```
+### Using `costingInsert`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, costingInsert, CostingInsertVariables } from '@erp-system/inventory';
+
+// The `costingInsert` mutation requires an argument of type `CostingInsertVariables`:
+const costingInsertVars: CostingInsertVariables = {
+  id: ..., 
+  brandName: ..., 
+  usdRate: ..., 
+  totalCustomsValue: ..., 
+  totalFreightValue: ..., 
+  totalUnitCostUSD: ..., 
+  shipmentTotalUSD: ..., 
+  consignmentValue: ..., 
+  totalValueOfBrand: ..., 
+  modelsJson: ..., 
+  status: ..., 
+};
+
+// Call the `costingInsert()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await costingInsert(costingInsertVars);
+// Variables can be defined inline as well.
+const { data } = await costingInsert({ id: ..., brandName: ..., usdRate: ..., totalCustomsValue: ..., totalFreightValue: ..., totalUnitCostUSD: ..., shipmentTotalUSD: ..., consignmentValue: ..., totalValueOfBrand: ..., modelsJson: ..., status: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await costingInsert(dataConnect, costingInsertVars);
+
+console.log(data.costing_insert);
+
+// Or, you can use the `Promise` API.
+costingInsert(costingInsertVars).then((response) => {
+  const data = response.data;
+  console.log(data.costing_insert);
+});
+```
+
+### Using `costingInsert`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, costingInsertRef, CostingInsertVariables } from '@erp-system/inventory';
+
+// The `costingInsert` mutation requires an argument of type `CostingInsertVariables`:
+const costingInsertVars: CostingInsertVariables = {
+  id: ..., 
+  brandName: ..., 
+  usdRate: ..., 
+  totalCustomsValue: ..., 
+  totalFreightValue: ..., 
+  totalUnitCostUSD: ..., 
+  shipmentTotalUSD: ..., 
+  consignmentValue: ..., 
+  totalValueOfBrand: ..., 
+  modelsJson: ..., 
+  status: ..., 
+};
+
+// Call the `costingInsertRef()` function to get a reference to the mutation.
+const ref = costingInsertRef(costingInsertVars);
+// Variables can be defined inline as well.
+const ref = costingInsertRef({ id: ..., brandName: ..., usdRate: ..., totalCustomsValue: ..., totalFreightValue: ..., totalUnitCostUSD: ..., shipmentTotalUSD: ..., consignmentValue: ..., totalValueOfBrand: ..., modelsJson: ..., status: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = costingInsertRef(dataConnect, costingInsertVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.costing_insert);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.costing_insert);
+});
+```
+
+## costingUpdate
+You can execute the `costingUpdate` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [inventory/index.d.ts](./index.d.ts):
+```typescript
+costingUpdate(vars: CostingUpdateVariables): MutationPromise<CostingUpdateData, CostingUpdateVariables>;
+
+interface CostingUpdateRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: CostingUpdateVariables): MutationRef<CostingUpdateData, CostingUpdateVariables>;
+}
+export const costingUpdateRef: CostingUpdateRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+costingUpdate(dc: DataConnect, vars: CostingUpdateVariables): MutationPromise<CostingUpdateData, CostingUpdateVariables>;
+
+interface CostingUpdateRef {
+  ...
+  (dc: DataConnect, vars: CostingUpdateVariables): MutationRef<CostingUpdateData, CostingUpdateVariables>;
+}
+export const costingUpdateRef: CostingUpdateRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the costingUpdateRef:
+```typescript
+const name = costingUpdateRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `costingUpdate` mutation requires an argument of type `CostingUpdateVariables`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface CostingUpdateVariables {
+  id: string;
+  brandName: string;
+  usdRate: number;
+  totalCustomsValue: number;
+  totalFreightValue: number;
+  totalUnitCostUSD: number;
+  shipmentTotalUSD: number;
+  consignmentValue: number;
+  totalValueOfBrand: number;
+  modelsJson: string;
+  status: string;
+}
+```
+### Return Type
+Recall that executing the `costingUpdate` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `CostingUpdateData`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface CostingUpdateData {
+  costing_update?: Costing_Key | null;
+}
+```
+### Using `costingUpdate`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, costingUpdate, CostingUpdateVariables } from '@erp-system/inventory';
+
+// The `costingUpdate` mutation requires an argument of type `CostingUpdateVariables`:
+const costingUpdateVars: CostingUpdateVariables = {
+  id: ..., 
+  brandName: ..., 
+  usdRate: ..., 
+  totalCustomsValue: ..., 
+  totalFreightValue: ..., 
+  totalUnitCostUSD: ..., 
+  shipmentTotalUSD: ..., 
+  consignmentValue: ..., 
+  totalValueOfBrand: ..., 
+  modelsJson: ..., 
+  status: ..., 
+};
+
+// Call the `costingUpdate()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await costingUpdate(costingUpdateVars);
+// Variables can be defined inline as well.
+const { data } = await costingUpdate({ id: ..., brandName: ..., usdRate: ..., totalCustomsValue: ..., totalFreightValue: ..., totalUnitCostUSD: ..., shipmentTotalUSD: ..., consignmentValue: ..., totalValueOfBrand: ..., modelsJson: ..., status: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await costingUpdate(dataConnect, costingUpdateVars);
+
+console.log(data.costing_update);
+
+// Or, you can use the `Promise` API.
+costingUpdate(costingUpdateVars).then((response) => {
+  const data = response.data;
+  console.log(data.costing_update);
+});
+```
+
+### Using `costingUpdate`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, costingUpdateRef, CostingUpdateVariables } from '@erp-system/inventory';
+
+// The `costingUpdate` mutation requires an argument of type `CostingUpdateVariables`:
+const costingUpdateVars: CostingUpdateVariables = {
+  id: ..., 
+  brandName: ..., 
+  usdRate: ..., 
+  totalCustomsValue: ..., 
+  totalFreightValue: ..., 
+  totalUnitCostUSD: ..., 
+  shipmentTotalUSD: ..., 
+  consignmentValue: ..., 
+  totalValueOfBrand: ..., 
+  modelsJson: ..., 
+  status: ..., 
+};
+
+// Call the `costingUpdateRef()` function to get a reference to the mutation.
+const ref = costingUpdateRef(costingUpdateVars);
+// Variables can be defined inline as well.
+const ref = costingUpdateRef({ id: ..., brandName: ..., usdRate: ..., totalCustomsValue: ..., totalFreightValue: ..., totalUnitCostUSD: ..., shipmentTotalUSD: ..., consignmentValue: ..., totalValueOfBrand: ..., modelsJson: ..., status: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = costingUpdateRef(dataConnect, costingUpdateVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.costing_update);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.costing_update);
+});
+```
+
+## costingDelete
+You can execute the `costingDelete` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [inventory/index.d.ts](./index.d.ts):
+```typescript
+costingDelete(vars: CostingDeleteVariables): MutationPromise<CostingDeleteData, CostingDeleteVariables>;
+
+interface CostingDeleteRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: CostingDeleteVariables): MutationRef<CostingDeleteData, CostingDeleteVariables>;
+}
+export const costingDeleteRef: CostingDeleteRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+costingDelete(dc: DataConnect, vars: CostingDeleteVariables): MutationPromise<CostingDeleteData, CostingDeleteVariables>;
+
+interface CostingDeleteRef {
+  ...
+  (dc: DataConnect, vars: CostingDeleteVariables): MutationRef<CostingDeleteData, CostingDeleteVariables>;
+}
+export const costingDeleteRef: CostingDeleteRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the costingDeleteRef:
+```typescript
+const name = costingDeleteRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `costingDelete` mutation requires an argument of type `CostingDeleteVariables`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface CostingDeleteVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that executing the `costingDelete` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `CostingDeleteData`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface CostingDeleteData {
+  costing_delete?: Costing_Key | null;
+}
+```
+### Using `costingDelete`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, costingDelete, CostingDeleteVariables } from '@erp-system/inventory';
+
+// The `costingDelete` mutation requires an argument of type `CostingDeleteVariables`:
+const costingDeleteVars: CostingDeleteVariables = {
+  id: ..., 
+};
+
+// Call the `costingDelete()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await costingDelete(costingDeleteVars);
+// Variables can be defined inline as well.
+const { data } = await costingDelete({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await costingDelete(dataConnect, costingDeleteVars);
+
+console.log(data.costing_delete);
+
+// Or, you can use the `Promise` API.
+costingDelete(costingDeleteVars).then((response) => {
+  const data = response.data;
+  console.log(data.costing_delete);
+});
+```
+
+### Using `costingDelete`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, costingDeleteRef, CostingDeleteVariables } from '@erp-system/inventory';
+
+// The `costingDelete` mutation requires an argument of type `CostingDeleteVariables`:
+const costingDeleteVars: CostingDeleteVariables = {
+  id: ..., 
+};
+
+// Call the `costingDeleteRef()` function to get a reference to the mutation.
+const ref = costingDeleteRef(costingDeleteVars);
+// Variables can be defined inline as well.
+const ref = costingDeleteRef({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = costingDeleteRef(dataConnect, costingDeleteVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.costing_delete);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.costing_delete);
 });
 ```
 

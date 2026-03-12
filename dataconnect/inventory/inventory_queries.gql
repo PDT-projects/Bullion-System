@@ -1,7 +1,7 @@
-# Inventory Queries - Read operations for Products and Product Transfers
+# Inventory Queries - Read operations for Products
 
 query ListProducts(
-  $limit: Int = 50
+  $limit: Int = 100
   $offset: Int = 0
 ) @auth(level: PUBLIC) {
   products(limit: $limit, offset: $offset, orderBy: { createdAt: DESC }) {
@@ -20,11 +20,11 @@ query ListProducts(
     serialNumbers
     serialCities
     serialStatus
-    # New linking fields
     brandId
     modelId
     costingId
     costingOption
+    # Flat costing fields for backward compatibility
     costingUnits
     costingUnitCostUSD
     costingTotalCostUSD
@@ -65,11 +65,11 @@ query GetProductById($id: String!) @auth(level: PUBLIC) {
     serialNumbers
     serialCities
     serialStatus
-    # New linking fields
     brandId
     modelId
     costingId
     costingOption
+    # Flat costing fields for backward compatibility
     costingUnits
     costingUnitCostUSD
     costingTotalCostUSD
@@ -90,58 +90,5 @@ query GetProductById($id: String!) @auth(level: PUBLIC) {
     costingModelsJson
     createdAt
     updatedAt
-  }
-}
-
-query ListProductTransfers(
-  $limit: Int = 50
-  $offset: Int = 0
-) @auth(level: PUBLIC) {
-  productTransfers(limit: $limit, offset: $offset, orderBy: { date: DESC }) {
-    id
-    productId
-    productName
-    brandName
-    modelName
-    fromLocation
-    toLocation
-    quantity
-    serialNumbers
-    date
-    transferDate
-    status
-    transferredBy
-    note
-    notes
-    receiptName
-    receiptType
-    receiptDataUrl
-    createdAt
-    receivedAt
-  }
-}
-
-query GetProductTransferById($id: String!) @auth(level: PUBLIC) {
-  productTransfer(id: $id) {
-    id
-    productId
-    productName
-    brandName
-    modelName
-    fromLocation
-    toLocation
-    quantity
-    serialNumbers
-    date
-    transferDate
-    status
-    transferredBy
-    note
-    notes
-    receiptName
-    receiptType
-    receiptDataUrl
-    createdAt
-    receivedAt
   }
 }
