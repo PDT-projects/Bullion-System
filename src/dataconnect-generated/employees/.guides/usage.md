@@ -12,18 +12,18 @@ For each operation, there is a wrapper hook that can be used to call the operati
 
 Here are all of the hooks that get generated:
 ```ts
-import { useListEmployees, useGetEmployeeById, useEmployeeInsert, useEmployeeUpdate, useEmployeeDelete } from '@erp-system/employees/react';
+import { useEmployeeInsert, useEmployeeUpdate, useEmployeeDelete, useListEmployees, useGetEmployeeById } from '@erp-system/employees/react';
 // The types of these hooks are available in react/index.d.ts
-
-const { data, isPending, isSuccess, isError, error } = useListEmployees(listEmployeesVars);
-
-const { data, isPending, isSuccess, isError, error } = useGetEmployeeById(getEmployeeByIdVars);
 
 const { data, isPending, isSuccess, isError, error } = useEmployeeInsert(employeeInsertVars);
 
 const { data, isPending, isSuccess, isError, error } = useEmployeeUpdate(employeeUpdateVars);
 
 const { data, isPending, isSuccess, isError, error } = useEmployeeDelete(employeeDeleteVars);
+
+const { data, isPending, isSuccess, isError, error } = useListEmployees(listEmployeesVars);
+
+const { data, isPending, isSuccess, isError, error } = useGetEmployeeById(getEmployeeByIdVars);
 
 ```
 
@@ -62,14 +62,8 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { listEmployees, getEmployeeById, employeeInsert, employeeUpdate, employeeDelete } from '@erp-system/employees';
+import { employeeInsert, employeeUpdate, employeeDelete, listEmployees, getEmployeeById } from '@erp-system/employees';
 
-
-// Operation ListEmployees:  For variables, look at type ListEmployeesVars in ../index.d.ts
-const { data } = await ListEmployees(dataConnect, listEmployeesVars);
-
-// Operation GetEmployeeById:  For variables, look at type GetEmployeeByIdVars in ../index.d.ts
-const { data } = await GetEmployeeById(dataConnect, getEmployeeByIdVars);
 
 // Operation employeeInsert:  For variables, look at type EmployeeInsertVars in ../index.d.ts
 const { data } = await EmployeeInsert(dataConnect, employeeInsertVars);
@@ -79,6 +73,12 @@ const { data } = await EmployeeUpdate(dataConnect, employeeUpdateVars);
 
 // Operation employeeDelete:  For variables, look at type EmployeeDeleteVars in ../index.d.ts
 const { data } = await EmployeeDelete(dataConnect, employeeDeleteVars);
+
+// Operation ListEmployees:  For variables, look at type ListEmployeesVars in ../index.d.ts
+const { data } = await ListEmployees(dataConnect, listEmployeesVars);
+
+// Operation GetEmployeeById:  For variables, look at type GetEmployeeByIdVars in ../index.d.ts
+const { data } = await GetEmployeeById(dataConnect, getEmployeeByIdVars);
 
 
 ```

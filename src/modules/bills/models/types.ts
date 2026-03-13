@@ -21,6 +21,15 @@ export interface BillTransaction {
 /**
  * Bill entity representing a utility bill payment
  */
+export interface BillItem {
+  productId?: string;
+  brandName: string;
+  modelName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
 export interface Bill {
   id: string;
   transactionId: string;
@@ -28,7 +37,7 @@ export interface Bill {
   time: string;
   company: string;
   mainCategory: 'Bills';
-  subCategory: 'Electricity' | 'Internet' | 'Utilities';
+  subCategory: 'Electricity' | 'Internet' | 'Utilities' | 'Purchase Order';
   amount: number;
   mode: 'Cash' | 'Bank' | 'Cheque';
   bankName: string;
@@ -40,6 +49,10 @@ export interface Bill {
   imageUrl: string;
   paymentStatus: 'Full' | 'Partial';
   remainingAmount: number;
+  
+  // Inventory/Purchase order fields
+  inventoryItems: BillItem[];
+  status: 'Pending' | 'Paid' | 'Partially Paid';
 }
 
 /**

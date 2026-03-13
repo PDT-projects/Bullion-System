@@ -200,6 +200,54 @@ export interface GetProductByIdVariables {
   id: string;
 }
 
+export interface GetReceivableProductData {
+  product?: {
+    id: string;
+    brandName: string;
+    modelName: string;
+    category: string;
+    costPrice: number;
+    sellPrice: number;
+    buyType: string;
+    warrantyYears: number;
+    stock: number;
+    description?: string | null;
+    status: string;
+    isDamaged?: boolean | null;
+    serialNumbers?: string | null;
+    serialCities?: string | null;
+    serialStatus?: string | null;
+    brandId?: string | null;
+    modelId?: string | null;
+    costingId?: string | null;
+    costingOption?: string | null;
+    costingUnits?: number | null;
+    costingUnitCostUSD?: number | null;
+    costingTotalCostUSD?: number | null;
+    costingPercentage?: number | null;
+    costingCustomPerModel?: number | null;
+    costingCustomPerUnit?: number | null;
+    costingFreightPerModel?: number | null;
+    costingFreightPerUnit?: number | null;
+    costingUnitCostPKR?: number | null;
+    costingTotalUnitCost?: number | null;
+    costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  } & Product_Key;
+}
+
+export interface GetReceivableProductVariables {
+  id: string;
+}
+
 export interface ListBrandsData {
   brands: ({
     id: string;
@@ -282,6 +330,27 @@ export interface ListProductsData {
 export interface ListProductsVariables {
   limit?: number | null;
   offset?: number | null;
+}
+
+export interface ListReceivableProductsData {
+  products: ({
+    id: string;
+    brandName: string;
+    modelName: string;
+    category: string;
+    costPrice: number;
+    sellPrice: number;
+    stock: number;
+    status: string;
+    serialNumbers?: string | null;
+    createdAt?: string | null;
+  } & Product_Key)[];
+}
+
+export interface ListReceivableProductsVariables {
+  limit?: number | null;
+  offset?: number | null;
+  status?: string | null;
 }
 
 export interface LoanPayment_Key {
@@ -678,6 +747,30 @@ export const listProductsRef: ListProductsRef;
 
 export function listProducts(vars?: ListProductsVariables): QueryPromise<ListProductsData, ListProductsVariables>;
 export function listProducts(dc: DataConnect, vars?: ListProductsVariables): QueryPromise<ListProductsData, ListProductsVariables>;
+
+interface ListReceivableProductsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: ListReceivableProductsVariables): QueryRef<ListReceivableProductsData, ListReceivableProductsVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars?: ListReceivableProductsVariables): QueryRef<ListReceivableProductsData, ListReceivableProductsVariables>;
+  operationName: string;
+}
+export const listReceivableProductsRef: ListReceivableProductsRef;
+
+export function listReceivableProducts(vars?: ListReceivableProductsVariables): QueryPromise<ListReceivableProductsData, ListReceivableProductsVariables>;
+export function listReceivableProducts(dc: DataConnect, vars?: ListReceivableProductsVariables): QueryPromise<ListReceivableProductsData, ListReceivableProductsVariables>;
+
+interface GetReceivableProductRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetReceivableProductVariables): QueryRef<GetReceivableProductData, GetReceivableProductVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetReceivableProductVariables): QueryRef<GetReceivableProductData, GetReceivableProductVariables>;
+  operationName: string;
+}
+export const getReceivableProductRef: GetReceivableProductRef;
+
+export function getReceivableProduct(vars: GetReceivableProductVariables): QueryPromise<GetReceivableProductData, GetReceivableProductVariables>;
+export function getReceivableProduct(dc: DataConnect, vars: GetReceivableProductVariables): QueryPromise<GetReceivableProductData, GetReceivableProductVariables>;
 
 interface GetProductByIdRef {
   /* Allow users to create refs without passing in DataConnect */

@@ -10,21 +10,21 @@ This README will guide you through the process of using the generated JavaScript
 - [**Accessing the connector**](#accessing-the-connector)
   - [*Connecting to the local Emulator*](#connecting-to-the-local-emulator)
 - [**Queries**](#queries)
-  - [*listBanks*](#listbanks)
-  - [*getBankById*](#getbankbyid)
   - [*listCashInHand*](#listcashinhand)
   - [*getCashInHandById*](#getcashinhandbyid)
   - [*listTransfers*](#listtransfers)
   - [*getTransferById*](#gettransferbyid)
+  - [*listBanks*](#listbanks)
+  - [*getBankById*](#getbankbyid)
 - [**Mutations**](#mutations)
+  - [*TransferInsert*](#transferinsert)
+  - [*TransferDelete*](#transferdelete)
   - [*BankInsert*](#bankinsert)
   - [*BankUpdate*](#bankupdate)
   - [*BankDelete*](#bankdelete)
   - [*UpdateBankBalance*](#updatebankbalance)
   - [*CashInHandInsert*](#cashinhandinsert)
   - [*CashInHandDelete*](#cashinhanddelete)
-  - [*TransferInsert*](#transferinsert)
-  - [*TransferDelete*](#transferdelete)
 
 # Accessing the connector
 A connector is a collection of Queries and Mutations. One SDK is generated for each connector - this SDK is generated for the connector `banking`. You can find more information about connectors in the [Data Connect documentation](https://firebase.google.com/docs/data-connect#how-does).
@@ -70,245 +70,6 @@ The following is true for both the action shortcut function and the `QueryRef` f
 - Both functions can be called with or without passing in a `DataConnect` instance as an argument. If no `DataConnect` argument is passed in, then the generated SDK will call `getDataConnect(connectorConfig)` behind the scenes for you.
 
 Below are examples of how to use the `banking` connector's generated functions to execute each query. You can also follow the examples from the [Data Connect documentation](https://firebase.google.com/docs/data-connect/web-sdk#using-queries).
-
-## listBanks
-You can execute the `listBanks` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
-```typescript
-listBanks(vars?: ListBanksVariables): QueryPromise<ListBanksData, ListBanksVariables>;
-
-interface ListBanksRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: ListBanksVariables): QueryRef<ListBanksData, ListBanksVariables>;
-}
-export const listBanksRef: ListBanksRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
-```typescript
-listBanks(dc: DataConnect, vars?: ListBanksVariables): QueryPromise<ListBanksData, ListBanksVariables>;
-
-interface ListBanksRef {
-  ...
-  (dc: DataConnect, vars?: ListBanksVariables): QueryRef<ListBanksData, ListBanksVariables>;
-}
-export const listBanksRef: ListBanksRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listBanksRef:
-```typescript
-const name = listBanksRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `listBanks` query has an optional argument of type `ListBanksVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface ListBanksVariables {
-  limit?: number | null;
-  offset?: number | null;
-}
-```
-### Return Type
-Recall that executing the `listBanks` query returns a `QueryPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `ListBanksData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface ListBanksData {
-  banks: ({
-    id: string;
-    name: string;
-    accountNumber: string;
-    balance: number;
-    createdAt?: string | null;
-    updatedAt?: string | null;
-  } & Bank_Key)[];
-}
-```
-### Using `listBanks`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, listBanks, ListBanksVariables } from '@erp-system/banking';
-
-// The `listBanks` query has an optional argument of type `ListBanksVariables`:
-const listBanksVars: ListBanksVariables = {
-  limit: ..., // optional
-  offset: ..., // optional
-};
-
-// Call the `listBanks()` function to execute the query.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await listBanks(listBanksVars);
-// Variables can be defined inline as well.
-const { data } = await listBanks({ limit: ..., offset: ..., });
-// Since all variables are optional for this query, you can omit the `ListBanksVariables` argument.
-const { data } = await listBanks();
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await listBanks(dataConnect, listBanksVars);
-
-console.log(data.banks);
-
-// Or, you can use the `Promise` API.
-listBanks(listBanksVars).then((response) => {
-  const data = response.data;
-  console.log(data.banks);
-});
-```
-
-### Using `listBanks`'s `QueryRef` function
-
-```typescript
-import { getDataConnect, executeQuery } from 'firebase/data-connect';
-import { connectorConfig, listBanksRef, ListBanksVariables } from '@erp-system/banking';
-
-// The `listBanks` query has an optional argument of type `ListBanksVariables`:
-const listBanksVars: ListBanksVariables = {
-  limit: ..., // optional
-  offset: ..., // optional
-};
-
-// Call the `listBanksRef()` function to get a reference to the query.
-const ref = listBanksRef(listBanksVars);
-// Variables can be defined inline as well.
-const ref = listBanksRef({ limit: ..., offset: ..., });
-// Since all variables are optional for this query, you can omit the `ListBanksVariables` argument.
-const ref = listBanksRef();
-
-// You can also pass in a `DataConnect` instance to the `QueryRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = listBanksRef(dataConnect, listBanksVars);
-
-// Call `executeQuery()` on the reference to execute the query.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeQuery(ref);
-
-console.log(data.banks);
-
-// Or, you can use the `Promise` API.
-executeQuery(ref).then((response) => {
-  const data = response.data;
-  console.log(data.banks);
-});
-```
-
-## getBankById
-You can execute the `getBankById` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
-```typescript
-getBankById(vars: GetBankByIdVariables): QueryPromise<GetBankByIdData, GetBankByIdVariables>;
-
-interface GetBankByIdRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: GetBankByIdVariables): QueryRef<GetBankByIdData, GetBankByIdVariables>;
-}
-export const getBankByIdRef: GetBankByIdRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
-```typescript
-getBankById(dc: DataConnect, vars: GetBankByIdVariables): QueryPromise<GetBankByIdData, GetBankByIdVariables>;
-
-interface GetBankByIdRef {
-  ...
-  (dc: DataConnect, vars: GetBankByIdVariables): QueryRef<GetBankByIdData, GetBankByIdVariables>;
-}
-export const getBankByIdRef: GetBankByIdRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the getBankByIdRef:
-```typescript
-const name = getBankByIdRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `getBankById` query requires an argument of type `GetBankByIdVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface GetBankByIdVariables {
-  id: string;
-}
-```
-### Return Type
-Recall that executing the `getBankById` query returns a `QueryPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `GetBankByIdData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface GetBankByIdData {
-  bank?: {
-    id: string;
-    name: string;
-    accountNumber: string;
-    balance: number;
-    createdAt?: string | null;
-    updatedAt?: string | null;
-  } & Bank_Key;
-}
-```
-### Using `getBankById`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, getBankById, GetBankByIdVariables } from '@erp-system/banking';
-
-// The `getBankById` query requires an argument of type `GetBankByIdVariables`:
-const getBankByIdVars: GetBankByIdVariables = {
-  id: ..., 
-};
-
-// Call the `getBankById()` function to execute the query.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await getBankById(getBankByIdVars);
-// Variables can be defined inline as well.
-const { data } = await getBankById({ id: ..., });
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await getBankById(dataConnect, getBankByIdVars);
-
-console.log(data.bank);
-
-// Or, you can use the `Promise` API.
-getBankById(getBankByIdVars).then((response) => {
-  const data = response.data;
-  console.log(data.bank);
-});
-```
-
-### Using `getBankById`'s `QueryRef` function
-
-```typescript
-import { getDataConnect, executeQuery } from 'firebase/data-connect';
-import { connectorConfig, getBankByIdRef, GetBankByIdVariables } from '@erp-system/banking';
-
-// The `getBankById` query requires an argument of type `GetBankByIdVariables`:
-const getBankByIdVars: GetBankByIdVariables = {
-  id: ..., 
-};
-
-// Call the `getBankByIdRef()` function to get a reference to the query.
-const ref = getBankByIdRef(getBankByIdVars);
-// Variables can be defined inline as well.
-const ref = getBankByIdRef({ id: ..., });
-
-// You can also pass in a `DataConnect` instance to the `QueryRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = getBankByIdRef(dataConnect, getBankByIdVars);
-
-// Call `executeQuery()` on the reference to execute the query.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeQuery(ref);
-
-console.log(data.bank);
-
-// Or, you can use the `Promise` API.
-executeQuery(ref).then((response) => {
-  const data = response.data;
-  console.log(data.bank);
-});
-```
 
 ## listCashInHand
 You can execute the `listCashInHand` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
@@ -800,6 +561,245 @@ executeQuery(ref).then((response) => {
 });
 ```
 
+## listBanks
+You can execute the `listBanks` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
+```typescript
+listBanks(vars?: ListBanksVariables): QueryPromise<ListBanksData, ListBanksVariables>;
+
+interface ListBanksRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: ListBanksVariables): QueryRef<ListBanksData, ListBanksVariables>;
+}
+export const listBanksRef: ListBanksRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listBanks(dc: DataConnect, vars?: ListBanksVariables): QueryPromise<ListBanksData, ListBanksVariables>;
+
+interface ListBanksRef {
+  ...
+  (dc: DataConnect, vars?: ListBanksVariables): QueryRef<ListBanksData, ListBanksVariables>;
+}
+export const listBanksRef: ListBanksRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listBanksRef:
+```typescript
+const name = listBanksRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `listBanks` query has an optional argument of type `ListBanksVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListBanksVariables {
+  limit?: number | null;
+  offset?: number | null;
+}
+```
+### Return Type
+Recall that executing the `listBanks` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListBanksData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListBanksData {
+  banks: ({
+    id: string;
+    name: string;
+    accountNumber: string;
+    balance: number;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  } & Bank_Key)[];
+}
+```
+### Using `listBanks`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listBanks, ListBanksVariables } from '@erp-system/banking';
+
+// The `listBanks` query has an optional argument of type `ListBanksVariables`:
+const listBanksVars: ListBanksVariables = {
+  limit: ..., // optional
+  offset: ..., // optional
+};
+
+// Call the `listBanks()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listBanks(listBanksVars);
+// Variables can be defined inline as well.
+const { data } = await listBanks({ limit: ..., offset: ..., });
+// Since all variables are optional for this query, you can omit the `ListBanksVariables` argument.
+const { data } = await listBanks();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listBanks(dataConnect, listBanksVars);
+
+console.log(data.banks);
+
+// Or, you can use the `Promise` API.
+listBanks(listBanksVars).then((response) => {
+  const data = response.data;
+  console.log(data.banks);
+});
+```
+
+### Using `listBanks`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listBanksRef, ListBanksVariables } from '@erp-system/banking';
+
+// The `listBanks` query has an optional argument of type `ListBanksVariables`:
+const listBanksVars: ListBanksVariables = {
+  limit: ..., // optional
+  offset: ..., // optional
+};
+
+// Call the `listBanksRef()` function to get a reference to the query.
+const ref = listBanksRef(listBanksVars);
+// Variables can be defined inline as well.
+const ref = listBanksRef({ limit: ..., offset: ..., });
+// Since all variables are optional for this query, you can omit the `ListBanksVariables` argument.
+const ref = listBanksRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listBanksRef(dataConnect, listBanksVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.banks);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.banks);
+});
+```
+
+## getBankById
+You can execute the `getBankById` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
+```typescript
+getBankById(vars: GetBankByIdVariables): QueryPromise<GetBankByIdData, GetBankByIdVariables>;
+
+interface GetBankByIdRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetBankByIdVariables): QueryRef<GetBankByIdData, GetBankByIdVariables>;
+}
+export const getBankByIdRef: GetBankByIdRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+getBankById(dc: DataConnect, vars: GetBankByIdVariables): QueryPromise<GetBankByIdData, GetBankByIdVariables>;
+
+interface GetBankByIdRef {
+  ...
+  (dc: DataConnect, vars: GetBankByIdVariables): QueryRef<GetBankByIdData, GetBankByIdVariables>;
+}
+export const getBankByIdRef: GetBankByIdRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the getBankByIdRef:
+```typescript
+const name = getBankByIdRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `getBankById` query requires an argument of type `GetBankByIdVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface GetBankByIdVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that executing the `getBankById` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `GetBankByIdData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface GetBankByIdData {
+  bank?: {
+    id: string;
+    name: string;
+    accountNumber: string;
+    balance: number;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  } & Bank_Key;
+}
+```
+### Using `getBankById`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, getBankById, GetBankByIdVariables } from '@erp-system/banking';
+
+// The `getBankById` query requires an argument of type `GetBankByIdVariables`:
+const getBankByIdVars: GetBankByIdVariables = {
+  id: ..., 
+};
+
+// Call the `getBankById()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await getBankById(getBankByIdVars);
+// Variables can be defined inline as well.
+const { data } = await getBankById({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await getBankById(dataConnect, getBankByIdVars);
+
+console.log(data.bank);
+
+// Or, you can use the `Promise` API.
+getBankById(getBankByIdVars).then((response) => {
+  const data = response.data;
+  console.log(data.bank);
+});
+```
+
+### Using `getBankById`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, getBankByIdRef, GetBankByIdVariables } from '@erp-system/banking';
+
+// The `getBankById` query requires an argument of type `GetBankByIdVariables`:
+const getBankByIdVars: GetBankByIdVariables = {
+  id: ..., 
+};
+
+// Call the `getBankByIdRef()` function to get a reference to the query.
+const ref = getBankByIdRef(getBankByIdVars);
+// Variables can be defined inline as well.
+const ref = getBankByIdRef({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = getBankByIdRef(dataConnect, getBankByIdVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.bank);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.bank);
+});
+```
+
 # Mutations
 
 There are two ways to execute a Data Connect Mutation using the generated Web SDK:
@@ -814,6 +814,245 @@ The following is true for both the action shortcut function and the `MutationRef
 - Both functions can be called with or without passing in a `DataConnect` instance as an argument. If no `DataConnect` argument is passed in, then the generated SDK will call `getDataConnect(connectorConfig)` behind the scenes for you.
 
 Below are examples of how to use the `banking` connector's generated functions to execute each mutation. You can also follow the examples from the [Data Connect documentation](https://firebase.google.com/docs/data-connect/web-sdk#using-mutations).
+
+## TransferInsert
+You can execute the `TransferInsert` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
+```typescript
+transferInsert(vars: TransferInsertVariables): MutationPromise<TransferInsertData, TransferInsertVariables>;
+
+interface TransferInsertRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: TransferInsertVariables): MutationRef<TransferInsertData, TransferInsertVariables>;
+}
+export const transferInsertRef: TransferInsertRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+transferInsert(dc: DataConnect, vars: TransferInsertVariables): MutationPromise<TransferInsertData, TransferInsertVariables>;
+
+interface TransferInsertRef {
+  ...
+  (dc: DataConnect, vars: TransferInsertVariables): MutationRef<TransferInsertData, TransferInsertVariables>;
+}
+export const transferInsertRef: TransferInsertRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the transferInsertRef:
+```typescript
+const name = transferInsertRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `TransferInsert` mutation requires an argument of type `TransferInsertVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface TransferInsertVariables {
+  id: string;
+  date: string;
+  fromBankId: string;
+  fromBankName: string;
+  toBankId: string;
+  toBankName: string;
+  amount: number;
+  note?: string | null;
+}
+```
+### Return Type
+Recall that executing the `TransferInsert` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `TransferInsertData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface TransferInsertData {
+  bankTransfer_insert: BankTransfer_Key;
+}
+```
+### Using `TransferInsert`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, transferInsert, TransferInsertVariables } from '@erp-system/banking';
+
+// The `TransferInsert` mutation requires an argument of type `TransferInsertVariables`:
+const transferInsertVars: TransferInsertVariables = {
+  id: ..., 
+  date: ..., 
+  fromBankId: ..., 
+  fromBankName: ..., 
+  toBankId: ..., 
+  toBankName: ..., 
+  amount: ..., 
+  note: ..., // optional
+};
+
+// Call the `transferInsert()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await transferInsert(transferInsertVars);
+// Variables can be defined inline as well.
+const { data } = await transferInsert({ id: ..., date: ..., fromBankId: ..., fromBankName: ..., toBankId: ..., toBankName: ..., amount: ..., note: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await transferInsert(dataConnect, transferInsertVars);
+
+console.log(data.bankTransfer_insert);
+
+// Or, you can use the `Promise` API.
+transferInsert(transferInsertVars).then((response) => {
+  const data = response.data;
+  console.log(data.bankTransfer_insert);
+});
+```
+
+### Using `TransferInsert`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, transferInsertRef, TransferInsertVariables } from '@erp-system/banking';
+
+// The `TransferInsert` mutation requires an argument of type `TransferInsertVariables`:
+const transferInsertVars: TransferInsertVariables = {
+  id: ..., 
+  date: ..., 
+  fromBankId: ..., 
+  fromBankName: ..., 
+  toBankId: ..., 
+  toBankName: ..., 
+  amount: ..., 
+  note: ..., // optional
+};
+
+// Call the `transferInsertRef()` function to get a reference to the mutation.
+const ref = transferInsertRef(transferInsertVars);
+// Variables can be defined inline as well.
+const ref = transferInsertRef({ id: ..., date: ..., fromBankId: ..., fromBankName: ..., toBankId: ..., toBankName: ..., amount: ..., note: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = transferInsertRef(dataConnect, transferInsertVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.bankTransfer_insert);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.bankTransfer_insert);
+});
+```
+
+## TransferDelete
+You can execute the `TransferDelete` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
+```typescript
+transferDelete(vars: TransferDeleteVariables): MutationPromise<TransferDeleteData, TransferDeleteVariables>;
+
+interface TransferDeleteRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: TransferDeleteVariables): MutationRef<TransferDeleteData, TransferDeleteVariables>;
+}
+export const transferDeleteRef: TransferDeleteRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
+```typescript
+transferDelete(dc: DataConnect, vars: TransferDeleteVariables): MutationPromise<TransferDeleteData, TransferDeleteVariables>;
+
+interface TransferDeleteRef {
+  ...
+  (dc: DataConnect, vars: TransferDeleteVariables): MutationRef<TransferDeleteData, TransferDeleteVariables>;
+}
+export const transferDeleteRef: TransferDeleteRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the transferDeleteRef:
+```typescript
+const name = transferDeleteRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `TransferDelete` mutation requires an argument of type `TransferDeleteVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface TransferDeleteVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that executing the `TransferDelete` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `TransferDeleteData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface TransferDeleteData {
+  bankTransfer_delete?: BankTransfer_Key | null;
+}
+```
+### Using `TransferDelete`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, transferDelete, TransferDeleteVariables } from '@erp-system/banking';
+
+// The `TransferDelete` mutation requires an argument of type `TransferDeleteVariables`:
+const transferDeleteVars: TransferDeleteVariables = {
+  id: ..., 
+};
+
+// Call the `transferDelete()` function to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await transferDelete(transferDeleteVars);
+// Variables can be defined inline as well.
+const { data } = await transferDelete({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await transferDelete(dataConnect, transferDeleteVars);
+
+console.log(data.bankTransfer_delete);
+
+// Or, you can use the `Promise` API.
+transferDelete(transferDeleteVars).then((response) => {
+  const data = response.data;
+  console.log(data.bankTransfer_delete);
+});
+```
+
+### Using `TransferDelete`'s `MutationRef` function
+
+```typescript
+import { getDataConnect, executeMutation } from 'firebase/data-connect';
+import { connectorConfig, transferDeleteRef, TransferDeleteVariables } from '@erp-system/banking';
+
+// The `TransferDelete` mutation requires an argument of type `TransferDeleteVariables`:
+const transferDeleteVars: TransferDeleteVariables = {
+  id: ..., 
+};
+
+// Call the `transferDeleteRef()` function to get a reference to the mutation.
+const ref = transferDeleteRef(transferDeleteVars);
+// Variables can be defined inline as well.
+const ref = transferDeleteRef({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the `MutationRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = transferDeleteRef(dataConnect, transferDeleteVars);
+
+// Call `executeMutation()` on the reference to execute the mutation.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeMutation(ref);
+
+console.log(data.bankTransfer_delete);
+
+// Or, you can use the `Promise` API.
+executeMutation(ref).then((response) => {
+  const data = response.data;
+  console.log(data.bankTransfer_delete);
+});
+```
 
 ## BankInsert
 You can execute the `BankInsert` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
@@ -1508,245 +1747,6 @@ console.log(data.cashInHand_delete);
 executeMutation(ref).then((response) => {
   const data = response.data;
   console.log(data.cashInHand_delete);
-});
-```
-
-## TransferInsert
-You can execute the `TransferInsert` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
-```typescript
-transferInsert(vars: TransferInsertVariables): MutationPromise<TransferInsertData, TransferInsertVariables>;
-
-interface TransferInsertRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: TransferInsertVariables): MutationRef<TransferInsertData, TransferInsertVariables>;
-}
-export const transferInsertRef: TransferInsertRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
-```typescript
-transferInsert(dc: DataConnect, vars: TransferInsertVariables): MutationPromise<TransferInsertData, TransferInsertVariables>;
-
-interface TransferInsertRef {
-  ...
-  (dc: DataConnect, vars: TransferInsertVariables): MutationRef<TransferInsertData, TransferInsertVariables>;
-}
-export const transferInsertRef: TransferInsertRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the transferInsertRef:
-```typescript
-const name = transferInsertRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `TransferInsert` mutation requires an argument of type `TransferInsertVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface TransferInsertVariables {
-  id: string;
-  date: string;
-  fromBankId: string;
-  fromBankName: string;
-  toBankId: string;
-  toBankName: string;
-  amount: number;
-  note?: string | null;
-}
-```
-### Return Type
-Recall that executing the `TransferInsert` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `TransferInsertData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface TransferInsertData {
-  bankTransfer_insert: BankTransfer_Key;
-}
-```
-### Using `TransferInsert`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, transferInsert, TransferInsertVariables } from '@erp-system/banking';
-
-// The `TransferInsert` mutation requires an argument of type `TransferInsertVariables`:
-const transferInsertVars: TransferInsertVariables = {
-  id: ..., 
-  date: ..., 
-  fromBankId: ..., 
-  fromBankName: ..., 
-  toBankId: ..., 
-  toBankName: ..., 
-  amount: ..., 
-  note: ..., // optional
-};
-
-// Call the `transferInsert()` function to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await transferInsert(transferInsertVars);
-// Variables can be defined inline as well.
-const { data } = await transferInsert({ id: ..., date: ..., fromBankId: ..., fromBankName: ..., toBankId: ..., toBankName: ..., amount: ..., note: ..., });
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await transferInsert(dataConnect, transferInsertVars);
-
-console.log(data.bankTransfer_insert);
-
-// Or, you can use the `Promise` API.
-transferInsert(transferInsertVars).then((response) => {
-  const data = response.data;
-  console.log(data.bankTransfer_insert);
-});
-```
-
-### Using `TransferInsert`'s `MutationRef` function
-
-```typescript
-import { getDataConnect, executeMutation } from 'firebase/data-connect';
-import { connectorConfig, transferInsertRef, TransferInsertVariables } from '@erp-system/banking';
-
-// The `TransferInsert` mutation requires an argument of type `TransferInsertVariables`:
-const transferInsertVars: TransferInsertVariables = {
-  id: ..., 
-  date: ..., 
-  fromBankId: ..., 
-  fromBankName: ..., 
-  toBankId: ..., 
-  toBankName: ..., 
-  amount: ..., 
-  note: ..., // optional
-};
-
-// Call the `transferInsertRef()` function to get a reference to the mutation.
-const ref = transferInsertRef(transferInsertVars);
-// Variables can be defined inline as well.
-const ref = transferInsertRef({ id: ..., date: ..., fromBankId: ..., fromBankName: ..., toBankId: ..., toBankName: ..., amount: ..., note: ..., });
-
-// You can also pass in a `DataConnect` instance to the `MutationRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = transferInsertRef(dataConnect, transferInsertVars);
-
-// Call `executeMutation()` on the reference to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeMutation(ref);
-
-console.log(data.bankTransfer_insert);
-
-// Or, you can use the `Promise` API.
-executeMutation(ref).then((response) => {
-  const data = response.data;
-  console.log(data.bankTransfer_insert);
-});
-```
-
-## TransferDelete
-You can execute the `TransferDelete` mutation using the following action shortcut function, or by calling `executeMutation()` after calling the following `MutationRef` function, both of which are defined in [banking/index.d.ts](./index.d.ts):
-```typescript
-transferDelete(vars: TransferDeleteVariables): MutationPromise<TransferDeleteData, TransferDeleteVariables>;
-
-interface TransferDeleteRef {
-  ...
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: TransferDeleteVariables): MutationRef<TransferDeleteData, TransferDeleteVariables>;
-}
-export const transferDeleteRef: TransferDeleteRef;
-```
-You can also pass in a `DataConnect` instance to the action shortcut function or `MutationRef` function.
-```typescript
-transferDelete(dc: DataConnect, vars: TransferDeleteVariables): MutationPromise<TransferDeleteData, TransferDeleteVariables>;
-
-interface TransferDeleteRef {
-  ...
-  (dc: DataConnect, vars: TransferDeleteVariables): MutationRef<TransferDeleteData, TransferDeleteVariables>;
-}
-export const transferDeleteRef: TransferDeleteRef;
-```
-
-If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the transferDeleteRef:
-```typescript
-const name = transferDeleteRef.operationName;
-console.log(name);
-```
-
-### Variables
-The `TransferDelete` mutation requires an argument of type `TransferDeleteVariables`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface TransferDeleteVariables {
-  id: string;
-}
-```
-### Return Type
-Recall that executing the `TransferDelete` mutation returns a `MutationPromise` that resolves to an object with a `data` property.
-
-The `data` property is an object of type `TransferDeleteData`, which is defined in [banking/index.d.ts](./index.d.ts). It has the following fields:
-```typescript
-export interface TransferDeleteData {
-  bankTransfer_delete?: BankTransfer_Key | null;
-}
-```
-### Using `TransferDelete`'s action shortcut function
-
-```typescript
-import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, transferDelete, TransferDeleteVariables } from '@erp-system/banking';
-
-// The `TransferDelete` mutation requires an argument of type `TransferDeleteVariables`:
-const transferDeleteVars: TransferDeleteVariables = {
-  id: ..., 
-};
-
-// Call the `transferDelete()` function to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await transferDelete(transferDeleteVars);
-// Variables can be defined inline as well.
-const { data } = await transferDelete({ id: ..., });
-
-// You can also pass in a `DataConnect` instance to the action shortcut function.
-const dataConnect = getDataConnect(connectorConfig);
-const { data } = await transferDelete(dataConnect, transferDeleteVars);
-
-console.log(data.bankTransfer_delete);
-
-// Or, you can use the `Promise` API.
-transferDelete(transferDeleteVars).then((response) => {
-  const data = response.data;
-  console.log(data.bankTransfer_delete);
-});
-```
-
-### Using `TransferDelete`'s `MutationRef` function
-
-```typescript
-import { getDataConnect, executeMutation } from 'firebase/data-connect';
-import { connectorConfig, transferDeleteRef, TransferDeleteVariables } from '@erp-system/banking';
-
-// The `TransferDelete` mutation requires an argument of type `TransferDeleteVariables`:
-const transferDeleteVars: TransferDeleteVariables = {
-  id: ..., 
-};
-
-// Call the `transferDeleteRef()` function to get a reference to the mutation.
-const ref = transferDeleteRef(transferDeleteVars);
-// Variables can be defined inline as well.
-const ref = transferDeleteRef({ id: ..., });
-
-// You can also pass in a `DataConnect` instance to the `MutationRef` function.
-const dataConnect = getDataConnect(connectorConfig);
-const ref = transferDeleteRef(dataConnect, transferDeleteVars);
-
-// Call `executeMutation()` on the reference to execute the mutation.
-// You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await executeMutation(ref);
-
-console.log(data.bankTransfer_delete);
-
-// Or, you can use the `Promise` API.
-executeMutation(ref).then((response) => {
-  const data = response.data;
-  console.log(data.bankTransfer_delete);
 });
 ```
 

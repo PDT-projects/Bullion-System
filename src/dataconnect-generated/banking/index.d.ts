@@ -260,6 +260,78 @@ export interface UpdateBankBalanceVariables {
   newBalance: number;
 }
 
+interface ListCashInHandRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: ListCashInHandVariables): QueryRef<ListCashInHandData, ListCashInHandVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars?: ListCashInHandVariables): QueryRef<ListCashInHandData, ListCashInHandVariables>;
+  operationName: string;
+}
+export const listCashInHandRef: ListCashInHandRef;
+
+export function listCashInHand(vars?: ListCashInHandVariables): QueryPromise<ListCashInHandData, ListCashInHandVariables>;
+export function listCashInHand(dc: DataConnect, vars?: ListCashInHandVariables): QueryPromise<ListCashInHandData, ListCashInHandVariables>;
+
+interface GetCashInHandByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetCashInHandByIdVariables): QueryRef<GetCashInHandByIdData, GetCashInHandByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetCashInHandByIdVariables): QueryRef<GetCashInHandByIdData, GetCashInHandByIdVariables>;
+  operationName: string;
+}
+export const getCashInHandByIdRef: GetCashInHandByIdRef;
+
+export function getCashInHandById(vars: GetCashInHandByIdVariables): QueryPromise<GetCashInHandByIdData, GetCashInHandByIdVariables>;
+export function getCashInHandById(dc: DataConnect, vars: GetCashInHandByIdVariables): QueryPromise<GetCashInHandByIdData, GetCashInHandByIdVariables>;
+
+interface TransferInsertRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: TransferInsertVariables): MutationRef<TransferInsertData, TransferInsertVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: TransferInsertVariables): MutationRef<TransferInsertData, TransferInsertVariables>;
+  operationName: string;
+}
+export const transferInsertRef: TransferInsertRef;
+
+export function transferInsert(vars: TransferInsertVariables): MutationPromise<TransferInsertData, TransferInsertVariables>;
+export function transferInsert(dc: DataConnect, vars: TransferInsertVariables): MutationPromise<TransferInsertData, TransferInsertVariables>;
+
+interface TransferDeleteRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: TransferDeleteVariables): MutationRef<TransferDeleteData, TransferDeleteVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: TransferDeleteVariables): MutationRef<TransferDeleteData, TransferDeleteVariables>;
+  operationName: string;
+}
+export const transferDeleteRef: TransferDeleteRef;
+
+export function transferDelete(vars: TransferDeleteVariables): MutationPromise<TransferDeleteData, TransferDeleteVariables>;
+export function transferDelete(dc: DataConnect, vars: TransferDeleteVariables): MutationPromise<TransferDeleteData, TransferDeleteVariables>;
+
+interface ListTransfersRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: ListTransfersVariables): QueryRef<ListTransfersData, ListTransfersVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars?: ListTransfersVariables): QueryRef<ListTransfersData, ListTransfersVariables>;
+  operationName: string;
+}
+export const listTransfersRef: ListTransfersRef;
+
+export function listTransfers(vars?: ListTransfersVariables): QueryPromise<ListTransfersData, ListTransfersVariables>;
+export function listTransfers(dc: DataConnect, vars?: ListTransfersVariables): QueryPromise<ListTransfersData, ListTransfersVariables>;
+
+interface GetTransferByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetTransferByIdVariables): QueryRef<GetTransferByIdData, GetTransferByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetTransferByIdVariables): QueryRef<GetTransferByIdData, GetTransferByIdVariables>;
+  operationName: string;
+}
+export const getTransferByIdRef: GetTransferByIdRef;
+
+export function getTransferById(vars: GetTransferByIdVariables): QueryPromise<GetTransferByIdData, GetTransferByIdVariables>;
+export function getTransferById(dc: DataConnect, vars: GetTransferByIdVariables): QueryPromise<GetTransferByIdData, GetTransferByIdVariables>;
+
 interface BankInsertRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars: BankInsertVariables): MutationRef<BankInsertData, BankInsertVariables>;
@@ -355,76 +427,4 @@ export const cashInHandDeleteRef: CashInHandDeleteRef;
 
 export function cashInHandDelete(vars: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
 export function cashInHandDelete(dc: DataConnect, vars: CashInHandDeleteVariables): MutationPromise<CashInHandDeleteData, CashInHandDeleteVariables>;
-
-interface ListCashInHandRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: ListCashInHandVariables): QueryRef<ListCashInHandData, ListCashInHandVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars?: ListCashInHandVariables): QueryRef<ListCashInHandData, ListCashInHandVariables>;
-  operationName: string;
-}
-export const listCashInHandRef: ListCashInHandRef;
-
-export function listCashInHand(vars?: ListCashInHandVariables): QueryPromise<ListCashInHandData, ListCashInHandVariables>;
-export function listCashInHand(dc: DataConnect, vars?: ListCashInHandVariables): QueryPromise<ListCashInHandData, ListCashInHandVariables>;
-
-interface GetCashInHandByIdRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: GetCashInHandByIdVariables): QueryRef<GetCashInHandByIdData, GetCashInHandByIdVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: GetCashInHandByIdVariables): QueryRef<GetCashInHandByIdData, GetCashInHandByIdVariables>;
-  operationName: string;
-}
-export const getCashInHandByIdRef: GetCashInHandByIdRef;
-
-export function getCashInHandById(vars: GetCashInHandByIdVariables): QueryPromise<GetCashInHandByIdData, GetCashInHandByIdVariables>;
-export function getCashInHandById(dc: DataConnect, vars: GetCashInHandByIdVariables): QueryPromise<GetCashInHandByIdData, GetCashInHandByIdVariables>;
-
-interface TransferInsertRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: TransferInsertVariables): MutationRef<TransferInsertData, TransferInsertVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: TransferInsertVariables): MutationRef<TransferInsertData, TransferInsertVariables>;
-  operationName: string;
-}
-export const transferInsertRef: TransferInsertRef;
-
-export function transferInsert(vars: TransferInsertVariables): MutationPromise<TransferInsertData, TransferInsertVariables>;
-export function transferInsert(dc: DataConnect, vars: TransferInsertVariables): MutationPromise<TransferInsertData, TransferInsertVariables>;
-
-interface TransferDeleteRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: TransferDeleteVariables): MutationRef<TransferDeleteData, TransferDeleteVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: TransferDeleteVariables): MutationRef<TransferDeleteData, TransferDeleteVariables>;
-  operationName: string;
-}
-export const transferDeleteRef: TransferDeleteRef;
-
-export function transferDelete(vars: TransferDeleteVariables): MutationPromise<TransferDeleteData, TransferDeleteVariables>;
-export function transferDelete(dc: DataConnect, vars: TransferDeleteVariables): MutationPromise<TransferDeleteData, TransferDeleteVariables>;
-
-interface ListTransfersRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: ListTransfersVariables): QueryRef<ListTransfersData, ListTransfersVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars?: ListTransfersVariables): QueryRef<ListTransfersData, ListTransfersVariables>;
-  operationName: string;
-}
-export const listTransfersRef: ListTransfersRef;
-
-export function listTransfers(vars?: ListTransfersVariables): QueryPromise<ListTransfersData, ListTransfersVariables>;
-export function listTransfers(dc: DataConnect, vars?: ListTransfersVariables): QueryPromise<ListTransfersData, ListTransfersVariables>;
-
-interface GetTransferByIdRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: GetTransferByIdVariables): QueryRef<GetTransferByIdData, GetTransferByIdVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: GetTransferByIdVariables): QueryRef<GetTransferByIdData, GetTransferByIdVariables>;
-  operationName: string;
-}
-export const getTransferByIdRef: GetTransferByIdRef;
-
-export function getTransferById(vars: GetTransferByIdVariables): QueryPromise<GetTransferByIdData, GetTransferByIdVariables>;
-export function getTransferById(dc: DataConnect, vars: GetTransferByIdVariables): QueryPromise<GetTransferByIdData, GetTransferByIdVariables>;
 

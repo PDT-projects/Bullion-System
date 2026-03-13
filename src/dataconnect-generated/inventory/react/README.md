@@ -20,6 +20,8 @@ You can also follow the instructions from the [Data Connect documentation](https
   - [*ListBrands*](#listbrands)
   - [*GetBrandById*](#getbrandbyid)
   - [*ListProducts*](#listproducts)
+  - [*ListReceivableProducts*](#listreceivableproducts)
+  - [*GetReceivableProduct*](#getreceivableproduct)
   - [*GetProductById*](#getproductbyid)
   - [*ListModels*](#listmodels)
   - [*GetModelById*](#getmodelbyid)
@@ -441,6 +443,231 @@ export default function ListProductsComponent() {
   // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
   if (query.isSuccess) {
     console.log(query.data.products);
+  }
+  return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## ListReceivableProducts
+You can execute the `ListReceivableProducts` Query using the following Query hook function, which is defined in [inventory/react/index.d.ts](./index.d.ts):
+
+```javascript
+useListReceivableProducts(dc: DataConnect, vars?: ListReceivableProductsVariables, options?: useDataConnectQueryOptions<ListReceivableProductsData>): UseDataConnectQueryResult<ListReceivableProductsData, ListReceivableProductsVariables>;
+```
+You can also pass in a `DataConnect` instance to the Query hook function.
+```javascript
+useListReceivableProducts(vars?: ListReceivableProductsVariables, options?: useDataConnectQueryOptions<ListReceivableProductsData>): UseDataConnectQueryResult<ListReceivableProductsData, ListReceivableProductsVariables>;
+```
+
+### Variables
+The `ListReceivableProducts` Query has an optional argument of type `ListReceivableProductsVariables`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface ListReceivableProductsVariables {
+  limit?: number | null;
+  offset?: number | null;
+  status?: string | null;
+}
+```
+### Return Type
+Recall that calling the `ListReceivableProducts` Query hook function returns a `UseQueryResult` object. This object holds the state of your Query, including whether the Query is loading, has completed, or has succeeded/failed, and any data returned by the Query, among other things.
+
+To check the status of a Query, use the `UseQueryResult.status` field. You can also check for pending / success / error status using the `UseQueryResult.isPending`, `UseQueryResult.isSuccess`, and `UseQueryResult.isError` fields.
+
+To access the data returned by a Query, use the `UseQueryResult.data` field. The data for the `ListReceivableProducts` Query is of type `ListReceivableProductsData`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface ListReceivableProductsData {
+  products: ({
+    id: string;
+    brandName: string;
+    modelName: string;
+    category: string;
+    costPrice: number;
+    sellPrice: number;
+    stock: number;
+    status: string;
+    serialNumbers?: string | null;
+    createdAt?: string | null;
+  } & Product_Key)[];
+}
+```
+
+To learn more about the `UseQueryResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery).
+
+### Using `ListReceivableProducts`'s Query hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, ListReceivableProductsVariables } from '@erp-system/inventory';
+import { useListReceivableProducts } from '@erp-system/inventory/react'
+
+export default function ListReceivableProductsComponent() {
+  // The `useListReceivableProducts` Query hook has an optional argument of type `ListReceivableProductsVariables`:
+  const listReceivableProductsVars: ListReceivableProductsVariables = {
+    limit: ..., // optional
+    offset: ..., // optional
+    status: ..., // optional
+  };
+
+  // You don't have to do anything to "execute" the Query.
+  // Call the Query hook function to get a `UseQueryResult` object which holds the state of your Query.
+  const query = useListReceivableProducts(listReceivableProductsVars);
+  // Variables can be defined inline as well.
+  const query = useListReceivableProducts({ limit: ..., offset: ..., status: ..., });
+  // Since all variables are optional for this Query, you can omit the `ListReceivableProductsVariables` argument.
+  // (as long as you don't want to provide any `options`!)
+  const query = useListReceivableProducts();
+
+  // You can also pass in a `DataConnect` instance to the Query hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const query = useListReceivableProducts(dataConnect, listReceivableProductsVars);
+
+  // You can also pass in a `useDataConnectQueryOptions` object to the Query hook function.
+  const options = { staleTime: 5 * 1000 };
+  const query = useListReceivableProducts(listReceivableProductsVars, options);
+  // If you'd like to provide options without providing any variables, you must
+  // pass `undefined` where you would normally pass the variables.
+  const query = useListReceivableProducts(undefined, options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectQueryOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = { staleTime: 5 * 1000 };
+  const query = useListReceivableProducts(dataConnect, listReceivableProductsVars /** or undefined */, options);
+
+  // Then, you can render your component dynamically based on the status of the Query.
+  if (query.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (query.isError) {
+    return <div>Error: {query.error.message}</div>;
+  }
+
+  // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
+  if (query.isSuccess) {
+    console.log(query.data.products);
+  }
+  return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
+}
+```
+
+## GetReceivableProduct
+You can execute the `GetReceivableProduct` Query using the following Query hook function, which is defined in [inventory/react/index.d.ts](./index.d.ts):
+
+```javascript
+useGetReceivableProduct(dc: DataConnect, vars: GetReceivableProductVariables, options?: useDataConnectQueryOptions<GetReceivableProductData>): UseDataConnectQueryResult<GetReceivableProductData, GetReceivableProductVariables>;
+```
+You can also pass in a `DataConnect` instance to the Query hook function.
+```javascript
+useGetReceivableProduct(vars: GetReceivableProductVariables, options?: useDataConnectQueryOptions<GetReceivableProductData>): UseDataConnectQueryResult<GetReceivableProductData, GetReceivableProductVariables>;
+```
+
+### Variables
+The `GetReceivableProduct` Query requires an argument of type `GetReceivableProductVariables`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+
+```javascript
+export interface GetReceivableProductVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that calling the `GetReceivableProduct` Query hook function returns a `UseQueryResult` object. This object holds the state of your Query, including whether the Query is loading, has completed, or has succeeded/failed, and any data returned by the Query, among other things.
+
+To check the status of a Query, use the `UseQueryResult.status` field. You can also check for pending / success / error status using the `UseQueryResult.isPending`, `UseQueryResult.isSuccess`, and `UseQueryResult.isError` fields.
+
+To access the data returned by a Query, use the `UseQueryResult.data` field. The data for the `GetReceivableProduct` Query is of type `GetReceivableProductData`, which is defined in [inventory/index.d.ts](../index.d.ts). It has the following fields:
+```javascript
+export interface GetReceivableProductData {
+  product?: {
+    id: string;
+    brandName: string;
+    modelName: string;
+    category: string;
+    costPrice: number;
+    sellPrice: number;
+    buyType: string;
+    warrantyYears: number;
+    stock: number;
+    description?: string | null;
+    status: string;
+    isDamaged?: boolean | null;
+    serialNumbers?: string | null;
+    serialCities?: string | null;
+    serialStatus?: string | null;
+    brandId?: string | null;
+    modelId?: string | null;
+    costingId?: string | null;
+    costingOption?: string | null;
+    costingUnits?: number | null;
+    costingUnitCostUSD?: number | null;
+    costingTotalCostUSD?: number | null;
+    costingPercentage?: number | null;
+    costingCustomPerModel?: number | null;
+    costingCustomPerUnit?: number | null;
+    costingFreightPerModel?: number | null;
+    costingFreightPerUnit?: number | null;
+    costingUnitCostPKR?: number | null;
+    costingTotalUnitCost?: number | null;
+    costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  } & Product_Key;
+}
+```
+
+To learn more about the `UseQueryResult` object, see the [TanStack React Query documentation](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery).
+
+### Using `GetReceivableProduct`'s Query hook function
+
+```javascript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, GetReceivableProductVariables } from '@erp-system/inventory';
+import { useGetReceivableProduct } from '@erp-system/inventory/react'
+
+export default function GetReceivableProductComponent() {
+  // The `useGetReceivableProduct` Query hook requires an argument of type `GetReceivableProductVariables`:
+  const getReceivableProductVars: GetReceivableProductVariables = {
+    id: ..., 
+  };
+
+  // You don't have to do anything to "execute" the Query.
+  // Call the Query hook function to get a `UseQueryResult` object which holds the state of your Query.
+  const query = useGetReceivableProduct(getReceivableProductVars);
+  // Variables can be defined inline as well.
+  const query = useGetReceivableProduct({ id: ..., });
+
+  // You can also pass in a `DataConnect` instance to the Query hook function.
+  const dataConnect = getDataConnect(connectorConfig);
+  const query = useGetReceivableProduct(dataConnect, getReceivableProductVars);
+
+  // You can also pass in a `useDataConnectQueryOptions` object to the Query hook function.
+  const options = { staleTime: 5 * 1000 };
+  const query = useGetReceivableProduct(getReceivableProductVars, options);
+
+  // You can also pass both a `DataConnect` instance and a `useDataConnectQueryOptions` object.
+  const dataConnect = getDataConnect(connectorConfig);
+  const options = { staleTime: 5 * 1000 };
+  const query = useGetReceivableProduct(dataConnect, getReceivableProductVars, options);
+
+  // Then, you can render your component dynamically based on the status of the Query.
+  if (query.isPending) {
+    return <div>Loading...</div>;
+  }
+
+  if (query.isError) {
+    return <div>Error: {query.error.message}</div>;
+  }
+
+  // If the Query is successful, you can access the data returned using the `UseQueryResult.data` field.
+  if (query.isSuccess) {
+    console.log(query.data.product);
   }
   return <div>Query execution {query.isSuccess ? 'successful' : 'failed'}!</div>;
 }

@@ -1,4 +1,4 @@
-import { brandInsertRef, brandUpdateRef, brandDeleteRef, listBrandsRef, getBrandByIdRef, costingInsertRef, costingUpdateRef, costingDeleteRef, productInsertRef, productUpdateRef, productDeleteRef, productTransferInsertRef, productTransferUpdateRef, productTransferDeleteRef, listProductsRef, getProductByIdRef, modelInsertRef, modelUpdateRef, modelDeleteRef, listModelsRef, getModelByIdRef, connectorConfig } from '../../esm/index.esm.js';
+import { brandInsertRef, brandUpdateRef, brandDeleteRef, listBrandsRef, getBrandByIdRef, costingInsertRef, costingUpdateRef, costingDeleteRef, productInsertRef, productUpdateRef, productDeleteRef, productTransferInsertRef, productTransferUpdateRef, productTransferDeleteRef, listProductsRef, listReceivableProductsRef, getReceivableProductRef, getProductByIdRef, modelInsertRef, modelUpdateRef, modelDeleteRef, listModelsRef, getModelByIdRef, connectorConfig } from '../../esm/index.esm.js';
 import { validateArgs, CallerSdkTypeEnum } from 'firebase/data-connect';
 import { useDataConnectQuery, useDataConnectMutation, validateReactArgs } from '@tanstack-query-firebase/react/data-connect';
 
@@ -114,6 +114,18 @@ export function useProductTransferDelete(dcOrOptions, options) {
 export function useListProducts(dcOrVars, varsOrOptions, options) {
   const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateReactArgs(connectorConfig, dcOrVars, varsOrOptions, options, true, false);
   const ref = listProductsRef(dcInstance, inputVars);
+  return useDataConnectQuery(ref, inputOpts, CallerSdkTypeEnum.GeneratedReact);
+}
+
+export function useListReceivableProducts(dcOrVars, varsOrOptions, options) {
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateReactArgs(connectorConfig, dcOrVars, varsOrOptions, options, true, false);
+  const ref = listReceivableProductsRef(dcInstance, inputVars);
+  return useDataConnectQuery(ref, inputOpts, CallerSdkTypeEnum.GeneratedReact);
+}
+
+export function useGetReceivableProduct(dcOrVars, varsOrOptions, options) {
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateReactArgs(connectorConfig, dcOrVars, varsOrOptions, options, true, true);
+  const ref = getReceivableProductRef(dcInstance, inputVars);
   return useDataConnectQuery(ref, inputOpts, CallerSdkTypeEnum.GeneratedReact);
 }
 

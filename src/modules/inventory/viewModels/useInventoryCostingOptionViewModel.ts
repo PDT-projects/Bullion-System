@@ -31,12 +31,15 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
     setSelectedOption(option);
   }, []);
 
-  const handleContinue = useCallback(() => {
-    if (selectedOption) {
-      // Navigate to costing details step (step 3) with both inventory type and costing option in URL
+const handleContinue = useCallback(() => {
+  if (selectedOption) {
+    if (selectedOption === 'with') {
       navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${selectedOption}`);
+    } else {
+      navigate(`/inventory/create-new/details?type=${inventoryType}&costing=${selectedOption}`);
     }
-  }, [navigate, selectedOption, inventoryType]);
+  }
+}, [navigate, selectedOption, inventoryType]);
 
   const handleBack = useCallback(() => {
     // Go back to inventory type selection step

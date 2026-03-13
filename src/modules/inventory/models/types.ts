@@ -4,7 +4,7 @@
 /**
  * Product status in the inventory system
  */
-export type ProductStatus = 'New' | 'In Transit' | 'Available' | 'Sold' | 'Damaged' | 'Returned' | 'Used';
+export type ProductStatus = 'New' | 'In Transit' | 'On-Order' | 'Receivable' | 'Available' | 'Sold' | 'Damaged' | 'Returned' | 'Used';
 
 /**
  * Product buy type
@@ -104,6 +104,11 @@ export interface Product {
   brandId?: string;
   modelId?: string;
   costingId?: string;
+  
+  // Receivable stock fields
+  billId?: string;
+  receivableStatus?: 'Pending' | 'Received';
+  expectedReceiveDate?: string;
 
   // Costing fields (when costingOption === 'with')
   costingOption?: CostingOption;
@@ -127,6 +132,12 @@ export interface Product {
   costingConsignmentValue?: number;
   costingTotalValueOfBrand?: number;
   costingModelsJson?: string;
+}
+
+export interface ReceivableProduct extends Product {
+  billId: string;
+  receivableStatus: 'Pending' | 'Received';
+  expectedReceiveDate: string;
 }
 
 /**
@@ -165,6 +176,11 @@ export interface CreateProductDTO {
   description: string;
   status: ProductStatus;
   isDamaged: boolean;
+  
+  // Receivable fields (optional)
+  billId?: string;
+  receivableStatus?: 'Pending' | 'Received';
+  expectedReceiveDate?: string;
   
   // Costing option
   costingOption?: CostingOption;

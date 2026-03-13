@@ -2,7 +2,8 @@
 // InventoryCostingDetailsView - Step 3: Costing Details only (NEW SEPARATED SCREEN)
 // Shows only costing fields - inventory details come on next screen
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Package, ArrowLeft, ArrowRight, Calculator } from 'lucide-react';
 import { UseInventoryCostingDetailsViewModelReturn } from '../viewModels/useInventoryCostingDetailsViewModel';
 import { CostingGlobalInputs } from '../components/CostingGlobalInputs';
@@ -17,6 +18,8 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
   inventoryType,
   validationErrors,
   isValid,
+  isSaving,
+  saveError,
   setCostingBrandName,
   setUsdRate,
   setTotalCustomsValue,
@@ -29,18 +32,16 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
   showCostingFields,
   costingSummary,
 }) => {
-  // If "without costing" option was selected, skip this screen
-  if (!showCostingFields) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-        <div className="inventory-entry-container max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <p className="text-gray-600">No costing details required. Redirecting...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+// Auto-redirect for without costing handled by useEffect below
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  useEffect(() => {
+    if (!showCostingFields) {
+      const inventoryType = searchParams.get('type') || 'in-stock';
+      navigate(`/inventory/create-new/details?type=${inventoryType}&costing=without`, { replace: true });
+    }
+  }, [showCostingFields, navigate, searchParams]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
@@ -174,6 +175,17 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
               {validationErrors.models && (
                 <p className="text-red-500 text-sm mt-2">{validationErrors.models}</p>
               )}
+              {saveError && (
+                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 font-medium">{saveError}</p>
+                  <button
+                    onClick={() => {/* Clear error via VM if exposed */}}
+                    className="mt-2 text-sm text-red-600 hover:underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Navigation Buttons */}
@@ -187,15 +199,24 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
               </button>
               <button
                 onClick={handleNext}
-                disabled={!isValid}
+                disabled={isSaving || !isValid}
                 className={`px-8 py-4 rounded-lg transition-colors font-medium text-lg shadow-lg flex items-center gap-2 ${
-                  isValid
-                    ? 'bg-[#4f46e5] text-white hover:bg-[#4338ca]'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  isSaving || !isValid
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-[#4f46e5] text-white hover:bg-[#4338ca]'
                 }`}
               >
-                Next: Product Details
-                <ArrowRight size={20} />
+                {isSaving ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    Next: Product Details
+                    <ArrowRight size={20} />
+                  </>
+                )}
               </button>
             </div>
           </div>

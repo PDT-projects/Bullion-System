@@ -7,30 +7,6 @@ const connectorConfig = {
 };
 exports.connectorConfig = connectorConfig;
 
-const listEmployeesRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'ListEmployees', inputVars);
-}
-listEmployeesRef.operationName = 'ListEmployees';
-exports.listEmployeesRef = listEmployeesRef;
-
-exports.listEmployees = function listEmployees(dcOrVars, vars) {
-  return executeQuery(listEmployeesRef(dcOrVars, vars));
-};
-
-const getEmployeeByIdRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'GetEmployeeById', inputVars);
-}
-getEmployeeByIdRef.operationName = 'GetEmployeeById';
-exports.getEmployeeByIdRef = getEmployeeByIdRef;
-
-exports.getEmployeeById = function getEmployeeById(dcOrVars, vars) {
-  return executeQuery(getEmployeeByIdRef(dcOrVars, vars));
-};
-
 const employeeInsertRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
   dcInstance._useGeneratedSdk();
@@ -65,4 +41,28 @@ exports.employeeDeleteRef = employeeDeleteRef;
 
 exports.employeeDelete = function employeeDelete(dcOrVars, vars) {
   return executeMutation(employeeDeleteRef(dcOrVars, vars));
+};
+
+const listEmployeesRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'ListEmployees', inputVars);
+}
+listEmployeesRef.operationName = 'ListEmployees';
+exports.listEmployeesRef = listEmployeesRef;
+
+exports.listEmployees = function listEmployees(dcOrVars, vars) {
+  return executeQuery(listEmployeesRef(dcOrVars, vars));
+};
+
+const getEmployeeByIdRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'GetEmployeeById', inputVars);
+}
+getEmployeeByIdRef.operationName = 'GetEmployeeById';
+exports.getEmployeeByIdRef = getEmployeeByIdRef;
+
+exports.getEmployeeById = function getEmployeeById(dcOrVars, vars) {
+  return executeQuery(getEmployeeByIdRef(dcOrVars, vars));
 };

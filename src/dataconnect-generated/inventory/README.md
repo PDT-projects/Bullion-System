@@ -13,6 +13,8 @@ This README will guide you through the process of using the generated JavaScript
   - [*ListBrands*](#listbrands)
   - [*GetBrandById*](#getbrandbyid)
   - [*ListProducts*](#listproducts)
+  - [*ListReceivableProducts*](#listreceivableproducts)
+  - [*GetReceivableProduct*](#getreceivableproduct)
   - [*GetProductById*](#getproductbyid)
   - [*ListModels*](#listmodels)
   - [*GetModelById*](#getmodelbyid)
@@ -470,6 +472,285 @@ console.log(data.products);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.products);
+});
+```
+
+## ListReceivableProducts
+You can execute the `ListReceivableProducts` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [inventory/index.d.ts](./index.d.ts):
+```typescript
+listReceivableProducts(vars?: ListReceivableProductsVariables): QueryPromise<ListReceivableProductsData, ListReceivableProductsVariables>;
+
+interface ListReceivableProductsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: ListReceivableProductsVariables): QueryRef<ListReceivableProductsData, ListReceivableProductsVariables>;
+}
+export const listReceivableProductsRef: ListReceivableProductsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listReceivableProducts(dc: DataConnect, vars?: ListReceivableProductsVariables): QueryPromise<ListReceivableProductsData, ListReceivableProductsVariables>;
+
+interface ListReceivableProductsRef {
+  ...
+  (dc: DataConnect, vars?: ListReceivableProductsVariables): QueryRef<ListReceivableProductsData, ListReceivableProductsVariables>;
+}
+export const listReceivableProductsRef: ListReceivableProductsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listReceivableProductsRef:
+```typescript
+const name = listReceivableProductsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListReceivableProducts` query has an optional argument of type `ListReceivableProductsVariables`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListReceivableProductsVariables {
+  limit?: number | null;
+  offset?: number | null;
+  status?: string | null;
+}
+```
+### Return Type
+Recall that executing the `ListReceivableProducts` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListReceivableProductsData`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListReceivableProductsData {
+  products: ({
+    id: string;
+    brandName: string;
+    modelName: string;
+    category: string;
+    costPrice: number;
+    sellPrice: number;
+    stock: number;
+    status: string;
+    serialNumbers?: string | null;
+    createdAt?: string | null;
+  } & Product_Key)[];
+}
+```
+### Using `ListReceivableProducts`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listReceivableProducts, ListReceivableProductsVariables } from '@erp-system/inventory';
+
+// The `ListReceivableProducts` query has an optional argument of type `ListReceivableProductsVariables`:
+const listReceivableProductsVars: ListReceivableProductsVariables = {
+  limit: ..., // optional
+  offset: ..., // optional
+  status: ..., // optional
+};
+
+// Call the `listReceivableProducts()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listReceivableProducts(listReceivableProductsVars);
+// Variables can be defined inline as well.
+const { data } = await listReceivableProducts({ limit: ..., offset: ..., status: ..., });
+// Since all variables are optional for this query, you can omit the `ListReceivableProductsVariables` argument.
+const { data } = await listReceivableProducts();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listReceivableProducts(dataConnect, listReceivableProductsVars);
+
+console.log(data.products);
+
+// Or, you can use the `Promise` API.
+listReceivableProducts(listReceivableProductsVars).then((response) => {
+  const data = response.data;
+  console.log(data.products);
+});
+```
+
+### Using `ListReceivableProducts`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listReceivableProductsRef, ListReceivableProductsVariables } from '@erp-system/inventory';
+
+// The `ListReceivableProducts` query has an optional argument of type `ListReceivableProductsVariables`:
+const listReceivableProductsVars: ListReceivableProductsVariables = {
+  limit: ..., // optional
+  offset: ..., // optional
+  status: ..., // optional
+};
+
+// Call the `listReceivableProductsRef()` function to get a reference to the query.
+const ref = listReceivableProductsRef(listReceivableProductsVars);
+// Variables can be defined inline as well.
+const ref = listReceivableProductsRef({ limit: ..., offset: ..., status: ..., });
+// Since all variables are optional for this query, you can omit the `ListReceivableProductsVariables` argument.
+const ref = listReceivableProductsRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listReceivableProductsRef(dataConnect, listReceivableProductsVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.products);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.products);
+});
+```
+
+## GetReceivableProduct
+You can execute the `GetReceivableProduct` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [inventory/index.d.ts](./index.d.ts):
+```typescript
+getReceivableProduct(vars: GetReceivableProductVariables): QueryPromise<GetReceivableProductData, GetReceivableProductVariables>;
+
+interface GetReceivableProductRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetReceivableProductVariables): QueryRef<GetReceivableProductData, GetReceivableProductVariables>;
+}
+export const getReceivableProductRef: GetReceivableProductRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+getReceivableProduct(dc: DataConnect, vars: GetReceivableProductVariables): QueryPromise<GetReceivableProductData, GetReceivableProductVariables>;
+
+interface GetReceivableProductRef {
+  ...
+  (dc: DataConnect, vars: GetReceivableProductVariables): QueryRef<GetReceivableProductData, GetReceivableProductVariables>;
+}
+export const getReceivableProductRef: GetReceivableProductRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the getReceivableProductRef:
+```typescript
+const name = getReceivableProductRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `GetReceivableProduct` query requires an argument of type `GetReceivableProductVariables`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface GetReceivableProductVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that executing the `GetReceivableProduct` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `GetReceivableProductData`, which is defined in [inventory/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface GetReceivableProductData {
+  product?: {
+    id: string;
+    brandName: string;
+    modelName: string;
+    category: string;
+    costPrice: number;
+    sellPrice: number;
+    buyType: string;
+    warrantyYears: number;
+    stock: number;
+    description?: string | null;
+    status: string;
+    isDamaged?: boolean | null;
+    serialNumbers?: string | null;
+    serialCities?: string | null;
+    serialStatus?: string | null;
+    brandId?: string | null;
+    modelId?: string | null;
+    costingId?: string | null;
+    costingOption?: string | null;
+    costingUnits?: number | null;
+    costingUnitCostUSD?: number | null;
+    costingTotalCostUSD?: number | null;
+    costingPercentage?: number | null;
+    costingCustomPerModel?: number | null;
+    costingCustomPerUnit?: number | null;
+    costingFreightPerModel?: number | null;
+    costingFreightPerUnit?: number | null;
+    costingUnitCostPKR?: number | null;
+    costingTotalUnitCost?: number | null;
+    costingTotalShipmentValuePKR?: number | null;
+    costingUsdRate?: number | null;
+    costingTotalCustomsValue?: number | null;
+    costingTotalFreightValue?: number | null;
+    costingShipmentTotalUSD?: number | null;
+    costingConsignmentValue?: number | null;
+    costingTotalValueOfBrand?: number | null;
+    costingModelsJson?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  } & Product_Key;
+}
+```
+### Using `GetReceivableProduct`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, getReceivableProduct, GetReceivableProductVariables } from '@erp-system/inventory';
+
+// The `GetReceivableProduct` query requires an argument of type `GetReceivableProductVariables`:
+const getReceivableProductVars: GetReceivableProductVariables = {
+  id: ..., 
+};
+
+// Call the `getReceivableProduct()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await getReceivableProduct(getReceivableProductVars);
+// Variables can be defined inline as well.
+const { data } = await getReceivableProduct({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await getReceivableProduct(dataConnect, getReceivableProductVars);
+
+console.log(data.product);
+
+// Or, you can use the `Promise` API.
+getReceivableProduct(getReceivableProductVars).then((response) => {
+  const data = response.data;
+  console.log(data.product);
+});
+```
+
+### Using `GetReceivableProduct`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, getReceivableProductRef, GetReceivableProductVariables } from '@erp-system/inventory';
+
+// The `GetReceivableProduct` query requires an argument of type `GetReceivableProductVariables`:
+const getReceivableProductVars: GetReceivableProductVariables = {
+  id: ..., 
+};
+
+// Call the `getReceivableProductRef()` function to get a reference to the query.
+const ref = getReceivableProductRef(getReceivableProductVars);
+// Variables can be defined inline as well.
+const ref = getReceivableProductRef({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = getReceivableProductRef(dataConnect, getReceivableProductVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.product);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.product);
 });
 ```
 

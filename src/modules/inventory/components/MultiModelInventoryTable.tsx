@@ -2,8 +2,8 @@ import React from 'react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Plus, Trash2, Edit3 } from 'lucide-react';
-import type { Model } from '../../../../api/dataconnect/brandModelDataConnectService';
-
+// import type { Model } from '../../../../api/dataconnect/brandModelDataConnectService';
+import type { Model } from '../../../api/dataconnect/brandModelDataConnectService';
 interface MultiModelRow {
   modelId: string;
   modelName: string;

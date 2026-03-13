@@ -187,6 +187,30 @@ exports.listProducts = function listProducts(dcOrVars, vars) {
   return executeQuery(listProductsRef(dcOrVars, vars));
 };
 
+const listReceivableProductsRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'ListReceivableProducts', inputVars);
+}
+listReceivableProductsRef.operationName = 'ListReceivableProducts';
+exports.listReceivableProductsRef = listReceivableProductsRef;
+
+exports.listReceivableProducts = function listReceivableProducts(dcOrVars, vars) {
+  return executeQuery(listReceivableProductsRef(dcOrVars, vars));
+};
+
+const getReceivableProductRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'GetReceivableProduct', inputVars);
+}
+getReceivableProductRef.operationName = 'GetReceivableProduct';
+exports.getReceivableProductRef = getReceivableProductRef;
+
+exports.getReceivableProduct = function getReceivableProduct(dcOrVars, vars) {
+  return executeQuery(getReceivableProductRef(dcOrVars, vars));
+};
+
 const getProductByIdRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();

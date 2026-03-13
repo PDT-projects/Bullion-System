@@ -1,285 +1,40 @@
-I0312 10:25:02.175217    5184 load.go:31] Reloading schema and connectors...
-I0312 10:25:02.261306    5184 control.go:100] [projects/emulator/locations/emulator/services/erp-system-service 8bf6] UpdateResources(): done
-Main schema: sources: schema\schema.gql [5604B] 
-Connector "loans": sources: loans\loan_mutations.gql [1195B] loans\loan_queries.gql [1265B] loans\schema.gql [0B] 
-Connector "budgets": sources: budgets\budget_mutations.gql [1235B] budgets\budget_queries.gql [517B] 
-Connector "inventory": sources: inventory\brand_mutations.gql [761B] inventory\brand_queries.gql [457B] inventory\inventory_mutations.gql [9687B] inventory\model_mutations.gql [1059B] inventory\model_queries.gql [543B] 
-Connector "banking": sources: banking\cash_queries.gql [555B] banking\transfer_mutations.gql [662B] banking\transfer_queries.gql [571B] banking\bank_mutations.gql [969B] banking\bank_queries.gql [434B] banking\cash_mutations.gql [641B] 
-I0312 10:25:02.332600    5184 codegen.go:80] [connector "banking" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
-I0312 10:25:02.365580    5184 codegen.go:80] [connector "loans" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
-I0312 10:25:02.398222    5184 codegen.go:80] [connector "budgets" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
-I0312 10:25:02.426219    5184 codegen.go:80] [connector "inventory" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
-I0312 10:25:02.473924    5184 collector.go:107] schema extensions wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\dataconnect\\.dataconnect\\schema"
-Generated sources: prelude.gql [80730B] main\relation.gql [103605B] main\query.gql [16652B] main\mutation.gql [43975B] main\input.gql [196881B] 
-I0312 10:25:02.486912    5184 collector.go:107] connector "banking" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
-Generated sources: index.d.ts [14488B] esm\index.esm.js [5953B] react\index.d.ts [6869B] react\package.json [457B] react\README.md [74850B] .guides/usage.md [4198B] .guides/setup.md [1679B] .guides/config.json [236B] index.cjs.js [6789B] react\index.cjs.js [5586B] esm\package.json [17B] package.json [860B] react\esm\package.json [17B] react\esm\index.esm.js [5294B] README.md [68505B] 
-I0312 10:25:02.492909    5184 installsdk.go:55] Package @erp-system/banking is already installed. Skipping installation
-I0312 10:25:02.501903    5184 collector.go:107] connector "loans" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
-Generated sources: react\package.json [453B] .guides/usage.md [3062B] .guides/config.json [236B] react\index.d.ts [3131B] react\index.cjs.js [2587B] .guides/setup.md [1677B] index.cjs.js [3060B] package.json [856B] README.md [34386B] react\esm\package.json [17B] react\README.md [39450B] index.d.ts [8112B] esm\index.esm.js [2675B] esm\package.json [17B] react\esm\index.esm.js [2456B] 
-I0312 10:25:02.504902    5184 installsdk.go:55] Package @erp-system/loans is already installed. Skipping installation
-I0312 10:25:02.530030    5184 collector.go:107] connector "budgets" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
-Generated sources: index.d.ts [6800B] esm\package.json [17B] package.json [860B] README.md [31976B] react\package.json [457B] react\README.md [38502B] index.cjs.js [3044B] react\index.d.ts [3141B] react\esm\package.json [17B] .guides/setup.md [1679B] esm\index.esm.js [2671B] .guides/config.json [236B] react\index.cjs.js [2520B] react\esm\index.esm.js [2393B] .guides/usage.md [3034B] 
-I0312 10:25:02.533028    5184 installsdk.go:55] Package @erp-system/budgets is already installed. Skipping installation
-I0312 10:25:02.545021    5184 collector.go:107] connector "inventory" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
-Generated sources: react\index.d.ts [9292B] react\package.json [461B] react\esm\package.json [17B] index.d.ts [22058B] esm\package.json [17B] index.cjs.js [9144B] react\index.cjs.js [7375B] react\README.md [108426B] .guides/config.json [236B] esm\index.esm.js [8028B] package.json [864B] README.md [105661B] react\esm\index.esm.js [6983B] .guides/setup.md [1681B] .guides/usage.md [4378B] 
-I0312 10:25:02.547020    5184 installsdk.go:55] Package @erp-system/inventory is already installed. Skipping installation
-I0312 10:25:02.547020    5184 load.go:109] Finished reloading
-I0312 10:25:02.549019    5184 dev.go:104] Listening on address (HTTP + gRPC): 127.0.0.1:9399
-I0312 10:25:02.550019    5184 dev.go:104] Listening on address (HTTP + gRPC): [::1]:9399
-I0312 10:25:06.502040    5184 control.go:100] [projects/emulator/locations/emulator/services/erp-system-service b974] UpdateResources(): done
+I0313 22:12:57.784421    2064 load.go:31] Reloading schema and connectors...
+I0313 22:12:57.899553    2064 control.go:100] [projects/emulator/locations/emulator/services/erp-system-service 2f45] UpdateResources(): done
 Main schema: sources: schema\schema.gql [5604B] 
 Connector "budgets": sources: budgets\budget_mutations.gql [1235B] budgets\budget_queries.gql [517B] 
-Connector "inventory": sources: inventory\brand_mutations.gql [761B] inventory\brand_queries.gql [457B] inventory\inventory_mutations.gql [9687B] inventory\model_mutations.gql [1059B] inventory\model_queries.gql [543B] 
-Connector "loans": sources: loans\loan_mutations.gql [1195B] loans\loan_queries.gql [1265B] loans\schema.gql [0B] 
-Connector "banking": sources: banking\bank_mutations.gql [969B] banking\bank_queries.gql [434B] banking\cash_mutations.gql [641B] banking\cash_queries.gql [555B] banking\transfer_mutations.gql [662B] banking\transfer_queries.gql [571B] 
-I0312 10:51:02.972278    5184 execute.go:57] Database ping is quick (likely cached), took 1.4298ms
-I0312 10:51:02.986491    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service b974] ExecuteQuery listCashInHand: succeeded. Connector: banking
-I0312 10:51:04.176883    5184 execute.go:57] Database ping is quick (likely cached), took 998.8µs
-I0312 10:51:04.186168    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service b974] ExecuteQuery listTransfers: succeeded. Connector: banking
-I0312 10:56:46.654281    5184 execute.go:57] Database ping is quick (likely cached), took 504.8µs
-I0312 10:56:46.665516    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service b974] ExecuteQuery listBanks: succeeded. Connector: banking
-I0312 11:01:32.628220    5184 load.go:31] Reloading schema and connectors...
-I0312 11:01:33.446599    5184 control.go:100] [projects/emulator/locations/emulator/services/erp-system-service f357] UpdateResources(): done
-Main schema: sources: schema\schema.gql [5604B] 
-Connector "budgets": sources: budgets\budget_mutations.gql [1235B] budgets\budget_queries.gql [517B] 
-Connector "inventory": sources: inventory\brand_mutations.gql [761B] inventory\brand_queries.gql [457B] inventory\inventory_mutations.gql [9687B] inventory\model_mutations.gql [1059B] inventory\model_queries.gql [543B] 
+Connector "inventory": sources: inventory\model_mutations.gql [1059B] inventory\model_queries.gql [543B] inventory\brand_mutations.gql [761B] inventory\brand_queries.gql [457B] inventory\inventory_mutations.gql [10258B] inventory\inventory_queries.gql [3840B] 
 Connector "employees": sources: employees\employees.gql [633B] employees\employees_mutations.gql [1823B] 
-Connector "banking": sources: banking\bank_mutations.gql [969B] banking\bank_queries.gql [434B] banking\cash_mutations.gql [641B] banking\cash_queries.gql [555B] banking\transfer_mutations.gql [662B] banking\transfer_queries.gql [571B] 
-Connector "loans": sources: loans\schema.gql [0B] loans\loan_mutations.gql [1195B] loans\loan_queries.gql [1265B] 
-I0312 11:01:33.820389    5184 codegen.go:80] [connector "banking" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
-I0312 11:01:34.105470    5184 codegen.go:80] [connector "loans" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
-I0312 11:01:34.144396    5184 codegen.go:80] [connector "budgets" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
-I0312 11:01:34.225398    5184 codegen.go:80] [connector "inventory" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
-I0312 11:01:35.417003    5184 codegen.go:80] [connector "employees" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\employees"
-I0312 11:01:35.468236    5184 collector.go:107] schema extensions wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\dataconnect\\.dataconnect\\schema"
-Generated sources: main\mutation.gql [43975B] main\input.gql [196881B] main\relation.gql [103605B] prelude.gql [80730B] main\query.gql [16652B] 
-I0312 11:01:35.537304    5184 collector.go:107] connector "banking" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
-Generated sources: package.json [860B] README.md [68505B] react\index.d.ts [6869B] react\index.cjs.js [5586B] .guides/config.json [236B] react\package.json [457B] react\esm\index.esm.js [5294B] esm\index.esm.js [5953B] react\esm\package.json [17B] react\README.md [74850B] .guides/usage.md [4230B] index.d.ts [14488B] esm\package.json [17B] index.cjs.js [6789B] .guides/setup.md [1679B] 
-I0312 11:01:35.538305    5184 installsdk.go:55] Package @erp-system/banking is already installed. Skipping installation
-I0312 11:01:35.572199    5184 collector.go:107] connector "loans" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
-Generated sources: index.cjs.js [3060B] react\esm\index.esm.js [2456B] .guides/setup.md [1677B] package.json [856B] react\index.d.ts [3131B] react\package.json [453B] .guides/config.json [236B] index.d.ts [8112B] esm\index.esm.js [2675B] README.md [34386B] .guides/usage.md [3062B] esm\package.json [17B] react\esm\package.json [17B] react\index.cjs.js [2587B] react\README.md [39450B] 
-I0312 11:01:35.627417    5184 installsdk.go:55] Package @erp-system/loans is already installed. Skipping installation
-I0312 11:01:35.641410    5184 collector.go:107] connector "budgets" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
-Generated sources: react\README.md [38502B] react\esm\index.esm.js [2393B] .guides/usage.md [3034B] .guides/config.json [236B] esm\index.esm.js [2671B] .guides/setup.md [1679B] index.d.ts [6800B] esm\package.json [17B] index.cjs.js [3044B] README.md [31976B] react\index.d.ts [3141B] react\index.cjs.js [2520B] package.json [860B] react\package.json [457B] react\esm\package.json [17B] 
-I0312 11:01:35.643409    5184 installsdk.go:55] Package @erp-system/budgets is already installed. Skipping installation
-I0312 11:01:35.666878    5184 collector.go:107] connector "inventory" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
-Generated sources: esm\package.json [17B] index.d.ts [22058B] react\esm\package.json [17B] react\index.cjs.js [7375B] .guides/setup.md [1681B] package.json [864B] react\package.json [461B] react\esm\index.esm.js [6983B] react\README.md [108426B] .guides/usage.md [4042B] esm\index.esm.js [8028B] index.cjs.js [9144B] README.md [105661B] react\index.d.ts [9292B] .guides/config.json [236B] 
-I0312 11:01:35.670874    5184 installsdk.go:55] Package @erp-system/inventory is already installed. Skipping installation
-I0312 11:01:35.744423    5184 collector.go:107] connector "employees" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\employees"
-Generated sources: react\index.d.ts [2782B] .guides/usage.md [2797B] esm\package.json [17B] package.json [864B] README.md [30961B] react\index.cjs.js [2176B] .guides/config.json [236B] index.d.ts [6699B] index.cjs.js [2615B] react\package.json [461B] .guides/setup.md [1681B] esm\index.esm.js [2280B] react\esm\package.json [17B] react\esm\index.esm.js [2063B] react\README.md [36630B] 
-I0312 11:01:35.875186    5184 installsdk.go:86] Running command: C:\Program Files\nodejs\npm.cmd install file:src\dataconnect-generated\employees
-I0312 11:01:47.787934    5184 load.go:109] Finished reloading
-I0312 11:23:39.814956    5184 execute.go:57] Database ping is quick (likely cached), took 1.6748ms
-I0312 11:23:39.824090    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listCashInHand: succeeded. Connector: banking
-I0312 11:23:41.139983    5184 execute.go:57] Database ping is quick (likely cached), took 1.0872ms
-I0312 11:23:41.158913    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listTransfers: succeeded. Connector: banking
-I0312 11:23:43.192965    5184 execute.go:57] Database ping is quick (likely cached), took 1.3227ms
-I0312 11:23:43.201715    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listBanks: succeeded. Connector: banking
-I0312 11:24:14.651574    5184 execute.go:57] Database ping is quick (likely cached), took 861µs
-I0312 11:24:14.681587    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation BankInsert: succeeded. Connector: banking
-I0312 11:24:14.790607    5184 execute.go:57] Database ping is quick (likely cached), took 794.1µs
-I0312 11:24:14.796207    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listBanks: succeeded. Connector: banking
-I0312 11:24:44.428677    5184 execute.go:57] Database ping is quick (likely cached), took 505.1µs
-I0312 11:24:44.435089    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation BankInsert: succeeded. Connector: banking
-I0312 11:24:44.528702    5184 execute.go:57] Database ping is quick (likely cached), took 845.3µs
-I0312 11:24:44.531993    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listBanks: succeeded. Connector: banking
-I0312 11:26:35.193034    5184 execute.go:57] Database ping is quick (likely cached), took 1.4741ms
-I0312 11:26:35.200230    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listCashInHand: succeeded. Connector: banking
-I0312 11:26:38.252122    5184 execute.go:57] Database ping is quick (likely cached), took 916.5µs
-I0312 11:26:38.257900    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listBanks: succeeded. Connector: banking
-I0312 11:26:42.332727    5184 execute.go:57] Database ping is quick (likely cached), took 1.3422ms
-I0312 11:26:42.345730    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListEmployees: succeeded. Connector: employees
-I0312 11:27:42.787424    5184 execute.go:57] Database ping is quick (likely cached), took 3.5087ms
-I0312 11:27:42.796917    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation employeeInsert: succeeded. Connector: employees
-I0312 11:27:42.877562    5184 execute.go:57] Database ping is quick (likely cached), took 999.2µs
-I0312 11:27:42.887461    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListEmployees: succeeded. Connector: employees
-I0312 11:27:52.093968    5184 execute.go:57] Database ping is quick (likely cached), took 513.3µs
-I0312 11:27:52.103605    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListEmployees: succeeded. Connector: employees
-I0312 11:27:56.145701    5184 execute.go:57] Database ping is quick (likely cached), took 1.3728ms
-I0312 11:27:56.151467    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery GetEmployeeById: succeeded. Connector: employees
-I0312 11:28:03.686852    5184 execute.go:57] Database ping is quick (likely cached), took 986.8µs
-I0312 11:28:03.704377    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation employeeUpdate: succeeded. Connector: employees
-I0312 11:28:03.767567    5184 execute.go:57] Database ping is quick (likely cached), took 1.308ms
-I0312 11:28:03.773389    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListEmployees: succeeded. Connector: employees
-I0312 11:29:06.815178    5184 execute.go:57] Database ping is quick (likely cached), took 820.7µs
-I0312 11:29:06.819414    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation employeeInsert: succeeded. Connector: employees
-I0312 11:29:06.900791    5184 execute.go:57] Database ping is quick (likely cached), took 999.4µs
-I0312 11:29:06.909784    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListEmployees: succeeded. Connector: employees
-I0312 11:30:50.185561    5184 execute.go:57] Database ping is quick (likely cached), took 1.2486ms
-I0312 11:30:50.190656    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listBanks: succeeded. Connector: banking
-I0312 11:30:51.191647    5184 execute.go:57] Database ping is quick (likely cached), took 1.8102ms
-I0312 11:30:51.198349    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listTransfers: succeeded. Connector: banking
-I0312 11:30:52.484061    5184 execute.go:57] Database ping is quick (likely cached), took 1.5109ms
-I0312 11:30:52.488163    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listCashInHand: succeeded. Connector: banking
-I0312 11:30:59.678332    5184 execute.go:57] Database ping is quick (likely cached), took 2.0158ms
-I0312 11:30:59.684677    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListEmployees: succeeded. Connector: employees
-I0312 11:56:47.745757    5184 execute.go:57] Database ping is quick (likely cached), took 1.5085ms
-I0312 11:56:47.751764    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listBanks: succeeded. Connector: banking
-I0312 11:56:49.282197    5184 execute.go:57] Database ping is quick (likely cached), took 605µs
-I0312 11:56:49.291961    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listTransfers: succeeded. Connector: banking
-I0312 11:56:51.738290    5184 execute.go:57] Database ping is quick (likely cached), took 840.3µs
-I0312 11:56:51.742085    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listCashInHand: succeeded. Connector: banking
-I0312 11:56:54.386929    5184 execute.go:57] Database ping is quick (likely cached), took 1.0193ms
-I0312 11:56:54.391325    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listBudgets: succeeded. Connector: budgets
-I0312 11:56:57.564229    5184 execute.go:57] Database ping is quick (likely cached), took 591.8µs
-I0312 11:56:57.570428    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListEmployees: succeeded. Connector: employees
-I0312 12:08:41.869914    5184 execute.go:57] Database ping is quick (likely cached), took 980µs
-I0312 12:08:41.874436    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 12:08:41.881354    5184 execute.go:57] Database ping is quick (likely cached), took 980.9µs
-I0312 12:08:41.885114    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation brandInsert: succeeded. Connector: inventory
-I0312 12:08:41.890497    5184 execute.go:57] Database ping is quick (likely cached), took 537.2µs
-I0312 12:08:41.896434    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 12:08:41.901746    5184 execute.go:57] Database ping is quick (likely cached), took 689.2µs
-I0312 12:08:41.904147    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 12:28:04.277546    5184 execute.go:57] Database ping is quick (likely cached), took 2.5387ms
-I0312 12:28:04.281202    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listCashInHand: succeeded. Connector: banking
-I0312 12:28:07.678118    5184 execute.go:57] Database ping is quick (likely cached), took 530.4µs
-I0312 12:28:07.684361    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listTransfers: succeeded. Connector: banking
-I0312 12:28:10.224449    5184 execute.go:57] Database ping is quick (likely cached), took 1.0204ms
-I0312 12:28:10.227627    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery listBanks: succeeded. Connector: banking
-I0312 12:28:19.328216    5184 execute.go:57] Database ping is quick (likely cached), took 531.1µs
-I0312 12:28:19.332255    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListEmployees: succeeded. Connector: employees
-I0312 12:29:07.118561    5184 execute.go:57] Database ping is quick (likely cached), took 741.4µs
-I0312 12:29:07.121557    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 12:29:07.127212    5184 execute.go:57] Database ping is quick (likely cached), took 646.3µs
-I0312 12:29:07.129878    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation brandInsert: succeeded. Connector: inventory
-I0312 12:29:07.135666    5184 execute.go:57] Database ping is quick (likely cached), took 761.1µs
-I0312 12:29:07.138254    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 12:29:07.142893    5184 execute.go:57] Database ping is quick (likely cached), took 717.3µs
-I0312 12:29:07.145609    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 12:40:42.595264    5184 execute.go:57] Database ping is quick (likely cached), took 1.053ms
-I0312 12:40:42.598932    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 12:40:42.607491    5184 execute.go:57] Database ping is quick (likely cached), took 979.7µs
-I0312 12:40:42.610656    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation brandInsert: succeeded. Connector: inventory
-I0312 12:40:42.617716    5184 execute.go:57] Database ping is quick (likely cached), took 806.2µs
-I0312 12:40:42.620408    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 12:40:42.626348    5184 execute.go:57] Database ping is quick (likely cached), took 971.4µs
-I0312 12:40:42.629347    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:13:28.030903    5184 execute.go:57] Database ping is quick (likely cached), took 1.3716ms
-I0312 13:13:28.034252    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:13:28.043855    5184 execute.go:57] Database ping is quick (likely cached), took 1.0874ms
-I0312 13:13:28.046498    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation brandInsert: succeeded. Connector: inventory
-I0312 13:13:28.054527    5184 execute.go:57] Database ping is quick (likely cached), took 949.1µs
-I0312 13:13:28.057207    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:13:28.063915    5184 execute.go:57] Database ping is quick (likely cached), took 915.6µs
-I0312 13:13:28.068559    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:13:28.075240    5184 execute.go:57] Database ping is quick (likely cached), took 1.0852ms
-I0312 13:13:28.078939    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:13:28.221986    5184 execute.go:57] Database ping is quick (likely cached), took 1.007ms
-I0312 13:13:28.231653    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:17:03.976215    5184 execute.go:57] Database ping is quick (likely cached), took 1.1563ms
-I0312 13:17:03.979584    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:17:03.989068    5184 execute.go:57] Database ping is quick (likely cached), took 1.0155ms
-I0312 13:17:03.993908    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation brandInsert: succeeded. Connector: inventory
-I0312 13:17:04.003017    5184 execute.go:57] Database ping is quick (likely cached), took 1.2345ms
-I0312 13:17:04.007511    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:17:04.014622    5184 execute.go:57] Database ping is quick (likely cached), took 1.0007ms
-I0312 13:17:04.017846    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:17:04.184195    5184 execute.go:57] Database ping is quick (likely cached), took 1.0003ms
-I0312 13:17:04.190425    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:22:31.038265    5184 execute.go:57] Database ping is quick (likely cached), took 1.2363ms
-I0312 13:22:31.041890    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:22:31.052672    5184 execute.go:57] Database ping is quick (likely cached), took 1.1229ms
-I0312 13:22:31.055526    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation brandInsert: succeeded. Connector: inventory
-I0312 13:22:31.062649    5184 execute.go:57] Database ping is quick (likely cached), took 1.0252ms
-I0312 13:22:31.066800    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:22:31.074903    5184 execute.go:57] Database ping is quick (likely cached), took 966.4µs
-I0312 13:22:31.077876    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:22:31.196638    5184 execute.go:57] Database ping is quick (likely cached), took 1.9986ms
-I0312 13:22:31.205714    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service f357] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:24:12.624541    5184 load.go:31] Reloading schema and connectors...
-I0312 13:24:13.918026    5184 control.go:100] [projects/emulator/locations/emulator/services/erp-system-service bc5d] UpdateResources(): done
-Main schema: sources: schema\schema.gql [5604B] 
-Connector "banking": sources: banking\bank_mutations.gql [969B] banking\bank_queries.gql [434B] banking\cash_mutations.gql [641B] banking\cash_queries.gql [555B] banking\transfer_mutations.gql [662B] banking\transfer_queries.gql [571B] 
+Connector "banking": sources: banking\bank_queries.gql [434B] banking\cash_mutations.gql [641B] banking\cash_queries.gql [555B] banking\transfer_mutations.gql [662B] banking\transfer_queries.gql [571B] banking\bank_mutations.gql [969B] 
 Connector "loans": sources: loans\loan_mutations.gql [1195B] loans\loan_queries.gql [1265B] loans\schema.gql [0B] 
-Connector "budgets": sources: budgets\budget_mutations.gql [1235B] budgets\budget_queries.gql [517B] 
-Connector "inventory": sources: inventory\model_mutations.gql [1059B] inventory\model_queries.gql [543B] inventory\brand_mutations.gql [761B] inventory\brand_queries.gql [457B] inventory\inventory_mutations.gql [9687B] inventory\inventory_queries.gql [0B] 
-Connector "employees": sources: employees\employees.gql [633B] employees\employees_mutations.gql [1823B] 
-I0312 13:24:14.049499    5184 codegen.go:80] [connector "banking" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
-I0312 13:24:14.117245    5184 codegen.go:80] [connector "loans" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
-I0312 13:24:14.170749    5184 codegen.go:80] [connector "budgets" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
-I0312 13:24:14.216581    5184 codegen.go:80] [connector "inventory" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
-I0312 13:24:14.318349    5184 codegen.go:80] [connector "employees" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\employees"
-I0312 13:24:14.363891    5184 collector.go:107] schema extensions wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\dataconnect\\.dataconnect\\schema"
-Generated sources: main\input.gql [196881B] main\relation.gql [103605B] main\query.gql [16652B] main\mutation.gql [43975B] prelude.gql [80730B] 
-I0312 13:24:14.375886    5184 collector.go:107] connector "banking" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
-Generated sources: esm\index.esm.js [5953B] index.cjs.js [6789B] README.md [68505B] react\esm\index.esm.js [5294B] react\README.md [74850B] .guides/config.json [236B] index.d.ts [14488B] esm\package.json [17B] package.json [860B] react\package.json [457B] react\esm\package.json [17B] react\index.cjs.js [5586B] .guides/usage.md [4270B] react\index.d.ts [6869B] .guides/setup.md [1679B] 
-I0312 13:24:14.378884    5184 installsdk.go:55] Package @erp-system/banking is already installed. Skipping installation
-I0312 13:24:14.390875    5184 collector.go:107] connector "loans" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
-Generated sources: react\package.json [453B] .guides/setup.md [1677B] esm\index.esm.js [2675B] index.cjs.js [3060B] react\esm\package.json [17B] react\esm\index.esm.js [2456B] react\README.md [39450B] .guides/config.json [236B] esm\package.json [17B] package.json [856B] react\index.d.ts [3131B] react\index.cjs.js [2587B] index.d.ts [8112B] README.md [34386B] .guides/usage.md [3062B] 
-I0312 13:24:14.519088    5184 installsdk.go:55] Package @erp-system/loans is already installed. Skipping installation
-I0312 13:24:14.532597    5184 collector.go:107] connector "budgets" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
-Generated sources: index.cjs.js [3044B] README.md [31976B] react\esm\index.esm.js [2393B] .guides/setup.md [1679B] esm\package.json [17B] react\package.json [457B] react\esm\package.json [17B] react\index.cjs.js [2520B] .guides/config.json [236B] package.json [860B] .guides/usage.md [3034B] index.d.ts [6800B] esm\index.esm.js [2671B] react\index.d.ts [3141B] react\README.md [38502B] 
-I0312 13:24:14.534596    5184 installsdk.go:55] Package @erp-system/budgets is already installed. Skipping installation
-I0312 13:24:14.544591    5184 collector.go:107] connector "inventory" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
-Generated sources: esm\package.json [17B] package.json [864B] react\index.d.ts [9292B] react\README.md [108426B] .guides/usage.md [4378B] .guides/config.json [236B] index.d.ts [22058B] esm\index.esm.js [8028B] index.cjs.js [9144B] README.md [105661B] react\esm\index.esm.js [6983B] .guides/setup.md [1681B] react\package.json [461B] react\esm\package.json [17B] react\index.cjs.js [7375B] 
-I0312 13:24:14.545591    5184 installsdk.go:55] Package @erp-system/inventory is already installed. Skipping installation
-I0312 13:24:14.570171    5184 collector.go:107] connector "employees" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\employees"
-Generated sources: react\esm\index.esm.js [2063B] .guides/setup.md [1681B] index.d.ts [6699B] esm\package.json [17B] react\package.json [461B] index.cjs.js [2615B] esm\index.esm.js [2280B] package.json [864B] react\index.d.ts [2782B] react\esm\package.json [17B] react\index.cjs.js [2176B] .guides/config.json [236B] README.md [30961B] react\README.md [36630B] .guides/usage.md [2797B] 
-I0312 13:24:14.573169    5184 installsdk.go:55] Package @erp-system/employees is already installed. Skipping installation
-I0312 13:24:14.573169    5184 load.go:109] Finished reloading
-I0312 13:24:17.713155    5184 execute.go:57] Database ping is quick (likely cached), took 2.9574ms
-I0312 13:24:17.719940    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service bc5d] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:24:17.955318    5184 execute.go:57] Database ping is quick (likely cached), took 1.2209ms
-I0312 13:24:17.960741    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service bc5d] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:24:19.751339    5184 execute.go:57] Database ping is quick (likely cached), took 3.194ms
-I0312 13:24:19.760136    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service bc5d] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:24:19.890496    5184 execute.go:57] Database ping is quick (likely cached), took 949.8µs
-I0312 13:24:19.896577    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service bc5d] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:24:20.697629    5184 execute.go:57] Database ping is quick (likely cached), took 1.2102ms
-I0312 13:24:20.703109    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service bc5d] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:24:21.753628    5184 execute.go:57] Database ping is quick (likely cached), took 528.1µs
-I0312 13:24:21.759608    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service bc5d] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:24:52.625879    5184 load.go:31] Reloading schema and connectors...
-I0312 13:24:53.975496    5184 control.go:100] [projects/emulator/locations/emulator/services/erp-system-service d726] UpdateResources(): done
+I0313 22:12:57.983872    2064 codegen.go:80] [connector "banking" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
+I0313 22:12:58.044771    2064 codegen.go:80] [connector "loans" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
+I0313 22:12:58.064758    2064 codegen.go:80] [connector "budgets" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
+I0313 22:12:58.104074    2064 codegen.go:80] [connector "inventory" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
+I0313 22:12:58.172304    2064 codegen.go:80] [connector "employees" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\employees"
+I0313 22:12:58.205987    2064 collector.go:107] schema extensions wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\dataconnect\\.dataconnect\\schema"
+Generated sources: main\mutation.gql [43975B] main\input.gql [196881B] main\relation.gql [103605B] main\query.gql [16652B] prelude.gql [80731B] 
+I0313 22:12:58.245459    2064 collector.go:107] connector "banking" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
+Generated sources: index.d.ts [14488B] esm\package.json [17B] index.cjs.js [6789B] package.json [860B] react\esm\package.json [17B] .guides/config.json [236B] .guides/usage.md [4230B] .guides/setup.md [1679B] esm\index.esm.js [5953B] README.md [68505B] react\README.md [74850B] react\index.d.ts [6869B] react\package.json [457B] react\index.cjs.js [5586B] react\esm\index.esm.js [5294B] 
+I0313 22:12:58.369510    2064 installsdk.go:55] Package @erp-system/banking is already installed. Skipping installation
+I0313 22:12:58.388498    2064 collector.go:107] connector "loans" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
+Generated sources: react\index.cjs.js [2587B] .guides/setup.md [1677B] esm\index.esm.js [2675B] index.cjs.js [3060B] react\esm\package.json [17B] react\esm\index.esm.js [2456B] index.d.ts [8112B] esm\package.json [17B] package.json [856B] README.md [34386B] react\index.d.ts [3131B] .guides/usage.md [3062B] .guides/config.json [236B] react\package.json [453B] react\README.md [39450B] 
+I0313 22:12:58.391496    2064 installsdk.go:55] Package @erp-system/loans is already installed. Skipping installation
+I0313 22:12:58.407488    2064 collector.go:107] connector "budgets" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
+Generated sources: react\esm\package.json [17B] index.d.ts [6800B] esm\index.esm.js [2671B] README.md [31976B] react\index.cjs.js [2520B] .guides/setup.md [1679B] .guides/config.json [236B] index.cjs.js [3044B] react\index.d.ts [3141B] esm\package.json [17B] package.json [860B] react\esm\index.esm.js [2393B] react\README.md [38502B] .guides/usage.md [3034B] react\package.json [457B] 
+I0313 22:12:58.414483    2064 installsdk.go:55] Package @erp-system/budgets is already installed. Skipping installation
+I0313 22:12:58.540979    2064 collector.go:107] connector "inventory" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
+Generated sources: esm\index.esm.js [9732B] .guides/usage.md [4122B] index.cjs.js [11120B] package.json [864B] README.md [128544B] react\index.d.ts [11260B] react\package.json [461B] react\index.cjs.js [9013B] react\esm\index.esm.js [8525B] .guides/setup.md [1681B] react\esm\package.json [17B] react\README.md [130067B] .guides/config.json [236B] index.d.ts [29945B] esm\package.json [17B] 
+I0313 22:12:58.648122    2064 installsdk.go:55] Package @erp-system/inventory is already installed. Skipping installation
+I0313 22:12:58.660114    2064 collector.go:107] connector "employees" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\employees"
+Generated sources: esm\index.esm.js [2280B] esm\package.json [17B] react\package.json [461B] index.d.ts [6699B] index.cjs.js [2615B] react\index.d.ts [2782B] react\esm\index.esm.js [2063B] react\README.md [36630B] .guides/usage.md [2797B] .guides/setup.md [1681B] .guides/config.json [236B] package.json [864B] README.md [30961B] react\esm\package.json [17B] react\index.cjs.js [2176B] 
+I0313 22:12:58.986591    2064 installsdk.go:55] Package @erp-system/employees is already installed. Skipping installation
+I0313 22:12:58.986591    2064 load.go:109] Finished reloading
+I0313 22:12:59.030566    2064 dev.go:104] Listening on address (HTTP + gRPC): 127.0.0.1:9399
+I0313 22:12:59.033564    2064 dev.go:104] Listening on address (HTTP + gRPC): [::1]:9399
+I0313 22:13:09.415193    2064 control.go:100] [projects/emulator/locations/emulator/services/erp-system-service d91d] UpdateResources(): done
 Main schema: sources: schema\schema.gql [5604B] 
-Connector "loans": sources: loans\loan_mutations.gql [1195B] loans\loan_queries.gql [1265B] loans\schema.gql [0B] 
-Connector "budgets": sources: budgets\budget_mutations.gql [1235B] budgets\budget_queries.gql [517B] 
-Connector "inventory": sources: inventory\inventory_queries.gql [1999B] inventory\model_mutations.gql [1059B] inventory\model_queries.gql [543B] inventory\brand_mutations.gql [761B] inventory\brand_queries.gql [457B] inventory\inventory_mutations.gql [9687B] 
 Connector "employees": sources: employees\employees.gql [633B] employees\employees_mutations.gql [1823B] 
-Connector "banking": sources: banking\cash_queries.gql [555B] banking\transfer_mutations.gql [662B] banking\transfer_queries.gql [571B] banking\bank_mutations.gql [969B] banking\bank_queries.gql [434B] banking\cash_mutations.gql [641B] 
-I0312 13:24:54.156460    5184 codegen.go:80] [connector "banking" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
-I0312 13:24:54.261233    5184 codegen.go:80] [connector "loans" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
-I0312 13:24:54.301860    5184 codegen.go:80] [connector "budgets" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
-I0312 13:24:54.405701    5184 codegen.go:80] [connector "inventory" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
-I0312 13:24:54.492972    5184 codegen.go:80] [connector "employees" javascriptSdk] Generating sources into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\employees"
-I0312 13:24:54.538786    5184 collector.go:107] schema extensions wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\dataconnect\\.dataconnect\\schema"
-Generated sources: prelude.gql [80730B] main\input.gql [196881B] main\relation.gql [103605B] main\query.gql [16652B] main\mutation.gql [43975B] 
-I0312 13:24:54.548787    5184 collector.go:107] connector "banking" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\banking"
-Generated sources: index.d.ts [14488B] esm\package.json [17B] index.cjs.js [6789B] README.md [68505B] react\index.cjs.js [5586B] .guides/setup.md [1679B] package.json [860B] react\esm\index.esm.js [5294B] .guides/config.json [236B] esm\index.esm.js [5953B] react\index.d.ts [6869B] react\package.json [457B] react\esm\package.json [17B] react\README.md [74850B] .guides/usage.md [4198B] 
-I0312 13:24:54.550785    5184 installsdk.go:55] Package @erp-system/banking is already installed. Skipping installation
-I0312 13:24:54.594347    5184 collector.go:107] connector "loans" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\loans"
-Generated sources: react\index.d.ts [3131B] react\esm\index.esm.js [2456B] react\README.md [39450B] .guides/setup.md [1677B] .guides/config.json [236B] index.d.ts [8112B] README.md [34386B] react\esm\package.json [17B] esm\index.esm.js [2675B] esm\package.json [17B] react\package.json [453B] react\index.cjs.js [2587B] .guides/usage.md [3062B] index.cjs.js [3060B] package.json [856B] 
-I0312 13:24:54.602344    5184 installsdk.go:55] Package @erp-system/loans is already installed. Skipping installation
-I0312 13:24:54.616334    5184 collector.go:107] connector "budgets" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\budgets"
-Generated sources: index.d.ts [6800B] esm\index.esm.js [2671B] react\index.d.ts [3141B] react\index.cjs.js [2520B] .guides/usage.md [3034B] README.md [31976B] .guides/setup.md [1679B] package.json [860B] react\package.json [457B] react\README.md [38502B] .guides/config.json [236B] esm\package.json [17B] index.cjs.js [3044B] react\esm\package.json [17B] react\esm\index.esm.js [2393B] 
-I0312 13:24:54.618334    5184 installsdk.go:55] Package @erp-system/budgets is already installed. Skipping installation
-I0312 13:24:54.630195    5184 collector.go:107] connector "inventory" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\inventory"
-Generated sources: index.d.ts [26385B] esm\index.esm.js [8832B] react\index.d.ts [10180B] react\package.json [461B] react\index.cjs.js [8162B] .guides/setup.md [1681B] .guides/config.json [236B] index.cjs.js [10060B] react\esm\package.json [17B] package.json [864B] react\README.md [119442B] esm\package.json [17B] README.md [117098B] react\esm\index.esm.js [7730B] .guides/usage.md [4122B] 
-I0312 13:24:54.777982    5184 installsdk.go:55] Package @erp-system/inventory is already installed. Skipping installation
-I0312 13:24:54.787979    5184 collector.go:107] connector "employees" javascriptSdk wrote into "C:\\Users\\Arab Line\\Desktop\\Pak-Det\\Current\\CashFlow_System\\src\\dataconnect-generated\\employees"
-Generated sources: index.cjs.js [2615B] react\package.json [461B] README.md [30961B] .guides/config.json [236B] index.d.ts [6699B] esm\package.json [17B] package.json [864B] react\index.d.ts [2782B] react\esm\package.json [17B] react\esm\index.esm.js [2063B] react\README.md [36630B] .guides/usage.md [2797B] esm\index.esm.js [2280B] react\index.cjs.js [2176B] .guides/setup.md [1681B] 
-I0312 13:24:54.789976    5184 installsdk.go:55] Package @erp-system/employees is already installed. Skipping installation
-I0312 13:24:54.789976    5184 load.go:109] Finished reloading
-I0312 13:33:42.249127    5184 execute.go:57] Database ping is quick (likely cached), took 1.5775ms
-I0312 13:33:42.253078    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:33:42.262441    5184 execute.go:57] Database ping is quick (likely cached), took 1.1233ms
-I0312 13:33:42.265463    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteMutation brandInsert: succeeded. Connector: inventory
-I0312 13:33:42.274742    5184 execute.go:57] Database ping is quick (likely cached), took 1.0419ms
-I0312 13:33:42.277895    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:33:42.285743    5184 execute.go:57] Database ping is quick (likely cached), took 986.4µs
-I0312 13:33:42.289050    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:33:42.414187    5184 execute.go:57] Database ping is quick (likely cached), took 978.2µs
-I0312 13:33:42.422598    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:35:32.489477    5184 execute.go:57] Database ping is quick (likely cached), took 999.1µs
-I0312 13:35:32.499471    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:46:35.766873    5184 execute.go:57] Database ping is quick (likely cached), took 1.1675ms
-I0312 13:46:35.771043    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 13:46:35.780232    5184 execute.go:57] Database ping is quick (likely cached), took 1.0435ms
-I0312 13:46:35.782990    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:46:35.789820    5184 execute.go:57] Database ping is quick (likely cached), took 852.4µs
-I0312 13:46:35.792791    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteMutation modelInsert: succeeded. Connector: inventory
-I0312 13:46:35.921576    5184 execute.go:57] Database ping is quick (likely cached), took 6.1084ms
-I0312 13:46:35.929821    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteQuery ListBrands: succeeded. Connector: inventory
-I0312 14:54:36.397468    5184 execute.go:57] Database ping is quick (likely cached), took 1.252ms
-I0312 14:54:36.402086    5184 engine.go:208] [projects/emulator/locations/emulator/services/erp-system-service d726] ExecuteQuery listCashInHand: succeeded. Connector: banking
+Connector "inventory": sources: inventory\brand_queries.gql [457B] inventory\inventory_mutations.gql [10258B] inventory\inventory_queries.gql [3840B] inventory\model_mutations.gql [1059B] inventory\model_queries.gql [543B] inventory\brand_mutations.gql [761B] 
+Connector "loans": sources: loans\loan_queries.gql [1265B] loans\schema.gql [0B] loans\loan_mutations.gql [1195B] 
+Connector "banking": sources: banking\transfer_mutations.gql [662B] banking\transfer_queries.gql [571B] banking\bank_mutations.gql [969B] banking\bank_queries.gql [434B] banking\cash_mutations.gql [641B] banking\cash_queries.gql [555B] 
+Connector "budgets": sources: budgets\budget_mutations.gql [1235B] budgets\budget_queries.gql [517B] 

@@ -1,29 +1,14 @@
-# Employee DataConnect Fix Progress
+# Firebase Import Fix - inventoryDataConnectService.ts
 
-## Completed ✅
-- [x] Created dataconnect/employees/employees.gql (queries)
-- [x] Created dataconnect/employees/employees_mutations.gql (mutations)  
-- [x] Updated dataconnect/dataconnect.yaml (added employees to connectorDirs)
-- [x] Fixed employeeDataConnectService.ts import to '@erp-system/employees'
+## Status: In Progress
 
-## Next Steps ⏳
-1. **Regenerate SDK**: Run SDK generation command
-2. **Restart DataConnect Emulator**: `start-emulator.ps1` or `firebase emulators:start`
-3. **Restart dev server**: `npm run dev`
-4. **Test**: Navigate to employees page, add/fetch employees
+**✅ Step 1: Create TODO.md** - Done
 
-## Commands to run:
-```
-# Generate SDK (check regenerate-sdk.ps1 or use CLI)
-./regenerate-sdk.ps1
+**✅ Step 2: Add `export { app };` to src/api/firebase/firebase.ts** - Done
 
-# Or Firebase CLI:
-npx firebase dataconnect:sdk-generate
+**✅ Step 3: Verify the import error is resolved**
 
-# Restart emulator if running
-# Ctrl+C then start-emulator.ps1
+**✅ Step 4: Test inventory service functionality**
 
-# Dev server
-npm run dev
-```
+**✅ Step 5: Update TODO.md with completion status** - Fixed!
 

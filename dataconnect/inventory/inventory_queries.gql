@@ -1,4 +1,4 @@
-# Inventory Queries - Read operations for Products
+# Inventory Queries - Read operations for Products and Receivables
 
 query ListProducts(
   $limit: Int = 100
@@ -24,6 +24,10 @@ query ListProducts(
     modelId
     costingId
     costingOption
+    # Receivable fields - commented (not in Product schema)
+    # billId
+    # receivableStatus
+    # expectedReceiveDate
     # Flat costing fields for backward compatibility
     costingUnits
     costingUnitCostUSD
@@ -47,6 +51,86 @@ query ListProducts(
     updatedAt
   }
 }
+
+query ListReceivableProducts(
+  $limit: Int = 100
+  $offset: Int = 0
+  $status: String = "Pending"
+) @auth(level: PUBLIC) {
+  products(
+    where: {
+      # receivableStatus: { eq: $status }  # commented - no field in Product_Filter
+      _or: [
+        { status: { eq: "On-Order" } }
+        { status: { eq: "Receivable" } }
+      ]
+    }
+    limit: $limit
+    offset: $offset
+    # orderBy: { expectedReceiveDate: ASC } # Commented out - field not in Product
+  ) {
+    id
+    brandName
+    modelName
+    category
+    costPrice
+    sellPrice
+    stock
+    status
+    serialNumbers
+    createdAt
+  }
+}
+
+query GetReceivableProduct($id: String!) @auth(level: PUBLIC) {
+  product(id: $id) {
+    id
+    brandName
+    modelName
+    category
+    costPrice
+    sellPrice
+    buyType
+    warrantyYears
+    stock
+    description
+    status
+    isDamaged
+    serialNumbers
+    serialCities
+    serialStatus
+    brandId
+    modelId
+    costingId
+    costingOption
+    # Receivable fields - commented (not in Product schema)
+    # billId
+    # receivableStatus
+    # expectedReceiveDate
+    # Flat costing fields for backward compatibility
+    costingUnits
+    costingUnitCostUSD
+    costingTotalCostUSD
+    costingPercentage
+    costingCustomPerModel
+    costingCustomPerUnit
+    costingFreightPerModel
+    costingFreightPerUnit
+    costingUnitCostPKR
+    costingTotalUnitCost
+    costingTotalShipmentValuePKR
+    costingUsdRate
+    costingTotalCustomsValue
+    costingTotalFreightValue
+    costingShipmentTotalUSD
+    costingConsignmentValue
+    costingTotalValueOfBrand
+    costingModelsJson
+    createdAt
+    updatedAt
+  }
+}
+
 
 query GetProductById($id: String!) @auth(level: PUBLIC) {
   product(id: $id) {

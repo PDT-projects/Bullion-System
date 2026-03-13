@@ -1,37 +1,27 @@
 // Inventory Module - ViewModel Layer
-// useInventoryListViewModel - Business logic for inventory list page
+// useInventoryListViewModel - fetches products from Firestore by inventoryType
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Product, ProductFilters } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
+import { InventoryDataConnectService } from '../../../api/dataconnect/inventoryDataConnectService';
 
-/**
- * Context type from InventoryLayout
- */
 interface InventoryContext {
   products: Product[];
   setProducts: (products: Product[]) => void;
+  refreshProducts?: () => Promise<void>;
 }
 
-/**
- * Return type for useInventoryListViewModel
- */
 interface UseInventoryListViewModelReturn {
-  // Data
   products: Product[];
   allProducts: Product[];
   categories: string[];
-  
-  // Filter State
   filters: ProductFilters;
   showFilters: boolean;
   activeFilterCount: number;
-  
-  // View Modal State
   viewProduct: Product | null;
-  
-  // Stats
+  isLoading: boolean;
   stats: {
     totalProducts: number;
     totalStock: number;
@@ -40,8 +30,6 @@ interface UseInventoryListViewModelReturn {
     inTransit: number;
     available: number;
   };
-  
-  // Actions
   setFilter: (key: keyof ProductFilters, value: any) => void;
   clearFilters: () => void;
   toggleFilters: () => void;
@@ -49,17 +37,21 @@ interface UseInventoryListViewModelReturn {
   onAddNew: () => void;
   onAddToExisting: () => void;
   onTransfer: (id: string) => void;
+  onReceiveProduct?: (id: string) => void;
 }
 
-/**
- * ViewModel hook for Inventory List page
- */
-export function useInventoryListViewModel(): UseInventoryListViewModelReturn {
+export function useInventoryListViewModel(
+  inventoryType: 'in-stock' | 'on-order' = 'in-stock'
+): UseInventoryListViewModelReturn {
   const navigate = useNavigate();
-  const { products: allProducts, setProducts } = useOutletContext<InventoryContext>();
 
-  // ==================== STATE ====================
-  
+  // Try outlet context first (layout may already have products)
+  const outletContext = (useOutletContext<InventoryContext>()) || {};
+  const { setProducts: setContextProducts } = outletContext;
+
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [filters, setFilters] = useState<ProductFilters>({
     brandSearch: '',
     modelSearch: '',
@@ -68,14 +60,32 @@ export function useInventoryListViewModel(): UseInventoryListViewModelReturn {
     buyTypeFilter: '',
     minPrice: null,
     maxPrice: null,
-    hasStock: null
+    hasStock: null,
   });
-  
+
   const [showFilters, setShowFilters] = useState(false);
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
 
-  // ==================== COMPUTED VALUES ====================
-  
+  // Fetch products directly from Firestore by type
+  useEffect(() => {
+    const loadProducts = async () => {
+      setIsLoading(true);
+      try {
+        const fetched = await InventoryDataConnectService.fetchProductsByType(inventoryType);
+        setAllProducts(fetched);
+        // Also update layout context if available
+        if (setContextProducts) setContextProducts(fetched);
+        console.log(`✅ Loaded ${fetched.length} ${inventoryType} products`);
+      } catch (error) {
+        console.error('Error loading products:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, [inventoryType]);
+
   const products = useMemo(() => {
     return InventoryService.filterProducts(allProducts, filters);
   }, [allProducts, filters]);
@@ -92,8 +102,6 @@ export function useInventoryListViewModel(): UseInventoryListViewModelReturn {
     return InventoryService.countActiveProductFilters(filters);
   }, [filters]);
 
-  // ==================== ACTIONS ====================
-  
   const setFilter = useCallback((key: keyof ProductFilters, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   }, []);
@@ -107,7 +115,7 @@ export function useInventoryListViewModel(): UseInventoryListViewModelReturn {
       buyTypeFilter: '',
       minPrice: null,
       maxPrice: null,
-      hasStock: null
+      hasStock: null,
     });
   }, []);
 
@@ -127,6 +135,15 @@ export function useInventoryListViewModel(): UseInventoryListViewModelReturn {
     navigate(`/product-transfer?productId=${id}`);
   }, [navigate]);
 
+  // Mark on-order product as received → moves to in-stock
+  const onReceiveProduct = useCallback(async (id: string) => {
+    const success = await InventoryDataConnectService.receiveProduct(id);
+    if (success) {
+      // Remove from current on-order list
+      setAllProducts(prev => prev.filter(p => p.id !== id));
+    }
+  }, []);
+
   return {
     products,
     allProducts,
@@ -135,13 +152,14 @@ export function useInventoryListViewModel(): UseInventoryListViewModelReturn {
     showFilters,
     activeFilterCount,
     viewProduct,
+    isLoading,
     stats: {
       totalProducts: stats.totalProducts,
       totalStock: stats.totalStock,
       totalValue: stats.totalValue,
       newProducts: stats.newProducts,
       inTransit: stats.inTransit,
-      available: stats.available
+      available: stats.available,
     },
     setFilter,
     clearFilters,
@@ -149,6 +167,7 @@ export function useInventoryListViewModel(): UseInventoryListViewModelReturn {
     setViewProduct,
     onAddNew,
     onAddToExisting,
-    onTransfer
+    onTransfer,
+    onReceiveProduct: inventoryType === 'on-order' ? onReceiveProduct : undefined,
   };
 }

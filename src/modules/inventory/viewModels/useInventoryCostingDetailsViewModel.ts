@@ -4,6 +4,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { CostingOption, InventoryEntryType, CostingModel, CostingInfo } from '../models/types';
 import { 
   createEmptyCostingModel, 
@@ -272,7 +273,9 @@ export function useInventoryCostingDetailsViewModel(): UseInventoryCostingDetail
       navigate(`/inventory/create-new/details?${queryParams.toString()}`);
     } catch (error) {
       console.error('Failed to save costing:', error);
-      setSaveError('Failed to save costing details. Please try again.');
+      const errorMsg = 'Failed to save costing details. Please check your inputs and try again.';
+      setSaveError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsSaving(false);
     }

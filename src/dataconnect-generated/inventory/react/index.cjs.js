@@ -1,4 +1,4 @@
-const { brandInsertRef, brandUpdateRef, brandDeleteRef, listBrandsRef, getBrandByIdRef, costingInsertRef, costingUpdateRef, costingDeleteRef, productInsertRef, productUpdateRef, productDeleteRef, productTransferInsertRef, productTransferUpdateRef, productTransferDeleteRef, listProductsRef, getProductByIdRef, modelInsertRef, modelUpdateRef, modelDeleteRef, listModelsRef, getModelByIdRef, connectorConfig } = require('../index.cjs.js');
+const { brandInsertRef, brandUpdateRef, brandDeleteRef, listBrandsRef, getBrandByIdRef, costingInsertRef, costingUpdateRef, costingDeleteRef, productInsertRef, productUpdateRef, productDeleteRef, productTransferInsertRef, productTransferUpdateRef, productTransferDeleteRef, listProductsRef, listReceivableProductsRef, getReceivableProductRef, getProductByIdRef, modelInsertRef, modelUpdateRef, modelDeleteRef, listModelsRef, getModelByIdRef, connectorConfig } = require('../index.cjs.js');
 const { validateArgs, CallerSdkTypeEnum } = require('firebase/data-connect');
 const { useDataConnectQuery, useDataConnectMutation, validateReactArgs } = require('@tanstack-query-firebase/react/data-connect');
 
@@ -114,6 +114,18 @@ exports.useProductTransferDelete = function useProductTransferDelete(dcOrOptions
 exports.useListProducts = function useListProducts(dcOrVars, varsOrOptions, options) {
   const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateReactArgs(connectorConfig, dcOrVars, varsOrOptions, options, true, false);
   const ref = listProductsRef(dcInstance, inputVars);
+  return useDataConnectQuery(ref, inputOpts, CallerSdkTypeEnum.GeneratedReact);
+}
+
+exports.useListReceivableProducts = function useListReceivableProducts(dcOrVars, varsOrOptions, options) {
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateReactArgs(connectorConfig, dcOrVars, varsOrOptions, options, true, false);
+  const ref = listReceivableProductsRef(dcInstance, inputVars);
+  return useDataConnectQuery(ref, inputOpts, CallerSdkTypeEnum.GeneratedReact);
+}
+
+exports.useGetReceivableProduct = function useGetReceivableProduct(dcOrVars, varsOrOptions, options) {
+  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateReactArgs(connectorConfig, dcOrVars, varsOrOptions, options, true, true);
+  const ref = getReceivableProductRef(dcInstance, inputVars);
   return useDataConnectQuery(ref, inputOpts, CallerSdkTypeEnum.GeneratedReact);
 }
 

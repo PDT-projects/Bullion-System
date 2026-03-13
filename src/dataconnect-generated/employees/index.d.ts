@@ -163,30 +163,6 @@ export interface Product_Key {
   __typename?: 'Product_Key';
 }
 
-interface ListEmployeesRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: ListEmployeesVariables): QueryRef<ListEmployeesData, ListEmployeesVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars?: ListEmployeesVariables): QueryRef<ListEmployeesData, ListEmployeesVariables>;
-  operationName: string;
-}
-export const listEmployeesRef: ListEmployeesRef;
-
-export function listEmployees(vars?: ListEmployeesVariables): QueryPromise<ListEmployeesData, ListEmployeesVariables>;
-export function listEmployees(dc: DataConnect, vars?: ListEmployeesVariables): QueryPromise<ListEmployeesData, ListEmployeesVariables>;
-
-interface GetEmployeeByIdRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: GetEmployeeByIdVariables): QueryRef<GetEmployeeByIdData, GetEmployeeByIdVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: GetEmployeeByIdVariables): QueryRef<GetEmployeeByIdData, GetEmployeeByIdVariables>;
-  operationName: string;
-}
-export const getEmployeeByIdRef: GetEmployeeByIdRef;
-
-export function getEmployeeById(vars: GetEmployeeByIdVariables): QueryPromise<GetEmployeeByIdData, GetEmployeeByIdVariables>;
-export function getEmployeeById(dc: DataConnect, vars: GetEmployeeByIdVariables): QueryPromise<GetEmployeeByIdData, GetEmployeeByIdVariables>;
-
 interface EmployeeInsertRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars?: EmployeeInsertVariables): MutationRef<EmployeeInsertData, EmployeeInsertVariables>;
@@ -222,4 +198,28 @@ export const employeeDeleteRef: EmployeeDeleteRef;
 
 export function employeeDelete(vars?: EmployeeDeleteVariables): MutationPromise<EmployeeDeleteData, EmployeeDeleteVariables>;
 export function employeeDelete(dc: DataConnect, vars?: EmployeeDeleteVariables): MutationPromise<EmployeeDeleteData, EmployeeDeleteVariables>;
+
+interface ListEmployeesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars?: ListEmployeesVariables): QueryRef<ListEmployeesData, ListEmployeesVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars?: ListEmployeesVariables): QueryRef<ListEmployeesData, ListEmployeesVariables>;
+  operationName: string;
+}
+export const listEmployeesRef: ListEmployeesRef;
+
+export function listEmployees(vars?: ListEmployeesVariables): QueryPromise<ListEmployeesData, ListEmployeesVariables>;
+export function listEmployees(dc: DataConnect, vars?: ListEmployeesVariables): QueryPromise<ListEmployeesData, ListEmployeesVariables>;
+
+interface GetEmployeeByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetEmployeeByIdVariables): QueryRef<GetEmployeeByIdData, GetEmployeeByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetEmployeeByIdVariables): QueryRef<GetEmployeeByIdData, GetEmployeeByIdVariables>;
+  operationName: string;
+}
+export const getEmployeeByIdRef: GetEmployeeByIdRef;
+
+export function getEmployeeById(vars: GetEmployeeByIdVariables): QueryPromise<GetEmployeeByIdData, GetEmployeeByIdVariables>;
+export function getEmployeeById(dc: DataConnect, vars: GetEmployeeByIdVariables): QueryPromise<GetEmployeeByIdData, GetEmployeeByIdVariables>;
 

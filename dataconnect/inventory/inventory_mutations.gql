@@ -109,7 +109,12 @@ mutation productInsert(
   $costingShipmentTotalUSD: Float,
   $costingConsignmentValue: Float,
   $costingTotalValueOfBrand: Float,
-  $costingModelsJson: String
+  $costingModelsJson: String,
+  # Receivable fields
+# Receivable fields - commented (not in Product_Data)
+# $billId: String
+# $receivableStatus: String
+# $expectedReceiveDate: String
 ) @auth(level: PUBLIC) {
   product_insert(
     data: {
@@ -150,11 +155,16 @@ mutation productInsert(
       costingConsignmentValue: $costingConsignmentValue
       costingTotalValueOfBrand: $costingTotalValueOfBrand
       costingModelsJson: $costingModelsJson
+      # Receivable fields
+      # billId: $billId
+      # receivableStatus: $receivableStatus
+      # expectedReceiveDate: $expectedReceiveDate
       createdAt: "now()"
       updatedAt: "now()"
     }
   )
 }
+
 
 mutation productUpdate(
   $id: String!,
@@ -194,7 +204,11 @@ mutation productUpdate(
   $costingShipmentTotalUSD: Float,
   $costingConsignmentValue: Float,
   $costingTotalValueOfBrand: Float,
-  $costingModelsJson: String
+  $costingModelsJson: String,
+  # Receivable fields
+  # $billId: String,
+  # $receivableStatus: String,
+  # $expectedReceiveDate: String
 ) @auth(level: PUBLIC) {
   product_update(
     id: $id,
@@ -235,10 +249,15 @@ mutation productUpdate(
       costingConsignmentValue: $costingConsignmentValue
       costingTotalValueOfBrand: $costingTotalValueOfBrand
       costingModelsJson: $costingModelsJson
+      # Receivable fields
+      # billId: $billId
+      # receivableStatus: $receivableStatus
+      # expectedReceiveDate: $expectedReceiveDate
       updatedAt: "now()"
     }
   )
 }
+
 
 mutation productDelete($id: String!) @auth(level: PUBLIC) {
   product_delete(id: $id)

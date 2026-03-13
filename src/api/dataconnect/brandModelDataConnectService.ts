@@ -1,22 +1,25 @@
 /**
  * Brand Model Data Connect Service
- * Functions to fetch brands and models from Firebase Data Connect
+ * Uses correct Firebase Data Connect 0.3.12 API:
+ * - Queries: executeQuery(queryRef)  — already working via generated SDK
+ * - Mutations: executeMutation(mutationRef) — correct API for this version
+ * - Generated functions: brandInsert, modelInsert from @erp-system/inventory
  */
-import { listBrands, listModels, getModelById, brandInsert, modelInsert } from '@erp-system/inventory';
-import type { CostingInfo, CostingModel } from '../../modules/inventory/models/types';
+import {
+  listBrands,
+  listModels,
+  getModelById,
+  brandInsert,
+  modelInsert,
+} from '@erp-system/inventory';
+import type { CostingInfo } from '../../modules/inventory/models/types';
 
-/**
- * Brand interface - defined locally for type safety
- */
 export interface Brand {
   id: string;
   name: string;
   createdAt?: string;
 }
 
-/**
- * Model interface with costPrice and sellPrice - defined locally
- */
 export interface Model {
   id: string;
   brandId: string;
@@ -42,17 +45,16 @@ export interface BrandWithModels {
 }
 
 /**
- * Fetch all brands from the database
+ * Fetch all brands
  */
 export async function fetchBrands(): Promise<Brand[]> {
   try {
     const { data } = await listBrands({ limit: 100, offset: 0 });
-    const brands: Brand[] = ((data as any).brands || []).map((b: any) => ({
+    return ((data as any).brands || []).map((b: any) => ({
       id: b.id,
       name: b.name,
-      createdAt: b.createdAt
+      createdAt: b.createdAt,
     }));
-    return brands;
   } catch (error) {
     console.error('Error fetching brands:', error);
     return [];
@@ -60,15 +62,24 @@ export async function fetchBrands(): Promise<Brand[]> {
 }
 
 /**
- * Fetch all models and filter by brandId client-side
- * (Firebase Data Connect doesn't support server-side filtering for models)
+ * Fetch models filtered by brandId client-side
  */
 export async function fetchModelsByBrand(brandId: string): Promise<Model[]> {
   try {
     const { data } = await listModels({ limit: 100, offset: 0 });
-    // Filter client-side by brandId
-    const models: Model[] = ((data as any).models || []).filter((m: any) => m.brandId === brandId);
-    return models;
+    return ((data as any).models || [])
+      .filter((m: any) => m.brandId === brandId)
+      .map((m: any) => ({
+        id: m.id,
+        brandId: m.brandId,
+        name: m.name,
+        category: m.category || undefined,
+        description: m.description || undefined,
+        costPrice: m.costPrice || undefined,
+        sellPrice: m.sellPrice || undefined,
+        createdAt: m.createdAt || undefined,
+        updatedAt: m.updatedAt || undefined,
+      }));
   } catch (error) {
     console.error('Error fetching models:', error);
     return [];
@@ -82,16 +93,17 @@ export async function fetchModelById(modelId: string): Promise<Model | null> {
   try {
     const { data } = await getModelById({ id: modelId });
     if (!data.model) return null;
+    const m = data.model as any;
     return {
-      id: data.model.id,
-      brandId: data.model.brandId || '',
-      name: data.model.name || '',
-      category: data.model.category || undefined,
-      description: data.model.description || undefined,
-      costPrice: data.model.costPrice || undefined,
-      sellPrice: data.model.sellPrice || undefined,
-      createdAt: data.model.createdAt || undefined,
-      updatedAt: data.model.updatedAt || undefined
+      id: m.id,
+      brandId: m.brandId || '',
+      name: m.name || '',
+      category: m.category || undefined,
+      description: m.description || undefined,
+      costPrice: m.costPrice || undefined,
+      sellPrice: m.sellPrice || undefined,
+      createdAt: m.createdAt || undefined,
+      updatedAt: m.updatedAt || undefined,
     };
   } catch (error) {
     console.error('Error fetching model:', error);
@@ -100,13 +112,41 @@ export async function fetchModelById(modelId: string): Promise<Model | null> {
 }
 
 /**
- * Create a new brand
+ * Find brand by name (case-insensitive)
+ */
+export async function findBrandByName(name: string): Promise<Brand | null> {
+  try {
+    const { data } = await listBrands({ limit: 100, offset: 0 });
+    const brands: Brand[] = (data as any).brands || [];
+    return (
+      brands.find(
+        (b) => b.name.toLowerCase() === name.trim().toLowerCase()
+      ) || null
+    );
+  } catch (error) {
+    console.error('Error finding brand:', error);
+    return null;
+  }
+}
+
+/**
+ * Create a new brand using the generated brandInsert mutation
+ * Checks for duplicates first to prevent re-insertion
  */
 export async function createBrand(vars: { name: string }): Promise<Brand | null> {
   try {
+    // Duplicate guard
+    const existing = await findBrandByName(vars.name);
+    if (existing) {
+      console.log('✅ Brand already exists, reusing:', existing.name);
+      return existing;
+    }
+
     const id = `brand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    await brandInsert({ id, name: vars.name });
-    return { id, name: vars.name };
+    // brandInsert is the generated mutation function from @erp-system/inventory
+    await brandInsert({ id, name: vars.name.trim() });
+    console.log('✅ Brand created:', vars.name, id);
+    return { id, name: vars.name.trim() };
   } catch (error) {
     console.error('Error creating brand:', error);
     return null;
@@ -114,24 +154,31 @@ export async function createBrand(vars: { name: string }): Promise<Brand | null>
 }
 
 /**
- * Create a new model
+ * Create a new model using the generated modelInsert mutation
  */
-export async function createModel(vars: { name: string; brandId: string; costPrice?: number; sellPrice?: number }): Promise<Model | null> {
+export async function createModel(vars: {
+  name: string;
+  brandId: string;
+  costPrice?: number;
+  sellPrice?: number;
+}): Promise<Model | null> {
   try {
     const id = `model_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    await modelInsert({ 
-      id, 
-      name: vars.name, 
+    // modelInsert is the generated mutation function from @erp-system/inventory
+    await modelInsert({
+      id,
+      name: vars.name.trim(),
       brandId: vars.brandId,
       costPrice: vars.costPrice || 0,
-      sellPrice: vars.sellPrice || 0
+      sellPrice: vars.sellPrice || 0,
     });
-    return { 
-      id, 
-      name: vars.name, 
+    console.log('✅ Model created:', vars.name, id);
+    return {
+      id,
+      name: vars.name.trim(),
       brandId: vars.brandId,
       costPrice: vars.costPrice,
-      sellPrice: vars.sellPrice
+      sellPrice: vars.sellPrice,
     };
   } catch (error) {
     console.error('Error creating model:', error);
@@ -140,93 +187,58 @@ export async function createModel(vars: { name: string; brandId: string; costPri
 }
 
 /**
- * Find brand by name (exact match)
+ * Save complete costing info — finds/creates brand then all models
  */
-export async function findBrandByName(name: string): Promise<Brand | null> {
-  try {
-    const { data } = await listBrands({ limit: 100, offset: 0 });
-    const brands: Brand[] = ((data as any).brands || []);
-    const existing = brands.find(b => b.name.toLowerCase() === name.toLowerCase());
-    return existing || null;
-  } catch (error) {
-    console.error('Error finding brand:', error);
-    return null;
+export async function saveCostingToDataConnect(
+  costingInfo: CostingInfo
+): Promise<CostingSaveResult> {
+  const brandName = costingInfo.brandName.trim();
+
+  // Step 1: Find or create brand (duplicate-safe)
+  let brand = await findBrandByName(brandName);
+  if (!brand) {
+    brand = await createBrand({ name: brandName });
   }
-}
+  if (!brand) throw new Error('Failed to find or create brand');
 
-/**
- * Save complete costing info to DataConnect
- * Creates brand if not exists, then all models
- */
-export async function saveCostingToDataConnect(costingInfo: CostingInfo): Promise<CostingSaveResult> {
-  try {
-    // Step 1: Find or create brand
-    let brandId: string;
-    let brandName = costingInfo.brandName.trim();
-    
-    const existingBrand = await findBrandByName(brandName);
-    if (existingBrand) {
-      brandId = existingBrand.id;
-    } else {
-      const newBrand = await createBrand({ name: brandName });
-      if (!newBrand) {
-        throw new Error('Failed to create brand');
-      }
-      brandId = newBrand.id;
-    }
+  const brandId = brand.id;
 
-    // Step 2: Create models from costing info
-    const modelIds: string[] = [];
-    for (const model of costingInfo.models) {
-      if (!model.modelName.trim()) continue;
-      
-      const newModel = await createModel({
-        name: model.modelName,
-        brandId,
-        costPrice: model.totalLandedUnitCost // Save final landed cost per unit
-      });
-      
-      if (newModel) {
-        modelIds.push(newModel.id);
-      }
-    }
-
-    return {
+  // Step 2: Create models
+  const modelIds: string[] = [];
+  for (const model of costingInfo.models) {
+    if (!model.modelName.trim()) continue;
+    const newModel = await createModel({
+      name: model.modelName,
       brandId,
-      brandName,
-      modelIds
-    };
-  } catch (error) {
-    console.error('Error saving costing to DataConnect:', error);
-    throw error;
+      costPrice: model.totalLandedUnitCost,
+    });
+    if (newModel) modelIds.push(newModel.id);
   }
+
+  return { brandId, brandName, modelIds };
 }
 
 /**
- * Fetch all brands with their models (for dropdowns)
+ * Fetch all brands with their models
  */
 export async function fetchBrandsWithModels(): Promise<BrandWithModels[]> {
   try {
     const brands = await fetchBrands();
-    const brandModelsMap: { [key: string]: Model[] } = {};
-    
-    // Group models by brand
     const allModels = await listModels({ limit: 100, offset: 0 });
-    const models: Model[] = ((allModels.data as any).models || []);
-    
-    models.forEach(model => {
-      if (model.brandId && !brandModelsMap[model.brandId]) {
-        brandModelsMap[model.brandId] = [];
-      }
+    const models: Model[] = (allModels.data as any).models || [];
+
+    const brandModelsMap: { [key: string]: Model[] } = {};
+    models.forEach((model) => {
       if (model.brandId) {
+        if (!brandModelsMap[model.brandId]) brandModelsMap[model.brandId] = [];
         brandModelsMap[model.brandId].push(model);
       }
     });
-    
-    return brands.map(brand => ({
+
+    return brands.map((brand) => ({
       brandId: brand.id,
       brandName: brand.name,
-      models: brandModelsMap[brand.id] || []
+      models: brandModelsMap[brand.id] || [],
     }));
   } catch (error) {
     console.error('Error fetching brands with models:', error);

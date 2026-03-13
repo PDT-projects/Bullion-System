@@ -15,6 +15,16 @@ import {
 } from '../models/costingCalculator';
 
 export interface UseInventoryProductDetailsViewModelReturn {
+  // Single model for 'without costing'
+  singleModel: {
+    brandName: string;
+    modelName: string;
+    costPrice: number;
+    sellPrice: number;
+    quantity: number;
+  };
+  setSingleModelField: (field: keyof UseInventoryProductDetailsViewModelReturn['singleModel'], value: string | number) => void;
+
   // State
   formData: ProductFormData;
   costingOption: CostingOption;
@@ -55,7 +65,7 @@ export interface UseInventoryProductDetailsViewModelReturn {
   updateSerialCity: (index: number, value: string) => void;
   
   // Navigation
-  handleNext: () => void;
+  handleNext: (selectedModels?: Array<{ modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number }>) => void;
   handleBack: () => void;
   
   // Utilities
@@ -89,7 +99,19 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   const costingOption = (searchParams.get('costing') as CostingOption) || 'without';
   const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
 
-  // Initialize form data with new multi-model costing structure
+  // Single model state for 'without costing'
+  const [singleModel, setSingleModel] = useState({
+    brandName: '',
+    modelName: '',
+    costPrice: 0,
+    sellPrice: 0,
+    quantity: 1,
+  });
+  
+  const setSingleModelField = useCallback((field: keyof typeof singleModel, value: string | number) => {
+    setSingleModel(prev => ({ ...prev, [field]: value }));
+  }, []);
+
   const [formData, setFormData] = useState<ProductFormData>({
     currentStep: 2,
     costingOption,
@@ -112,8 +134,6 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   const [serialInputs, setSerialInputs] = useState<string[]>([]);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   
-  // Brand-Model dropdown state
-// Brand/Model state managed by BrandModelDropdown component
   // DC brandId/modelIds from URL params (costing screen)
   const dcBrandId = searchParams.get('brandId') || '';
   const dcModelIdsStr = searchParams.get('modelIds') || '[]';
@@ -208,12 +228,6 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     setFormData(prev => ({ ...prev, isDamaged: value }));
   }, []);
 
-  // Brand-Model selection handlers
-// handleBrandChange, handleModelChange handled by BrandModelDropdown component
-  // onBrandChange/onModelChange callbacks update formData.brandName/modelName
-
-
-
   // Multi-Model Costing Global Input Setters
   const setCostingBrandName = useCallback((value: string) => {
     setFormData(prev => ({
@@ -258,15 +272,12 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     setFormData(prev => {
       if (!prev.costing) return prev;
       
-      // Calculate totals for percentage calculation
       const totalUnitCostUSD = prev.costing.models.reduce((sum, m) => sum + m.unitCostUSD, 0);
       const shipmentTotalUSD = prev.costing.models.reduce((sum, m) => sum + m.units * m.unitCostUSD, 0);
       
       const updatedModels = prev.costing.models.map(model => {
         if (model.id === modelId) {
           const updatedModel = { ...model, [field]: value };
-          
-          // Recalculate this model's costs with 6 arguments
           return calculateModelCosts(
             updatedModel,
             totalUnitCostUSD,
@@ -279,7 +290,6 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
         return model;
       });
       
-      // Recalculate summary
       const result = recalculateAllModels(
         updatedModels,
         prev.costing!.usdRate,
@@ -307,7 +317,6 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
       
       const updatedModels = prev.costing.models.filter(m => m.id !== modelId);
       
-      // Recalculate if there are remaining models
       if (updatedModels.length > 0) {
         const result = recalculateAllModels(
           updatedModels,
@@ -329,7 +338,6 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
         };
       }
       
-      // If no models left, reset summary
       return {
         ...prev,
         costing: {
@@ -378,14 +386,15 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   }, [serialInputs]);
 
   // Validation
-  const validateForm = useCallback((): boolean => {
+  const validateForm = useCallback((
+    selectedModels?: Array<{ modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number }>
+  ): boolean => {
     const errors: { [key: string]: string } = {};
     
     if (!formData.brandName.trim()) {
       errors.brandName = 'Brand name is required';
     }
     
-    // Only require modelName when costing option is WITHOUT
     if (costingOption !== 'with' && !formData.modelName.trim()) {
       errors.modelName = 'Model name is required';
     }
@@ -398,23 +407,12 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
       errors.description = 'Description is required';
     }
     
-    // Validate costing if enabled
-    if (costingOption === 'with' && formData.costing) {
-      if (formData.costing.models.length === 0) {
-        errors.models = 'At least one model is required';
+    // For 'with costing', validate selectedModels passed from view
+    if (costingOption === 'with') {
+      const modelsToCheck = selectedModels || [];
+      if (modelsToCheck.length === 0) {
+        errors.models = 'At least one model must be selected';
       }
-      
-      formData.costing.models.forEach((model, index) => {
-        if (!model.modelName.trim()) {
-          errors[`model_${index}`] = `Model ${index + 1} name is required`;
-        }
-        if (model.units <= 0) {
-          errors[`units_${index}`] = `Model ${index + 1} units must be greater than 0`;
-        }
-        if (model.unitCostUSD <= 0) {
-          errors[`unitCost_${index}`] = `Model ${index + 1} unit cost must be greater than 0`;
-        }
-      });
     }
     
     const validSerials = serialInputs.filter(s => s.trim() !== '');
@@ -426,24 +424,21 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     return Object.keys(errors).length === 0;
   }, [formData, serialInputs, costingOption]);
 
+  // isValid - for 'with costing', does NOT require selectedModels (view handles that separately)
   const isValid = useMemo(() => {
-    const hasBasic = formData.brandName.trim() !== '' &&
-           formData.category.trim() !== '' &&
-           formData.description.trim() !== '' &&
-           serialInputs.filter(s => s.trim() !== '').length === formData.stock;
-    
+    const hasBasic =
+      formData.brandName.trim() !== '' &&
+      formData.category.trim() !== '' &&
+      formData.description.trim() !== '' &&
+      serialInputs.filter(s => s.trim() !== '').length === formData.stock;
+
     if (costingOption !== 'with') {
-      // For without costing, modelName is required
+      // Without costing: modelName also required
       return formData.modelName.trim() !== '' && hasBasic;
     }
-    
-    // For with costing, modelName is optional (handled in CostingTable)
-    // Additional validation for costing
-    if (!formData.costing || formData.costing.models.length === 0) return false;
-    
-    return formData.costing.models.every(model => 
-      model.modelName.trim() !== '' && model.units > 0 && model.unitCostUSD > 0
-    ) && hasBasic;
+
+    // With costing: basic fields only - selectedModels check is in the View
+    return hasBasic;
   }, [formData, serialInputs, costingOption]);
 
   // Costing summary for display
@@ -454,10 +449,18 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     totalValueOfBrand: formData.costing?.totalValueOfBrand || 0,
   }), [formData.costing?.totalUnitCostUSD, formData.costing?.shipmentTotalUSD, formData.costing?.consignmentValue, formData.costing?.totalValueOfBrand]);
 
-  // Navigation
-  const handleNext = useCallback(() => {
-    if (!validateForm()) return;
-    
+  // Navigation - accepts selectedModels from the View for 'with costing' path
+  const handleNext = useCallback((
+    selectedModels?: Array<{ modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number }>
+  ) => {
+    if (!validateForm(selectedModels)) return;
+
+    // For 'with costing', require at least one model selected in the view
+    if (costingOption === 'with' && (!selectedModels || selectedModels.length === 0)) {
+      setValidationErrors(prev => ({ ...prev, models: 'At least one model must be selected' }));
+      return;
+    }
+
     const validSerials = serialInputs.filter(s => s.trim() !== '');
     const queryParams = new URLSearchParams({
       type: inventoryType,
@@ -485,16 +488,18 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
       queryParams.set('shipmentTotalUSD', formData.costing.shipmentTotalUSD.toString());
       queryParams.set('consignmentValue', formData.costing.consignmentValue.toString());
       queryParams.set('totalValueOfBrand', formData.costing.totalValueOfBrand.toString());
-      
-      // Serialize models array
       queryParams.set('costingModels', JSON.stringify(formData.costing.models));
+    }
+
+    // Pass selected models from view to payment screen
+    if (selectedModels && selectedModels.length > 0) {
+      queryParams.set('selectedModels', JSON.stringify(selectedModels));
     }
     
     navigate(`/inventory/create-new/payment?${queryParams.toString()}`);
   }, [navigate, formData, serialInputs, costingOption, validateForm, inventoryType]);
 
   const handleBack = useCallback(() => {
-    // Go back to costing details step (or costing option if "without costing")
     if (costingOption === 'with') {
       navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${costingOption}`);
     } else {
@@ -503,6 +508,8 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   }, [navigate, inventoryType, costingOption]);
 
   return {
+    singleModel,
+    setSingleModelField,
     formData,
     costingOption,
     inventoryType,
@@ -530,7 +537,7 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     updateSerialCity,
     handleNext,
     handleBack,
-    showCostingFields: false, // Costing fields are now on separate screen (InventoryCostingDetailsView)
+    showCostingFields: false,
     categories: CATEGORIES,
     cities: CITIES,
     costingSummary,
