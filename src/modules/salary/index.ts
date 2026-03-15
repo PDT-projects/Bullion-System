@@ -1,9 +1,9 @@
 // Salary Module - Public API
-// Export all components, hooks, and types for external use
 
 // Models
 export * from './models/types';
 export { SalaryService } from './models/salaryService';
+export { SalaryFirebaseService } from './models/salaryFirebaseService';
 
 // ViewModels
 export { useSalaryListViewModel } from './viewModels/useSalaryListViewModel';

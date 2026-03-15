@@ -1,47 +1,39 @@
-// Commission Report Wrapper - Connects ViewModel to View
+// Commission Report Wrapper — fetches employees from Firestore
 
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useCommissionReportViewModel } from '../viewModels/useCommissionReportViewModel';
 import { CommissionReportView } from './CommissionReportView';
+import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 import { CITIES } from '../models/commissionService';
 
-interface CommissionReportWrapperProps {
-  employees: any[];
-}
+export function CommissionReportWrapper() {
+  const [employees, setEmployees] = useState<any[]>([]);
 
-export function CommissionReportWrapper({ employees }: CommissionReportWrapperProps) {
-  const {
-    commissions,
-    filteredCommissions,
-    isLoading,
-    filters,
-    updateFilter,
-    clearFilters,
-    activeFilterCount,
-    showFilters,
-    setShowFilters,
-    stats,
-    refreshCommissions,
-    exportToCSV,
-    formatCurrency,
-    formatMonth
-  } = useCommissionReportViewModel();
+  useEffect(() => {
+    EmployeeFirebaseService.fetchAllEmployees()
+      .then(setEmployees)
+      .catch(() => toast.error('Failed to load employees'));
+  }, []);
+
+  const vm = useCommissionReportViewModel();
 
   return (
     <CommissionReportView
-      commissions={commissions}
-      filteredCommissions={filteredCommissions}
-      isLoading={isLoading}
-      filters={filters}
-      updateFilter={updateFilter}
-      clearFilters={clearFilters}
-      activeFilterCount={activeFilterCount}
-      showFilters={showFilters}
-      setShowFilters={setShowFilters}
-      stats={stats}
-      refreshCommissions={refreshCommissions}
-      exportToCSV={exportToCSV}
-      formatCurrency={formatCurrency}
-      formatMonth={formatMonth}
+      commissions={vm.commissions}
+      filteredCommissions={vm.filteredCommissions}
+      isLoading={vm.isLoading}
+      filters={vm.filters}
+      updateFilter={vm.updateFilter}
+      clearFilters={vm.clearFilters}
+      activeFilterCount={vm.activeFilterCount}
+      showFilters={vm.showFilters}
+      setShowFilters={vm.setShowFilters}
+      stats={vm.stats}
+      refreshCommissions={vm.refreshCommissions}
+      exportToCSV={vm.exportToCSV}
+      formatCurrency={vm.formatCurrency}
+      formatMonth={vm.formatMonth}
       cities={CITIES}
       employees={employees}
     />

@@ -1,9 +1,6 @@
 // Salary Module - Model Layer
 // Data interfaces and types
 
-/**
- * Salary transaction entity representing a salary payment
- */
 export interface SalaryTransaction {
   id: string;
   amount: number;
@@ -17,9 +14,6 @@ export interface SalaryTransaction {
   salaryMonth: string;
 }
 
-/**
- * Salary entity representing a salary payment record
- */
 export interface Salary {
   id: string;
   transactionId: string;
@@ -45,9 +39,6 @@ export interface Salary {
   remainingAmount: number;
 }
 
-/**
- * DTO for creating a new salary payment
- */
 export interface CreateSalaryDTO {
   employeeId: string;
   date: string;
@@ -59,16 +50,10 @@ export interface CreateSalaryDTO {
   transactions: SalaryTransaction[];
 }
 
-/**
- * DTO for updating an existing salary
- */
 export interface UpdateSalaryDTO extends CreateSalaryDTO {
   id: string;
 }
 
-/**
- * Filter criteria for salary list
- */
 export interface SalaryFilters {
   searchTerm: string;
   typeFilter: 'all' | 'regular' | 'advance';
@@ -79,9 +64,6 @@ export interface SalaryFilters {
   paymentMethodFilter: '' | 'Cash' | 'Bank' | 'Cheque';
 }
 
-/**
- * Salary statistics for dashboard/display
- */
 export interface SalaryStats {
   totalRecords: number;
   totalAmount: number;
@@ -96,18 +78,12 @@ export interface SalaryStats {
   chequeTotal: number;
 }
 
-/**
- * Validation result for salary data
- */
 export interface ValidationResult {
   isValid: boolean;
   error: string | null;
   fieldErrors?: { [key: string]: string };
 }
 
-/**
- * Employee info for salary context
- */
 export interface EmployeeInfo {
   id: string;
   name: string;
@@ -115,20 +91,10 @@ export interface EmployeeInfo {
   position: string;
 }
 
-/**
- * Predefined salary types
- */
 export const SALARY_TYPES = {
   REGULAR: 'Employee salary' as const,
   ADVANCE: 'Advance salary' as const
 };
 
-/**
- * Payment methods
- */
 export const PAYMENT_METHODS = ['Cash', 'Bank', 'Cheque'] as const;
-
-/**
- * Payment statuses
- */
 export const PAYMENT_STATUSES = ['Full', 'Partial'] as const;

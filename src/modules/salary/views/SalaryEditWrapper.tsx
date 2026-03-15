@@ -1,12 +1,22 @@
 // Salary Module - Wrapper Component
-// SalaryEditWrapper - Connects ViewModel to View for edit page
+// SalaryEditWrapper — fetches employees from Firestore
 
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useSalaryFormViewModel } from '../viewModels/useSalaryFormViewModel';
 import { SalaryFormView } from './SalaryFormView';
+import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 
 export function SalaryEditWrapper() {
-  // Determine type from the existing salary record in the ViewModel
-  const viewModel = useSalaryFormViewModel({ mode: 'edit', type: 'regular' });
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  useEffect(() => {
+    EmployeeFirebaseService.fetchAllEmployees()
+      .then(setEmployees)
+      .catch(() => toast.error('Failed to load employees'));
+  }, []);
+
+  const viewModel = useSalaryFormViewModel({ mode: 'edit', type: 'regular', employees, banks: [] });
 
   return (
     <SalaryFormView

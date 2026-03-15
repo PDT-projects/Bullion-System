@@ -1,143 +1,74 @@
 // Banking Module - Dashboard ViewModel
-// Manages state and logic for banking dashboard with Data Connect integration
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
 import { Bank, BankTransfer, CashTransaction, DashboardStats } from '../models/types';
 import { BankingService } from '../models/bankingService';
+import { BankFirebaseService } from '../models/bankFirebaseService';
+import { TransferFirebaseService } from '../models/Transferfirebaseservice';
+import { CashFirebaseService } from '../models/cashFirebaseService';
 
-interface UseBankingDashboardViewModelProps {
-  banks: Bank[];
-  transfers: BankTransfer[];
-  cashTransactions: CashTransaction[];
-}
-
-interface UseBankingDashboardViewModelReturn {
-  // Data
-  stats: DashboardStats;
-  recentTransfers: BankTransfer[];
-  recentCashTransactions: CashTransaction[];
-  cashRecords: CashTransaction[];
-  firebaseBanks: Bank[];
-  
-  // Loading State
-  isLoading: boolean;
-  error: string | null;
-  
-  // Quick Actions
-  showTransferModal: boolean;
-  setShowTransferModal: (show: boolean) => void;
-  
-  // Actions
-  refreshData: () => Promise<void>;
-  
-  // Utils
-  formatCurrency: (amount: number) => string;
-  formatDate: (date: string) => string;
-}
-
-export function useBankingDashboardViewModel({
-  banks: localBanks,
-  transfers,
-  cashTransactions
-}: UseBankingDashboardViewModelProps): UseBankingDashboardViewModelReturn {
-  // Modal state
-  const [showTransferModal, setShowTransferModal] = useState(false);
-  
-  // Loading and error states
-  const [isLoading, setIsLoading] = useState(false);
+export function useBankingDashboardViewModel() {
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [transfers, setTransfers] = useState<BankTransfer[]>([]);
+  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Data from Data Connect
-  const [cashRecords, setCashRecords] = useState<CashTransaction[]>([]);
-  const [dataConnectBanks, setDataConnectBanks] = useState<Bank[]>([]);
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
-  // Fetch all data from Data Connect on mount
-  useEffect(() => {
-    fetchAllData();
-  }, []);
-
-  // Fetch all data from Data Connect
-  const fetchAllData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      
-      // Fetch both cash transactions and banks from Data Connect in parallel
-      const [cashData, banksData] = await Promise.all([
-        BankingService.fetchCashTransactionsFromDataConnect(),
-        BankingService.fetchBanksFromDataConnect()
+      const [banksData, transfersData, cashData, cashRecords] = await Promise.all([
+        BankFirebaseService.fetchAllBanks(),
+        TransferFirebaseService.fetchAllTransfers(),
+        CashFirebaseService.fetchAllCashTransactions(),
+        CashFirebaseService.fetchAllCashRecords()
       ]);
-      
-      setCashRecords(cashData);
-      setDataConnectBanks(banksData);
-      
-      console.log(`✅ Dashboard fetched ${cashData.length} cash transactions and ${banksData.length} banks from Data Connect`);
+      setBanks(banksData);
+      setTransfers(transfersData);
+      setCashTransactions(cashData);
+      if (cashRecords.length > 0) setOpeningBalance(cashRecords[0].balance);
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-      setError('Failed to load data from database');
+      const msg = err instanceof Error ? err.message : 'Failed to load banking data';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Refresh all data (public method)
-  const refreshData = useCallback(async (): Promise<void> => {
-    await fetchAllData();
   }, []);
 
-  // Calculate total cash balance from cash transactions
-  const totalCashBalance = useMemo(() => {
-    const stats = BankingService.calculateCashStats(cashRecords, 0);
-    return stats.totalCashInHand;
-  }, [cashRecords]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Calculate total bank balance from Data Connect banks
-  const totalBankBalance = useMemo(() => {
-    return dataConnectBanks.reduce((sum, bank) => sum + bank.balance, 0);
-  }, [dataConnectBanks]);
+  const stats: DashboardStats = useMemo(
+    () => BankingService.calculateDashboardStats(banks, cashTransactions, openingBalance),
+    [banks, cashTransactions, openingBalance]
+  );
 
-  // Calculate dashboard statistics using Data Connect data
-  const stats = useMemo(() => {
-    return {
-      totalBankBalance,
-      totalCashInHand: totalCashBalance,
-      totalLiquidity: totalBankBalance + totalCashBalance,
-      bankCount: dataConnectBanks.length
-    };
-  }, [totalBankBalance, totalCashBalance, dataConnectBanks.length]);
+  const recentTransfers = useMemo(
+    () => BankingService.sortByDate(transfers).slice(0, 5),
+    [transfers]
+  );
 
-  // Get recent transfers (last 5)
-  const recentTransfers = useMemo(() => {
-    return BankingService.sortTransactionsByDate(transfers).slice(0, 5);
-  }, [transfers]);
-
-  // Get recent cash transactions (last 5)
-  const recentCashTransactions = useMemo(() => {
-    return BankingService.sortTransactionsByDate(cashTransactions).slice(0, 5);
-  }, [cashTransactions]);
-
-  // Format currency
-  const formatCurrency = useCallback((amount: number) => {
-    return BankingService.formatCurrency(amount);
-  }, []);
-
-  // Format date
-  const formatDate = useCallback((date: string) => {
-    return BankingService.formatDate(date);
-  }, []);
+  const recentCashTransactions = useMemo(
+    () => BankingService.sortByDate(cashTransactions).slice(0, 5),
+    [cashTransactions]
+  );
 
   return {
     stats,
     recentTransfers,
     recentCashTransactions,
-    cashRecords,
-    firebaseBanks: dataConnectBanks,
+    firebaseBanks: banks,
+    cashRecords: cashTransactions,
     isLoading,
     error,
     showTransferModal,
     setShowTransferModal,
-    refreshData,
-    formatCurrency,
-    formatDate
+    refreshData: loadData,
+    formatCurrency: BankingService.formatCurrency,
+    formatDate: BankingService.formatDate
   };
 }

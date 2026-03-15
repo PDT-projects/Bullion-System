@@ -1,20 +1,19 @@
 // Bills Module - Wrapper Component
-// Connects ViewModel to View for Delete page
+// BillsDeleteWrapper
 
 import React from 'react';
 import { useBillsDeleteViewModel } from '../viewModels/useBillsDeleteViewModel';
 import { BillsDeleteView } from './BillsDeleteView';
 
 export const BillsDeleteWrapper: React.FC = () => {
-  const viewModel = useBillsDeleteViewModel();
-
+  const vm = useBillsDeleteViewModel();
   return (
     <BillsDeleteView
-      bill={viewModel.bill}
-      isDeleting={viewModel.isDeleting}
-      categoryColor={viewModel.categoryColor}
-      handleConfirmDelete={viewModel.handleConfirmDelete}
-      handleCancel={viewModel.handleCancel}
+      bill={vm.bill}
+      isDeleting={vm.isDeleting}
+      categoryColor={vm.categoryColor}
+      handleConfirmDelete={vm.handleConfirmDelete}
+      handleCancel={vm.handleCancel}
     />
   );
 };

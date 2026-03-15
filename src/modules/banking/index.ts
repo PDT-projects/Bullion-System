@@ -1,6 +1,5 @@
 // Banking Module - Public API
-// MVVM Architecture Implementation
-// Types
+
 export type {
   Bank,
   BankTransfer,
@@ -13,14 +12,15 @@ export type {
   TransferFormData,
   BankFilters,
   TransferFilters,
-  CashFilters
+  CashFilters,
+  CashFormData
 } from './models/types';
 
-// Services (Data Connect based)
-export { BankingService } from './models/bankingService';
+export { BankingService, CASH_LOCATIONS } from './models/bankingService';
+export { BankFirebaseService } from './models/bankFirebaseService';
+export { TransferFirebaseService } from './models/transferFirebaseService';
+export { CashFirebaseService } from './models/cashFirebaseService';
 
-
-// ViewModels
 export { useBankListViewModel } from './viewModels/useBankListViewModel';
 export { useBankFormViewModel } from './viewModels/useBankFormViewModel';
 export { useBankDeleteViewModel } from './viewModels/useBankDeleteViewModel';
@@ -30,8 +30,6 @@ export { useBankingDashboardViewModel } from './viewModels/useBankingDashboardVi
 export { useCashListViewModel } from './viewModels/useCashListViewModel';
 export { useCashFormViewModel } from './viewModels/useCashFormViewModel';
 
-// Views
-
 export { BankListView } from './views/BankListView';
 export { BankFormView } from './views/BankFormView';
 export { BankDeleteView } from './views/BankDeleteView';
@@ -40,8 +38,6 @@ export { TransferFormView } from './views/TransferFormView';
 export { BankingDashboardView } from './views/BankingDashboardView';
 export { CashListView } from './views/CashListView';
 export { CashFormView } from './views/CashFormView';
-
-// Wrappers
 
 export { BankListWrapper } from './views/BankListWrapper';
 export { BankCreateWrapper } from './views/BankCreateWrapper';

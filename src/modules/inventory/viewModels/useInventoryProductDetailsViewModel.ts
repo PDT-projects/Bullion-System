@@ -1,545 +1,368 @@
 // Inventory Module - ViewModel Layer
-// useInventoryProductDetailsViewModel - Step 2: Product details with conditional costing fields
-// Supports multi-model costing with real-time calculations
-// Updated: Percentage calculation now uses unitCostUSD / totalUnitCostUSD
+// useInventoryProductDetailsViewModel - Step 4: Product details
+// With costing: fetches ONLY the brand's models that were saved in the costing step
+// directly from Firestore using costingBrandId + costingModelIds from URL params.
+// No BrandModelDropdown interaction needed — models are pre-populated in the table.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ProductFormData, CostingOption, BuyType, ProductStatus, InventoryEntryType, CostingModel, CostingInfo, BrandWithModels } from '../models/types';
-import { 
-  createEmptyCostingModel, 
-  recalculateAllModels, 
-  createInitialCostingInfo,
-  generateModelId,
-  calculateModelCosts
-} from '../models/costingCalculator';
+import { ProductFormData, CostingOption, BuyType, ProductStatus, InventoryEntryType, CostingModel } from '../models/types';
+import { createInitialCostingInfo, calculateModelCosts, recalculateAllModels, createEmptyCostingModel } from '../models/costingCalculator';
+import { BrandModelFirebaseService } from '../models/InventoryFirebaseService';
+
+const CATEGORIES = ['Detection Equipment', 'Security Equipment', 'Imaging Equipment', 'Surveillance Systems', 'Access Control', 'Other'];
+const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'];
+
+export interface SelectedModel {
+  modelId: string;
+  modelName: string;
+  costPrice: number;
+  salePrice: number;
+  quantity: number;
+  serialNumbers: string[];                  // one per unit
+  serialCities:  { [serial: string]: string }; // optional city per serial
+}
 
 export interface UseInventoryProductDetailsViewModelReturn {
-  // Single model for 'without costing'
-  singleModel: {
-    brandName: string;
-    modelName: string;
-    costPrice: number;
-    sellPrice: number;
-    quantity: number;
-  };
-  setSingleModelField: (field: keyof UseInventoryProductDetailsViewModelReturn['singleModel'], value: string | number) => void;
-
-  // State
+  singleModel: { brandName: string; modelName: string; costPrice: number; sellPrice: number; quantity: number };
+  setSingleModelField: (field: string, value: string | number) => void;
   formData: ProductFormData;
   costingOption: CostingOption;
   inventoryType: InventoryEntryType;
-  
-  // Serial number management
+  costingBrandId: string;
+  costingBrandName: string;
+  // Pre-fetched models from Firestore — auto-populate the table
+  preloadedModels: SelectedModel[];
+  isLoadingModels: boolean;
   serialInputs: string[];
-  
-  // Validation
   validationErrors: { [key: string]: string };
   isValid: boolean;
-  
-  // Actions - Basic fields
-  setBrandName: (value: string) => void;
-  setModelName: (value: string) => void;
-  setCategory: (value: string) => void;
-  setSellPrice: (value: number) => void;
-  setBuyType: (value: BuyType) => void;
-  setWarrantyYears: (value: number) => void;
-  setStock: (value: number) => void;
-  setDescription: (value: string) => void;
-  setStatus: (value: ProductStatus) => void;
-  setIsDamaged: (value: boolean) => void;
-  
-  // Actions - Multi-Model Costing Global Inputs
-  setCostingBrandName: (value: string) => void;
-  setUsdRate: (value: number) => void;
-  setTotalCustomsValue: (value: number) => void;
-  setTotalFreightValue: (value: number) => void;
-  
-  // Actions - Model Management
+  setBrandName: (v: string) => void;
+  setModelName: (v: string) => void;
+  setCategory: (v: string) => void;
+  setSellPrice: (v: number) => void;
+  setBuyType: (v: BuyType) => void;
+  setWarrantyYears: (v: number) => void;
+  setStock: (v: number) => void;
+  setDescription: (v: string) => void;
+  setStatus: (v: ProductStatus) => void;
+  setIsDamaged: (v: boolean) => void;
+  setCostingBrandName: (v: string) => void;
+  setUsdRate: (v: number) => void;
+  setTotalCustomsValue: (v: number) => void;
+  setTotalFreightValue: (v: number) => void;
   addModel: () => void;
   updateModelField: (modelId: string, field: keyof CostingModel, value: string | number) => void;
   removeModel: (modelId: string) => void;
-  
-  // Actions - Serial numbers
   updateSerialNumber: (index: number, value: string) => void;
   updateSerialCity: (index: number, value: string) => void;
-  
-  // Navigation
-  handleNext: (selectedModels?: Array<{ modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number }>) => void;
+  updateModelSerial: (modelIdx: number, serialIdx: number, value: string) => void;
+  updateModelSerialCity: (modelIdx: number, serialIdx: number, city: string) => void;
+  handleNext: (selectedModels?: SelectedModel[]) => void;
   handleBack: () => void;
-  
-  // Utilities
   showCostingFields: boolean;
   categories: string[];
   cities: string[];
-  
-  // Costing summary (calculated)
-  costingSummary: {
-    totalUnitCostUSD: number;
-    shipmentTotalUSD: number;
-    consignmentValue: number;
-    totalValueOfBrand: number;
-  };
+  costingSummary: { totalUnitCostUSD: number; shipmentTotalUSD: number; consignmentValue: number; totalValueOfBrand: number };
 }
-
-const CATEGORIES = [
-  'Detection Equipment',
-  'Security Equipment',
-  'Imaging Equipment',
-  'Surveillance Systems',
-  'Access Control',
-  'Other'
-];
-
-const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'];
 
 export function useInventoryProductDetailsViewModel(): UseInventoryProductDetailsViewModelReturn {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const costingOption = (searchParams.get('costing') as CostingOption) || 'without';
-  const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
+  const costingOption  = (searchParams.get('costing') as CostingOption)   || 'without';
+  const inventoryType  = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
+  const costingBrandId   = searchParams.get('costingBrandId')   || '';
+  const costingBrandName = searchParams.get('costingBrandName') || '';
+  // Model IDs saved to Firestore by the costing step
+  const costingModelIds: string[] = JSON.parse(searchParams.get('costingModelIds') || '[]');
 
-  // Single model state for 'without costing'
-  const [singleModel, setSingleModel] = useState({
-    brandName: '',
-    modelName: '',
-    costPrice: 0,
-    sellPrice: 0,
-    quantity: 1,
-  });
-  
-  const setSingleModelField = useCallback((field: keyof typeof singleModel, value: string | number) => {
+  // ── Pre-load models from Firestore ──────────────────────────────────────────
+  // Fetch all models for costingBrandId then keep only those in costingModelIds.
+  // This is the SOURCE OF TRUTH — the dropdown is NOT needed for the with-costing path.
+  const [preloadedModels, setPreloadedModels] = useState<SelectedModel[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  useEffect(() => {
+    if (costingOption !== 'with' || !costingBrandId) return;
+
+    const fetchCostingModels = async () => {
+      setIsLoadingModels(true);
+      try {
+        const allModels = await BrandModelFirebaseService.fetchModelsByBrand(costingBrandId);
+        console.log(`✅ Fetched ${allModels.length} models for brand ${costingBrandId}, filtering to ${costingModelIds.length} costing IDs`);
+
+        // If we have specific IDs, filter to them; otherwise show all models for the brand
+        const filtered = costingModelIds.length > 0
+          ? allModels.filter(m => costingModelIds.includes(m.id))
+          : allModels;
+
+        const mapped: SelectedModel[] = filtered.map(m => ({
+          modelId:     m.id,
+          modelName:   m.name,
+          costPrice:   m.costPrice || 0,
+          salePrice:   Math.round((m.costPrice || 0) * 1.3),
+          quantity:    1,
+          serialNumbers: [''],
+          serialCities:  {},
+        }));
+
+        setPreloadedModels(mapped);
+        console.log(`✅ Pre-loaded ${mapped.length} models:`, mapped.map(m => m.modelName));
+      } catch (err) {
+        console.error('❌ Failed to pre-load costing models:', err);
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+
+    fetchCostingModels();
+    // costingModelIds is from URL — stable for this render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [costingBrandId, costingOption]);
+
+  // ── Form state ───────────────────────────────────────────────────────────────
+  const [singleModel, setSingleModel] = useState({ brandName: '', modelName: '', costPrice: 0, sellPrice: 0, quantity: 1 });
+  const setSingleModelField = useCallback((field: string, value: string | number) => {
     setSingleModel(prev => ({ ...prev, [field]: value }));
   }, []);
 
   const [formData, setFormData] = useState<ProductFormData>({
     currentStep: 2,
     costingOption,
-    brandName: '',
-    modelName: '',
-    category: '',
-    sellPrice: 0,
-    buyType: 'Import',
+    brandName:     costingBrandName,
+    modelName:     '',
+    category:      '',
+    sellPrice:     0,
+    buyType:       'Import',
     warrantyYears: 0,
-    stock: 0,
-    description: '',
-    status: 'New',
-    isDamaged: false,
+    stock:         0,
+    description:   '',
+    status:        'New',
+    isDamaged:     false,
     serialNumbers: [],
-    serialCities: {},
-    costing: costingOption === 'with' ? createInitialCostingInfo() : undefined,
+    serialCities:  {},
+    costing: costingOption === 'with' ? (() => {
+      const c = createInitialCostingInfo();
+      return {
+        ...c,
+        brandName:         costingBrandName,
+        usdRate:           Number(searchParams.get('usdRate'))           || 0,
+        totalCustomsValue: Number(searchParams.get('totalCustomsValue')) || 0,
+        totalFreightValue: Number(searchParams.get('totalFreightValue')) || 0,
+        shipmentTotalUSD:  Number(searchParams.get('shipmentTotalUSD'))  || 0,
+        consignmentValue:  Number(searchParams.get('consignmentValue'))  || 0,
+        totalValueOfBrand: Number(searchParams.get('totalValueOfBrand')) || 0,
+        totalUnitCostUSD:  Number(searchParams.get('totalUnitCostUSD'))  || 0,
+        models: JSON.parse(searchParams.get('costingModels') || '[]'),
+      };
+    })() : undefined,
   });
 
-  // Serial inputs state
   const [serialInputs, setSerialInputs] = useState<string[]>([]);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
-  
-  // DC brandId/modelIds from URL params (costing screen)
-  const dcBrandId = searchParams.get('brandId') || '';
-  const dcModelIdsStr = searchParams.get('modelIds') || '[]';
-  const dcModelIds: string[] = JSON.parse(dcModelIdsStr);
 
-  // Auto-recalculate when costing inputs change
   useEffect(() => {
     if (costingOption === 'with' && formData.costing && formData.costing.models.length > 0) {
       const { models, usdRate, totalCustomsValue, totalFreightValue } = formData.costing;
       const result = recalculateAllModels(models, usdRate, totalCustomsValue, totalFreightValue);
-      
       setFormData(prev => ({
-        ...prev,
-        costing: prev.costing ? {
-          ...prev.costing,
-          models: result.models,
-          totalUnitCostUSD: result.summary.totalUnitCostUSD,
-          shipmentTotalUSD: result.summary.shipmentTotalUSD,
-          consignmentValue: result.summary.consignmentValue,
+        ...prev, costing: prev.costing ? {
+          ...prev.costing, models: result.models,
+          totalUnitCostUSD:  result.summary.totalUnitCostUSD,
+          shipmentTotalUSD:  result.summary.shipmentTotalUSD,
+          consignmentValue:  result.summary.consignmentValue,
           totalValueOfBrand: result.summary.totalValueOfBrand,
         } : undefined,
       }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.costing?.usdRate, formData.costing?.totalCustomsValue, formData.costing?.totalFreightValue, costingOption]);
 
-  // Update serial inputs when stock changes
+  // ── Stock / serial handlers ──────────────────────────────────────────────────
   const handleStockChange = useCallback((newStock: number) => {
     setFormData(prev => ({ ...prev, stock: newStock }));
-    
     setSerialInputs(prev => {
-      if (newStock > prev.length) {
-        const toAdd = newStock - prev.length;
-        return [...prev, ...Array(toAdd).fill('')];
-      } else if (newStock < prev.length) {
-        const removedSerials = prev.slice(newStock);
-        const keptSerials = prev.slice(0, newStock);
-        
-        setFormData(prevData => {
-          const updatedCities = { ...prevData.serialCities };
-          removedSerials.forEach(serial => {
-            if (serial && updatedCities[serial]) {
-              delete updatedCities[serial];
-            }
-          });
-          return { ...prevData, serialCities: updatedCities };
-        });
-        
-        return keptSerials;
+      if (newStock > prev.length) return [...prev, ...Array(newStock - prev.length).fill('')];
+      if (newStock < prev.length) {
+        const removed = prev.slice(newStock);
+        setFormData(pd => ({
+          ...pd,
+          serialCities: Object.fromEntries(Object.entries(pd.serialCities).filter(([k]) => !removed.includes(k)))
+        }));
+        return prev.slice(0, newStock);
       }
       return prev;
     });
   }, []);
 
-  // Basic field setters
-  const setBrandName = useCallback((value: string) => {
-    setFormData(prev => ({ ...prev, brandName: value }));
-  }, []);
+  // ── Field setters ────────────────────────────────────────────────────────────
+  const setBrandName     = useCallback((v: string) => setFormData(p => ({ ...p, brandName: v })), []);
+  const setModelName     = useCallback((v: string) => setFormData(p => ({ ...p, modelName: v })), []);
+  const setCategory      = useCallback((v: string) => setFormData(p => ({ ...p, category: v })), []);
+  const setSellPrice     = useCallback((v: number) => setFormData(p => ({ ...p, sellPrice: v })), []);
+  const setBuyType       = useCallback((v: BuyType) => setFormData(p => ({ ...p, buyType: v })), []);
+  const setWarrantyYears = useCallback((v: number) => setFormData(p => ({ ...p, warrantyYears: v })), []);
+  const setStock         = useCallback((v: number) => handleStockChange(v), [handleStockChange]);
+  const setDescription   = useCallback((v: string) => setFormData(p => ({ ...p, description: v })), []);
+  const setStatus        = useCallback((v: ProductStatus) => setFormData(p => ({ ...p, status: v })), []);
+  const setIsDamaged     = useCallback((v: boolean) => setFormData(p => ({ ...p, isDamaged: v })), []);
 
-  const setModelName = useCallback((value: string) => {
-    setFormData(prev => ({ ...prev, modelName: value }));
-  }, []);
+  const setCostingBrandNameFn = useCallback((v: string) => setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, brandName: v } : undefined })), []);
+  const setUsdRate            = useCallback((v: number) => setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, usdRate: v } : undefined })), []);
+  const setTotalCustomsValue  = useCallback((v: number) => setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, totalCustomsValue: v } : undefined })), []);
+  const setTotalFreightValue  = useCallback((v: number) => setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, totalFreightValue: v } : undefined })), []);
 
-  const setCategory = useCallback((value: string) => {
-    setFormData(prev => ({ ...prev, category: value }));
-  }, []);
-
-  const setSellPrice = useCallback((value: number) => {
-    setFormData(prev => ({ ...prev, sellPrice: value }));
-  }, []);
-
-  const setBuyType = useCallback((value: BuyType) => {
-    setFormData(prev => ({ ...prev, buyType: value }));
-  }, []);
-
-  const setWarrantyYears = useCallback((value: number) => {
-    setFormData(prev => ({ ...prev, warrantyYears: value }));
-  }, []);
-
-  const setStock = useCallback((value: number) => {
-    handleStockChange(value);
-  }, [handleStockChange]);
-
-  const setDescription = useCallback((value: string) => {
-    setFormData(prev => ({ ...prev, description: value }));
-  }, []);
-
-  const setStatus = useCallback((value: ProductStatus) => {
-    setFormData(prev => ({ ...prev, status: value }));
-  }, []);
-
-  const setIsDamaged = useCallback((value: boolean) => {
-    setFormData(prev => ({ ...prev, isDamaged: value }));
-  }, []);
-
-  // Multi-Model Costing Global Input Setters
-  const setCostingBrandName = useCallback((value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      costing: prev.costing ? { ...prev.costing, brandName: value } : undefined,
-    }));
-  }, []);
-
-  const setUsdRate = useCallback((value: number) => {
-    setFormData(prev => ({
-      ...prev,
-      costing: prev.costing ? { ...prev.costing, usdRate: value } : undefined,
-    }));
-  }, []);
-
-  const setTotalCustomsValue = useCallback((value: number) => {
-    setFormData(prev => ({
-      ...prev,
-      costing: prev.costing ? { ...prev.costing, totalCustomsValue: value } : undefined,
-    }));
-  }, []);
-
-  const setTotalFreightValue = useCallback((value: number) => {
-    setFormData(prev => ({
-      ...prev,
-      costing: prev.costing ? { ...prev.costing, totalFreightValue: value } : undefined,
-    }));
-  }, []);
-
-  // Model Management Functions
   const addModel = useCallback(() => {
-    const newModel = createEmptyCostingModel();
-    setFormData(prev => ({
-      ...prev,
-      costing: prev.costing 
-        ? { ...prev.costing, models: [...prev.costing.models, newModel] }
-        : undefined,
-    }));
+    setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, models: [...p.costing.models, createEmptyCostingModel()] } : undefined }));
   }, []);
 
   const updateModelField = useCallback((modelId: string, field: keyof CostingModel, value: string | number) => {
     setFormData(prev => {
       if (!prev.costing) return prev;
-      
-      const totalUnitCostUSD = prev.costing.models.reduce((sum, m) => sum + m.unitCostUSD, 0);
-      const shipmentTotalUSD = prev.costing.models.reduce((sum, m) => sum + m.units * m.unitCostUSD, 0);
-      
-      const updatedModels = prev.costing.models.map(model => {
-        if (model.id === modelId) {
-          const updatedModel = { ...model, [field]: value };
-          return calculateModelCosts(
-            updatedModel,
-            totalUnitCostUSD,
-            shipmentTotalUSD,
-            prev.costing!.usdRate,
-            prev.costing!.totalCustomsValue,
-            prev.costing!.totalFreightValue
-          );
-        }
-        return model;
-      });
-      
-      const result = recalculateAllModels(
-        updatedModels,
-        prev.costing!.usdRate,
-        prev.costing!.totalCustomsValue,
-        prev.costing!.totalFreightValue
+      const tot  = prev.costing.models.reduce((s, m) => s + m.unitCostUSD, 0);
+      const ship = prev.costing.models.reduce((s, m) => s + m.units * m.unitCostUSD, 0);
+      const updated = prev.costing.models.map(m => m.id !== modelId ? m :
+        calculateModelCosts({ ...m, [field]: value }, tot, ship, prev.costing!.usdRate, prev.costing!.totalCustomsValue, prev.costing!.totalFreightValue)
       );
-      
-      return {
-        ...prev,
-        costing: {
-          ...prev.costing,
-          models: result.models,
-          totalUnitCostUSD: result.summary.totalUnitCostUSD,
-          shipmentTotalUSD: result.summary.shipmentTotalUSD,
-          consignmentValue: result.summary.consignmentValue,
-          totalValueOfBrand: result.summary.totalValueOfBrand,
-        },
-      };
+      const result = recalculateAllModels(updated, prev.costing.usdRate, prev.costing.totalCustomsValue, prev.costing.totalFreightValue);
+      return { ...prev, costing: { ...prev.costing, models: result.models, totalUnitCostUSD: result.summary.totalUnitCostUSD, shipmentTotalUSD: result.summary.shipmentTotalUSD, consignmentValue: result.summary.consignmentValue, totalValueOfBrand: result.summary.totalValueOfBrand } };
     });
   }, []);
 
   const removeModel = useCallback((modelId: string) => {
     setFormData(prev => {
       if (!prev.costing) return prev;
-      
-      const updatedModels = prev.costing.models.filter(m => m.id !== modelId);
-      
-      if (updatedModels.length > 0) {
-        const result = recalculateAllModels(
-          updatedModels,
-          prev.costing!.usdRate,
-          prev.costing!.totalCustomsValue,
-          prev.costing!.totalFreightValue
-        );
-        
-        return {
-          ...prev,
-          costing: {
-            ...prev.costing,
-            models: result.models,
-            totalUnitCostUSD: result.summary.totalUnitCostUSD,
-            shipmentTotalUSD: result.summary.shipmentTotalUSD,
-            consignmentValue: result.summary.consignmentValue,
-            totalValueOfBrand: result.summary.totalValueOfBrand,
-          },
-        };
+      const updated = prev.costing.models.filter(m => m.id !== modelId);
+      if (updated.length > 0) {
+        const result = recalculateAllModels(updated, prev.costing.usdRate, prev.costing.totalCustomsValue, prev.costing.totalFreightValue);
+        return { ...prev, costing: { ...prev.costing, models: result.models, totalUnitCostUSD: result.summary.totalUnitCostUSD, shipmentTotalUSD: result.summary.shipmentTotalUSD, consignmentValue: result.summary.consignmentValue, totalValueOfBrand: result.summary.totalValueOfBrand } };
       }
-      
-      return {
-        ...prev,
-        costing: {
-          ...prev.costing,
-          models: [],
-          totalUnitCostUSD: 0,
-          shipmentTotalUSD: 0,
-          consignmentValue: 0,
-          totalValueOfBrand: 0,
-        },
-      };
+      return { ...prev, costing: { ...prev.costing, models: [], totalUnitCostUSD: 0, shipmentTotalUSD: 0, consignmentValue: 0, totalValueOfBrand: 0 } };
     });
   }, []);
 
-  // Serial number management
   const updateSerialNumber = useCallback((index: number, value: string) => {
     setSerialInputs(prev => {
       const updated = [...prev];
-      const oldSerial = updated[index];
+      const old = updated[index];
       updated[index] = value;
-      
-      if (oldSerial && formData.serialCities[oldSerial]) {
-        setFormData(prevData => {
-          const updatedCities = { ...prevData.serialCities };
-          const city = updatedCities[oldSerial];
-          delete updatedCities[oldSerial];
-          if (value) {
-            updatedCities[value] = city;
-          }
-          return { ...prevData, serialCities: updatedCities };
+      if (old && formData.serialCities[old]) {
+        setFormData(pd => {
+          const cities = { ...pd.serialCities };
+          const city = cities[old]; delete cities[old];
+          if (value) cities[value] = city;
+          return { ...pd, serialCities: cities };
         });
       }
-      
       return updated;
     });
   }, [formData.serialCities]);
 
   const updateSerialCity = useCallback((index: number, value: string) => {
-    const serialKey = serialInputs[index];
-    if (!serialKey) return;
-    
-    setFormData(prev => ({
-      ...prev,
-      serialCities: { ...prev.serialCities, [serialKey]: value },
-    }));
+    const key = serialInputs[index];
+    if (!key) return;
+    setFormData(prev => ({ ...prev, serialCities: { ...prev.serialCities, [key]: value } }));
   }, [serialInputs]);
 
-  // Validation
-  const validateForm = useCallback((
-    selectedModels?: Array<{ modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number }>
-  ): boolean => {
+  // ── These are passed to the View to handle per-model serial inputs ────────────
+  // They live here so the view can call them and the updated selectedModels
+  // flow through handleNext → URL params → payment ViewModel.
+  // NOTE: selectedModels state lives in the VIEW (for with-costing path).
+  // These helpers are passed down and called by the view's setter.
+  // The view owns selectedModels state; we expose helpers here for validation only.
+
+  // ── Validation ───────────────────────────────────────────────────────────────
+  const validateForm = useCallback((selectedModels?: SelectedModel[]): boolean => {
     const errors: { [key: string]: string } = {};
-    
-    if (!formData.brandName.trim()) {
-      errors.brandName = 'Brand name is required';
+    if (!formData.brandName.trim()) errors.brandName = 'Brand name is required';
+    if (costingOption !== 'with' && !formData.modelName.trim()) errors.modelName = 'Model name is required';
+    if (!formData.category.trim()) errors.category = 'Category is required';
+    if (!formData.description.trim()) errors.description = 'Description is required';
+    if (costingOption === 'with' && (!selectedModels || selectedModels.length === 0)) errors.models = 'At least one model is required';
+    if (costingOption === 'with' && selectedModels) {
+      // Validate per-model serial numbers
+      selectedModels.forEach((m, i) => {
+        const validSerials = m.serialNumbers.filter(s => s.trim() !== '');
+        if (m.quantity > 0 && validSerials.length !== m.quantity) {
+          errors[`serials_${i}`] = `${m.modelName}: provide ${m.quantity} serial number${m.quantity > 1 ? 's' : ''}`;
+        }
+      });
+    } else {
+      // without costing — single model serial validation
+      const validSerials = serialInputs.filter(s => s.trim() !== '');
+      if (formData.stock > 0 && validSerials.length !== formData.stock) errors.serialNumbers = `Please provide ${formData.stock} serial numbers`;
     }
-    
-    if (costingOption !== 'with' && !formData.modelName.trim()) {
-      errors.modelName = 'Model name is required';
-    }
-    
-    if (!formData.category.trim()) {
-      errors.category = 'Category is required';
-    }
-    
-    if (!formData.description.trim()) {
-      errors.description = 'Description is required';
-    }
-    
-    // For 'with costing', validate selectedModels passed from view
-    if (costingOption === 'with') {
-      const modelsToCheck = selectedModels || [];
-      if (modelsToCheck.length === 0) {
-        errors.models = 'At least one model must be selected';
-      }
-    }
-    
-    const validSerials = serialInputs.filter(s => s.trim() !== '');
-    if (validSerials.length !== formData.stock) {
-      errors.serialNumbers = `Please provide ${formData.stock} unique serial numbers`;
-    }
-    
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData, serialInputs, costingOption]);
 
-  // isValid - for 'with costing', does NOT require selectedModels (view handles that separately)
+  // Only block Next button on the minimum visible required fields
   const isValid = useMemo(() => {
-    const hasBasic =
-      formData.brandName.trim() !== '' &&
-      formData.category.trim() !== '' &&
-      formData.description.trim() !== '' &&
-      serialInputs.filter(s => s.trim() !== '').length === formData.stock;
-
-    if (costingOption !== 'with') {
-      // Without costing: modelName also required
-      return formData.modelName.trim() !== '' && hasBasic;
-    }
-
-    // With costing: basic fields only - selectedModels check is in the View
+    const hasBasic = formData.brandName.trim() !== '' && formData.category.trim() !== '';
+    if (costingOption !== 'with') return formData.modelName.trim() !== '' && hasBasic;
     return hasBasic;
-  }, [formData, serialInputs, costingOption]);
+  }, [formData, costingOption]);
 
-  // Costing summary for display
   const costingSummary = useMemo(() => ({
-    totalUnitCostUSD: formData.costing?.totalUnitCostUSD || 0,
-    shipmentTotalUSD: formData.costing?.shipmentTotalUSD || 0,
-    consignmentValue: formData.costing?.consignmentValue || 0,
+    totalUnitCostUSD:  formData.costing?.totalUnitCostUSD  || 0,
+    shipmentTotalUSD:  formData.costing?.shipmentTotalUSD  || 0,
+    consignmentValue:  formData.costing?.consignmentValue  || 0,
     totalValueOfBrand: formData.costing?.totalValueOfBrand || 0,
-  }), [formData.costing?.totalUnitCostUSD, formData.costing?.shipmentTotalUSD, formData.costing?.consignmentValue, formData.costing?.totalValueOfBrand]);
+  }), [formData.costing]);
 
-  // Navigation - accepts selectedModels from the View for 'with costing' path
-  const handleNext = useCallback((
-    selectedModels?: Array<{ modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number }>
-  ) => {
+  // ── Navigation ───────────────────────────────────────────────────────────────
+  const handleNext = useCallback((selectedModels?: SelectedModel[]) => {
     if (!validateForm(selectedModels)) return;
-
-    // For 'with costing', require at least one model selected in the view
-    if (costingOption === 'with' && (!selectedModels || selectedModels.length === 0)) {
-      setValidationErrors(prev => ({ ...prev, models: 'At least one model must be selected' }));
-      return;
-    }
-
     const validSerials = serialInputs.filter(s => s.trim() !== '');
-    const queryParams = new URLSearchParams({
-      type: inventoryType,
-      costing: costingOption,
-      brandName: formData.brandName,
-      modelName: formData.modelName,
-      category: formData.category,
-      sellPrice: formData.sellPrice.toString(),
-      buyType: formData.buyType,
-      warrantyYears: formData.warrantyYears.toString(),
-      stock: formData.stock.toString(),
-      description: formData.description,
-      status: formData.status,
-      isDamaged: formData.isDamaged.toString(),
+    const params = new URLSearchParams({
+      type: inventoryType, costing: costingOption,
+      brandName: formData.brandName, modelName: formData.modelName,
+      category: formData.category, sellPrice: formData.sellPrice.toString(),
+      buyType: formData.buyType, warrantyYears: formData.warrantyYears.toString(),
+      stock: formData.stock.toString(), description: formData.description,
+      status: formData.status, isDamaged: formData.isDamaged.toString(),
       serialNumbers: JSON.stringify(validSerials),
-      serialCities: JSON.stringify(formData.serialCities),
+      serialCities:  JSON.stringify(formData.serialCities),
     });
-    
-    // Add costing fields if applicable
+    if (costingBrandId) params.set('costingBrandId', costingBrandId);
     if (costingOption === 'with' && formData.costing) {
-      queryParams.set('usdRate', formData.costing.usdRate.toString());
-      queryParams.set('totalCustomsValue', formData.costing.totalCustomsValue.toString());
-      queryParams.set('totalFreightValue', formData.costing.totalFreightValue.toString());
-      queryParams.set('totalUnitCostUSD', formData.costing.totalUnitCostUSD.toString());
-      queryParams.set('shipmentTotalUSD', formData.costing.shipmentTotalUSD.toString());
-      queryParams.set('consignmentValue', formData.costing.consignmentValue.toString());
-      queryParams.set('totalValueOfBrand', formData.costing.totalValueOfBrand.toString());
-      queryParams.set('costingModels', JSON.stringify(formData.costing.models));
+      params.set('usdRate',           formData.costing.usdRate.toString());
+      params.set('totalCustomsValue', formData.costing.totalCustomsValue.toString());
+      params.set('totalFreightValue', formData.costing.totalFreightValue.toString());
+      params.set('totalUnitCostUSD',  formData.costing.totalUnitCostUSD.toString());
+      params.set('shipmentTotalUSD',  formData.costing.shipmentTotalUSD.toString());
+      params.set('consignmentValue',  formData.costing.consignmentValue.toString());
+      params.set('totalValueOfBrand', formData.costing.totalValueOfBrand.toString());
+      params.set('costingModels',     JSON.stringify(formData.costing.models));
+      params.set('costingBrandName',  formData.costing.brandName);
     }
-
-    // Pass selected models from view to payment screen
-    if (selectedModels && selectedModels.length > 0) {
-      queryParams.set('selectedModels', JSON.stringify(selectedModels));
+    if (selectedModels?.length) {
+      // selectedModels already contain serialNumbers + serialCities per model
+      params.set('selectedModels', JSON.stringify(selectedModels));
     }
-    
-    navigate(`/inventory/create-new/payment?${queryParams.toString()}`);
-  }, [navigate, formData, serialInputs, costingOption, validateForm, inventoryType]);
+    navigate(`/inventory/create-new/payment?${params.toString()}`);
+  }, [navigate, formData, serialInputs, costingOption, validateForm, inventoryType, costingBrandId]);
 
   const handleBack = useCallback(() => {
-    if (costingOption === 'with') {
-      navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${costingOption}`);
-    } else {
-      navigate(`/inventory/create-new/costing?type=${inventoryType}`);
-    }
+    if (costingOption === 'with') navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${costingOption}`);
+    else navigate(`/inventory/create-new/costing?type=${inventoryType}`);
   }, [navigate, inventoryType, costingOption]);
 
   return {
-    singleModel,
-    setSingleModelField,
-    formData,
-    costingOption,
-    inventoryType,
-    serialInputs,
-    validationErrors,
-    isValid,
-    setBrandName,
-    setModelName,
-    setCategory,
-    setSellPrice,
-    setBuyType,
-    setWarrantyYears,
-    setStock,
-    setDescription,
-    setStatus,
-    setIsDamaged,
-    setCostingBrandName,
-    setUsdRate,
-    setTotalCustomsValue,
-    setTotalFreightValue,
-    addModel,
-    updateModelField,
-    removeModel,
-    updateSerialNumber,
-    updateSerialCity,
-    handleNext,
-    handleBack,
-    showCostingFields: false,
-    categories: CATEGORIES,
-    cities: CITIES,
-    costingSummary,
+    singleModel, setSingleModelField, formData, costingOption, inventoryType,
+    costingBrandId, costingBrandName,
+    preloadedModels, isLoadingModels,
+    serialInputs, validationErrors, isValid,
+    setBrandName, setModelName, setCategory, setSellPrice, setBuyType,
+    setWarrantyYears, setStock, setDescription, setStatus, setIsDamaged,
+    setCostingBrandName: setCostingBrandNameFn, setUsdRate, setTotalCustomsValue, setTotalFreightValue,
+    addModel, updateModelField, removeModel,
+    updateSerialNumber, updateSerialCity,
+    // Dummy implementations — per-model serial updates are handled in the View's local state
+    updateModelSerial: () => {},
+    updateModelSerialCity: () => {},
+    handleNext, handleBack,
+    showCostingFields: costingOption === 'with',
+    categories: CATEGORIES, cities: CITIES, costingSummary,
   };
 }

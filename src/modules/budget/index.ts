@@ -4,6 +4,7 @@
 // Models
 export * from './models/types';
 export { BudgetService } from './models/budgetService';
+export { BudgetFirebaseService } from './models/Budgetfirebaseservice';
 
 // ViewModels
 export { useBudgetListViewModel } from './viewModels/useBudgetListViewModel';

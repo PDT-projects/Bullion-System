@@ -1,21 +1,13 @@
 // Banking Module - Bank List Wrapper
-// Connects ViewModel to View for bank list page
 
 import React from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Bank } from '../../../App';
-
+import { useNavigate } from 'react-router-dom';
 import { useBankListViewModel } from '../viewModels/useBankListViewModel';
 import { BankListView } from './BankListView';
 
 export const BankListWrapper: React.FC = () => {
   const navigate = useNavigate();
-  const { banks, setBanks } = useOutletContext<{
-    banks: Bank[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-
-  const viewModel = useBankListViewModel({ banks, setBanks });
+  const viewModel = useBankListViewModel();
 
   return (
     <BankListView

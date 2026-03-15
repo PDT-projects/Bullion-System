@@ -1,8 +1,0 @@
-connectorId: inventory
-
-generate:
-  javascriptSdk:
-    - outputDir: ..\..\src\dataconnect-generated\inventory
-      package: "@erp-system/inventory"
-      packageJsonDir: ..\..\
-      react: true

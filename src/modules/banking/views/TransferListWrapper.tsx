@@ -1,20 +1,13 @@
 // Banking Module - Transfer List Wrapper
-// Connects ViewModel to View for transfer list page
 
 import React from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
-import { BankTransfer } from '../models/types';
+import { useNavigate } from 'react-router-dom';
 import { useTransferListViewModel } from '../viewModels/useTransferListViewModel';
 import { TransferListView } from './TransferListView';
 
 export const TransferListWrapper: React.FC = () => {
   const navigate = useNavigate();
-  const { transfers, setTransfers } = useOutletContext<{
-    transfers: BankTransfer[];
-    setTransfers: (transfers: BankTransfer[]) => void;
-  }>();
-
-  const viewModel = useTransferListViewModel({ transfers, setTransfers });
+  const viewModel = useTransferListViewModel();
 
   return (
     <TransferListView

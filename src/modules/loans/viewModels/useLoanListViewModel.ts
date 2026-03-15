@@ -1,321 +1,170 @@
 /**
  * Loans List ViewModel
- * 
- * Manages loan list state, filtering, sorting, pagination, and list actions.
+ * Manages loan list state, filtering, sorting, pagination, and actions.
+ * Backed by Firebase Firestore.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { 
-  Loan, 
-  Bank, 
-  LoanFilters, 
-  LoanSortField, 
-  SortOrder,
-  LoanType,
-  LoanStatus,
-  LoanCategory
-} from '../models/types';
-import {
-  getAllLoans,
-  saveLoans,
-  filterLoans,
-  sortLoans,
-  deleteLoan,
-  formatCurrency,
-  exportLoansToCSV,
-  downloadCSV,
-  calculateStatistics
-} from '../models/loanService';
+import type { Loan, LoanFilters, LoanSortField, SortOrder, LoanType, LoanStatus, LoanCategory } from '../models/types';
+import { filterLoans, sortLoans, calculateStatistics, exportLoansToCSV, downloadCSV } from '../models/loanService';
+import { LoanFirebaseService } from '../models/Loanfirebaseservice';
 
-export interface UseLoanListViewModelReturn {
-  // State
-  loans: Loan[];
-  filteredLoans: Loan[];
-  isLoading: boolean;
-  error: string | null;
-  
-  // Filters
-  filters: LoanFilters;
-  setSearchTerm: (term: string) => void;
-  setTypeFilter: (type: LoanType | 'all') => void;
-  setStatusFilter: (status: LoanStatus | 'all') => void;
-  setCategoryFilter: (category: LoanCategory | 'all') => void;
-  setDateRange: (from?: string, to?: string) => void;
-  clearFilters: () => void;
-  
-  // Sorting
-  sortField: LoanSortField;
-  sortOrder: SortOrder;
-  setSortField: (field: LoanSortField) => void;
-  toggleSortOrder: () => void;
-  
-  // Pagination
-  currentPage: number;
-  pageSize: number;
-  totalPages: number;
-  setPage: (page: number) => void;
-  setPageSize: (size: number) => void;
-  
-  // Selection
-  selectedLoans: string[];
-  toggleSelection: (id: string) => void;
-  selectAll: () => void;
-  clearSelection: () => void;
-  
-  // Actions
-  refreshData: () => void;
-  handleDelete: (id: string) => Promise<boolean>;
-  handleBulkDelete: () => Promise<boolean>;
-  handleExport: () => void;
-  navigateToCreate: () => void;
-  navigateToEdit: (id: string) => void;
-  navigateToView: (id: string) => void;
-  navigateToPayment: (id: string) => void;
-  
-  // Stats
-  totalCount: number;
-  totalAmount: number;
-}
-
-export const useLoanListViewModel = (
-  banks: Bank[],
-  setBanks: (banks: Bank[]) => void,
-  initialType?: LoanType
-): UseLoanListViewModelReturn => {
+export function useLoanListViewModel() {
   const navigate = useNavigate();
-  
-  // State
-  const [loans, setLoans] = useState<Loan[]>([]);
+
+  // ==================== STATE ====================
+
+  const [allLoans, setAllLoans] = useState<Loan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Filters
+
   const [filters, setFilters] = useState<LoanFilters>({
     searchTerm: '',
-    type: initialType || 'all',
+    type: 'all',
     status: 'all',
     loanCategory: 'all',
     dateFrom: undefined,
-    dateTo: undefined
+    dateTo: undefined,
   });
-  
-  // Sorting
+
   const [sortField, setSortField] = useState<LoanSortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  
-  // Selection
   const [selectedLoans, setSelectedLoans] = useState<string[]>([]);
-  
-  // Load data
-  const loadData = useCallback(() => {
+
+  // ==================== DATA FETCHING ====================
+
+  const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const allLoans = getAllLoans();
-      setLoans(allLoans);
-      setSelectedLoans([]); // Clear selection on refresh
+      console.log('🔄 Fetching loans from Firestore...');
+      const loans = await LoanFirebaseService.fetchAllLoans();
+      setAllLoans(loans);
+      setSelectedLoans([]);
+      console.log(`✅ Loaded ${loans.length} loans`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load loans');
+      console.error('❌ Error loading loans:', err);
+      setError('Failed to load loans. Please try again.');
       toast.error('Failed to load loans');
     } finally {
       setIsLoading(false);
     }
   }, []);
-  
-  // Initial load
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-  
-  // Filter and sort loans
-  const filteredLoans = useMemo(() => {
-    let result = filterLoans(loans, filters);
-    result = sortLoans(result, sortField, sortOrder);
-    return result;
-  }, [loans, filters, sortField, sortOrder]);
-  
-  // Pagination
-  const totalPages = useMemo(() => 
-    Math.ceil(filteredLoans.length / pageSize) || 1
-  , [filteredLoans.length, pageSize]);
-  
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // ==================== COMPUTED ====================
+
+  const filteredAndSorted = useMemo(() => {
+    const filtered = filterLoans(allLoans, filters);
+    return sortLoans(filtered, sortField, sortOrder);
+  }, [allLoans, filters, sortField, sortOrder]);
+
+  const totalPages = useMemo(() =>
+    Math.ceil(filteredAndSorted.length / pageSize) || 1,
+  [filteredAndSorted.length, pageSize]);
+
   const paginatedLoans = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return filteredLoans.slice(start, start + pageSize);
-  }, [filteredLoans, currentPage, pageSize]);
-  
-  // Reset to first page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filters, sortField, sortOrder]);
-  
-  // Filter handlers
-  const setSearchTerm = useCallback((term: string) => {
-    setFilters(prev => ({ ...prev, searchTerm: term }));
-  }, []);
-  
-  const setTypeFilter = useCallback((type: LoanType | 'all') => {
-    setFilters(prev => ({ ...prev, type }));
-  }, []);
-  
-  const setStatusFilter = useCallback((status: LoanStatus | 'all') => {
-    setFilters(prev => ({ ...prev, status }));
-  }, []);
-  
-  const setCategoryFilter = useCallback((category: LoanCategory | 'all') => {
-    setFilters(prev => ({ ...prev, loanCategory: category }));
-  }, []);
-  
-  const setDateRange = useCallback((from?: string, to?: string) => {
-    setFilters(prev => ({ ...prev, dateFrom: from, dateTo: to }));
-  }, []);
-  
-  const clearFilters = useCallback(() => {
-    setFilters({
-      searchTerm: '',
-      type: 'all',
-      status: 'all',
-      loanCategory: 'all',
-      dateFrom: undefined,
-      dateTo: undefined
-    });
-  }, []);
-  
-  // Sort handlers
-  const handleSetSortField = useCallback((field: LoanSortField) => {
-    setSortField(field);
-  }, []);
-  
-  const toggleSortOrder = useCallback(() => {
-    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-  }, []);
-  
-  // Pagination handlers
+    return filteredAndSorted.slice(start, start + pageSize);
+  }, [filteredAndSorted, currentPage, pageSize]);
+
+  const stats = useMemo(() => calculateStatistics(filteredAndSorted), [filteredAndSorted]);
+
+  // Reset page on filter/sort change
+  useEffect(() => { setCurrentPage(1); }, [filters, sortField, sortOrder]);
+
+  // ==================== FILTER ACTIONS ====================
+
+  const setSearchTerm = useCallback((term: string) => setFilters(prev => ({ ...prev, searchTerm: term })), []);
+  const setTypeFilter = useCallback((type: LoanType | 'all') => setFilters(prev => ({ ...prev, type })), []);
+  const setStatusFilter = useCallback((status: LoanStatus | 'all') => setFilters(prev => ({ ...prev, status })), []);
+  const setCategoryFilter = useCallback((loanCategory: LoanCategory | 'all') => setFilters(prev => ({ ...prev, loanCategory })), []);
+  const setDateRange = useCallback((from?: string, to?: string) => setFilters(prev => ({ ...prev, dateFrom: from, dateTo: to })), []);
+  const clearFilters = useCallback(() => setFilters({ searchTerm: '', type: 'all', status: 'all', loanCategory: 'all' }), []);
+
+  // ==================== SORT ACTIONS ====================
+
+  const handleSetSortField = useCallback((field: LoanSortField) => setSortField(field), []);
+  const toggleSortOrder = useCallback(() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc'), []);
+
+  // ==================== PAGINATION ====================
+
   const setPage = useCallback((page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
+    if (page >= 1 && page <= totalPages) setCurrentPage(page);
   }, [totalPages]);
-  
+
   const handleSetPageSize = useCallback((size: number) => {
     setPageSize(size);
     setCurrentPage(1);
   }, []);
-  
-  // Selection handlers
+
+  // ==================== SELECTION ====================
+
   const toggleSelection = useCallback((id: string) => {
-    setSelectedLoans(prev => 
-      prev.includes(id) 
-        ? prev.filter(loanId => loanId !== id)
-        : [...prev, id]
-    );
+    setSelectedLoans(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }, []);
-  
+
   const selectAll = useCallback(() => {
-    const allIds = paginatedLoans.map(l => l.id);
-    setSelectedLoans(allIds);
+    setSelectedLoans(paginatedLoans.map(l => l.id));
   }, [paginatedLoans]);
-  
-  const clearSelection = useCallback(() => {
-    setSelectedLoans([]);
-  }, []);
-  
-  // Delete handler
+
+  const clearSelection = useCallback(() => setSelectedLoans([]), []);
+
+  // ==================== CRUD ACTIONS ====================
+
   const handleDelete = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const result = deleteLoan(id, loans, banks, setBanks);
-      
-      if (result.success) {
-        const updatedLoans = loans.filter(l => l.id !== id);
-        setLoans(updatedLoans);
-        saveLoans(updatedLoans);
-        toast.success('Loan deleted successfully');
-        return true;
-      } else {
-        toast.error(result.error || 'Failed to delete loan');
-        return false;
-      }
-    } catch (err) {
-      toast.error('An error occurred while deleting');
-      return false;
-    }
-  }, [loans, banks, setBanks]);
-  
-  // Bulk delete handler
-  const handleBulkDelete = useCallback(async (): Promise<boolean> => {
-    if (selectedLoans.length === 0) {
-      toast.error('No loans selected');
-      return false;
-    }
-    
-    try {
-      let updatedLoans = [...loans];
-      let updatedBanks = [...banks];
-      
-      for (const id of selectedLoans) {
-        const result = deleteLoan(id, updatedLoans, updatedBanks, (b) => { updatedBanks = b; });
-        if (result.success) {
-          updatedLoans = updatedLoans.filter(l => l.id !== id);
-          if (result.updatedBanks) {
-            updatedBanks = result.updatedBanks;
-          }
-        }
-      }
-      
-      setLoans(updatedLoans);
-      saveLoans(updatedLoans);
-      setBanks(updatedBanks);
-      setSelectedLoans([]);
-      
-      toast.success(`${selectedLoans.length} loans deleted successfully`);
+      await LoanFirebaseService.deleteLoan(id);
+      setAllLoans(prev => prev.filter(l => l.id !== id));
+      toast.success('Loan deleted successfully');
       return true;
-    } catch (err) {
-      toast.error('An error occurred during bulk delete');
+    } catch {
+      toast.error('Failed to delete loan');
       return false;
     }
-  }, [selectedLoans, loans, banks, setBanks]);
-  
-  // Export handler
+  }, []);
+
+  const handleBulkDelete = useCallback(async (): Promise<boolean> => {
+    if (selectedLoans.length === 0) { toast.error('No loans selected'); return false; }
+    try {
+      await Promise.all(selectedLoans.map(id => LoanFirebaseService.deleteLoan(id)));
+      setAllLoans(prev => prev.filter(l => !selectedLoans.includes(l.id)));
+      setSelectedLoans([]);
+      toast.success(`${selectedLoans.length} loans deleted`);
+      return true;
+    } catch {
+      toast.error('Failed to delete selected loans');
+      return false;
+    }
+  }, [selectedLoans]);
+
   const handleExport = useCallback(() => {
     try {
-      const csv = exportLoansToCSV(filteredLoans);
-      const timestamp = new Date().toISOString().split('T')[0];
-      downloadCSV(csv, `loans_export_${timestamp}.csv`);
-      toast.success(`Exported ${filteredLoans.length} loans to CSV`);
-    } catch (err) {
+      const csv = exportLoansToCSV(filteredAndSorted);
+      downloadCSV(csv, `loans_export_${new Date().toISOString().split('T')[0]}.csv`);
+      toast.success(`Exported ${filteredAndSorted.length} loans`);
+    } catch {
       toast.error('Failed to export loans');
     }
-  }, [filteredLoans]);
-  
-  // Navigation handlers
-  const navigateToCreate = useCallback(() => {
-    navigate('/loans/create');
-  }, [navigate]);
-  
-  const navigateToEdit = useCallback((id: string) => {
-    navigate(`/loans/${id}/edit`);
-  }, [navigate]);
-  
-  const navigateToView = useCallback((id: string) => {
-    navigate(`/loans/${id}`);
-  }, [navigate]);
-  
-  const navigateToPayment = useCallback((id: string) => {
-    navigate(`/loans/${id}/payment`);
-  }, [navigate]);
-  
-  // Stats
-  const stats = useMemo(() => calculateStatistics(filteredLoans), [filteredLoans]);
-  
+  }, [filteredAndSorted]);
+
+  // ==================== NAVIGATION ====================
+
+  const navigateToCreate = useCallback(() => navigate('/loans/create'), [navigate]);
+  const navigateToEdit = useCallback((id: string) => navigate(`/loans/${id}/edit`), [navigate]);
+  const navigateToView = useCallback((id: string) => navigate(`/loans/${id}`), [navigate]);
+  const navigateToPayment = useCallback((id: string) => navigate(`/loans/${id}/payment`), [navigate]);
+
+  // ==================== RETURN ====================
+
   return {
     loans: paginatedLoans,
-    filteredLoans,
+    filteredLoans: filteredAndSorted,
     isLoading,
     error,
     filters,
@@ -346,7 +195,7 @@ export const useLoanListViewModel = (
     navigateToEdit,
     navigateToView,
     navigateToPayment,
-    totalCount: filteredLoans.length,
-    totalAmount: stats.totalAmount
+    totalCount: filteredAndSorted.length,
+    totalAmount: stats.totalAmount,
   };
-};
+}

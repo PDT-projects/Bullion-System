@@ -1,326 +1,207 @@
 // Inventory Module - ViewModel Layer
-// useProductTransferViewModel - Business logic for product transfers
+// useProductTransferViewModel - Transfer list + Mark Received logic
+//
+// MARK RECEIVED LOGIC:
+//   1. Find the same product (brandName + modelName) at destination in Firestore
+//   2. If found: merge serials into it, increment stock, update serialCities to toLocation
+//   3. If not found: update the original product doc with toLocation serials added back
+//   4. Set transfer status → 'Received'
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Product, ProductTransfer, CreateTransferDTO, TransferFilters, ValidationResult } from '../models/types';
-import { InventoryService } from '../models/inventoryService';
+import { Product, ProductTransfer, TransferFilters } from '../models/types';
+import { InventoryFirebaseService, TransferFirebaseService } from '../models/InventoryFirebaseService';
 
-/**
- * Context type from InventoryLayout
- */
-interface InventoryContext {
-  products: Product[];
-  transfers: ProductTransfer[];
-  setTransfers: (transfers: ProductTransfer[]) => void;
-}
-
-/**
- * Return type for useProductTransferViewModel
- */
 interface UseProductTransferViewModelReturn {
-  // Data
-  products: Product[];
   transfers: ProductTransfer[];
-  locations: string[];
-  
-  // Selected Product
-  selectedProduct: Product | null;
-  availableSerials: string[];
-  
-  // Filter State
+  isLoading: boolean;
   filters: TransferFilters;
   showFilters: boolean;
   activeFilterCount: number;
-  
-  // Form State (for new transfer)
-  formData: Partial<CreateTransferDTO>;
-  selectedSerials: string[];
-  validation: ValidationResult;
-  isSubmitting: boolean;
-  
-  // View State
   viewTransfer: ProductTransfer | null;
-  
-  // Stats
   stats: {
     totalTransfers: number;
     pendingTransfers: number;
-    completedTransfers: number;
     inTransitTransfers: number;
+    receivedTransfers: number;
   };
-  
-  // Actions
   setFilter: (key: keyof TransferFilters, value: any) => void;
   clearFilters: () => void;
   toggleFilters: () => void;
-  setSelectedProduct: (product: Product | null) => void;
-  setFormField: (field: string, value: any) => void;
-
-  toggleSerialSelection: (serial: string) => void;
-  selectAllSerials: () => void;
-  clearSerialSelection: () => void;
-  handleCreateTransfer: () => void;
-  handleCompleteTransfer: (id: string) => void;
-  handleCancelTransfer: (id: string) => void;
+  handleMarkReceived: (transfer: ProductTransfer) => Promise<void>;
+  handleDeleteTransfer: (id: string) => Promise<void>;
   setViewTransfer: (transfer: ProductTransfer | null) => void;
   onBack: () => void;
   onNewTransfer: () => void;
+  formatDate: (date: string) => string;
 }
 
-/**
- * ViewModel hook for Product Transfer page
- */
+const DEFAULT_FILTERS: TransferFilters = {
+  productSearch: '', fromLocation: '', toLocation: '',
+  statusFilter: '', dateFrom: '', dateTo: '',
+};
+
 export function useProductTransferViewModel(): UseProductTransferViewModelReturn {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { products, transfers: allTransfers, setTransfers } = useOutletContext<InventoryContext>();
 
-  // Get productId from URL if present
-  const urlProductId = searchParams.get('productId');
-
-  // ==================== STATE ====================
-  
-  const [filters, setFilters] = useState<TransferFilters>({
-    productSearch: '',
-    fromLocation: '',
-    toLocation: '',
-    statusFilter: '',
-    dateFrom: '',
-    dateTo: ''
-  });
-  
+  const [allTransfers, setAllTransfers] = useState<ProductTransfer[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [filters, setFiltersState] = useState<TransferFilters>(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [viewTransfer, setViewTransfer] = useState<ProductTransfer | null>(null);
-  
-  // Form state for new transfer
-  const [formData, setFormData] = useState<Partial<CreateTransferDTO>>({
-    fromLocation: '',
-    toLocation: '',
-    quantity: 0,
-    serialNumbers: [],
-    transferDate: new Date().toISOString().split('T')[0],
-    notes: ''
-  });
-  const [selectedSerials, setSelectedSerials] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ==================== EFFECTS ====================
-  
-  // Auto-select product from URL
   useEffect(() => {
-    if (urlProductId && products.length > 0) {
-      const product = InventoryService.findProductById(products, urlProductId);
-      if (product) {
-        setSelectedProduct(product);
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const [fetchedTransfers, fetchedProducts] = await Promise.all([
+          TransferFirebaseService.fetchAllTransfers(),
+          InventoryFirebaseService.fetchAllProducts(),
+        ]);
+        setAllTransfers(fetchedTransfers);
+        setAllProducts(fetchedProducts);
+        console.log(`✅ Loaded ${fetchedTransfers.length} transfers`);
+      } catch (err) {
+        console.error('Error loading transfers:', err);
+        toast.error('Failed to load transfers');
+      } finally {
+        setIsLoading(false);
       }
-    }
-  }, [urlProductId, products]);
+    };
+    load();
+  }, []);
 
-  // Update available serials when product changes
-  useEffect(() => {
-    if (selectedProduct) {
-      const available = InventoryService.getAvailableSerials(selectedProduct);
-      setFormData(prev => ({ ...prev, serialNumbers: [] }));
-      setSelectedSerials([]);
-    }
-  }, [selectedProduct]);
-
-  // ==================== COMPUTED VALUES ====================
-  
+  // Basic filter — search by product name or location
   const transfers = useMemo(() => {
-    return InventoryService.filterTransfers(allTransfers, filters);
+    let list = [...allTransfers];
+    if (filters.productSearch)
+      list = list.filter(t =>
+        t.productName?.toLowerCase().includes(filters.productSearch.toLowerCase())
+      );
+    if (filters.fromLocation)
+      list = list.filter(t => t.fromLocation === filters.fromLocation);
+    if (filters.toLocation)
+      list = list.filter(t => t.toLocation === filters.toLocation);
+    if (filters.statusFilter)
+      list = list.filter(t => t.status === filters.statusFilter);
+    return list;
   }, [allTransfers, filters]);
 
-  const locations = useMemo(() => {
-    return InventoryService.getUniqueLocations(allTransfers);
-  }, [allTransfers]);
+  const stats = useMemo(() => ({
+    totalTransfers:    allTransfers.length,
+    pendingTransfers:  allTransfers.filter(t => t.status === 'Pending').length,
+    inTransitTransfers:allTransfers.filter(t => t.status === 'In Transit').length,
+    receivedTransfers: allTransfers.filter(t => t.status === 'Received').length,
+  }), [allTransfers]);
 
-  const availableSerials = useMemo(() => {
-    if (!selectedProduct) return [];
-    return InventoryService.getAvailableSerials(selectedProduct);
-  }, [selectedProduct]);
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).filter(v => v !== '').length,
+    [filters]
+  );
 
-  const stats = useMemo(() => {
-    return InventoryService.calculateTransferStats(transfers);
-  }, [transfers]);
+  const setFilter = useCallback(
+    (key: keyof TransferFilters, value: any) =>
+      setFiltersState(prev => ({ ...prev, [key]: value })),
+    []
+  );
+  const clearFilters  = useCallback(() => setFiltersState(DEFAULT_FILTERS), []);
+  const toggleFilters = useCallback(() => setShowFilters(p => !p), []);
 
-  const validation = useMemo((): ValidationResult => {
-    if (!selectedProduct) {
-      return { isValid: false, error: 'Please select a product' };
-    }
-    return InventoryService.validateTransfer(
-      { ...formData, productId: selectedProduct.id }, 
-      selectedProduct.stock
-    );
-  }, [formData, selectedProduct]);
-
-  const activeFilterCount = useMemo(() => {
-    return Object.values(filters).filter(v => v !== '' && v !== null).length;
-  }, [filters]);
-
-  // ==================== ACTIONS ====================
-  
-  const setFilter = useCallback((key: keyof TransferFilters, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  }, []);
-
-  const clearFilters = useCallback(() => {
-    setFilters({
-      productSearch: '',
-      fromLocation: '',
-      toLocation: '',
-      statusFilter: '',
-      dateFrom: '',
-      dateTo: ''
-    });
-  }, []);
-
-  const toggleFilters = useCallback(() => {
-    setShowFilters(prev => !prev);
-  }, []);
-
-  const setFormField = useCallback((field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
-
-
-  const toggleSerialSelection = useCallback((serial: string) => {
-    setSelectedSerials(prev => {
-      if (prev.includes(serial)) {
-        return prev.filter(s => s !== serial);
-      }
-      if (prev.length >= (formData.quantity || 0)) {
-        toast.error(`You can only select ${formData.quantity} serial numbers`);
-        return prev;
-      }
-      return [...prev, serial];
-    });
-    
-    setFormData(prev => ({
-      ...prev,
-      serialNumbers: prev.serialNumbers?.includes(serial)
-        ? prev.serialNumbers.filter(s => s !== serial)
-        : [...(prev.serialNumbers || []), serial]
-    }));
-  }, [formData.quantity]);
-
-  const selectAllSerials = useCallback(() => {
-    if (!selectedProduct) return;
-    const available = InventoryService.getAvailableSerials(selectedProduct);
-    const toSelect = available.slice(0, formData.quantity || available.length);
-    setSelectedSerials(toSelect);
-    setFormData(prev => ({ ...prev, serialNumbers: toSelect }));
-  }, [selectedProduct, formData.quantity]);
-
-  const clearSerialSelection = useCallback(() => {
-    setSelectedSerials([]);
-    setFormData(prev => ({ ...prev, serialNumbers: [] }));
-  }, []);
-
-  const handleCreateTransfer = useCallback(() => {
-    if (!selectedProduct || !validation.isValid) {
-      toast.error(validation.error || 'Please fix the errors');
+  // ── CORE: Mark Received → add serials to destination product ─────────────────
+  const handleMarkReceived = useCallback(async (transfer: ProductTransfer) => {
+    if (transfer.status === 'Received') {
+      toast.error('This transfer is already marked as received');
       return;
     }
 
-    setIsSubmitting(true);
-    
     try {
-      const transferData: CreateTransferDTO = {
-        productId: selectedProduct.id,
-        fromLocation: formData.fromLocation || '',
-        toLocation: formData.toLocation || '',
-        quantity: formData.quantity || 0,
-        serialNumbers: formData.serialNumbers || [],
-        transferDate: formData.transferDate || new Date().toISOString().split('T')[0],
-        notes: formData.notes
-      };
+      // Find the source product doc to know brandName/modelName
+      const sourceProduct = allProducts.find(p => p.id === transfer.productId);
+      if (!sourceProduct) {
+        toast.error('Source product not found');
+        return;
+      }
 
-      const updatedTransfers = InventoryService.createTransfer(
-        allTransfers, 
-        transferData, 
-        selectedProduct.modelName
-      );
-      
-      setTransfers(updatedTransfers);
-      toast.success('Transfer created successfully');
-      
-      // Reset form
-      setSelectedProduct(null);
-      setFormData({
-        fromLocation: '',
-        toLocation: '',
-        quantity: 0,
-        serialNumbers: [],
-        transferDate: new Date().toISOString().split('T')[0],
-        notes: ''
+      const transferredSerials = transfer.serialNumbers || [];
+      const toLocation = transfer.toLocation;
+
+      // Look for an existing product with the same brand+model at the destination
+      // (could be same doc or a different one if stock was split previously)
+      const destProduct = allProducts.find(
+        p =>
+          p.brandName === sourceProduct.brandName &&
+          p.modelName === sourceProduct.modelName &&
+          p.id !== transfer.productId &&
+          p.receivableStatus !== 'Pending'
+      ) || sourceProduct; // fallback: update the same product doc
+
+      // Merge serials into destination product
+      const existingSerials = destProduct.serialNumbers || [];
+      const mergedSerials   = [
+        ...existingSerials.filter(s => !transferredSerials.includes(s)),
+        ...transferredSerials,
+      ];
+      const mergedCities = { ...destProduct.serialCities };
+      transferredSerials.forEach(s => { mergedCities[s] = toLocation; });
+
+      await InventoryFirebaseService.updateProduct(destProduct.id, {
+        stock:         (destProduct.stock || 0) + transferredSerials.length,
+        serialNumbers: mergedSerials,
+        serialCities:  mergedCities,
       });
-      setSelectedSerials([]);
-      
-    } catch (error) {
-      console.error('Error creating transfer:', error);
-      toast.error('Failed to create transfer');
-    } finally {
-      setIsSubmitting(false);
+
+      // Mark transfer received
+      const receivedAt = new Date().toISOString();
+      await TransferFirebaseService.updateTransferStatus(transfer.id, 'Received', receivedAt);
+
+      // Update local state
+      setAllTransfers(prev =>
+        prev.map(t => t.id === transfer.id ? { ...t, status: 'Received', receivedAt } : t)
+      );
+      setAllProducts(prev =>
+        prev.map(p =>
+          p.id === destProduct.id
+            ? { ...p, stock: (p.stock || 0) + transferredSerials.length, serialNumbers: mergedSerials, serialCities: mergedCities }
+            : p
+        )
+      );
+
+      toast.success(
+        `✅ Transfer received at ${toLocation} — ${transferredSerials.length} unit(s) added to stock`
+      );
+      setViewTransfer(null);
+    } catch (err) {
+      console.error('Mark received failed:', err);
+      toast.error('Failed to mark transfer as received');
     }
-  }, [selectedProduct, formData, validation, allTransfers, setTransfers]);
+  }, [allProducts]);
 
-  const handleCompleteTransfer = useCallback((id: string) => {
-    const updatedTransfers = InventoryService.completeTransfer(allTransfers, id);
-    setTransfers(updatedTransfers);
-    toast.success('Transfer completed');
-  }, [allTransfers, setTransfers]);
+  const handleDeleteTransfer = useCallback(async (id: string) => {
+    if (!window.confirm('Delete this transfer record?')) return;
+    try {
+      await TransferFirebaseService.deleteTransfer(id);
+      setAllTransfers(prev => prev.filter(t => t.id !== id));
+      toast.success('Transfer deleted');
+    } catch {
+      toast.error('Failed to delete transfer');
+    }
+  }, []);
 
-  const handleCancelTransfer = useCallback((id: string) => {
-    const updatedTransfers = InventoryService.cancelTransfer(allTransfers, id);
-    setTransfers(updatedTransfers);
-    toast.success('Transfer cancelled');
-  }, [allTransfers, setTransfers]);
+  const formatDate = useCallback(
+    (date: string) => date ? new Date(date).toLocaleDateString('en-PK') : '-',
+    []
+  );
 
-  const onBack = useCallback(() => {
-    navigate('/inventory');
-  }, [navigate]);
-
-  const onNewTransfer = useCallback(() => {
-    navigate('/product-transfer/new');
-  }, [navigate]);
+  const onBack        = useCallback(() => navigate('/inventory'), [navigate]);
+  const onNewTransfer = useCallback(() => navigate('/product-transfer/new'), [navigate]);
 
   return {
-    products,
-    transfers,
-    locations,
-    selectedProduct,
-    availableSerials,
-    filters,
-    showFilters,
-    activeFilterCount,
-    formData,
-    selectedSerials,
-    validation,
-    isSubmitting,
-    viewTransfer,
-    stats: {
-      totalTransfers: stats.totalTransfers,
-      pendingTransfers: stats.pendingTransfers,
-      completedTransfers: stats.completedTransfers,
-      inTransitTransfers: stats.inTransitTransfers
-    },
-    setFilter,
-    clearFilters,
-    toggleFilters,
-    setSelectedProduct,
-    setFormField,
-    toggleSerialSelection,
-    selectAllSerials,
-    clearSerialSelection,
-    handleCreateTransfer,
-    handleCompleteTransfer,
-    handleCancelTransfer,
-    setViewTransfer,
-    onBack,
-    onNewTransfer
+    transfers, isLoading, filters, showFilters, activeFilterCount,
+    viewTransfer, stats,
+    setFilter, clearFilters, toggleFilters,
+    handleMarkReceived, handleDeleteTransfer,
+    setViewTransfer, onBack, onNewTransfer, formatDate,
   };
 }

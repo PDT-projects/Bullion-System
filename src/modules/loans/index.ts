@@ -1,49 +1,11 @@
 /**
- * Loans Module - MVVM Architecture
- * 
- * Complete loans management module with MVVM pattern.
- * Supports payable and receivable loans with bank integration.
+ * Loans Module - Public API
  */
 
 // Models
-export type {
-  Loan,
-  Bank,
-  Employee,
-  LoanType,
-  LoanCategory,
-  PaymentMode,
-  ReceiverType,
-  LoanStatus,
-  LoanFormState,
-  PaymentFormState,
-  LoanFilters,
-  LoanSortField,
-  SortOrder,
-  LoanStatistics,
-  LoanDashboardCard,
-  LoanQuickAction,
-  CreateLoanDTO,
-  UpdateLoanDTO,
-  MakePaymentDTO,
-  LoanValidationErrors
-} from './models/types';
-
-export {
-  getAllLoans,
-  getLoanById,
-  createLoan,
-  updateLoan,
-  deleteLoan,
-  makePayment,
-  validateLoan,
-  filterLoans,
-  sortLoans,
-  calculateProgress,
-  formatCurrency,
-  formatDate,
-  exportLoansToCSV
-} from './models/loanService';
+export * from './models/types';
+export { LoanFirebaseService } from './models/loanFirebaseService';
+export { formatCurrency, formatDate, calculateProgress, calculateStatistics, filterLoans, sortLoans, validateLoan, exportLoansToCSV, downloadCSV, getTotalReceivable, getTotalPayable, getNetLoanPosition, getOverdueLoans, getUpcomingPayments } from './models/loanService';
 
 // ViewModels
 export { useLoanDashboardViewModel } from './viewModels/useLoanDashboardViewModel';
@@ -57,7 +19,7 @@ export { LoanListView } from './views/LoanListView';
 export { LoanFormView } from './views/LoanFormView';
 export { LoanPaymentView } from './views/LoanPaymentView';
 
-// Wrappers (Container Components)
+// Wrappers
 export { LoanDashboardWrapper } from './views/LoanDashboardWrapper';
 export { LoanListWrapper } from './views/LoanListWrapper';
 export { LoanFormWrapper } from './views/LoanFormWrapper';

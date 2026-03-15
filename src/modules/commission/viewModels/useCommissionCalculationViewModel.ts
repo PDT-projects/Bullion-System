@@ -1,26 +1,22 @@
-// Commission Calculation ViewModel
+// Commission Calculation ViewModel — saves results to Firestore
 
 import { useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import type { Commission, CommissionCalculationResult } from '../models/types';
 import {
   calculateCommissions,
-  saveCalculatedCommissions,
-  confirmCommission,
-  updateCommission,
   formatCurrency,
   formatMonth,
   getCurrentMonth,
   CITIES
 } from '../models/commissionService';
+import { CommissionFirebaseService } from '../models/Commissionfirebaseservice';
 
 interface UseCommissionCalculationViewModelReturn {
-  // Selection state
   selectedCity: string;
   setSelectedCity: (city: string) => void;
   selectedMonth: string;
   setSelectedMonth: (month: string) => void;
-  
-  // Calculation results
   commissionData: Commission[];
   calculationErrors: string[];
   summary: {
@@ -28,33 +24,23 @@ interface UseCommissionCalculationViewModelReturn {
     totalSales: number;
     totalCommission: number;
   } | null;
-  
-  // UI state
   showModal: boolean;
   setShowModal: (show: boolean) => void;
   isFullScreen: boolean;
   setIsFullScreen: (full: boolean) => void;
   isCalculating: boolean;
   isEditing: string | null;
-  editValues: {
-    percentage: number;
-    amount: number;
-  };
+  editValues: { percentage: number; amount: number };
   setEditValues: (values: { percentage: number; amount: number }) => void;
-
-  
-  // Actions
-  calculateCommission: (invoices: any[], employees: any[]) => boolean;
+  calculateCommission: (invoices: any[], employees: any[]) => Promise<boolean>;
   confirmSingleCommission: (commissionId: string) => void;
   confirmAllCommissions: () => void;
   startEdit: (commission: Commission) => void;
   saveEdit: (commissionId: string) => void;
   cancelEdit: () => void;
   cancelCalculation: () => void;
-  handleModalConfirm: () => void;
+  handleModalConfirm: () => Promise<void>;
   handleModalCancel: () => void;
-  
-  // Utils
   formatCurrency: (amount: number) => string;
   formatMonth: (monthStr: string) => string;
   cities: readonly string[];
@@ -72,15 +58,13 @@ export function useCommissionCalculationViewModel(
     totalSales: number;
     totalCommission: number;
   } | null>(null);
-  
   const [showModal, setShowModal] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editValues, setEditValues] = useState({ percentage: 0, amount: 0 });
 
-  // Calculate commission
-  const calculateCommission = useCallback((invoices: any[], employees: any[]): boolean => {
+  const calculateCommission = useCallback(async (invoices: any[], employees: any[]): Promise<boolean> => {
     if (!selectedCity || !selectedMonth) {
       setCalculationErrors(['Please select both city and month']);
       return false;
@@ -90,12 +74,16 @@ export function useCommissionCalculationViewModel(
     setCalculationErrors([]);
 
     try {
+      // Fetch slabs from Firestore for calculation
+      const slabs = await CommissionFirebaseService.fetchAllSlabs();
+
       const result: CommissionCalculationResult = calculateCommissions(
         selectedCity,
         selectedMonth,
         invoices,
         employees,
-        'Admin' // TODO: Get from auth context
+        slabs,
+        'Admin'
       );
 
       setCommissionData(result.commissions);
@@ -107,48 +95,37 @@ export function useCommissionCalculationViewModel(
           ...prev,
           'No sales data found for the selected city and month'
         ]);
-        setIsCalculating(false);
         return false;
       }
 
       setShowModal(true);
-      setIsCalculating(false);
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Calculation failed';
-      setCalculationErrors([errorMessage]);
-      setIsCalculating(false);
+      const msg = error instanceof Error ? error.message : 'Calculation failed';
+      setCalculationErrors([msg]);
       return false;
+    } finally {
+      setIsCalculating(false);
     }
   }, [selectedCity, selectedMonth]);
 
-  // Confirm single commission
   const confirmSingleCommission = useCallback((commissionId: string) => {
-    try {
-      const updated = confirmCommission(commissionId, 'Admin');
-      
-      setCommissionData(prev => 
-        prev.map(c => c.id === commissionId ? updated : c)
-      );
-    } catch (error) {
-      console.error('Error confirming commission:', error);
-    }
+    setCommissionData(prev =>
+      prev.map(c =>
+        c.id === commissionId
+          ? { ...c, status: 'Confirmed' as const, confirmedBy: 'Admin', confirmedAt: new Date().toISOString(), isLocked: true }
+          : c
+      )
+    );
   }, []);
 
-  // Confirm all commissions
   const confirmAllCommissions = useCallback(() => {
-    try {
-      const confirmed = commissionData.map(commission => 
-        confirmCommission(commission.id, 'Admin')
-      );
-      
-      setCommissionData(confirmed);
-    } catch (error) {
-      console.error('Error confirming all commissions:', error);
-    }
-  }, [commissionData]);
+    const now = new Date().toISOString();
+    setCommissionData(prev =>
+      prev.map(c => ({ ...c, status: 'Confirmed' as const, confirmedBy: 'Admin', confirmedAt: now, isLocked: true }))
+    );
+  }, []);
 
-  // Start editing
   const startEdit = useCallback((commission: Commission) => {
     setIsEditing(commission.id);
     setEditValues({
@@ -157,31 +134,22 @@ export function useCommissionCalculationViewModel(
     });
   }, []);
 
-  // Save edit
   const saveEdit = useCallback((commissionId: string) => {
-    try {
-      const updated = updateCommission({
-        id: commissionId,
-        overriddenCommissionPercentage: editValues.percentage,
-        overriddenCommissionAmount: editValues.amount
-      });
-      
-      setCommissionData(prev => 
-        prev.map(c => c.id === commissionId ? updated : c)
-      );
-      setIsEditing(null);
-    } catch (error) {
-      console.error('Error saving edit:', error);
-    }
+    setCommissionData(prev =>
+      prev.map(c =>
+        c.id === commissionId
+          ? { ...c, overriddenCommissionPercentage: editValues.percentage, overriddenCommissionAmount: editValues.amount, status: 'Adjusted' as const }
+          : c
+      )
+    );
+    setIsEditing(null);
   }, [editValues]);
 
-  // Cancel edit
   const cancelEdit = useCallback(() => {
     setIsEditing(null);
     setEditValues({ percentage: 0, amount: 0 });
   }, []);
 
-  // Cancel calculation
   const cancelCalculation = useCallback(() => {
     setCommissionData([]);
     setSelectedCity('');
@@ -190,35 +158,34 @@ export function useCommissionCalculationViewModel(
     setSummary(null);
   }, []);
 
-  // Handle modal confirm
-  const handleModalConfirm = useCallback(() => {
+  const handleModalConfirm = useCallback(async () => {
     try {
-      // Confirm all commissions
-      const confirmed = commissionData.map(commission => ({
-        ...commission,
+      const confirmed = commissionData.map(c => ({
+        ...c,
         status: 'Confirmed' as const,
         confirmedBy: 'Admin',
         confirmedAt: new Date().toISOString(),
         isLocked: true
       }));
 
-      // Save to storage
-      saveCalculatedCommissions(confirmed);
-      
+      // Save to Firestore (strip the temp id, let Firestore generate real ones)
+      const toSave = confirmed.map(({ id, ...rest }) => rest);
+      await CommissionFirebaseService.saveCommissions(toSave);
+
+      toast.success(`${confirmed.length} commission(s) saved successfully`);
       setShowModal(false);
       setCommissionData([]);
       setSelectedCity('');
       setSelectedMonth(getCurrentMonth());
       setCalculationErrors([]);
       setSummary(null);
-      
       onCommissionsSaved();
     } catch (error) {
-      console.error('Error saving commissions:', error);
+      toast.error('Failed to save commissions');
+      console.error(error);
     }
   }, [commissionData, onCommissionsSaved]);
 
-  // Handle modal cancel
   const handleModalCancel = useCallback(() => {
     setShowModal(false);
     setCommissionData([]);

@@ -1,28 +1,20 @@
 // Salary Module - ViewModel Layer
-// Dashboard page logic for salary cards
+// Dashboard page logic — fetches directly from Firestore
 
-import { useMemo } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Salary } from '../models/types';
-
-interface SalaryContext {
-  transactions: any[];
-  setTransactions: (transactions: any[]) => void;
-  employees: any[];
-  banks: any[];
-  setBanks: (banks: any[]) => void;
-}
+import { SalaryFirebaseService } from '../models/salaryFirebaseService';
 
 interface UseSalaryDashboardViewModelReturn {
-  // Stats
   stats: {
     totalSalariesPaid: number;
     advanceSalaries: number;
     thisMonth: number;
     pendingPayments: number;
   };
-  
-  // Navigation handlers
+  isLoading: boolean;
   navigateToAllSalaries: () => void;
   navigateToRegularSalaries: () => void;
   navigateToAdvanceSalaries: () => void;
@@ -32,60 +24,50 @@ interface UseSalaryDashboardViewModelReturn {
 
 export function useSalaryDashboardViewModel(): UseSalaryDashboardViewModelReturn {
   const navigate = useNavigate();
-  const { transactions } = useOutletContext<SalaryContext>();
+  const [salaries, setSalaries] = useState<Salary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Filter salary transactions from all transactions
-  const salaryTransactions = useMemo(() => {
-    return transactions.filter((t: any) => 
-      t.mainCategory === 'Salary' ||
-      (t.mainCategory === 'Cash Outflow' && t.subCategory === 'Advance Salary')
-    );
-  }, [transactions]);
-
-  // Calculate stats
-  const stats = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
-
-    // All salaries (regular + advance)
-    const totalSalariesPaid = salaryTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
-    
-    // Advance salaries only
-    const advanceSalaries = salaryTransactions
-      .filter((t: any) => t.mainCategory === 'Cash Outflow' && t.subCategory === 'Advance Salary')
-      .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
-    
-    // This month
-    const thisMonth = salaryTransactions
-      .filter((t: any) => t.salaryMonth === currentMonth)
-      .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
-    
-    // Pending payments (partial payments)
-    const pendingPayments = salaryTransactions
-      .filter((t: any) => t.paymentStatus === 'Partial')
-      .length;
-
-    return {
-      totalSalariesPaid,
-      advanceSalaries,
-      thisMonth,
-      pendingPayments
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await SalaryFirebaseService.fetchAllSalaries();
+        setSalaries(data);
+      } catch (error) {
+        toast.error('Failed to load salary data');
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [salaryTransactions]);
+    load();
+  }, []);
 
-  // Navigation handlers
-  const navigateToAllSalaries = () => navigate('/salary/all');
-  const navigateToRegularSalaries = () => navigate('/salary/regular');
-  const navigateToAdvanceSalaries = () => navigate('/salary/advance');
-  const navigateToCreateRegular = () => navigate('/salary/create-regular');
-  const navigateToCreateAdvance = () => navigate('/salary/create-advance');
+  const stats = useMemo(() => {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    const totalSalariesPaid = salaries.reduce((sum, s) => sum + (s.amount || 0), 0);
+
+    const advanceSalaries = salaries
+      .filter(s => s.subCategory?.toLowerCase().includes('advance'))
+      .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+    const thisMonth = salaries
+      .filter(s => s.salaryMonth === currentMonth)
+      .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+    const pendingPayments = salaries.filter(
+      s => !s.paymentStatus || s.paymentStatus === 'Partial'
+    ).length;
+
+    return { totalSalariesPaid, advanceSalaries, thisMonth, pendingPayments };
+  }, [salaries]);
 
   return {
     stats,
-    navigateToAllSalaries,
-    navigateToRegularSalaries,
-    navigateToAdvanceSalaries,
-    navigateToCreateRegular,
-    navigateToCreateAdvance
+    isLoading,
+    navigateToAllSalaries: () => navigate('/salary/all'),
+    navigateToRegularSalaries: () => navigate('/salary/regular'),
+    navigateToAdvanceSalaries: () => navigate('/salary/advance'),
+    navigateToCreateRegular: () => navigate('/salary/create-regular'),
+    navigateToCreateAdvance: () => navigate('/salary/create-advance')
   };
 }

@@ -1,15 +1,26 @@
 // Salary Module - Wrapper Component
-// SalaryCreateWrapper - Connects ViewModel to View for create page
+// SalaryCreateWrapper — fetches employees from Firestore
 
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useSalaryFormViewModel } from '../viewModels/useSalaryFormViewModel';
 import { SalaryFormView } from './SalaryFormView';
+import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 
 interface SalaryCreateWrapperProps {
   type: 'regular' | 'advance';
 }
 
 export function SalaryCreateWrapper({ type }: SalaryCreateWrapperProps) {
-  const viewModel = useSalaryFormViewModel({ mode: 'create', type });
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  useEffect(() => {
+    EmployeeFirebaseService.fetchAllEmployees()
+      .then(setEmployees)
+      .catch(() => toast.error('Failed to load employees'));
+  }, []);
+
+  const viewModel = useSalaryFormViewModel({ mode: 'create', type, employees, banks: [] });
 
   return (
     <SalaryFormView

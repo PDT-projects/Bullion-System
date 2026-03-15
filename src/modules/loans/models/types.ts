@@ -1,16 +1,15 @@
 /**
  * Loans Module - Type Definitions
- * 
- * This file contains all TypeScript interfaces and types for the Loans module.
  */
 
-// Import from App.tsx
-import type { Loan as AppLoan, Bank, Employee } from '../../../App';
+export type LoanType = 'Payable' | 'Receivable';
+export type LoanCategory = 'Official' | 'Personal' | 'Other';
+export type LoanStatus = 'Full' | 'Partial';
+export type PaymentMode = 'Cash' | 'Bank';
+export type ReceiverType = 'Employee' | 'Person';
+export type LoanSortField = 'date' | 'loanAmount' | 'paid' | 'remaining' | 'entityName';
+export type SortOrder = 'asc' | 'desc';
 
-// Re-export for convenience
-export type { Bank, Employee };
-
-// Local type definitions
 export interface PaymentRecord {
   id: string;
   amount: number;
@@ -20,31 +19,42 @@ export interface PaymentRecord {
   bankName?: string;
 }
 
-// Loan Types
-
-export type LoanType = 'Payable' | 'Receivable';
-export type LoanCategory = 'Official' | 'Personal' | 'Other';
-export type LoanStatus = 'Full' | 'Partial';
-export type PaymentMode = 'Cash' | 'Bank';
-
-// Receiver Types
-export type ReceiverType = 'Employee' | 'Person';
-
-// Filter Types
-export interface LoanFilters {
-  searchTerm: string;
-  type: LoanType | 'all';
-  status: LoanStatus | 'all';
-  loanCategory: LoanCategory | 'all';
-  dateFrom?: string;
-  dateTo?: string;
+export interface Loan {
+  id: string;
+  entityName: string;
+  receiverName: string;
+  receiverType: ReceiverType;
+  receiverId?: string;
+  receiverPhone?: string;
+  loanAmount: number;
+  paid: number;
+  remaining: number;
+  type: LoanType;
+  loanType: LoanCategory;
+  status: LoanStatus;
+  date: string;
+  mode: PaymentMode;
+  bankId?: string;
+  bankName?: string;
+  employeeId?: string;
+  employeeName?: string;
+  notes?: string;
+  paymentHistory: PaymentRecord[];
+  createdAt: string;
+  updatedAt: string;
 }
 
-// Sort Options
-export type LoanSortField = 'date' | 'loanAmount' | 'paid' | 'remaining' | 'entityName';
-export type SortOrder = 'asc' | 'desc';
+export interface Bank {
+  id: string;
+  name: string;
+  balance: number;
+}
 
-// DTOs for Create/Update
+export interface Employee {
+  id: string;
+  name: string;
+}
+
 export interface CreateLoanDTO {
   entityName: string;
   loanAmount: number;
@@ -68,7 +78,6 @@ export interface UpdateLoanDTO extends Partial<CreateLoanDTO> {
   id: string;
 }
 
-// Payment DTO
 export interface MakePaymentDTO {
   loanId: string;
   amount: number;
@@ -78,7 +87,15 @@ export interface MakePaymentDTO {
   date?: string;
 }
 
-// Statistics
+export interface LoanFilters {
+  searchTerm: string;
+  type: LoanType | 'all';
+  status: LoanStatus | 'all';
+  loanCategory: LoanCategory | 'all';
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export interface LoanStatistics {
   totalLoans: number;
   totalAmount: number;
@@ -92,21 +109,9 @@ export interface LoanStatistics {
   personalCount: number;
   otherCount: number;
   averageLoanAmount: number;
-  collectionRate: number; // percentage of total paid
+  collectionRate: number;
 }
 
-// Re-export Loan type
-export type Loan = AppLoan;
-
-// Loan with extended info for UI
-export interface LoanViewModel extends Loan {
-  progressPercentage: number; // paid / loanAmount * 100
-  isOverdue: boolean;
-  daysSinceCreated: number;
-}
-
-
-// Validation Errors
 export interface LoanValidationErrors {
   entityName?: string;
   loanAmount?: string;
@@ -120,7 +125,6 @@ export interface LoanValidationErrors {
   receiverName?: string;
 }
 
-// Form State
 export interface LoanFormState {
   entityName: string;
   loanAmount: string;
@@ -137,73 +141,28 @@ export interface LoanFormState {
   employeeId: string;
 }
 
-
-// Payment Form State
 export interface PaymentFormState {
   amount: string;
   mode: PaymentMode;
   bankId: string;
 }
 
-// Dashboard Card
 export interface LoanDashboardCard {
   id: string;
   title: string;
   description: string;
-  icon: string; // Lucide icon name
+  icon: string;
   path: string;
   color: 'blue' | 'red' | 'green' | 'purple' | 'orange';
   count?: number;
   amount?: number;
 }
 
-// Quick Action
 export interface LoanQuickAction {
   id: string;
   title: string;
   description: string;
-  icon: string; // Lucide icon name
+  icon: string;
   path: string;
   color: 'red' | 'green';
-}
-
-// Export/Import
-export interface LoanExportData {
-  loans: AppLoan[];
-  exportedAt: string;
-  totalCount: number;
-  totalAmount: number;
-}
-
-
-// API Response Types (for future backend integration)
-export interface LoanApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-  errors?: string[];
-}
-
-export interface LoanListResponse {
-  loans: AppLoan[];
-  total: number;
-  page: number;
-  pageSize: number;
-  statistics: LoanStatistics;
-}
-
-// Search Result
-export interface LoanSearchResult {
-  loan: AppLoan;
-  relevanceScore: number;
-  matchedFields: string[];
-}
-
-
-// Comparison Data
-export interface LoanComparisonData {
-  period: string;
-  payableAmount: number;
-  receivableAmount: number;
-  netPosition: number; // receivable - payable
 }

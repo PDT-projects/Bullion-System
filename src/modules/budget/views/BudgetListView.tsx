@@ -9,7 +9,6 @@ import { Plus, Filter, X, AlertTriangle, Eye, Pencil, Trash2 } from 'lucide-reac
 
 interface BudgetListViewProps {
   budgets: Budget[];
-  allBudgets: Budget[];
   filters: BudgetFilters;
   showFilters: boolean;
   activeFilterCount: number;

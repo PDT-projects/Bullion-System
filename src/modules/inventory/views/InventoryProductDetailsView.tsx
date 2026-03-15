@@ -1,89 +1,127 @@
-import React, { useState } from 'react';
-import { Package, Hash, ArrowLeft, ArrowRight } from 'lucide-react';
-import { UseInventoryProductDetailsViewModelReturn } from '../viewModels/useInventoryProductDetailsViewModel';
-import { BrandModelDropdown } from '../components/BrandModelDropdown';
-import { MultiModelInventoryTable } from '../components/MultiModelInventoryTable';
+// Inventory Module - View Layer
+// InventoryProductDetailsView - Step 4: Product Details
+//
+// WITH COSTING: Models are pre-loaded from Firestore. Each model shows its own
+// serial number inputs (one input per unit based on quantity).
+//
+// WITHOUT COSTING: Single model with a shared serial number section.
+
+import React, { useState, useEffect } from 'react';
+import { Package, Hash, ArrowLeft, ArrowRight, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { UseInventoryProductDetailsViewModelReturn, SelectedModel } from '../viewModels/useInventoryProductDetailsViewModel';
 
 interface InventoryProductDetailsViewProps extends UseInventoryProductDetailsViewModelReturn {}
 
 export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewProps> = ({
   formData,
   costingOption,
-  inventoryType,
   singleModel,
   setSingleModelField,
   serialInputs,
   validationErrors,
-  isValid,
   setBrandName,
   setModelName,
   setCategory,
   setSellPrice,
-  setBuyType,
-  setWarrantyYears,
   setStock,
   setDescription,
   setStatus,
-  setIsDamaged,
   updateSerialNumber,
   updateSerialCity,
   handleNext,
   handleBack,
   categories,
   cities,
+  costingBrandId,
+  costingBrandName,
+  preloadedModels,
+  isLoadingModels,
 }) => {
+  // ── With-costing: local selectedModels state (owns serial data too) ──────────
+  const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
+  const [expandedModel, setExpandedModel] = useState<string | null>(null);
 
-  // ✅ ALL hooks at top level — never after a conditional return
-  const [selectedModels, setSelectedModels] = useState<Array<{
-    modelId: string;
-    modelName: string;
-    costPrice: number;
-    salePrice: number;
-    quantity: number;
-  }>>([]);
+  // Populate from ViewModel once Firestore fetch completes
+  useEffect(() => {
+    if (preloadedModels.length > 0) {
+      setSelectedModels(preloadedModels.map(m => ({
+        ...m,
+        serialNumbers: Array(m.quantity).fill(''),
+        serialCities:  {},
+      })));
+      // Auto-expand first model
+      setExpandedModel(preloadedModels[0]?.modelId || null);
+    }
+  }, [preloadedModels]);
 
-  const handleAddModelToTable = (modelId: string, modelName: string, costPrice: number) => {
-    const newModel = {
-      modelId,
-      modelName,
-      costPrice,
-      salePrice: Math.round(costPrice * 1.3),
-      quantity: 1,
-    };
-    setSelectedModels(prev => [...prev, newModel]);
-    setModelName(modelName);
-  };
-
+  // When quantity changes for a model, resize its serialNumbers array
   const handleUpdateModel = (index: number, field: 'salePrice' | 'quantity', value: number) => {
-    setSelectedModels(prev => prev.map((model, i) =>
-      i === index ? { ...model, [field]: value } : model
-    ));
+    setSelectedModels(prev => prev.map((m, i) => {
+      if (i !== index) return m;
+      if (field === 'quantity') {
+        const newQty = Math.max(1, value);
+        const serials = [...m.serialNumbers];
+        if (newQty > serials.length) {
+          // grow
+          while (serials.length < newQty) serials.push('');
+        } else {
+          // shrink — remove trailing entries and their cities
+          const removed = serials.splice(newQty);
+          const newCities = { ...m.serialCities };
+          removed.forEach(s => { if (s) delete newCities[s]; });
+          return { ...m, quantity: newQty, serialNumbers: serials, serialCities: newCities };
+        }
+        return { ...m, quantity: newQty, serialNumbers: serials };
+      }
+      return { ...m, [field]: value };
+    }));
   };
 
   const handleRemoveModel = (index: number) => {
     setSelectedModels(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleEditModel = (index: number) => {
-    console.log('Edit model:', selectedModels[index]);
+  // Update a specific serial number for a specific model
+  const handleUpdateSerial = (modelIdx: number, serialIdx: number, value: string) => {
+    setSelectedModels(prev => prev.map((m, i) => {
+      if (i !== modelIdx) return m;
+      const serials = [...m.serialNumbers];
+      const oldSerial = serials[serialIdx];
+      serials[serialIdx] = value;
+      // update cities key if serial changed
+      const newCities = { ...m.serialCities };
+      if (oldSerial && newCities[oldSerial]) {
+        const city = newCities[oldSerial];
+        delete newCities[oldSerial];
+        if (value) newCities[value] = city;
+      }
+      return { ...m, serialNumbers: serials, serialCities: newCities };
+    }));
   };
 
-  const canProceed = isValid && selectedModels.length > 0;
+  // Update city for a specific serial of a specific model
+  const handleUpdateSerialCity = (modelIdx: number, serialIdx: number, city: string) => {
+    setSelectedModels(prev => prev.map((m, i) => {
+      if (i !== modelIdx) return m;
+      const serial = m.serialNumbers[serialIdx];
+      if (!serial) return m;
+      return { ...m, serialCities: { ...m.serialCities, [serial]: city } };
+    }));
+  };
 
-  // ── Progress Bar shared component ──
-  const ProgressBar = ({ active }: { active: 'without' | 'with' }) => (
+  // ── Progress bar ─────────────────────────────────────────────────────────────
+  const ProgressBar = () => (
     <div className="mb-6 bg-white rounded-xl shadow-lg border p-6">
       <div className="flex items-center max-w-4xl mx-auto">
-        <div className="flex flex-col items-center mr-6">
-          <div className="w-16 h-16 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-lg">✓</div>
-          <span className="text-xs font-medium text-green-600 mt-1">Type</span>
-        </div>
-        <div className="flex-1 h-1 bg-green-500 rounded-full mx-3" />
-        <div className="flex flex-col items-center mr-6">
-          <div className="w-16 h-16 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-lg">✓</div>
-          <span className="text-xs font-medium text-green-600 mt-1">Costing</span>
-        </div>
-        <div className="flex-1 h-1 bg-blue-500 rounded-full mx-3" />
+        {[{ label: 'Type' }, { label: 'Costing' }].map((s, i) => (
+          <React.Fragment key={i}>
+            <div className="flex flex-col items-center mr-6">
+              <div className="w-16 h-16 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-lg">✓</div>
+              <span className="text-xs font-medium text-green-600 mt-1">{s.label}</span>
+            </div>
+            <div className="flex-1 h-1 bg-green-500 rounded-full mx-3" />
+          </React.Fragment>
+        ))}
         <div className="flex flex-col items-center">
           <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold shadow-lg ring-2 ring-blue-300">3</div>
           <span className="text-sm font-medium text-blue-600 mt-1">Details</span>
@@ -97,7 +135,39 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     </div>
   );
 
-  // ── WITHOUT COSTING ──
+  // ── Common fields ─────────────────────────────────────────────────────────────
+  const CommonFields = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+        <select value={formData.category} onChange={e => setCategory(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+          <option value="">Select category</option>
+          {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+        </select>
+        {validationErrors.category && <p className="text-red-500 text-sm mt-1">{validationErrors.category}</p>}
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+        <select value={formData.status} onChange={e => setStatus(e.target.value as any)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+          <option value="New">New</option>
+          <option value="Used">Used</option>
+          <option value="Returned">Returned</option>
+        </select>
+      </div>
+      <div className="md:col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+        <textarea value={formData.description} onChange={e => setDescription(e.target.value)} rows={3}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-vertical" />
+        {validationErrors.description && <p className="text-red-500 text-sm mt-1">{validationErrors.description}</p>}
+      </div>
+    </div>
+  );
+
+  // ═══════════════════════════════════════════════════════════
+  // WITHOUT COSTING — single model, shared serial section
+  // ═══════════════════════════════════════════════════════════
   if (costingOption === 'without') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
@@ -111,68 +181,46 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                 <Package className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  Simple Product Entry
-                </h2>
+                <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Simple Product Entry</h2>
                 <p className="text-lg text-gray-600">Quick entry without detailed costing</p>
               </div>
             </div>
           </div>
-
-          <ProgressBar active="without" />
-
+          <ProgressBar />
           <div className="bg-white rounded-lg shadow-sm border p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Brand Name *</label>
-                <input
-                  type="text"
-                  value={singleModel.brandName}
-                  onChange={(e) => { setSingleModelField('brandName', e.target.value); setBrandName(e.target.value); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="text" value={singleModel.brandName}
+                  onChange={e => { setSingleModelField('brandName', e.target.value); setBrandName(e.target.value); }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
                 {validationErrors.brandName && <p className="text-red-500 text-sm mt-1">{validationErrors.brandName}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Model Name *</label>
-                <input
-                  type="text"
-                  value={singleModel.modelName}
-                  onChange={(e) => { setSingleModelField('modelName', e.target.value); setModelName(e.target.value); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="text" value={singleModel.modelName}
+                  onChange={e => { setSingleModelField('modelName', e.target.value); setModelName(e.target.value); }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
                 {validationErrors.modelName && <p className="text-red-500 text-sm mt-1">{validationErrors.modelName}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price (PKR)</label>
-                <input
-                  type="number"
-                  value={singleModel.costPrice}
-                  onChange={(e) => setSingleModelField('costPrice', Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  min="0"
-                />
+                <input type="number" value={singleModel.costPrice}
+                  onChange={e => setSingleModelField('costPrice', Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" min="0" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sell Price (PKR) *</label>
-                <input
-                  type="number"
-                  value={singleModel.sellPrice}
-                  onChange={(e) => { setSingleModelField('sellPrice', Number(e.target.value)); setSellPrice(Number(e.target.value)); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  min="0"
-                />
+                <input type="number" value={singleModel.sellPrice}
+                  onChange={e => { setSingleModelField('sellPrice', Number(e.target.value)); setSellPrice(Number(e.target.value)); }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" min="0" />
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
+                <select value={formData.category} onChange={e => setCategory(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                   <option value="">Select category</option>
                   {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
@@ -180,38 +228,25 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Stock Qty *</label>
-                <input
-                  type="number"
-                  value={formData.stock}
-                  onChange={(e) => setStock(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  min="1"
-                />
+                <input type="number" value={formData.stock} onChange={e => setStock(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" min="1" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setStatus(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="New">New</option>
-                  <option value="Used">Used</option>
-                  <option value="Returned">Returned</option>
+                <select value={formData.status} onChange={e => setStatus(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <option value="New">New</option><option value="Used">Used</option><option value="Returned">Returned</option>
                 </select>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+                <textarea value={formData.description} onChange={e => setDescription(e.target.value)} rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
                 {validationErrors.description && <p className="text-red-500 text-sm mt-1">{validationErrors.description}</p>}
               </div>
             </div>
 
+            {/* Serial numbers — single model */}
             {formData.stock > 0 && (
               <div>
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
@@ -222,18 +257,10 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                   {Array.from({ length: formData.stock }, (_, i) => (
                     <div key={i} className="bg-white p-4 rounded-lg border">
                       <label className="block text-xs font-medium text-gray-600 mb-1">Unit {i + 1}</label>
-                      <input
-                        type="text"
-                        value={serialInputs[i] || ''}
-                        onChange={(e) => updateSerialNumber(i, e.target.value)}
-                        className="w-full px-3 py-1 border rounded-lg mb-1 text-sm"
-                        placeholder={`Serial #${i + 1}`}
-                      />
-                      <select
-                        value={formData.serialCities[serialInputs[i]] || ''}
-                        onChange={(e) => updateSerialCity(i, e.target.value)}
-                        className="w-full px-3 py-1 border rounded-lg text-sm"
-                      >
+                      <input type="text" value={serialInputs[i] || ''} onChange={e => updateSerialNumber(i, e.target.value)}
+                        className="w-full px-3 py-1 border rounded-lg mb-1 text-sm" placeholder={`Serial #${i + 1}`} />
+                      <select value={formData.serialCities[serialInputs[i]] || ''} onChange={e => updateSerialCity(i, e.target.value)}
+                        className="w-full px-3 py-1 border rounded-lg text-sm">
                         <option value="">Location</option>
                         {cities.map(city => <option key={city} value={city}>{city}</option>)}
                       </select>
@@ -245,17 +272,10 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
 
             <div className="flex items-center justify-between pt-6 border-t">
               <button onClick={handleBack} className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium">
-                ← Back to Costing
+                ← Back
               </button>
-              <button
-                onClick={() => handleNext()}
-                disabled={!isValid}
-                className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 ${
-                  isValid
-                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
+              <button onClick={() => handleNext()}
+                className="px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl transition-all">
                 Next: Payment <ArrowRight size={20} />
               </button>
             </div>
@@ -265,7 +285,11 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     );
   }
 
-  // ── WITH COSTING ──
+  // ═══════════════════════════════════════════════════════════
+  // WITH COSTING — per-model serial inputs
+  // Each model card has its own collapsible serial number section
+  // showing N inputs where N = that model's quantity.
+  // ═══════════════════════════════════════════════════════════
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -278,147 +302,180 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               <Package className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                Product Details
-              </h2>
-              <p className="text-lg text-gray-600">Select brands/models from DataConnect and set sale prices</p>
+              <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Product Details</h2>
+              <p className="text-lg text-gray-600">
+                Set sale prices & serial numbers for <span className="font-semibold text-indigo-700">{costingBrandName}</span> models
+              </p>
             </div>
           </div>
         </div>
+        <ProgressBar />
 
-        <ProgressBar active="with" />
+        <div className="bg-white rounded-lg shadow-sm border p-8 space-y-6">
 
-        <div className="bg-white rounded-lg shadow-sm border p-8 space-y-8">
-
-          {/* Brand & Model Selection */}
-          <div>
-            <h4 className="font-semibold text-gray-900 mb-6 flex items-center">
-              <Package className="w-5 h-5 mr-2 text-blue-600" />
-              Select from DataConnect (Brands/Models)
-            </h4>
-            <BrandModelDropdown
-              onBrandChange={(brandId, brandName) => setBrandName(brandName)}
-              onModelChange={handleAddModelToTable}
-            />
-            {validationErrors.brandName && <p className="text-red-500 text-sm mt-2">{validationErrors.brandName}</p>}
-            {validationErrors.models && <p className="text-red-500 text-sm mt-2">{validationErrors.models}</p>}
-          </div>
-
-          {/* Multi Model Table */}
-          <div>
-            <MultiModelInventoryTable
-              models={selectedModels}
-              onUpdateModel={handleUpdateModel}
-              onAddModel={() => console.log('Add new model row')}
-              onRemoveModel={handleRemoveModel}
-              onEditModel={handleEditModel}
-            />
-          </div>
-
-          {/* Other Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-              <select
-                value={formData.category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select category</option>
-                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-              {validationErrors.category && <p className="text-red-500 text-sm mt-1">{validationErrors.category}</p>}
+          {/* ── Loading / status banner ── */}
+          {isLoadingModels ? (
+            <div className="flex items-center gap-3 px-5 py-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+              <span className="text-sm text-indigo-700 font-medium">
+                Fetching models for <strong>{costingBrandName}</strong>...
+              </span>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stock Qty</label>
-              <input
-                type="number"
-                value={formData.stock}
-                onChange={(e) => setStock(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                min="0"
-              />
+          ) : selectedModels.length === 0 ? (
+            <div className="flex items-center gap-3 px-5 py-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <Package className="w-5 h-5 text-amber-500" />
+              <span className="text-sm text-amber-800">No models loaded. Check that the costing step saved models correctly.</span>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setStatus(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="New">New</option>
-                <option value="Used">Used</option>
-                <option value="Returned">Returned</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-vertical"
-              />
-              {validationErrors.description && <p className="text-red-500 text-sm mt-1">{validationErrors.description}</p>}
-            </div>
-          </div>
-
-          {/* Serial Numbers */}
-          {formData.stock > 0 && (
-            <div className="border-t pt-6">
-              <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
-                <Hash className="w-5 h-5 mr-2 text-blue-600" /> Serial Numbers ({formData.stock} units)
-              </h4>
-              {validationErrors.serialNumbers && <p className="text-red-500 text-sm mb-2">{validationErrors.serialNumbers}</p>}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto p-4 bg-gray-50 rounded-lg">
-                {serialInputs.map((serial, index) => (
-                  <div key={index} className="bg-white p-4 rounded-lg border shadow-sm">
-                    <label className="block text-xs font-medium text-gray-600 mb-2">Unit {index + 1}</label>
-                    <input
-                      type="text"
-                      value={serial}
-                      onChange={(e) => updateSerialNumber(index, e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg mb-2 focus:ring-2 focus:ring-blue-500 text-sm"
-                      placeholder={`Serial #${index + 1}`}
-                    />
-                    <select
-                      value={formData.serialCities[serial] || ''}
-                      onChange={(e) => updateSerialCity(index, e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                    >
-                      <option value="">Location</option>
-                      {cities.map(city => <option key={city} value={city}>{city}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
+          ) : (
+            <div className="flex items-center gap-3 px-5 py-3 bg-green-50 border border-green-200 rounded-lg">
+              <Package className="w-5 h-5 text-green-600" />
+              <span className="text-sm text-green-800">
+                <strong>{selectedModels.length} model{selectedModels.length !== 1 ? 's' : ''}</strong> loaded.
+                Set the sale price, quantity, and serial numbers for each model below.
+              </span>
             </div>
           )}
 
-          {/* Navigation */}
+          {/* ── Per-model cards ── */}
+          {selectedModels.map((model, modelIdx) => {
+            const isExpanded = expandedModel === model.modelId;
+            const filledSerials = model.serialNumbers.filter(s => s.trim() !== '').length;
+            const serialError = validationErrors[`serials_${modelIdx}`];
+
+            return (
+              <div key={model.modelId} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+
+                {/* Card header — always visible */}
+                <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-b border-gray-200">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-indigo-100 rounded-lg">
+                      <Package className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{model.modelName}</p>
+                      <p className="text-xs text-gray-500">Cost: PKR {model.costPrice.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Qty + Sale price inline */}
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600 font-medium whitespace-nowrap">Qty:</label>
+                      <input
+                        type="number" min="1" value={model.quantity}
+                        onChange={e => handleUpdateModel(modelIdx, 'quantity', Number(e.target.value))}
+                        className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600 font-medium whitespace-nowrap">Sale Price:</label>
+                      <input
+                        type="number" min="0" value={model.salePrice}
+                        onChange={e => handleUpdateModel(modelIdx, 'salePrice', Number(e.target.value))}
+                        className="w-28 px-2 py-1 border border-gray-300 rounded-lg text-sm text-right focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </div>
+                    {/* Serial progress badge */}
+                    <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      filledSerials === model.quantity && model.quantity > 0
+                        ? 'bg-green-100 text-green-700'
+                        : filledSerials > 0
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {filledSerials}/{model.quantity} serials
+                    </div>
+                    {/* Remove model */}
+                    <button onClick={() => handleRemoveModel(modelIdx)}
+                      className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors">
+                      Remove
+                    </button>
+                    {/* Expand/collapse serials */}
+                    <button
+                      onClick={() => setExpandedModel(isExpanded ? null : model.modelId)}
+                      className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium px-3 py-1.5 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">
+                      <Hash size={14} />
+                      Serials
+                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Serial inputs — collapsible */}
+                {isExpanded && (
+                  <div className="px-6 py-5 bg-white">
+                    <div className="flex items-center justify-between mb-4">
+                      <h5 className="font-medium text-gray-800 flex items-center gap-2">
+                        <Hash className="w-4 h-4 text-indigo-500" />
+                        Serial Numbers for <span className="text-indigo-700">{model.modelName}</span>
+                        <span className="text-xs text-gray-400 font-normal">({model.quantity} unit{model.quantity !== 1 ? 's' : ''})</span>
+                      </h5>
+                      {serialError && (
+                        <p className="text-red-500 text-xs font-medium">{serialError}</p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {Array.from({ length: model.quantity }, (_, serialIdx) => (
+                        <div key={serialIdx} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                          <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+                            Unit {serialIdx + 1}
+                          </label>
+                          <input
+                            type="text"
+                            value={model.serialNumbers[serialIdx] || ''}
+                            onChange={e => handleUpdateSerial(modelIdx, serialIdx, e.target.value)}
+                            placeholder={`Serial #${serialIdx + 1}`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white mb-2"
+                          />
+                          <select
+                            value={model.serialCities[model.serialNumbers[serialIdx]] || ''}
+                            onChange={e => handleUpdateSerialCity(modelIdx, serialIdx, e.target.value)}
+                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-300 bg-white text-gray-600">
+                            <option value="">Location (optional)</option>
+                            {cities.map(city => <option key={city} value={city}>{city}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {validationErrors.models && (
+            <p className="text-red-500 text-sm">{validationErrors.models}</p>
+          )}
+
+          {/* ── Common fields ── */}
+          <div className="border-t pt-6">
+            <h4 className="font-semibold text-gray-900 mb-4">Common Details</h4>
+            <CommonFields />
+          </div>
+
+          {/* ── Navigation ── */}
           <div className="flex items-center justify-between pt-8 border-t">
             <button onClick={handleBack} className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium transition-colors">
               ← Back to Costing
             </button>
-
-            {isValid && selectedModels.length === 0 && (
-              <p className="text-amber-600 text-sm font-medium">Please select at least one model above</p>
-            )}
-
-            <button
-              onClick={() => handleNext(selectedModels)}
-              disabled={!canProceed}
-              className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-all ${
-                canProceed
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl hover:scale-[1.02]'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              Next: Payment <ArrowRight size={20} />
-            </button>
+            <div className="flex items-center gap-4">
+              {!isLoadingModels && selectedModels.length === 0 && (
+                <p className="text-amber-600 text-sm font-medium">At least one model is required</p>
+              )}
+              <button
+                onClick={() => handleNext(selectedModels)}
+                disabled={isLoadingModels || selectedModels.length === 0}
+                className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-all ${
+                  !isLoadingModels && selectedModels.length > 0
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl hover:scale-[1.02]'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}>
+                {isLoadingModels
+                  ? <><Loader2 size={18} className="animate-spin" /> Loading...</>
+                  : <>Next: Payment <ArrowRight size={20} /></>
+                }
+              </button>
+            </div>
           </div>
         </div>
       </div>

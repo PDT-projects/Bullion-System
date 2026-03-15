@@ -1,8 +1,0 @@
-connectorId: loans
-
-generate:
-  javascriptSdk:
-    - outputDir: ..\..\src\dataconnect-generated\loans
-      package: "@erp-system/loans"
-      packageJsonDir: ..\..
-      react: true

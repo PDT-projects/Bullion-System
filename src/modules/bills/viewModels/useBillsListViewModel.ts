@@ -1,33 +1,22 @@
 // Bills Module - ViewModel Layer
-// List page logic and state management
+// List page logic — fetches directly from Firestore
 
-import { useState, useMemo, useCallback } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Bill, BillFilters } from '../models/types';
 import { BillsService } from '../models/billsService';
-
-interface BillsContext {
-  transactions: any[];
-  setTransactions: (transactions: any[]) => void;
-  banks: any[];
-  setBanks: (banks: any[]) => void;
-}
+import { BillsFirebaseService } from '../models/Billsfirebaseservice';
 
 interface UseBillsListViewModelReturn {
-  // Data
   bills: Bill[];
   allBills: Bill[];
-  
-  // Filters
   filters: BillFilters;
   showFilters: boolean;
   activeFilterCount: number;
-  
-  // View State
   viewingBill: Bill | null;
   viewingSlip: Bill | null;
-  
-  // Stats
+  isLoading: boolean;
   stats: {
     totalBills: number;
     totalAmount: number;
@@ -38,8 +27,6 @@ interface UseBillsListViewModelReturn {
     utilitiesCount: number;
     utilitiesTotal: number;
   };
-  
-  // Actions
   setFilter: (key: keyof BillFilters, value: any) => void;
   clearFilters: () => void;
   toggleFilters: () => void;
@@ -54,14 +41,9 @@ interface UseBillsListViewModelReturn {
 
 export function useBillsListViewModel(): UseBillsListViewModelReturn {
   const navigate = useNavigate();
-  const { transactions, setTransactions, banks, setBanks } = useOutletContext<BillsContext>();
 
-  // Filter bills from all transactions
-  const allBills = useMemo(() => {
-    return transactions.filter((t: any) => t.mainCategory === 'Bills') as Bill[];
-  }, [transactions]);
-
-  // State
+  const [allBills, setAllBills] = useState<Bill[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<BillFilters>({
     searchTerm: '',
     categoryFilter: 'all',
@@ -73,20 +55,33 @@ export function useBillsListViewModel(): UseBillsListViewModelReturn {
   const [viewingBill, setViewingBill] = useState<Bill | null>(null);
   const [viewingSlip, setViewingSlip] = useState<Bill | null>(null);
 
-  // Computed
-  const bills = useMemo(() => {
-    return BillsService.filterBills(allBills, filters);
-  }, [allBills, filters]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        const data = await BillsFirebaseService.fetchAllBills();
+        setAllBills(data);
+      } catch (error) {
+        console.error('❌ Error loading bills:', error);
+        toast.error('Failed to load bills');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
 
-  const stats = useMemo(() => {
-    return BillsService.calculateStats(bills);
-  }, [bills]);
+  const bills = useMemo(
+    () => BillsService.filterBills(allBills, filters),
+    [allBills, filters]
+  );
 
-  const activeFilterCount = useMemo(() => {
-    return BillsService.countActiveFilters(filters);
-  }, [filters]);
+  const stats = useMemo(() => BillsService.calculateStats(bills), [bills]);
+  const activeFilterCount = useMemo(
+    () => BillsService.countActiveFilters(filters),
+    [filters]
+  );
 
-  // Actions
   const setFilter = useCallback((key: keyof BillFilters, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   }, []);
@@ -101,46 +96,30 @@ export function useBillsListViewModel(): UseBillsListViewModelReturn {
     });
   }, []);
 
-  const toggleFilters = useCallback(() => {
-    setShowFilters(prev => !prev);
-  }, []);
+  const toggleFilters = useCallback(() => setShowFilters(prev => !prev), []);
 
-  const handleDelete = useCallback((id: string) => {
-    const billToDelete = BillsService.findById(allBills, id);
-    if (!billToDelete) return;
-
-    if (confirm('Are you sure you want to delete this bill?')) {
-      // Reverse bank transaction if it was a bank payment
-      if ((billToDelete.mode === 'Bank' || billToDelete.mode === 'Cheque') && billToDelete.bankName && setBanks) {
-        const updatedBanks = banks.map((bank: any) => {
-          if (bank.name === billToDelete.bankName) {
-            return { ...bank, balance: bank.balance + billToDelete.amount };
-          }
-          return bank;
-        });
-        setBanks(updatedBanks);
-      }
-
-      const updatedTransactions = transactions.filter((t: any) => t.id !== id);
-      setTransactions(updatedTransactions);
+  const handleDelete = useCallback(async (id: string) => {
+    if (!confirm('Are you sure you want to delete this bill?')) return;
+    try {
+      await BillsFirebaseService.deleteBill(id);
+      setAllBills(prev => prev.filter(b => b.id !== id));
+      toast.success('Bill deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete bill');
     }
-  }, [allBills, transactions, setTransactions, banks, setBanks]);
-
-  const handleAdd = useCallback(() => {
-    navigate('/bills/create');
-  }, [navigate]);
-
-  const handlePrint = useCallback((bill: Bill) => {
-    window.print();
   }, []);
 
-  const getCategoryColor = useCallback((category: string) => {
-    return BillsService.getCategoryColor(category);
-  }, []);
+  const handleAdd = useCallback(() => navigate('/bills/create'), [navigate]);
+  const handlePrint = useCallback(() => window.print(), []);
 
-  const getCategoryIconName = useCallback((category: string) => {
-    return BillsService.getCategoryIconName(category);
-  }, []);
+  const getCategoryColor = useCallback(
+    (category: string) => BillsService.getCategoryColor(category),
+    []
+  );
+  const getCategoryIconName = useCallback(
+    (category: string) => BillsService.getCategoryIconName(category),
+    []
+  );
 
   return {
     bills,
@@ -150,6 +129,7 @@ export function useBillsListViewModel(): UseBillsListViewModelReturn {
     activeFilterCount,
     viewingBill,
     viewingSlip,
+    isLoading,
     stats: {
       totalBills: stats.totalBills,
       totalAmount: stats.totalAmount,

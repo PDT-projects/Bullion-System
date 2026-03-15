@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Employee, EmployeeFilters } from '../models/types';
 import { EmployeeService } from '../models/employeeService';
-import { EmployeeDataConnectService } from '../../../api/dataconnect/employeeDataConnectService';
+import { EmployeeFirebaseService } from '../models/employeeFirebaseService';
 
 /**
  * Return type for useEmployeeListViewModel
@@ -85,7 +85,7 @@ export function useEmployeeListViewModel(): UseEmployeeListViewModelReturn {
       setError(null);
       console.log('🔄 Fetching employees from Firebase...');
       
-const employees = await EmployeeDataConnectService.fetchAllEmployees();
+const employees = await EmployeeFirebaseService.fetchAllEmployees();
       setAllEmployees(employees);
       
       console.log(`✅ Loaded ${employees.length} employees`);
@@ -220,4 +220,3 @@ const employees = await EmployeeDataConnectService.fetchAllEmployees();
     refreshEmployees,
   };
 }
-

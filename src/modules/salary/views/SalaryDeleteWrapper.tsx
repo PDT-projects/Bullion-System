@@ -1,5 +1,5 @@
 // Salary Module - Wrapper Component
-// SalaryDeleteWrapper - Connects ViewModel to View for delete page
+// SalaryDeleteWrapper
 
 import { useSalaryDeleteViewModel } from '../viewModels/useSalaryDeleteViewModel';
 import { SalaryDeleteView } from './SalaryDeleteView';

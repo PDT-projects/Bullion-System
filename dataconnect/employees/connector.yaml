@@ -1,9 +1,0 @@
-connectorId: employees
-
-generate:
-  javascriptSdk:
-    - outputDir: ..\..\src\dataconnect-generated\employees
-      package: "@erp-system/employees"
-      packageJsonDir: ..\..\ 
-      react: true
-

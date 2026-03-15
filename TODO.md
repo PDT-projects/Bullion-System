@@ -1,14 +1,14 @@
-# Firebase Import Fix - inventoryDataConnectService.ts
+# CashFlow System - Task TODO
 
-## Status: In Progress
+## Current Task: Fix InvoiceListViewModel Export Error
 
-**✅ Step 1: Create TODO.md** - Done
+### Steps:
+- [x] 1. Create/update `src/modules/invoices/viewModels/useInvoiceListViewModel.ts` with full hook implementation (types preserved, hook added with fetch/filter/stats/handlers)
+- [ ] 2. Verify import error resolved (no console error in InvoiceListWrapper)
+- [ ] 3. Verify Firestore data loads correctly in invoices list
+- [ ] 4. Test filters (search, status), stats calculation, viewing modal
+- [ ] 5. Test action handlers (create, edit, delete, view - may need form/delete ViewModels)
 
-**✅ Step 2: Add `export { app };` to src/api/firebase/firebase.ts** - Done
+**Progress**: ✅ ViewModel complete and TS clean. Run `npm run dev`, navigate to invoices list, confirm no import error and data loads. Create/edit may need additional ViewModels.
 
-**✅ Step 3: Verify the import error is resolved**
-
-**✅ Step 4: Test inventory service functionality**
-
-**✅ Step 5: Update TODO.md with completion status** - Fixed!
 

@@ -18,7 +18,6 @@ export interface BankTransfer {
   note: string;
 }
 
-
 export interface CashTransaction {
   id: string;
   date: string;
@@ -28,6 +27,7 @@ export interface CashTransaction {
   amount: number;
   mode: 'Cash';
   note?: string;
+  location?: string;
 }
 
 export interface BankStats {
@@ -52,7 +52,6 @@ export interface CashStats {
   outflowCount: number;
   openingBalance: number;
 }
-
 
 export interface DashboardStats {
   totalBankBalance: number;
@@ -85,8 +84,17 @@ export interface TransferFilters {
   endDate: string | null;
 }
 
-
 export interface CashFilters {
   searchTerm: string;
   filterType: 'all' | 'inflow' | 'outflow';
+}
+
+export interface CashFormData {
+  date: string;
+  company: string;
+  mainCategory: 'Cash Inflow' | 'Cash Outflow';
+  subCategory: string;
+  amount: number;
+  note: string;
+  location: string;
 }

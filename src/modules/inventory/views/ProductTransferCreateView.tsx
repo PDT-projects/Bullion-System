@@ -1,352 +1,335 @@
 // Inventory Module - View Layer
-// ProductTransferCreateView - UI for creating new product transfers
+// ProductTransferCreateView - Create a new product transfer
+// Shows products with serials available at the selected From location.
+// On submit: serials are removed from source, transfer record created as 'In Transit'.
 
 import React from 'react';
-import { X, Package, Maximize2, Minimize2 } from 'lucide-react';
-import { Product } from '../models/types';
+import {
+  ArrowLeft, ArrowRight, Plus, Trash2, Loader2,
+  MapPin, Package, Hash, User, Calendar, FileText,
+} from 'lucide-react';
+import { UseProductTransferCreateViewModelReturn } from '../viewModels/useProductTransferCreateViewModel';
 
-interface TransferLine {
-  productId: string;
-  quantity: number;
-  selectedSerials: string[];
-}
+interface Props extends UseProductTransferCreateViewModelReturn {}
 
-interface ProductTransferCreateViewProps {
-  // Data
-  products: Product[];
-  locations: string[];
-  
-  // Form State
-  formData: {
-    date: string;
-    fromLocation: string;
-    toLocation: string;
-    transferredBy: string;
-    note: string;
-  };
-  transferItems: TransferLine[];
-  receiptName: string;
-  receiptType: string;
-  receiptDataUrl: string;
-  showSummary: boolean;
-  isSubmitting: boolean;
-  
-  // Validation
-  validation: {
-    isValid: boolean;
-    error?: string;
-  };
-  
-  // UI State
-  isFullScreen: boolean;
-  
-  // Actions
-  setFormField: (field: string, value: any) => void;
-  addTransferItem: () => void;
-  removeTransferItem: (index: number) => void;
-  updateTransferItemProduct: (index: number, productId: string) => void;
-  updateTransferItemQuantity: (index: number, quantity: number) => void;
-  updateTransferItemSerial: (lineIndex: number, serialIndex: number, value: string) => void;
-  handleReceiptChange: (file?: File) => void;
-  toggleSummary: () => void;
-  toggleFullScreen: () => void;
-  handleSave: () => void;
-  handlePreviewPdf: () => void;
-  handleDownloadPdf: () => void;
-  onBack: () => void;
-  
-  // Helpers
-  getAvailableSerials: (productId?: string, location?: string) => string[];
-  getProductStockByLocation: (productId: string, location: string) => number;
-  getProductById: (productId: string) => Product | undefined;
-}
-
-export const ProductTransferCreateView: React.FC<ProductTransferCreateViewProps> = ({
-  products,
-  locations,
-  formData,
-  transferItems,
-  receiptName,
-  receiptType,
-  receiptDataUrl,
-  showSummary,
-  isSubmitting,
-  validation,
-  isFullScreen,
-  setFormField,
-  addTransferItem,
-  removeTransferItem,
-  updateTransferItemProduct,
-  updateTransferItemQuantity,
-  updateTransferItemSerial,
-  handleReceiptChange,
-  toggleSummary,
-  toggleFullScreen,
-  handleSave,
-  handlePreviewPdf,
-  handleDownloadPdf,
-  onBack,
-  getAvailableSerials,
-  getProductStockByLocation,
-  getProductById,
+export const ProductTransferCreateView: React.FC<Props> = ({
+  products, locations, formData, transferItems,
+  showSummary, isSubmitting, isLoading, validation,
+  setFormField, addTransferItem, removeTransferItem,
+  updateTransferItemProduct, updateTransferItemQuantity, updateTransferItemSerial,
+  toggleSummary, handleSave, onBack,
+  getAvailableSerials, getProductStockByLocation, getProductById,
 }) => {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+
+  const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm';
+
   return (
-    <div className="p-6">
+    <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <ArrowLeft size={22} />
+        </button>
         <div>
-          <h2 className="text-2xl font-bold">New Product Transfer</h2>
-          <p className="text-sm text-gray-600 mt-1">Create a new product transfer between locations</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleFullScreen}
-            className="p-2 text-gray-500 hover:text-gray-700"
-            title={isFullScreen ? "Exit Full Screen" : "Full Screen"}
-          >
-            {isFullScreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-          </button>
-          <button
-            onClick={onBack}
-            className="p-2 text-gray-500 hover:text-gray-700"
-          >
-            <X size={24} />
-          </button>
+          <h2 className="text-2xl font-bold text-gray-900">New Product Transfer</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Move products between locations — serials are removed from source immediately
+          </p>
         </div>
       </div>
 
-      {/* Form */}
-      <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${isFullScreen ? 'p-6' : 'p-6'}`}>
-        {/* Basic Info */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
-            <input
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormField('date', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">From Location *</label>
-            <select
-              value={formData.fromLocation}
-              onChange={(e) => setFormField('fromLocation', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-            >
-              <option value="">Select location</option>
-              {locations.map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">To Location *</label>
-            <select
-              value={formData.toLocation}
-              onChange={(e) => setFormField('toLocation', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-            >
-              <option value="">Select location</option>
-              {locations.filter(loc => loc !== formData.fromLocation).map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Transferred By *</label>
-            <input
-              type="text"
-              value={formData.transferredBy}
-              onChange={(e) => setFormField('transferredBy', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-              placeholder="e.g., Manager Ahmed"
-            />
-          </div>
-        </div>
+      <div className="space-y-6">
 
-        {/* Transfer Items */}
-        <div className="border-t pt-4 mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Items to Transfer</label>
-          <div className="space-y-3">
-            {transferItems.map((line, li) => (
-              <div key={li} className="grid grid-cols-12 gap-2 items-start">
-                <div className="col-span-5">
-                  <select
-                    value={line.productId}
-                    onChange={(e) => updateTransferItemProduct(li, e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="">Select product</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.brandName} {p.modelName} (Stock: {getProductStockByLocation(p.id, formData.fromLocation || '')})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    min={1}
-                    value={line.quantity}
-                    onChange={(e) => updateTransferItemQuantity(li, Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
-                <div className="col-span-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    {Array.from({ length: line.quantity }).map((_, si) => (
-                      <select
-                        key={si}
-                        value={line.selectedSerials[si] || ''}
-                        onChange={(e) => updateTransferItemSerial(li, si, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      >
-                        <option value="">Select serial</option>
-                        {getAvailableSerials(line.productId, formData.fromLocation).map(serial => (
-                          <option 
-                            key={serial} 
-                            value={serial} 
-                            disabled={transferItems.some((it, idx) => idx !== li && it.selectedSerials.includes(serial))}
-                          >
-                            {serial}
-                          </option>
-                        ))}
-                      </select>
-                    ))}
-                  </div>
-                </div>
-                <div className="col-span-1 flex gap-2">
-                  <button
-                    onClick={() => removeTransferItem(li)}
-                    className="px-2 py-1 text-sm text-red-600 bg-red-50 rounded"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-
+        {/* ── Header info ── */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-indigo-500" /> Transfer Details
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <button
-                onClick={addTransferItem}
-                className="px-3 py-2 bg-[#eef2ff] text-[#4f46e5] rounded text-sm"
-              >
-                Add Item
-              </button>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                <Calendar className="w-3.5 h-3.5 inline mr-1" />Date *
+              </label>
+              <input type="date" value={formData.date}
+                onChange={e => setFormField('date', e.target.value)}
+                className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                <User className="w-3.5 h-3.5 inline mr-1" />Transferred By *
+              </label>
+              <input type="text" value={formData.transferredBy}
+                onChange={e => setFormField('transferredBy', e.target.value)}
+                placeholder="e.g. Manager Ahmed"
+                className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                <MapPin className="w-3.5 h-3.5 inline mr-1 text-red-400" />From Location *
+              </label>
+              <select value={formData.fromLocation}
+                onChange={e => setFormField('fromLocation', e.target.value)}
+                className={inputCls}>
+                <option value="">Select source location</option>
+                {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                <MapPin className="w-3.5 h-3.5 inline mr-1 text-green-500" />To Location *
+              </label>
+              <select value={formData.toLocation}
+                onChange={e => setFormField('toLocation', e.target.value)}
+                className={inputCls}>
+                <option value="">Select destination location</option>
+                {locations
+                  .filter(loc => loc !== formData.fromLocation)
+                  .map(loc => <option key={loc} value={loc}>{loc}</option>)}
+              </select>
             </div>
           </div>
-        </div>
 
-        {/* Receipt Upload */}
-        <div className="border-t pt-4 mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Transfer Receipt (Optional)</label>
-          <input
-            type="file"
-            accept="application/pdf,image/jpeg,image/jpg,image/png"
-            onChange={(e) => handleReceiptChange(e.target.files?.[0])}
-            className="w-full text-sm"
-          />
-          {receiptDataUrl && (
-            <div className="mt-2 flex items-center gap-3">
-              {receiptType.startsWith('image/') ? (
-                <img src={receiptDataUrl} alt={receiptName} className="w-20 h-20 object-cover rounded" />
-              ) : (
-                <div className="w-20 h-20 flex items-center justify-center bg-gray-100 rounded text-sm">PDF</div>
-              )}
-              <div className="text-sm">
-                <div className="font-medium">{receiptName}</div>
-                <a href={receiptDataUrl} download={receiptName} className="text-green-700 hover:underline">Download</a>
-              </div>
+          {/* Route arrow */}
+          {formData.fromLocation && formData.toLocation && (
+            <div className="flex items-center gap-3 mt-4 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+              <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-semibold">
+                {formData.fromLocation}
+              </span>
+              <ArrowRight className="w-5 h-5 text-indigo-500 shrink-0" />
+              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
+                {formData.toLocation}
+              </span>
             </div>
           )}
         </div>
 
-        {/* Notes */}
-        <div className="border-t pt-4 mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
-          <textarea
-            value={formData.note}
-            onChange={(e) => setFormField('note', e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] resize-none"
-            placeholder="Additional notes about the transfer"
-          />
+        {/* ── Transfer lines ── */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <Package className="w-5 h-5 text-indigo-500" /> Items to Transfer
+            </h3>
+            <button onClick={addTransferItem}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors font-medium">
+              <Plus size={16} /> Add Item
+            </button>
+          </div>
+
+          {!formData.fromLocation && (
+            <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700 mb-4">
+              Select a From location first to see available stock.
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {transferItems.map((line, li) => {
+              const availableSerials = getAvailableSerials(line.productId, formData.fromLocation);
+              const stockAtLocation  = getProductStockByLocation(line.productId, formData.fromLocation || '');
+              const selectedProduct  = getProductById(line.productId);
+
+              return (
+                <div key={li} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Item {li + 1}
+                    </span>
+                    {transferItems.length > 1 && (
+                      <button onClick={() => removeTransferItem(li)}
+                        className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800 px-2 py-1 hover:bg-red-50 rounded transition-colors">
+                        <Trash2 size={13} /> Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Product select */}
+                  <div className="mb-3">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Product *</label>
+                    <select value={line.productId}
+                      onChange={e => updateTransferItemProduct(li, e.target.value)}
+                      className={inputCls}
+                      disabled={!formData.fromLocation}>
+                      <option value="">
+                        {formData.fromLocation ? 'Select product' : 'Select From location first'}
+                      </option>
+                      {products.map(p => {
+                        const stock = getProductStockByLocation(p.id, formData.fromLocation || '');
+                        return (
+                          <option key={p.id} value={p.id} disabled={stock === 0}>
+                            {p.brandName} {p.modelName}
+                            {formData.fromLocation ? ` — ${stock} at ${formData.fromLocation}` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {selectedProduct && formData.fromLocation && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Available at {formData.fromLocation}: <strong>{stockAtLocation}</strong> unit(s)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quantity */}
+                  {line.productId && (
+                    <div className="mb-3">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Quantity *</label>
+                      <input type="number" min="1" max={stockAtLocation} value={line.quantity}
+                        onChange={e => updateTransferItemQuantity(li, Number(e.target.value))}
+                        className={`${inputCls} w-28`} />
+                      {line.quantity > stockAtLocation && stockAtLocation > 0 && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Only {stockAtLocation} available at {formData.fromLocation}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Serial number selects */}
+                  {line.productId && line.quantity > 0 && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+                        <Hash size={13} /> Select Serials to Transfer
+                        <span className="text-gray-400 font-normal">
+                          ({line.selectedSerials.filter(s => s).length}/{line.quantity} selected)
+                        </span>
+                      </label>
+                      {availableSerials.length === 0 ? (
+                        <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                          No serials available at {formData.fromLocation} for this product.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {Array.from({ length: line.quantity }, (_, si) => (
+                            <select key={si} value={line.selectedSerials[si] || ''}
+                              onChange={e => updateTransferItemSerial(li, si, e.target.value)}
+                              className={inputCls}>
+                              <option value="">Serial {si + 1}</option>
+                              {availableSerials.map(serial => (
+                                <option
+                                  key={serial}
+                                  value={serial}
+                                  disabled={
+                                    // disable if already chosen in another slot of this line
+                                    line.selectedSerials.some(
+                                      (s, idx) => idx !== si && s === serial
+                                    ) ||
+                                    // disable if chosen in another line
+                                    transferItems.some(
+                                      (it, idx) => idx !== li && it.selectedSerials.includes(serial)
+                                    )
+                                  }>
+                                  {serial}
+                                </option>
+                              ))}
+                            </select>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Summary */}
+        {/* ── Notes ── */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
+            <FileText className="w-3.5 h-3.5 inline mr-1" />Notes (optional)
+          </label>
+          <textarea value={formData.note} onChange={e => setFormField('note', e.target.value)}
+            rows={3} placeholder="Any notes about this transfer..."
+            className={`${inputCls} resize-none`} />
+        </div>
+
+        {/* ── Summary (shown after Review) ── */}
         {showSummary && (
-          <div className="border-t pt-4 mb-6">
-            <h3 className="text-lg font-medium mb-4">Transfer Summary</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              From: <span className="font-medium">{formData.fromLocation}</span> — To: <span className="font-medium">{formData.toLocation}</span>
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Product</th>
-                    <th className="px-3 py-2 text-left">Qty</th>
-                    <th className="px-3 py-2 text-left">Serials</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transferItems.map((it, idx) => {
-                    const p = getProductById(it.productId);
-                    return (
-                      <tr key={idx} className="border-b">
-                        <td className="px-3 py-2">{p ? `${p.brandName} ${p.modelName}` : '—'}</td>
-                        <td className="px-3 py-2">{it.quantity}</td>
-                        <td className="px-3 py-2">{it.selectedSerials.join(', ')}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6">
+            <h3 className="font-semibold text-indigo-900 mb-4">Transfer Summary</h3>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-semibold">{formData.fromLocation}</span>
+              <ArrowRight className="w-5 h-5 text-indigo-500" />
+              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">{formData.toLocation}</span>
             </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-indigo-200">
+                  <th className="text-left py-2 text-indigo-700">Product</th>
+                  <th className="text-left py-2 text-indigo-700">Qty</th>
+                  <th className="text-left py-2 text-indigo-700">Serials</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transferItems.map((it, idx) => {
+                  const p = getProductById(it.productId);
+                  return (
+                    <tr key={idx} className="border-b border-indigo-100">
+                      <td className="py-2 text-indigo-900 font-medium">
+                        {p ? `${p.brandName} ${p.modelName}` : '—'}
+                      </td>
+                      <td className="py-2 text-indigo-800">{it.quantity}</td>
+                      <td className="py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {it.selectedSerials.filter(Boolean).map(s => (
+                            <span key={s} className="px-2 py-0.5 bg-white border border-indigo-200 text-indigo-700 rounded text-xs font-mono">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="text-xs text-indigo-600 mt-3">
+              These serials will be removed from <strong>{formData.fromLocation}</strong> immediately
+              and marked <strong>In Transit</strong> until received at <strong>{formData.toLocation}</strong>.
+            </p>
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex items-center justify-between gap-3 pt-4 border-t">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handlePreviewPdf}
-              className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50"
-            >
-              Preview PDF
-            </button>
-            <button
-              onClick={handleDownloadPdf}
-              className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca]"
-            >
-              Download PDF
-            </button>
+        {/* Validation error */}
+        {!validation.isValid && (
+          <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {validation.error}
           </div>
+        )}
+
+        {/* ── Actions ── */}
+        <div className="flex items-center justify-between pb-6">
+          <button onClick={onBack} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+            Cancel
+          </button>
           <div className="flex items-center gap-3">
             {!showSummary ? (
               <button
                 onClick={toggleSummary}
-                className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca]"
-              >
-                Review & Create
+                disabled={!validation.isValid}
+                className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium">
+                Review Transfer
               </button>
             ) : (
               <>
-                <button
-                  onClick={toggleSummary}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                >
-                  Edit
+                <button onClick={toggleSummary}
+                  className="px-4 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                  ← Edit
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={isSubmitting || !validation.isValid}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Creating...' : 'Confirm Transfer'}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold">
+                  {isSubmitting
+                    ? <><Loader2 size={18} className="animate-spin" /> Creating Transfer...</>
+                    : <>Confirm Transfer <ArrowRight size={18} /></>
+                  }
                 </button>
               </>
             )}

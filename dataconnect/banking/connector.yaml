@@ -1,8 +1,0 @@
-connectorId: banking
-
-generate:
-  javascriptSdk:
-    - outputDir: ..\..\src\dataconnect-generated\banking
-      package: "@erp-system/banking"
-      packageJsonDir: ..\..
-      react: true

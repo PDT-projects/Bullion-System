@@ -14,7 +14,6 @@ import { EmployeeViewModal } from './components/EmployeeViewModal';
 interface EmployeeListViewProps {
   // Data
   employees: Employee[];
-  allEmployees: Employee[];
   uniquePositions: string[];
   
   // Filter State

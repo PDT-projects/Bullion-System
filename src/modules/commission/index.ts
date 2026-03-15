@@ -1,5 +1,4 @@
-// Commission Module - Public API Exports
-// MVVM Architecture for Commission Management
+// Commission Module - Public API
 
 // Types
 export type {
@@ -8,8 +7,6 @@ export type {
   Commission,
   CreateCommissionSlabDTO,
   UpdateCommissionSlabDTO,
-  CreateCommissionDTO,
-  UpdateCommissionDTO,
   CommissionSlabFilter,
   CommissionFilter,
   CommissionStats,
@@ -20,30 +17,15 @@ export type {
   SlabOverlap
 } from './models/types';
 
-// Service
+// Services
+export { CommissionFirebaseService } from './models/commissionFirebaseService';
 export {
-  getAllCommissionSlabs,
-  getCommissionSlabById,
-  createCommissionSlab,
-  updateCommissionSlab,
-  deleteCommissionSlab,
-  filterCommissionSlabs,
-  validateCommissionSlab,
-  checkSlabOverlap,
-  calculateCommissions,
-  saveCalculatedCommissions,
-  getAllCommissions,
-  updateCommission,
-  confirmCommission,
-  filterCommissions,
-  getCommissionStats,
   formatCurrency,
   formatMonth,
   getCurrentMonth,
   exportCommissionsToCSV,
   CITIES
 } from './models/commissionService';
-
 
 // ViewModels
 export { useCommissionSlabListViewModel } from './viewModels/useCommissionSlabListViewModel';
@@ -57,7 +39,7 @@ export { CommissionSlabFormView } from './views/CommissionSlabFormView';
 export { CommissionCalculationView } from './views/CommissionCalculationView';
 export { CommissionReportView } from './views/CommissionReportView';
 
-// Wrappers (Container Components)
+// Wrappers
 export { CommissionSlabListWrapper } from './views/CommissionSlabListWrapper';
 export { CommissionCalculationWrapper } from './views/CommissionCalculationWrapper';
 export { CommissionReportWrapper } from './views/CommissionReportWrapper';

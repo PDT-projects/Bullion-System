@@ -1,21 +1,11 @@
 // Banking Module - Bank Create Wrapper
-// Connects ViewModel to View for create bank page
 
 import React from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Bank } from '../../../App';
 import { useBankFormViewModel } from '../viewModels/useBankFormViewModel';
 import { BankFormView } from './BankFormView';
 
 export const BankCreateWrapper: React.FC = () => {
-  const navigate = useNavigate();
-  const { banks, setBanks } = useOutletContext<{
-    banks: Bank[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-
-  const viewModel = useBankFormViewModel({ banks, setBanks, mode: 'create' });
-
+  const viewModel = useBankFormViewModel({ mode: 'create' });
   return (
     <BankFormView
       formData={viewModel.formData}

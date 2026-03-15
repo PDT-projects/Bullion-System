@@ -6,7 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Employee, CreateEmployeeDTO, UpdateEmployeeDTO } from '../models/types';
 import { EmployeeService } from '../models/employeeService';
-import { EmployeeDataConnectService } from '../../../api/dataconnect/employeeDataConnectService';
+import { EmployeeFirebaseService } from '../models/employeeFirebaseService';
 
 /**
  * Props for useEmployeeFormViewModel
@@ -81,7 +81,7 @@ export function useEmployeeFormViewModel({
           setIsLoading(true);
           console.log(`🔄 Loading employee ${id} for editing...`);
           
-const employee = await EmployeeDataConnectService.fetchEmployeeById(id);
+const employee = await EmployeeFirebaseService.fetchEmployeeById(id);
           
           if (employee) {
             setFormData(employee);
@@ -139,13 +139,13 @@ const employee = await EmployeeDataConnectService.fetchEmployeeById(id);
           ...(formData as CreateEmployeeDTO),
           id
         };
-await EmployeeDataConnectService.updateEmployee(updateData);
+await EmployeeFirebaseService.updateEmployee(updateData);
         toast.success('Employee updated successfully');
       } else {
         // Create new employee
         console.log('➕ Creating new employee');
         const createData: CreateEmployeeDTO = formData as CreateEmployeeDTO;
-await EmployeeDataConnectService.createEmployee(createData);
+await EmployeeFirebaseService.createEmployee(createData);
         toast.success('Employee added successfully');
       }
 
@@ -189,4 +189,3 @@ await EmployeeDataConnectService.createEmployee(createData);
   };
 
 }
-

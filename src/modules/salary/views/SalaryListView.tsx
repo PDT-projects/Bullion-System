@@ -1,13 +1,13 @@
 // Salary Module - View Layer
-// SalaryListView - Main page for salary list with filters
+// SalaryListView - Main list page with filters
 
-import { 
-  Plus, 
-  Filter, 
-  ArrowLeft, 
-  Eye, 
-  Edit, 
-  Trash2, 
+import {
+  Plus,
+  Filter,
+  ArrowLeft,
+  Eye,
+  Edit,
+  Trash2,
   Search,
   CreditCard,
   Printer,
@@ -19,19 +19,13 @@ import { Salary, SalaryFilters as SalaryFiltersType } from '../models/types';
 import { SalaryService } from '../models/salaryService';
 
 interface SalaryListViewProps {
-  // Data
   salaries: Salary[];
   allSalaries: Salary[];
-  
-  // Filters
   filters: SalaryFiltersType;
   showFilters: boolean;
   activeFilterCount: number;
-  
-  // View State
   viewingSalary: Salary | null;
-  
-  // Stats
+  isLoading: boolean;
   stats: {
     totalRecords: number;
     totalAmount: number;
@@ -42,12 +36,8 @@ interface SalaryListViewProps {
     thisMonthTotal: number;
     pendingSlips: number;
   };
-  
-  // Lists for filters
   uniqueEmployees: { id: string; name: string }[];
   uniqueMonths: string[];
-  
-  // Actions
   setFilter: (key: keyof SalaryFiltersType, value: any) => void;
   clearFilters: () => void;
   toggleFilters: () => void;
@@ -59,8 +49,6 @@ interface SalaryListViewProps {
   getSalaryTypeColor: (subCategory: string) => string;
   getEmployeeTotalPaid: (employeeId: string, month: string) => number;
   isEmployeeFullyPaid: (employeeId: string, month: string, fullSalary: number) => boolean;
-  
-  // Context data
   employees: any[];
   onBack: () => void;
   title: string;
@@ -73,6 +61,7 @@ export function SalaryListView({
   showFilters,
   activeFilterCount,
   viewingSalary,
+  isLoading,
   stats,
   uniqueEmployees,
   uniqueMonths,
@@ -116,8 +105,8 @@ export function SalaryListView({
             <button
               onClick={toggleFilters}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                showFilters 
-                  ? 'bg-blue-600 text-white' 
+                showFilters
+                  ? 'bg-blue-600 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
             >
@@ -150,27 +139,21 @@ export function SalaryListView({
               <TrendingUp className="w-5 h-5 text-green-600" />
               <span className="text-sm text-gray-600">Total Amount</span>
             </div>
-            <p className="text-2xl font-bold text-green-600">
-              {formatCurrency(stats.totalAmount)}
-            </p>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalAmount)}</p>
           </div>
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-2">
               <FileText className="w-5 h-5 text-purple-600" />
               <span className="text-sm text-gray-600">This Month</span>
             </div>
-            <p className="text-2xl font-bold text-purple-600">
-              {formatCurrency(stats.thisMonthTotal)}
-            </p>
+            <p className="text-2xl font-bold text-purple-600">{formatCurrency(stats.thisMonthTotal)}</p>
           </div>
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-2">
               <Printer className="w-5 h-5 text-orange-600" />
               <span className="text-sm text-gray-600">Pending Slips</span>
             </div>
-            <p className="text-2xl font-bold text-orange-600">
-              {stats.pendingSlips}
-            </p>
+            <p className="text-2xl font-bold text-orange-600">{stats.pendingSlips}</p>
           </div>
         </div>
 
@@ -178,7 +161,6 @@ export function SalaryListView({
         {showFilters && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {/* Search */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
                 <div className="relative">
@@ -193,7 +175,6 @@ export function SalaryListView({
                 </div>
               </div>
 
-              {/* Type Filter */}
               {type === 'all' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
@@ -209,7 +190,6 @@ export function SalaryListView({
                 </div>
               )}
 
-              {/* Employee Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
                 <select
@@ -224,7 +204,6 @@ export function SalaryListView({
                 </select>
               </div>
 
-              {/* Month Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
                 <select
@@ -239,7 +218,6 @@ export function SalaryListView({
                 </select>
               </div>
 
-              {/* Payment Method Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                 <select
@@ -254,7 +232,6 @@ export function SalaryListView({
                 </select>
               </div>
 
-              {/* Date Range */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
                 <input
@@ -264,6 +241,7 @@ export function SalaryListView({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
                 <input
@@ -275,7 +253,6 @@ export function SalaryListView({
               </div>
             </div>
 
-            {/* Clear Filters */}
             {activeFilterCount > 0 && (
               <div className="mt-4 flex justify-end">
                 <button
@@ -291,111 +268,124 @@ export function SalaryListView({
 
         {/* Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Salary</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commission</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deductions</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {salaries.map((salary) => {
-                  const totalPaid = getEmployeeTotalPaid(salary.employeeId || '', salary.salaryMonth || '');
-                  const employee = employees.find(e => e.id === salary.employeeId);
-                  const fullSalary = employee?.salary || 0;
-                  const isFullyPaid = isEmployeeFullyPaid(salary.employeeId || '', salary.salaryMonth || '', fullSalary);
-                  
-                  return (
-                    <tr key={salary.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(salary.date)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-600">
-                        {salary.transactionId || salary.id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                        {salary.employeeName || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {salary.salaryMonth || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(salary.baseSalary || 0)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                        +{formatCurrency(salary.commission || 0)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                        -{formatCurrency(salary.deductions || 0)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        {formatCurrency(salary.netAmount || salary.amount)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          isFullyPaid 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {isFullyPaid ? 'Paid' : 'Partial'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setViewingSalary(salary)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="View"
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleEdit(salary.id)}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            onClick={() => handlePrint(salary)}
-                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                            title="Print Slip"
-                          >
-                            <Printer size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(salary.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+          {isLoading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+              <p className="text-gray-600">Loading salary records...</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Salary</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commission</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deductions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net Amount</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {salaries.map((salary) => {
+                    const totalPaid = getEmployeeTotalPaid(salary.employeeId || '', salary.salaryMonth || '');
+                    const employee = employees.find(e => e.id === salary.employeeId);
+                    const fullSalary = employee?.salary || 0;
+                    const isFullyPaid = isEmployeeFullyPaid(
+                      salary.employeeId || '',
+                      salary.salaryMonth || '',
+                      fullSalary
+                    );
+
+                    return (
+                      <tr key={salary.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatDate(salary.date)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-600">
+                          {salary.transactionId || salary.id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                          {salary.employeeName || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {salary.salaryMonth || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatCurrency(salary.baseSalary || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                          +{formatCurrency(salary.commission || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                          -{formatCurrency(salary.deductions || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          {formatCurrency(salary.netAmount || salary.amount)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            isFullyPaid
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {isFullyPaid ? 'Paid' : 'Partial'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setViewingSalary(salary)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="View"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleEdit(salary.id)}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handlePrint(salary)}
+                              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                              title="Print Slip"
+                            >
+                              <Printer size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(salary.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {salaries.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
+                        <CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p>No salary records found</p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Create a new salary payment to get started
+                        </p>
                       </td>
                     </tr>
-                  );
-                })}
-                {salaries.length === 0 && (
-                  <tr>
-                    <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
-                      <CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p>No salary records found</p>
-                      <p className="text-sm text-gray-400 mt-1">Create a new salary payment to get started</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* View Modal */}
@@ -404,8 +394,8 @@ export function SalaryListView({
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <h3 className="text-xl font-bold">Salary Details</h3>
-                <button 
-                  onClick={() => setViewingSalary(null)} 
+                <button
+                  onClick={() => setViewingSalary(null)}
                   className="text-gray-500 hover:text-gray-700"
                 >
                   <X size={24} />
@@ -443,7 +433,9 @@ export function SalaryListView({
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Net Amount</p>
-                    <p className="font-bold text-lg text-blue-600">{formatCurrency(viewingSalary.netAmount || viewingSalary.amount)}</p>
+                    <p className="font-bold text-lg text-blue-600">
+                      {formatCurrency(viewingSalary.netAmount || viewingSalary.amount)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Paid By</p>
@@ -451,7 +443,9 @@ export function SalaryListView({
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Payment Method</p>
-                    <p className="font-medium">{viewingSalary.mode}{viewingSalary.bankName ? ` (${viewingSalary.bankName})` : ''}</p>
+                    <p className="font-medium">
+                      {viewingSalary.mode}{viewingSalary.bankName ? ` (${viewingSalary.bankName})` : ''}
+                    </p>
                   </div>
                 </div>
                 {viewingSalary.note && (
@@ -463,7 +457,11 @@ export function SalaryListView({
                 {viewingSalary.imageUrl && (
                   <div className="border-t pt-4">
                     <p className="text-sm text-gray-600 mb-2">Receipt</p>
-                    <img src={viewingSalary.imageUrl} alt="Receipt" className="max-w-full h-auto rounded border" />
+                    <img
+                      src={viewingSalary.imageUrl}
+                      alt="Receipt"
+                      className="max-w-full h-auto rounded border"
+                    />
                   </div>
                 )}
               </div>

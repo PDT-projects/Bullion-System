@@ -1,9 +1,6 @@
 // Invoice Module - Model Layer
-// Data interfaces and types extracted from App.tsx
+// Data interfaces and types
 
-/**
- * Invoice product line item
- */
 export interface InvoiceProduct {
   id: string;
   productId: string;
@@ -19,9 +16,6 @@ export interface InvoiceProduct {
   serialCities?: { [serialNumber: string]: string };
 }
 
-/**
- * Invoice entity representing a sales invoice
- */
 export interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -59,11 +53,10 @@ export interface Invoice {
   paidBy?: string;
   paidTo?: string;
   productLocation?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-/**
- * DTO for creating a new invoice
- */
 export interface CreateInvoiceDTO {
   invoiceNumber: string;
   date: string;
@@ -96,16 +89,10 @@ export interface CreateInvoiceDTO {
   digitalStamp?: boolean;
 }
 
-/**
- * DTO for updating an existing invoice
- */
 export interface UpdateInvoiceDTO extends CreateInvoiceDTO {
   id: string;
 }
 
-/**
- * Filter criteria for invoice list
- */
 export interface InvoiceFilters {
   searchTerm: string;
   statusFilter: 'all' | 'Paid' | 'Unpaid';
@@ -115,9 +102,6 @@ export interface InvoiceFilters {
   salespersonFilter: string;
 }
 
-/**
- * Invoice statistics for dashboard/display
- */
 export interface InvoiceStats {
   totalCount: number;
   paidCount: number;
@@ -127,17 +111,11 @@ export interface InvoiceStats {
   netAmount: number;
 }
 
-/**
- * Validation result for invoice data
- */
 export interface ValidationResult {
   isValid: boolean;
   error: string | null;
 }
 
-/**
- * Product info for dropdown selection
- */
 export interface ProductInfo {
   id: string;
   brandName: string;
@@ -151,9 +129,6 @@ export interface ProductInfo {
   description: string;
 }
 
-/**
- * Customer suggestion from existing invoices
- */
 export interface CustomerSuggestion {
   customerName: string;
   customerPhone: string;
@@ -166,9 +141,6 @@ export interface CustomerSuggestion {
   exchangeWarrantyNote: string;
 }
 
-/**
- * Province-City mapping
- */
 export interface ProvinceCities {
   [province: string]: string[];
 }

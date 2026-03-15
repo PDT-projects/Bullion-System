@@ -18,7 +18,7 @@ export interface Commission {
   salesperson: string;
   salespersonName: string;
   city: string;
-  month: string; // Format: "YYYY-MM"
+  month: string;
   totalSales: number;
   appliedSlabFrom: number;
   appliedSlabTo: number;
@@ -34,7 +34,6 @@ export interface Commission {
   isLocked: boolean;
 }
 
-// DTOs for create/update operations
 export interface CreateCommissionSlabDTO {
   salesperson: string;
   city: string;
@@ -74,7 +73,6 @@ export interface UpdateCommissionDTO {
   confirmedAt?: string;
 }
 
-// Filter types
 export interface CommissionSlabFilter {
   salesperson?: string;
   city?: string;
@@ -87,7 +85,6 @@ export interface CommissionFilter {
   status?: CommissionStatus;
 }
 
-// Statistics
 export interface CommissionStats {
   totalCommissions: number;
   totalAmount: number;
@@ -97,7 +94,6 @@ export interface CommissionStats {
   averageRate: number;
 }
 
-// Calculation result
 export interface CommissionCalculationResult {
   commissions: Commission[];
   errors: string[];
@@ -108,7 +104,6 @@ export interface CommissionCalculationResult {
   };
 }
 
-// Invoice reference (simplified from invoice module)
 export interface InvoiceReference {
   id: string;
   date: string;
@@ -118,20 +113,17 @@ export interface InvoiceReference {
   salesperson?: string;
 }
 
-// Employee reference (simplified from employee module)
 export interface EmployeeReference {
   id: string;
   name: string;
   status: 'active' | 'inactive';
 }
 
-// Validation result
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
 }
 
-// Slab overlap check
 export interface SlabOverlap {
   exists: boolean;
   conflictingSlab?: CommissionSlab;

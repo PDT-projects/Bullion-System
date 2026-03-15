@@ -1,16 +1,12 @@
 // Budget Module - ViewModel Layer
-// Create/Edit form logic and state management with Firebase Data Connect
+// Create/Edit form logic and state management with Firebase Firestore
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Budget, CreateBudgetDTO, UpdateBudgetDTO } from '../models/types';
 import { BudgetService } from '../models/budgetService';
-
-interface BudgetContext {
-  budgets: Budget[];
-  setBudgets: (budgets: Budget[]) => void;
-}
+import { BudgetFirebaseService } from '../models/Budgetfirebaseservice';
 
 interface UseBudgetFormViewModelReturn {
   // Form State
@@ -18,10 +14,10 @@ interface UseBudgetFormViewModelReturn {
   isEditing: boolean;
   isSubmitting: boolean;
   errors: { [key: string]: string };
-  
+
   // UI State
   subCategories: string[];
-  
+
   // Actions
   setFormField: (field: keyof Budget, value: any) => void;
   handleSubmit: () => Promise<void>;
@@ -31,20 +27,18 @@ interface UseBudgetFormViewModelReturn {
 export function useBudgetFormViewModel(): UseBudgetFormViewModelReturn {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { budgets, setBudgets } = useOutletContext<BudgetContext>();
-  
+
   const isEditing = !!id;
-  
-  // Form state
+
+  // ==================== STATE ====================
+
   const [formData, setFormData] = useState<Partial<Budget>>(
     BudgetService.getDefaultFormData()
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  // Get unique sub-categories for dropdown
   const subCategories = useMemo(() => {
-    const existing = BudgetService.getUniqueSubCategories(budgets);
     const defaults = [
       'Salaries',
       'Office Rent',
@@ -55,36 +49,48 @@ export function useBudgetFormViewModel(): UseBudgetFormViewModelReturn {
       'Travel',
       'Miscellaneous'
     ];
-    return Array.from(new Set([...defaults, ...existing])).sort();
-  }, [budgets]);
+    return defaults.sort();
+  }, []);
 
-  // Load existing budget data if editing
+  // ==================== EFFECTS ====================
+
   useEffect(() => {
     if (isEditing && id) {
-      const existingBudget = BudgetService.findById(budgets, id);
-      if (existingBudget) {
-        setFormData(existingBudget);
-      } else {
-        toast.error('Budget not found');
-        navigate('/budgets');
-      }
+      const loadBudget = async () => {
+        try {
+          console.log(`🔄 Loading budget ${id} for editing...`);
+          const budget = await BudgetFirebaseService.fetchBudgetById(id);
+          if (budget) {
+            setFormData(budget);
+            console.log('✅ Budget loaded for editing:', budget.subCategory);
+          } else {
+            toast.error('Budget not found');
+            navigate('/budgets');
+          }
+        } catch (error) {
+          console.error('❌ Error loading budget:', error);
+          toast.error('Failed to load budget');
+          navigate('/budgets');
+        }
+      };
+      loadBudget();
     }
-  }, [isEditing, id, budgets, navigate]);
+  }, [isEditing, id, navigate]);
+
+  // ==================== ACTIONS ====================
 
   const setFormField = useCallback((field: keyof Budget, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field when user changes it
     if (errors[field]) {
       setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
+        const next = { ...prev };
+        delete next[field];
+        return next;
       });
     }
   }, [errors]);
 
   const handleSubmit = useCallback(async () => {
-    // Validate
     const validation = BudgetService.validateBudget(formData);
     if (!validation.isValid) {
       setErrors(validation.fieldErrors || {});
@@ -96,7 +102,6 @@ export function useBudgetFormViewModel(): UseBudgetFormViewModelReturn {
 
     try {
       if (isEditing && id) {
-        // Update existing budget in Data Connect
         const updateData: UpdateBudgetDTO = {
           id,
           category: 'Expenses',
@@ -104,49 +109,37 @@ export function useBudgetFormViewModel(): UseBudgetFormViewModelReturn {
           period: formData.period!,
           budgetLimit: formData.budgetLimit!
         };
-        
-        const existingBudget = BudgetService.findById(budgets, id);
-        if (existingBudget) {
-          const updatedBudget = await BudgetService.updateBudgetInDataConnect(existingBudget, updateData);
-          
-          // Update local state
-          const updatedBudgets = BudgetService.updateBudget(budgets, id, updateData);
-          setBudgets(updatedBudgets);
-          
-          console.log('✅ Budget updated in Data Connect:', updatedBudget.id);
-          toast.success('Budget updated successfully!');
-        }
+
+        await BudgetFirebaseService.updateBudget(updateData);
+        console.log('✅ Budget updated in Firestore:', id);
+        toast.success('Budget updated successfully!');
       } else {
-        // Create new budget in Data Connect
         const createData: CreateBudgetDTO = {
           category: 'Expenses',
           subCategory: formData.subCategory!,
           period: formData.period!,
           budgetLimit: formData.budgetLimit!
         };
-        
-        const createdBudget = await BudgetService.createBudgetInDataConnect(createData);
-        
-        // Update local state
-        const updatedBudgets = BudgetService.createBudget(budgets, createData);
-        setBudgets(updatedBudgets);
-        
-        console.log('✅ Budget created in Data Connect:', createdBudget.id);
+
+        const created = await BudgetFirebaseService.createBudget(createData);
+        console.log('✅ Budget created in Firestore:', created.id);
         toast.success('Budget created successfully!');
       }
-      
+
       navigate('/budgets');
     } catch (error) {
-      console.error('Error saving budget:', error);
+      console.error('❌ Error saving budget:', error);
       toast.error('Failed to save budget. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, isEditing, id, budgets, setBudgets, navigate]);
+  }, [formData, isEditing, id, navigate]);
 
   const handleCancel = useCallback(() => {
     navigate('/budgets');
   }, [navigate]);
+
+  // ==================== RETURN ====================
 
   return {
     formData,

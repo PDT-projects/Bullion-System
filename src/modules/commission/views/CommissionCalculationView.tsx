@@ -4,13 +4,10 @@ import { Calculator, X, Maximize2, Minimize2, Check, AlertCircle, Edit2, Save, X
 import type { Commission } from '../models/types';
 
 interface CommissionCalculationViewProps {
-  // Selection state
   selectedCity: string;
   setSelectedCity: (city: string) => void;
   selectedMonth: string;
   setSelectedMonth: (month: string) => void;
-  
-  // Calculation results
   commissionData: Commission[];
   calculationErrors: string[];
   summary: {
@@ -18,21 +15,14 @@ interface CommissionCalculationViewProps {
     totalSales: number;
     totalCommission: number;
   } | null;
-  
-  // UI state
   showModal: boolean;
   setShowModal: (show: boolean) => void;
   isFullScreen: boolean;
   setIsFullScreen: (full: boolean) => void;
   isCalculating: boolean;
   isEditing: string | null;
-  editValues: {
-    percentage: number;
-    amount: number;
-  };
+  editValues: { percentage: number; amount: number };
   setEditValues: (values: { percentage: number; amount: number }) => void;
-  
-  // Actions
   calculateCommission: () => void;
   confirmSingleCommission: (commissionId: string) => void;
   confirmAllCommissions: () => void;
@@ -41,8 +31,6 @@ interface CommissionCalculationViewProps {
   cancelEdit: () => void;
   handleModalConfirm: () => void;
   handleModalCancel: () => void;
-  
-  // Utils
   formatCurrency: (amount: number) => string;
   formatMonth: (monthStr: string) => string;
   cities: readonly string[];
@@ -78,19 +66,15 @@ export function CommissionCalculationView({
   cities,
   employees
 }: CommissionCalculationViewProps) {
-  const getEmployeeName = (id: string) => {
-    const emp = employees.find(e => e.id === id);
-    return emp?.name || id;
-  };
+  const getEmployeeName = (id: string) =>
+    employees.find(e => e.id === id)?.name || id;
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">Commission Calculation</h1>
-        <p className="text-gray-600 mt-1">
-          Calculate commissions based on sales performance
-        </p>
+        <p className="text-gray-600 mt-1">Calculate commissions based on sales performance</p>
       </div>
 
       {/* Selection Form */}
@@ -106,14 +90,12 @@ export function CommissionCalculationView({
               </label>
               <select
                 value={selectedCity}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCity(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+                onChange={(e) => setSelectedCity(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
               >
                 <option value="">Select City</option>
                 {cities.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
+                  <option key={city} value={city}>{city}</option>
                 ))}
               </select>
             </div>
@@ -124,13 +106,12 @@ export function CommissionCalculationView({
               <input
                 type="month"
                 value={selectedMonth}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSelectedMonth(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
               />
             </div>
           </div>
 
-          {/* Errors */}
           {calculationErrors.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-start gap-2">
@@ -166,20 +147,14 @@ export function CommissionCalculationView({
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Commission Calculation Results</h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  {selectedCity} - {formatMonth(selectedMonth)}
+                  {selectedCity} — {formatMonth(selectedMonth)}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsFullScreen(!isFullScreen)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2 hover:bg-gray-100 rounded-lg">
                   {isFullScreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
                 </button>
-                <button
-                  onClick={handleModalCancel}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                <button onClick={handleModalCancel} className="p-2 hover:bg-gray-100 rounded-lg">
                   <X size={20} />
                 </button>
               </div>
@@ -237,14 +212,13 @@ export function CommissionCalculationView({
                         <td className="px-4 py-3 text-sm text-gray-900">
                           {formatCurrency(commission.totalSales)}
                         </td>
-
                         <td className="px-4 py-3 text-sm text-gray-900">
                           {isEditing === commission.id ? (
                             <div className="flex items-center gap-2">
                               <input
                                 type="number"
                                 value={editValues.percentage}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditValues({ ...editValues, percentage: parseFloat(e.target.value) || 0 })}
+                                onChange={(e) => setEditValues({ ...editValues, percentage: parseFloat(e.target.value) || 0 })}
                                 className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
                                 step="0.01"
                               />
@@ -256,25 +230,21 @@ export function CommissionCalculationView({
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900">
                           {isEditing === commission.id ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={editValues.amount}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditValues({ ...editValues, amount: parseFloat(e.target.value) || 0 })}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
-                              />
-                            </div>
+                            <input
+                              type="number"
+                              value={editValues.amount}
+                              onChange={(e) => setEditValues({ ...editValues, amount: parseFloat(e.target.value) || 0 })}
+                              className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
                           ) : (
                             formatCurrency(commission.overriddenCommissionAmount || commission.calculatedCommissionAmount)
                           )}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            commission.status === 'Confirmed'
-                              ? 'bg-green-100 text-green-800'
-                              : commission.status === 'Adjusted'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-blue-100 text-blue-800'
+                            commission.status === 'Confirmed' ? 'bg-green-100 text-green-800'
+                            : commission.status === 'Adjusted' ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-blue-100 text-blue-800'
                           }`}>
                             {commission.status}
                           </span>
@@ -283,35 +253,19 @@ export function CommissionCalculationView({
                           <div className="flex items-center gap-1">
                             {isEditing === commission.id ? (
                               <>
-                                <button
-                                  onClick={() => saveEdit(commission.id)}
-                                  className="p-1 hover:bg-gray-100 rounded text-green-600"
-                                  title="Save"
-                                >
+                                <button onClick={() => saveEdit(commission.id)} className="p-1 hover:bg-gray-100 rounded text-green-600" title="Save">
                                   <Save size={16} />
                                 </button>
-                                <button
-                                  onClick={cancelEdit}
-                                  className="p-1 hover:bg-gray-100 rounded text-red-600"
-                                  title="Cancel"
-                                >
+                                <button onClick={cancelEdit} className="p-1 hover:bg-gray-100 rounded text-red-600" title="Cancel">
                                   <XCircle size={16} />
                                 </button>
                               </>
                             ) : (
                               <>
-                                <button
-                                  onClick={() => startEdit(commission)}
-                                  className="p-1 hover:bg-gray-100 rounded text-blue-600"
-                                  title="Edit"
-                                >
+                                <button onClick={() => startEdit(commission)} className="p-1 hover:bg-gray-100 rounded text-blue-600" title="Edit">
                                   <Edit2 size={16} />
                                 </button>
-                                <button
-                                  onClick={() => confirmSingleCommission(commission.id)}
-                                  className="p-1 hover:bg-gray-100 rounded text-green-600"
-                                  title="Confirm"
-                                >
+                                <button onClick={() => confirmSingleCommission(commission.id)} className="p-1 hover:bg-gray-100 rounded text-green-600" title="Confirm">
                                   <Check size={16} />
                                 </button>
                               </>
@@ -327,16 +281,10 @@ export function CommissionCalculationView({
 
             {/* Modal Actions */}
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={handleModalCancel}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
-              >
+              <button onClick={handleModalCancel} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
                 Cancel
               </button>
-              <button
-                onClick={handleModalConfirm}
-                className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors"
-              >
+              <button onClick={handleModalConfirm} className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca]">
                 Save All Commissions
               </button>
             </div>

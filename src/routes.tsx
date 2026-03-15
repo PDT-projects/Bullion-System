@@ -1,55 +1,24 @@
-import { createBrowserRouter, useNavigate, Navigate, Outlet, useParams } from 'react-router-dom';
+import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Dashboard } from './features/finance/Dashboard';
 
-// Employee Module - MVVM Architecture with Firebase Data Connect
-import { 
-  EmployeeListWrapper, 
-  EmployeeCreateWrapper, 
-  EmployeeEditWrapper, 
-  EmployeeDeleteWrapper 
-} from './modules/employee';
+// Employee Module
+import { EmployeeListWrapper, EmployeeCreateWrapper, EmployeeEditWrapper, EmployeeDeleteWrapper } from './modules/employee';
 
+// Loans Module
+import { LoanDashboardWrapper, LoanListWrapper, LoanFormWrapper, LoanPaymentWrapper } from './modules/loans';
 
-// Inventory Module - MVVM Architecture (5-Step Flow)
-import { InventoryDashboardView } from './modules/inventory/views/InventoryDashboardView';
-import { InventoryListView } from './modules/inventory/views/InventoryListView';
-import { ProductTransferWrapper } from './modules/inventory/views/ProductTransferWrapper';
-import { ProductTransferCreateWrapper } from './modules/inventory/views/ProductTransferCreateWrapper';
-import { InventoryTypeSelectionWrapper } from './modules/inventory/views/InventoryTypeSelectionWrapper';
-import { InventoryCostingOptionWrapper } from './modules/inventory/views/InventoryCostingOptionWrapper';
-import { InventoryCostingDetailsWrapper } from './modules/inventory/views/InventoryCostingDetailsWrapper';
-import { InventoryProductDetailsWrapper } from './modules/inventory/views/InventoryProductDetailsWrapper';
-import { InventoryPaymentWrapper } from './modules/inventory/views/InventoryPaymentWrapper';
-import { useInventoryDashboardViewModel } from './modules/inventory/viewModels/useInventoryDashboardViewModel';
-import { useInventoryListViewModel } from './modules/inventory/viewModels/useInventoryListViewModel';
+// Salary Module
+import { SalaryListWrapper, SalaryCreateWrapper, SalaryEditWrapper, SalaryDeleteWrapper, SalaryDashboardWrapper } from './modules/salary';
 
+// Bills Module
+import { BillsListWrapper, BillsCreateWrapper, BillsEditWrapper, BillsDeleteWrapper } from './modules/bills';
 
+// Commission Module
+import { CommissionSlabListWrapper, CommissionCalculationWrapper, CommissionReportWrapper } from './modules/commission';
 
-// Invoice Module - MVVM Architecture
-import { 
-  InvoiceListWrapper, 
-  InvoiceFormWrapper, 
-  InvoiceDeleteWrapper,
-  InvoiceReportWrapper 
-} from './modules/invoices';
-
-
-// Budget Module - MVVM Architecture
-import {
-  BudgetListWrapper,
-  BudgetCreateWrapper,
-  BudgetEditWrapper,
-  BudgetDeleteWrapper,
-  Budget
-} from './modules/budget';
-
-
-import { Bills } from './features/finance/Bills';
-
-
-// Banking Module - MVVM Architecture
+// Banking Module
 import {
   BankingDashboardWrapper,
   BankListWrapper,
@@ -62,1274 +31,390 @@ import {
   CashCreateWrapper
 } from './modules/banking';
 
-
-// Bills Module - MVVM Architecture
+// Inventory Module
 import {
-  BillsListWrapper,
-  BillsCreateWrapper,
-  BillsEditWrapper,
-  BillsDeleteWrapper
-} from './modules/bills';
+  InventoryDashboardWrapper,
+  InventoryListWrapper,
+  InventoryTypeSelectionWrapper,
+  InventoryCostingOptionWrapper,
+  InventoryCostingDetailsWrapper,
+  InventoryProductDetailsWrapper,
+  InventoryPaymentWrapper,
+  InventoryAddExistingWrapper,
+  ProductTransferWrapper,
+  ProductTransferCreateWrapper,
+} from './modules/inventory';
 
-
-// Transactions Module - MVVM Architecture
+// Invoice Module
 import {
-  TransactionListWrapper,
-  TransactionCreateWrapper,
-  TransactionEditWrapper,
-  TransactionDeleteWrapper,
-  PendingPaymentsWrapper
-} from './modules/transactions';
+  InvoiceListWrapper,
+  InvoiceFormWrapper,
+  InvoiceDeleteWrapper,
+  InvoiceReportWrapper,
+} from './modules/invoices';
 
-// Salary Module - MVVM Architecture
-import {
-  SalaryListWrapper,
-  SalaryCreateWrapper,
-  SalaryEditWrapper,
-  SalaryDeleteWrapper,
-  SalaryDashboardWrapper
-} from './modules/salary';
-
-
-
-
-// Commission Module - MVVM Architecture
-import { 
-  CommissionSlabListWrapper,
-  CommissionCalculationWrapper,
-  CommissionReportWrapper
-} from './modules/commission';
-
-// Loans Module - MVVM Architecture
-import {
-  LoanDashboardWrapper,
-  LoanListWrapper,
-  LoanFormWrapper,
-  LoanPaymentWrapper
-} from './modules/loans';
+// Budget Module (commented out — not yet converted to Firestore)
+// import { BudgetListWrapper, BudgetCreateWrapper, BudgetEditWrapper, BudgetDeleteWrapper, Budget } from './modules/budget';
+// Inventory Module
+// import { ... } from './modules/inventory/...';
+// Invoice Module
+// import { ... } from './modules/invoices';
+// Transactions Module
+// import { ... } from './modules/transactions';
 
 import { Sidebar } from './layouts/Sidebar';
 import { TopBar } from './layouts/TopBar';
 import { useAuth } from './providers/context/AuthContext';
-import { DataProvider } from './providers/context/DataContext';
-import { useState, useEffect, useCallback } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { AppData, initialData, normalizeInitialData, Employee, Bank, Transaction, Loan, BankTransfer } from './App';
-import type { Transaction as ModuleTransaction } from './modules/transactions/models/types';
-
-import { CashTransaction } from './modules/banking/models/types';
+import { useState } from 'react';
+import { AppData, initialData } from './App';
 
 
-// --- PROTECTED ROUTE WRAPPER ---
+// ============================================================
+// PROTECTED ROUTE
+// ============================================================
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
-// --- SIGNUP WRAPPER ---
+
+// ============================================================
+// AUTH PAGES
+// ============================================================
+
 function SignupPage() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
-
   return (
-    <Signup 
-      onNavigateToLogin={() => navigate('/login')} 
-      onSignupSuccess={(user) => {
-        setUser(user);
-        navigate('/dashboard');
-      }} 
+    <Signup
+      onNavigateToLogin={() => navigate('/login')}
+      onSignupSuccess={(user) => { setUser(user); navigate('/dashboard'); }}
     />
   );
 }
 
-// --- LOGIN WRAPPER ---
 function LoginPage() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
-
   return (
-    <Login 
-      onNavigateToSignup={() => navigate('/signup')} 
-      onLoginSuccess={(user) => {
-        setUser(user);
-        navigate('/dashboard');
-      }} 
+    <Login
+      onNavigateToSignup={() => navigate('/signup')}
+      onLoginSuccess={(user) => { setUser(user); navigate('/dashboard'); }}
     />
   );
 }
 
-// --- DASHBOARD LAYOUT WITH SIDEBAR AND TOPBAR ---
+
+// ============================================================
+// SHARED LAYOUT FACTORY
+// ============================================================
+
+function AppLayout({ activeModule, children }: { activeModule: string; children: React.ReactNode }) {
+  const { user } = useAuth();
+  return (
+    <div className="flex h-screen bg-[#f0f2f5]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <TopBar notifications={[]} setNotifications={() => {}} activeModule={activeModule} user={user} />
+        </header>
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
+    </div>
+  );
+}
+
+function OutletLayout({ activeModule }: { activeModule: string }) {
+  return (
+    <AppLayout activeModule={activeModule}>
+      <Outlet />
+    </AppLayout>
+  );
+}
+
+
+// ============================================================
+// DASHBOARD LAYOUT
+// ============================================================
+
 function DashboardLayout() {
-  const { user } = useAuth();
-  const [data] = useState<AppData>(() => normalizeInitialData(initialData));
-
+  const [data] = useState<AppData>(() => initialData);
   return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="dashboard" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Dashboard data={data} />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- EMPLOYEES LAYOUT WITH SIDEBAR AND TOPBAR ---
-// Now uses Firebase Data Connect - no outlet context needed
-function EmployeesLayout() {
-  const { user } = useAuth();
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="employees" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
-        </main>
-      </div>
-    </div>
+    <AppLayout activeModule="dashboard">
+      <Dashboard data={data} />
+    </AppLayout>
   );
 }
 
 
-
-// --- INVENTORY MVVM WRAPPER COMPONENTS ---
-
-function InventoryDashboardWrapper() {
-  const viewModel = useInventoryDashboardViewModel();
-  return <InventoryDashboardView {...viewModel} />;
-}
-
-function InventoryListWrapper() {
-  const viewModel = useInventoryListViewModel();
-  return <InventoryListView {...viewModel} />;
-}
-
-// New 5-Step Inventory Flow Wrappers
-function InventoryTypeSelectionRoute() {
-  return <InventoryTypeSelectionWrapper />;
-}
-
-function InventoryCostingOptionRoute() {
-  return <InventoryCostingOptionWrapper />;
-}
-
-function InventoryCostingDetailsRoute() {
-  return <InventoryCostingDetailsWrapper />;
-}
-
-
-function InventoryProductDetailsRoute() {
-  return <InventoryProductDetailsWrapper />;
-}
-
-function InventoryPaymentRoute() {
-  return <InventoryPaymentWrapper />;
-}
-
-// --- PRODUCT TRANSFER LAYOUT WITH SIDEBAR AND TOPBAR ---
-function ProductTransferLayout() {
-  const { user } = useAuth();
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="product-transfer" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- INVENTORY LAYOUT WITH SIDEBAR AND TOPBAR ---
-function InventoryLayout() {
-  const { user } = useAuth();
-  const [products, setProducts] = useState<any[]>([]);
-  const [transfers, setTransfers] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Fetch products from Data Connect
-  const fetchProducts = useCallback(async () => {
-    // setIsLoading(true); DISABLED
-    try {
-      console.log('📡 Products fetch DISABLED - pending DC schema (NORMAL)');
-      setProducts([]);
-    } catch (error) {
-      console.error('❌ Error fetching products from Data Connect:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Fetch products from Data Connect on mount
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="inventory" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-gray-500">Loading products...</div>
-            </div>
-          ) : (
-            <Outlet context={{ products, setProducts, transfers, setTransfers, refreshProducts: fetchProducts }} />
-          )}
-        </main>
-      </div>
-    </div>
-  );
-}
-
-
-// --- INVOICES LAYOUT WITH SIDEBAR AND TOPBAR ---
-function InvoicesLayout() {
-  const { user } = useAuth();
-  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="invoices" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet context={{ 
-            invoices: data.invoices || [], 
-            setInvoices: (invoices: any[]) => setData({ ...data, invoices }),
-            products: data.products || [],
-            setProducts: (products: any[]) => setData({ ...data, products }),
-            employees: data.employees,
-            banks: data.banks
-          }} />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- INVOICE MVVM WRAPPER COMPONENTS ---
-
-function InvoiceListRoute() {
-  const { invoices, setInvoices, products, setProducts } = useOutletContext<{
-    invoices: any[];
-    setInvoices: (invoices: any[]) => void;
-    products: any[];
-    setProducts: (products: any[]) => void;
-  }>();
-  
-  return (
-    <InvoiceListWrapper 
-      invoices={invoices}
-      products={products}
-      setInvoices={setInvoices}
-      setProducts={setProducts}
-    />
-  );
-}
-
-function InvoiceFormRoute() {
-  const { invoices, setInvoices, products, setProducts, employees, banks } = useOutletContext<{
-    invoices: any[];
-    setInvoices: (invoices: any[]) => void;
-    products: any[];
-    setProducts: (products: any[]) => void;
-    employees: Employee[];
-    banks: Bank[];
-  }>();
-  
-  return (
-    <InvoiceFormWrapper 
-      invoices={invoices}
-      products={products}
-      employees={employees}
-      banks={banks}
-      setInvoices={setInvoices}
-      setProducts={setProducts}
-    />
-  );
-}
-
-function InvoiceDeleteRoute() {
-  const { invoices, setInvoices, products, setProducts } = useOutletContext<{
-    invoices: any[];
-    setInvoices: (invoices: any[]) => void;
-    products: any[];
-    setProducts: (products: any[]) => void;
-  }>();
-  
-  return (
-    <InvoiceDeleteWrapper 
-      invoices={invoices}
-      products={products}
-      setInvoices={setInvoices}
-      setProducts={setProducts}
-    />
-  );
-}
-
-function InvoiceReportRoute() {
-  const { invoices } = useOutletContext<{
-    invoices: any[];
-  }>();
-  
-  return (
-    <InvoiceReportWrapper 
-      invoices={invoices}
-    />
-  );
-}
-
-// --- BUDGETS LAYOUT WITH SIDEBAR AND TOPBAR ---
-function BudgetsLayout() {
-  const { user } = useAuth();
-  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="budgets" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet context={{
-            budgets: data.budgets,
-            setBudgets: (budgets: Budget[]) => setData({ ...data, budgets })
-          }} />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- BUDGET MVVM WRAPPER COMPONENTS ---
-
-function BudgetListRoute() {
-  return <BudgetListWrapper />;
-}
-
-function BudgetCreateRoute() {
-  return <BudgetCreateWrapper />;
-}
-
-function BudgetEditRoute() {
-  return <BudgetEditWrapper />;
-}
-
-function BudgetDeleteRoute() {
-  return <BudgetDeleteWrapper />;
-}
-
-// --- FINANCE LAYOUT WITH SIDEBAR AND TOPBAR ---
-function FinanceLayout() {
-  const { user } = useAuth();
-  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="finance" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet context={{ 
-            banks: data.banks, 
-            setBanks: (banks: Bank[]) => setData({ ...data, banks }),
-            transactions: data.transactions,
-            setTransactions: (transactions: Transaction[]) => setData({ ...data, transactions })
-          }} />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- WRAPPER COMPONENTS FOR FINANCE ROUTES ---
-function FinanceTransactionsWrapper() {
-  // Transactions component manages its own state internally
-  return <TransactionListWrapper />;
-}
-
-function FinancePendingPaymentsWrapper() {
-
-  const { transactions, setTransactions, banks } = useOutletContext<{
-    transactions: Transaction[];
-    setTransactions: (transactions: Transaction[]) => void;
-    banks: Bank[];
-  }>();
-
-  return (
-    <PendingPaymentsWrapper 
-      transactions={transactions as ModuleTransaction[]}
-      setTransactions={setTransactions as (transactions: ModuleTransaction[]) => void}
-      banks={banks}
-    />
-  );
-}
-
-
-function FinanceBillsWrapper() {
-  const { transactions, setTransactions, banks, setBanks } = useOutletContext<{
-    transactions: Transaction[];
-    setTransactions: (transactions: Transaction[]) => void;
-    banks: Bank[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-
-  return (
-    <Bills 
-      transactions={transactions}
-      setTransactions={setTransactions}
-      banks={banks}
-      setBanks={setBanks}
-    />
-  );
-}
-
-// --- BILLS MVVM WRAPPER COMPONENTS ---
-
-function BillsListRoute() {
-  return <BillsListWrapper />;
-}
-
-function BillsCreateRoute() {
-  return <BillsCreateWrapper />;
-}
-
-function BillsEditRoute() {
-  return <BillsEditWrapper />;
-}
-
-function BillsDeleteRoute() {
-  return <BillsDeleteWrapper />;
-}
-
-// --- TRANSACTIONS MVVM WRAPPER COMPONENTS ---
-
-function TransactionListRoute() {
-  return <TransactionListWrapper />;
-}
-
-
-
-
-function TransactionCreateRoute() {
-  const { transactions, setTransactions } = useOutletContext<{
-    transactions: Transaction[];
-    setTransactions: (transactions: Transaction[]) => void;
-  }>();
-  
-  return (
-    <TransactionCreateWrapper 
-      transactions={transactions as ModuleTransaction[]}
-      setTransactions={setTransactions as (transactions: ModuleTransaction[]) => void}
-    />
-  );
-}
-
-
-function TransactionEditRoute() {
-  const { transactions, setTransactions } = useOutletContext<{
-    transactions: Transaction[];
-    setTransactions: (transactions: Transaction[]) => void;
-  }>();
-  
-  return (
-    <TransactionEditWrapper 
-      transactions={transactions as ModuleTransaction[]}
-      setTransactions={setTransactions as (transactions: ModuleTransaction[]) => void}
-    />
-  );
-}
-
-
-function TransactionDeleteRoute() {
-  const { transactions, setTransactions } = useOutletContext<{
-    transactions: Transaction[];
-    setTransactions: (transactions: Transaction[]) => void;
-  }>();
-  
-  return (
-    <TransactionDeleteWrapper 
-      transactions={transactions as ModuleTransaction[]}
-      setTransactions={setTransactions as (transactions: ModuleTransaction[]) => void}
-    />
-  );
-}
-
-
-function FinanceSalaryWrapper() {
-  // Salary feature component - redirects to salary page
-  return <Navigate to="/salary" replace />;
-}
-
-
-// --- SALARY MVVM WRAPPER COMPONENTS ---
-
-
-function SalaryDashboardRoute() {
-  return <SalaryDashboardWrapper />;
-}
-
-function SalaryAllListRoute() {
-  return <SalaryListWrapper type="all" title="All Salaries" />;
-}
-
-function SalaryRegularListRoute() {
-  return <SalaryListWrapper type="regular" title="Regular Salaries" />;
-}
-
-function SalaryAdvanceListRoute() {
-  return <SalaryListWrapper type="advance" title="Advance Salaries" />;
-}
-
-function SalaryCreateRegularRoute() {
-  return <SalaryCreateWrapper type="regular" />;
-}
-
-function SalaryCreateAdvanceRoute() {
-  return <SalaryCreateWrapper type="advance" />;
-}
-
-function SalaryEditRoute() {
-  return <SalaryEditWrapper />;
-}
-
-function SalaryDeleteRoute() {
-  return <SalaryDeleteWrapper />;
-}
-
-// --- SALARY LAYOUT WITH SIDEBAR AND TOPBAR ---
-function SalaryLayout() {
-  const { user } = useAuth();
-  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="salary" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet context={{ 
-            transactions: data.transactions,
-            setTransactions: (transactions: Transaction[]) => setData({ ...data, transactions }),
-            employees: data.employees,
-            banks: data.banks
-          }} />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- COMMISSION LAYOUT WITH SIDEBAR AND TOPBAR ---
-function CommissionLayout() {
-  const { user } = useAuth();
-  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="commission" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet context={{ 
-            invoices: data.invoices || [],
-            employees: data.employees
-          }} />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- COMMISSION MVVM WRAPPER COMPONENTS ---
-
-function CommissionSlabsRoute() {
-  const { employees } = useOutletContext<{
-    employees: Employee[];
-  }>();
-  
-  return <CommissionSlabListWrapper employees={employees} />;
-}
-
-function CommissionCalculationRoute() {
-  const { invoices, employees } = useOutletContext<{
-    invoices: any[];
-    employees: Employee[];
-  }>();
-  
-  return (
-    <CommissionCalculationWrapper 
-      employees={employees}
-      invoices={invoices}
-      onCommissionsSaved={() => {
-        // Could add toast notification here
-        console.log('Commissions saved successfully');
-      }}
-    />
-  );
-}
-
-function CommissionReportsRoute() {
-  const { employees } = useOutletContext<{
-    employees: Employee[];
-  }>();
-  
-  return <CommissionReportWrapper employees={employees} />;
-}
-
-
-
-
-// --- LOANS LAYOUT WITH SIDEBAR AND TOPBAR ---
-function LoansLayout() {
-  const { user } = useAuth();
-  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="loans" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet context={{ 
-            loans: data.loans, 
-            setLoans: (loans: Loan[]) => setData({ ...data, loans }),
-            employees: data.employees,
-            banks: data.banks,
-            setBanks: (banks: Bank[]) => setData({ ...data, banks })
-          }} />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- LOANS MVVM WRAPPER COMPONENTS ---
-
-function LoanDashboardRoute() {
-  const { banks, employees } = useOutletContext<{
-    banks: Bank[];
-    employees: Employee[];
-  }>();
-  
-  return <LoanDashboardWrapper banks={banks} employees={employees} />;
-}
-
-function LoanListRoute() {
-  const { banks, employees, setBanks } = useOutletContext<{
-    banks: Bank[];
-    employees: Employee[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-  
-  return <LoanListWrapper banks={banks} employees={employees} setBanks={setBanks} />;
-}
-
-function LoanPayableListRoute() {
-  const { banks, employees, setBanks } = useOutletContext<{
-    banks: Bank[];
-    employees: Employee[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-  
-  return <LoanListWrapper banks={banks} employees={employees} setBanks={setBanks} initialType="Payable" />;
-}
-
-function LoanReceivableListRoute() {
-  const { banks, employees, setBanks } = useOutletContext<{
-    banks: Bank[];
-    employees: Employee[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-  
-  return <LoanListWrapper banks={banks} employees={employees} setBanks={setBanks} initialType="Receivable" />;
-}
-
-function LoanCreatePayableRoute() {
-  const { banks, employees, setBanks } = useOutletContext<{
-    banks: Bank[];
-    employees: Employee[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-  
-  return <LoanFormWrapper banks={banks} employees={employees} setBanks={setBanks} defaultType="Payable" />;
-}
-
-function LoanCreateReceivableRoute() {
-  const { banks, employees, setBanks } = useOutletContext<{
-    banks: Bank[];
-    employees: Employee[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-  
-  return <LoanFormWrapper banks={banks} employees={employees} setBanks={setBanks} defaultType="Receivable" />;
-}
-
-function LoanEditRoute() {
-  const { banks, employees, setBanks } = useOutletContext<{
-    banks: Bank[];
-    employees: Employee[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-  
-  return <LoanFormWrapper banks={banks} employees={employees} setBanks={setBanks} />;
-}
-
-function LoanPaymentRoute() {
-  const { banks, setBanks } = useOutletContext<{
-    banks: Bank[];
-    setBanks: (banks: Bank[]) => void;
-  }>();
-  
-  return <LoanPaymentWrapper banks={banks} setBanks={setBanks} />;
-}
-
-
-// --- BANKING LAYOUT WITH SIDEBAR AND TOPBAR ---
-function BankingLayout() {
-  const { user } = useAuth();
-  const [data, setData] = useState<AppData>(() => normalizeInitialData(initialData));
-  const [transfers, setTransfers] = useState<BankTransfer[]>([]);
-  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
-
-  return (
-    <div className="flex h-screen bg-[#f0f2f5]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <TopBar notifications={[]} setNotifications={() => {}} activeModule="banking" user={user} />
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet context={{ 
-            banks: data.banks, 
-            setBanks: (banks: Bank[]) => setData({ ...data, banks }),
-            transactions: data.transactions,
-            transfers,
-            setTransfers,
-            cashTransactions,
-            setCashTransactions
-          }} />
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// --- BANKING MVVM WRAPPER COMPONENTS ---
-
-function BankingDashboardRoute() {
-  return <BankingDashboardWrapper />;
-}
-
-function BankListRoute() {
-  return <BankListWrapper />;
-}
-
-function BankCreateRoute() {
-  return <BankCreateWrapper />;
-}
-
-function BankEditRoute() {
-  return <BankEditWrapper />;
-}
-
-function BankDeleteRoute() {
-  return <BankDeleteWrapper />;
-}
-
-function TransferListRoute() {
-  return <TransferListWrapper />;
-}
-
-function TransferCreateRoute() {
-  return <TransferCreateWrapper />;
-}
-
-function CashListRoute() {
-  return <CashListWrapper />;
-}
-
-function CashCreateRoute() {
-  return <CashCreateWrapper />;
-}
-
+// ============================================================
+// LOAN ROUTES
+// LoanFormWrapper and LoanPaymentWrapper are self-contained —
+// they fetch employees and banks from Firestore internally.
+// Do NOT pass banks={[]} or employees={[]} props here.
+// ============================================================
+
+function LoanDashboardRoute()        { return <LoanDashboardWrapper />; }
+function LoanListRoute()             { return <LoanListWrapper />; }
+function LoanPayableListRoute()      { return <LoanListWrapper />; }
+function LoanReceivableListRoute()   { return <LoanListWrapper />; }
+function LoanCreateRoute()           { return <LoanFormWrapper />; }
+function LoanCreatePayableRoute()    { return <LoanFormWrapper defaultType="Payable" />; }
+function LoanCreateReceivableRoute() { return <LoanFormWrapper defaultType="Receivable" />; }
+function LoanEditRoute()             { return <LoanFormWrapper />; }
+function LoanPaymentRoute()          { return <LoanPaymentWrapper />; }
+
+
+// ============================================================
+// SALARY ROUTES
+// ============================================================
+
+function SalaryDashboardRoute()     { return <SalaryDashboardWrapper />; }
+function SalaryAllListRoute()       { return <SalaryListWrapper type="all" title="All Salaries" />; }
+function SalaryRegularListRoute()   { return <SalaryListWrapper type="regular" title="Regular Salaries" />; }
+function SalaryAdvanceListRoute()   { return <SalaryListWrapper type="advance" title="Advance Salaries" />; }
+function SalaryCreateRegularRoute() { return <SalaryCreateWrapper type="regular" />; }
+function SalaryCreateAdvanceRoute() { return <SalaryCreateWrapper type="advance" />; }
+function SalaryEditRoute()          { return <SalaryEditWrapper />; }
+function SalaryDeleteRoute()        { return <SalaryDeleteWrapper />; }
+
+
+// ============================================================
+// BILLS ROUTES
+// ============================================================
+
+function BillsListRoute()   { return <BillsListWrapper />; }
+function BillsCreateRoute() { return <BillsCreateWrapper />; }
+function BillsEditRoute()   { return <BillsEditWrapper />; }
+function BillsDeleteRoute() { return <BillsDeleteWrapper />; }
+
+
+// ============================================================
+// COMMISSION ROUTES
+// ============================================================
+
+function CommissionSlabsRoute()       { return <CommissionSlabListWrapper />; }
+function CommissionCalculationRoute() { return <CommissionCalculationWrapper />; }
+function CommissionReportsRoute()     { return <CommissionReportWrapper />; }
+
+
+// ============================================================
+// BANKING ROUTES
+// ============================================================
+
+function BankingDashboardRoute() { return <BankingDashboardWrapper />; }
+function BankListRoute()         { return <BankListWrapper />; }
+function BankCreateRoute()       { return <BankCreateWrapper />; }
+function BankEditRoute()         { return <BankEditWrapper />; }
+function BankDeleteRoute()       { return <BankDeleteWrapper />; }
+function TransferListRoute()     { return <TransferListWrapper />; }
+function TransferCreateRoute()   { return <TransferCreateWrapper />; }
+function CashListRoute()         { return <CashListWrapper />; }
+function CashCreateRoute()       { return <CashCreateWrapper />; }
+
+
+// ============================================================
+// INVENTORY ROUTES
+// ============================================================
+
+function InventoryDashboardRoute()        { return <InventoryDashboardWrapper />; }
+function InventoryViewRoute()             { return <InventoryListWrapper inventoryType="in-stock" />; }
+function InventoryReceivableRoute()       { return <InventoryListWrapper inventoryType="on-order" />; }
+function InventoryTypeSelectionRoute()    { return <InventoryTypeSelectionWrapper />; }
+function InventoryCostingOptionRoute()    { return <InventoryCostingOptionWrapper />; }
+function InventoryCostingDetailsRoute()   { return <InventoryCostingDetailsWrapper />; }
+function InventoryProductDetailsRoute()   { return <InventoryProductDetailsWrapper />; }
+function InventoryPaymentRoute()          { return <InventoryPaymentWrapper />; }
+function InvoiceListRoute()   { return <InvoiceListWrapper />; }
+function InvoiceFormRoute()   { return <InvoiceFormWrapper />; }
+function InvoiceEditRoute()   { return <InvoiceFormWrapper />; }
+function InvoiceDeleteRoute() { return <InvoiceDeleteWrapper />; }
+function InvoiceReportRoute() { return <InvoiceReportWrapper />; }
+function InventoryAddExistingRoute()       { return <InventoryAddExistingWrapper />; }
+function ProductTransferListRoute()       { return <ProductTransferWrapper />; }
+function ProductTransferNewRoute()        { return <ProductTransferCreateWrapper />; }
+
+
+// ============================================================
+// COMMENTED-OUT MODULE ROUTES (preserved for future use)
+// ============================================================
+
+// --- BUDGETS ---
+// function BudgetListRoute()   { return <BudgetListWrapper />; }
+// function BudgetCreateRoute() { return <BudgetCreateWrapper />; }
+// function BudgetEditRoute()   { return <BudgetEditWrapper />; }
+// function BudgetDeleteRoute() { return <BudgetDeleteWrapper />; }
+
+// --- INVENTORY ---
+// function InventoryLayout() { ... }
+
+// --- INVOICES ---
+// function InvoiceListRoute()   { ... }
+// function InvoiceFormRoute()   { ... }
+// function InvoiceDeleteRoute() { ... }
+// function InvoiceReportRoute() { ... }
+
+// --- TRANSACTIONS ---
+// function TransactionListRoute()   { return <TransactionListWrapper />; }
+// function TransactionCreateRoute() { ... }
+// function TransactionEditRoute()   { ... }
+// function TransactionDeleteRoute() { ... }
+
+
+// ============================================================
+// ROUTER
+// ============================================================
 
 export const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <Navigate to="/dashboard" replace />,
-  },
-  {
-    path: "/login",
-    element: <LoginPage />,
-  },
-  {
-    path: "/signup",
-    element: <SignupPage />,
-  },
+  { path: "/",       element: <Navigate to="/dashboard" replace /> },
+  { path: "/login",  element: <LoginPage /> },
+  { path: "/signup", element: <SignupPage /> },
+
   {
     path: "/dashboard",
-    element: (
-      <ProtectedRoute>
-        <DashboardLayout />
-      </ProtectedRoute>
-    ),
+    element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>),
   },
+
+  // --- EMPLOYEES ---
   {
     path: "/employees",
-    element: (
-      <ProtectedRoute>
-        <EmployeesLayout />
-      </ProtectedRoute>
-    ),
+    element: (<ProtectedRoute><OutletLayout activeModule="employees" /></ProtectedRoute>),
     children: [
-      {
-        index: true,
-        element: <EmployeeListWrapper />,
-      },
-      {
-        path: "create",
-        element: <EmployeeCreateWrapper />,
-      },
-      {
-        path: ":id/edit",
-        element: <EmployeeEditWrapper />,
-      },
-      {
-        path: ":id/delete",
-        element: <EmployeeDeleteWrapper />,
-      }
+      { index: true,        element: <EmployeeListWrapper /> },
+      { path: "create",     element: <EmployeeCreateWrapper /> },
+      { path: ":id/edit",   element: <EmployeeEditWrapper /> },
+      { path: ":id/delete", element: <EmployeeDeleteWrapper /> },
     ],
   },
 
-  {
-    path: "/product-transfer",
-    element: (
-      <ProtectedRoute>
-        <InventoryLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: <ProductTransferWrapper />,
-      },
-      {
-        path: "new",
-        element: <ProductTransferCreateWrapper />,
-      },
-
-    ],
-  },
-
-
-  {
-    path: "/inventory",
-    element: (
-      <ProtectedRoute>
-        <InventoryLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: <InventoryDashboardWrapper />,
-      },
-      {
-        path: "create-new",
-        element: <InventoryTypeSelectionRoute />,
-      },
-      {
-        path: "create-new/costing",
-        element: <InventoryCostingOptionRoute />,
-      },
-      {
-        path: "create-new/costing-details",
-        element: <InventoryCostingDetailsRoute />,
-      },
-      {
-        path: "create-new/details",
-        element: <InventoryProductDetailsRoute />,
-      },
-
-      {
-        path: "create-new/payment",
-        element: <InventoryPaymentRoute />,
-      },
-      {
-        path: "add-existing",
-        element: <InventoryListWrapper />,
-      },
-      {
-        path: "receivable",
-        element: <InventoryListWrapper />,
-      },
-      {
-        path: "view",
-        element: <InventoryListWrapper />,
-      }
-    ],
-  },
-
-
-  {
-    path: "/invoices",
-    element: (
-      <ProtectedRoute>
-        <InvoicesLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: <InvoiceListRoute />,
-      },
-      {
-        path: "new",
-        element: <InvoiceFormRoute />,
-      },
-      {
-        path: ":id/edit",
-        element: <InvoiceFormRoute />,
-      },
-      {
-        path: ":id/delete",
-        element: <InvoiceDeleteRoute />,
-      },
-      {
-        path: "reports",
-        element: <InvoiceReportRoute />,
-      },
-    ],
-  },
-
-
-
-  {
-    path: "/budgets",
-    element: (
-      <ProtectedRoute>
-        <BudgetsLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: <BudgetListRoute />,
-      },
-      {
-        path: "create",
-        element: <BudgetCreateRoute />,
-      },
-      {
-        path: ":id/edit",
-        element: <BudgetEditRoute />,
-      },
-      {
-        path: ":id/delete",
-        element: <BudgetDeleteRoute />,
-      },
-    ],
-  },
-
-  {
-    path: "/finance",
-    element: (
-      <ProtectedRoute>
-        <FinanceLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        path: "transactions",
-        element: <Navigate to="/transactions" replace />,
-      },
-
-      {
-        path: "banks",
-        element: <Navigate to="/banking/banks" replace />,
-      },
-
-      {
-        path: "pending-payments",
-        element: <FinancePendingPaymentsWrapper />,
-      },
-      {
-        path: "bills",
-        element: <Navigate to="/bills" replace />,
-      },
-
-      {
-        path: "salary",
-        element: <FinanceSalaryWrapper />,
-      },
-      {
-        path: "bank-transfers",
-        element: <Navigate to="/banking/transfers" replace />,
-      },
-      {
-        path: "cash-in-hand",
-        element: <Navigate to="/banking/cash-in-hand" replace />,
-      },
-
-    ],
-  },
+  // --- LOANS ---
   {
     path: "/loans",
-    element: (
-      <ProtectedRoute>
-        <LoansLayout />
-      </ProtectedRoute>
-    ),
+    element: (<ProtectedRoute><OutletLayout activeModule="loans" /></ProtectedRoute>),
     children: [
-      {
-        index: true,
-        element: <LoanDashboardRoute />,
-      },
-      {
-        path: "all",
-        element: <LoanListRoute />,
-      },
-      {
-        path: "payable",
-        element: <LoanPayableListRoute />,
-      },
-      {
-        path: "receivable",
-        element: <LoanReceivableListRoute />,
-      },
-      {
-        path: "create-payable",
-        element: <LoanCreatePayableRoute />,
-      },
-      {
-        path: "create-receivable",
-        element: <LoanCreateReceivableRoute />,
-      },
-      { path: "create", element: <LoanEditRoute /> },
-      {
-        path: ":id/edit",
-        element: <LoanEditRoute />,
-      },
-      {
-        path: "create",
-        element: <LoanEditRoute />, 
-      },
-      {
-        path: "payable",
-        element: <LoanPayableListRoute />,
-      },
-      {
-        path: ":id/payment",
-        element: <LoanPaymentRoute />,
-      },
+      { index: true,               element: <LoanDashboardRoute /> },
+      { path: "all",               element: <LoanListRoute /> },
+      { path: "payable",           element: <LoanPayableListRoute /> },
+      { path: "receivable",        element: <LoanReceivableListRoute /> },
+      { path: "create",            element: <LoanCreateRoute /> },
+      { path: "create-payable",    element: <LoanCreatePayableRoute /> },
+      { path: "create-receivable", element: <LoanCreateReceivableRoute /> },
+      { path: ":id/edit",          element: <LoanEditRoute /> },
+      { path: ":id/payment",       element: <LoanPaymentRoute /> },
     ],
   },
 
-  {
-    path: "/banking",
-    element: (
-      <ProtectedRoute>
-        <BankingLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: <BankingDashboardRoute />,
-      },
-      {
-        path: "banks",
-        element: <BankListRoute />,
-      },
-      {
-        path: "banks/new",
-        element: <BankCreateRoute />,
-      },
-      {
-        path: "banks/:id/edit",
-        element: <BankEditRoute />,
-      },
-      {
-        path: "banks/:id/delete",
-        element: <BankDeleteRoute />,
-      },
-      {
-        path: "transfers",
-        element: <TransferListRoute />,
-      },
-      {
-        path: "transfers/new",
-        element: <TransferCreateRoute />,
-      },
-      {
-        path: "cash",
-        element: <CashListRoute />,
-      },
-      {
-        path: "cash/new",
-        element: <CashCreateRoute />,
-      },
-    ],
-  },
-
-  {
-    path: "/bills",
-    element: (
-      <ProtectedRoute>
-        <FinanceLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: <BillsListRoute />,
-      },
-      {
-        path: "create",
-        element: <BillsCreateRoute />,
-      },
-      {
-        path: ":id/edit",
-        element: <BillsEditRoute />,
-      },
-      {
-        path: ":id/delete",
-        element: <BillsDeleteRoute />,
-      },
-    ],
-  },
-
-  {
-    path: "/transactions",
-    element: (
-      <ProtectedRoute>
-        <FinanceLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        index: true,
-        element: <TransactionListRoute />,
-      },
-      {
-        path: "new",
-        element: <TransactionCreateRoute />,
-      },
-      {
-        path: ":id/edit",
-        element: <TransactionEditRoute />,
-      },
-      {
-        path: ":id/delete",
-        element: <TransactionDeleteRoute />,
-      },
-    ],
-  },
-
+  // --- SALARY ---
   {
     path: "/salary",
-    element: (
-      <ProtectedRoute>
-        <SalaryLayout />
-      </ProtectedRoute>
-    ),
-children: [
-      {
-        index: true,
-        element: <SalaryDashboardRoute />,
-      },
-
-      {
-        path: "all",
-        element: <SalaryAllListRoute />,
-      },
-      {
-        path: "regular",
-        element: <SalaryRegularListRoute />,
-      },
-      {
-        path: "advance",
-        element: <SalaryAdvanceListRoute />,
-      },
-      {
-        path: "create-regular",
-        element: <SalaryCreateRegularRoute />,
-      },
-      {
-        path: "create-advance",
-        element: <SalaryCreateAdvanceRoute />,
-      },
-      {
-        path: ":id/edit",
-        element: <SalaryEditRoute />,
-      },
-      {
-        path: ":id/delete",
-        element: <SalaryDeleteRoute />,
-      },
-
+    element: (<ProtectedRoute><OutletLayout activeModule="salary" /></ProtectedRoute>),
+    children: [
+      { index: true,            element: <SalaryDashboardRoute /> },
+      { path: "all",            element: <SalaryAllListRoute /> },
+      { path: "regular",        element: <SalaryRegularListRoute /> },
+      { path: "advance",        element: <SalaryAdvanceListRoute /> },
+      { path: "create-regular", element: <SalaryCreateRegularRoute /> },
+      { path: "create-advance", element: <SalaryCreateAdvanceRoute /> },
+      { path: ":id/edit",       element: <SalaryEditRoute /> },
+      { path: ":id/delete",     element: <SalaryDeleteRoute /> },
     ],
   },
+
+  // --- BILLS ---
+  {
+    path: "/bills",
+    element: (<ProtectedRoute><OutletLayout activeModule="bills" /></ProtectedRoute>),
+    children: [
+      { index: true,        element: <BillsListRoute /> },
+      { path: "create",     element: <BillsCreateRoute /> },
+      { path: ":id/edit",   element: <BillsEditRoute /> },
+      { path: ":id/delete", element: <BillsDeleteRoute /> },
+    ],
+  },
+
+  // --- COMMISSION ---
   {
     path: "/commission",
-    element: (
-      <ProtectedRoute>
-        <CommissionLayout />
-      </ProtectedRoute>
-    ),
+    element: (<ProtectedRoute><OutletLayout activeModule="commission" /></ProtectedRoute>),
     children: [
-      {
-        index: true,
-        element: <CommissionSlabsRoute />,
-      },
-      {
-        path: "slabs",
-        element: <CommissionSlabsRoute />,
-      },
-      {
-        path: "calculate",
-        element: <CommissionCalculationRoute />,
-      },
-      {
-        path: "reports",
-        element: <CommissionReportsRoute />,
-      },
+      { index: true,       element: <CommissionSlabsRoute /> },
+      { path: "slabs",     element: <CommissionSlabsRoute /> },
+      { path: "calculate", element: <CommissionCalculationRoute /> },
+      { path: "reports",   element: <CommissionReportsRoute /> },
     ],
-  }
+  },
 
+  // --- BANKING ---
+  {
+    path: "/banking",
+    element: (<ProtectedRoute><OutletLayout activeModule="banking" /></ProtectedRoute>),
+    children: [
+      { index: true,              element: <BankingDashboardRoute /> },
+      { path: "banks",            element: <BankListRoute /> },
+      { path: "banks/new",        element: <BankCreateRoute /> },
+      { path: "banks/:id/edit",   element: <BankEditRoute /> },
+      { path: "banks/:id/delete", element: <BankDeleteRoute /> },
+      { path: "transfers",        element: <TransferListRoute /> },
+      { path: "transfers/new",    element: <TransferCreateRoute /> },
+      { path: "cash",             element: <CashListRoute /> },
+      { path: "cash/new",         element: <CashCreateRoute /> },
+    ],
+  },
+
+  // --- INVOICES ---
+  {
+    path: "/invoices",
+    element: (<ProtectedRoute><OutletLayout activeModule="invoices" /></ProtectedRoute>),
+    children: [
+      { index: true,          element: <InvoiceListRoute /> },
+      { path: "new",          element: <InvoiceFormRoute /> },
+      { path: ":id/edit",     element: <InvoiceEditRoute /> },
+      { path: ":id/delete",   element: <InvoiceDeleteRoute /> },
+      { path: "reports",      element: <InvoiceReportRoute /> },
+    ],
+  },
+
+  // --- INVENTORY ---
+  {
+    path: "/inventory",
+    element: (<ProtectedRoute><OutletLayout activeModule="inventory" /></ProtectedRoute>),
+    children: [
+      { index: true,                        element: <InventoryDashboardRoute /> },
+      { path: "view",                       element: <InventoryViewRoute /> },
+      { path: "receivable",                 element: <InventoryReceivableRoute /> },
+      { path: "create-new",                 element: <InventoryTypeSelectionRoute /> },
+      { path: "create-new/costing",         element: <InventoryCostingOptionRoute /> },
+      { path: "create-new/costing-details", element: <InventoryCostingDetailsRoute /> },
+      { path: "create-new/details",         element: <InventoryProductDetailsRoute /> },
+      { path: "create-new/payment",         element: <InventoryPaymentRoute /> },
+      { path: "add-existing",                 element: <InventoryAddExistingRoute /> },
+    ],
+  },
+
+  // --- PRODUCT TRANSFER ---
+  {
+    path: "/product-transfer",
+    element: (<ProtectedRoute><OutletLayout activeModule="inventory" /></ProtectedRoute>),
+    children: [
+      { index: true, element: <ProductTransferListRoute /> },
+      { path: "new",  element: <ProductTransferNewRoute /> },
+    ],
+  },
+
+  // --- BUDGETS (commented out) ---
+  // { path: "/budgets", element: (<ProtectedRoute><OutletLayout activeModule="budgets" /></ProtectedRoute>), children: [ ... ] },
+
+  // --- INVENTORY (commented out) ---
+  // { path: "/inventory", element: (<ProtectedRoute><OutletLayout activeModule="inventory" /></ProtectedRoute>), children: [ ... ] },
+
+  // --- INVOICES (commented out) ---
+  // { path: "/invoices", element: (<ProtectedRoute><OutletLayout activeModule="invoices" /></ProtectedRoute>), children: [ ... ] },
+
+  // --- FINANCE (commented out) ---
+  // { path: "/finance", element: (<ProtectedRoute><OutletLayout activeModule="finance" /></ProtectedRoute>), children: [ ... ] },
+
+  // --- TRANSACTIONS (commented out) ---
+  // { path: "/transactions", element: (<ProtectedRoute><OutletLayout activeModule="transactions" /></ProtectedRoute>), children: [ ... ] },
 ]);

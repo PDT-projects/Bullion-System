@@ -1,9 +1,9 @@
+// Inventory Module - Component
+// MultiModelInventoryTable - Table for displaying and editing selected models with sale prices
+
 import React from 'react';
-import { Button } from '../../../components/ui/button';
-import { Badge } from '../../../components/ui/badge';
 import { Plus, Trash2, Edit3 } from 'lucide-react';
-// import type { Model } from '../../../../api/dataconnect/brandModelDataConnectService';
-import type { Model } from '../../../api/dataconnect/brandModelDataConnectService';
+
 interface MultiModelRow {
   modelId: string;
   modelName: string;
@@ -21,20 +21,16 @@ interface MultiModelInventoryTableProps {
 }
 
 export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> = ({
-  models,
-  onUpdateModel,
-  onAddModel,
-  onRemoveModel,
-  onEditModel
+  models, onUpdateModel, onAddModel, onRemoveModel, onEditModel,
 }) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="text-lg font-semibold text-gray-900">Selected Models</h4>
-        <Button onClick={onAddModel} variant="outline" size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Model
-        </Button>
+        <button onClick={onAddModel}
+          className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+          <Plus className="h-4 w-4" /> Add Model
+        </button>
       </div>
 
       {models.length === 0 ? (
@@ -59,50 +55,35 @@ export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> =
                 <tr key={model.modelId} className="border-b last:border-b-0 hover:bg-gray-50">
                   <td className="p-3 font-medium">{model.modelName}</td>
                   <td className="p-3 text-right">
-                    <Badge variant="secondary" className="text-xs">
+                    <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
                       PKR {model.costPrice.toLocaleString()}
-                    </Badge>
+                    </span>
                   </td>
                   <td className="p-3">
-                    <input
-                      type="number"
-                      value={model.salePrice}
-                      onChange={(e) => onUpdateModel(index, 'salePrice', parseFloat(e.target.value) || 0)}
-                      min="0"
-                      step="0.01"
-                      className="w-24 text-right border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                    />
+                    <input type="number" value={model.salePrice}
+                      onChange={e => onUpdateModel(index, 'salePrice', parseFloat(e.target.value) || 0)}
+                      min="0" step="0.01"
+                      className="w-24 text-right border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                   </td>
                   <td className="p-3">
-                    <input
-                      type="number"
-                      value={model.quantity}
-                      onChange={(e) => onUpdateModel(index, 'quantity', parseInt(e.target.value) || 0)}
+                    <input type="number" value={model.quantity}
+                      onChange={e => onUpdateModel(index, 'quantity', parseInt(e.target.value) || 0)}
                       min="1"
-                      className="w-20 text-right border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                    />
+                      className="w-20 text-right border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                   </td>
                   <td className="p-3 text-right font-semibold text-lg text-green-600">
                     PKR {(model.salePrice * model.quantity).toLocaleString()}
                   </td>
                   <td className="p-3">
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onEditModel(index)}
-                        title="Edit model"
-                      >
+                      <button onClick={() => onEditModel(index)} title="Edit"
+                        className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors">
                         <Edit3 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onRemoveModel(index)}
-                        title="Remove"
-                      >
+                      </button>
+                      <button onClick={() => onRemoveModel(index)} title="Remove"
+                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors">
                         <Trash2 className="h-4 w-4" />
-                      </Button>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -112,7 +93,7 @@ export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> =
               <tr className="border-t font-bold bg-gray-50">
                 <td colSpan={4} className="p-3 text-right">Grand Total:</td>
                 <td className="p-3 text-right text-2xl text-green-700">
-                  PKR {models.reduce((sum, m) => sum + (m.salePrice * m.quantity), 0).toLocaleString()}
+                  PKR {models.reduce((sum, m) => sum + m.salePrice * m.quantity, 0).toLocaleString()}
                 </td>
                 <td className="p-3"></td>
               </tr>
@@ -123,4 +104,3 @@ export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> =
     </div>
   );
 };
-

@@ -8,25 +8,11 @@ import { BrandModelSelector } from './BrandModelSelector';
 interface AddCostingDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: {
-    brandId: string;
-    brandName: string;
-    modelId: string;
-    modelName: string;
-  }) => void;
+  onSave: (data: { brandId: string; brandName: string; modelId: string; modelName: string }) => void;
   productName: string;
 }
 
-/**
- * AddCostingDialog - Allows linking an existing inventory item to a brand/model costing
- * Uses BrandModelSelector to let user select brand and model
- */
-export function AddCostingDialog({
-  isOpen,
-  onClose,
-  onSave,
-  productName
-}: AddCostingDialogProps) {
+export function AddCostingDialog({ isOpen, onClose, onSave, productName }: AddCostingDialogProps) {
   const [selectedBrandId, setSelectedBrandId] = useState('');
   const [selectedBrandName, setSelectedBrandName] = useState('');
   const [selectedModelId, setSelectedModelId] = useState('');
@@ -36,116 +22,49 @@ export function AddCostingDialog({
 
   const handleSave = () => {
     if (selectedBrandId && selectedModelId) {
-      onSave({
-        brandId: selectedBrandId,
-        brandName: selectedBrandName,
-        modelId: selectedModelId,
-        modelName: selectedModelName
-      });
-      // Reset values
-      setSelectedBrandId('');
-      setSelectedBrandName('');
-      setSelectedModelId('');
-      setSelectedModelName('');
+      onSave({ brandId: selectedBrandId, brandName: selectedBrandName, modelId: selectedModelId, modelName: selectedModelName });
+      setSelectedBrandId(''); setSelectedBrandName(''); setSelectedModelId(''); setSelectedModelName('');
     }
-  };
-
-  const handleBrandChange = (brandId: string, brandName: string) => {
-    setSelectedBrandId(brandId);
-    setSelectedBrandName(brandName);
-    // Reset model when brand changes
-    setSelectedModelId('');
-    setSelectedModelName('');
-  };
-
-  const handleModelChange = (
-    modelId: string,
-    modelName: string,
-    costPrice?: number,
-    sellPrice?: number
-  ) => {
-    setSelectedModelId(modelId);
-    setSelectedModelName(modelName);
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
+      <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={onClose} />
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full">
-          {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Add Costing
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Link to an existing brand and model
-              </p>
+              <h3 className="text-lg font-semibold text-gray-900">Add Costing</h3>
+              <p className="text-sm text-gray-500 mt-1">Link to an existing brand and model</p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
               <X size={20} className="text-gray-500" />
             </button>
           </div>
-
-          {/* Content */}
           <div className="p-6 space-y-4">
-            {/* Product Info */}
             <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-sm text-blue-700">
-                <span className="font-medium">Product:</span> {productName}
-              </p>
+              <p className="text-sm text-blue-700"><span className="font-medium">Product:</span> {productName}</p>
             </div>
-
-            {/* Instructions */}
             <p className="text-sm text-gray-600">
-              Select a brand and model that has existing costing. This will link your 
-              inventory item to the selected model's pricing.
+              Select a brand and model that has existing costing. This will link your inventory item to the selected model's pricing.
             </p>
-
-            {/* Brand/Model Selector */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Brand & Model *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Brand & Model *</label>
               <BrandModelSelector
-                onBrandChange={handleBrandChange}
-                onModelChange={handleModelChange}
+                onBrandChange={(id, name) => { setSelectedBrandId(id); setSelectedBrandName(name); setSelectedModelId(''); setSelectedModelName(''); }}
+                onModelChange={(id, name) => { setSelectedModelId(id); setSelectedModelName(name); }}
               />
             </div>
-
-            {/* Selected Info */}
             {selectedModelId && (
               <div className="bg-green-50 p-3 rounded-lg">
-                <p className="text-sm text-green-700">
-                  <span className="font-medium">Selected:</span> {selectedBrandName} - {selectedModelName}
-                </p>
+                <p className="text-sm text-green-700"><span className="font-medium">Selected:</span> {selectedBrandName} — {selectedModelName}</p>
               </div>
             )}
           </div>
-
-          {/* Footer */}
           <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!selectedBrandId || !selectedModelId}
-              className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancel</button>
+            <button onClick={handleSave} disabled={!selectedBrandId || !selectedModelId}
+              className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               Link Costing
             </button>
           </div>
@@ -154,4 +73,3 @@ export function AddCostingDialog({
     </div>
   );
 }
-

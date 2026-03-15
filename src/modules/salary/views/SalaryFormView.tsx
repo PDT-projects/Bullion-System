@@ -1,12 +1,7 @@
 // Salary Module - View Layer
 // SalaryFormView - Form for create/edit salary
 
-import React from 'react';
-import { 
-  ArrowLeft, 
-  Save, 
-  X, 
-  Upload,
+import {
   User,
   Calculator,
   Wallet,
@@ -16,9 +11,7 @@ import { SalaryTransaction } from '../models/types';
 import { SalaryService } from '../models/salaryService';
 import { Button } from '../../../components/ui/button';
 
-
 interface SalaryFormViewProps {
-  // Form State
   formData: {
     employeeId: string;
     subCategory: 'Employee salary' | 'Advance salary';
@@ -33,19 +26,13 @@ interface SalaryFormViewProps {
   errorMessage: string | null;
   fieldErrors: { [key: string]: string };
   isLoading: boolean;
-  
-  // Meta
   isEditMode: boolean;
   pageTitle: string;
   submitButtonText: string;
-  
-  // Data
   employees: any[];
   banks: any[];
   selectedEmployee: any | null;
   calculatedNetAmount: number;
-  
-  // Actions
   onFieldChange: (field: string, value: any) => void;
   onTransactionChange: (index: number, field: keyof SalaryTransaction, value: any) => void;
   onSubmit: () => void;
@@ -102,7 +89,7 @@ export function SalaryFormView({
               <User className="w-5 h-5 text-gray-600" />
               Employee Details
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -167,7 +154,7 @@ export function SalaryFormView({
               <Calculator className="w-5 h-5 text-gray-600" />
               Salary Calculation
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -191,9 +178,7 @@ export function SalaryFormView({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Commission
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Commission</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">PKR</span>
                   <input
@@ -207,9 +192,7 @@ export function SalaryFormView({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Deductions
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Deductions</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">PKR</span>
                   <input
@@ -242,7 +225,7 @@ export function SalaryFormView({
               <Wallet className="w-5 h-5 text-gray-600" />
               Payment Details
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -263,9 +246,7 @@ export function SalaryFormView({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Transaction By
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Transaction By</label>
                 <input
                   type="text"
                   value={transaction.transactionBy}
@@ -296,7 +277,10 @@ export function SalaryFormView({
                     Bank Name <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <Building2
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                      size={18}
+                    />
                     <select
                       value={transaction.bankName}
                       onChange={(e) => onTransactionChange(0, 'bankName', e.target.value)}
@@ -319,9 +303,7 @@ export function SalaryFormView({
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Status
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
                 <select
                   value={transaction.paymentStatus}
                   onChange={(e) => onTransactionChange(0, 'paymentStatus', e.target.value)}
@@ -334,15 +316,15 @@ export function SalaryFormView({
 
               {transaction.paymentStatus === 'Partial' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Remaining Amount
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Remaining Amount</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">PKR</span>
                     <input
                       type="number"
                       value={transaction.remainingAmount}
-                      onChange={(e) => onTransactionChange(0, 'remainingAmount', parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        onTransactionChange(0, 'remainingAmount', parseFloat(e.target.value) || 0)
+                      }
                       className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                       placeholder="0"
                     />
@@ -368,9 +350,7 @@ export function SalaryFormView({
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Additional Notes
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
                 <textarea
                   value={formData.note}
                   onChange={(e) => onFieldChange('note', e.target.value)}
@@ -405,11 +385,7 @@ export function SalaryFormView({
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-4 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={onCancel}
-              disabled={isLoading}
-            >
+            <Button variant="outline" onClick={onCancel} disabled={isLoading}>
               Cancel
             </Button>
             <Button

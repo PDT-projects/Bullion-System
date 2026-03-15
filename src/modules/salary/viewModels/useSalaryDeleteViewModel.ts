@@ -1,25 +1,15 @@
 // Salary Module - ViewModel Layer
-// Delete confirmation page logic
+// Delete confirmation page logic — fetches from Firestore
 
-import { useEffect, useCallback } from 'react';
-import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Salary } from '../models/types';
-import { SalaryService } from '../models/salaryService';
-
-interface SalaryContext {
-  transactions: any[];
-  setTransactions: (transactions: any[]) => void;
-  banks: any[];
-  setBanks: (banks: any[]) => void;
-}
+import { SalaryFirebaseService } from '../models/salaryFirebaseService';
 
 interface UseSalaryDeleteViewModelReturn {
-  // Data
   salary: Salary | null;
   isLoading: boolean;
-  
-  // Actions
   onDelete: () => void;
   onCancel: () => void;
 }
@@ -27,79 +17,56 @@ interface UseSalaryDeleteViewModelReturn {
 export function useSalaryDeleteViewModel(): UseSalaryDeleteViewModelReturn {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { transactions, setTransactions, banks, setBanks } = useOutletContext<SalaryContext>();
 
-  // ==================== COMPUTED VALUES ====================
-  
-  // Find the salary to delete
-  const allSalaries = transactions.filter((t: any) => t.mainCategory === 'Salary') as Salary[];
-  const salary = id ? SalaryService.findById(allSalaries, id) || null : null;
+  const [salary, setSalary] = useState<Salary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // ==================== EFFECTS ====================
-  
-  // Redirect if salary not found
   useEffect(() => {
-    if (id && transactions.length > 0 && !salary) {
-      toast.error('Salary record not found');
-      navigate('/salary');
-    }
-  }, [id, transactions, salary, navigate]);
-
-  // ==================== ACTIONS ====================
-  
-  /**
-   * Handle delete confirmation
-   */
-  const handleDelete = useCallback(() => {
     if (!id) {
-      toast.error('Invalid salary ID');
+      navigate('/salary');
       return;
     }
+    const load = async () => {
+      try {
+        const data = await SalaryFirebaseService.fetchSalaryById(id);
+        if (!data) {
+          toast.error('Salary record not found');
+          navigate('/salary');
+          return;
+        }
+        setSalary(data);
+      } catch (error) {
+        toast.error('Failed to load salary record');
+        navigate('/salary');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, [id, navigate]);
 
+  const handleDelete = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
     try {
-      // Reverse bank transaction if it was a bank payment
-      if (salary && (salary.mode === 'Bank' || salary.mode === 'Cheque') && salary.bankName && setBanks) {
-        const updatedBanks = banks.map((bank: any) => {
-          if (bank.name === salary.bankName) {
-            return { ...bank, balance: bank.balance + salary.amount };
-          }
-          return bank;
-        });
-        setBanks(updatedBanks);
-      }
-
-      const updatedTransactions = transactions.filter((t: any) => t.id !== id);
-      setTransactions(updatedTransactions);
+      await SalaryFirebaseService.deleteSalary(id);
       toast.success('Salary record deleted successfully');
-      
-      // Navigate back based on salary type
-      if (salary?.subCategory === 'Advance salary') {
-        navigate('/salary/advance');
-      } else {
-        navigate('/salary/regular');
-      }
+      const isAdvance = salary?.subCategory === 'Advance salary';
+      navigate(isAdvance ? '/salary/advance' : '/salary/regular');
     } catch (error) {
-      toast.error('An error occurred while deleting the salary record');
-      console.error('Error deleting salary:', error);
+      toast.error('Failed to delete salary record');
+      setIsLoading(false);
     }
-  }, [id, salary, transactions, setTransactions, banks, setBanks, navigate]);
+  }, [id, salary, navigate]);
 
-  /**
-   * Handle cancel action
-   */
   const handleCancel = useCallback(() => {
-    if (salary?.subCategory === 'Advance salary') {
-      navigate('/salary/advance');
-    } else {
-      navigate('/salary/regular');
-    }
-  }, [navigate, salary]);
+    const isAdvance = salary?.subCategory === 'Advance salary';
+    navigate(isAdvance ? '/salary/advance' : '/salary/regular');
+  }, [salary, navigate]);
 
-  // ==================== RETURN ====================
-  
   return {
     salary,
-    isLoading: false,
+    isLoading,
     onDelete: handleDelete,
     onCancel: handleCancel
   };

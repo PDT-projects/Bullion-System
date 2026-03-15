@@ -1,10 +1,10 @@
 // Salary Module - View Layer
 // SalaryDeleteView - Delete confirmation page
 
-import { 
-  ArrowLeft, 
-  Trash2, 
-  X, 
+import {
+  ArrowLeft,
+  Trash2,
+  X,
   AlertTriangle,
   User,
   Calendar,
@@ -15,11 +15,8 @@ import { Salary } from '../models/types';
 import { SalaryService } from '../models/salaryService';
 
 interface SalaryDeleteViewProps {
-  // Data
   salary: Salary | null;
   isLoading: boolean;
-  
-  // Actions
   onDelete: () => void;
   onCancel: () => void;
 }
@@ -70,10 +67,12 @@ export function SalaryDeleteView({
               <AlertTriangle className="w-6 h-6 text-red-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-red-800 mb-2">Warning: This action cannot be undone</h3>
+              <h3 className="text-lg font-semibold text-red-800 mb-2">
+                Warning: This action cannot be undone
+              </h3>
               <p className="text-red-700">
-                You are about to delete a salary payment record. This will permanently remove the record from the system 
-                and reverse any associated bank transactions. Please review the details below before confirming.
+                You are about to permanently delete this salary payment record.
+                Please review the details below before confirming.
               </p>
             </div>
           </div>
@@ -82,7 +81,7 @@ export function SalaryDeleteView({
         {/* Salary Details Card */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Salary Record Details</h3>
-          
+
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
               <User className="w-5 h-5 text-blue-600" />
@@ -104,7 +103,9 @@ export function SalaryDeleteView({
               <DollarSign className="w-5 h-5 text-blue-600" />
               <div>
                 <p className="text-sm text-gray-600">Net Amount</p>
-                <p className="font-medium text-lg text-blue-600">{formatCurrency(salary.netAmount || salary.amount)}</p>
+                <p className="font-medium text-lg text-blue-600">
+                  {formatCurrency(salary.netAmount || salary.amount)}
+                </p>
               </div>
             </div>
 
@@ -166,7 +167,7 @@ export function SalaryDeleteView({
                 </>
               )}
             </button>
-            
+
             <button
               onClick={onCancel}
               disabled={isLoading}

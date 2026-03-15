@@ -1,13 +1,12 @@
 // Salary Module - View Layer
-// SalaryDashboardView - Main dashboard with cards for salary management
+// SalaryDashboardView - Main dashboard with cards
 
-import { useNavigate } from 'react-router-dom';
-import { 
-  Wallet, 
-  Plus, 
-  Calendar, 
-  ArrowUpCircle, 
-  ArrowDownCircle, 
+import {
+  Wallet,
+  Plus,
+  Calendar,
+  ArrowUpCircle,
+  ArrowDownCircle,
   FileText,
   CreditCard,
   TrendingUp
@@ -15,15 +14,13 @@ import {
 import { SalaryService } from '../models/salaryService';
 
 interface SalaryDashboardViewProps {
-  // Stats
   stats: {
     totalSalariesPaid: number;
     advanceSalaries: number;
     thisMonth: number;
     pendingPayments: number;
   };
-  
-  // Navigation handlers
+  isLoading: boolean;
   navigateToAllSalaries: () => void;
   navigateToRegularSalaries: () => void;
   navigateToAdvanceSalaries: () => void;
@@ -33,6 +30,7 @@ interface SalaryDashboardViewProps {
 
 export function SalaryDashboardView({
   stats,
+  isLoading,
   navigateToAllSalaries,
   navigateToRegularSalaries,
   navigateToAdvanceSalaries,
@@ -110,47 +108,58 @@ export function SalaryDashboardView({
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <CreditCard className="w-5 h-5 text-blue-600" />
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-3" />
+                <div className="h-8 bg-gray-200 rounded w-1/2" />
               </div>
-              <span className="text-sm text-gray-600">Total Salaries Paid</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalSalariesPaid)}</p>
+            ))}
           </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <ArrowUpCircle className="w-5 h-5 text-orange-600" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <CreditCard className="w-5 h-5 text-blue-600" />
+                </div>
+                <span className="text-sm text-gray-600">Total Salaries Paid</span>
               </div>
-              <span className="text-sm text-gray-600">Advance Salaries</span>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalSalariesPaid)}</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.advanceSalaries)}</p>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-green-600" />
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <ArrowUpCircle className="w-5 h-5 text-orange-600" />
+                </div>
+                <span className="text-sm text-gray-600">Advance Salaries</span>
               </div>
-              <span className="text-sm text-gray-600">This Month</span>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.advanceSalaries)}</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.thisMonth)}</p>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Calendar className="w-5 h-5 text-purple-600" />
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <TrendingUp className="w-5 h-5 text-green-600" />
+                </div>
+                <span className="text-sm text-gray-600">This Month</span>
               </div>
-              <span className="text-sm text-gray-600">Pending Payments</span>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.thisMonth)}</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{stats.pendingPayments}</p>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Calendar className="w-5 h-5 text-purple-600" />
+                </div>
+                <span className="text-sm text-gray-600">Pending Payments</span>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">{stats.pendingPayments}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Navigation Cards */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
@@ -166,9 +175,7 @@ export function SalaryDashboardView({
                   <card.icon className={`w-8 h-8 text-${card.color}-600 mr-3 group-hover:text-white`} />
                   <h4 className="text-lg font-semibold">{card.title}</h4>
                 </div>
-                <p className="text-gray-600 text-sm group-hover:text-white/90">
-                  {card.description}
-                </p>
+                <p className="text-gray-600 text-sm group-hover:text-white/90">{card.description}</p>
               </button>
             ))}
           </div>

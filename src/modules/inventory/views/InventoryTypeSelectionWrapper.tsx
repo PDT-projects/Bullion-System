@@ -1,12 +1,11 @@
-// Inventory Module - View Layer
-// InventoryTypeSelectionWrapper - Wrapper for Inventory Type Selection step
+// Inventory Module - Wrapper
+// InventoryTypeSelectionWrapper
 
 import React from 'react';
-import { InventoryTypeSelectionView } from './InventoryTypeSelectionView';
 import { useInventoryTypeSelectionViewModel } from '../viewModels/useInventoryTypeSelectionViewModel';
+import { InventoryTypeSelectionView } from './InventoryTypeSelectionView';
 
 export const InventoryTypeSelectionWrapper: React.FC = () => {
   const viewModel = useInventoryTypeSelectionViewModel();
-  
   return <InventoryTypeSelectionView {...viewModel} />;
 };

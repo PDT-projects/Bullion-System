@@ -1,96 +1,53 @@
 /**
  * Loans Dashboard ViewModel
- * 
- * Manages dashboard state, statistics, and navigation for loans module.
+ * Manages dashboard statistics and navigation.
+ * Backed by Firebase Firestore.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { 
-  Loan, 
-  Bank, 
-  LoanStatistics, 
-  LoanDashboardCard, 
-  LoanQuickAction 
-} from '../models/types';
-import {
-  getAllLoans,
-  calculateStatistics,
-  getTotalReceivable,
-  getTotalPayable,
-  getNetLoanPosition,
-  getOverdueLoans,
-  getUpcomingPayments,
-  formatCurrency
-} from '../models/loanService';
+import type { Loan, LoanStatistics, LoanDashboardCard, LoanQuickAction } from '../models/types';
+import { calculateStatistics, getTotalReceivable, getTotalPayable, getNetLoanPosition, getOverdueLoans, getUpcomingPayments, formatCurrency } from '../models/loanService';
+import { LoanFirebaseService } from '../models/Loanfirebaseservice';
 
-export interface UseLoanDashboardViewModelReturn {
-  // State
-  loans: Loan[];
-  statistics: LoanStatistics;
-  isLoading: boolean;
-  error: string | null;
-  
-  // Computed values
-  totalReceivable: number;
-  totalPayable: number;
-  netPosition: number;
-  overdueCount: number;
-  upcomingCount: number;
-  
-  // Dashboard cards
-  dashboardCards: LoanDashboardCard[];
-  quickActions: LoanQuickAction[];
-  
-  // Actions
-  refreshData: () => void;
-  navigateToAllLoans: () => void;
-  navigateToPayableLoans: () => void;
-  navigateToReceivableLoans: () => void;
-  navigateToCreatePayable: () => void;
-  navigateToCreateReceivable: () => void;
-  navigateToOverdueLoans: () => void;
-}
-
-export const useLoanDashboardViewModel = (
-  banks: Bank[],
-  employees: any[]
-): UseLoanDashboardViewModelReturn => {
+export function useLoanDashboardViewModel() {
   const navigate = useNavigate();
-  
-  // State
+
+  // ==================== STATE ====================
+
   const [loans, setLoans] = useState<Loan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Load data
-  const loadData = useCallback(() => {
+
+  // ==================== DATA FETCHING ====================
+
+  const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const allLoans = getAllLoans();
+      console.log('🔄 Fetching loans for dashboard...');
+      const allLoans = await LoanFirebaseService.fetchAllLoans();
       setLoans(allLoans);
+      console.log(`✅ Dashboard loaded ${allLoans.length} loans`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load loans');
+      console.error('❌ Dashboard load error:', err);
+      setError('Failed to load dashboard data');
     } finally {
       setIsLoading(false);
     }
   }, []);
-  
-  // Initial load
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-  
-  // Computed statistics
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // ==================== COMPUTED ====================
+
   const statistics = useMemo(() => calculateStatistics(loans), [loans]);
   const totalReceivable = useMemo(() => getTotalReceivable(loans), [loans]);
   const totalPayable = useMemo(() => getTotalPayable(loans), [loans]);
   const netPosition = useMemo(() => getNetLoanPosition(loans), [loans]);
   const overdueCount = useMemo(() => getOverdueLoans(loans).length, [loans]);
   const upcomingCount = useMemo(() => getUpcomingPayments(loans).length, [loans]);
-  
-  // Dashboard cards configuration
+
   const dashboardCards = useMemo<LoanDashboardCard[]>(() => [
     {
       id: 'all-loans',
@@ -100,7 +57,7 @@ export const useLoanDashboardViewModel = (
       path: '/loans/all',
       color: 'blue',
       count: statistics.totalLoans,
-      amount: statistics.totalAmount
+      amount: statistics.totalAmount,
     },
     {
       id: 'payable',
@@ -110,7 +67,7 @@ export const useLoanDashboardViewModel = (
       path: '/loans/payable',
       color: 'red',
       count: statistics.payableCount,
-      amount: totalPayable
+      amount: totalPayable,
     },
     {
       id: 'receivable',
@@ -120,7 +77,7 @@ export const useLoanDashboardViewModel = (
       path: '/loans/receivable',
       color: 'green',
       count: statistics.receivableCount,
-      amount: totalReceivable
+      amount: totalReceivable,
     },
     {
       id: 'overdue',
@@ -129,7 +86,7 @@ export const useLoanDashboardViewModel = (
       icon: 'AlertTriangle',
       path: '/loans/overdue',
       color: 'orange',
-      count: overdueCount
+      count: overdueCount,
     },
     {
       id: 'upcoming',
@@ -138,43 +95,26 @@ export const useLoanDashboardViewModel = (
       icon: 'Calendar',
       path: '/loans/upcoming',
       color: 'purple',
-      count: upcomingCount
-    }
-  ], [statistics, totalPayable, totalReceivable, overdueCount, upcomingCount]);
-  
-  // Quick actions configuration
-  const quickActions = useMemo<LoanQuickAction[]>(() => [
-    {
-      id: 'create-payable',
-      title: 'Create Payable Loan',
-      description: 'Record a loan we need to pay',
-      icon: 'Plus',
-      path: '/loans/create-payable',
-      color: 'red'
+      count: upcomingCount,
     },
-    {
-      id: 'create-receivable',
-      title: 'Create Receivable Loan',
-      description: 'Record money owed to us',
-      icon: 'Plus',
-      path: '/loans/create-receivable',
-      color: 'green'
-    }
+  ], [statistics, totalPayable, totalReceivable, overdueCount, upcomingCount]);
+
+  const quickActions = useMemo<LoanQuickAction[]>(() => [
+    { id: 'create-payable', title: 'Create Payable Loan', description: 'Record a loan we need to pay', icon: 'Plus', path: '/loans/create-payable', color: 'red' },
+    { id: 'create-receivable', title: 'Create Receivable Loan', description: 'Record money owed to us', icon: 'Plus', path: '/loans/create-receivable', color: 'green' },
   ], []);
-  
-  // Navigation handlers
+
+  // ==================== NAVIGATION ====================
+
   const navigateToAllLoans = useCallback(() => navigate('/loans/all'), [navigate]);
   const navigateToPayableLoans = useCallback(() => navigate('/loans/payable'), [navigate]);
   const navigateToReceivableLoans = useCallback(() => navigate('/loans/receivable'), [navigate]);
   const navigateToCreatePayable = useCallback(() => navigate('/loans/create-payable'), [navigate]);
   const navigateToCreateReceivable = useCallback(() => navigate('/loans/create-receivable'), [navigate]);
   const navigateToOverdueLoans = useCallback(() => navigate('/loans/overdue'), [navigate]);
-  
-  // Refresh data
-  const refreshData = useCallback(() => {
-    loadData();
-  }, [loadData]);
-  
+
+  // ==================== RETURN ====================
+
   return {
     loans,
     statistics,
@@ -187,12 +127,12 @@ export const useLoanDashboardViewModel = (
     upcomingCount,
     dashboardCards,
     quickActions,
-    refreshData,
+    refreshData: loadData,
     navigateToAllLoans,
     navigateToPayableLoans,
     navigateToReceivableLoans,
     navigateToCreatePayable,
     navigateToCreateReceivable,
-    navigateToOverdueLoans
+    navigateToOverdueLoans,
   };
-};
+}

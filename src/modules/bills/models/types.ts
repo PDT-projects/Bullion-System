@@ -1,9 +1,6 @@
 // Bills Module - Model Layer
 // Data interfaces and types
 
-/**
- * Bill transaction entity
- */
 export interface BillTransaction {
   id: string;
   amount: number;
@@ -16,18 +13,6 @@ export interface BillTransaction {
   paymentStatus: 'Full' | 'Partial';
   remainingAmount: number;
   billMonth: string;
-}
-
-/**
- * Bill entity representing a utility bill payment
- */
-export interface BillItem {
-  productId?: string;
-  brandName: string;
-  modelName: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
 }
 
 export interface Bill {
@@ -49,44 +34,28 @@ export interface Bill {
   imageUrl: string;
   paymentStatus: 'Full' | 'Partial';
   remainingAmount: number;
-  
-  // Inventory/Purchase order fields
-  inventoryItems: BillItem[];
-  status: 'Pending' | 'Paid' | 'Partially Paid';
 }
 
-/**
- * DTO for creating a new bill
- */
 export interface CreateBillDTO {
   company: string;
   date: string;
-  subCategory: 'Electricity' | 'Internet' | 'Utilities';
+  subCategory: 'Electricity' | 'Internet' | 'Utilities' | 'Purchase Order';
   note: string;
   transactions: BillTransaction[];
 }
 
-/**
- * DTO for updating an existing bill
- */
 export interface UpdateBillDTO extends CreateBillDTO {
   id: string;
 }
 
-/**
- * Filter criteria for bill list
- */
 export interface BillFilters {
   searchTerm: string;
-  categoryFilter: 'all' | 'Electricity' | 'Internet' | 'Utilities';
+  categoryFilter: 'all' | 'Electricity' | 'Internet' | 'Utilities' | 'Purchase Order';
   dateFrom: string | null;
   dateTo: string | null;
   paymentMethodFilter: '' | 'Cash' | 'Bank' | 'Cheque';
 }
 
-/**
- * Bill statistics for dashboard/display
- */
 export interface BillStats {
   totalBills: number;
   totalAmount: number;
@@ -101,22 +70,17 @@ export interface BillStats {
   chequeTotal: number;
 }
 
-/**
- * Validation result for bill data
- */
 export interface ValidationResult {
   isValid: boolean;
   error: string | null;
   fieldErrors?: { [key: string]: string };
 }
 
-/**
- * Predefined bill categories and vendors
- */
 export const BILL_CATEGORIES = {
   'Electricity': ['LESCO', 'IESCO', 'K-Electric', 'Generator Fuel'],
   'Internet': ['PTCL', 'StormFiber', 'Nayatel'],
-  'Utilities': ['Sui Gas', 'Water Board', 'Sanitation']
+  'Utilities': ['Sui Gas', 'Water Board', 'Sanitation'],
+  'Purchase Order': ['Vendor', 'Supplier']
 } as const;
 
 export const PREDEFINED_VENDORS = [

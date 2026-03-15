@@ -1,33 +1,33 @@
 // Bills Module - Wrapper Component
-// Connects ViewModel to View for List page
+// BillsListWrapper
 
 import React from 'react';
 import { useBillsListViewModel } from '../viewModels/useBillsListViewModel';
 import { BillsListView } from './BillsListView';
 
 export const BillsListWrapper: React.FC = () => {
-  const viewModel = useBillsListViewModel();
-
+  const vm = useBillsListViewModel();
   return (
     <BillsListView
-      bills={viewModel.bills}
-      allBills={viewModel.allBills}
-      filters={viewModel.filters}
-      showFilters={viewModel.showFilters}
-      activeFilterCount={viewModel.activeFilterCount}
-      viewingBill={viewModel.viewingBill}
-      viewingSlip={viewModel.viewingSlip}
-      stats={viewModel.stats}
-      setFilter={viewModel.setFilter}
-      clearFilters={viewModel.clearFilters}
-      toggleFilters={viewModel.toggleFilters}
-      setViewingBill={viewModel.setViewingBill}
-      setViewingSlip={viewModel.setViewingSlip}
-      handleDelete={viewModel.handleDelete}
-      handleAdd={viewModel.handleAdd}
-      handlePrint={viewModel.handlePrint}
-      getCategoryColor={viewModel.getCategoryColor}
-      getCategoryIconName={viewModel.getCategoryIconName}
+      bills={vm.bills}
+      allBills={vm.allBills}
+      filters={vm.filters}
+      showFilters={vm.showFilters}
+      activeFilterCount={vm.activeFilterCount}
+      viewingBill={vm.viewingBill}
+      viewingSlip={vm.viewingSlip}
+      isLoading={vm.isLoading}
+      stats={vm.stats}
+      setFilter={vm.setFilter}
+      clearFilters={vm.clearFilters}
+      toggleFilters={vm.toggleFilters}
+      setViewingBill={vm.setViewingBill}
+      setViewingSlip={vm.setViewingSlip}
+      handleDelete={vm.handleDelete}
+      handleAdd={vm.handleAdd}
+      handlePrint={vm.handlePrint}
+      getCategoryColor={vm.getCategoryColor}
+      getCategoryIconName={vm.getCategoryIconName}
     />
   );
 };

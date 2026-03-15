@@ -1,100 +1,69 @@
-// Commission Slab List ViewModel
+// Commission Slab List ViewModel — fetches from Firestore
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
 import type { CommissionSlab, CommissionSlabFilter } from '../models/types';
-import {
-  getAllCommissionSlabs,
-  filterCommissionSlabs,
-  deleteCommissionSlab,
-  getCommissionStats,
-  formatCurrency
-} from '../models/commissionService';
+import { filterCommissionSlabs, formatCurrency } from '../models/commissionService';
+import { CommissionFirebaseService } from '../models/Commissionfirebaseservice';
 
 interface UseCommissionSlabListViewModelReturn {
-  // Data
   slabs: CommissionSlab[];
   filteredSlabs: CommissionSlab[];
   isLoading: boolean;
-  
-  // Filters
   filter: CommissionSlabFilter;
   setFilter: (filter: CommissionSlabFilter) => void;
   clearFilters: () => void;
-  
-  // Actions
   refreshSlabs: () => void;
-  handleDelete: (id: string) => boolean;
-  
-  // Stats
+  handleDelete: (id: string) => void;
   totalSlabs: number;
-  
-  // Utils
   getSalespersonName: (salespersonId: string, employees: any[]) => string;
   formatCurrency: (amount: number) => string;
 }
 
 export function useCommissionSlabListViewModel(): UseCommissionSlabListViewModelReturn {
   const [slabs, setSlabs] = useState<CommissionSlab[]>([]);
-  const [filteredSlabs, setFilteredSlabs] = useState<CommissionSlab[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<CommissionSlabFilter>({});
 
-  // Load slabs
-  const loadSlabs = useCallback(() => {
-    setIsLoading(true);
+  const loadSlabs = useCallback(async () => {
     try {
-      const data = getAllCommissionSlabs();
+      setIsLoading(true);
+      const data = await CommissionFirebaseService.fetchAllSlabs();
       setSlabs(data);
-      setFilteredSlabs(data);
     } catch (error) {
-      console.error('Error loading commission slabs:', error);
+      console.error('Error loading slabs:', error);
+      toast.error('Failed to load commission slabs');
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    loadSlabs();
-  }, [loadSlabs]);
+  useEffect(() => { loadSlabs(); }, [loadSlabs]);
 
-  // Apply filters
-  useEffect(() => {
-    if (Object.keys(filter).length === 0) {
-      setFilteredSlabs(slabs);
-    } else {
-      const filtered = filterCommissionSlabs(filter);
-      setFilteredSlabs(filtered);
-    }
-  }, [filter, slabs]);
+  const filteredSlabs = useMemo(
+    () => filterCommissionSlabs(slabs, filter),
+    [slabs, filter]
+  );
 
-  // Refresh slabs
-  const refreshSlabs = useCallback(() => {
-    loadSlabs();
-  }, [loadSlabs]);
+  const clearFilters = useCallback(() => setFilter({}), []);
+  const refreshSlabs = useCallback(() => loadSlabs(), [loadSlabs]);
 
-  // Clear filters
-  const clearFilters = useCallback(() => {
-    setFilter({});
-  }, []);
-
-  // Handle delete
-  const handleDelete = useCallback((id: string): boolean => {
+  const handleDelete = useCallback(async (id: string) => {
+    if (!confirm('Are you sure you want to delete this commission slab?')) return;
     try {
-      deleteCommissionSlab(id);
-      refreshSlabs();
-      return true;
+      await CommissionFirebaseService.deleteSlab(id);
+      setSlabs(prev => prev.filter(s => s.id !== id));
+      toast.success('Commission slab deleted');
     } catch (error) {
-      console.error('Error deleting commission slab:', error);
-      return false;
+      toast.error('Failed to delete commission slab');
     }
-  }, [refreshSlabs]);
-
-  // Get salesperson name
-  const getSalespersonName = useCallback((salespersonId: string, employees: any[]): string => {
-    const employee = employees.find(emp => emp.id === salespersonId);
-    return employee ? employee.name : salespersonId;
   }, []);
+
+  const getSalespersonName = useCallback(
+    (salespersonId: string, employees: any[]) =>
+      employees.find(e => e.id === salespersonId)?.name || salespersonId,
+    []
+  );
 
   return {
     slabs,

@@ -1,52 +1,48 @@
 // Inventory Module - ViewModel Layer
-// useInventoryPaymentViewModel - Final step: saves product to DataConnect
-// Handles both 'in-stock' and 'on-order' (receivable) inventory types
+// useInventoryPaymentViewModel - Final step: payment & save to Firestore
+//
+// Transaction ID is AUTO-GENERATED in format INV-DDMMYY-NNN
+// e.g. INV-150326-001 (INV = Inventory, 15=day, 03=month, 26=year, 001=sequence)
+//
+// The user can optionally edit the transaction ID before submitting.
+// If they leave it unchanged the auto-generated one is used.
 
-import { useState, useCallback, useMemo } from 'react';
-import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  ProductFormData,
-  CostingOption,
-  BuyType,
-  ProductStatus,
-  InventoryEntryType,
-  Product,
-  CostingInfo,
-  CostingModel,
+  ProductFormData, CostingOption, BuyType, ProductStatus,
+  InventoryEntryType, CostingInfo, CostingModel, CreateProductDTO,
 } from '../models/types';
-import { InventoryDataConnectService } from '../../../api/dataconnect/inventoryDataConnectService';
+import { InventoryFirebaseService, generateInventoryTransactionId } from '../models/InventoryFirebaseService';
 
-export type PaymentStatus = 'paid' | 'unpaid' | 'partial';
+export type PaymentStatusType = 'paid' | 'unpaid' | 'partial';
 
 export interface UseInventoryPaymentViewModelReturn {
   formData: Partial<ProductFormData>;
   costingOption: CostingOption;
   inventoryType: InventoryEntryType;
   totalAmount: number;
-  paymentStatus: PaymentStatus;
+  paymentStatus: PaymentStatusType;
   transactionId: string;
+  isGeneratingId: boolean;
+  isEditingTransactionId: boolean;       // ← NEW: true while user is editing the ID
   paidAmount: number;
   remainingAmount: number;
   validationErrors: { [key: string]: string };
   isValid: boolean;
   isSaving: boolean;
-  setPaymentStatus: (status: PaymentStatus) => void;
-  setTransactionId: (value: string) => void;
+  setPaymentStatus: (status: PaymentStatusType) => void;
+  setTransactionId: (id: string) => void;            // ← NEW: allow editing
+  setIsEditingTransactionId: (v: boolean) => void;   // ← NEW: toggle edit mode
   setPaidAmount: (value: number) => void;
   handleSubmit: () => void;
   handleBack: () => void;
   formatCurrency: (amount: number) => string;
   productSummary: {
-    brandName: string;
-    modelName: string;
-    category: string;
-    stock: number;
-    sellPrice: number;
-    status: string;
-    inventoryType: string;
-    totalValueOfBrand?: number;
-    modelCount?: number;
+    brandName: string; modelName: string; category: string;
+    stock: number; sellPrice: number; status: string; inventoryType: string;
+    totalValueOfBrand?: number; modelCount?: number;
   };
 }
 
@@ -54,57 +50,76 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingId, setIsGeneratingId] = useState(true);
+  const [transactionId, setTransactionId] = useState('');
+  const [isEditingTransactionId, setIsEditingTransactionId] = useState(false); // ← NEW
 
-  const outletContext = useOutletContext<{
-    refreshProducts?: () => Promise<void>;
-    setProducts?: (products: Product[]) => void;
-    products?: Product[];
-  }>() || {};
-  const { refreshProducts } = outletContext;
-
-  const costingOption = (searchParams.get('costing') as CostingOption) || 'without';
-  const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
-  const brandName = searchParams.get('brandName') || '';
-  const modelName = searchParams.get('modelName') || '';
-  const category = searchParams.get('category') || '';
-  const sellPrice = Number(searchParams.get('sellPrice')) || 0;
-  const buyType = (searchParams.get('buyType') as BuyType) || 'Import';
-  const warrantyYears = Number(searchParams.get('warrantyYears')) || 0;
-  const stock = Number(searchParams.get('stock')) || 0;
-  const description = searchParams.get('description') || '';
-  const status = (searchParams.get('status') as ProductStatus) || 'New';
-  const isDamaged = searchParams.get('isDamaged') === 'true';
-  const serialNumbers: string[] = JSON.parse(searchParams.get('serialNumbers') || '[]');
-  const serialCities: { [key: string]: string } = JSON.parse(searchParams.get('serialCities') || '{}');
+  // ── Parse wizard state from URL ──
+  const costingOption  = (searchParams.get('costing') as CostingOption)      || 'without';
+  const inventoryType  = (searchParams.get('type')    as InventoryEntryType) || 'in-stock';
+  const brandName      = searchParams.get('brandName')    || '';
+  const modelName      = searchParams.get('modelName')    || '';
+  const category       = searchParams.get('category')     || '';
+  const sellPrice      = Number(searchParams.get('sellPrice'))     || 0;
+  const buyType        = (searchParams.get('buyType') as BuyType)  || 'Import';
+  const warrantyYears  = Number(searchParams.get('warrantyYears')) || 0;
+  const stock          = Number(searchParams.get('stock'))         || 0;
+  const description    = searchParams.get('description')  || '';
+  const status         = (searchParams.get('status') as ProductStatus) || 'New';
+  const isDamaged      = searchParams.get('isDamaged') === 'true';
+  const serialNumbers: string[]                = JSON.parse(searchParams.get('serialNumbers') || '[]');
+  const serialCities:  { [k: string]: string } = JSON.parse(searchParams.get('serialCities')  || '{}');
+  const costingBrandId = searchParams.get('costingBrandId') || '';
 
   let costing: CostingInfo | undefined;
   if (costingOption === 'with') {
-    const costingModelsJson = searchParams.get('costingModels');
-    const models: CostingModel[] = costingModelsJson ? JSON.parse(costingModelsJson) : [];
+    const models: CostingModel[] = JSON.parse(searchParams.get('costingModels') || '[]');
     costing = {
-      brandName: searchParams.get('costingBrandName') || brandName,
-      usdRate: Number(searchParams.get('usdRate')) || 0,
+      brandName:         searchParams.get('costingBrandName') || brandName,
+      usdRate:           Number(searchParams.get('usdRate'))           || 0,
       totalCustomsValue: Number(searchParams.get('totalCustomsValue')) || 0,
       totalFreightValue: Number(searchParams.get('totalFreightValue')) || 0,
       models,
-      totalUnitCostUSD: Number(searchParams.get('totalUnitCostUSD')) || 0,
-      shipmentTotalUSD: Number(searchParams.get('shipmentTotalUSD')) || 0,
-      consignmentValue: Number(searchParams.get('consignmentValue')) || 0,
+      totalUnitCostUSD:  Number(searchParams.get('totalUnitCostUSD'))  || 0,
+      shipmentTotalUSD:  Number(searchParams.get('shipmentTotalUSD'))  || 0,
+      consignmentValue:  Number(searchParams.get('consignmentValue'))  || 0,
       totalValueOfBrand: Number(searchParams.get('totalValueOfBrand')) || 0,
     };
   }
 
-  const selectedModelsJson = searchParams.get('selectedModels');
-  const selectedModels = selectedModelsJson ? JSON.parse(selectedModelsJson) : [];
+  const selectedModels: Array<{
+    modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number;
+  }> = JSON.parse(searchParams.get('selectedModels') || '[]');
 
   const formData: Partial<ProductFormData> = {
     costingOption, brandName, modelName, category, sellPrice, buyType,
-    warrantyYears, stock, description, status, isDamaged,
-    serialNumbers, serialCities, costing,
+    warrantyYears, stock, description, status, isDamaged, serialNumbers, serialCities, costing,
   };
 
-  const [paymentStatus, setPaymentStatusState] = useState<PaymentStatus>('paid');
-  const [transactionId, setTransactionId] = useState('');
+  // ── Auto-generate transaction ID on mount ──
+  useEffect(() => {
+    const generate = async () => {
+      setIsGeneratingId(true);
+      try {
+        const id = await generateInventoryTransactionId();
+        setTransactionId(id);
+        console.log('✅ Generated transaction ID:', id);
+      } catch (error) {
+        console.error('Failed to generate transaction ID:', error);
+        // Fallback: generate locally if Firestore is unreachable
+        const now = new Date();
+        const dd  = String(now.getDate()).padStart(2, '0');
+        const mm  = String(now.getMonth() + 1).padStart(2, '0');
+        const yy  = String(now.getFullYear()).slice(-2);
+        setTransactionId(`INV-${dd}${mm}${yy}-001`);
+      } finally {
+        setIsGeneratingId(false);
+      }
+    };
+    generate();
+  }, []);
+
+  const [paymentStatus, setPaymentStatusState] = useState<PaymentStatusType>('paid');
   const [paidAmount, setPaidAmountState] = useState(0);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
@@ -115,92 +130,93 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
 
   const remainingAmount = useMemo(() => totalAmount - paidAmount, [totalAmount, paidAmount]);
 
-  const setPaymentStatus = useCallback((status: PaymentStatus) => {
-    setPaymentStatusState(status);
-    if (status === 'unpaid') { setTransactionId(''); setPaidAmountState(0); }
-    else if (status === 'paid') { setPaidAmountState(totalAmount); }
-    else { setPaidAmountState(0); }
+  const setPaymentStatus = useCallback((s: PaymentStatusType) => {
+    setPaymentStatusState(s);
+    if (s === 'unpaid')  setPaidAmountState(0);
+    else if (s === 'paid') setPaidAmountState(totalAmount);
+    else setPaidAmountState(0);
   }, [totalAmount]);
 
-  const setPaidAmount = useCallback((amount: number) => setPaidAmountState(amount), []);
+  const setPaidAmount = useCallback((v: number) => setPaidAmountState(v), []);
 
-  const formatCurrency = useCallback((amount: number) => {
-    return new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
-  }, []);
+  const formatCurrency = useCallback((amount: number) =>
+    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount)
+  , []);
 
   const validateForm = useCallback((): boolean => {
     const errors: { [key: string]: string } = {};
-    if ((paymentStatus === 'paid' || paymentStatus === 'partial') && !transactionId.trim()) {
-      errors.transactionId = 'Transaction ID is required for Paid and Partial payments';
+    if (!transactionId.trim()) {
+      errors.transactionId = 'Transaction ID is required';
     }
     if (paymentStatus === 'partial' && paidAmount <= 0) {
       errors.paidAmount = 'Paid amount must be greater than 0 for partial payments';
     }
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [paymentStatus, transactionId, paidAmount]);
+  }, [paymentStatus, paidAmount, transactionId]);
 
   const isValid = useMemo(() => {
-    if (paymentStatus === 'unpaid') return true;
-    if (paymentStatus === 'paid') return transactionId.trim() !== '';
-    if (paymentStatus === 'partial') return transactionId.trim() !== '' && paidAmount > 0;
-    return false;
-  }, [paymentStatus, transactionId, paidAmount]);
+    if (isGeneratingId) return false;
+    if (!transactionId.trim()) return false;
+    if (paymentStatus === 'partial') return paidAmount > 0;
+    return true;
+  }, [paymentStatus, paidAmount, isGeneratingId, transactionId]);
 
-  // ── Submit: save to DataConnect ──
+  // ── Save to Firestore ──
   const handleSubmit = useCallback(async () => {
     if (!validateForm()) return;
     setIsSaving(true);
+
     try {
+      const isOnOrder = inventoryType === 'on-order';
+      const paymentInfo = {
+        paymentStatus,
+        transactionId: paymentStatus !== 'unpaid' ? transactionId : undefined,
+        paidAmount:    paymentStatus !== 'unpaid' ? paidAmount    : undefined,
+        totalAmount,
+      };
+
       if (costingOption === 'with' && selectedModels.length > 0) {
+        // One product document per model, each carrying its own serial numbers
         for (const sm of selectedModels) {
-          await InventoryDataConnectService.saveProduct({
-            brandName: brandName || sm.modelName,
-            modelName: sm.modelName,
+          const validSerials = (sm.serialNumbers || []).filter((s: string) => s.trim() !== '');
+          const dto: CreateProductDTO = {
+            brandName,
+            modelName:     sm.modelName,
             category,
-            costPrice: sm.costPrice || 0,
-            sellPrice: sm.salePrice || sellPrice,
+            sellPrice:     sm.salePrice,
             buyType,
             warrantyYears,
-            stock: sm.quantity || stock,
+            stock:         sm.quantity,
+            serialNumbers: validSerials,
+            serialCities:  sm.serialCities || {},
             description,
-            status,
+            status:        isOnOrder ? 'On-Order' : status,
             isDamaged,
-            serialNumbers,
-            serialCities,
-            inventoryType,
-            costingOption,
-            costingUsdRate: costing?.usdRate,
-            costingTotalCustomsValue: costing?.totalCustomsValue,
-            costingTotalFreightValue: costing?.totalFreightValue,
-            costingShipmentTotalUSD: costing?.shipmentTotalUSD,
-            costingConsignmentValue: costing?.consignmentValue,
-            costingTotalValueOfBrand: costing?.totalValueOfBrand,
-            paymentStatus,
-            transactionId,
-            paidAmount,
-            remainingAmount,
-          } as any);
+            costingOption: 'with',
+            costing,
+            receivableStatus:    isOnOrder ? 'Pending'  : undefined,
+            expectedReceiveDate: isOnOrder ? undefined  : undefined,
+          };
+          await InventoryFirebaseService.createProduct(dto, paymentInfo);
         }
       } else {
-        await InventoryDataConnectService.saveProduct({
-          brandName, modelName, category,
-          costPrice: 0, sellPrice, buyType, warrantyYears, stock,
-          description, status, isDamaged, serialNumbers, serialCities,
-          inventoryType, costingOption,
-          paymentStatus,
-          transactionId,
-          paidAmount,
-          remainingAmount,
-        } as any);
+        const dto: CreateProductDTO = {
+          brandName, modelName, category, sellPrice, buyType, warrantyYears,
+          stock, serialNumbers, serialCities, description,
+          status:        isOnOrder ? 'On-Order'  : status,
+          isDamaged,
+          costingOption: costingOption === 'with' ? 'with' : 'without',
+          costing:       costingOption === 'with' ? costing : undefined,
+          receivableStatus:    isOnOrder ? 'Pending'  : undefined,
+          expectedReceiveDate: isOnOrder ? undefined  : undefined,
+        };
+        await InventoryFirebaseService.createProduct(dto, paymentInfo);
       }
 
-      if (refreshProducts) await refreshProducts();
-
-      const isOnOrder = inventoryType === 'on-order';
       toast.success(isOnOrder
-        ? '✅ Product saved to Receivable Stock (Pending arrival)'
-        : '✅ Product added to Inventory!'
+        ? `✅ Product saved to Receivable Stock — Transaction: ${transactionId}`
+        : `✅ Product added to Inventory — Transaction: ${transactionId}`
       );
       navigate(isOnOrder ? '/inventory/receivable' : '/inventory/view');
     } catch (error) {
@@ -210,47 +226,54 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       setIsSaving(false);
     }
   }, [
-    validateForm, costingOption, selectedModels, brandName, modelName, category,
-    sellPrice, buyType, warrantyYears, stock, description, status, isDamaged,
-    serialNumbers, serialCities, inventoryType, costing, paymentStatus,
-    transactionId, paidAmount, remainingAmount, totalAmount, refreshProducts, navigate,
+    validateForm, costingOption, selectedModels, brandName, modelName,
+    category, sellPrice, buyType, warrantyYears, stock, description, status,
+    isDamaged, serialNumbers, serialCities, inventoryType, costing,
+    paymentStatus, transactionId, paidAmount, totalAmount, navigate,
   ]);
 
   const handleBack = useCallback(() => {
-    const queryParams = new URLSearchParams({
+    const params = new URLSearchParams({
       type: inventoryType, costing: costingOption, brandName, modelName,
       category, sellPrice: sellPrice.toString(), buyType,
       warrantyYears: warrantyYears.toString(), stock: stock.toString(),
       description, status, isDamaged: isDamaged.toString(),
       serialNumbers: JSON.stringify(serialNumbers),
-      serialCities: JSON.stringify(serialCities),
+      serialCities:  JSON.stringify(serialCities),
     });
+    if (costingBrandId) params.set('costingBrandId', costingBrandId);
     if (costingOption === 'with' && costing) {
-      queryParams.set('usdRate', costing.usdRate.toString());
-      queryParams.set('totalCustomsValue', costing.totalCustomsValue.toString());
-      queryParams.set('totalFreightValue', costing.totalFreightValue.toString());
-      queryParams.set('shipmentTotalUSD', costing.shipmentTotalUSD.toString());
-      queryParams.set('consignmentValue', costing.consignmentValue.toString());
-      queryParams.set('totalValueOfBrand', costing.totalValueOfBrand.toString());
-      queryParams.set('costingModels', JSON.stringify(costing.models));
+      params.set('usdRate',           costing.usdRate.toString());
+      params.set('totalCustomsValue', costing.totalCustomsValue.toString());
+      params.set('totalFreightValue', costing.totalFreightValue.toString());
+      params.set('shipmentTotalUSD',  costing.shipmentTotalUSD.toString());
+      params.set('consignmentValue',  costing.consignmentValue.toString());
+      params.set('totalValueOfBrand', costing.totalValueOfBrand.toString());
+      params.set('totalUnitCostUSD',  costing.totalUnitCostUSD.toString());
+      params.set('costingModels',     JSON.stringify(costing.models));
+      params.set('costingBrandName',  costing.brandName);
     }
-    navigate(`/inventory/create-new/details?${queryParams.toString()}`);
-  }, [
-    navigate, inventoryType, costingOption, brandName, modelName, category,
-    sellPrice, buyType, warrantyYears, stock, description, status, isDamaged,
-    serialNumbers, serialCities, costing,
-  ]);
+    params.set('selectedModels', JSON.stringify(selectedModels));
+    navigate(`/inventory/create-new/details?${params.toString()}`);
+  }, [navigate, inventoryType, costingOption, brandName, modelName, category, sellPrice,
+      buyType, warrantyYears, stock, description, status, isDamaged, serialNumbers,
+      serialCities, costing, selectedModels, costingBrandId]);
 
   const productSummary = useMemo(() => ({
     brandName, modelName, category, stock, sellPrice, status, inventoryType,
     totalValueOfBrand: costingOption === 'with' ? costing?.totalValueOfBrand : undefined,
-    modelCount: costingOption === 'with' ? costing?.models.length : undefined,
+    modelCount:        costingOption === 'with' ? costing?.models.length      : undefined,
   }), [brandName, modelName, category, stock, sellPrice, status, inventoryType, costingOption, costing]);
 
   return {
-    formData, costingOption, inventoryType, totalAmount, paymentStatus,
-    transactionId, paidAmount, remainingAmount, validationErrors, isValid,
-    isSaving, setPaymentStatus, setTransactionId, setPaidAmount,
+    formData, costingOption, inventoryType, totalAmount,
+    paymentStatus, transactionId, isGeneratingId,
+    isEditingTransactionId, setIsEditingTransactionId,  // ← NEW
+    paidAmount, remainingAmount,
+    validationErrors, isValid, isSaving,
+    setPaymentStatus,
+    setTransactionId,                                    // ← NEW
+    setPaidAmount,
     handleSubmit, handleBack, formatCurrency, productSummary,
   };
 }

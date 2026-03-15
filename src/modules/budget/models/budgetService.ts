@@ -10,7 +10,7 @@ import {
   BudgetStatus,
   ValidationResult 
 } from './types';
-import { BudgetDataConnectService } from '../../../api/dataconnect/budgetDataConnectService';
+import { BudgetFirebaseService } from './Budgetfirebaseservice';
 
 /**
  * BudgetService - Contains all business logic for budget operations
@@ -108,40 +108,28 @@ export class BudgetService {
    * Fetch all budgets from Data Connect
    */
   static async fetchBudgetsFromDataConnect(): Promise<Budget[]> {
-    return await BudgetDataConnectService.fetchAllBudgets();
+    return BudgetFirebaseService.fetchAllBudgets();
   }
 
   /**
    * Create a new budget in Data Connect
    */
   static async createBudgetInDataConnect(data: CreateBudgetDTO): Promise<Budget> {
-    return await BudgetDataConnectService.createBudget({
-      category: data.category,
-      subCategory: data.subCategory,
-      period: data.period,
-      budgetLimit: data.budgetLimit,
-      spent: 0
-    });
+    return BudgetFirebaseService.createBudget(data);
   }
 
   /**
    * Update a budget in Data Connect
    */
   static async updateBudgetInDataConnect(budget: Budget, data: UpdateBudgetDTO): Promise<Budget> {
-    return await BudgetDataConnectService.updateBudget({
-      ...budget,
-      category: data.category,
-      subCategory: data.subCategory,
-      period: data.period,
-      budgetLimit: data.budgetLimit
-    });
+    return BudgetFirebaseService.updateBudget(data);
   }
 
   /**
    * Delete a budget from Data Connect
    */
   static async deleteBudgetFromDataConnect(id: string): Promise<void> {
-    return await BudgetDataConnectService.deleteBudget(id);
+    return BudgetFirebaseService.deleteBudget(id);
   }
 
   /**

@@ -1,64 +1,51 @@
 // Invoice Module - Delete ViewModel
-// Manages invoice delete confirmation and execution
 
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Invoice, ProductInfo } from '../models/types';
+import { Invoice } from '../models/types';
+import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
+import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
+import { formatCurrency, formatDate } from '../models/invoiceService';
 
-interface UseInvoiceDeleteViewModelProps {
-  invoices: Invoice[];
-  products: ProductInfo[];
-  setInvoices: (invoices: Invoice[]) => void;
-  setProducts: (products: ProductInfo[]) => void;
-}
-
-interface UseInvoiceDeleteViewModelReturn {
-  handleDelete: (id: string) => void;
+export interface UseInvoiceDeleteViewModelReturn {
+  invoice: Invoice | null;
+  handleDelete: () => void;
   handleCancel: () => void;
+  formatCurrency: (amount: number) => string;
+  formatDate: (dateString: string) => string;
 }
 
-export const useInvoiceDeleteViewModel = ({
-  invoices,
-  products,
-  setInvoices,
-  setProducts
-}: UseInvoiceDeleteViewModelProps): UseInvoiceDeleteViewModelReturn => {
+export function useInvoiceDeleteViewModel(invoices: Invoice[]): UseInvoiceDeleteViewModelReturn {
   const navigate = useNavigate();
-  
-  const handleDelete = useCallback((id: string) => {
-    const invoiceToDelete = invoices.find(inv => inv.id === id);
-    if (!invoiceToDelete) {
-      toast.error('Invoice not found');
-      navigate('/invoices');
-      return;
-    }
-    
-    // Return products to inventory
-    const updatedProducts = products.map(product => {
-      const returnedProduct = invoiceToDelete.products.find(p => p.productId === product.id);
-      if (returnedProduct && returnedProduct.serialNumbers) {
-        return {
-          ...product,
-          serialNumbers: [...product.serialNumbers, ...returnedProduct.serialNumbers],
-          stock: product.stock + returnedProduct.quantity
-        };
+  const { id }   = useParams<{ id: string }>();
+  const invoice  = invoices.find(i => i.id === id) || null;
+
+  const handleDelete = useCallback(async () => {
+    if (!id || !invoice) { navigate('/invoices'); return; }
+    try {
+      // Return serials to inventory
+      for (const ip of invoice.products) {
+        if (!ip.productId || !ip.serialNumbers?.length) continue;
+        try {
+          const product = await InventoryFirebaseService.fetchProductById(ip.productId);
+          if (!product) continue;
+          const merged = [...(product.serialNumbers || []), ...ip.serialNumbers.filter(s => s.trim() !== '')];
+          await InventoryFirebaseService.updateProduct(ip.productId, {
+            stock:         (product.stock || 0) + ip.quantity,
+            serialNumbers: merged,
+          });
+        } catch { /* skip missing products */ }
       }
-      return product;
-    });
-    
-    setProducts(updatedProducts);
-    setInvoices(invoices.filter(inv => inv.id !== id));
-    toast.success('Invoice deleted successfully');
-    navigate('/invoices');
-  }, [invoices, products, setInvoices, setProducts, navigate]);
-  
-  const handleCancel = useCallback(() => {
-    navigate('/invoices');
-  }, [navigate]);
-  
-  return {
-    handleDelete,
-    handleCancel
-  };
-};
+      await InvoiceFirebaseService.deleteInvoice(id);
+      toast.success('Invoice deleted — products returned to inventory');
+      navigate('/invoices');
+    } catch {
+      toast.error('Failed to delete invoice');
+    }
+  }, [id, invoice, navigate]);
+
+  const handleCancel = useCallback(() => navigate('/invoices'), [navigate]);
+
+  return { invoice, handleDelete, handleCancel, formatCurrency, formatDate };
+}

@@ -1,31 +1,30 @@
 // Bills Module - Wrapper Component
-// Connects ViewModel to View for Create page
+// BillsCreateWrapper
 
 import React from 'react';
 import { useBillsFormViewModel } from '../viewModels/useBillsFormViewModel';
 import { BillsFormView } from './BillsFormView';
 
 export const BillsCreateWrapper: React.FC = () => {
-  const viewModel = useBillsFormViewModel();
-
+  const vm = useBillsFormViewModel();
   return (
     <BillsFormView
-      formData={viewModel.formData}
-      billTransactions={viewModel.billTransactions}
-      isEditing={viewModel.isEditing}
-      isSubmitting={viewModel.isSubmitting}
-      errors={viewModel.errors}
-      predefinedVendors={viewModel.predefinedVendors}
-      companies={viewModel.companies}
-      banks={viewModel.banks}
-      setFormField={viewModel.setFormField}
-      addBillTransaction={viewModel.addBillTransaction}
-      removeBillTransaction={viewModel.removeBillTransaction}
-      updateBillTransaction={viewModel.updateBillTransaction}
-      handleImageUpload={viewModel.handleImageUpload}
-      handleSubmit={viewModel.handleSubmit}
-      handleCancel={viewModel.handleCancel}
-      calculateTotal={viewModel.calculateTotal}
+      formData={vm.formData}
+      billTransactions={vm.billTransactions}
+      isEditing={vm.isEditing}
+      isSubmitting={vm.isSubmitting}
+      errors={vm.errors}
+      predefinedVendors={vm.predefinedVendors}
+      companies={vm.companies}
+      banks={vm.banks}
+      setFormField={vm.setFormField}
+      addBillTransaction={vm.addBillTransaction}
+      removeBillTransaction={vm.removeBillTransaction}
+      updateBillTransaction={vm.updateBillTransaction}
+      handleImageUpload={vm.handleImageUpload}
+      handleSubmit={vm.handleSubmit}
+      handleCancel={vm.handleCancel}
+      calculateTotal={vm.calculateTotal}
     />
   );
 };

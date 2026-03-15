@@ -6,7 +6,7 @@ import { InventoryReport } from '../../features/inventory/InventoryReport';
 import { TransactionHistoryReport } from './TransactionHistoryReport';
 import { ReferralReport } from '../sales/ReferralReport';
 import { CommissionReport } from '../sales/CommissionReport';
-import { InvoiceReportView } from '../../modules/invoices';
+// import { InvoiceReportView } from '../../modules/invoices';
 
 
 import { InventoryAuditLogComponent } from '../inventory/InventoryAuditLog';

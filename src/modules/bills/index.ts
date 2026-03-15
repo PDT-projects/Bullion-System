@@ -1,9 +1,9 @@
 // Bills Module - Public API
-// Export all components, hooks, and types for external use
 
 // Models
 export * from './models/types';
 export { BillsService } from './models/billsService';
+export { BillsFirebaseService } from './models/Billsfirebaseservice';
 
 // ViewModels
 export { useBillsListViewModel } from './viewModels/useBillsListViewModel';
