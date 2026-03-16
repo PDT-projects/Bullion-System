@@ -69,7 +69,7 @@ export function Sidebar() {
           children: [
             { id: 'add-transaction', name: 'Add Transaction', icon: PlusCircle, path: '/transactions' },
 
-            { id: 'pending-payment', name: 'Pending Payment', icon: Clock, path: '/finance/pending-payments' },
+{ id: 'pending-payment', name: 'Pending Payment', icon: Clock, path: '/transactions/pending' },
             { id: 'bills', name: 'Bills', icon: FileTextIcon, path: '/bills' },
 
             { id: 'salary', name: 'Salary', icon: DollarSign, path: '/salary' },

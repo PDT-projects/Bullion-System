@@ -1,369 +1,319 @@
-// // Transactions Module - Transaction Form ViewModel
-// // Updated to use banks from props instead of hardcoded BANKS constant
+// Transactions Module - Form ViewModel
+// Self-contained: fetches banks from Firestore, saves/updates to Firestore
+// Validates thoroughly: sub-category, amount, paid-by, paid-to, bank selection
 
-// import { useState, useCallback, useMemo } from 'react';
-// import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES } from '../models/types';
-// import { TransactionService } from '../models/transactionsService';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES } from '../models/types';
+import { formatCurrency } from '../models/transactionsService';
+import { TransactionFirebaseService } from '../models/transactionFirebaseService';
+import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 
-// // Bank type for transactions
-// interface BankInfo {
-//   id: string;
-//   name: string;
-//   balance: number;
-// }
+interface BankInfo { id: string; name: string; balance: number; }
 
-// export interface TransactionFormViewModel {
-//   // State
-//   formData: {
-//     date: string;
-//     company: string;
-//     mainCategory: string;
-//     subCategory: string;
-//     amount: string;
-//     mode: 'Cash' | 'Bank' | 'Cheque';
-//     bankName: string;
-//     note: string;
-//   };
-//   office: string;
-//   transactionType: 'Cash Inflow' | 'Cash Outflow' | 'Loan';
-//   paymentMode: 'Cash' | 'Bank' | 'Cheque';
-//   selectedBank: string;
-//   enableMultiple: boolean;
-//   transactionItems: TransactionItem[];
-//   availableSubCategories: string[];
-//   isEditing: boolean;
-//   editingTransaction: Transaction | null;
-  
-//   // Current bank balance
-//   currentBankBalance: number;
-//   totalAmount: number;
-//   totalPaid: number;
-//   totalRemaining: number;
-//   remainingBalanceAfter: number;
-  
-//   // Constants
-//   companies: typeof COMPANIES;
-//   subCategories: typeof SUB_CATEGORIES;
-//   banks: BankInfo[];
-  
-//   // Actions
-//   setOffice: (office: string) => void;
-//   setDate: (date: string) => void;
-//   setTransactionType: (type: 'Cash Inflow' | 'Cash Outflow' | 'Loan') => void;
-//   setPaymentMode: (mode: 'Cash' | 'Bank' | 'Cheque') => void;
-//   setSelectedBank: (bank: string) => void;
-//   setEnableMultiple: (enabled: boolean) => void;
-//   updateTransactionItem: (id: string, field: keyof TransactionItem, value: any) => void;
-//   addTransactionItem: () => void;
-//   removeTransactionItem: (id: string) => void;
-//   setFormData: (data: Partial<TransactionFormViewModel['formData']>) => void;
-//   resetForm: () => void;
-//   loadTransaction: (transaction: Transaction) => void;
-  
-//   // Submit
-//   handleSave: () => Transaction[];
-//   validateForm: () => { isValid: boolean; errors: string[] };
-// }
+export interface UseTransactionFormViewModelReturn {
+  // State
+  office: string;
+  date: string;
+  transactionType: 'Cash Inflow' | 'Cash Outflow' | 'Loan';
+  paymentMode: 'Cash' | 'Bank' | 'Cheque';
+  selectedBank: string;
+  enableMultiple: boolean;
+  transactionItems: TransactionItem[];
+  // Transaction ID (auto-generated, user can edit before saving)
+  transactionId: string;
+  isGeneratingId: boolean;
+  isEditingId: boolean;
+  setTransactionId: (id: string) => void;
+  setIsEditingId: (v: boolean) => void;
+  // Computed
+  totalAmount: number;
+  totalPaid: number;
+  totalRemaining: number;
+  currentBankBalance: number;
+  remainingBalanceAfter: number;
+  // Meta
+  banks: BankInfo[];
+  isLoading: boolean;
+  isSaving: boolean;
+  isEditing: boolean;
+  // Actions
+  setOffice: (v: string) => void;
+  setDate: (v: string) => void;
+  setTransactionType: (v: 'Cash Inflow' | 'Cash Outflow' | 'Loan') => void;
+  setPaymentMode: (v: 'Cash' | 'Bank' | 'Cheque') => void;
+  setSelectedBank: (v: string) => void;
+  setEnableMultiple: (v: boolean) => void;
+  updateItem: (id: string, field: keyof TransactionItem, value: any) => void;
+  addItem: () => void;
+  removeItem: (id: string) => void;
+  handleSave: () => Promise<void>;
+  handleCancel: () => void;
+  formatCurrency: (n: number) => string;
+  formatDateDisplay: (d: string) => string;
+  // Duplicate ID error — shown as modal in the view
+  duplicateIdError: string;
+  setDuplicateIdError: (msg: string) => void;
+}
 
-// const getInitialFormData = (): {
-//   date: string;
-//   company: string;
-//   mainCategory: string;
-//   subCategory: string;
-//   amount: string;
-//   mode: 'Cash' | 'Bank' | 'Cheque';
-//   bankName: string;
-//   note: string;
-// } => ({
-//   date: new Date().toISOString().split('T')[0],
-//   company: '',
-//   mainCategory: '',
-//   subCategory: '',
-//   amount: '',
-//   mode: 'Cash',
-//   bankName: '',
-//   note: ''
-// });
+const emptyItem = (type: string): TransactionItem => ({
+  id: Date.now().toString(),
+  mainCategory: type, subCategory: '', detailCategory: '',
+  amount: 0, amountPaid: 0, remainingAmount: 0,
+  paymentStatus: 'Full', paidBy: '', paidTo: '', note: '',
+});
 
-// const getInitialTransactionItem = (transactionType: 'Cash Inflow' | 'Cash Outflow' | 'Loan'): TransactionItem => ({
-//   id: Date.now().toString(),
-//   mainCategory: transactionType,
-//   subCategory: '',
-//   detailCategory: '',
-//   amount: 0,
-//   amountPaid: 0,
-//   remainingAmount: 0,
-//   paymentStatus: 'Full',
-//   paidBy: '',
-//   paidTo: '',
-//   note: ''
-// });
+export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn {
+  const navigate = useNavigate();
+  const { id }   = useParams<{ id: string }>();
 
-// export const useTransactionFormViewModel = (
-//   transactions: Transaction[],
-//   setTransactions: (transactions: Transaction[]) => void,
-//   banks: BankInfo[],
-//   existingTransaction?: Transaction
-// ): TransactionFormViewModel => {
-//   const isEditing = !!existingTransaction;
-  
-//   // General Information
-//   const [office, setOffice] = useState(COMPANIES[0].id);
-//   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  
-//   // Transaction Type
-//   const [transactionType, setTransactionType] = useState<'Cash Inflow' | 'Cash Outflow' | 'Loan'>('Cash Inflow');
-  
-//   // Payment Mode
-//   const [paymentMode, setPaymentMode] = useState<'Cash' | 'Bank' | 'Cheque'>('Bank');
-//   const [selectedBank, setSelectedBank] = useState('');
-  
-//   // Multiple transactions
-//   const [enableMultiple, setEnableMultiple] = useState(false);
-//   const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([
-//     getInitialTransactionItem('Cash Inflow')
-//   ]);
+  const [banks,           setBanks]           = useState<BankInfo[]>([]);
+  const [editingTx,       setEditingTx]       = useState<Transaction | null>(null);
+  const [isLoading,       setIsLoading]       = useState(true);
+  const [isSaving,        setIsSaving]        = useState(false);
+  const [transactionId,   setTransactionId]   = useState('');
+  const [isGeneratingId,  setIsGeneratingId]  = useState(true);
+  const [isEditingId,     setIsEditingId]     = useState(false);
+  const [duplicateIdError,setDuplicateIdError]= useState('');
 
-//   const [formData, setFormDataState] = useState(getInitialFormData());
+  const [office,          setOffice]          = useState(COMPANIES[0].id);
+  const [date,            setDate]            = useState(new Date().toISOString().split('T')[0]);
+  const [transactionType, setTransactionTypeState] = useState<'Cash Inflow' | 'Cash Outflow' | 'Loan'>('Cash Inflow');
+  const [paymentMode,     setPaymentMode]     = useState<'Cash' | 'Bank' | 'Cheque'>('Cash');
+  const [selectedBank,    setSelectedBank]    = useState('');
+  const [enableMultiple,  setEnableMultiple]  = useState(false);
+  const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([emptyItem('Cash Inflow')]);
 
-//   const [availableSubCategories, setAvailableSubCategories] = useState<string[]>([]);
+  useEffect(() => {
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch banks
+        const bankList = await BankFirebaseService.fetchAllBanks().catch(() => []);
+        setBanks(bankList as any[]);
 
-//   // Get selected bank balance from passed banks array
-//   const selectedBankData = useMemo(() => {
-//     return banks.find(b => b.id === selectedBank);
-//   }, [banks, selectedBank]);
-  
-//   const currentBankBalance = selectedBankData?.balance || 0;
+        // If editing, load existing transaction
+        if (id) {
+          const tx = await TransactionFirebaseService.fetchTransactionById(id);
+          if (tx) {
+            setEditingTx(tx);
+            setTransactionId(tx.transactionId || '');  // show existing ID when editing
+            setIsGeneratingId(false);
+            const officeId = COMPANIES.find(o => tx.company?.includes(o.name.split(':')[1]?.trim()))?.id || COMPANIES[0].id;
+            setOffice(officeId);
+            setDate(tx.date);
+            setTransactionTypeState(tx.mainCategory as any);
+            setPaymentMode(tx.mode);
+            if (tx.bankId) setSelectedBank(tx.bankId);
+            setTransactionItems([{
+              id:              tx.id,
+              mainCategory:    tx.mainCategory || '',
+              subCategory:     tx.subCategory  || '',
+              detailCategory:  tx.detailCategory || '',
+              amount:          tx.amount || 0,
+              amountPaid:      tx.amountPaid ?? tx.amount ?? 0,
+              remainingAmount: tx.remainingAmount ?? 0,
+              paymentStatus:   tx.paymentStatus ?? 'Full',
+              paidBy:          tx.paidBy  || '',
+              paidTo:          tx.paidTo  || '',
+              note:            tx.note    || '',
+            }]);
+          }
+        } else {
+          // New transaction — show a date-based PREVIEW (no counter increment yet).
+          // The real unique ID is generated atomically at save time.
+          const now = new Date();
+          const dd  = String(now.getDate()).padStart(2, '0');
+          const mm  = String(now.getMonth() + 1).padStart(2, '0');
+          const yy  = String(now.getFullYear()).slice(-2);
+          setTransactionId(`TXN-${dd}${mm}${yy}-###`);
+          setIsGeneratingId(false);
+        }
+      } catch {
+        toast.error('Failed to load form data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, [id]);
 
-//   // Load existing transaction for editing
-//   const loadTransaction = useCallback((transaction: Transaction) => {
-//     // Set office based on company name
-//     const officeId = COMPANIES.find(o => transaction.company?.includes(o.name.split(':')[1]?.trim()))?.id || COMPANIES[0].id;
-//     setOffice(officeId);
-//     setDate(transaction.date);
-//     setTransactionType(transaction.mainCategory as 'Cash Inflow' | 'Cash Outflow' | 'Loan');
-//     setPaymentMode(transaction.mode as 'Cash' | 'Bank' | 'Cheque');
-    
-//     if (transaction.bankName) {
-//       const bankId = banks.find(b => transaction.bankName?.includes(b.name))?.id || '';
-//       setSelectedBank(bankId);
-//     }
-    
-//     setFormDataState({
-//       date: transaction.date,
-//       company: transaction.company,
-//       mainCategory: transaction.mainCategory,
-//       subCategory: transaction.subCategory,
-//       amount: transaction.amount.toString(),
-//       mode: transaction.mode as 'Cash' | 'Bank' | 'Cheque',
-//       bankName: transaction.bankName || '',
-//       note: transaction.note
-//     });
-    
-//     setAvailableSubCategories(SUB_CATEGORIES[transaction.mainCategory] || []);
-    
-//     setTransactionItems([{
-//       id: transaction.id,
-//       mainCategory: transaction.mainCategory || '',
-//       subCategory: transaction.subCategory || '',
-//       detailCategory: (transaction as any).detailCategory || '',
-//       amount: transaction.amount || 0,
-//       amountPaid: (transaction as any).amountPaid || transaction.amount || 0,
-//       remainingAmount: (transaction as any).remainingAmount || 0,
-//       paymentStatus: (transaction as any).paymentStatus || 'Full',
-//       paidBy: (transaction as any).paidBy || '',
-//       paidTo: (transaction as any).paidTo || '',
-//       note: transaction.note || ''
-//     }]);
-//   }, [banks]);
+  const setTransactionType = useCallback((type: 'Cash Inflow' | 'Cash Outflow' | 'Loan') => {
+    setTransactionTypeState(type);
+    setTransactionItems(items => items.map(i => ({ ...i, mainCategory: type, subCategory: '' })));
+  }, []);
 
-//   // Handle transaction type change
-//   const handleTransactionTypeChange = useCallback((type: 'Cash Inflow' | 'Cash Outflow' | 'Loan') => {
-//     setTransactionType(type);
-//     setAvailableSubCategories(SUB_CATEGORIES[type] || []);
-//     setTransactionItems(items => items.map(item => ({
-//       ...item,
-//       mainCategory: type,
-//       subCategory: ''
-//     })));
-//   }, []);
+  const updateItem = useCallback((itemId: string, field: keyof TransactionItem, value: any) => {
+    setTransactionItems(prev => prev.map(item => {
+      if (item.id !== itemId) return item;
+      const updated = { ...item, [field]: value };
+      if (field === 'amount' || field === 'amountPaid') {
+        const amount     = field === 'amount'     ? Number(value) : item.amount;
+        const amountPaid = field === 'amountPaid' ? Number(value) : item.amountPaid;
+        updated.remainingAmount = Math.max(0, amount - amountPaid);
+        updated.paymentStatus   = amountPaid >= amount ? 'Full' : 'Partial';
+      }
+      return updated;
+    }));
+  }, []);
 
-//   // Add transaction item
-//   const handleAddTransactionItem = useCallback(() => {
-//     setTransactionItems([...transactionItems, {
-//       ...getInitialTransactionItem(transactionType),
-//       id: Date.now().toString()
-//     }]);
-//   }, [transactionItems, transactionType]);
+  const addItem    = useCallback(() => setTransactionItems(p => [...p, { ...emptyItem(transactionType), id: Date.now().toString() }]), [transactionType]);
+  const removeItem = useCallback((itemId: string) => {
+    setTransactionItems(p => p.length > 1 ? p.filter(i => i.id !== itemId) : p);
+  }, []);
 
-//   // Remove transaction item
-//   const handleRemoveTransactionItem = useCallback((id: string) => {
-//     if (transactionItems.length > 1) {
-//       setTransactionItems(transactionItems.filter(item => item.id !== id));
-//     }
-//   }, [transactionItems]);
+  const totals = useMemo(() => {
+    const totalAmount    = transactionItems.reduce((s, i) => s + (i.amount || 0), 0);
+    const totalPaid      = transactionItems.reduce((s, i) => s + (i.amountPaid || 0), 0);
+    return { totalAmount, totalPaid, totalRemaining: totalAmount - totalPaid };
+  }, [transactionItems]);
 
-//   // Update transaction item
-//   const updateTransactionItem = useCallback((id: string, field: keyof TransactionItem, value: any) => {
-//     setTransactionItems(items => items.map(item => {
-//       if (item.id !== id) return item;
-      
-//       const updated = { ...item, [field]: value };
-      
-//       // Auto-calculate remaining amount when amount or amountPaid changes
-//       if (field === 'amount' || field === 'amountPaid') {
-//         const amount = field === 'amount' ? Number(value) : item.amount;
-//         const amountPaid = field === 'amountPaid' ? Number(value) : item.amountPaid;
-//         updated.remainingAmount = Math.max(0, amount - amountPaid);
-//         updated.paymentStatus = amountPaid >= amount ? 'Full' : 'Partial';
-//       }
-      
-//       return updated;
-//     }));
-//   }, []);
+  const selectedBankData    = useMemo(() => banks.find(b => b.id === selectedBank), [banks, selectedBank]);
+  const currentBankBalance  = selectedBankData?.balance || 0;
+  const remainingBalanceAfter = currentBankBalance + (transactionType === 'Cash Inflow' ? totals.totalPaid : -totals.totalPaid);
 
-//   // Calculate totals
-//   const calculateTotals = useCallback(() => {
-//     const totalAmount = transactionItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-//     const totalPaid = transactionItems.reduce((sum, item) => sum + (item.amountPaid || 0), 0);
-//     const totalRemaining = totalAmount - totalPaid;
-//     return { totalAmount, totalPaid, totalRemaining };
-//   }, [transactionItems]);
+  // ── Validation ───────────────────────────────────────────────────────────────
+  const validate = useCallback((): string[] => {
+    const errors: string[] = [];
 
-//   const { totalAmount, totalPaid, totalRemaining } = calculateTotals();
-//   const remainingBalanceAfter = currentBankBalance + (transactionType === 'Cash Inflow' ? totalPaid : -totalPaid);
+    if (!office) errors.push('Select an office/branch');
+    if (!date)   errors.push('Select a date');
 
-//   // Set form data
-//   const setFormData = useCallback((data: Partial<{
-//     date: string;
-//     company: string;
-//     mainCategory: string;
-//     subCategory: string;
-//     amount: string;
-//     mode: 'Cash' | 'Bank' | 'Cheque';
-//     bankName: string;
-//     note: string;
-//   }>) => {
-//     setFormDataState(prev => ({ ...prev, ...data }));
-//   }, []);
+    for (const [i, item] of transactionItems.entries()) {
+      const n = transactionItems.length > 1 ? ` (item ${i + 1})` : '';
+      if (!item.subCategory)               errors.push(`Sub category is required${n}`);
+      if (!item.amount || item.amount <= 0) errors.push(`Amount must be greater than 0${n}`);
+      if (item.amountPaid < 0)             errors.push(`Amount paid cannot be negative${n}`);
+      if (item.amountPaid > item.amount)   errors.push(`Amount paid (${item.amountPaid}) cannot exceed total amount (${item.amount})${n}`);
+      // paidBy / paidTo are optional — don't block save
+    }
 
-//   // Reset form
-//   const resetForm = useCallback(() => {
-//     setOffice(COMPANIES[0].id);
-//     setDate(new Date().toISOString().split('T')[0]);
-//     setTransactionType('Cash Inflow');
-//     setPaymentMode('Bank');
-//     setSelectedBank('');
-//     setEnableMultiple(false);
-//     setTransactionItems([getInitialTransactionItem('Cash Inflow')]);
-//     setFormDataState(getInitialFormData());
-//     setAvailableSubCategories([]);
-//   }, []);
+    if (paymentMode === 'Bank' && !selectedBank) {
+      errors.push('Select a bank for bank transactions');
+    }
 
-//   // Validate form
-//   const validateForm = useCallback(() => {
-//     const errors: string[] = [];
-    
-//     const invalidItems = transactionItems.filter(item => !item.subCategory || item.amount <= 0);
-//     if (invalidItems.length > 0) {
-//       errors.push('Please fill in all required fields for each transaction');
-//     }
+    return errors;
+  }, [office, date, transactionItems, paymentMode, selectedBank]);
 
-//     if (paymentMode === 'Bank' && !selectedBank) {
-//       errors.push('Please select a bank for bank transactions');
-//     }
+  // ── Save ─────────────────────────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    const errors = validate();
+    if (errors.length > 0) {
+      errors.forEach(e => toast.error(e));
+      return;
+    }
 
-//     return {
-//       isValid: errors.length === 0,
-//       errors
-//     };
-//   }, [transactionItems, paymentMode, selectedBank]);
+    setIsSaving(true);
+    try {
+      const selectedBankData = banks.find(b => b.id === selectedBank);
+      const now  = new Date();
+      const time = now.toTimeString().split(' ')[0];
 
-//   // Handle save
-//   const handleSave = useCallback(() => {
-//     const validation = validateForm();
-//     if (!validation.isValid) {
-//       throw new Error(validation.errors.join(', '));
-//     }
+      if (editingTx) {
+        // ── EDIT: update fields but NEVER change the transactionId ───────────
+        const item = transactionItems[0];
+        await TransactionFirebaseService.updateTransaction(editingTx.id, {
+          date, time,
+          company:      COMPANIES.find(o => o.id === office)?.name || COMPANIES[0].name,
+          mainCategory: transactionType,
+          subCategory:  item.subCategory,
+          detailCategory: item.detailCategory || undefined,
+          amount:       item.amount,
+          mode:         paymentMode,
+          bankId:       paymentMode === 'Bank' ? selectedBank : undefined,
+          bankName:     paymentMode === 'Bank' ? selectedBankData?.name : undefined,
+          amountPaid:   item.amountPaid,
+          remainingAmount: item.remainingAmount,
+          paymentStatus: item.paymentStatus,
+          paidBy:       item.paidBy,
+          paidTo:       item.paidTo,
+          note:         item.note,
+        });
+        toast.success('Transaction updated successfully');
+      } else {
+        // ── CREATE: one Firestore doc per item ───────────────────────────────
+        const isCustomId = transactionId && !transactionId.includes('###');
 
-//     const selectedBankData = banks.find(b => b.id === selectedBank);
+        // Resolve the actual ID to use for the first item
+        const firstTxId = isCustomId
+          ? transactionId
+          : await TransactionFirebaseService.generateTransactionId();
 
-//     // Create transactions for each item
-//     const newTransactions: Transaction[] = transactionItems.map((item, index) => ({
-//       id: isEditing && existingTransaction ? existingTransaction.id : `${Date.now()}-${index}`,
-//       transactionId: isEditing && existingTransaction ? existingTransaction.transactionId : TransactionService.generateTransactionId(),
-//       date: date,
-//       time: new Date().toLocaleTimeString('en-US', { hour12: false }),
-//       company: COMPANIES.find(o => o.id === office)?.name || COMPANIES[0].name,
-//       mainCategory: transactionType,
-//       subCategory: item.subCategory,
-//       amount: item.amount,
-//       mode: paymentMode,
-//       bankName: paymentMode === 'Bank' ? selectedBankData?.name : undefined,
-//       note: item.note,
-//       // Additional fields
-//       detailCategory: item.detailCategory,
-//       amountPaid: item.amountPaid,
-//       remainingAmount: item.remainingAmount,
-//       paymentStatus: item.paymentStatus,
-//       paidBy: item.paidBy,
-//       paidTo: item.paidTo
-//     }));
+        // Always check uniqueness — even auto-generated IDs could collide
+        // if the counter doc was ever reset or if a fallback timestamp was used
+        const alreadyExists = await TransactionFirebaseService.transactionIdExists(firstTxId);
+        if (alreadyExists) {
+          setDuplicateIdError(firstTxId);
+          setIsSaving(false);
+          return;
+        }
 
-//     if (isEditing && existingTransaction) {
-//       // Update existing transaction
-//       setTransactions(transactions.map(t => 
-//         t.id === existingTransaction.id ? { ...newTransactions[0], id: existingTransaction.id, transactionId: existingTransaction.transactionId } : t
-//       ));
-//     } else {
-//       // Add new transactions
-//       setTransactions([...newTransactions, ...transactions]);
-//     }
+        for (const [idx, item] of transactionItems.entries()) {
+          const txId = idx === 0
+            ? firstTxId
+            : await TransactionFirebaseService.generateTransactionId();
 
-//     return newTransactions;
-//   }, [transactions, setTransactions, transactionItems, date, office, transactionType, paymentMode, selectedBank, isEditing, existingTransaction, validateForm, banks]);
+          // If user left amountPaid blank/0, treat as full payment
+          const effectiveAmountPaid    = item.amountPaid > 0 ? item.amountPaid : item.amount;
+          const effectiveRemaining     = Math.max(0, item.amount - effectiveAmountPaid);
+          const effectivePaymentStatus = effectiveRemaining <= 0 ? 'Full' : 'Partial';
 
-//   return {
-//     // State
-//     formData,
-//     office,
-//     transactionType,
-//     paymentMode,
-//     selectedBank,
-//     enableMultiple,
-//     transactionItems,
-//     availableSubCategories,
-//     isEditing,
-//     editingTransaction: existingTransaction || null,
-    
-//     // Computed
-//     currentBankBalance,
-//     totalAmount,
-//     totalPaid,
-//     totalRemaining,
-//     remainingBalanceAfter,
-    
-//     // Constants
-//     companies: COMPANIES,
-//     subCategories: SUB_CATEGORIES,
-//     banks,
-    
-//     // Actions
-//     setOffice,
-//     setDate,
-//     setTransactionType: handleTransactionTypeChange,
-//     setPaymentMode,
-//     setSelectedBank,
-//     setEnableMultiple,
-//     updateTransactionItem,
-//     addTransactionItem: handleAddTransactionItem,
-//     removeTransactionItem: handleRemoveTransactionItem,
-//     setFormData,
-//     resetForm,
-//     loadTransaction,
-    
-//     // Submit
-//     handleSave,
-//     validateForm
-//   };
-// };
+          const txData: Omit<Transaction, 'id'> = {
+            transactionId:   txId,
+            date, time,
+            company:         COMPANIES.find(o => o.id === office)?.name || COMPANIES[0].name,
+            mainCategory:    transactionType,
+            subCategory:     item.subCategory,
+            detailCategory:  item.detailCategory || undefined,
+            amount:          item.amount,
+            mode:            paymentMode,
+            bankId:          paymentMode === 'Bank' ? selectedBank        : undefined,
+            bankName:        paymentMode === 'Bank' ? selectedBankData?.name : undefined,
+            amountPaid:      effectiveAmountPaid,
+            remainingAmount: effectiveRemaining,
+            paymentStatus:   effectivePaymentStatus,
+            paidBy:          item.paidBy  || undefined,
+            paidTo:          item.paidTo  || undefined,
+            note:            item.note    || '',
+            partialPayments: [],
+            totalPaid:       effectiveAmountPaid,
+            isFullyCleared:  effectiveRemaining <= 0,
+            linkedType:      'manual',
+          };
+          await TransactionFirebaseService.createTransaction(txData);
+        }
+        toast.success(`${transactionItems.length > 1 ? transactionItems.length + ' transactions' : 'Transaction'} saved — ID: ${transactionId}`);
+      }
+
+      navigate('/transactions');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to save transaction');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [validate, editingTx, transactionItems, office, date, transactionType, paymentMode, selectedBank, banks, navigate, transactionId]);
+
+  const handleCancel = useCallback(() => navigate('/transactions'), [navigate]);
+
+  const formatDateDisplay = useCallback((d: string) =>
+    d ? new Date(d).toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '', []
+  );
+
+  return {
+    office, date, transactionType, paymentMode, selectedBank,
+    enableMultiple, transactionItems,
+    transactionId, isGeneratingId, isEditingId,
+    setTransactionId, setIsEditingId,
+    totalAmount: totals.totalAmount,
+    totalPaid: totals.totalPaid,
+    totalRemaining: totals.totalRemaining,
+    currentBankBalance, remainingBalanceAfter,
+    banks, isLoading, isSaving, isEditing: !!editingTx,
+    setOffice, setDate, setTransactionType, setPaymentMode, setSelectedBank,
+    setEnableMultiple, updateItem, addItem, removeItem,
+    handleSave, handleCancel, formatCurrency, formatDateDisplay,
+    duplicateIdError, setDuplicateIdError,
+  };
+}

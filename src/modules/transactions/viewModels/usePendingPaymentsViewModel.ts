@@ -1,184 +1,178 @@
-// // Transactions Module - Pending Payments ViewModel
+// Transactions Module - Pending Payments ViewModel
 
-// import { useState, useMemo, useCallback } from 'react';
-// import { Transaction, PartialPayment, PendingPaymentData } from '../models/types';
-// import { TransactionService } from '../models/transactionsService';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { toast } from 'sonner';
+import { Transaction, PartialPayment, PendingPaymentData } from '../models/types';
+import {
+  getTransactionTotals, isPending, formatCurrency, formatDateTime,
+  getCategoryColor, getPaymentStatusColor,
+} from '../models/transactionsService';
+import { TransactionFirebaseService } from '../models/transactionFirebaseService';
+import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 
-// export interface PendingPaymentsViewModel {
-//   // State
-//   transactions: Transaction[];
-//   viewTransaction: Transaction | null;
-//   paymentModal: boolean;
-//   selectedTransactionId: string | null;
-//   filterStatus: 'All' | 'Uncleared' | 'PartiallyPaid';
-//   paymentData: PendingPaymentData;
-  
-//   // Filtered transactions
-//   pendingTransactions: Transaction[];
-//   filteredTransactions: Transaction[];
-  
-//   // Summary stats
-//   summaryStats: {
-//     totalPending: number;
-//     unclearedCount: number;
-//     totalTransactions: number;
-//   };
-  
-//   // Actions
-//   setViewTransaction: (transaction: Transaction | null) => void;
-//   setPaymentModal: (open: boolean) => void;
-//   setSelectedTransactionId: (id: string | null) => void;
-//   setFilterStatus: (status: 'All' | 'Uncleared' | 'PartiallyPaid') => void;
-//   setPaymentData: (data: Partial<PendingPaymentData>) => void;
-  
-//   // Actions
-//   addPartialPayment: () => void;
-//   markPaymentAsCleared: (transactionId: string, paymentId: string) => void;
-//   deleteTransaction: (id: string) => void;
-  
-//   // Utils
-//   getTransactionTotals: (transaction: Transaction) => { totalPaid: number; remainingAmount: number };
-//   formatCurrency: (amount: number) => string;
-//   formatDateTime: (date: string, time?: string) => string;
-//   getCategoryColor: (category: string) => string;
-//   getPaymentStatusColor: (transaction: Transaction) => string;
-// }
+interface BankInfo { id: string; name: string; balance: number; }
 
-// export const usePendingPaymentsViewModel = (
-//   transactions: Transaction[],
-//   setTransactions: (transactions: Transaction[]) => void,
-//   banks: { id: string; name: string; balance: number }[]
-// ): PendingPaymentsViewModel => {
-//   const [viewTransaction, setViewTransaction] = useState<Transaction | null>(null);
-//   const [paymentModal, setPaymentModal] = useState(false);
-//   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
-//   const [filterStatus, setFilterStatus] = useState<'All' | 'Uncleared' | 'PartiallyPaid'>('All');
+export interface UsePendingPaymentsViewModelReturn {
+  transactions:         Transaction[];
+  filteredTransactions: Transaction[];
+  viewTransaction:      Transaction | null;
+  paymentModal:         boolean;
+  selectedTransactionId:string | null;
+  filterStatus:         'All' | 'Uncleared' | 'PartiallyPaid';
+  paymentData:          PendingPaymentData;
+  banks:                BankInfo[];
+  isLoading:            boolean;
+  summaryStats: { totalPending: number; unclearedCount: number; totalTransactions: number };
+  setViewTransaction:       (t: Transaction | null) => void;
+  setPaymentModal:          (v: boolean) => void;
+  setSelectedTransactionId: (id: string | null) => void;
+  setFilterStatus:          (s: 'All' | 'Uncleared' | 'PartiallyPaid') => void;
+  setPaymentData:           (d: Partial<PendingPaymentData>) => void;
+  addPartialPayment:        () => Promise<void>;
+  markPaymentAsCleared:     (transactionId: string, paymentId: string) => Promise<void>;
+  deleteTransaction:        (id: string) => Promise<void>;
+  getTransactionTotals:     typeof getTransactionTotals;
+  formatCurrency:           (n: number) => string;
+  formatDateTime:           (d: string, t?: string) => string;
+  getCategoryColor:         (c: string) => string;
+  getPaymentStatusColor:    (t: Transaction) => string;
+}
 
-//   const [paymentData, setPaymentData] = useState<PendingPaymentData>({
-//     amount: 0,
-//     bankId: '',
-//     method: 'Cash'
-//   });
+export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn {
+  const [transactions,          setTransactions]          = useState<Transaction[]>([]);
+  const [banks,                 setBanks]                 = useState<BankInfo[]>([]);
+  const [isLoading,             setIsLoading]             = useState(true);
+  const [viewTransaction,       setViewTransaction]       = useState<Transaction | null>(null);
+  const [paymentModal,          setPaymentModal]          = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+  const [filterStatus,          setFilterStatus]          = useState<'All' | 'Uncleared' | 'PartiallyPaid'>('All');
+  const [paymentData,           setPaymentDataState]      = useState<PendingPaymentData>({
+    amount: 0, bankId: '', method: 'Cash',
+  });
 
-//   // Filter pending transactions
-//   const pendingTransactions = useMemo(() => {
-//     return TransactionService.getPendingTransactions(transactions);
-//   }, [transactions]);
+  useEffect(() => {
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const [txList, bankList] = await Promise.all([
+          TransactionFirebaseService.fetchAllTransactions(),
+          BankFirebaseService.fetchAllBanks().catch(() => []),
+        ]);
+        setTransactions(txList.filter(isPending));
+        setBanks(bankList as any[]);
+      } catch {
+        toast.error('Failed to load pending payments');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
 
-//   // Filter based on status
-//   const filteredTransactions = useMemo(() => {
-//     return TransactionService.filterPendingByStatus(pendingTransactions, filterStatus);
-//   }, [pendingTransactions, filterStatus]);
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      const { remainingAmount } = getTransactionTotals(t);
+      const hasUncleared = (t.partialPayments || []).some(p => !p.isCleared && p.method !== 'Bank');
+      if (filterStatus === 'All')           return true;
+      if (filterStatus === 'Uncleared')     return hasUncleared;
+      if (filterStatus === 'PartiallyPaid') return remainingAmount > 0;
+      return true;
+    });
+  }, [transactions, filterStatus]);
 
-//   // Summary stats
-//   const summaryStats = useMemo(() => {
-//     const totalPending = filteredTransactions.reduce((sum, t) => {
-//       const { remainingAmount } = TransactionService.getTransactionTotals(t);
-//       return sum + remainingAmount;
-//     }, 0);
+  const summaryStats = useMemo(() => ({
+    totalPending:     filteredTransactions.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
+    unclearedCount:   filteredTransactions.filter(t => (t.partialPayments || []).some(p => !p.isCleared)).length,
+    totalTransactions:filteredTransactions.length,
+  }), [filteredTransactions]);
 
-//     const unclearedCount = filteredTransactions.filter(t => 
-//       t.partialPayments?.some(p => !p.isCleared)
-//     ).length;
+  const setPaymentData = useCallback((d: Partial<PendingPaymentData>) => {
+    setPaymentDataState(prev => ({ ...prev, ...d }));
+  }, []);
 
-//     return {
-//       totalPending,
-//       unclearedCount,
-//       totalTransactions: filteredTransactions.length
-//     };
-//   }, [filteredTransactions]);
+  const addPartialPayment = useCallback(async () => {
+    if (!selectedTransactionId) return;
+    const tx = transactions.find(t => t.id === selectedTransactionId);
+    if (!tx) return;
 
-//   // Add partial payment
-//   const addPartialPaymentAction = useCallback(() => {
-//     const transaction = transactions.find(t => t.id === selectedTransactionId);
-//     if (!transaction) return;
+    const { remainingAmount } = getTransactionTotals(tx);
 
-//     const { remainingAmount } = TransactionService.getTransactionTotals(transaction);
+    // Validate
+    if (!paymentData.amount || paymentData.amount <= 0) {
+      toast.error('Enter a valid amount'); return;
+    }
+    if (paymentData.amount > remainingAmount) {
+      toast.error(`Amount exceeds remaining balance (${formatCurrency(remainingAmount)})`); return;
+    }
+    if (paymentData.method === 'Bank' && !paymentData.bankId) {
+      toast.error('Select a bank'); return;
+    }
+    if (paymentData.method === 'Cheque' && !paymentData.chequeNumber?.trim()) {
+      toast.error('Enter cheque number'); return;
+    }
 
-//     if (paymentData.amount <= 0) {
-//       throw new Error('Enter a valid amount');
-//     }
+    const newPayment: PartialPayment = {
+      id:            `PAY-${Date.now()}`,
+      amount:        paymentData.amount,
+      date:          new Date().toISOString().split('T')[0],
+      time:          new Date().toTimeString().split(' ')[0],
+      method:        paymentData.method,
+      bankId:        paymentData.method === 'Bank'    ? paymentData.bankId       : undefined,
+      chequeNumber:  paymentData.method === 'Cheque'  ? paymentData.chequeNumber : undefined,
+      isCleared:     paymentData.method === 'Bank',
+    };
 
-//     if (paymentData.amount > remainingAmount) {
-//       throw new Error('Amount exceeds remaining balance');
-//     }
+    try {
+      await TransactionFirebaseService.addPartialPayment(selectedTransactionId, newPayment);
+      // Update local state
+      setTransactions(prev => prev.map(t => {
+        if (t.id !== selectedTransactionId) return t;
+        const payments    = [...(t.partialPayments || []), newPayment];
+        const totalPaid   = payments.reduce((s, p) => s + p.amount, 0);
+        const remaining   = t.amount - totalPaid;
+        const updated     = { ...t, partialPayments: payments, totalPaid, remainingAmount: remaining, isFullyCleared: remaining <= 0 };
+        // Remove from list if fully cleared
+        return updated;
+      }).filter(isPending));
+      toast.success('Payment added successfully');
+      setPaymentModal(false);
+      setSelectedTransactionId(null);
+      setPaymentDataState({ amount: 0, bankId: '', method: 'Cash' });
+    } catch {
+      toast.error('Failed to add payment');
+    }
+  }, [selectedTransactionId, transactions, paymentData]);
 
-//     if (paymentData.method === 'Bank' && !paymentData.bankId) {
-//       throw new Error('Select a bank');
-//     }
+  const markPaymentAsCleared = useCallback(async (transactionId: string, paymentId: string) => {
+    try {
+      await TransactionFirebaseService.markPaymentCleared(transactionId, paymentId);
+      setTransactions(prev => prev.map(t => {
+        if (t.id !== transactionId) return t;
+        const payments = (t.partialPayments || []).map(p => p.id === paymentId ? { ...p, isCleared: true } : p);
+        return { ...t, partialPayments: payments };
+      }).filter(isPending));
+      toast.success('Payment marked as cleared');
+    } catch {
+      toast.error('Failed to mark payment as cleared');
+    }
+  }, []);
 
-//     if (paymentData.method === 'Cheque' && !paymentData.chequeNumber) {
-//       throw new Error('Enter cheque number');
-//     }
+  const deleteTransaction = useCallback(async (id: string) => {
+    if (!window.confirm('Delete this transaction?')) return;
+    try {
+      await TransactionFirebaseService.deleteTransaction(id);
+      setTransactions(prev => prev.filter(t => t.id !== id));
+      toast.success('Transaction deleted');
+    } catch {
+      toast.error('Failed to delete transaction');
+    }
+  }, []);
 
-//     const newPayment: Omit<PartialPayment, 'id'> = {
-//       amount: paymentData.amount,
-//       date: new Date().toISOString().split('T')[0],
-//       time: new Date().toTimeString().split(' ')[0],
-//       method: paymentData.method,
-//       bankId: paymentData.method === 'Bank' ? paymentData.bankId : undefined,
-//       chequeNumber: paymentData.method === 'Cheque' ? paymentData.chequeNumber : undefined,
-//       isCleared: paymentData.method === 'Bank'
-//     };
-
-//     setTransactions(TransactionService.addPartialPayment(transactions, selectedTransactionId!, newPayment));
-    
-//     // Reset payment modal
-//     setPaymentModal(false);
-//     setSelectedTransactionId(null);
-//     setPaymentData({ amount: 0, bankId: '', method: 'Cash' });
-//   }, [transactions, setTransactions, selectedTransactionId, paymentData]);
-
-//   // Mark payment as cleared
-//   const markPaymentAsClearedAction = useCallback((transactionId: string, paymentId: string) => {
-//     setTransactions(TransactionService.markPaymentAsCleared(transactions, transactionId, paymentId));
-//   }, [transactions, setTransactions]);
-
-//   // Delete transaction
-//   const deleteTransactionAction = useCallback((id: string) => {
-//     setTransactions(TransactionService.deleteTransaction(transactions, id));
-//   }, [transactions, setTransactions]);
-
-//   // Open payment modal
-//   const openPaymentModal = useCallback((transactionId: string) => {
-//     setSelectedTransactionId(transactionId);
-//     setPaymentModal(true);
-//     setPaymentData({ amount: 0, bankId: '', method: 'Cash' });
-//   }, []);
-
-//   return {
-//     // State
-//     transactions,
-//     viewTransaction,
-//     paymentModal,
-//     selectedTransactionId,
-//     filterStatus,
-//     paymentData,
-    
-//     // Filtered
-//     pendingTransactions,
-//     filteredTransactions,
-    
-//     // Stats
-//     summaryStats,
-    
-//     // Actions
-//     setViewTransaction,
-//     setPaymentModal,
-//     setSelectedTransactionId,
-//     setFilterStatus,
-//     setPaymentData: (data: Partial<PendingPaymentData>) => setPaymentData(prev => ({ ...prev, ...data })),
-    
-//     // Actions
-//     addPartialPayment: addPartialPaymentAction,
-//     markPaymentAsCleared: markPaymentAsClearedAction,
-//     deleteTransaction: deleteTransactionAction,
-    
-//     // Utils
-//     getTransactionTotals: TransactionService.getTransactionTotals,
-//     formatCurrency: TransactionService.formatCurrency,
-//     formatDateTime: TransactionService.formatDateTime,
-//     getCategoryColor: TransactionService.getCategoryColor,
-//     getPaymentStatusColor: TransactionService.getPaymentStatusColor
-//   };
-// };
+  return {
+    transactions, filteredTransactions, viewTransaction, paymentModal,
+    selectedTransactionId, filterStatus, paymentData, banks, isLoading, summaryStats,
+    setViewTransaction, setPaymentModal, setSelectedTransactionId, setFilterStatus, setPaymentData,
+    addPartialPayment, markPaymentAsCleared, deleteTransaction,
+    getTransactionTotals, formatCurrency, formatDateTime, getCategoryColor, getPaymentStatusColor,
+  };
+}

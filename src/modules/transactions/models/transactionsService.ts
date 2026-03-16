@@ -1,244 +1,106 @@
-// // Transactions Module - Service
-// // Business logic for transactions
+// Transactions Module - Business Logic Service (no Firestore)
 
-// import { Transaction, PartialPayment } from './types';
+import { Transaction, TransactionFilters, TransactionStats } from './types';
 
-// // Generate unique transaction ID
-// export const generateTransactionId = (): string => {
-//   return `TXN-${Date.now()}`;
-// };
+export const getTransactionTotals = (t: Transaction) => {
+  const partialTotal = (t.partialPayments || []).reduce((s, p) => s + p.amount, 0);
+  // Use partialPayments sum if available, otherwise fall back to amountPaid field
+  const totalPaid = partialTotal > 0 ? partialTotal : (t.amountPaid ?? t.amount ?? 0);
+  const remaining = Math.max(0, (t.amount ?? 0) - totalPaid);
+  return { totalPaid, remainingAmount: remaining };
+};
 
-// // Generate unique payment ID
-// export const generatePaymentId = (): string => {
-//   return `PAY-${Date.now()}`;
-// };
+export const isPending = (t: Transaction): boolean => {
+  // A transaction is only pending if:
+  // 1. There is still money remaining to be paid, OR
+  // 2. There are partial payments that have not been cleared yet (e.g. cheques)
+  // Fully paid (paymentStatus === 'Full' or isFullyCleared) transactions are never pending.
+  if (t.isFullyCleared)              return false;
+  if (t.paymentStatus === 'Full')    return false;
+  const { remainingAmount } = getTransactionTotals(t);
+  const hasUncleared = (t.partialPayments || []).some(p => !p.isCleared && p.method !== 'Bank');
+  return remainingAmount > 0 || hasUncleared;
+};
 
-// // Calculate transaction totals
-// export const getTransactionTotals = (transaction: Transaction) => {
-//   const totalPaid = transaction.partialPayments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
-//   return {
-//     totalPaid,
-//     remainingAmount: transaction.amount - totalPaid
-//   };
-// };
+export const filterTransactions = (transactions: Transaction[], filters: TransactionFilters): Transaction[] =>
+  transactions.filter(t => {
+    if (filters.searchTerm) {
+      const s = filters.searchTerm.toLowerCase();
+      if (!t.company.toLowerCase().includes(s) &&
+          !t.mainCategory.toLowerCase().includes(s) &&
+          !t.subCategory.toLowerCase().includes(s) &&
+          !t.note.toLowerCase().includes(s) &&
+          !(t.transactionId || '').toLowerCase().includes(s) &&
+          !(t.paidBy || '').toLowerCase().includes(s) &&
+          !(t.paidTo || '').toLowerCase().includes(s)) return false;
+    }
+    if (filters.mainCategory && t.mainCategory !== filters.mainCategory) return false;
+    if (filters.dateFrom && t.date < filters.dateFrom) return false;
+    if (filters.dateTo   && t.date > filters.dateTo)   return false;
+    if (filters.company  && t.company !== filters.company) return false;
+    if (filters.paymentStatus) {
+      if (filters.paymentStatus === 'Pending' && !isPending(t)) return false;
+      if (filters.paymentStatus === 'Full' && isPending(t)) return false;
+    }
+    return true;
+  });
 
-// // Filter pending transactions
-// export const getPendingTransactions = (transactions: Transaction[]) => {
-//   return transactions.filter(t => {
-//     const { remainingAmount } = getTransactionTotals(t);
-//     const hasUncleared = t.partialPayments?.some(
-//       p => !p.isCleared && p.method !== 'Bank'
-//     );
-//     return remainingAmount > 0 || hasUncleared;
-//   });
-// };
+export const calculateStats = (transactions: Transaction[]): TransactionStats => {
+  const totalInflow  = transactions.filter(t => t.mainCategory === 'Cash Inflow').reduce((s, t) => s + t.amount, 0);
+  const totalOutflow = transactions.filter(t => t.mainCategory === 'Cash Outflow').reduce((s, t) => s + t.amount, 0);
+  const pending      = transactions.filter(isPending);
+  return {
+    totalInflow, totalOutflow,
+    netBalance:       totalInflow - totalOutflow,
+    transactionCount: transactions.length,
+    pendingCount:     pending.length,
+    totalPending:     pending.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
+  };
+};
 
-// // Filter transactions by status
-// export const filterPendingByStatus = (
-//   transactions: Transaction[],
-//   status: 'All' | 'Uncleared' | 'PartiallyPaid'
-// ) => {
-//   return transactions.filter(t => {
-//     const { remainingAmount } = getTransactionTotals(t);
-//     const hasUncleared = t.partialPayments?.some(
-//       p => !p.isCleared && p.method !== 'Bank'
-//     );
+export const formatCurrency = (amount: number): string =>
+  new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
 
-//     if (status === 'All') return true;
-//     if (status === 'Uncleared') return hasUncleared;
-//     if (status === 'PartiallyPaid') return remainingAmount > 0;
-//     return true;
-//   });
-// };
+export const formatDate = (d: string): string =>
+  d ? new Date(d).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
 
-// // Calculate stats
-// export const calculateTransactionStats = (transactions: Transaction[]) => {
-//   const totalInflow = transactions
-//     .filter(t => t.mainCategory === 'Cash Inflow')
-//     .reduce((sum, t) => sum + t.amount, 0);
-    
-//   const totalOutflow = transactions
-//     .filter(t => t.mainCategory === 'Cash Outflow')
-//     .reduce((sum, t) => sum + t.amount, 0);
-    
-//   return {
-//     totalInflow,
-//     totalOutflow,
-//     netBalance: totalInflow - totalOutflow,
-//     transactionCount: transactions.length
-//   };
-// };
+export const formatDateTime = (date: string, time?: string): string => {
+  const dateStr = formatDate(date);
+  return time ? `${dateStr} ${time}` : dateStr;
+};
 
-// // Search transactions
-// export const searchTransactions = (
-//   transactions: Transaction[],
-//   searchTerm: string
-// ): Transaction[] => {
-//   const term = searchTerm.toLowerCase();
-//   return transactions.filter(trans =>
-//     trans.company.toLowerCase().includes(term) ||
-//     trans.mainCategory.toLowerCase().includes(term) ||
-//     trans.subCategory.toLowerCase().includes(term) ||
-//     trans.note.toLowerCase().includes(term) ||
-//     trans.transactionId?.toLowerCase().includes(term)
-//   );
-// };
+export const getCategoryColor = (category: string): string => {
+  if (category === 'Cash Inflow')  return 'bg-green-100 text-green-800';
+  if (category === 'Cash Outflow') return 'bg-red-100 text-red-800';
+  return 'bg-blue-100 text-blue-800';
+};
 
-// // Add new transaction
-// export const createTransaction = (
-//   transactions: Transaction[],
-//   newTransaction: Omit<Transaction, 'id' | 'transactionId'>
-// ): Transaction[] => {
-//   const transaction: Transaction = {
-//     ...newTransaction,
-//     id: Date.now().toString(),
-//     transactionId: generateTransactionId()
-//   };
-//   return [transaction, ...transactions];
-// };
+export const getPaymentStatusColor = (t: Transaction): string => {
+  const { remainingAmount } = getTransactionTotals(t);
+  const hasUncleared = (t.partialPayments || []).some(p => !p.isCleared);
+  if (remainingAmount === 0 && !hasUncleared) return 'bg-green-100 text-green-800 border-green-200';
+  if (hasUncleared) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+  return 'bg-orange-100 text-orange-800 border-orange-200';
+};
 
-// // Update transaction
-// export const updateTransaction = (
-//   transactions: Transaction[],
-//   id: string,
-//   updates: Partial<Transaction>
-// ): Transaction[] => {
-//   return transactions.map(t =>
-//     t.id === id ? { ...t, ...updates } : t
-//   );
-// };
+export const exportToCSV = (transactions: Transaction[]): string => {
+  const headers = ['Transaction ID', 'Date', 'Time', 'Company', 'Main Category', 'Sub Category', 'Amount', 'Paid', 'Remaining', 'Mode', 'Paid By', 'Paid To', 'Status', 'Note'];
+  const rows = transactions.map(t => {
+    const { totalPaid, remainingAmount } = getTransactionTotals(t);
+    return [
+      t.transactionId, t.date, t.time, t.company, t.mainCategory, t.subCategory,
+      t.amount.toString(), totalPaid.toString(), remainingAmount.toString(),
+      t.mode, t.paidBy || '', t.paidTo || '',
+      isPending(t) ? 'Pending' : 'Cleared', t.note,
+    ];
+  });
+  return [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+};
 
-// // Delete transaction
-// export const deleteTransaction = (
-//   transactions: Transaction[],
-//   id: string
-// ): Transaction[] => {
-//   return transactions.filter(t => t.id !== id);
-// };
-
-// // Add partial payment
-// export const addPartialPayment = (
-//   transactions: Transaction[],
-//   transactionId: string,
-//   payment: Omit<PartialPayment, 'id'>
-// ): Transaction[] => {
-//   const newPayment: PartialPayment = {
-//     ...payment,
-//     id: generatePaymentId()
-//   };
-  
-//   return transactions.map(t => {
-//     if (t.id !== transactionId) return t;
-    
-//     const updatedPayments = [...(t.partialPayments ?? []), newPayment];
-//     const totalPaid = updatedPayments.reduce((s, p) => s + p.amount, 0);
-//     const remaining = t.amount - totalPaid;
-    
-//     return {
-//       ...t,
-//       partialPayments: updatedPayments,
-//       totalPaid,
-//       remainingAmount: remaining,
-//       isFullyCleared: remaining === 0 && updatedPayments.every(p => p.isCleared || p.method === 'Bank')
-//     };
-//   });
-// };
-
-// // Mark payment as cleared
-// export const markPaymentAsCleared = (
-//   transactions: Transaction[],
-//   transactionId: string,
-//   paymentId: string
-// ): Transaction[] => {
-//   return transactions.map(t => {
-//     if (t.id !== transactionId) return t;
-    
-//     const updatedPayments =
-//       t.partialPayments?.map(p =>
-//         p.id === paymentId ? { ...p, isCleared: true } : p
-//       ) ?? [];
-    
-//     const totalPaid = updatedPayments.reduce((s, p) => s + p.amount, 0);
-//     const remaining = t.amount - totalPaid;
-    
-//     return {
-//       ...t,
-//       partialPayments: updatedPayments,
-//       totalPaid,
-//       remainingAmount: remaining,
-//       isFullyCleared: remaining === 0 && updatedPayments.every(p => p.isCleared)
-//     };
-//   });
-// };
-
-// // Format currency
-// export const formatCurrency = (amount: number): string => {
-//   return new Intl.NumberFormat('en-PK', {
-//     style: 'currency',
-//     currency: 'PKR',
-//     minimumFractionDigits: 0
-//   }).format(amount);
-// };
-
-// // Format date
-// export const formatDate = (dateString: string): string => {
-//   return new Date(dateString).toLocaleDateString('en-PK', {
-//     year: 'numeric',
-//     month: 'short',
-//     day: 'numeric'
-//   });
-// };
-
-// // Format date time
-// export const formatDateTime = (date: string, time?: string): string => {
-//   const d = new Date(date);
-//   const dateStr = d.toLocaleDateString('en-PK');
-//   return time ? `${dateStr} ${time}` : dateStr;
-// };
-
-// // Get category color
-// export const getCategoryColor = (category: string): string => {
-//   switch (category) {
-//     case 'Cash Inflow':
-//       return 'bg-green-100 text-green-800';
-//     case 'Cash Outflow':
-//       return 'bg-red-100 text-red-800';
-//     default:
-//       return 'bg-blue-100 text-blue-800';
-//   }
-// };
-
-// // Get payment status color
-// export const getPaymentStatusColor = (transaction: Transaction): string => {
-//   const { remainingAmount } = getTransactionTotals(transaction);
-//   const hasUnclearedPayments = transaction.partialPayments?.some(p => !p.isCleared);
-  
-//   if (remainingAmount === 0 && !hasUnclearedPayments) {
-//     return 'bg-green-100 text-green-800 border-green-200';
-//   }
-//   if (hasUnclearedPayments) {
-//     return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-//   }
-//   return 'bg-orange-100 text-orange-800 border-orange-200';
-// };
-
-// // Transaction Service object for export
-// export const TransactionService = {
-//   generateTransactionId,
-//   generatePaymentId,
-//   getTransactionTotals,
-//   getPendingTransactions,
-//   filterPendingByStatus,
-//   calculateTransactionStats,
-//   searchTransactions,
-//   createTransaction,
-//   updateTransaction,
-//   deleteTransaction,
-//   addPartialPayment,
-//   markPaymentAsCleared,
-//   formatCurrency,
-//   formatDate,
-//   formatDateTime,
-//   getCategoryColor,
-//   getPaymentStatusColor
-// };
+export const downloadCSV = (csv: string, filename: string) => {
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};

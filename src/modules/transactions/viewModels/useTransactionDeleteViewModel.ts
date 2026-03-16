@@ -1,77 +1,77 @@
-// // Transactions Module - Transaction Delete ViewModel
+// Transactions Module - Delete ViewModel
+// Fetches transaction from Firestore by ID, handles confirmation + deletion
 
-// import { useState, useCallback, useEffect } from 'react';
-// import { Transaction } from '../models/types';
-// import { TransactionService } from '../models/transactionsService';
+import { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Transaction } from '../models/types';
+import { TransactionFirebaseService } from '../models/transactionFirebaseService';
+import { formatCurrency, formatDate } from '../models/transactionsService';
 
-// export interface TransactionDeleteViewModel {
-//   // State
-//   transaction: Transaction | null;
-//   isLoading: boolean;
-//   isDeleting: boolean;
-//   confirmText: string;
-  
-//   // Actions
-//   setConfirmText: (text: string) => void;
-//   loadTransaction: (id: string) => void;
-//   deleteTransaction: () => boolean;
-//   resetForm: () => void;
-  
-//   // Utils
-//   formatCurrency: (amount: number) => string;
-//   formatDate: (dateString: string) => string;
-// }
+export interface UseTransactionDeleteViewModelReturn {
+  transaction:   Transaction | null;
+  isLoading:     boolean;
+  isDeleting:    boolean;
+  confirmText:   string;
+  setConfirmText:(text: string) => void;
+  handleDelete:  () => Promise<void>;
+  handleCancel:  () => void;
+  formatCurrency:(amount: number) => string;
+  formatDate:    (dateString: string) => string;
+}
 
-// export const useTransactionDeleteViewModel = (
-//   transactions: Transaction[],
-//   setTransactions: (transactions: Transaction[]) => void
-// ): TransactionDeleteViewModel => {
-//   const [transaction, setTransaction] = useState<Transaction | null>(null);
-//   const [isLoading, setIsLoading] = useState(true);
-//   const [isDeleting, setIsDeleting] = useState(false);
-//   const [confirmText, setConfirmText] = useState('');
+export function useTransactionDeleteViewModel(): UseTransactionDeleteViewModelReturn {
+  const navigate             = useNavigate();
+  const { id }               = useParams<{ id: string }>();
+  const [transaction,  setTransaction]  = useState<Transaction | null>(null);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [isDeleting,   setIsDeleting]   = useState(false);
+  const [confirmText,  setConfirmText]  = useState('');
 
-//   // Load transaction
-//   const loadTransaction = useCallback((id: string) => {
-//     setIsLoading(true);
-//     const foundTransaction = transactions.find(t => t.id === id);
-//     setTransaction(foundTransaction || null);
-//     setIsLoading(false);
-//   }, [transactions]);
+  // Load transaction from Firestore on mount
+  useEffect(() => {
+    if (!id) { navigate('/transactions'); return; }
+    TransactionFirebaseService.fetchTransactionById(id)
+      .then(tx => {
+        setTransaction(tx);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        toast.error('Failed to load transaction');
+        setIsLoading(false);
+      });
+  }, [id, navigate]);
 
-//   // Delete transaction
-//   const deleteTransaction = useCallback((): boolean => {
-//     if (!transaction) return false;
-    
-//     if (confirmText !== 'DELETE') {
-//       return false;
-//     }
+  const handleDelete = useCallback(async () => {
+    if (!transaction || !id) return;
 
-//     setIsDeleting(true);
-//     setTransactions(TransactionService.deleteTransaction(transactions, transaction.id));
-//     setIsDeleting(false);
-    
-//     return true;
-//   }, [transactions, setTransactions, transaction, confirmText]);
+    if (confirmText !== 'DELETE') {
+      toast.error('Type DELETE to confirm');
+      return;
+    }
 
-//   // Reset form
-//   const resetForm = useCallback(() => {
-//     setTransaction(null);
-//     setConfirmText('');
-//     setIsLoading(false);
-//     setIsDeleting(false);
-//   }, []);
+    setIsDeleting(true);
+    try {
+      await TransactionFirebaseService.deleteTransaction(id);
+      toast.success('Transaction deleted successfully');
+      navigate('/transactions');
+    } catch {
+      toast.error('Failed to delete transaction');
+      setIsDeleting(false);
+    }
+  }, [transaction, id, confirmText, navigate]);
 
-//   return {
-//     transaction,
-//     isLoading,
-//     isDeleting,
-//     confirmText,
-//     setConfirmText,
-//     loadTransaction,
-//     deleteTransaction,
-//     resetForm,
-//     formatCurrency: TransactionService.formatCurrency,
-//     formatDate: TransactionService.formatDate
-//   };
-// };
+  const handleCancel = useCallback(() => navigate('/transactions'), [navigate]);
+
+  return {
+    transaction,
+    isLoading,
+    isDeleting,
+    confirmText,
+    setConfirmText,
+    handleDelete,
+    handleCancel,
+    formatCurrency,
+    formatDate,
+  };
+}

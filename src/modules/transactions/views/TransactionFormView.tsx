@@ -1,656 +1,504 @@
-// // Transactions Module - Transaction Form View
-// // UI exactly same as src/pages/transactions/CreateTransactionPage.tsx
-// // Updated to use banks from props instead of hardcoded BANKS constant
+// Transactions Module - Form View (Create / Edit)
 
-// import { useState, useEffect } from "react";
-// import { useNavigate, useParams } from 'react-router-dom';
-// import { Transaction } from '../models/types';
-// import { COMPANIES, SUB_CATEGORIES } from '../models/types';
-// import { 
-//   ArrowLeft, 
-//   Plus, 
-//   Trash2, 
-//   Building2,
-//   Wallet,
-//   TrendingUp,
-//   TrendingDown,
-//   Upload,
-//   Calculator,
-//   User,
-//   Users,
-//   CheckCircle,
-//   AlertCircle,
-//   Repeat
-// } from 'lucide-react';
-// import { toast } from "sonner";
+import React, { useState } from 'react';
+import {
+  ArrowLeft, Plus, Trash2, Building2, Wallet, TrendingUp, TrendingDown,
+  Upload, Calculator, User, Users, CheckCircle, AlertCircle, Repeat, Loader2,
+  Hash, Edit2, Check, X,
+} from 'lucide-react';
+import { COMPANIES, SUB_CATEGORIES, TransactionItem } from '../models/types';
+import { UseTransactionFormViewModelReturn } from '../viewModels/useTransactionFormViewModel';
 
-// type TransactionItem = {
-//   id: string;
-//   mainCategory: string;
-//   subCategory: string;
-//   detailCategory: string;
-//   amount: number;
-//   amountPaid: number;
-//   remainingAmount: number;
-//   paymentStatus: 'Full' | 'Partial';
-//   paidBy: string;
-//   paidTo: string;
-//   note: string;
-//   receipt?: File | null;
-// };
+interface Props extends UseTransactionFormViewModelReturn {}
 
-// // Bank type for transactions
-// interface BankInfo {
-//   id: string;
-//   name: string;
-//   balance: number;
-// }
+const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm';
+const lbl = 'block text-sm font-medium text-gray-700 mb-1';
 
-// interface TransactionFormViewProps {
-//   transactions: Transaction[];
-//   setTransactions: (transactions: Transaction[]) => void;
-//   banks: BankInfo[];
-//   existingTransaction?: Transaction;
-// }
+export function TransactionFormView({
+  office, date, transactionType, paymentMode, selectedBank,
+  enableMultiple, transactionItems,
+  transactionId, isGeneratingId, isEditingId, setTransactionId, setIsEditingId,
+  duplicateIdError, setDuplicateIdError,
+  totalAmount, totalPaid, totalRemaining, currentBankBalance, remainingBalanceAfter,
+  banks, isLoading, isSaving, isEditing,
+  setOffice, setDate, setTransactionType, setPaymentMode, setSelectedBank,
+  setEnableMultiple, updateItem, addItem, removeItem,
+  handleSave, handleCancel, formatCurrency, formatDateDisplay,
+}: Props) {
+  const [saveAttempted, setSaveAttempted] = useState(false);
 
-// export function TransactionFormView({ transactions, setTransactions, banks, existingTransaction }: TransactionFormViewProps) {
-//   const navigate = useNavigate();
-//   const { id } = useParams();
-//   const isEditing = !!id && !!existingTransaction;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
 
-//   // General Information
-//   const [office, setOffice] = useState(COMPANIES[0].id);
-//   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  
-//   // Transaction Type
-//   const [transactionType, setTransactionType] = useState<'Cash Inflow' | 'Cash Outflow' | 'Loan'>('Cash Inflow');
-  
-//   // Payment Mode
-//   const [paymentMode, setPaymentMode] = useState<'Cash' | 'Bank' | 'Cheque'>('Bank');
-//   const [selectedBank, setSelectedBank] = useState('');
-  
-//   // Multiple transactions
-//   const [enableMultiple, setEnableMultiple] = useState(false);
-//   const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([
-//     {
-//       id: Date.now().toString(),
-//       mainCategory: '',
-//       subCategory: '',
-//       detailCategory: '',
-//       amount: 0,
-//       amountPaid: 0,
-//       remainingAmount: 0,
-//       paymentStatus: 'Full',
-//       paidBy: '',
-//       paidTo: '',
-//       note: ''
-//     }
-//   ]);
+  const selectedBankData = banks.find(b => b.id === selectedBank);
+  const isPreviewId = transactionId?.includes('###');
 
-//   const [availableSubCategories, setAvailableSubCategories] = useState<string[]>([]);
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
 
-//   // Load existing transaction for editing
-//   useEffect(() => {
-//     if (existingTransaction) {
-//       const officeId = COMPANIES.find(o => existingTransaction.company?.includes(o.name.split(':')[1]?.trim()))?.id || COMPANIES[0].id;
-//       setOffice(officeId);
-//       setDate(existingTransaction.date);
-//       setTransactionType(existingTransaction.mainCategory as 'Cash Inflow' | 'Cash Outflow' | 'Loan');
-//       setPaymentMode(existingTransaction.mode as 'Cash' | 'Bank' | 'Cheque');
-      
-//       if (existingTransaction.bankName) {
-//         const bankId = banks.find(b => existingTransaction.bankName?.includes(b.name))?.id || '';
-//         setSelectedBank(bankId);
-//       }
-      
-//       setAvailableSubCategories(SUB_CATEGORIES[existingTransaction.mainCategory] || []);
-      
-//       setTransactionItems([{
-//         id: existingTransaction.id,
-//         mainCategory: existingTransaction.mainCategory || '',
-//         subCategory: existingTransaction.subCategory || '',
-//         detailCategory: (existingTransaction as any).detailCategory || '',
-//         amount: existingTransaction.amount || 0,
-//         amountPaid: (existingTransaction as any).amountPaid || existingTransaction.amount || 0,
-//         remainingAmount: (existingTransaction as any).remainingAmount || 0,
-//         paymentStatus: (existingTransaction as any).paymentStatus || 'Full',
-//         paidBy: (existingTransaction as any).paidBy || '',
-//         paidTo: (existingTransaction as any).paidTo || '',
-//         note: existingTransaction.note || ''
-//       }]);
-//     }
-//   }, [existingTransaction, banks]);
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={handleCancel} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+          <ArrowLeft size={22} />
+        </button>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{isEditing ? 'Edit Transaction' : 'Add Transaction'}</h2>
+          <p className="text-gray-500 text-sm mt-0.5">Record a financial transaction</p>
+        </div>
+      </div>
 
-//   // Get selected bank balance from passed banks array
-//   const selectedBankData = banks.find(b => b.id === selectedBank);
-//   const currentBankBalance = selectedBankData?.balance || 0;
+      <div className="space-y-5">
 
-//   const handleTransactionTypeChange = (type: 'Cash Inflow' | 'Cash Outflow' | 'Loan') => {
-//     setTransactionType(type);
-//     setAvailableSubCategories(SUB_CATEGORIES[type] || []);
-//     setTransactionItems(items => items.map(item => ({
-//       ...item,
-//       mainCategory: type,
-//       subCategory: ''
-//     })));
-//   };
+        {/* ── Transaction ID ─────────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Hash className="w-5 h-5 text-[#4f46e5]" /> Transaction ID
+          </h3>
 
-//   const handleAddTransactionItem = () => {
-//     setTransactionItems([...transactionItems, {
-//       id: Date.now().toString(),
-//       mainCategory: transactionType,
-//       subCategory: '',
-//       detailCategory: '',
-//       amount: 0,
-//       amountPaid: 0,
-//       remainingAmount: 0,
-//       paymentStatus: 'Full',
-//       paidBy: '',
-//       paidTo: '',
-//       note: ''
-//     }]);
-//   };
+          {isGeneratingId ? (
+            <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+              <span className="text-sm text-gray-500">Preparing ID...</span>
+            </div>
+          ) : isEditingId ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={transactionId}
+                onChange={e => setTransactionId(e.target.value.toUpperCase())}
+                autoFocus
+                placeholder="e.g. TXN-160326-005"
+                className="flex-1 px-4 py-2.5 border border-indigo-400 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+              <button type="button" onClick={() => setIsEditingId(false)} title="Confirm"
+                className="p-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                <Check size={16} />
+              </button>
+              <button type="button" onClick={() => { setIsEditingId(false); }} title="Cancel"
+                className="p-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className={`flex-1 flex items-center justify-between px-4 py-2.5 rounded-lg border ${
+                isPreviewId ? 'bg-gray-50 border-gray-200' : 'bg-indigo-50 border-indigo-200'
+              }`}>
+                <span className={`font-mono text-sm font-bold tracking-widest ${
+                  isPreviewId ? 'text-gray-400' : 'text-indigo-800'
+                }`}>
+                  {transactionId || '—'}
+                </span>
+                <span className={`text-xs ml-2 ${isPreviewId ? 'text-gray-400' : 'text-indigo-400'}`}>
+                  {isPreviewId ? 'assigned on save' : 'auto-generated'}
+                </span>
+              </div>
+              {!isEditing && (
+                <button type="button" onClick={() => setIsEditingId(true)} title="Edit Transaction ID"
+                  className="p-2.5 bg-white border border-gray-300 text-gray-500 rounded-lg hover:border-indigo-400 hover:text-indigo-600 transition-colors">
+                  <Edit2 size={16} />
+                </button>
+              )}
+            </div>
+          )}
 
-//   const handleRemoveTransactionItem = (id: string) => {
-//     if (transactionItems.length > 1) {
-//       setTransactionItems(transactionItems.filter(item => item.id !== id));
-//     }
-//   };
+          <p className="text-xs text-gray-400 mt-2">
+            {isEditing
+              ? 'Transaction ID is locked after creation. Partial payments are tracked under this same ID.'
+              : isPreviewId
+                ? '🔒 A unique sequential ID (e.g. TXN-160326-005) is assigned automatically on save. Click ✏️ to set a custom ID.'
+                : '✅ Custom ID set. Duplicates are blocked on save.'}
+          </p>
+        </div>
 
-//   const updateTransactionItem = (id: string, field: keyof TransactionItem, value: any) => {
-//     setTransactionItems(items => items.map(item => {
-//       if (item.id !== id) return item;
-      
-//       const updated = { ...item, [field]: value };
-      
-//       if (field === 'amount' || field === 'amountPaid') {
-//         const amount = field === 'amount' ? Number(value) : item.amount;
-//         const amountPaid = field === 'amountPaid' ? Number(value) : item.amountPaid;
-//         updated.remainingAmount = Math.max(0, amount - amountPaid);
-//         updated.paymentStatus = amountPaid >= amount ? 'Full' : 'Partial';
-//       }
-      
-//       return updated;
-//     }));
-//   };
+        {/* ── General Information ─────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-[#4f46e5]" /> General Information
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={lbl}>Office/Branch *</label>
+              <select value={office} onChange={e => setOffice(e.target.value)} className={inp}>
+                {COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={lbl}>Date *</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
+              {date && <p className="text-xs text-gray-400 mt-1">{formatDateDisplay(date)}</p>}
+            </div>
+          </div>
+        </div>
 
-//   const calculateTotals = () => {
-//     const totalAmount = transactionItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-//     const totalPaid = transactionItems.reduce((sum, item) => sum + (item.amountPaid || 0), 0);
-//     const totalRemaining = totalAmount - totalPaid;
-//     return { totalAmount, totalPaid, totalRemaining };
-//   };
+        {/* ── Transaction Type ────────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-[#4f46e5]" /> Transaction Type
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {(['Cash Inflow', 'Cash Outflow', 'Loan'] as const).map(type => (
+              <button key={type} type="button" onClick={() => setTransactionType(type)}
+                className={`p-4 border-2 rounded-xl text-center transition-colors ${
+                  transactionType === type ? 'border-[#4f46e5] bg-[#4f46e5]/5' : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                <div className="flex justify-center mb-2">
+                  {type === 'Cash Inflow'  && <TrendingUp  className="w-6 h-6 text-green-500" />}
+                  {type === 'Cash Outflow' && <TrendingDown className="w-6 h-6 text-red-500" />}
+                  {type === 'Loan'         && <Wallet       className="w-6 h-6 text-blue-500" />}
+                </div>
+                <span className="font-medium text-sm">{type}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-//   const handleSave = () => {
-//     const invalidItems = transactionItems.filter(item => !item.subCategory || item.amount <= 0);
-//     if (invalidItems.length > 0) {
-//       toast.error('Please fill in all required fields for each transaction');
-//       return;
-//     }
+        {/* ── Payment Method ──────────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Calculator className="w-5 h-5 text-[#4f46e5]" /> Payment Method
+          </h3>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {(['Cash', 'Bank', 'Cheque'] as const).map(mode => (
+              <button key={mode} type="button" onClick={() => setPaymentMode(mode)}
+                className={`p-3 border-2 rounded-xl text-center font-medium text-sm transition-colors ${
+                  paymentMode === mode
+                    ? 'border-[#4f46e5] bg-[#4f46e5]/5 text-[#4f46e5]'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                }`}>
+                {mode}
+              </button>
+            ))}
+          </div>
 
-//     if (paymentMode === 'Bank' && !selectedBank) {
-//       toast.error('Please select a bank for bank transactions');
-//       return;
-//     }
+          {paymentMode === 'Bank' && (
+            <div className="space-y-3">
+              <div>
+                <label className={lbl}>Select Bank *</label>
+                <select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}
+                  className={`${inp} ${saveAttempted && !selectedBank ? 'border-red-400 ring-1 ring-red-300' : ''}`}>
+                  <option value="">Select a bank</option>
+                  {banks.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} — {formatCurrency(b.balance)}</option>
+                  ))}
+                </select>
+              </div>
+              {selectedBankData && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Available Balance</p>
+                  <p className="text-xl font-bold text-blue-700">{formatCurrency(currentBankBalance)}</p>
+                </div>
+              )}
+            </div>
+          )}
 
-//     const { totalPaid } = calculateTotals();
+          {selectedBank && paymentMode === 'Bank' && (
+            <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-gray-800 mb-2">Balance After Transaction</h4>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Current:</span>
+                <span className="font-medium">{formatCurrency(currentBankBalance)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">{transactionType === 'Cash Inflow' ? '+ Adding:' : '− Deducting:'}</span>
+                <span className={`font-medium ${transactionType === 'Cash Inflow' ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(totalPaid)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2">
+                <span>Remaining:</span>
+                <span className="text-[#4f46e5]">{formatCurrency(remainingBalanceAfter)}</span>
+              </div>
+            </div>
+          )}
+        </div>
 
-//     const newTransactions: Transaction[] = transactionItems.map((item, index) => ({
-//       id: isEditing && existingTransaction ? existingTransaction.id : `${Date.now()}-${index}`,
-//       transactionId: isEditing && existingTransaction ? existingTransaction.transactionId : `TXN-${Date.now()}-${index}`,
-//       date: date,
-//       time: new Date().toLocaleTimeString('en-US', { hour12: false }),
-//       company: COMPANIES.find(o => o.id === office)?.name || COMPANIES[0].name,
-//       mainCategory: transactionType as any,
-//       subCategory: item.subCategory,
-//       amount: item.amount,
-//       mode: paymentMode,
-//       bankName: paymentMode === 'Bank' ? selectedBankData?.name : undefined,
-//       note: item.note,
-//       detailCategory: item.detailCategory,
-//       amountPaid: item.amountPaid,
-//       remainingAmount: item.remainingAmount,
-//       paymentStatus: item.paymentStatus,
-//       paidBy: item.paidBy,
-//       paidTo: item.paidTo
-//     }));
+        {/* ── Multiple toggle ─────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Repeat className="w-5 h-5 text-[#4f46e5]" />
+            <div>
+              <p className="font-medium text-gray-900 text-sm">Enable multiple transactions</p>
+              <p className="text-xs text-gray-400">Batch process multiple items at once</p>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" checked={enableMultiple} onChange={e => setEnableMultiple(e.target.checked)} className="sr-only peer" />
+            <div className="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-[#4f46e5]/30 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-4 after:transition-all peer-checked:bg-[#4f46e5]"></div>
+          </label>
+        </div>
 
-//     if (isEditing && existingTransaction) {
-//       setTransactions(transactions.map(t => 
-//         t.id === existingTransaction.id ? { ...newTransactions[0], id: existingTransaction.id, transactionId: existingTransaction.transactionId } : t
-//       ));
-//       toast.success('Transaction updated successfully');
-//     } else {
-//       setTransactions([...newTransactions, ...transactions]);
-//       toast.success(`${newTransactions.length} transaction(s) added successfully`);
-//     }
-//     navigate('/transactions');
-//   };
+        {/* ── Transaction Items ───────────────────────────────────────────── */}
+        {transactionItems.map((item, index) => (
+          <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900">Transaction #{index + 1}</h3>
+              {enableMultiple && transactionItems.length > 1 && (
+                <button type="button" onClick={() => removeItem(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
 
-//   const formatCurrency = (amount: number) => {
-//     return new Intl.NumberFormat('en-PK', {
-//       style: 'currency',
-//       currency: 'PKR',
-//       minimumFractionDigits: 0
-//     }).format(amount);
-//   };
+            {/* Category */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className={lbl}>Main Category</label>
+                <input type="text" value={transactionType} readOnly className={`${inp} bg-gray-50 text-gray-500`} />
+              </div>
+              <div>
+                <label className={lbl}>Sub Category *</label>
+                <select value={item.subCategory} onChange={e => updateItem(item.id, 'subCategory', e.target.value)}
+                  className={`${inp} ${saveAttempted && !item.subCategory ? 'border-red-400 ring-1 ring-red-300' : ''}`}>
+                  <option value="">Select sub category</option>
+                  {(SUB_CATEGORIES[transactionType] || []).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className={lbl}>Detail Category <span className="text-gray-400 font-normal">(optional)</span></label>
+                <input type="text" value={item.detailCategory} onChange={e => updateItem(item.id, 'detailCategory', e.target.value)}
+                  placeholder="Additional detail..." className={inp} />
+              </div>
+            </div>
 
-//   const formatDateDisplay = (dateString: string) => {
-//     const [year, month, day] = dateString.split('-');
-//     return `${day}/${month}/${year}`;
-//   };
+            {/* Amounts */}
+            <div className="border-t pt-4 mb-4">
+              <h4 className="font-medium text-gray-800 text-sm mb-3">Amount Details</h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className={lbl}>Total Amount *</label>
+                  <input type="number" min="0" value={item.amount || ''}
+                    onChange={e => updateItem(item.id, 'amount', Number(e.target.value))}
+                    placeholder="0"
+                    className={`${inp} ${saveAttempted && (!item.amount || item.amount <= 0) ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
+                </div>
+                <div>
+                  <label className={lbl}>Amount Paid <span className="text-gray-400 font-normal">(leave blank = full)</span></label>
+                  <input type="number" min="0" value={item.amountPaid || ''}
+                    onChange={e => updateItem(item.id, 'amountPaid', Number(e.target.value))}
+                    placeholder="0 = full payment" className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Payment Status</label>
+                  <div className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${
+                    item.paymentStatus === 'Full'
+                      ? 'bg-green-50 border-green-200 text-green-700'
+                      : 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                  }`}>
+                    {item.paymentStatus === 'Full' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+                    {item.paymentStatus}
+                  </div>
+                </div>
+              </div>
+              {item.paymentStatus === 'Partial' && item.remainingAmount > 0 && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                  ⚠️ Partial — Remaining: <strong>{formatCurrency(item.remainingAmount)}</strong> will appear in Pending Payments
+                </div>
+              )}
+            </div>
 
-//   const { totalAmount, totalPaid, totalRemaining } = calculateTotals();
-//   const remainingBalanceAfter = currentBankBalance + (transactionType === 'Cash Inflow' ? totalPaid : -totalPaid);
+            {/* Parties */}
+            <div className="border-t pt-4 mb-4">
+              <h4 className="font-medium text-gray-800 text-sm mb-3 flex items-center gap-1.5">
+                <Users size={14} /> Parties Involved
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>Paid By <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                    <input type="text" value={item.paidBy} onChange={e => updateItem(item.id, 'paidBy', e.target.value)}
+                      placeholder="Who paid" className={`${inp} pl-9`} />
+                  </div>
+                </div>
+                <div>
+                  <label className={lbl}>Paid To <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                    <input type="text" value={item.paidTo} onChange={e => updateItem(item.id, 'paidTo', e.target.value)}
+                      placeholder="Who received" className={`${inp} pl-9`} />
+                  </div>
+                </div>
+              </div>
+            </div>
 
-//   return (
-//     <div className="min-h-screen bg-gray-50 p-6">
-//       <div className="max-w-4xl mx-auto">
-//         {/* Header */}
-//         <div className="flex items-center gap-4 mb-6">
-//           <button
-//             onClick={() => navigate('/transactions')}
-//             className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
-//           >
-//             <ArrowLeft size={24} />
-//           </button>
-//           <div>
-//             <h2 className="text-3xl font-bold text-gray-900">{isEditing ? 'Edit Transaction' : 'Add Transaction'}</h2>
-//             <p className="text-gray-600 mt-1">Record a new financial transaction</p>
-//           </div>
-//         </div>
+            {/* Note */}
+            <div className="border-t pt-4 mb-4">
+              <label className={lbl}>Note / Description <span className="text-gray-400 font-normal">(optional)</span></label>
+              <textarea value={item.note} onChange={e => updateItem(item.id, 'note', e.target.value)}
+                rows={2} placeholder="Add details..." className={`${inp} resize-none`} />
+            </div>
 
-//         <div className="space-y-6">
-//           {/* General Information */}
-//           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-//             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-//               <Building2 className="w-5 h-5 text-[#4f46e5]" />
-//               General Information
-//             </h3>
-//             <div className="grid grid-cols-2 gap-4">
-//               <div>
-//                 <label className="block text-sm font-medium text-gray-700 mb-1">Office/Branch *</label>
-//                 <select
-//                   value={office}
-//                   onChange={(e) => setOffice(e.target.value)}
-//                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                 >
-//                   {COMPANIES.map(o => (
-//                     <option key={o.id} value={o.id}>{o.name}</option>
-//                   ))}
-//                 </select>
-//               </div>
-//               <div>
-//                 <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
-//                 <input
-//                   type="date"
-//                   value={date}
-//                   onChange={(e) => setDate(e.target.value)}
-//                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                 />
-//                 <p className="text-xs text-gray-500 mt-1">{formatDateDisplay(date)}</p>
-//               </div>
-//             </div>
-//           </div>
+            {/* Receipt */}
+            <div className="border-t pt-4">
+              <label className={lbl}>Receipt / Image <span className="text-gray-400 font-normal">(optional)</span></label>
+              <label className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#4f46e5] hover:bg-[#4f46e5]/5 transition-colors w-fit">
+                <Upload size={16} className="text-gray-400" />
+                <span className="text-sm text-gray-500">Upload Image</span>
+                <input type="file" accept="image/*" onChange={e => updateItem(item.id, 'receipt', e.target.files?.[0] || null)} className="hidden" />
+              </label>
+              {item.receipt && (
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <CheckCircle size={12} /> {(item.receipt as File).name}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
 
-//           {/* Transaction Type */}
-//           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-//             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-//               <Wallet className="w-5 h-5 text-[#4f46e5]" />
-//               Transaction Type
-//             </h3>
-//             <div className="grid grid-cols-3 gap-4">
-//               {(['Cash Inflow', 'Cash Outflow', 'Loan'] as const).map((type) => (
-//                 <button
-//                   key={type}
-//                   onClick={() => handleTransactionTypeChange(type)}
-//                   className={`p-4 border-2 rounded-lg text-center transition-colors ${
-//                     transactionType === type
-//                       ? 'border-[#4f46e5] bg-[#4f46e5]/5'
-//                       : 'border-gray-200 hover:border-gray-300'
-//                   }`}
-//                 >
-//                   <div className="flex justify-center mb-2">
-//                     {type === 'Cash Inflow' && <TrendingUp className="w-6 h-6 text-green-600" />}
-//                     {type === 'Cash Outflow' && <TrendingDown className="w-6 h-6 text-red-600" />}
-//                     {type === 'Loan' && <Wallet className="w-6 h-6 text-blue-600" />}
-//                   </div>
-//                   <span className="font-medium">{type}</span>
-//                 </button>
-//               ))}
-//             </div>
-//           </div>
+        {/* Add Another */}
+        {enableMultiple && (
+          <button type="button" onClick={addItem}
+            className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-[#4f46e5] hover:text-[#4f46e5] hover:bg-[#4f46e5]/5 transition-colors flex items-center justify-center gap-2 text-sm font-medium">
+            <Plus size={16} /> Add Another Transaction
+          </button>
+        )}
 
-//           {/* Payment Mode */}
-//           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-//             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-//               <Calculator className="w-5 h-5 text-[#4f46e5]" />
-//               Payment Method
-//             </h3>
-//             <div className="grid grid-cols-3 gap-4 mb-4">
-//               {(['Cash', 'Bank', 'Cheque'] as const).map((mode) => (
-//                 <button
-//                   key={mode}
-//                   onClick={() => setPaymentMode(mode)}
-//                   className={`p-4 border-2 rounded-lg text-center transition-colors ${
-//                     paymentMode === mode
-//                       ? 'border-[#4f46e5] bg-[#4f46e5]/5'
-//                       : 'border-gray-200 hover:border-gray-300'
-//                   }`}
-//                 >
-//                   <span className="font-medium">{mode}</span>
-//                 </button>
-//               ))}
-//             </div>
+        {/* Grand Total */}
+        <div className="bg-[#4f46e5] text-white rounded-xl p-5">
+          <h3 className="font-semibold mb-4">Grand Total Summary</h3>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-white/70 text-xs mb-1">Total Amount</p>
+              <p className="text-2xl font-bold">{formatCurrency(totalAmount)}</p>
+            </div>
+            <div className="border-x border-white/20">
+              <p className="text-white/70 text-xs mb-1">Total Paid</p>
+              <p className="text-2xl font-bold text-green-300">{formatCurrency(totalPaid)}</p>
+            </div>
+            <div>
+              <p className="text-white/70 text-xs mb-1">Total Remaining</p>
+              <p className="text-2xl font-bold text-yellow-300">{formatCurrency(totalRemaining)}</p>
+            </div>
+          </div>
+        </div>
 
-//             {paymentMode === 'Bank' && (
-//               <div className="space-y-4">
-//                 <div>
-//                   <label className="block text-sm font-medium text-gray-700 mb-1">Select Bank *</label>
-//                   <select
-//                     value={selectedBank}
-//                     onChange={(e) => setSelectedBank(e.target.value)}
-//                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                   >
-//                     <option value="">Select a bank</option>
-//                     {banks.map(bank => (
-//                       <option key={bank.id} value={bank.id}>
-//                         {bank.name} - {formatCurrency(bank.balance)}
-//                       </option>
-//                     ))}
-//                   </select>
-//                 </div>
+        {/* Inline validation errors — shown after save attempt */}
+        {saveAttempted && !isSaving && (
+          (() => {
+            const errs: string[] = [];
+            if (!office) errs.push('Select an office/branch');
+            if (!date)   errs.push('Select a date');
+            transactionItems.forEach((item, i) => {
+              const n = transactionItems.length > 1 ? ` (item ${i + 1})` : '';
+              if (!item.subCategory)               errs.push(`Sub category is required${n}`);
+              if (!item.amount || item.amount <= 0) errs.push(`Amount must be greater than 0${n}`);
+              if (item.amountPaid > item.amount)    errs.push(`Amount paid cannot exceed total amount${n}`);
+            });
+            if (paymentMode === 'Bank' && !selectedBank) errs.push('Select a bank for bank transactions');
+            if (errs.length === 0) return null;
+            return (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 space-y-1">
+                <p className="font-semibold mb-2 flex items-center gap-2">
+                  <AlertCircle size={16} /> Please fix the following:
+                </p>
+                {errs.map((e, i) => <p key={i}>• {e}</p>)}
+              </div>
+            );
+          })()
+        )}
 
-//                 {selectedBankData && (
-//                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-//                     <p className="text-sm text-gray-600 mb-1">💳 Available Bank Balance</p>
-//                     <p className="text-2xl font-bold text-blue-600">
-//                       Current Balance: {formatCurrency(currentBankBalance)}
-//                     </p>
-//                   </div>
-//                 )}
-//               </div>
-//             )}
-//           </div>
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 pb-6">
+          <button type="button" onClick={handleCancel}
+            className="px-5 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium">
+            Cancel
+          </button>
+          <button type="button"
+            onClick={() => { setSaveAttempted(true); handleSave(); }}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors font-semibold">
+            {isSaving
+              ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
+              : <><Plus size={16} /> {isEditing ? 'Save Changes' : `Save ${transactionItems.length > 1 ? transactionItems.length + ' Transactions' : 'Transaction'}`}</>
+            }
+          </button>
+        </div>
 
-//           {/* Transaction Summary */}
-//           {selectedBank && paymentMode === 'Bank' && (
-//             <div className="bg-[#4f46e5]/10 rounded-lg p-6 border border-[#4f46e5]/20">
-//               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-//                 <Calculator className="w-5 h-5 text-[#4f46e5]" />
-//                 Transaction Summary
-//               </h3>
-//               <div className="space-y-2">
-//                 <div className="flex justify-between">
-//                   <span className="text-gray-600">Current Balance:</span>
-//                   <span className="font-medium">{formatCurrency(currentBankBalance)}</span>
-//                 </div>
-//                 <div className="flex justify-between">
-//                   <span className="text-gray-600">Amount to {transactionType === 'Cash Inflow' ? 'Add' : 'Deduct'}:</span>
-//                   <span className={`font-medium ${transactionType === 'Cash Inflow' ? 'text-green-600' : 'text-red-600'}`}>
-//                     {transactionType === 'Cash Inflow' ? '+' : '-'} {formatCurrency(totalPaid)}
-//                   </span>
-//                 </div>
-//                 <div className="border-t border-gray-300 pt-2 flex justify-between">
-//                   <span className="text-gray-900 font-medium">Remaining Balance After Transaction:</span>
-//                   <span className="font-bold text-[#4f46e5]">{formatCurrency(remainingBalanceAfter)}</span>
-//                 </div>
-//               </div>
-//             </div>
-//           )}
+      </div>
 
-//           {/* Multiple Transaction Toggle */}
-//           <div className="flex items-center justify-between bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-//             <div className="flex items-center gap-3">
-//               <Repeat className="w-5 h-5 text-[#4f46e5]" />
-//               <div>
-//                 <p className="font-medium text-gray-900">Enable multiple transactions entry</p>
-//                 <p className="text-sm text-gray-500">For batch processing multiple items at once</p>
-//               </div>
-//             </div>
-//             <label className="relative inline-flex items-center cursor-pointer">
-//               <input
-//                 type="checkbox"
-//                 checked={enableMultiple}
-//                 onChange={(e) => setEnableMultiple(e.target.checked)}
-//                 className="sr-only peer"
-//               />
-//               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#4f46e5]/25 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4f46e5]"></div>
-//             </label>
-//           </div>
+      {/* ── Duplicate Transaction ID Modal ─────────────────────────────────── */}
+      {duplicateIdError && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
 
-//           {/* Transaction Items */}
-//           <div className="space-y-4">
-//             {transactionItems.map((item, index) => (
-//               <div key={item.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-//                 <div className="flex items-center justify-between mb-4">
-//                   <h3 className="text-lg font-semibold text-gray-900">
-//                     Transaction #{index + 1}
-//                   </h3>
-//                   {enableMultiple && transactionItems.length > 1 && (
-//                     <button
-//                       onClick={() => handleRemoveTransactionItem(item.id)}
-//                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-//                     >
-//                       <Trash2 size={18} />
-//                     </button>
-//                   )}
-//                 </div>
+            {/* Red header */}
+            <div className="bg-red-600 px-6 py-5 flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-full">
+                <AlertCircle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Duplicate Transaction ID</h3>
+                <p className="text-red-100 text-sm">This ID is already in use</p>
+              </div>
+            </div>
 
-//                 <div className="grid grid-cols-2 gap-4 mb-4">
-//                   <div>
-//                     <label className="block text-sm font-medium text-gray-700 mb-1">Main Category *</label>
-//                     <select
-//                       value={transactionType}
-//                       disabled
-//                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
-//                     >
-//                       <option>{transactionType}</option>
-//                     </select>
-//                   </div>
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                <p className="text-xs text-red-400 font-medium uppercase tracking-wide mb-1">Conflicting ID</p>
+                <p className="font-mono text-xl font-bold text-red-700 tracking-widest">
+                  {duplicateIdError}
+                </p>
+              </div>
 
-//                   <div>
-//                     <label className="block text-sm font-medium text-gray-700 mb-1">Sub Category *</label>
-//                     <select
-//                       value={item.subCategory}
-//                       onChange={(e) => updateTransactionItem(item.id, 'subCategory', e.target.value)}
-//                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                     >
-//                       <option value="">Select sub category</option>
-//                       {(SUB_CATEGORIES[transactionType] || []).map(sub => (
-//                         <option key={sub} value={sub}>{sub}</option>
-//                       ))}
-//                     </select>
-//                   </div>
+              <p className="text-sm text-gray-600">
+                A transaction with ID <strong className="font-mono text-gray-900">{duplicateIdError}</strong> already
+                exists. Every transaction must have a unique ID.
+              </p>
 
-//                   <div className="col-span-2">
-//                     <label className="block text-sm font-medium text-gray-700 mb-1">Detail Category (Optional)</label>
-//                     <input
-//                       type="text"
-//                       value={item.detailCategory}
-//                       onChange={(e) => updateTransactionItem(item.id, 'detailCategory', e.target.value)}
-//                       placeholder="Enter detail (optional)"
-//                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                     />
-//                   </div>
-//                 </div>
+              <div className="text-sm text-gray-500 space-y-1.5">
+                <p className="font-medium text-gray-700">Choose an option:</p>
+                <div className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                  <p>Click <strong className="text-gray-800">"Use New ID"</strong> — system auto-assigns a fresh unique ID</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                  <p>Click <strong className="text-gray-800">"Edit ID"</strong> — manually enter a different custom ID</p>
+                </div>
+              </div>
+            </div>
 
-//                 {/* Amount Section */}
-//                 <div className="border-t pt-4 mb-4">
-//                   <h4 className="font-medium text-gray-900 mb-3">Amount Details</h4>
-//                   <div className="grid grid-cols-3 gap-4">
-//                     <div>
-//                       <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount *</label>
-//                       <input
-//                         type="number"
-//                         value={item.amount || ''}
-//                         onChange={(e) => updateTransactionItem(item.id, 'amount', Number(e.target.value))}
-//                         placeholder="0"
-//                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                       />
-//                     </div>
-//                     <div>
-//                       <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid *</label>
-//                       <input
-//                         type="number"
-//                         value={item.amountPaid || ''}
-//                         onChange={(e) => updateTransactionItem(item.id, 'amountPaid', Number(e.target.value))}
-//                         placeholder="0"
-//                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                       />
-//                     </div>
-//                     <div>
-//                       <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
-//                       <div className={`px-3 py-2 rounded-lg border ${
-//                         item.paymentStatus === 'Full' 
-//                           ? 'bg-green-50 border-green-200 text-green-700' 
-//                           : 'bg-yellow-50 border-yellow-200 text-yellow-700'
-//                       }`}>
-//                         <div className="flex items-center gap-2">
-//                           {item.paymentStatus === 'Full' ? (
-//                             <><CheckCircle size={16} /> Full</>
-//                           ) : (
-//                             <><AlertCircle size={16} /> Partial</>
-//                           )}
-//                         </div>
-//                       </div>
-//                     </div>
-//                   </div>
+            {/* Actions */}
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateIdError('');
+                  setIsEditingId(true);
+                  setTransactionId('');
+                }}
+                className="flex-1 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+              >
+                ✏️ Edit ID
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateIdError('');
+                  const now = new Date();
+                  const dd  = String(now.getDate()).padStart(2, '0');
+                  const mm  = String(now.getMonth() + 1).padStart(2, '0');
+                  const yy  = String(now.getFullYear()).slice(-2);
+                  setTransactionId(`TXN-${dd}${mm}${yy}-###`);
+                  setIsEditingId(false);
+                }}
+                className="flex-1 py-2.5 bg-[#4f46e5] text-white rounded-xl font-semibold hover:bg-[#4338ca] transition-colors"
+              >
+                🔄 Use New ID
+              </button>
+            </div>
 
-//                   {item.paymentStatus === 'Partial' && item.remainingAmount > 0 && (
-//                     <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-//                       <p className="text-sm text-yellow-800">
-//                         ⚠️ Partial payment - remaining amount will be tracked
-//                       </p>
-//                       <p className="text-lg font-bold text-yellow-700 mt-1">
-//                         Remaining Amount: {formatCurrency(item.remainingAmount)}
-//                       </p>
-//                     </div>
-//                   )}
-//                 </div>
+          </div>
+        </div>
+      )}
 
-//                 {/* Paid By / Paid To */}
-//                 <div className="border-t pt-4 mb-4">
-//                   <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
-//                     <Users className="w-4 h-4" />
-//                     Parties Involved
-//                   </h4>
-//                   <div className="grid grid-cols-2 gap-4">
-//                     <div>
-//                       <label className="block text-sm font-medium text-gray-700 mb-1">Paid By *</label>
-//                       <div className="relative">
-//                         <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-//                         <input
-//                           type="text"
-//                           value={item.paidBy}
-//                           onChange={(e) => updateTransactionItem(item.id, 'paidBy', e.target.value)}
-//                           placeholder="Who paid this amount"
-//                           className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                         />
-//                       </div>
-//                     </div>
-//                     <div>
-//                       <label className="block text-sm font-medium text-gray-700 mb-1">Paid To *</label>
-//                       <div className="relative">
-//                         <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-//                         <input
-//                           type="text"
-//                           value={item.paidTo}
-//                           onChange={(e) => updateTransactionItem(item.id, 'paidTo', e.target.value)}
-//                           placeholder="Who received this amount"
-//                           className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                         />
-//                       </div>
-//                     </div>
-//                   </div>
-//                 </div>
-
-//                 {/* Note */}
-//                 <div className="border-t pt-4 mb-4">
-//                   <label className="block text-sm font-medium text-gray-700 mb-1">Note/Description</label>
-//                   <textarea
-//                     value={item.note}
-//                     onChange={(e) => updateTransactionItem(item.id, 'note', e.target.value)}
-//                     placeholder="Add any additional notes..."
-//                     rows={2}
-//                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-//                   />
-//                 </div>
-
-//                 {/* Receipt Upload */}
-//                 <div className="border-t pt-4">
-//                   <label className="block text-sm font-medium text-gray-700 mb-2">Receipt/Image (Optional)</label>
-//                   <div className="flex items-center gap-4">
-//                     <label className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#4f46e5] hover:bg-[#4f46e5]/5 transition-colors">
-//                       <Upload size={18} className="text-gray-500" />
-//                       <span className="text-sm text-gray-600">Upload Image</span>
-//                       <input
-//                         type="file"
-//                         accept="image/*"
-//                         onChange={(e) => updateTransactionItem(item.id, 'receipt', e.target.files?.[0] || null)}
-//                         className="hidden"
-//                       />
-//                     </label>
-//                     {item.receipt && (
-//                       <span className="text-sm text-green-600 flex items-center gap-1">
-//                         <CheckCircle size={14} />
-//                         {item.receipt.name}
-//                       </span>
-//                     )}
-//                   </div>
-//                 </div>
-//               </div>
-//             ))}
-
-//             {/* Add Another Transaction Button */}
-//             {enableMultiple && (
-//               <button
-//                 onClick={handleAddTransactionItem}
-//                 className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#4f46e5] hover:text-[#4f46e5] hover:bg-[#4f46e5]/5 transition-colors flex items-center justify-center gap-2"
-//               >
-//                 <Plus size={18} />
-//                 Add Another Transaction
-//               </button>
-//             )}
-//           </div>
-
-//           {/* Grand Total Summary */}
-//           <div className="bg-[#4f46e5] text-white rounded-lg p-6">
-//             <h3 className="text-lg font-semibold mb-4">Grand Total Summary</h3>
-//             <div className="grid grid-cols-3 gap-4">
-//               <div className="text-center">
-//                 <p className="text-[#4f46e5]/80 text-sm mb-1">Total Amount</p>
-//                 <p className="text-2xl font-bold">{formatCurrency(totalAmount)}</p>
-//               </div>
-//               <div className="text-center border-x border-white/20">
-//                 <p className="text-[#4f46e5]/80 text-sm mb-1">Total Paid</p>
-//                 <p className="text-2xl font-bold text-green-300">{formatCurrency(totalPaid)}</p>
-//               </div>
-//               <div className="text-center">
-//                 <p className="text-[#4f46e5]/80 text-sm mb-1">Total Remaining</p>
-//                 <p className="text-2xl font-bold text-yellow-300">{formatCurrency(totalRemaining)}</p>
-//               </div>
-//             </div>
-//           </div>
-
-//           {/* Actions */}
-//           <div className="flex items-center justify-end gap-4">
-//             <button
-//               onClick={() => navigate('/transactions')}
-//               className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-//             >
-//               Cancel
-//             </button>
-//             <button
-//               onClick={handleSave}
-//               className="flex items-center gap-2 px-6 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium"
-//             >
-//               <Plus size={18} />
-//               {isEditing ? 'Save Changes' : `Save ${transactionItems.length > 1 ? `${transactionItems.length} Transactions` : 'Transaction'}`}
-//             </button>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
+    </div>
+  );
+}
