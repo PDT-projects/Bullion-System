@@ -56,6 +56,14 @@ import {
   PendingPaymentsWrapper,
 } from './modules/transactions';
 
+// ── Budget imports ───────────────────────────────────────────────────────────
+import {
+  BudgetListWrapper,
+  BudgetCreateWrapper,
+  BudgetEditWrapper,
+  BudgetDeleteWrapper,
+} from './modules/budget';
+
 import { Sidebar }  from './layouts/Sidebar';
 import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
@@ -149,8 +157,6 @@ function EmployeeDeleteRoute() { return <EmployeeDeleteWrapper />; }
 
 // ============================================================
 // LOAN ROUTES
-// All wrappers are self-contained — fetch employees + banks
-// from Firestore internally. No props needed.
 // ============================================================
 
 function LoanDashboardRoute()        { return <LoanDashboardWrapper />; }
@@ -201,15 +207,15 @@ function CommissionReportsRoute()     { return <CommissionReportWrapper />; }
 // BANKING ROUTES
 // ============================================================
 
-function BankingDashboardRoute()  { return <BankingDashboardWrapper />; }
-function BankListRoute()          { return <BankListWrapper />; }
-function BankCreateRoute()        { return <BankCreateWrapper />; }
-function BankEditRoute()          { return <BankEditWrapper />; }
-function BankDeleteRoute()        { return <BankDeleteWrapper />; }
-function BankTransferListRoute()  { return <TransferListWrapper />; }
-function BankTransferCreateRoute(){ return <TransferCreateWrapper />; }
-function CashListRoute()          { return <CashListWrapper />; }
-function CashCreateRoute()        { return <CashCreateWrapper />; }
+function BankingDashboardRoute()   { return <BankingDashboardWrapper />; }
+function BankListRoute()           { return <BankListWrapper />; }
+function BankCreateRoute()         { return <BankCreateWrapper />; }
+function BankEditRoute()           { return <BankEditWrapper />; }
+function BankDeleteRoute()         { return <BankDeleteWrapper />; }
+function BankTransferListRoute()   { return <TransferListWrapper />; }
+function BankTransferCreateRoute() { return <TransferCreateWrapper />; }
+function CashListRoute()           { return <CashListWrapper />; }
+function CashCreateRoute()         { return <CashCreateWrapper />; }
 
 
 // ============================================================
@@ -249,6 +255,16 @@ function InventoryPaymentRoute()        { return <InventoryPaymentWrapper />; }
 function InventoryAddExistingRoute()    { return <InventoryAddExistingWrapper />; }
 function ProductTransferListRoute()     { return <ProductTransferWrapper />; }
 function ProductTransferNewRoute()      { return <ProductTransferCreateWrapper />; }
+
+
+// ============================================================
+// BUDGET ROUTES
+// ============================================================
+
+function BudgetListRoute()   { return <BudgetListWrapper />; }
+function BudgetCreateRoute() { return <BudgetCreateWrapper />; }
+function BudgetEditRoute()   { return <BudgetEditWrapper />; }
+function BudgetDeleteRoute() { return <BudgetDeleteWrapper />; }
 
 
 // ============================================================
@@ -404,6 +420,18 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <ProductTransferListRoute /> },
       { path: 'new', element: <ProductTransferNewRoute /> },
+    ],
+  },
+
+  // ── Budgets ───────────────────────────────────────────────
+  {
+    path: '/budgets',
+    element: (<ProtectedRoute><OutletLayout activeModule="budgets" /></ProtectedRoute>),
+    children: [
+      { index: true,        element: <BudgetListRoute /> },
+      { path: 'create',     element: <BudgetCreateRoute /> },
+      { path: ':id/edit',   element: <BudgetEditRoute /> },
+      { path: ':id/delete', element: <BudgetDeleteRoute /> },
     ],
   },
 
