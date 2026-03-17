@@ -1,5 +1,5 @@
 // Salary Module - Wrapper Component
-// SalaryCreateWrapper — fetches employees from Firestore
+// SalaryCreateWrapper — fetches employees from Firestore, banks fetched internally by VM
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -20,27 +20,31 @@ export function SalaryCreateWrapper({ type }: SalaryCreateWrapperProps) {
       .catch(() => toast.error('Failed to load employees'));
   }, []);
 
-  const viewModel = useSalaryFormViewModel({ mode: 'create', type, employees, banks: [] });
+  const vm = useSalaryFormViewModel({ mode: 'create', type, employees });
 
   return (
     <SalaryFormView
-      formData={viewModel.formData}
-      transactions={viewModel.transactions}
-      isValid={viewModel.isValid}
-      errorMessage={viewModel.errorMessage}
-      fieldErrors={viewModel.fieldErrors}
-      isLoading={viewModel.isLoading}
-      isEditMode={viewModel.isEditMode}
-      pageTitle={viewModel.pageTitle}
-      submitButtonText={viewModel.submitButtonText}
-      employees={viewModel.employees}
-      banks={viewModel.banks}
-      selectedEmployee={viewModel.selectedEmployee}
-      calculatedNetAmount={viewModel.calculatedNetAmount}
-      onFieldChange={viewModel.onFieldChange}
-      onTransactionChange={viewModel.onTransactionChange}
-      onSubmit={viewModel.onSubmit}
-      onCancel={viewModel.onCancel}
+      formData={vm.formData}
+      transactions={vm.transactions}
+      isValid={vm.isValid}
+      errorMessage={vm.errorMessage}
+      fieldErrors={vm.fieldErrors}
+      isLoading={vm.isLoading}
+      isEditMode={vm.isEditMode}
+      pageTitle={vm.pageTitle}
+      submitButtonText={vm.submitButtonText}
+      employees={vm.employees}
+      banks={vm.banks}
+      selectedEmployee={vm.selectedEmployee}
+      calculatedNetAmount={vm.calculatedNetAmount}
+      advancePaidThisMonth={vm.advancePaidThisMonth}
+      regularAlreadyPaid={vm.regularAlreadyPaid}
+      regularAlreadyPaidAmount={vm.regularAlreadyPaidAmount}
+      isEffectivelyAdvance={vm.isEffectivelyAdvance}
+      onFieldChange={vm.onFieldChange}
+      onTransactionChange={vm.onTransactionChange}
+      onSubmit={vm.onSubmit}
+      onCancel={vm.onCancel}
     />
   );
 }

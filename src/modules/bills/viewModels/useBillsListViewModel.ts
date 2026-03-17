@@ -34,6 +34,7 @@ interface UseBillsListViewModelReturn {
   setViewingSlip: (bill: Bill | null) => void;
   handleDelete: (id: string) => void;
   handleAdd: () => void;
+  handleEdit: (id: string) => void;         // ← new
   handlePrint: (bill: Bill) => void;
   getCategoryColor: (category: string) => string;
   getCategoryIconName: (category: string) => 'Zap' | 'Wifi' | 'Droplets' | 'Receipt';
@@ -42,18 +43,18 @@ interface UseBillsListViewModelReturn {
 export function useBillsListViewModel(): UseBillsListViewModelReturn {
   const navigate = useNavigate();
 
-  const [allBills, setAllBills] = useState<Bill[]>([]);
+  const [allBills,  setAllBills]  = useState<Bill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filters, setFilters] = useState<BillFilters>({
-    searchTerm: '',
-    categoryFilter: 'all',
-    dateFrom: null,
-    dateTo: null,
-    paymentMethodFilter: ''
+  const [filters,   setFilters]   = useState<BillFilters>({
+    searchTerm:          '',
+    categoryFilter:      'all',
+    dateFrom:            null,
+    dateTo:              null,
+    paymentMethodFilter: '',
   });
-  const [showFilters, setShowFilters] = useState(false);
-  const [viewingBill, setViewingBill] = useState<Bill | null>(null);
-  const [viewingSlip, setViewingSlip] = useState<Bill | null>(null);
+  const [showFilters,  setShowFilters]  = useState(false);
+  const [viewingBill,  setViewingBill]  = useState<Bill | null>(null);
+  const [viewingSlip,  setViewingSlip]  = useState<Bill | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -88,11 +89,11 @@ export function useBillsListViewModel(): UseBillsListViewModelReturn {
 
   const clearFilters = useCallback(() => {
     setFilters({
-      searchTerm: '',
-      categoryFilter: 'all',
-      dateFrom: null,
-      dateTo: null,
-      paymentMethodFilter: ''
+      searchTerm:          '',
+      categoryFilter:      'all',
+      dateFrom:            null,
+      dateTo:              null,
+      paymentMethodFilter: '',
     });
   }, []);
 
@@ -104,22 +105,18 @@ export function useBillsListViewModel(): UseBillsListViewModelReturn {
       await BillsFirebaseService.deleteBill(id);
       setAllBills(prev => prev.filter(b => b.id !== id));
       toast.success('Bill deleted successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete bill');
     }
   }, []);
 
-  const handleAdd = useCallback(() => navigate('/bills/create'), [navigate]);
+  const handleAdd  = useCallback(() => navigate('/bills/create'), [navigate]);
+  // ── NEW: navigate to edit route ──────────────────────────────────────────
+  const handleEdit = useCallback((id: string) => navigate(`/bills/${id}/edit`), [navigate]);
   const handlePrint = useCallback(() => window.print(), []);
 
-  const getCategoryColor = useCallback(
-    (category: string) => BillsService.getCategoryColor(category),
-    []
-  );
-  const getCategoryIconName = useCallback(
-    (category: string) => BillsService.getCategoryIconName(category),
-    []
-  );
+  const getCategoryColor    = useCallback((c: string) => BillsService.getCategoryColor(c),    []);
+  const getCategoryIconName = useCallback((c: string) => BillsService.getCategoryIconName(c), []);
 
   return {
     bills,
@@ -131,14 +128,14 @@ export function useBillsListViewModel(): UseBillsListViewModelReturn {
     viewingSlip,
     isLoading,
     stats: {
-      totalBills: stats.totalBills,
-      totalAmount: stats.totalAmount,
-      electricityCount: stats.electricityCount,
-      electricityTotal: stats.electricityTotal,
-      internetCount: stats.internetCount,
-      internetTotal: stats.internetTotal,
-      utilitiesCount: stats.utilitiesCount,
-      utilitiesTotal: stats.utilitiesTotal
+      totalBills:        stats.totalBills,
+      totalAmount:       stats.totalAmount,
+      electricityCount:  stats.electricityCount,
+      electricityTotal:  stats.electricityTotal,
+      internetCount:     stats.internetCount,
+      internetTotal:     stats.internetTotal,
+      utilitiesCount:    stats.utilitiesCount,
+      utilitiesTotal:    stats.utilitiesTotal,
     },
     setFilter,
     clearFilters,
@@ -147,8 +144,9 @@ export function useBillsListViewModel(): UseBillsListViewModelReturn {
     setViewingSlip,
     handleDelete,
     handleAdd,
+    handleEdit,
     handlePrint,
     getCategoryColor,
-    getCategoryIconName
+    getCategoryIconName,
   };
 }

@@ -1,5 +1,4 @@
 // Bills Module - Wrapper Component
-// BillsListWrapper
 
 import React from 'react';
 import { useBillsListViewModel } from '../viewModels/useBillsListViewModel';
@@ -25,6 +24,7 @@ export const BillsListWrapper: React.FC = () => {
       setViewingSlip={vm.setViewingSlip}
       handleDelete={vm.handleDelete}
       handleAdd={vm.handleAdd}
+      handleEdit={vm.handleEdit}
       handlePrint={vm.handlePrint}
       getCategoryColor={vm.getCategoryColor}
       getCategoryIconName={vm.getCategoryIconName}

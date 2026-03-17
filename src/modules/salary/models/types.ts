@@ -1,5 +1,4 @@
 // Salary Module - Model Layer
-// Data interfaces and types
 
 export interface SalaryTransaction {
   id: string;
@@ -7,7 +6,11 @@ export interface SalaryTransaction {
   paidBy: string;
   transactionBy: string;
   mode: 'Cash' | 'Bank' | 'Cheque';
+  bankId: string;           // ← new: Firestore bank ID for balance update
   bankName: string;
+  chequeNumber: string;     // ← new
+  chequeDate: string;       // ← new
+  chequeBank: string;       // ← new: bank name on the cheque
   imageUrl: string;
   paymentStatus: 'Full' | 'Partial';
   remainingAmount: number;
@@ -29,7 +32,11 @@ export interface Salary {
   deductions: number;
   netAmount: number;
   mode: 'Cash' | 'Bank' | 'Cheque';
+  bankId?: string;          // ← new
   bankName: string;
+  chequeNumber?: string;    // ← new
+  chequeDate?: string;      // ← new
+  chequeBank?: string;      // ← new
   paidBy: string;
   transactionBy: string;
   salaryMonth: string;
@@ -37,6 +44,8 @@ export interface Salary {
   imageUrl: string;
   paymentStatus: 'Full' | 'Partial';
   remainingAmount: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateSalaryDTO {
@@ -93,7 +102,7 @@ export interface EmployeeInfo {
 
 export const SALARY_TYPES = {
   REGULAR: 'Employee salary' as const,
-  ADVANCE: 'Advance salary' as const
+  ADVANCE: 'Advance salary' as const,
 };
 
 export const PAYMENT_METHODS = ['Cash', 'Bank', 'Cheque'] as const;

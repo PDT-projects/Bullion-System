@@ -1,5 +1,7 @@
 // Transactions Module - Firebase Service
 // All Firestore operations for transactions collection
+// Fix: deep stripUndefined removes undefined from nested objects + arrays
+//      (Firestore rejects undefined anywhere in the document tree)
 
 import {
   collection, getDocs, getDoc, addDoc, updateDoc, setDoc,
@@ -11,10 +13,22 @@ import { Transaction, PartialPayment } from './types';
 const COLLECTION  = 'transactions';
 const COUNTER_COL = 'transactionCounters';
 
-function stripUndefined<T extends object>(obj: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== undefined)
-  ) as Partial<T>;
+// ── Deep strip of undefined values ───────────────────────────────────────────
+// Firestore rejects undefined at ANY depth — including inside arrays of objects
+// (e.g. partialPayments[].chequeNumber = undefined → crash).
+// This recursively cleans the whole tree before every Firestore write.
+function deepStripUndefined(value: any): any {
+  if (Array.isArray(value)) {
+    return value.map(deepStripUndefined);
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, deepStripUndefined(v)])
+    );
+  }
+  return value;
 }
 
 function docToTransaction(d: any): Transaction {
@@ -33,6 +47,9 @@ function docToTransaction(d: any): Transaction {
     bankName:             data.bankName,
     bankId:               data.bankId,
     chequeNumber:         data.chequeNumber,
+    chequeDate:           data.chequeDate,
+    chequeBank:           data.chequeBank,
+    transactionReference: data.transactionReference,
     note:                 data.note                 || '',
     paidBy:               data.paidBy,
     paidTo:               data.paidTo,
@@ -64,8 +81,6 @@ function docToTransaction(d: any): Transaction {
 export class TransactionFirebaseService {
 
   // ── Auto-generate Transaction ID: TXN-DDMMYY-NNN ──────────────────────────
-  // Uses Firestore runTransaction for atomic read-increment-write.
-  // This prevents race conditions where two saves get the same counter value.
   static async generateTransactionId(): Promise<string> {
     const now = new Date();
     const dd  = String(now.getDate()).padStart(2, '0');
@@ -84,17 +99,15 @@ export class TransactionFirebaseService {
       return `TXN-${key}-${String(next).padStart(3, '0')}`;
     } catch (err) {
       console.error('Counter transaction failed, using timestamp fallback:', err);
-      // Fallback: timestamp-based suffix — still unique, just not sequential
       const suffix = String(Date.now()).slice(-5);
       return `TXN-${key}-${suffix}`;
     }
   }
 
-  // ── Check if a transaction ID already exists (for uniqueness validation) ─
+  // ── Check if a transaction ID already exists ──────────────────────────────
   static async transactionIdExists(transactionId: string): Promise<boolean> {
     try {
-      // Use a where query instead of a full collection scan
-      const q = query(collection(db, COLLECTION), where('transactionId', '==', transactionId));
+      const q    = query(collection(db, COLLECTION), where('transactionId', '==', transactionId));
       const snap = await getDocs(q);
       return !snap.empty;
     } catch {
@@ -102,7 +115,7 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Fetch all transactions (newest first, client-sorted to avoid index) ────
+  // ── Fetch all transactions (newest first) ─────────────────────────────────
   static async fetchAllTransactions(): Promise<Transaction[]> {
     try {
       const snapshot = await getDocs(collection(db, COLLECTION));
@@ -120,7 +133,7 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Fetch single transaction ───────────────────────────────────────────────
+  // ── Fetch single transaction ──────────────────────────────────────────────
   static async fetchTransactionById(id: string): Promise<Transaction | null> {
     try {
       const snap = await getDoc(doc(db, COLLECTION, id));
@@ -132,11 +145,12 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Create transaction ─────────────────────────────────────────────────────
+  // ── Create transaction ────────────────────────────────────────────────────
   static async createTransaction(data: Omit<Transaction, 'id'>): Promise<Transaction> {
     try {
       const now  = new Date().toISOString();
-      const body = stripUndefined({ ...data, createdAt: now, updatedAt: now });
+      // Deep strip so no undefined anywhere in the tree
+      const body = deepStripUndefined({ ...data, createdAt: now, updatedAt: now });
       const ref  = await addDoc(collection(db, COLLECTION), body);
       console.log('✅ Transaction created:', ref.id);
       return { ...data, id: ref.id, createdAt: now, updatedAt: now };
@@ -146,10 +160,11 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Update transaction ─────────────────────────────────────────────────────
+  // ── Update transaction ────────────────────────────────────────────────────
   static async updateTransaction(id: string, data: Partial<Omit<Transaction, 'id'>>): Promise<void> {
     try {
-      const body = stripUndefined({ ...data, updatedAt: new Date().toISOString() });
+      // Deep strip — catches undefined inside partialPayments[] objects and any other nested fields
+      const body = deepStripUndefined({ ...data, updatedAt: new Date().toISOString() });
       await updateDoc(doc(db, COLLECTION, id), body);
       console.log('✅ Transaction updated:', id);
     } catch (error) {
@@ -158,7 +173,7 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Delete transaction ─────────────────────────────────────────────────────
+  // ── Delete transaction ────────────────────────────────────────────────────
   static async deleteTransaction(id: string): Promise<void> {
     try {
       await deleteDoc(doc(db, COLLECTION, id));
@@ -169,24 +184,29 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Add partial payment to a transaction ──────────────────────────────────
+  // ── Add partial payment to a transaction ─────────────────────────────────
+  // The partial payment object may contain undefined fields (chequeNumber, bankId etc.)
+  // deepStripUndefined inside updateTransaction handles these before the Firestore write.
   static async addPartialPayment(transactionId: string, payment: PartialPayment): Promise<void> {
     try {
       const snap = await getDoc(doc(db, COLLECTION, transactionId));
       if (!snap.exists()) throw new Error('Transaction not found');
       const tx = docToTransaction(snap);
 
-      const updatedPayments = [...(tx.partialPayments || []), payment];
+      // Strip undefined from the new payment object before merging
+      const cleanPayment    = deepStripUndefined(payment) as PartialPayment;
+      const updatedPayments = [...(tx.partialPayments || []), cleanPayment];
       const totalPaid       = updatedPayments.reduce((s, p) => s + p.amount, 0);
-      const remaining       = tx.amount - totalPaid;
+      const remaining       = Math.max(0, tx.amount - totalPaid);
       const isFullyCleared  = remaining <= 0 && updatedPayments.every(p => p.isCleared || p.method === 'Bank');
 
+      // updateTransaction also deep-strips, so doubly safe
       await TransactionFirebaseService.updateTransaction(transactionId, {
         partialPayments: updatedPayments,
         totalPaid,
         remainingAmount: remaining,
         isFullyCleared,
-        paymentStatus: remaining <= 0 ? 'Full' : 'Partial',
+        paymentStatus:   remaining <= 0 ? 'Full' : 'Partial',
       });
       console.log('✅ Partial payment added:', transactionId);
     } catch (error) {
@@ -195,7 +215,7 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Mark a partial payment as cleared ─────────────────────────────────────
+  // ── Mark a partial payment as cleared ────────────────────────────────────
   static async markPaymentCleared(transactionId: string, paymentId: string): Promise<void> {
     try {
       const snap = await getDoc(doc(db, COLLECTION, transactionId));
@@ -206,7 +226,7 @@ export class TransactionFirebaseService {
         p.id === paymentId ? { ...p, isCleared: true } : p
       );
       const totalPaid      = updatedPayments.reduce((s, p) => s + p.amount, 0);
-      const remaining      = tx.amount - totalPaid;
+      const remaining      = Math.max(0, tx.amount - totalPaid);
       const isFullyCleared = remaining <= 0 && updatedPayments.every(p => p.isCleared);
 
       await TransactionFirebaseService.updateTransaction(transactionId, {

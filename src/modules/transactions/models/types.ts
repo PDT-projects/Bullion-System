@@ -7,7 +7,10 @@ export interface PartialPayment {
   time: string;
   method: 'Cash' | 'Cheque' | 'Bank';
   bankId?: string;
+  bankName?: string;
   chequeNumber?: string;
+  chequeDate?: string;       // ← new: date on cheque
+  chequeBank?: string;       // ← new: bank name on cheque
   isCleared: boolean;
   depositedDate?: string;
 }
@@ -35,6 +38,7 @@ export interface Transaction {
   bankId?: string;
   chequeNumber?: string;
   chequeDate?: string;
+  chequeBank?: string;       // ← new
   transactionReference?: string;
   note: string;
   paidBy?: string;
@@ -52,10 +56,10 @@ export interface Transaction {
   isFullyCleared?: boolean;
   depositedToBank?: boolean;
   attachments?: Attachment[];
-  // Linked record info (for salary, loan, bill linkage)
+  // Linked record info
   linkedType?: 'salary' | 'loan' | 'bill' | 'invoice' | 'commission' | 'manual';
   linkedId?: string;
-  linkedRef?: string;    // human-readable: "SAL-001", "LOAN-003", etc.
+  linkedRef?: string;
   // Salary fields
   baseSalary?: number;
   commission?: number;
@@ -112,6 +116,8 @@ export interface PendingPaymentData {
   bankId: string;
   method: 'Cash' | 'Cheque' | 'Bank';
   chequeNumber?: string;
+  chequeDate?: string;
+  chequeBank?: string;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -124,8 +130,11 @@ export const COMPANIES = [
   { id: 'rnd', name: 'Pakistan Detectors Technologies: RND/SITE Office' },
 ];
 
+// FIX 1: 'Loan' added so category filter works correctly
 export const MAIN_CATEGORIES = ['Cash Inflow', 'Cash Outflow', 'Loan'];
 
+// FIX 2: Loan sub-categories are listed under BOTH Loan key AND inside inflow/outflow
+// so filtering by mainCategory === 'Loan' correctly shows loan records.
 export const SUB_CATEGORIES: Record<string, string[]> = {
   'Cash Inflow': [
     'Product sale received',
@@ -175,3 +184,16 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
     'Other loan - Partial',
   ],
 };
+
+// Loan-related sub-categories that appear under Inflow/Outflow but belong to Loan category
+export const LOAN_SUB_CATEGORIES = new Set([
+  'Loan received - From Employee',
+  'Loan received - From Company',
+  'Loan paid to employee',
+  'Loan given',
+  'Loan received',
+  'Official Loan',
+  'Personal loan',
+  'Other loan - Full',
+  'Other loan - Partial',
+]);

@@ -1,25 +1,28 @@
 // Transactions Module - Business Logic Service (no Firestore)
 
-import { Transaction, TransactionFilters, TransactionStats } from './types';
+import { Transaction, TransactionFilters, TransactionStats, LOAN_SUB_CATEGORIES } from './types';
 
 export const getTransactionTotals = (t: Transaction) => {
   const partialTotal = (t.partialPayments || []).reduce((s, p) => s + p.amount, 0);
-  // Use partialPayments sum if available, otherwise fall back to amountPaid field
   const totalPaid = partialTotal > 0 ? partialTotal : (t.amountPaid ?? t.amount ?? 0);
   const remaining = Math.max(0, (t.amount ?? 0) - totalPaid);
   return { totalPaid, remainingAmount: remaining };
 };
 
 export const isPending = (t: Transaction): boolean => {
-  // A transaction is only pending if:
-  // 1. There is still money remaining to be paid, OR
-  // 2. There are partial payments that have not been cleared yet (e.g. cheques)
-  // Fully paid (paymentStatus === 'Full' or isFullyCleared) transactions are never pending.
-  if (t.isFullyCleared)              return false;
-  if (t.paymentStatus === 'Full')    return false;
+  if (t.isFullyCleared)           return false;
+  if (t.paymentStatus === 'Full') return false;
   const { remainingAmount } = getTransactionTotals(t);
   const hasUncleared = (t.partialPayments || []).some(p => !p.isCleared && p.method !== 'Bank');
   return remainingAmount > 0 || hasUncleared;
+};
+
+// FIX: When filtering by 'Loan', match both mainCategory === 'Loan'
+// AND inflow/outflow transactions whose subCategory is a loan sub-category.
+export const isLoanTransaction = (t: Transaction): boolean => {
+  if (t.mainCategory === 'Loan') return true;
+  if (LOAN_SUB_CATEGORIES.has(t.subCategory)) return true;
+  return false;
 };
 
 export const filterTransactions = (transactions: Transaction[], filters: TransactionFilters): Transaction[] =>
@@ -34,7 +37,14 @@ export const filterTransactions = (transactions: Transaction[], filters: Transac
           !(t.paidBy || '').toLowerCase().includes(s) &&
           !(t.paidTo || '').toLowerCase().includes(s)) return false;
     }
-    if (filters.mainCategory && t.mainCategory !== filters.mainCategory) return false;
+    // FIX: Loan filter — match Loan main category OR loan sub-categories in inflow/outflow
+    if (filters.mainCategory) {
+      if (filters.mainCategory === 'Loan') {
+        if (!isLoanTransaction(t)) return false;
+      } else {
+        if (t.mainCategory !== filters.mainCategory) return false;
+      }
+    }
     if (filters.dateFrom && t.date < filters.dateFrom) return false;
     if (filters.dateTo   && t.date > filters.dateTo)   return false;
     if (filters.company  && t.company !== filters.company) return false;
@@ -72,7 +82,8 @@ export const formatDateTime = (date: string, time?: string): string => {
 export const getCategoryColor = (category: string): string => {
   if (category === 'Cash Inflow')  return 'bg-green-100 text-green-800';
   if (category === 'Cash Outflow') return 'bg-red-100 text-red-800';
-  return 'bg-blue-100 text-blue-800';
+  if (category === 'Loan')         return 'bg-blue-100 text-blue-800';
+  return 'bg-gray-100 text-gray-800';
 };
 
 export const getPaymentStatusColor = (t: Transaction): string => {
