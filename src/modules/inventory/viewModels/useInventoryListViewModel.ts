@@ -1,5 +1,6 @@
 // Inventory Module - ViewModel Layer
 // useInventoryListViewModel - Fetches products from Firestore
+// Change: adds locationFilter support + exposes uniqueLocations for the filter dropdown
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +13,7 @@ interface UseInventoryListViewModelReturn {
   products: Product[];
   allProducts: Product[];
   categories: string[];
+  uniqueLocations: string[];          // ← new
   filters: ProductFilters;
   showFilters: boolean;
   activeFilterCount: number;
@@ -36,14 +38,15 @@ interface UseInventoryListViewModelReturn {
 }
 
 const DEFAULT_FILTERS: ProductFilters = {
-  brandSearch: '',
-  modelSearch: '',
+  brandSearch:    '',
+  modelSearch:    '',
   categoryFilter: '',
-  statusFilter: '',
-  buyTypeFilter: '',
-  minPrice: null,
-  maxPrice: null,
-  hasStock: null,
+  statusFilter:   '',
+  buyTypeFilter:  '',
+  locationFilter: '',              // ← new
+  minPrice:       null,
+  maxPrice:       null,
+  hasStock:       null,
 };
 
 export function useInventoryListViewModel(
@@ -52,8 +55,8 @@ export function useInventoryListViewModel(
   const navigate = useNavigate();
 
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [filters, setFilters] = useState<ProductFilters>(DEFAULT_FILTERS);
+  const [isLoading, setIsLoading]     = useState(true);
+  const [filters, setFilters]         = useState<ProductFilters>(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
 
@@ -73,20 +76,19 @@ export function useInventoryListViewModel(
     loadProducts();
   }, [inventoryType]);
 
-  const products = useMemo(() => InventoryService.filterProducts(allProducts, filters), [allProducts, filters]);
-  const categories = useMemo(() => InventoryService.getUniqueCategories(allProducts), [allProducts]);
-  const stats = useMemo(() => InventoryService.calculateProductStats(products), [products]);
+  const products          = useMemo(() => InventoryService.filterProducts(allProducts, filters), [allProducts, filters]);
+  const categories        = useMemo(() => InventoryService.getUniqueCategories(allProducts), [allProducts]);
+  const uniqueLocations   = useMemo(() => InventoryService.getUniqueLocations(allProducts), [allProducts]);  // ← new
+  const stats             = useMemo(() => InventoryService.calculateProductStats(products), [products]);
   const activeFilterCount = useMemo(() => InventoryService.countActiveProductFilters(filters), [filters]);
 
-  const setFilter = useCallback((key: keyof ProductFilters, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  }, []);
-
+  const setFilter    = useCallback((key: keyof ProductFilters, value: any) =>
+    setFilters(prev => ({ ...prev, [key]: value })), []);
   const clearFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
   const toggleFilters = useCallback(() => setShowFilters(prev => !prev), []);
-  const onAddNew = useCallback(() => navigate('/inventory/create-new'), [navigate]);
+  const onAddNew      = useCallback(() => navigate('/inventory/create-new'), [navigate]);
   const onAddToExisting = useCallback(() => navigate('/inventory/add-existing'), [navigate]);
-  const onTransfer = useCallback((id: string) => navigate(`/product-transfer?productId=${id}`), [navigate]);
+  const onTransfer    = useCallback((id: string) => navigate(`/product-transfer?productId=${id}`), [navigate]);
 
   const onReceiveProduct = useCallback(async (id: string) => {
     try {
@@ -100,29 +102,19 @@ export function useInventoryListViewModel(
   }, []);
 
   return {
-    products,
-    allProducts,
-    categories,
-    filters,
-    showFilters,
-    activeFilterCount,
-    viewProduct,
-    isLoading,
+    products, allProducts, categories, uniqueLocations,
+    filters, showFilters, activeFilterCount,
+    viewProduct, isLoading,
     stats: {
       totalProducts: stats.totalProducts,
-      totalStock: stats.totalStock,
-      totalValue: stats.totalValue,
-      newProducts: stats.newProducts,
-      inTransit: stats.inTransit,
-      available: stats.available,
+      totalStock:    stats.totalStock,
+      totalValue:    stats.totalValue,
+      newProducts:   stats.newProducts,
+      inTransit:     stats.inTransit,
+      available:     stats.available,
     },
-    setFilter,
-    clearFilters,
-    toggleFilters,
-    setViewProduct,
-    onAddNew,
-    onAddToExisting,
-    onTransfer,
+    setFilter, clearFilters, toggleFilters, setViewProduct,
+    onAddNew, onAddToExisting, onTransfer,
     onReceiveProduct: inventoryType === 'on-order' ? onReceiveProduct : undefined,
   };
 }

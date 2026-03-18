@@ -150,6 +150,7 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
         stock:         (destProduct.stock || 0) + transferredSerials.length,
         serialNumbers: mergedSerials,
         serialCities:  mergedCities,
+        location:      toLocation,   // update primary location on receipt
       });
 
       // Mark transfer received
@@ -163,7 +164,7 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
       setAllProducts(prev =>
         prev.map(p =>
           p.id === destProduct.id
-            ? { ...p, stock: (p.stock || 0) + transferredSerials.length, serialNumbers: mergedSerials, serialCities: mergedCities }
+            ? { ...p, stock: (p.stock || 0) + transferredSerials.length, serialNumbers: mergedSerials, serialCities: mergedCities, location: toLocation }
             : p
         )
       );

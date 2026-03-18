@@ -1,5 +1,6 @@
 // Inventory Module - Model Layer
 // Type definitions for Inventory and Product Transfer
+// Change: added `location` field to Product, CreateProductDTO, UpdateProductDTO, ProductFormData
 
 export type ProductStatus = 'New' | 'In Transit' | 'On-Order' | 'Receivable' | 'Available' | 'Sold' | 'Damaged' | 'Returned' | 'Used';
 export type BuyType = 'Import' | 'Export';
@@ -8,6 +9,15 @@ export type PaymentStatus = 'Pending' | 'Partial' | 'Complete';
 export type CostingOption = 'with' | 'without';
 export type InventoryEntryType = 'in-stock' | 'on-order';
 export type InventoryEntryStep = 'details' | 'payment' | 'confirmation';
+
+// Canonical location list — single source of truth used across inventory + transfers
+export const INVENTORY_LOCATIONS = [
+  'Islamabad',
+  'Karachi',
+  'Lahore',
+  'Bullion RND/SITE',
+] as const;
+export type InventoryLocation = typeof INVENTORY_LOCATIONS[number];
 
 export interface CostingModel {
   id: string;
@@ -47,6 +57,8 @@ export interface Product {
   buyType: BuyType;
   warrantyYears: number;
   stock: number;
+  // Primary stocking location — set at entry time, updated on transfer receipt
+  location?: string;
   serialNumbers: string[];
   serialCities: { [serialNumber: string]: string };
   serialStatus?: { [serialNumber: string]: SerialStatus };
@@ -111,6 +123,7 @@ export interface CreateProductDTO {
   buyType: BuyType;
   warrantyYears: number;
   stock: number;
+  location?: string;           // ← new: primary stocking location
   serialNumbers: string[];
   serialCities: { [serialNumber: string]: string };
   description: string;
@@ -134,6 +147,7 @@ export interface ProductFormData {
   buyType: BuyType;
   warrantyYears: number;
   stock: number;
+  location?: string;           // ← new: primary stocking location
   description: string;
   status: ProductStatus;
   isDamaged: boolean;
@@ -179,6 +193,7 @@ export interface UpdateProductDTO {
   buyType?: BuyType;
   warrantyYears?: number;
   stock?: number;
+  location?: string;           // ← new
   serialNumbers?: string[];
   serialCities?: { [serialNumber: string]: string };
   description?: string;
@@ -204,6 +219,7 @@ export interface ProductFilters {
   categoryFilter: string;
   statusFilter: ProductStatus | '';
   buyTypeFilter: BuyType | '';
+  locationFilter: string;      // ← new: filter by location
   minPrice: number | null;
   maxPrice: number | null;
   hasStock: boolean | null;

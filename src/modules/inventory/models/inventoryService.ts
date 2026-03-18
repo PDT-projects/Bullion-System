@@ -1,5 +1,6 @@
 // Inventory Module - Model Layer
 // InventoryService - Business logic, data manipulation, and utilities
+// Change: filterProducts now supports locationFilter; getDefaultProductFormData includes location
 
 import {
   Product, ProductTransfer, CreateProductDTO, UpdateProductDTO,
@@ -29,9 +30,17 @@ export class InventoryService {
         product.sellPrice <= filters.maxPrice;
       const matchesStock = filters.hasStock === null ||
         (filters.hasStock ? product.stock > 0 : product.stock === 0);
+      // Location filter: matches product.location OR any serial's city
+      const matchesLocation = !filters.locationFilter || (() => {
+        if (product.location === filters.locationFilter) return true;
+        // Also match if any serial is stocked at that location
+        return Object.values(product.serialCities || {}).some(
+          city => city === filters.locationFilter
+        );
+      })();
       return matchesBrand && matchesModel && matchesCategory &&
         matchesStatus && matchesBuyType && matchesMinPrice &&
-        matchesMaxPrice && matchesStock;
+        matchesMaxPrice && matchesStock && matchesLocation;
     });
   }
 
@@ -109,7 +118,7 @@ export class InventoryService {
       id: this.generateId(),
       productName,
       date: data.transferDate,
-      status: 'Pending',
+      status: 'In Transit',
       createdAt: new Date().toISOString()
     };
     return [...transfers, newTransfer];
@@ -190,7 +199,17 @@ export class InventoryService {
     return [...new Set(products.map(p => p.category))].sort();
   }
 
-  static getUniqueLocations(transfers: ProductTransfer[]): string[] {
+  /** Returns all distinct locations across products (from product.location + serialCities values) */
+  static getUniqueLocations(products: Product[]): string[] {
+    const locs = new Set<string>();
+    products.forEach(p => {
+      if (p.location) locs.add(p.location);
+      Object.values(p.serialCities || {}).forEach(city => { if (city) locs.add(city); });
+    });
+    return [...locs].sort();
+  }
+
+  static getUniqueTransferLocations(transfers: ProductTransfer[]): string[] {
     const locations = new Set<string>();
     transfers.forEach(t => { locations.add(t.fromLocation); locations.add(t.toLocation); });
     return [...locations].sort();
@@ -205,10 +224,31 @@ export class InventoryService {
     return this.getAvailableSerials(product).length >= quantity;
   }
 
+  /** Returns serials stocked at a specific location */
+  static getSerialsAtLocation(product: Product, location: string): string[] {
+    return (product.serialNumbers || []).filter(s => {
+      const city   = product.serialCities?.[s];
+      const status = product.serialStatus?.[s] || 'Available';
+      return city === location && status !== 'In Transit' && status !== 'Damaged';
+    });
+  }
+
+  /** Groups serialNumbers by city/location */
+  static groupSerialsByLocation(product: Product): Record<string, string[]> {
+    const groups: Record<string, string[]> = {};
+    (product.serialNumbers || []).forEach(s => {
+      const city = product.serialCities?.[s] || 'Unknown';
+      if (!groups[city]) groups[city] = [];
+      groups[city].push(s);
+    });
+    return groups;
+  }
+
   static getDefaultProductFormData(): Partial<CreateProductDTO> {
     return {
       brandName: '', modelName: '', category: '', sellPrice: 0,
       buyType: 'Import', warrantyYears: 1, stock: 0,
+      location: '',
       serialNumbers: [], serialCities: {}, description: '', status: 'New'
     };
   }

@@ -1,12 +1,7 @@
 /**
  * Inventory Module - Firebase Firestore Service Layer
- *
- * Collections:
- *   products        - inventory product records
- *   transfers       - product transfer records
- *   brands          - brand records
- *   brandModels     - model records per brand
- *   inv_counters    - auto-increment counters for transaction IDs
+ * Change: `location` field added to product documents — saved on create/update,
+ * read back in transformDocToProduct.
  */
 
 import {
@@ -51,21 +46,14 @@ function stripUndefined<T extends Record<string, any>>(obj: T): T {
 /**
  * Auto-generate transaction ID: INV-DDMMYY-NNN
  * e.g.  INV-150326-001
- *   INV  = Inventory
- *   15   = day (today's date)
- *   03   = month
- *   26   = year (last 2 digits of 2026)
- *   001  = daily sequential counter, resets each new day
- *
- * Counter is stored in Firestore collection inv_counters / document INV-DDMMYY
  */
 export async function generateInventoryTransactionId(): Promise<string> {
-  const now  = new Date();
-  const dd   = String(now.getDate()).padStart(2, '0');
-  const mm   = String(now.getMonth() + 1).padStart(2, '0');
-  const yy   = String(now.getFullYear()).slice(-2);
-  const dateKey   = `${dd}${mm}${yy}`;
-  const prefix    = `INV-${dateKey}`;
+  const now      = new Date();
+  const dd       = String(now.getDate()).padStart(2, '0');
+  const mm       = String(now.getMonth() + 1).padStart(2, '0');
+  const yy       = String(now.getFullYear()).slice(-2);
+  const dateKey  = `${dd}${mm}${yy}`;
+  const prefix   = `INV-${dateKey}`;
   const counterRef = doc(db, COUNTERS_COLLECTION, prefix);
 
   const newCount = await runTransaction(db, async (tx) => {
@@ -93,6 +81,7 @@ function transformDocToProduct(docSnap: any): Product {
     buyType:       d.buyType       || 'Import',
     warrantyYears: d.warrantyYears ?? 0,
     stock:         d.stock         ?? 0,
+    location:      d.location      || '',          // ← new
     serialNumbers: d.serialNumbers || [],
     serialCities:  d.serialCities  || {},
     serialStatus:  d.serialStatus  || {},
@@ -145,8 +134,8 @@ function transformDocToTransfer(docSnap: any): ProductTransfer {
   };
 }
 
-export interface BrandDoc { id: string; name: string; createdAt?: string; }
-export interface ModelDoc { id: string; name: string; brandId: string; costPrice?: number; sellPrice?: number; createdAt?: string; }
+export interface BrandDoc  { id: string; name: string; createdAt?: string; }
+export interface ModelDoc  { id: string; name: string; brandId: string; costPrice?: number; sellPrice?: number; createdAt?: string; }
 
 function transformDocToBrand(docSnap: any): BrandDoc {
   const d = docSnap.data();
@@ -184,10 +173,6 @@ export class InventoryFirebaseService {
     }
   }
 
-  /**
-   * 'in-stock'  → all products WHERE receivableStatus != 'Pending'
-   * 'on-order'  → all products WHERE receivableStatus == 'Pending' (receivable/consignment stock)
-   */
   static async fetchProductsByType(inventoryType: 'in-stock' | 'on-order'): Promise<Product[]> {
     try {
       console.log(`🔥 Fetching ${inventoryType} products...`);
@@ -195,8 +180,6 @@ export class InventoryFirebaseService {
       let snapshot;
 
       if (inventoryType === 'on-order') {
-        // No orderBy — avoids composite index requirement on (receivableStatus, createdAt).
-        // Sort client-side instead.
         const q = query(ref, where('receivableStatus', '==', 'Pending'));
         snapshot = await getDocs(q);
       } else {
@@ -211,7 +194,6 @@ export class InventoryFirebaseService {
         products.push(p);
       });
 
-      // Sort on-order results by createdAt descending (newest first) client-side
       if (inventoryType === 'on-order') {
         products.sort((a, b) =>
           new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
@@ -253,6 +235,14 @@ export class InventoryFirebaseService {
       const serialStatus: { [key: string]: SerialStatus } = {};
       dto.serialNumbers.forEach(s => { serialStatus[s] = 'Available'; });
 
+      // If no per-serial cities set, seed them all to the product's primary location
+      const serialCities = { ...dto.serialCities };
+      if (dto.location) {
+        dto.serialNumbers.forEach(s => {
+          if (!serialCities[s]) serialCities[s] = dto.location!;
+        });
+      }
+
       let costingFields = {};
       if (dto.costingOption === 'with' && dto.costing) {
         const c = dto.costing;
@@ -281,8 +271,9 @@ export class InventoryFirebaseService {
         buyType:       dto.buyType,
         warrantyYears: dto.warrantyYears,
         stock:         dto.stock,
+        location:      dto.location,              // ← new
         serialNumbers: dto.serialNumbers,
-        serialCities:  dto.serialCities,
+        serialCities,                             // ← seeded from location
         serialStatus,
         description:   dto.description,
         status:        dto.status,
@@ -339,10 +330,6 @@ export class InventoryFirebaseService {
     }
   }
 
-  /**
-   * Mark a receivable (on-order) product as received.
-   * Clears receivableStatus → moves it from receivable stock to live inventory.
-   */
   static async receiveProduct(id: string): Promise<void> {
     try {
       console.log(`🔥 Receiving product ${id}...`);
@@ -423,7 +410,7 @@ export class TransferFirebaseService {
         serialNumbers:  dto.serialNumbers,
         date:           dto.transferDate,
         transferDate:   dto.transferDate,
-        status:         'Pending' as const,
+        status:         'In Transit' as const,   // ← always In Transit on create
         transferredBy:  dto.transferredBy,
         note:           dto.note,
         notes:          dto.notes,
@@ -482,13 +469,10 @@ export class BrandModelFirebaseService {
 
   static async fetchModelsByBrand(brandId: string): Promise<ModelDoc[]> {
     try {
-      // No orderBy — avoids requiring a composite index on (brandId, name).
-      // Sort client-side instead.
       const q = query(collection(db, MODELS_COLLECTION), where('brandId', '==', brandId));
       const snapshot = await getDocs(q);
       const models: ModelDoc[] = [];
       snapshot.forEach(d => models.push(transformDocToModel(d)));
-      // Sort alphabetically client-side
       models.sort((a, b) => a.name.localeCompare(b.name));
       console.log(`✅ Fetched ${models.length} models for brand ${brandId}`);
       return models;
@@ -523,20 +507,12 @@ export class BrandModelFirebaseService {
     }
   }
 
-  /**
-   * Called after costing step completes.
-   * Saves the brand + all costing models to Firestore so they appear
-   * in the BrandModelDropdown on the product details screen.
-   * Skips duplicates by name.
-   */
   static async saveCostingBrandAndModels(
     brandName: string,
     models: Array<{ modelName: string; costPrice?: number }>
   ): Promise<{ brandId: string; modelIds: string[] }> {
     try {
       console.log('🔥 Saving costing brand/models to Firestore:', brandName);
-
-      // Upsert brand
       const bq = query(collection(db, BRANDS_COLLECTION), where('name', '==', brandName));
       const bSnap = await getDocs(bq);
       let brandId: string;
@@ -547,7 +523,6 @@ export class BrandModelFirebaseService {
         brandId = b.id;
       }
 
-      // Upsert each model
       const modelIds: string[] = [];
       for (const m of models) {
         if (!m.modelName.trim()) continue;
