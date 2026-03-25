@@ -1,14 +1,24 @@
 /**
  * Loan List Wrapper
  * Connects list ViewModel to View.
+ *
+ * Change: accepts an optional `defaultType` prop.
+ * Pass defaultType="Payable"    → Payable Loans screen
+ * Pass defaultType="Receivable" → Receivable Loans screen
+ * No prop                       → All Loans screen
  */
 
 import React from 'react';
 import { useLoanListViewModel } from '../viewModels/useLoanListViewModel';
 import { LoanListView } from './LoanListView';
+import type { LoanType } from '../models/types';
 
-export const LoanListWrapper: React.FC = () => {
-  const vm = useLoanListViewModel();
+interface LoanListWrapperProps {
+  defaultType?: LoanType;
+}
+
+export const LoanListWrapper: React.FC<LoanListWrapperProps> = ({ defaultType }) => {
+  const vm = useLoanListViewModel(defaultType);
 
   return (
     <LoanListView
@@ -17,6 +27,8 @@ export const LoanListWrapper: React.FC = () => {
       isLoading={vm.isLoading}
       error={vm.error}
       filters={vm.filters}
+      isTypeLocked={vm.isTypeLocked}
+      defaultType={defaultType}
       setSearchTerm={vm.setSearchTerm}
       setTypeFilter={vm.setTypeFilter}
       setStatusFilter={vm.setStatusFilter}

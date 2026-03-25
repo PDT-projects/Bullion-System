@@ -1,8 +1,12 @@
 // Invoice Module - List View
+// Change: added PDF download button in Actions column (generates PDF on-click via jsPDF)
 
-import React from 'react';
-import { FileText, Plus, Search, Filter, Download, Eye, Edit, Trash2, X, Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  FileText, Plus, Search, Eye, Edit, Trash2, X, Loader2, FileDown,
+} from 'lucide-react';
 import { Invoice, InvoiceStats, InvoiceFilters } from '../models/types';
+import { downloadInvoicePdf } from '../models/invoicePdfService';
 
 interface Props {
   invoices: Invoice[];
@@ -28,6 +32,25 @@ export function InvoiceListView({
   onEditInvoice, onDeleteInvoice, onCreateInvoice,
   formatCurrency, formatDate,
 }: Props) {
+  // Track which invoice IDs are currently generating a PDF
+  const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
+
+  const handleDownloadPdf = async (invoice: Invoice) => {
+    if (generatingPdf.has(invoice.id)) return;
+    setGeneratingPdf(prev => new Set(prev).add(invoice.id));
+    try {
+      await downloadInvoicePdf(invoice);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+    } finally {
+      setGeneratingPdf(prev => {
+        const next = new Set(prev);
+        next.delete(invoice.id);
+        return next;
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -117,11 +140,33 @@ export function InvoiceListView({
                     {invoice.status}
                   </span>
                 </td>
+                {/* ── Actions (View, Edit, PDF, Delete) ── */}
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1">
-                    <button onClick={() => onViewInvoice(invoice)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View"><Eye size={16} /></button>
-                    <button onClick={() => onEditInvoice(invoice.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Edit"><Edit size={16} /></button>
-                    <button onClick={() => onDeleteInvoice(invoice.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete"><Trash2 size={16} /></button>
+                    <button onClick={() => onViewInvoice(invoice)}
+                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View">
+                      <Eye size={16} />
+                    </button>
+                    <button onClick={() => onEditInvoice(invoice.id)}
+                      className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Edit">
+                      <Edit size={16} />
+                    </button>
+                    {/* PDF download — generates fresh via jsPDF */}
+                    <button
+                      onClick={() => handleDownloadPdf(invoice)}
+                      disabled={generatingPdf.has(invoice.id)}
+                      className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-40 transition-colors"
+                      title="Download PDF"
+                    >
+                      {generatingPdf.has(invoice.id)
+                        ? <Loader2 size={16} className="animate-spin" />
+                        : <FileDown size={16} />
+                      }
+                    </button>
+                    <button onClick={() => onDeleteInvoice(invoice.id)}
+                      className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -135,8 +180,25 @@ export function InvoiceListView({
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-xl font-bold">Invoice Details</h3>
-              <button onClick={onCloseView} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><X size={24} /></button>
+              <div>
+                <h3 className="text-xl font-bold">Invoice Details</h3>
+                <p className="text-xs text-gray-400 font-mono mt-0.5">{viewingInvoice.invoiceNumber}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* PDF download from modal */}
+                <button
+                  onClick={() => handleDownloadPdf(viewingInvoice)}
+                  disabled={generatingPdf.has(viewingInvoice.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-medium hover:bg-indigo-100 disabled:opacity-40 transition-colors"
+                  title="Download PDF"
+                >
+                  {generatingPdf.has(viewingInvoice.id)
+                    ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
+                    : <><FileDown size={15} /> Download PDF</>
+                  }
+                </button>
+                <button onClick={onCloseView} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><X size={24} /></button>
+              </div>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -181,9 +243,23 @@ export function InvoiceListView({
                   ))}</tbody>
                 </table>
               </div>
-              <div className="border-t pt-4 flex justify-between items-center">
-                <p className="text-lg font-bold">Total Amount</p>
-                <p className="text-2xl font-bold text-[#4f46e5]">{formatCurrency(viewingInvoice.totalAmount)}</p>
+              <div className="border-t pt-4 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span>{formatCurrency(viewingInvoice.totalAmount)}</span>
+                </div>
+                {viewingInvoice.deductionCharges > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Deduction Charges</span>
+                    <span className="text-red-600">−{formatCurrency(viewingInvoice.deductionCharges)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <p className="text-lg font-bold">Net Total</p>
+                  <p className="text-2xl font-bold text-[#4f46e5]">
+                    {formatCurrency(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

@@ -1,6 +1,9 @@
 // Invoice Module - Form ViewModel
-// Self-contained: fetches products + employees + banks from Firestore
-// Creates/edits invoices, removes sold serials from inventory on save
+// Fixes:
+//   1. PDF is auto-generated + downloaded on every Create/Update Invoice save.
+//   2. generateAndSavePdf moved above handleSave to fix stale-closure / hoisting bug.
+//   3. getAvailableSerialsForProduct now excludes serials already selected in OTHER rows.
+//   4. Product dropdown label includes category + stock count for clarity.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -13,6 +16,7 @@ import {
   provinceCities, salespersonLocations, deliveryStatuses, collectionMethods, formatCurrency,
 } from '../models/invoiceService';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
+import { generateInvoicePdf, downloadInvoicePdf } from '../models/invoicePdfService';
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
@@ -28,6 +32,8 @@ export interface UseInvoiceFormViewModelReturn {
   isEditing: boolean;
   isLoading: boolean;
   isSaving: boolean;
+  pdfGenerating: boolean;
+  isDownloadingPdf: boolean;
   provinceCities: Record<string, string[]>;
   salespersonLocations: string[];
   deliveryStatuses: string[];
@@ -42,9 +48,10 @@ export interface UseInvoiceFormViewModelReturn {
   removeProduct: (id: string) => void;
   updateProduct: (id: string, field: string, value: any) => void;
   updateSerial: (productId: string, index: number, value: string) => void;
-  getAvailableSerialsForProduct: (productId: string) => string[];
+  getAvailableSerialsForProduct: (productId: string, rowId: string) => string[];
   handleSave: () => void;
   handleCancel: () => void;
+  handleDownloadPdf: () => void;
   calculateTotal: () => number;
   formatCurrency: (amount: number) => string;
 }
@@ -53,13 +60,15 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const navigate = useNavigate();
   const { id }   = useParams<{ id: string }>();
 
-  const [allInvoices,    setAllInvoices]    = useState<Invoice[]>([]);
-  const [allProducts,    setAllProducts]    = useState<ProductInfo[]>([]);
-  const [activeEmployees,setActiveEmployees]= useState<Employee[]>([]);
-  const [banks,          setBanks]          = useState<Bank[]>([]);
-  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
-  const [isLoading,      setIsLoading]      = useState(true);
-  const [isSaving,       setIsSaving]       = useState(false);
+  const [allInvoices,      setAllInvoices]      = useState<Invoice[]>([]);
+  const [allProducts,      setAllProducts]      = useState<ProductInfo[]>([]);
+  const [activeEmployees,  setActiveEmployees]  = useState<Employee[]>([]);
+  const [banks,            setBanks]            = useState<Bank[]>([]);
+  const [editingInvoice,   setEditingInvoice]   = useState<Invoice | null>(null);
+  const [isLoading,        setIsLoading]        = useState(true);
+  const [isSaving,         setIsSaving]         = useState(false);
+  const [pdfGenerating,    setPdfGenerating]    = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const [formData, setFormDataState] = useState<Partial<Invoice>>({
     date: new Date().toISOString().split('T')[0],
@@ -75,44 +84,52 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     digitalStamp: false,
   });
 
-  const [selectedProducts, setSelectedProducts] = useState<InvoiceProduct[]>([]);
+  const [selectedProducts,    setSelectedProducts]    = useState<InvoiceProduct[]>([]);
   const [customerSuggestions, setCustomerSuggestions] = useState<Invoice[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showSuggestions,     setShowSuggestions]     = useState(false);
 
-  // Load everything on mount
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
       try {
-        const [invoices, products, employees, bankList] = await Promise.all([
+        let rawProducts: any[] = [];
+        try {
+          rawProducts = await InventoryFirebaseService.fetchAllProducts();
+          console.log('✅ Raw products from Firestore:', rawProducts.length, rawProducts[0]);
+        } catch (productErr) {
+          console.error('❌ fetchAllProducts failed:', productErr);
+          toast.error('Could not load products — check Firestore rules or collection name');
+        }
+
+        const [invoices, employees, bankList] = await Promise.all([
           InvoiceFirebaseService.fetchAllInvoices(),
-          InventoryFirebaseService.fetchAllProducts(),
           EmployeeFirebaseService.fetchAllEmployees().catch(() => []),
           BankFirebaseService.fetchAllBanks().catch(() => []),
         ]);
-
         setAllInvoices(invoices);
 
-        // Map inventory products to ProductInfo shape
-        const productInfos: ProductInfo[] = products
+        // Map raw Firestore docs → ProductInfo
+        // Include all fields needed for the product row display
+        const productInfos: ProductInfo[] = rawProducts
           .filter(p => p.receivableStatus !== 'Pending')
           .map(p => ({
-            id:           p.id,
-            brandName:    p.brandName,
-            modelName:    p.modelName,
-            category:     p.category,
-            sellPrice:    p.sellPrice,
-            stock:        p.stock,
-            serialNumbers:p.serialNumbers || [],
-            serialCities: p.serialCities  || {},
-            serialStatus: p.serialStatus,
-            description:  p.description,
+            id:            p.id,
+            brandName:     p.brandName     || p.brand     || '',
+            modelName:     p.modelName     || p.model     || '',
+            category:      p.category      || '',
+            sellPrice:     p.sellPrice     || p.salePrice || p.price || 0,
+            // ── FIX: ensure stock reflects the actual count of available serials ──
+            stock:         typeof p.stock === 'number' ? p.stock : (p.serialNumbers?.length ?? 0),
+            serialNumbers: p.serialNumbers || [],
+            serialCities:  p.serialCities  || {},
+            serialStatus:  p.serialStatus  || {},
+            description:   p.description   || '',
           }));
+        console.log('✅ Mapped productInfos:', productInfos.length, productInfos[0]);
         setAllProducts(productInfos);
         setActiveEmployees((employees as any[]).filter(e => e.status === 'active'));
         setBanks(bankList as any[]);
 
-        // If editing, load the invoice
         if (id) {
           const existing = invoices.find(i => i.id === id) ||
                            await InvoiceFirebaseService.fetchInvoiceById(id);
@@ -122,11 +139,10 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
             setSelectedProducts(existing.products || []);
           }
         } else {
-          // New invoice — generate number
           const invoiceNumber = await InvoiceFirebaseService.generateInvoiceNumber();
           setFormDataState(prev => ({ ...prev, invoiceNumber }));
         }
-      } catch (err) {
+      } catch {
         toast.error('Failed to load form data');
       } finally {
         setIsLoading(false);
@@ -141,7 +157,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     setFormDataState(prev => ({ ...prev, ...data }));
   }, []);
 
-  // Customer autocomplete
   const handleCustomerSearch = useCallback((value: string, field: 'customerName' | 'customerPhone') => {
     setFormData({ [field]: value });
     if (value.length >= 2) {
@@ -172,39 +187,131 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   }, [setFormData]);
 
   const addProduct    = useCallback(() => setSelectedProducts(p => [...p, createEmptyInvoiceProduct()]), []);
-  const removeProduct = useCallback((id: string) => setSelectedProducts(p => p.filter(x => x.id !== id)), []);
+  const removeProduct = useCallback((pid: string) => setSelectedProducts(p => p.filter(x => x.id !== pid)), []);
 
-  const updateProduct = useCallback((id: string, field: string, value: any) => {
+  const updateProduct = useCallback((pid: string, field: string, value: any) => {
     setSelectedProducts(prev => prev.map(p => {
-      if (p.id !== id) return p;
+      if (p.id !== pid) return p;
       switch (field) {
-        case 'productId':  return updateProductWithSelection(p, value, allProducts);
-        case 'quantity':   return updateProductQuantity(p, value);
-        case 'price':      return updateProductPrice(p, value);
-        default:           return { ...p, [field]: value };
+        case 'productId': return updateProductWithSelection(p, value, allProducts);
+        case 'quantity':  return updateProductQuantity(p, value);
+        case 'price':     return updateProductPrice(p, value);
+        default:          return { ...p, [field]: value };
       }
     }));
   }, [allProducts]);
 
   const updateSerial = useCallback((productId: string, index: number, value: string) => {
-    setSelectedProducts(prev => prev.map(p => p.id !== productId ? p : updateSerialNumber(p, index, value)));
+    setSelectedProducts(prev =>
+      prev.map(p => p.id !== productId ? p : updateSerialNumber(p, index, value))
+    );
   }, []);
 
-  const getAvailableSerialsForProduct = useCallback((productId: string): string[] => {
-    const usedSerials = allInvoices
-      .filter(inv => inv.id !== editingInvoice?.id)
-      .flatMap(inv => inv.products.flatMap(p => p.serialNumbers || []));
-    return getAvailableSerials(productId, allProducts, usedSerials);
-  }, [allProducts, allInvoices, editingInvoice]);
+  // ── FIX: exclude serials already picked in OTHER rows of the same invoice ──
+  const getAvailableSerialsForProduct = useCallback((productId: string, rowId: string): string[] => {
+    const p = allProducts.find(x => x.id === productId);
+    if (!p) return [];
+
+    // Collect serials already assigned to OTHER product rows
+    const usedElsewhere = new Set<string>();
+    selectedProducts.forEach(row => {
+      if (row.id === rowId) return;            // skip own row
+      if (row.productId !== productId) return; // only same product matters
+      (row.serialNumbers || []).forEach(s => { if (s.trim()) usedElsewhere.add(s); });
+    });
+
+    return (p.serialNumbers || []).filter(s => {
+      if (!s.trim()) return false;
+      if (usedElsewhere.has(s)) return false;
+      const status = p.serialStatus?.[s] || 'Available';
+      return status === 'Available' || status === 'Returned';
+    });
+  }, [allProducts, selectedProducts]);
 
   const total = useMemo(() => calculateTotal(selectedProducts), [selectedProducts]);
 
-  // Auto-recalculate deduction charges
   useEffect(() => {
     const charges = calculateDeductionCharges(total, formData.collectionMethod);
     setFormData({ deductionCharges: charges });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total, formData.collectionMethod]);
+
+  // ── Helper: strip internal fields from the customer-facing PDF copy ──────────
+  const toCustomerInvoice = useCallback((inv: Invoice): Invoice => ({
+    ...inv,
+    salesperson: undefined, salespersonLocation: undefined,
+    clientDealBy: undefined, referralBy: undefined, createdBy: undefined,
+    paymentMode: undefined, bankId: undefined, bankName: undefined,
+    bankAccountNumber: undefined, collectionMethod: undefined,
+  }), []);
+
+  // ── Background: generate + upload PDF to Firebase Storage ────────────────────
+  // IMPORTANT: defined BEFORE handleSave so the reference is stable
+  const generateAndSavePdf = useCallback(async (savedInvoice: Invoice): Promise<void> => {
+    setPdfGenerating(true);
+    try {
+      const pdfBlob = await generateInvoicePdf(savedInvoice);
+      const pdfUrl  = await InvoiceFirebaseService.uploadInvoicePdf(savedInvoice.id, pdfBlob);
+      await InvoiceFirebaseService.savePdfUrl(savedInvoice.id, pdfUrl);
+      console.log('✅ PDF saved to cloud:', pdfUrl);
+    } catch (err) {
+      console.error('⚠️ PDF cloud upload failed:', err);
+      toast.error('Invoice saved but PDF cloud upload failed.');
+    } finally {
+      setPdfGenerating(false);
+    }
+  }, []);
+
+  // ── Manual "Download PDF" button ─────────────────────────────────────────────
+  const handleDownloadPdf = useCallback(async () => {
+    if (!formData.customerName?.trim()) {
+      toast.error('Please enter customer name before downloading PDF');
+      return;
+    }
+    setIsDownloadingPdf(true);
+    try {
+      const previewInvoice: Invoice = {
+        id:                     editingInvoice?.id || 'preview',
+        invoiceNumber:          formData.invoiceNumber || 'DRAFT',
+        date:                   formData.date || new Date().toISOString().split('T')[0],
+        customerName:           formData.customerName || '',
+        customerPhone:          formData.customerPhone || '',
+        customerPhone2:         formData.customerPhone2,
+        customerCNIC:           formData.customerCNIC || '',
+        customerProvince:       formData.customerProvince || '',
+        customerCity:           formData.customerCity || '',
+        customerAddress:        formData.customerAddress,
+        warrantyLocation:       formData.warrantyLocation,
+        products:               selectedProducts,
+        exchangeWarrantyNote:   formData.exchangeWarrantyNote || '',
+        deliveryStatus:         formData.deliveryStatus || 'Self-collect',
+        deliveryReceivedStatus: 'Pending',
+        totalAmount:            total,
+        status:                 formData.status || 'Unpaid',
+        deductionCharges:       formData.deductionCharges || 0,
+        paymentStatus:          formData.paymentStatus,
+        paidAmount:             formData.paymentStatus === 'Full' ? total : formData.paidAmount,
+        remainingAmount:        formData.paymentStatus === 'Full' ? 0 : formData.remainingAmount,
+        digitalStamp:           formData.digitalStamp,
+        salesperson:            undefined,
+        salespersonLocation:    undefined,
+        clientDealBy:           undefined,
+        referralBy:             undefined,
+        createdBy:              undefined,
+        paymentMode:            undefined,
+        bankId:                 undefined,
+        bankName:               undefined,
+        bankAccountNumber:      undefined,
+        collectionMethod:       undefined,
+      };
+      await downloadInvoicePdf(previewInvoice);
+    } catch (err) {
+      console.error('PDF download error:', err);
+      toast.error('Failed to generate PDF for download');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  }, [formData, selectedProducts, total, editingInvoice]);
 
   // ── Save ──────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
@@ -214,67 +321,89 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
     try {
       const invoiceData: Omit<Invoice, 'id'> = {
-        invoiceNumber:        formData.invoiceNumber!,
-        date:                 formData.date!,
-        customerName:         formData.customerName!,
-        customerPhone:        formData.customerPhone!,
-        customerPhone2:       formData.customerPhone2,
-        customerCNIC:         formData.customerCNIC!,
-        customerProvince:     formData.customerProvince || '',
-        customerCity:         formData.customerCity     || '',
-        customerAddress:      formData.customerAddress,
-        warrantyLocation:     formData.warrantyLocation,
-        products:             selectedProducts,
-        exchangeWarrantyNote: formData.exchangeWarrantyNote || '',
-        deliveryStatus:       formData.deliveryStatus || 'Self-collect',
+        invoiceNumber:          formData.invoiceNumber!,
+        date:                   formData.date!,
+        customerName:           formData.customerName!,
+        customerPhone:          formData.customerPhone!,
+        customerPhone2:         formData.customerPhone2,
+        customerCNIC:           formData.customerCNIC!,
+        customerProvince:       formData.customerProvince || '',
+        customerCity:           formData.customerCity     || '',
+        customerAddress:        formData.customerAddress,
+        warrantyLocation:       formData.warrantyLocation,
+        products:               selectedProducts,
+        exchangeWarrantyNote:   formData.exchangeWarrantyNote || '',
+        deliveryStatus:         formData.deliveryStatus || 'Self-collect',
         deliveryReceivedStatus: editingInvoice?.deliveryReceivedStatus || 'Pending',
-        totalAmount:          total,
-        status:               formData.status  || 'Unpaid',
-        salesperson:          formData.salesperson,
-        salespersonLocation:  formData.salespersonLocation,
-        clientDealBy:         formData.clientDealBy,
-        referralBy:           formData.referralBy,
-        createdBy:            formData.createdBy,
-        paymentMode:          formData.paymentMode,
-        bankId:               formData.bankId,
-        bankName:             formData.bankName,
-        bankAccountNumber:    formData.bankAccountNumber,
-        paymentStatus:        formData.paymentStatus,
-        paidAmount:           formData.paymentStatus === 'Full' ? total : formData.paidAmount,
-        remainingAmount:      formData.paymentStatus === 'Full' ? 0    : formData.remainingAmount,
-        collectionMethod:     formData.collectionMethod,
-        deductionCharges:     formData.deductionCharges || 0,
-        digitalStamp:         formData.digitalStamp,
+        totalAmount:            total,
+        status:                 formData.status  || 'Unpaid',
+        salesperson:            formData.salesperson,
+        salespersonLocation:    formData.salespersonLocation,
+        clientDealBy:           formData.clientDealBy,
+        referralBy:             formData.referralBy,
+        createdBy:              formData.createdBy,
+        paymentMode:            formData.paymentMode,
+        bankId:                 formData.bankId,
+        bankName:               formData.bankName,
+        bankAccountNumber:      formData.bankAccountNumber,
+        paymentStatus:          formData.paymentStatus,
+        paidAmount:             formData.paymentStatus === 'Full' ? total : formData.paidAmount,
+        remainingAmount:        formData.paymentStatus === 'Full' ? 0    : formData.remainingAmount,
+        collectionMethod:       formData.collectionMethod,
+        deductionCharges:       formData.deductionCharges || 0,
+        digitalStamp:           formData.digitalStamp,
       };
 
       if (isEditing && editingInvoice) {
+        // ── UPDATE ────────────────────────────────────────────────────────────
         await InvoiceFirebaseService.updateInvoice(editingInvoice.id, invoiceData);
-        toast.success('Invoice updated successfully');
+        const saved: Invoice = { ...invoiceData, id: editingInvoice.id };
+        toast.success('Invoice updated — downloading PDF…');
+
+        // Auto-download PDF immediately on save
+        try {
+          await downloadInvoicePdf(toCustomerInvoice(saved));
+        } catch {
+          toast.error('Invoice updated but PDF download failed');
+        }
+
+        // Background cloud upload
+        generateAndSavePdf(saved);
+
       } else {
-        // Remove sold serials from inventory
+        // ── CREATE ────────────────────────────────────────────────────────────
+        // Deduct inventory first
         for (const ip of selectedProducts) {
           if (!ip.productId || !ip.serialNumbers?.length) continue;
           try {
             const product = await InventoryFirebaseService.fetchProductById(ip.productId);
             if (!product) continue;
-            const soldSerials   = ip.serialNumbers.filter(s => s.trim() !== '');
-            const remaining     = (product.serialNumbers || []).filter(s => !soldSerials.includes(s));
-            const newCities     = { ...product.serialCities };
-            const newStatus     = { ...product.serialStatus };
+            const soldSerials = ip.serialNumbers.filter(s => s.trim() !== '');
+            const remaining   = (product.serialNumbers || []).filter(s => !soldSerials.includes(s));
+            const newCities   = { ...product.serialCities };
+            const newStatus   = { ...product.serialStatus };
             soldSerials.forEach(s => { delete newCities[s]; delete newStatus[s]; });
             await InventoryFirebaseService.updateProduct(ip.productId, {
-              stock:         Math.max(0, product.stock - ip.quantity),
-              serialNumbers: remaining,
-              serialCities:  newCities,
-              serialStatus:  newStatus as any,
+              stock: Math.max(0, product.stock - ip.quantity),
+              serialNumbers: remaining, serialCities: newCities, serialStatus: newStatus as any,
             });
           } catch (err) {
-            console.error('Failed to update inventory for product', ip.productId, err);
+            console.error('Inventory update failed for', ip.productId, err);
           }
         }
 
-        await InvoiceFirebaseService.createInvoice(invoiceData);
-        toast.success('Invoice created successfully');
+        const created = await InvoiceFirebaseService.createInvoice(invoiceData);
+        toast.success('Invoice created — downloading PDF…');
+
+        // Auto-download PDF immediately on save
+        try {
+          await downloadInvoicePdf(toCustomerInvoice(created));
+        } catch {
+          toast.error('Invoice created but PDF download failed');
+        }
+
+        // Background cloud upload
+        generateAndSavePdf(created);
       }
 
       navigate('/invoices');
@@ -284,25 +413,21 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     } finally {
       setIsSaving(false);
     }
-  }, [formData, selectedProducts, total, isEditing, editingInvoice, navigate]);
+  }, [formData, selectedProducts, total, isEditing, editingInvoice, navigate, generateAndSavePdf, toCustomerInvoice]);
 
   const handleCancel = useCallback(() => navigate('/invoices'), [navigate]);
 
-  const availableProducts = useMemo(() =>
-    allProducts.filter(p => getAvailableSerialsForProduct(p.id).length > 0),
-    [allProducts, getAvailableSerialsForProduct]
-  );
-
   return {
     formData, selectedProducts, customerSuggestions, showSuggestions,
-    isEditing, isLoading, isSaving,
-    provinceCities, salespersonLocations, deliveryStatuses: deliveryStatuses as string[],
+    isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
+    provinceCities, salespersonLocations,
+    deliveryStatuses: deliveryStatuses as string[],
     collectionMethods: collectionMethods as string[],
-    availableProducts, activeEmployees, banks,
+    availableProducts: allProducts, activeEmployees, banks,
     setFormData, handleCustomerSearch, handleCustomerSelect,
     addProduct, removeProduct, updateProduct, updateSerial,
     getAvailableSerialsForProduct,
-    handleSave, handleCancel,
+    handleSave, handleCancel, handleDownloadPdf,
     calculateTotal: () => total,
     formatCurrency,
   };

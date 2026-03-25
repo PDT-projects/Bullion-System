@@ -1,6 +1,6 @@
 // Commission Report View - Presentational Component
 
-import { Download, Filter, FileText, TrendingUp, DollarSign, CheckCircle } from 'lucide-react';
+import { Download, Filter, FileText, TrendingUp, DollarSign, CheckCircle, Receipt } from 'lucide-react';
 import type { Commission, CommissionFilter, CommissionStats } from '../models/types';
 
 interface CommissionReportViewProps {
@@ -53,6 +53,11 @@ export function CommissionReportView({
     window.URL.revokeObjectURL(url);
   };
 
+  // Total invoices across the filtered set
+  const totalInvoicesInReport = filteredCommissions.reduce(
+    (sum, c) => sum + (c.invoiceCount ?? 0), 0
+  );
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -81,8 +86,8 @@ export function CommissionReportView({
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Stats Cards — now 5 cards including invoice count */}
+      <div className="grid gap-4 md:grid-cols-5">
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total Commissions</span>
@@ -90,6 +95,17 @@ export function CommissionReportView({
           </div>
           <div className="text-2xl font-bold text-gray-900">{stats.totalCommissions}</div>
         </div>
+
+        {/* ← New: total invoices card */}
+        <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-600">Total Invoices</span>
+            <Receipt className="h-4 w-4 text-blue-500" />
+          </div>
+          <div className="text-2xl font-bold text-blue-600">{totalInvoicesInReport}</div>
+          <p className="text-xs text-gray-500">across filtered records</p>
+        </div>
+
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total Amount</span>
@@ -207,7 +223,10 @@ export function CommissionReportView({
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Salesperson</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">City</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
+                    {/* ← New column */}
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Invoices</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sales</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Applied Slab</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commission %</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -221,12 +240,22 @@ export function CommissionReportView({
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">{commission.city}</td>
                       <td className="px-4 py-3 text-sm text-gray-900">{formatMonth(commission.month)}</td>
+                      {/* ← Invoice count badge */}
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                          <Receipt size={11} />
+                          {commission.invoiceCount ?? '—'}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(commission.totalSales)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {formatCurrency(commission.appliedSlabFrom)} – {formatCurrency(commission.appliedSlabTo)}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
-                        {commission.overriddenCommissionPercentage || commission.commissionPercentage}%
+                        {commission.overriddenCommissionPercentage ?? commission.commissionPercentage}%
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {formatCurrency(commission.overriddenCommissionAmount || commission.calculatedCommissionAmount)}
+                        {formatCurrency(commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount)}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${

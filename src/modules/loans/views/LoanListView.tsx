@@ -1,6 +1,13 @@
 /**
  * Loan List View
  * Presentational component for displaying and managing loans.
+ *
+ * Changes:
+ *  - Accepts `isTypeLocked` and `defaultType` props.
+ *  - Page title and subtitle reflect the current context
+ *    ("Payable Loans", "Receivable Loans", or "All Loans").
+ *  - Type filter dropdown is hidden when `isTypeLocked` is true
+ *    (no point showing it when the list is already constrained).
  */
 
 import React from 'react';
@@ -14,6 +21,9 @@ interface LoanListViewProps {
   isLoading: boolean;
   error: string | null;
   filters: LoanFilters;
+  // New: passed from wrapper so the view knows when to hide the Type dropdown
+  isTypeLocked: boolean;
+  defaultType?: LoanType;
   setSearchTerm: (term: string) => void;
   setTypeFilter: (type: LoanType | 'all') => void;
   setStatusFilter: (status: LoanStatus | 'all') => void;
@@ -45,21 +55,29 @@ interface LoanListViewProps {
 }
 
 const typeColors: Record<string, string> = {
-  Payable: 'bg-red-100 text-red-800',
+  Payable:    'bg-red-100 text-red-800',
   Receivable: 'bg-green-100 text-green-800',
 };
 const statusColors: Record<string, string> = {
-  Full: 'bg-green-100 text-green-800',
+  Full:    'bg-green-100 text-green-800',
   Partial: 'bg-yellow-100 text-yellow-800',
 };
 const categoryColors: Record<string, string> = {
   Official: 'bg-blue-100 text-blue-800',
   Personal: 'bg-purple-100 text-purple-800',
-  Other: 'bg-gray-100 text-gray-800',
+  Other:    'bg-gray-100 text-gray-800',
+};
+
+// Derive page title + subtitle from the locked type (or fall back to "All Loans")
+const pageTitle = (defaultType?: LoanType) => {
+  if (defaultType === 'Payable')    return { title: 'Payable Loans',    subtitle: 'Loans we need to pay back' };
+  if (defaultType === 'Receivable') return { title: 'Receivable Loans', subtitle: 'Loans others owe us' };
+  return { title: 'All Loans', subtitle: 'All payable and receivable loans' };
 };
 
 export const LoanListView: React.FC<LoanListViewProps> = ({
   loans, filteredLoans, isLoading, error, filters,
+  isTypeLocked, defaultType,
   setSearchTerm, setTypeFilter, setStatusFilter, setCategoryFilter, clearFilters,
   sortField, sortOrder, setSortField, toggleSortOrder,
   currentPage, pageSize, totalPages, setPage, setPageSize,
@@ -67,8 +85,17 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
   onRefresh, onCreate, onEdit, onView, onDelete, onPayment, onExport, onBulkDelete,
   totalCount, totalAmount,
 }) => {
-  const hasActiveFilters = filters.searchTerm || filters.type !== 'all' || filters.status !== 'all' || filters.loanCategory !== 'all';
-  const sortIndicator = (field: LoanSortField) => sortField === field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : '';
+  // "Active filters" check excludes the locked type from being counted as a user filter
+  const hasActiveFilters =
+    filters.searchTerm ||
+    (!isTypeLocked && filters.type !== 'all') ||
+    filters.status !== 'all' ||
+    filters.loanCategory !== 'all';
+
+  const sortIndicator = (field: LoanSortField) =>
+    sortField === field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : '';
+
+  const { title, subtitle } = pageTitle(defaultType);
 
   if (error) {
     return (
@@ -86,8 +113,10 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">All Loans</h1>
-          <p className="text-gray-500 mt-1">{totalCount} loans • Total: {formatCurrency(totalAmount)}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+          <p className="text-gray-500 mt-1">
+            {subtitle} · {totalCount} loans · Total: {formatCurrency(totalAmount)}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={onRefresh} className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
@@ -103,31 +132,40 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2"><Filter className="h-5 w-5" /> Filters</h3>
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <Filter className="h-5 w-5" /> Filters
+          </h3>
           {hasActiveFilters && (
             <button onClick={clearFilters} className="text-sm text-red-600 hover:text-red-800 flex items-center gap-1">
               <X className="h-4 w-4" /> Clear All
             </button>
           )}
         </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Grid: 4 cols when Type is shown, 3 cols when it's hidden (locked) */}
+        <div className={`p-6 grid grid-cols-1 md:grid-cols-2 gap-4 ${isTypeLocked ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input type="text" placeholder="Search loans..." value={filters.searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              <input type="text" placeholder="Search loans..." value={filters.searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-            <select value={filters.type} onChange={e => setTypeFilter(e.target.value as LoanType | 'all')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
-              <option value="all">All Types</option>
-              <option value="Payable">Payable</option>
-              <option value="Receivable">Receivable</option>
-            </select>
-          </div>
+
+          {/* Type filter — hidden when locked to a specific type */}
+          {!isTypeLocked && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <select value={filters.type} onChange={e => setTypeFilter(e.target.value as LoanType | 'all')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
+                <option value="all">All Types</option>
+                <option value="Payable">Payable</option>
+                <option value="Receivable">Receivable</option>
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
             <select value={filters.status} onChange={e => setStatusFilter(e.target.value as LoanStatus | 'all')}
@@ -137,6 +175,7 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
               <option value="Partial">Partial</option>
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
             <select value={filters.loanCategory} onChange={e => setCategoryFilter(e.target.value as LoanCategory | 'all')}
@@ -166,7 +205,7 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
       {/* Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900">Loans</h3>
+          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500">Page size:</span>
             <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} className="px-2 py-1 border border-gray-300 rounded text-sm">
@@ -183,7 +222,9 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#4f46e5]" />
             </div>
           ) : loans.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">No loans found. Create your first loan to get started.</div>
+            <div className="text-center py-8 text-gray-500">
+              No {defaultType ? defaultType.toLowerCase() : ''} loans found.
+            </div>
           ) : (
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -194,7 +235,10 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => setSortField('entityName')}>
                     Entity{sortIndicator('entityName')}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                  {/* Hide Type column when locked — it's the same on every row */}
+                  {!isTypeLocked && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => setSortField('loanAmount')}>
                     Amount{sortIndicator('loanAmount')}
@@ -209,7 +253,7 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => setSortField('date')}>
                     Date{sortIndicator('date')}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[140px]">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -222,12 +266,14 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
                       <div className="text-sm font-medium text-gray-900">{loan.entityName}</div>
                       <div className="text-sm text-gray-500">{loan.receiverName}</div>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${typeColors[loan.type]}`}>
-                        {loan.type === 'Payable' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                        {loan.type}
-                      </span>
-                    </td>
+                    {!isTypeLocked && (
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${typeColors[loan.type]}`}>
+                          {loan.type === 'Payable' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                          {loan.type}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${categoryColors[loan.loanType]}`}>{loan.loanType}</span>
                     </td>
@@ -265,9 +311,11 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
               Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} results
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+              <button onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
               <span className="text-sm text-gray-600">Page {currentPage} of {totalPages}</span>
-              <button onClick={() => setPage(currentPage + 1)} disabled={currentPage === totalPages} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+              <button onClick={() => setPage(currentPage + 1)} disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
             </div>
           </div>
         )}

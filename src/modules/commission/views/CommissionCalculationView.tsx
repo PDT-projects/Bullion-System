@@ -2,9 +2,11 @@
 
 import {
   Calculator, X, Maximize2, Minimize2, Check,
-  AlertCircle, Edit2, Save, XCircle, FileText, Info
+  AlertCircle, Edit2, Save, XCircle, FileText,
+  Info, ChevronDown, ChevronRight, Receipt
 } from 'lucide-react';
-import type { Commission } from '../models/types';
+import type { Commission, InvoiceReference } from '../models/types';
+import type { SalespersonInvoiceBreakdown } from '../viewModels/useCommissionCalculationViewModel';
 
 interface CommissionCalculationViewProps {
   selectedCity: string;
@@ -17,7 +19,12 @@ interface CommissionCalculationViewProps {
     totalSalespeople: number;
     totalSales: number;
     totalCommission: number;
+    totalInvoicesUsed: number;
   } | null;
+  // Invoice breakdown props
+  invoiceBreakdowns: SalespersonInvoiceBreakdown[];
+  expandedSalesperson: string | null;
+  setExpandedSalesperson: (id: string | null) => void;
   showModal: boolean;
   setShowModal: (show: boolean) => void;
   isFullScreen: boolean;
@@ -50,6 +57,9 @@ export function CommissionCalculationView({
   commissionData,
   calculationErrors,
   summary,
+  invoiceBreakdowns,
+  expandedSalesperson,
+  setExpandedSalesperson,
   showModal,
   setShowModal,
   isFullScreen,
@@ -75,6 +85,10 @@ export function CommissionCalculationView({
 }: CommissionCalculationViewProps) {
   const getEmployeeName = (id: string) =>
     employees.find(e => e.id === id)?.name || id;
+
+  const toggleBreakdown = (salespersonId: string) => {
+    setExpandedSalesperson(expandedSalesperson === salespersonId ? null : salespersonId);
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -178,207 +192,309 @@ export function CommissionCalculationView({
               disabled={isCalculating || !selectedCity || !selectedMonth}
               className="flex items-center gap-2 bg-[#4f46e5] text-white px-6 py-2.5 rounded-lg hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Calculator size={20} />
+              <Calculator size={18} />
               {isCalculating ? 'Calculating...' : 'Calculate Commission'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Results Modal */}
+      {/* ── Invoice Breakdown Panel (shown after calculation, before modal) ── */}
+      {invoiceBreakdowns.length > 0 && !showModal && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Receipt size={18} className="text-[#4f46e5]" />
+              <h3 className="text-lg font-medium text-gray-900">Invoice Breakdown by Salesperson</h3>
+            </div>
+            <span className="text-sm text-gray-500">
+              {invoiceBreakdowns.reduce((s, b) => s + b.invoiceCount, 0)} paid invoices · {invoiceBreakdowns.length} salespeople
+            </span>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {invoiceBreakdowns.map((breakdown) => (
+              <div key={breakdown.salespersonId}>
+                {/* Salesperson row — click to expand */}
+                <button
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors text-left"
+                  onClick={() => toggleBreakdown(breakdown.salespersonId)}
+                >
+                  <div className="flex items-center gap-3">
+                    {expandedSalesperson === breakdown.salespersonId
+                      ? <ChevronDown size={16} className="text-gray-400" />
+                      : <ChevronRight size={16} className="text-gray-400" />
+                    }
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{breakdown.salespersonName}</p>
+                      <p className="text-xs text-gray-500">
+                        {breakdown.invoiceCount} paid invoice{breakdown.invoiceCount !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-900">{formatCurrency(breakdown.totalSales)}</p>
+                    <p className="text-xs text-gray-500">total sales</p>
+                  </div>
+                </button>
+
+                {/* Expanded invoice list */}
+                {expandedSalesperson === breakdown.salespersonId && (
+                  <div className="px-6 pb-4">
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Invoice ID</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {breakdown.invoices.map((inv) => (
+                            <tr key={inv.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-2 font-mono text-xs text-gray-700">{inv.id}</td>
+                              <td className="px-4 py-2 text-gray-700">
+                                {new Date(inv.date).toLocaleDateString('en-PK', {
+                                  year: 'numeric', month: 'short', day: 'numeric'
+                                })}
+                              </td>
+                              <td className="px-4 py-2 text-right font-medium text-gray-900">
+                                {formatCurrency(inv.totalAmount)}
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                  {inv.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 border-t border-gray-200">
+                          <tr>
+                            <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-gray-700">
+                              Total ({breakdown.invoiceCount} invoices)
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
+                              {formatCurrency(breakdown.totalSales)}
+                            </td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Calculation Results Modal / Full-Screen Panel ── */}
       {showModal && (
-        <div className={
-          isFullScreen
-            ? 'fixed inset-0 z-50 bg-white overflow-auto'
-            : 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'
+        <div className={isFullScreen
+          ? 'fixed inset-0 z-50 bg-white overflow-auto'
+          : 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'
         }>
-          <div className={
-            isFullScreen
-              ? 'w-full min-h-full'
-              : 'bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-auto'
+          <div className={isFullScreen
+            ? 'w-full min-h-full flex flex-col'
+            : 'bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden'
           }>
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white sticky top-0 z-10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Commission Calculation Results</h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {selectedCity} — {formatMonth(selectedMonth)}
-                </p>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Commission Results — {selectedCity} · {formatMonth(selectedMonth)}
+                </h2>
+                {summary && (
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {summary.totalInvoicesUsed} paid invoice{summary.totalInvoicesUsed !== 1 ? 's' : ''} · {summary.totalSalespeople} salesperson{summary.totalSalespeople !== 1 ? 's' : ''}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsFullScreen(!isFullScreen)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                  title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
-                >
-                  {isFullScreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                  {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
                 </button>
-                <button
-                  onClick={handleModalCancel}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X size={20} />
+                <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                  <X size={18} />
                 </button>
               </div>
             </div>
 
-            {/* Summary Cards */}
-            {summary && (
-              <div className="grid grid-cols-3 gap-4 p-6 border-b border-gray-200 bg-gray-50">
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-                  <p className="text-sm text-gray-500">Total Salespeople</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{summary.totalSalespeople}</p>
+            <div className="flex-1 overflow-auto">
+              {/* Summary Cards */}
+              {summary && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-gray-50 border-b border-gray-200">
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Invoices Used</p>
+                    <p className="text-2xl font-bold text-blue-600 mt-1">{summary.totalInvoicesUsed}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Salespeople</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{summary.totalSalespeople}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Sales</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(summary.totalSales)}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Commission</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(summary.totalCommission)}</p>
+                  </div>
                 </div>
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-                  <p className="text-sm text-gray-500">Total Sales (Paid Invoices)</p>
-                  <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(summary.totalSales)}</p>
-                </div>
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-                  <p className="text-sm text-gray-500">Total Commission Payable</p>
-                  <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(summary.totalCommission)}</p>
-                </div>
-              </div>
-            )}
+              )}
 
-            {/* Table */}
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Calculated Commissions</h3>
-                <button
-                  onClick={confirmAllCommissions}
-                  className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
-                >
-                  <Check size={16} />
-                  Confirm All
-                </button>
-              </div>
+              {/* Commission Table */}
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Calculated Commissions</h3>
+                  <button
+                    onClick={confirmAllCommissions}
+                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
+                  >
+                    <Check size={16} />
+                    Confirm All
+                  </button>
+                </div>
 
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salesperson</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Applied Slab</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Commission %</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Commission Amount</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {commissionData.map((commission) => (
-                      <tr key={commission.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                          {getEmployeeName(commission.salesperson)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                          {formatCurrency(commission.totalSales)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500 text-center">
-                          {formatCurrency(commission.appliedSlabFrom)} – {formatCurrency(commission.appliedSlabTo)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {isEditing === commission.id ? (
-                            <div className="flex items-center justify-center gap-1">
+                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Salesperson</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Invoices</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Sales</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Applied Slab</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Commission %</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Commission Amount</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {commissionData.map((commission) => (
+                        <tr key={commission.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            {getEmployeeName(commission.salesperson)}
+                          </td>
+                          {/* ← Invoice count badge */}
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                              <Receipt size={11} />
+                              {commission.invoiceCount}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                            {formatCurrency(commission.totalSales)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 text-center">
+                            {formatCurrency(commission.appliedSlabFrom)} – {formatCurrency(commission.appliedSlabTo)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {isEditing === commission.id ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <input
+                                  type="number"
+                                  value={editValues.percentage}
+                                  onChange={(e) =>
+                                    setEditValues({ ...editValues, percentage: parseFloat(e.target.value) || 0 })
+                                  }
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                                  step="0.01"
+                                  min="0"
+                                  max="100"
+                                />
+                                <span className="text-gray-500 text-sm">%</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-900">
+                                {commission.overriddenCommissionPercentage ?? commission.commissionPercentage}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {isEditing === commission.id ? (
                               <input
                                 type="number"
-                                value={editValues.percentage}
+                                value={editValues.amount}
                                 onChange={(e) =>
-                                  setEditValues({ ...editValues, percentage: parseFloat(e.target.value) || 0 })
+                                  setEditValues({ ...editValues, amount: parseFloat(e.target.value) || 0 })
                                 }
-                                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center"
-                                step="0.01"
-                                min="0"
-                                max="100"
+                                className="w-32 px-2 py-1 border border-gray-300 rounded text-sm text-right"
                               />
-                              <span className="text-gray-500 text-sm">%</span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-900">
-                              {commission.overriddenCommissionPercentage || commission.commissionPercentage}%
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {isEditing === commission.id ? (
-                            <input
-                              type="number"
-                              value={editValues.amount}
-                              onChange={(e) =>
-                                setEditValues({ ...editValues, amount: parseFloat(e.target.value) || 0 })
-                              }
-                              className="w-32 px-2 py-1 border border-gray-300 rounded text-sm text-right"
-                            />
-                          ) : (
-                            <span className="text-sm font-medium text-gray-900">
-                              {formatCurrency(
-                                commission.overriddenCommissionAmount || commission.calculatedCommissionAmount
-                              )}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            commission.status === 'Confirmed'
-                              ? 'bg-green-100 text-green-800'
-                              : commission.status === 'Adjusted'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {commission.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-1">
-                            {isEditing === commission.id ? (
-                              <>
-                                <button
-                                  onClick={() => saveEdit(commission.id)}
-                                  className="p-1.5 hover:bg-green-50 rounded transition-colors text-green-600"
-                                  title="Save"
-                                >
-                                  <Save size={16} />
-                                </button>
-                                <button
-                                  onClick={cancelEdit}
-                                  className="p-1.5 hover:bg-red-50 rounded transition-colors text-red-600"
-                                  title="Cancel"
-                                >
-                                  <XCircle size={16} />
-                                </button>
-                              </>
                             ) : (
-                              <>
-                                <button
-                                  onClick={() => startEdit(commission)}
-                                  disabled={commission.isLocked}
-                                  className="p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Edit"
-                                >
-                                  <Edit2 size={16} />
-                                </button>
-                                <button
-                                  onClick={() => confirmSingleCommission(commission.id)}
-                                  disabled={commission.isLocked}
-                                  className="p-1.5 hover:bg-green-50 rounded transition-colors text-green-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Confirm"
-                                >
-                                  <Check size={16} />
-                                </button>
-                              </>
+                              <span className="text-sm font-medium text-gray-900">
+                                {formatCurrency(
+                                  commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount
+                                )}
+                              </span>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              commission.status === 'Confirmed'
+                                ? 'bg-green-100 text-green-800'
+                                : commission.status === 'Adjusted'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {commission.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-1">
+                              {isEditing === commission.id ? (
+                                <>
+                                  <button
+                                    onClick={() => saveEdit(commission.id)}
+                                    className="p-1.5 hover:bg-green-50 rounded transition-colors text-green-600"
+                                    title="Save"
+                                  >
+                                    <Save size={16} />
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    className="p-1.5 hover:bg-red-50 rounded transition-colors text-red-600"
+                                    title="Cancel"
+                                  >
+                                    <XCircle size={16} />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => startEdit(commission)}
+                                    disabled={commission.isLocked}
+                                    className="p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Edit"
+                                  >
+                                    <Edit2 size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => confirmSingleCommission(commission.id)}
+                                    disabled={commission.isLocked}
+                                    className="p-1.5 hover:bg-green-50 rounded transition-colors text-green-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Confirm"
+                                  >
+                                    <Check size={16} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
-            {/* Modal Footer Actions */}
-            <div className="flex justify-between items-center px-6 py-4 border-t border-gray-200 bg-gray-50 sticky bottom-0">
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center px-6 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
               <p className="text-sm text-gray-500">
                 {commissionData.filter(c => c.status === 'Confirmed').length} of {commissionData.length} confirmed
               </p>

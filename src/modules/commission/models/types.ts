@@ -20,6 +20,7 @@ export interface Commission {
   city: string;
   month: string;
   totalSales: number;
+  invoiceCount: number;           // ← NEW: how many paid invoices contributed
   appliedSlabFrom: number;
   appliedSlabTo: number;
   commissionPercentage: number;
@@ -57,6 +58,7 @@ export interface CreateCommissionDTO {
   city: string;
   month: string;
   totalSales: number;
+  invoiceCount: number;           // ← NEW
   appliedSlabFrom: number;
   appliedSlabTo: number;
   commissionPercentage: number;
@@ -101,6 +103,7 @@ export interface CommissionCalculationResult {
     totalSalespeople: number;
     totalSales: number;
     totalCommission: number;
+    totalInvoicesUsed: number;    // ← NEW: total paid invoices that fed the calculation
   };
 }
 

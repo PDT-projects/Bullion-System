@@ -94,88 +94,6 @@ export const checkSlabOverlap = (
   return { exists: !!conflictingSlab, conflictingSlab };
 };
 
-// ==================== COMMISSION CALCULATION ====================
-
-export const calculateCommissions = (
-  city: string,
-  month: string,
-  invoices: InvoiceReference[],
-  employees: EmployeeReference[],
-  slabs: CommissionSlab[],
-  calculatedBy: string = 'Admin'
-): CommissionCalculationResult => {
-  const errors: string[] = [];
-
-  const monthInvoices = invoices.filter(invoice => {
-    const invoiceDate = new Date(invoice.date);
-    const invoiceMonth = `${invoiceDate.getFullYear()}-${String(invoiceDate.getMonth() + 1).padStart(2, '0')}`;
-    return invoice.customerCity === city && invoiceMonth === month && invoice.status === 'Paid';
-  });
-
-  const salesBySalesperson: { [key: string]: number } = {};
-  monthInvoices.forEach(invoice => {
-    if (invoice.salesperson) {
-      salesBySalesperson[invoice.salesperson] =
-        (salesBySalesperson[invoice.salesperson] || 0) + invoice.totalAmount;
-    }
-  });
-
-  const commissions: Commission[] = [];
-
-  Object.entries(salesBySalesperson).forEach(([salespersonId, totalSales]) => {
-    const employee = employees.find(emp => emp.id === salespersonId);
-    if (!employee) {
-      errors.push(`Employee not found for salesperson ID: ${salespersonId}`);
-      return;
-    }
-
-    const applicableSlab = slabs.find(
-      slab =>
-        slab.salesperson === salespersonId &&
-        slab.city === city &&
-        totalSales >= slab.fromAmount &&
-        totalSales <= slab.toAmount
-    );
-
-    if (!applicableSlab) {
-      errors.push(`No commission slab found for ${employee.name} in ${city}`);
-      return;
-    }
-
-    const commissionAmount = (totalSales * applicableSlab.commissionPercentage) / 100;
-
-    commissions.push({
-      id: `COM-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      salesperson: salespersonId,
-      salespersonName: employee.name,
-      city,
-      month,
-      totalSales,
-      appliedSlabFrom: applicableSlab.fromAmount,
-      appliedSlabTo: applicableSlab.toAmount,
-      commissionPercentage: applicableSlab.commissionPercentage,
-      calculatedCommissionAmount: commissionAmount,
-      status: 'Calculated',
-      calculatedBy,
-      calculatedAt: new Date().toISOString(),
-      isLocked: false
-    });
-  });
-
-  const totalSales = Object.values(salesBySalesperson).reduce((sum, s) => sum + s, 0);
-  const totalCommission = commissions.reduce((sum, c) => sum + c.calculatedCommissionAmount, 0);
-
-  return {
-    commissions,
-    errors,
-    summary: {
-      totalSalespeople: commissions.length,
-      totalSales,
-      totalCommission
-    }
-  };
-};
-
 // ==================== COMMISSION FILTERING & STATS ====================
 
 export const filterCommissions = (
@@ -208,18 +126,27 @@ export const getCommissionStats = (commissions: Commission[]): CommissionStats =
   };
 };
 
+// ← invoiceCount added to CSV
 export const exportCommissionsToCSV = (commissions: Commission[]): string => {
   const headers = [
-    'Salesperson', 'City', 'Month', 'Total Sales', 'Applied Slab From',
-    'Applied Slab To', 'Commission %', 'Commission Amount', 'Status',
+    'Salesperson', 'City', 'Month', 'Invoices',
+    'Total Sales', 'Applied Slab From', 'Applied Slab To',
+    'Commission %', 'Commission Amount', 'Status',
     'Calculated By', 'Confirmed By', 'Calculated At', 'Confirmed At'
   ];
   const rows = commissions.map(c => [
-    c.salespersonName, c.city, formatMonth(c.month), c.totalSales,
-    c.appliedSlabFrom, c.appliedSlabTo,
-    c.overriddenCommissionPercentage || c.commissionPercentage,
-    c.overriddenCommissionAmount || c.calculatedCommissionAmount,
-    c.status, c.calculatedBy, c.confirmedBy || '',
+    c.salespersonName,
+    c.city,
+    formatMonth(c.month),
+    c.invoiceCount ?? 0,                                          // ← new
+    c.totalSales,
+    c.appliedSlabFrom,
+    c.appliedSlabTo,
+    c.overriddenCommissionPercentage ?? c.commissionPercentage,
+    c.overriddenCommissionAmount ?? c.calculatedCommissionAmount,
+    c.status,
+    c.calculatedBy,
+    c.confirmedBy || '',
     new Date(c.calculatedAt).toLocaleDateString(),
     c.confirmedAt ? new Date(c.confirmedAt).toLocaleDateString() : ''
   ]);

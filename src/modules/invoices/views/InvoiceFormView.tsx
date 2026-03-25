@@ -1,8 +1,16 @@
 // Invoice Module - Form View
-// Create/Edit invoice form
+// Fixes:
+//   - Product dropdown shows: Brand · Model · Category · (N in stock)
+//   - getAvailableSerialsForProduct receives rowId so cross-row serial exclusion works
+//   - Quantity max is driven by available (not total) serial count
+//   - "Create Invoice" button label shows saving state clearly
+//   - Download PDF button retained for manual use
 
 import React from 'react';
-import { Plus, Trash2, X, Hash, Truck, User, CreditCard, Loader2 } from 'lucide-react';
+import {
+  Plus, Trash2, X, Hash, Truck, User, CreditCard,
+  Loader2, FileDown, Stamp,
+} from 'lucide-react';
 import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
@@ -16,6 +24,8 @@ interface Props {
   isEditing: boolean;
   isLoading: boolean;
   isSaving: boolean;
+  pdfGenerating: boolean;
+  isDownloadingPdf: boolean;
   provinceCities: Record<string, string[]>;
   salespersonLocations: string[];
   deliveryStatuses: string[];
@@ -30,9 +40,11 @@ interface Props {
   removeProduct: (id: string) => void;
   updateProduct: (id: string, field: string, value: any) => void;
   updateSerial: (productId: string, index: number, value: string) => void;
-  getAvailableSerialsForProduct: (productId: string) => string[];
+  // rowId added so the VM can exclude serials already chosen in other rows
+  getAvailableSerialsForProduct: (productId: string, rowId: string) => string[];
   handleSave: () => void;
   handleCancel: () => void;
+  handleDownloadPdf: () => void;
   calculateTotal: () => number;
   formatCurrency: (amount: number) => string;
 }
@@ -42,13 +54,13 @@ const lbl = 'block text-sm font-medium text-gray-700 mb-1';
 
 export function InvoiceFormView({
   formData, selectedProducts, customerSuggestions, showSuggestions,
-  isEditing, isLoading, isSaving,
+  isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
   provinceCities, salespersonLocations, deliveryStatuses, collectionMethods,
   availableProducts, activeEmployees, banks,
   setFormData, handleCustomerSearch, handleCustomerSelect,
   addProduct, removeProduct, updateProduct, updateSerial,
   getAvailableSerialsForProduct,
-  handleSave, handleCancel, calculateTotal, formatCurrency,
+  handleSave, handleCancel, handleDownloadPdf, calculateTotal, formatCurrency,
 }: Props) {
   const total = calculateTotal();
 
@@ -62,15 +74,39 @@ export function InvoiceFormView({
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-        <h3 className="text-xl font-bold">{isEditing ? 'Edit Invoice' : 'Create Invoice'}</h3>
-        <button onClick={handleCancel} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><X size={24} /></button>
+        <h3 className="text-xl font-bold text-gray-900">
+          {isEditing ? 'Edit Invoice' : 'Create Invoice'}
+        </h3>
+        <div className="flex items-center gap-3">
+          {pdfGenerating && (
+            <div className="flex items-center gap-2 text-sm text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg">
+              <Loader2 size={14} className="animate-spin" />
+              Saving PDF to cloud…
+            </div>
+          )}
+          {/* Manual Download PDF button — header */}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={isDownloadingPdf}
+            className="flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors text-sm font-medium shadow-sm"
+          >
+            {isDownloadingPdf
+              ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
+              : <><FileDown size={15} /> Download PDF</>
+            }
+          </button>
+          <button onClick={handleCancel} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
+            <X size={24} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
-        {/* Customer Information */}
+        {/* ── Customer Information ── */}
         <div className="border-b pb-6">
           <h4 className="font-semibold text-gray-900 mb-4">Customer Information</h4>
           <div className="grid grid-cols-2 gap-4">
@@ -82,7 +118,6 @@ export function InvoiceFormView({
               <label className={lbl}>Date *</label>
               <input type="date" value={formData.date || ''} onChange={e => setFormData({ date: e.target.value })} className={inp} />
             </div>
-            {/* Customer Name with suggestions */}
             <div className="relative">
               <label className={lbl}>Customer Name *</label>
               <input type="text" value={formData.customerName || ''}
@@ -126,7 +161,9 @@ export function InvoiceFormView({
               <select value={formData.customerCity || ''} onChange={e => setFormData({ customerCity: e.target.value })}
                 disabled={!formData.customerProvince} className={`${inp} disabled:bg-gray-50 disabled:text-gray-400`}>
                 <option value="">Select city</option>
-                {formData.customerProvince && provinceCities[formData.customerProvince]?.map(c => <option key={c} value={c}>{c}</option>)}
+                {formData.customerProvince && provinceCities[formData.customerProvince]?.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -140,7 +177,7 @@ export function InvoiceFormView({
           </div>
         </div>
 
-        {/* Products */}
+        {/* ── Products ── */}
         <div className="border-b pb-6">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-semibold text-gray-900">Products</h4>
@@ -155,63 +192,149 @@ export function InvoiceFormView({
           ) : (
             <div className="space-y-4">
               {selectedProducts.map((product, index) => {
-                const serials = product.productId ? getAvailableSerialsForProduct(product.productId) : [];
+                // Pass both productId AND row's own id — VM excludes serials chosen in other rows
+                const serials = product.productId
+                  ? getAvailableSerialsForProduct(product.productId, product.id)
+                  : [];
+
+                // Available count = currently unselected serials for this row
+                // (already selected by THIS row are also valid choices, so add them back)
+                const ownSelected  = (product.serialNumbers || []).filter(s => s.trim() !== '');
+                const totalChoices = serials.length + ownSelected.length;
+                const maxQty       = Math.max(totalChoices, product.quantity); // never shrink below current value
+
                 return (
                   <div key={product.id} className="border rounded-xl p-4 bg-gray-50">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-semibold text-gray-700">Product {index + 1}</span>
                       <button onClick={() => removeProduct(product.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
                     </div>
+
                     <div className="grid grid-cols-3 gap-3 mb-3">
+                      {/* ── Product select — shows brand, model, category, stock ── */}
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Product *</label>
-                        <select value={product.productId} onChange={e => updateProduct(product.id, 'productId', e.target.value)} className={inp}>
-                          <option value="">Select product</option>
-                          {availableProducts.map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.brandName} {p.modelName} ({getAvailableSerialsForProduct(p.id).length} available)
-                            </option>
-                          ))}
+                        <select
+                          value={product.productId}
+                          onChange={e => updateProduct(product.id, 'productId', e.target.value)}
+                          className={inp}
+                        >
+                          <option value="">— Select product —</option>
+                          {availableProducts.map(p => {
+                            const availCount = getAvailableSerialsForProduct(p.id, product.id).length;
+                            const label = [
+                              p.brandName,
+                              p.modelName,
+                              p.category ? `[${p.category}]` : '',
+                              `(${availCount} avail)`,
+                            ].filter(Boolean).join(' ');
+                            return (
+                              <option key={p.id} value={p.id} disabled={availCount === 0}>
+                                {label}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
+
+                      {/* ── Quantity — max = available serials for this row ── */}
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Quantity *</label>
-                        <input type="number" min="1" max={serials.length} value={product.quantity}
-                          onChange={e => updateProduct(product.id, 'quantity', Number(e.target.value))} className={inp} />
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Quantity * {product.productId && <span className="text-indigo-500 font-normal">(max {maxQty})</span>}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={maxQty || undefined}
+                          value={product.quantity}
+                          onChange={e => {
+                            const v = Math.max(1, Math.min(Number(e.target.value), maxQty || 9999));
+                            updateProduct(product.id, 'quantity', v);
+                          }}
+                          className={inp}
+                        />
                       </div>
+
+                      {/* ── Price (editable, pre-filled from product) ── */}
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Price</label>
-                        <input type="number" value={product.price}
-                          onChange={e => updateProduct(product.id, 'price', Number(e.target.value))} className={inp} />
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Unit Price (PKR)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={product.price}
+                          onChange={e => updateProduct(product.id, 'price', Number(e.target.value))}
+                          className={inp}
+                        />
                       </div>
                     </div>
-                    {/* Serial selects */}
+
+                    {/* ── Show selected product details ── */}
+                    {product.productId && (
+                      <div className="mb-3 flex flex-wrap gap-2 text-xs">
+                        {product.brandName  && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-medium">{product.brandName}</span>}
+                        {product.modelName  && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-medium">{product.modelName}</span>}
+                        {product.category   && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{product.category}</span>}
+                        {product.description && <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full truncate max-w-xs">{product.description}</span>}
+                      </div>
+                    )}
+
+                    {/* ── Serial number selectors ── */}
                     {product.productId && product.quantity > 0 && (
                       <div className="border-t pt-3">
                         <div className="flex items-center gap-1.5 mb-2">
                           <Hash size={13} className="text-[#4f46e5]" />
-                          <span className="text-xs font-semibold text-gray-700">Serial Numbers ({product.quantity} required)</span>
+                          <span className="text-xs font-semibold text-gray-700">
+                            Serial Numbers ({product.quantity} required)
+                          </span>
+                          {serials.length === 0 && ownSelected.length === 0 && (
+                            <span className="ml-2 text-xs text-red-500">No available serials</span>
+                          )}
                         </div>
-                        {serials.length === 0 ? (
-                          <p className="text-xs text-red-500">No available serials for this product</p>
-                        ) : (
+
+                        {(serials.length > 0 || ownSelected.length > 0) ? (
                           <div className="grid grid-cols-2 gap-2">
-                            {Array.from({ length: product.quantity }, (_, i) => (
-                              <select key={i} value={product.serialNumbers?.[i] || ''}
-                                onChange={e => updateSerial(product.id, i, e.target.value)} className={inp}>
-                                <option value="">Select serial #{i + 1}</option>
-                                {serials.map(s => (
-                                  <option key={s} value={s}
-                                    disabled={product.serialNumbers?.includes(s) && product.serialNumbers[i] !== s}>
-                                    {s}
-                                  </option>
-                                ))}
-                              </select>
-                            ))}
+                            {Array.from({ length: product.quantity }, (_, i) => {
+                              const currentVal = product.serialNumbers?.[i] || '';
+                              // Options = available (unselected by others) + current own value
+                              const options = currentVal && !serials.includes(currentVal)
+                                ? [currentVal, ...serials]
+                                : serials;
+
+                              return (
+                                <select
+                                  key={i}
+                                  value={currentVal}
+                                  onChange={e => updateSerial(product.id, i, e.target.value)}
+                                  className={inp}
+                                >
+                                  <option value="">— Serial #{i + 1} —</option>
+                                  {options.map(s => (
+                                    <option
+                                      key={s}
+                                      value={s}
+                                      // Disable if already chosen in another slot of THIS row
+                                      disabled={
+                                        s !== currentVal &&
+                                        (product.serialNumbers || []).includes(s)
+                                      }
+                                    >
+                                      {s}
+                                    </option>
+                                  ))}
+                                </select>
+                              );
+                            })}
                           </div>
+                        ) : (
+                          <p className="text-xs text-red-500">
+                            No available serial numbers for this product. Please check inventory.
+                          </p>
                         )}
                       </div>
                     )}
+
                     <div className="mt-3 text-right text-sm font-semibold text-gray-900">
                       Total: {formatCurrency(product.total)}
                     </div>
@@ -222,7 +345,7 @@ export function InvoiceFormView({
           )}
         </div>
 
-        {/* Delivery & Info */}
+        {/* ── Delivery & Information ── */}
         <div className="border-b pb-6">
           <div className="flex items-center gap-2 mb-4">
             <Truck size={18} className="text-[#4f46e5]" />
@@ -243,6 +366,50 @@ export function InvoiceFormView({
               </select>
             </div>
           </div>
+
+          {/* ── Digital Stamp Toggle ── */}
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={() => setFormData({ digitalStamp: !formData.digitalStamp })}
+              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 transition-all ${
+                formData.digitalStamp
+                  ? 'border-indigo-500 bg-indigo-50'
+                  : 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                  formData.digitalStamp ? 'bg-indigo-600' : 'bg-gray-100'
+                }`}>
+                  <Stamp size={18} className={formData.digitalStamp ? 'text-white' : 'text-gray-400'} />
+                </div>
+                <div className="text-left">
+                  <p className={`text-sm font-semibold ${formData.digitalStamp ? 'text-indigo-800' : 'text-gray-700'}`}>
+                    Digital Stamp
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Adds a verification seal to the customer PDF
+                  </p>
+                </div>
+              </div>
+              {/* Toggle pill */}
+              <div className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+                formData.digitalStamp ? 'bg-indigo-600' : 'bg-gray-300'
+              }`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                  formData.digitalStamp ? 'translate-x-5' : 'translate-x-0'
+                }`} />
+              </div>
+            </button>
+            {formData.digitalStamp && (
+              <p className="mt-2 ml-1 text-xs text-indigo-600 flex items-center gap-1.5">
+                <span className="text-base">✓</span>
+                PDF will include a "Digitally Stamped — Pakistan Detectors Technologies" verification seal
+              </p>
+            )}
+          </div>
+
           <div className="mt-4">
             <label className={lbl}>Exchange & Warranty Note</label>
             <textarea value={formData.exchangeWarrantyNote || ''} onChange={e => setFormData({ exchangeWarrantyNote: e.target.value })}
@@ -251,7 +418,7 @@ export function InvoiceFormView({
           </div>
         </div>
 
-        {/* Sales Details */}
+        {/* ── Sales Details (internal) ── */}
         <div className="border-b pb-6 bg-blue-50 p-4 rounded-xl">
           <div className="flex items-center gap-2 mb-4">
             <User size={18} className="text-[#4f46e5]" />
@@ -288,7 +455,7 @@ export function InvoiceFormView({
           </div>
         </div>
 
-        {/* Payment Details */}
+        {/* ── Payment & Collection (internal) ── */}
         <div className="border-b pb-6 bg-green-50 p-4 rounded-xl">
           <div className="flex items-center gap-2 mb-4">
             <CreditCard size={18} className="text-green-600" />
@@ -352,25 +519,48 @@ export function InvoiceFormView({
           </div>
         </div>
 
-        {/* Total & Save */}
+        {/* ── Total & Save ── */}
         <div className="bg-indigo-50 rounded-xl p-5">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-5">
             <span className="text-lg font-semibold text-gray-900">Total Amount:</span>
             <span className="text-3xl font-bold text-[#4f46e5]">{formatCurrency(total)}</span>
           </div>
-          <div className="flex justify-end gap-3">
-            <button onClick={handleCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-              Cancel
-            </button>
-            <button onClick={handleSave} disabled={isSaving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors font-semibold">
-              {isSaving
-                ? <><Loader2 size={18} className="animate-spin" /> Saving...</>
-                : isEditing ? 'Update Invoice' : 'Create Invoice'
+          <div className="flex items-center justify-between">
+            {/* Manual Download PDF — footer */}
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="flex items-center gap-2 px-4 py-2.5 border border-indigo-300 text-indigo-700 bg-white rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors text-sm font-medium"
+            >
+              {isDownloadingPdf
+                ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
+                : <><FileDown size={15} /> Download PDF</>
               }
             </button>
+            <div className="flex items-center gap-3">
+              <button onClick={handleCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors font-semibold"
+              >
+                {isSaving
+                  ? <><Loader2 size={18} className="animate-spin" /> Saving &amp; Generating PDF…</>
+                  : isEditing ? 'Update Invoice' : 'Create Invoice'
+                }
+              </button>
+            </div>
           </div>
+          {pdfGenerating && (
+            <p className="text-xs text-indigo-500 text-right mt-3 flex items-center justify-end gap-1.5">
+              <Loader2 size={11} className="animate-spin" />
+              PDF uploading to cloud storage…
+            </p>
+          )}
         </div>
+
       </div>
     </div>
   );

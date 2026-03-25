@@ -2,6 +2,10 @@
  * Loans List ViewModel
  * Manages loan list state, filtering, sorting, pagination, and actions.
  * Backed by Firebase Firestore.
+ *
+ * Change: accepts an optional `defaultType` ('Payable' | 'Receivable').
+ * When provided, the type filter is pre-set and locked so the list only
+ * ever shows that specific loan type.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -11,7 +15,7 @@ import type { Loan, LoanFilters, LoanSortField, SortOrder, LoanType, LoanStatus,
 import { filterLoans, sortLoans, calculateStatistics, exportLoansToCSV, downloadCSV } from '../models/loanService';
 import { LoanFirebaseService } from '../models/Loanfirebaseservice';
 
-export function useLoanListViewModel() {
+export function useLoanListViewModel(defaultType?: LoanType) {
   const navigate = useNavigate();
 
   // ==================== STATE ====================
@@ -22,7 +26,7 @@ export function useLoanListViewModel() {
 
   const [filters, setFilters] = useState<LoanFilters>({
     searchTerm: '',
-    type: 'all',
+    type: defaultType ?? 'all',   // ← pre-set to the locked type if provided
     status: 'all',
     loanCategory: 'all',
     dateFrom: undefined,
@@ -41,11 +45,9 @@ export function useLoanListViewModel() {
     try {
       setIsLoading(true);
       setError(null);
-      console.log('🔄 Fetching loans from Firestore...');
       const loans = await LoanFirebaseService.fetchAllLoans();
       setAllLoans(loans);
       setSelectedLoans([]);
-      console.log(`✅ Loaded ${loans.length} loans`);
     } catch (err) {
       console.error('❌ Error loading loans:', err);
       setError('Failed to load loans. Please try again.');
@@ -75,17 +77,36 @@ export function useLoanListViewModel() {
 
   const stats = useMemo(() => calculateStatistics(filteredAndSorted), [filteredAndSorted]);
 
-  // Reset page on filter/sort change
   useEffect(() => { setCurrentPage(1); }, [filters, sortField, sortOrder]);
 
   // ==================== FILTER ACTIONS ====================
 
-  const setSearchTerm = useCallback((term: string) => setFilters(prev => ({ ...prev, searchTerm: term })), []);
-  const setTypeFilter = useCallback((type: LoanType | 'all') => setFilters(prev => ({ ...prev, type })), []);
-  const setStatusFilter = useCallback((status: LoanStatus | 'all') => setFilters(prev => ({ ...prev, status })), []);
-  const setCategoryFilter = useCallback((loanCategory: LoanCategory | 'all') => setFilters(prev => ({ ...prev, loanCategory })), []);
-  const setDateRange = useCallback((from?: string, to?: string) => setFilters(prev => ({ ...prev, dateFrom: from, dateTo: to })), []);
-  const clearFilters = useCallback(() => setFilters({ searchTerm: '', type: 'all', status: 'all', loanCategory: 'all' }), []);
+  const setSearchTerm = useCallback((term: string) =>
+    setFilters(prev => ({ ...prev, searchTerm: term })), []);
+
+  // When a defaultType is locked, ignore external attempts to change the type filter
+  const setTypeFilter = useCallback((type: LoanType | 'all') => {
+    if (defaultType) return; // locked — type filter is not user-changeable
+    setFilters(prev => ({ ...prev, type }));
+  }, [defaultType]);
+
+  const setStatusFilter = useCallback((status: LoanStatus | 'all') =>
+    setFilters(prev => ({ ...prev, status })), []);
+
+  const setCategoryFilter = useCallback((loanCategory: LoanCategory | 'all') =>
+    setFilters(prev => ({ ...prev, loanCategory })), []);
+
+  const setDateRange = useCallback((from?: string, to?: string) =>
+    setFilters(prev => ({ ...prev, dateFrom: from, dateTo: to })), []);
+
+  // clearFilters resets everything EXCEPT the locked type
+  const clearFilters = useCallback(() =>
+    setFilters({
+      searchTerm: '',
+      type: defaultType ?? 'all',
+      status: 'all',
+      loanCategory: 'all',
+    }), [defaultType]);
 
   // ==================== SORT ACTIONS ====================
 
@@ -155,9 +176,9 @@ export function useLoanListViewModel() {
 
   // ==================== NAVIGATION ====================
 
-  const navigateToCreate = useCallback(() => navigate('/loans/create'), [navigate]);
-  const navigateToEdit = useCallback((id: string) => navigate(`/loans/${id}/edit`), [navigate]);
-  const navigateToView = useCallback((id: string) => navigate(`/loans/${id}`), [navigate]);
+  const navigateToCreate  = useCallback(() => navigate('/loans/create'), [navigate]);
+  const navigateToEdit    = useCallback((id: string) => navigate(`/loans/${id}/edit`), [navigate]);
+  const navigateToView    = useCallback((id: string) => navigate(`/loans/${id}`), [navigate]);
   const navigateToPayment = useCallback((id: string) => navigate(`/loans/${id}/payment`), [navigate]);
 
   // ==================== RETURN ====================
@@ -168,6 +189,8 @@ export function useLoanListViewModel() {
     isLoading,
     error,
     filters,
+    // expose whether the type is locked so the View can hide the Type dropdown
+    isTypeLocked: !!defaultType,
     setSearchTerm,
     setTypeFilter,
     setStatusFilter,

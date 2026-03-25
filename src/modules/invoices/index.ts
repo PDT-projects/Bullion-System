@@ -15,6 +15,9 @@ export {
 
 export { InvoiceFirebaseService } from './models/InvoiceFirebaseService';
 
+// PDF generation (jsPDF-based, no server needed)
+export { generateInvoicePdf, downloadInvoicePdf } from './models/invoicePdfService';
+
 // ── ViewModels ───────────────────────────────────────────────
 export { useInvoiceListViewModel }   from './viewModels/useInvoiceListViewModel';
 export { useInvoiceFormViewModel }   from './viewModels/useInvoiceFormViewModel';
