@@ -69,28 +69,37 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
         {/* Progress */}
         <div className="mb-6 bg-white rounded-xl shadow-lg border border-gray-200 p-6">
           <div className="flex items-center justify-between max-w-4xl mx-auto">
-            <div className="flex flex-col items-center text-green-700">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center font-bold mb-2 shadow-lg border-2 border-white bg-green-600 text-white"><CheckIcon /></div>
+            {/* Step 1 — Done */}
+            <div className="flex flex-col items-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold mb-2 shadow-md bg-green-600 text-white">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              </div>
               <span className="text-xs font-medium text-green-600">Inventory Type</span>
             </div>
-            <div className="flex-1 h-1 mx-2 rounded-full bg-gradient-to-r from-green-500 to-green-600" />
-            <div className="flex flex-col items-center text-green-700">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center font-bold mb-2 shadow-lg border-2 border-white bg-green-600 text-white"><CheckIcon /></div>
+            <div className="flex-1 h-1 mx-2 rounded-full bg-green-400" />
+            {/* Step 2 — Done */}
+            <div className="flex flex-col items-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold mb-2 shadow-md bg-green-600 text-white">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              </div>
               <span className="text-xs font-medium text-green-600">Costing Option</span>
             </div>
-            <div className="flex-1 h-1 mx-2 rounded-full bg-gradient-to-r from-green-500 to-purple-500" />
-            <div className="flex flex-col items-center text-purple-700">
-              <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2 shadow-lg border-2 border-white bg-gradient-to-r from-purple-500 to-purple-600 text-white ring-2 ring-purple-300">3</div>
-              <span className="text-sm font-medium text-purple-600">Costing Details</span>
+            <div className="flex-1 h-1 mx-2 rounded-full bg-green-400" />
+            {/* Step 3 — Active */}
+            <div className="flex flex-col items-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-md bg-purple-600 text-white outline outline-2 outline-offset-2 outline-purple-400">3</div>
+              <span className="text-sm font-semibold text-purple-600">Costing Details</span>
             </div>
-            <div className="flex-1 h-1 mx-2 rounded-full bg-gray-300" />
-            <div className="flex flex-col items-center text-gray-700">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-lg border-2 border-white bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800">4</div>
+            <div className="flex-1 h-1 mx-2 rounded-full bg-gray-200" />
+            {/* Step 4 — Inactive */}
+            <div className="flex flex-col items-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold mb-2 shadow-sm bg-white text-gray-500 border-2 border-gray-300">4</div>
               <span className="text-xs font-medium text-gray-500">Product Details</span>
             </div>
             <div className="flex-1 h-1 mx-2 rounded-full bg-gray-300" />
-            <div className="flex flex-col items-center text-gray-700">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-lg border-2 border-white bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800">5</div>
+            {/* Step 5 — Inactive */}
+            <div className="flex flex-col items-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold mb-2 shadow-sm bg-white text-gray-500 border-2 border-gray-300">5</div>
               <span className="text-xs font-medium text-gray-500">Payment</span>
             </div>
           </div>

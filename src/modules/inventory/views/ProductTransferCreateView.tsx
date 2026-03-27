@@ -34,7 +34,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+        <button onClick={onBack} className="p-2 text-gray-600 hover:bg-gray-100 border border-gray-200 bg-white rounded-lg transition-colors shadow-sm">
           <ArrowLeft size={22} />
         </button>
         <div>

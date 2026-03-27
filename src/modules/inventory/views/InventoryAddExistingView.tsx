@@ -168,7 +168,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                     <button
                       onClick={() => setAddQty(entry.addQty - 1)}
                       disabled={entry.addQty <= 1}
-                      className="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center text-lg font-bold hover:bg-gray-50 disabled:opacity-40 transition-colors">
+                      className="w-10 h-10 rounded-lg border border-gray-300 bg-white flex items-center justify-center text-lg font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm">
                       −
                     </button>
                     <input
@@ -178,7 +178,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                     />
                     <button
                       onClick={() => setAddQty(entry.addQty + 1)}
-                      className="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center text-lg font-bold hover:bg-gray-50 transition-colors">
+                      className="w-10 h-10 rounded-lg border border-gray-300 bg-white flex items-center justify-center text-lg font-bold text-gray-700 hover:bg-gray-100 transition-colors shadow-sm">
                       +
                     </button>
                     <span className="text-sm text-gray-500">

@@ -158,7 +158,7 @@ export function InventoryListView({
             </div>
           </div>
           <div className="flex justify-end mt-4">
-            <button onClick={clearFilters} className="text-sm text-gray-600 hover:text-gray-800">
+            <button onClick={clearFilters} className="text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 py-1.5 rounded-lg font-medium transition-colors">
               Clear all filters
             </button>
           </div>
@@ -232,7 +232,7 @@ export function InventoryListView({
                         </button>
                         {onReceiveProduct && (
                           <button onClick={() => onReceiveProduct(product.id)}
-                            className="px-3 py-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-xs font-semibold border border-blue-200"
+                            className="px-3 py-1 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-xs font-semibold shadow-sm"
                             title="Move to Stock">
                             → Stock
                           </button>

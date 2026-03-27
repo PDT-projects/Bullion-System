@@ -83,27 +83,26 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
 
   const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500';
 
-  // ── Progress bar ────────────────────────────────────────────────────────────
   const ProgressBar = () => (
     <div className="mb-6 bg-white rounded-xl shadow-lg border p-6">
-      <div className="flex items-center max-w-4xl mx-auto">
+      <div className="flex items-center justify-between">
         {[{ label: 'Type' }, { label: 'Costing' }].map((s, i) => (
           <React.Fragment key={i}>
-            <div className="flex flex-col items-center mr-6">
-              <div className="w-16 h-16 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-lg">✓</div>
-              <span className="text-xs font-medium text-green-600 mt-1">{s.label}</span>
+            <div className="flex flex-col items-center min-w-[70px]">
+              <div className="w-12 h-12 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-md">✓</div>
+              <span className="text-xs font-medium text-green-600 mt-1 text-center">{s.label}</span>
             </div>
-            <div className="flex-1 h-1 bg-green-500 rounded-full mx-3" />
+            <div className="flex-1 h-1 bg-green-500 rounded-full mx-2" />
           </React.Fragment>
         ))}
-        <div className="flex flex-col items-center">
-          <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold shadow-lg ring-2 ring-blue-300">3</div>
-          <span className="text-sm font-medium text-blue-600 mt-1">Details</span>
+        <div className="flex flex-col items-center min-w-[70px]">
+          <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-xl font-bold shadow-md ring-4 ring-blue-100">3</div>
+          <span className="text-xs font-semibold text-blue-600 mt-1 text-center">Details</span>
         </div>
-        <div className="flex-1 h-1 bg-gray-300 rounded-full mx-3" />
-        <div className="flex flex-col items-center text-gray-500">
-          <div className="w-16 h-16 rounded-full bg-gray-400 text-white flex items-center justify-center font-bold shadow-lg">4</div>
-          <span className="text-xs font-medium text-gray-500 mt-1">Payment</span>
+        <div className="flex-1 h-1 bg-gray-200 rounded-full mx-2" />
+        <div className="flex flex-col items-center min-w-[70px]">
+          <div className="w-12 h-12 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xl font-bold shadow-sm border border-gray-300">4</div>
+          <span className="text-xs font-medium text-gray-400 mt-1 text-center">Payment</span>
         </div>
       </div>
     </div>
@@ -304,7 +303,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
             )}
 
             <div className="flex items-center justify-between pt-6 border-t">
-              <button onClick={handleBack} className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium">← Back</button>
+              <button onClick={handleBack} className="px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg font-medium transition-colors flex items-center gap-2"><ArrowLeft size={18} />Back</button>
               <button onClick={() => handleNext()}
                 className="px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl transition-all">
                 Next: Payment <ArrowRight size={20} />
@@ -399,7 +398,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                       {filledSerials}/{model.quantity} serials
                     </div>
                     <button onClick={() => handleRemoveModel(modelIdx)}
-                      className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors">
+                      className="text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-colors font-medium">
                       Remove
                     </button>
                     <button
@@ -466,9 +465,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
 
           {/* Navigation */}
           <div className="flex items-center justify-between pt-8 border-t">
-            <button onClick={handleBack} className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium transition-colors">
-              ← Back to Costing
-            </button>
+            <button onClick={handleBack} className="px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg hover:bg-gray-200 font-medium transition-colors flex items-center gap-2"><ArrowLeft size={18} />Back to Costing</button>
             <div className="flex items-center gap-4">
               {!isLoadingModels && selectedModels.length === 0 && (
                 <p className="text-amber-600 text-sm font-medium">At least one model is required</p>

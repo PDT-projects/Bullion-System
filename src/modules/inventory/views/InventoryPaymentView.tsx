@@ -51,16 +51,19 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
           <div className="flex items-center justify-between max-w-4xl mx-auto">
             {[{ label: 'Inventory Type' }, { label: 'Costing Option' }, { label: 'Product Details' }].map((s, i) => (
               <React.Fragment key={i}>
-                <div className="flex flex-col items-center text-green-700">
-                  <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2 shadow-lg border-2 border-white bg-green-600 text-white"><CheckIconSVG /></div>
-                  <span className="text-sm font-medium text-center leading-tight text-green-600">{s.label}</span>
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold mb-2 shadow-md bg-green-600 text-white">
+                    <CheckIconSVG />
+                  </div>
+                  <span className="text-sm font-medium text-green-600">{s.label}</span>
                 </div>
-                <div className="flex-1 h-1 mx-4 rounded-full bg-gradient-to-r from-green-500 to-green-600" />
+                <div className="flex-1 h-1 mx-4 rounded-full bg-green-400" />
               </React.Fragment>
             ))}
-            <div className="flex flex-col items-center text-blue-700">
-              <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold mb-2 shadow-lg border-2 border-white bg-gradient-to-r from-blue-500 to-blue-600 text-white ring-2 ring-blue-300">4</div>
-              <span className="text-sm font-medium text-center leading-tight text-blue-600">Payment</span>
+            {/* Step 4 — Active */}
+            <div className="flex flex-col items-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-md bg-blue-600 text-white outline outline-2 outline-offset-2 outline-blue-400">4</div>
+              <span className="text-sm font-semibold text-blue-600">Payment</span>
             </div>
           </div>
         </div>
@@ -176,7 +179,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
 
           {/* Actions */}
           <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-            <button onClick={handleBack} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">← Back</button>
+            <button onClick={handleBack} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-2 font-medium"><ArrowLeft size={18} />Back</button>
             <button onClick={handleSubmit} disabled={!isValid || isSaving}
               className={`px-8 py-4 rounded-lg font-medium text-lg shadow-lg flex items-center gap-2 ${
                 isValid && !isSaving ? 'bg-[#4f46e5] text-white hover:bg-[#4338ca]' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
