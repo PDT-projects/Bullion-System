@@ -116,16 +116,16 @@ export function Dashboard() {
 
   // ── Report cards config ─────────────────────────────────────────────────
   const reportCards = [
-    { id: 'sales',                    name: 'Sales Report',               description: 'Sales performance, revenue trends, and customer analytics', icon: TrendingUp,  color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Revenue & Analytics' },
-    { id: 'profit-loss',              name: 'Profit & Loss',              description: 'Revenue, expenses, and net profit calculations',             icon: DollarSign,  color: 'from-green-500 to-green-600',    bg: 'bg-green-50',   text: 'text-green-700',   tag: 'Financial Analysis' },
-    { id: 'balance-sheet',            name: 'Balance Sheet',              description: 'Assets, liabilities, and equity statement',                  icon: FileText,    color: 'from-blue-500 to-blue-600',      bg: 'bg-blue-50',    text: 'text-blue-700',    tag: 'Financial Position' },
-    { id: 'inventory',                name: 'Inventory Report',           description: 'Stock levels, product distribution, and inventory value',     icon: Package,     color: 'from-purple-500 to-purple-600',  bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Stock Management' },
-    { id: 'transactions',             name: 'Transaction History Report', description: 'Detailed transaction history with filtering and export',       icon: Receipt,     color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Detailed History' },
-    { id: 'transaction-history',      name: 'Transaction History',        description: 'Complete transaction history with search capabilities',        icon: BarChart2,   color: 'from-teal-500 to-teal-600',      bg: 'bg-teal-50',    text: 'text-teal-700',    tag: 'Complete History' },
-    { id: 'referral',                 name: 'Referral Report',            description: 'Track referral performance and earnings',                      icon: Users,       color: 'from-pink-500 to-pink-600',      bg: 'bg-pink-50',    text: 'text-pink-700',    tag: 'Referral Network' },
-    { id: 'commission',               name: 'Commission Report',          description: 'Salesperson commissions and performance metrics',              icon: CreditCard,  color: 'from-orange-500 to-orange-600',  bg: 'bg-orange-50',  text: 'text-orange-700',  tag: 'Performance Bonus' },
-    { id: 'inventory-audit-log',      name: 'Inventory Audit Log',        description: 'Inventory changes, audits, and stock adjustments',             icon: FileText,    color: 'from-slate-500 to-slate-600',    bg: 'bg-slate-50',   text: 'text-slate-700',   tag: 'Audit Trail' },
-    { id: 'loan-history',             name: 'Loan History',               description: 'Loan transactions, payments, and outstanding balances',         icon: DollarSign,  color: 'from-red-500 to-red-600',        bg: 'bg-red-50',     text: 'text-red-700',     tag: 'Loan Tracking' },
+    { id: 'sales',               name: 'Sales Report',               description: 'Sales performance, revenue trends, and customer analytics', icon: TrendingUp,  color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Revenue & Analytics' },
+    { id: 'profit-loss',         name: 'Profit & Loss',              description: 'Revenue, expenses, and net profit calculations',             icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Financial Analysis' },
+    { id: 'balance-sheet',       name: 'Balance Sheet',              description: 'Assets, liabilities, and equity statement',                  icon: FileText,    color: 'from-blue-500 to-blue-600',      bg: 'bg-blue-50',    text: 'text-blue-700',    tag: 'Financial Position' },
+    { id: 'inventory',           name: 'Inventory Report',           description: 'Stock levels, product distribution, and inventory value',     icon: Package,     color: 'from-purple-500 to-purple-600',  bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Stock Management' },
+    { id: 'transactions',        name: 'Transaction History Report', description: 'Detailed transaction history with filtering and export',       icon: Receipt,     color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Detailed History' },
+    { id: 'transaction-history', name: 'Transaction History',        description: 'Complete transaction history with search capabilities',        icon: BarChart2,   color: 'from-teal-500 to-teal-600',      bg: 'bg-teal-50',    text: 'text-teal-700',    tag: 'Complete History' },
+    { id: 'referral',            name: 'Referral Report',            description: 'Track referral performance and earnings',                      icon: Users,       color: 'from-pink-500 to-pink-600',      bg: 'bg-pink-50',    text: 'text-pink-700',    tag: 'Referral Network' },
+    { id: 'commission',          name: 'Commission Report',          description: 'Salesperson commissions and performance metrics',              icon: CreditCard,  color: 'from-orange-500 to-orange-600',  bg: 'bg-orange-50',  text: 'text-orange-700',  tag: 'Performance Bonus' },
+    { id: 'inventory-audit-log', name: 'Inventory Audit Log',        description: 'Inventory changes, audits, and stock adjustments',             icon: FileText,    color: 'from-slate-500 to-slate-600',    bg: 'bg-slate-50',   text: 'text-slate-700',   tag: 'Audit Trail' },
+    { id: 'loan-history',        name: 'Loan History',               description: 'Loan transactions, payments, and outstanding balances',         icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Loan Tracking' },
   ];
 
   // ── Render content by tab ───────────────────────────────────────────────
@@ -155,17 +155,6 @@ export function Dashboard() {
 
         return (
           <div className="space-y-8">
-            {/* Header */}
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#4f46e5] to-[#7c3aed] rounded-2xl mb-4">
-                <FileText size={32} className="text-white" />
-              </div>
-              <h3 className="text-3xl font-bold text-gray-900 mb-2">Reports Hub</h3>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Comprehensive business insights — all powered by live Firestore data
-              </p>
-            </div>
-
             {/* Quick stats bar */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
@@ -278,13 +267,14 @@ export function Dashboard() {
                 <p className="text-xs text-gray-500 mt-1">{banks.length} account{banks.length !== 1 ? 's' : ''}</p>
               </div>
 
-              <div className="bg-gradient-to-br from-[#4f46e5] to-[#6366f1] rounded-lg p-5 shadow-sm">
+              {/* ── Overall Balance — now matches other cards ── */}
+              <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-white/90">Overall Balance</span>
-                  <DollarSign className="text-white" size={20} />
+                  <span className="text-sm text-gray-600">Overall Balance</span>
+                  <DollarSign className="text-[#4f46e5]" size={20} />
                 </div>
-                <p className="text-2xl font-bold text-white">{formatCurrency(stats.overallBalance)}</p>
-                <p className="text-xs text-white/70 mt-1">Cash + Banks</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.overallBalance)}</p>
+                <p className="text-xs text-gray-500 mt-1">Cash + Banks</p>
               </div>
             </div>
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Product } from '../App';
-import { Package, MapPin, Calendar, Filter, Download, BarChart3, Eye, X, Hash, DollarSign, FileText, TrendingUp } from 'lucide-react';
+import { Package, MapPin, Calendar, Filter, Download, BarChart3, Eye, X, Hash, DollarSign, FileText, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 

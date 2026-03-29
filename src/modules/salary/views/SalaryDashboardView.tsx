@@ -94,7 +94,7 @@ export function SalaryDashboardView({
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-              <Wallet className="w-8 h-8 text-white" />
+<Wallet className="w-8 h-8 text-black" />
             </div>
             <div>
               <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent tracking-tight mb-2">

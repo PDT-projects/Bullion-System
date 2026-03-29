@@ -1,6 +1,5 @@
 // Inventory Module - View Layer
 // InventoryPaymentView - Step 5: Payment information
-// Change: shows Location in the Product Summary panel
 
 import React from 'react';
 import {
@@ -18,18 +17,31 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   setPaymentStatus, setTransactionId, setIsEditingTransactionId,
   setPaidAmount, handleSubmit, handleBack, formatCurrency, productSummary,
 }) => {
-  const CheckIconSVG = () => (
-    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  );
+
+  // Steps vary based on whether costing is included
+  const steps = costingOption === 'with'
+    ? [
+        { number: 1, label: 'Inventory Type' },
+        { number: 2, label: 'Costing Option' },
+        { number: 3, label: 'Costing Details' },
+        { number: 4, label: 'Product Details' },
+        { number: 5, label: 'Payment' },
+      ]
+    : [
+        { number: 1, label: 'Inventory Type' },
+        { number: 2, label: 'Costing Option' },
+        { number: 3, label: 'Product Details' },
+        { number: 4, label: 'Payment' },
+      ];
+
+  const currentStep = steps.length; // Payment is always the last step
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <div className="inventory-entry-container max-w-7xl mx-auto">
 
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
+        <div className="flex items-center gap-4 mb-6">
           <button onClick={handleBack} className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 shadow-md border">
             <ArrowLeft size={20} /><span className="font-medium">Back</span>
           </button>
@@ -46,25 +58,48 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
           </div>
         </div>
 
-        {/* Progress */}
-        <div className="mb-6 bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            {[{ label: 'Inventory Type' }, { label: 'Costing Option' }, { label: 'Product Details' }].map((s, i) => (
-              <React.Fragment key={i}>
-                <div className="flex flex-col items-center">
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold mb-2 shadow-md bg-green-600 text-white">
-                    <CheckIconSVG />
+        {/* ── Stepper ── */}
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 px-6 py-5">
+          <div className="flex items-center w-full">
+            {steps.map((step, index) => {
+              const isActive = step.number === currentStep;
+              const isDone   = step.number < currentStep;
+              const isLast   = index === steps.length - 1;
+
+              return (
+                <React.Fragment key={step.number}>
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div
+                      className={`
+                        w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
+                        border-2 transition-all duration-200 shadow-sm
+                        ${isDone
+                          ? 'bg-green-500 border-green-500 text-white'
+                          : isActive
+                          ? 'bg-blue-600 border-blue-600 text-white ring-4 ring-blue-100'
+                          : 'bg-white border-gray-300 text-gray-400'
+                        }
+                      `}
+                    >
+                      {isDone ? <Check size={16} strokeWidth={3} /> : step.number}
+                    </div>
+                    <span
+                      className={`
+                        mt-2 text-xs font-semibold whitespace-nowrap tracking-wide
+                        ${isActive ? 'text-blue-600' : isDone ? 'text-green-600' : 'text-gray-400'}
+                      `}
+                    >
+                      {step.label}
+                    </span>
                   </div>
-                  <span className="text-sm font-medium text-green-600">{s.label}</span>
-                </div>
-                <div className="flex-1 h-1 mx-4 rounded-full bg-green-400" />
-              </React.Fragment>
-            ))}
-            {/* Step 4 — Active */}
-            <div className="flex flex-col items-center">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-md bg-blue-600 text-white outline outline-2 outline-offset-2 outline-blue-400">4</div>
-              <span className="text-sm font-semibold text-blue-600">Payment</span>
-            </div>
+                  {!isLast && (
+                    <div className="flex-1 mx-3 mb-5">
+                      <div className={`h-0.5 w-full rounded-full ${isDone ? 'bg-green-400' : 'bg-gray-200'}`} />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
 
@@ -152,7 +187,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             </div>
           </div>
 
-          {/* Product Summary — includes location */}
+          {/* Product Summary */}
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
             <h4 className="font-medium text-blue-900 mb-3">Product Summary</h4>
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -168,7 +203,6 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
               ].map(([l, v]) => (
                 <div key={l}><span className="text-blue-700">{l}:</span><span className="ml-2 font-medium text-blue-900">{v}</span></div>
               ))}
-              {/* Location prominently */}
               <div className="col-span-2 flex items-center gap-2 mt-1 pt-2 border-t border-blue-200">
                 <MapPin className="w-4 h-4 text-indigo-500" />
                 <span className="text-blue-700 font-medium">Stocking Location:</span>

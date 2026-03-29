@@ -415,9 +415,10 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
           {/* Actions */}
           <div className="flex items-center justify-end gap-4 pt-4 border-t">
             <Button variant="outline" onClick={handleCancel} disabled={isSubmitting}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-[#4f46e5] hover:bg-[#4338ca]">
+            <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-[#4f46e5] hover:bg-[#4338ca] text-white hover:text-white">
               {isSubmitting ? 'Saving...' : (isEditing ? 'Update Bill' : 'Save Bill(s)')}
             </Button>
+
           </div>
         </div>
       </div>

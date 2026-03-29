@@ -179,7 +179,7 @@ export function InventoryListView({
                 <tr>
                   {['Product', 'Category', 'Location', 'Stock', 'Cost Price', 'Sell Price', 'Status', 'Actions'].map(h => (
                     <th key={h}
-                      className={`px-5 py-3 text-${h === 'Actions' ? 'right' : 'left'} text-xs font-medium text-gray-500 uppercase tracking-wider`}>
+                      className={`px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${h === 'Actions' ? 'text-right' : ''}`}>
                       {h}
                     </th>
                   ))}

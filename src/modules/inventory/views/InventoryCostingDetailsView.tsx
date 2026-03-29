@@ -3,7 +3,7 @@
 
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Calculator } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calculator, Check } from 'lucide-react';
 import { UseInventoryCostingDetailsViewModelReturn } from '../viewModels/useInventoryCostingDetailsViewModel';
 import { CostingGlobalInputs } from '../components/CostingGlobalInputs';
 import { CostingTable } from '../components/CostingTable';
@@ -41,17 +41,22 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
     }
   }, [showCostingFields, navigate, searchParams]);
 
-  const CheckIcon = () => (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  );
+  const steps = [
+    { number: 1, label: 'Inventory Type' },
+    { number: 2, label: 'Costing Option' },
+    { number: 3, label: 'Costing Details' },
+    { number: 4, label: 'Product Details' },
+    { number: 5, label: 'Payment' },
+  ];
+
+  const currentStep = 3;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <div className="inventory-entry-container max-w-7xl mx-auto">
+
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
+        <div className="flex items-center gap-4 mb-6">
           <button onClick={handleBack} className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-md hover:shadow-lg border border-gray-200">
             <ArrowLeft size={20} /><span className="font-medium">Back</span>
           </button>
@@ -66,42 +71,48 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
           </div>
         </div>
 
-        {/* Progress */}
-        <div className="mb-6 bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            {/* Step 1 — Done */}
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold mb-2 shadow-md bg-green-600 text-white">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              </div>
-              <span className="text-xs font-medium text-green-600">Inventory Type</span>
-            </div>
-            <div className="flex-1 h-1 mx-2 rounded-full bg-green-400" />
-            {/* Step 2 — Done */}
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold mb-2 shadow-md bg-green-600 text-white">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              </div>
-              <span className="text-xs font-medium text-green-600">Costing Option</span>
-            </div>
-            <div className="flex-1 h-1 mx-2 rounded-full bg-green-400" />
-            {/* Step 3 — Active */}
-            <div className="flex flex-col items-center">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mb-2 shadow-md bg-purple-600 text-white outline outline-2 outline-offset-2 outline-purple-400">3</div>
-              <span className="text-sm font-semibold text-purple-600">Costing Details</span>
-            </div>
-            <div className="flex-1 h-1 mx-2 rounded-full bg-gray-200" />
-            {/* Step 4 — Inactive */}
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold mb-2 shadow-sm bg-white text-gray-500 border-2 border-gray-300">4</div>
-              <span className="text-xs font-medium text-gray-500">Product Details</span>
-            </div>
-            <div className="flex-1 h-1 mx-2 rounded-full bg-gray-300" />
-            {/* Step 5 — Inactive */}
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold mb-2 shadow-sm bg-white text-gray-500 border-2 border-gray-300">5</div>
-              <span className="text-xs font-medium text-gray-500">Payment</span>
-            </div>
+        {/* ── Stepper ── */}
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 px-6 py-5">
+          <div className="flex items-center w-full">
+            {steps.map((step, index) => {
+              const isActive = step.number === currentStep;
+              const isDone   = step.number < currentStep;
+              const isLast   = index === steps.length - 1;
+
+              return (
+                <React.Fragment key={step.number}>
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div
+                      className={`
+                        w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
+                        border-2 transition-all duration-200 shadow-sm
+                        ${isDone
+                          ? 'bg-green-500 border-green-500 text-white'
+                          : isActive
+                          ? 'bg-purple-600 border-purple-600 text-white ring-4 ring-purple-100'
+                          : 'bg-white border-gray-300 text-gray-400'
+                        }
+                      `}
+                    >
+                      {isDone ? <Check size={16} strokeWidth={3} /> : step.number}
+                    </div>
+                    <span
+                      className={`
+                        mt-2 text-xs font-semibold whitespace-nowrap tracking-wide
+                        ${isActive ? 'text-purple-600' : isDone ? 'text-green-600' : 'text-gray-400'}
+                      `}
+                    >
+                      {step.label}
+                    </span>
+                  </div>
+                  {!isLast && (
+                    <div className="flex-1 mx-3 mb-5">
+                      <div className={`h-0.5 w-full rounded-full ${isDone ? 'bg-green-400' : 'bg-gray-200'}`} />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
 

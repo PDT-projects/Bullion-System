@@ -1,14 +1,11 @@
 // Transactions Module - Pending Payments View
-// Fixes:
-// 1. Filter tabs: All / Partially Paid / Uncleared / Pending Receivable — all working
-// 2. Payment modal: cheque credentials (number, date, bank), bank selector
-// 3. Saving indicator while payment saves to Firestore
-// 4. Pending Receivable shown separately (Cash Inflow not fully received)
+// Styled to match the Bills screen layout
 
 import React from 'react';
 import {
-  Eye, Trash2, X, Check, AlertCircle, Clock, DollarSign,
-  Plus, Filter, Loader2, TrendingUp, CreditCard, ArrowDownCircle,
+  Eye, Trash2, X, Check, AlertCircle, Clock,
+  Loader2, TrendingUp, CreditCard, ArrowDownCircle,
+  Building2, DollarSign, Wallet, ReceiptText, Filter,
 } from 'lucide-react';
 import { Transaction } from '../models/types';
 import { UsePendingPaymentsViewModelReturn } from '../viewModels/usePendingPaymentsViewModel';
@@ -24,8 +21,9 @@ export function PendingPaymentsView({
 }: Props) {
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <Loader2 className="w-9 h-9 animate-spin text-[#4f46e5]" />
+        <p className="text-sm text-gray-500">Loading pending payments...</p>
       </div>
     );
   }
@@ -38,131 +36,232 @@ export function PendingPaymentsView({
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Pending Payments</h2>
-        <p className="text-gray-500 text-sm mt-1">Unpaid outflows, partially received inflows, and uncleared cheques</p>
-      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-red-50 rounded-xl border border-red-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <DollarSign size={16} className="text-red-500" />
-            <p className="text-xs text-gray-500 font-medium">Total Payable</p>
-          </div>
-          <p className="text-xl font-bold text-red-600">{formatCurrency(summaryStats.totalPending)}</p>
+      {/* ── Page Header ── */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Pending Payments</h2>
+          <p className="text-gray-500 text-sm mt-1">Unpaid outflows, partially received inflows, and uncleared cheques</p>
         </div>
-        <div className="bg-green-50 rounded-xl border border-green-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp size={16} className="text-green-500" />
-            <p className="text-xs text-gray-500 font-medium">Total Receivable</p>
-          </div>
-          <p className="text-xl font-bold text-green-600">{formatCurrency(summaryStats.totalReceivable)}</p>
-        </div>
-        <div className="bg-yellow-50 rounded-xl border border-yellow-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock size={16} className="text-yellow-500" />
-            <p className="text-xs text-gray-500 font-medium">Uncleared Cheques</p>
-          </div>
-          <p className="text-xl font-bold text-yellow-600">{summaryStats.unclearedCount}</p>
-        </div>
-        <div className="bg-orange-50 rounded-xl border border-orange-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertCircle size={16} className="text-orange-500" />
-            <p className="text-xs text-gray-500 font-medium">Showing</p>
-          </div>
-          <p className="text-xl font-bold text-orange-600">{summaryStats.totalTransactions}</p>
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <Filter size={16} />
+            Filters
+          </button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter size={16} className="text-gray-500" />
-          <h3 className="font-medium text-gray-900 text-sm">Filter by Type</h3>
+      {/* ── Stat Cards — exactly like Bills screen ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+              <ReceiptText size={16} className="text-gray-600" />
+            </div>
+            <span className="text-sm text-gray-600">Total Pending</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{formatCurrency(summaryStats.totalPending + summaryStats.totalReceivable)}</p>
+          <p className="text-sm text-gray-500 mt-1">{summaryStats.totalTransactions} records</p>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {([
-            { key: 'All',               label: 'All Pending',         color: 'indigo' },
-            { key: 'PartiallyPaid',     label: 'Partially Paid',      color: 'orange' },
-            { key: 'Uncleared',         label: 'Uncleared Cheques',   color: 'yellow' },
-            { key: 'PendingReceivable', label: 'Pending Receivable',  color: 'green'  },
-          ] as const).map(({ key, label }) => (
-            <button key={key} onClick={() => setFilterStatus(key)}
-              className={`py-2 px-3 text-sm rounded-lg border font-medium transition-colors ${
-                filterStatus === key
-                  ? 'bg-[#4f46e5] text-white border-[#4f46e5]'
-                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-              }`}>
-              {label}
-            </button>
-          ))}
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
+              <DollarSign size={16} className="text-red-500" />
+            </div>
+            <span className="text-sm text-gray-600">Total Payable</span>
+          </div>
+          <p className="text-2xl font-bold text-red-600">{formatCurrency(summaryStats.totalPending)}</p>
+          <p className="text-sm text-gray-500 mt-1">Outstanding outflows</p>
         </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+              <TrendingUp size={16} className="text-green-600" />
+            </div>
+            <span className="text-sm text-gray-600">Total Receivable</span>
+          </div>
+          <p className="text-2xl font-bold text-green-600">{formatCurrency(summaryStats.totalReceivable)}</p>
+          <p className="text-sm text-gray-500 mt-1">Pending inflows</p>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-yellow-50 flex items-center justify-center">
+              <Clock size={16} className="text-yellow-600" />
+            </div>
+            <span className="text-sm text-gray-600">Uncleared Cheques</span>
+          </div>
+          <p className="text-2xl font-bold text-yellow-600">{summaryStats.unclearedCount}</p>
+          <p className="text-sm text-gray-500 mt-1">Awaiting clearance</p>
+        </div>
+
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      {/* ── Filter Tabs — same style as Bills category pills ── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {([
+          { key: 'All' as const,               label: 'All Pending'        },
+          { key: 'PartiallyPaid' as const,     label: 'Partially Paid'     },
+          { key: 'Uncleared' as const,         label: 'Uncleared Cheques'  },
+          { key: 'PendingReceivable' as const, label: 'Pending Receivable' },
+        ]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setFilterStatus(key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              filterStatus === key
+                ? 'bg-[#4f46e5] text-white border-[#4f46e5]'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Table — same style as Bills table ── */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {filteredTransactions.length === 0 ? (
-          <div className="p-12 text-center">
+          <div className="py-16 text-center">
             <AlertCircle className="mx-auto text-gray-300 mb-3" size={40} />
             <p className="text-gray-500 font-medium">No pending payments in this category</p>
             <p className="text-sm text-gray-400 mt-1">Try a different filter or all transactions are cleared</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {['Transaction ID', 'Date & Time', 'Type', 'Category', 'Amount', 'Paid', 'Remaining', 'Status', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                  ))}
+            <table className="w-full" style={{ minWidth: '900px' }}>
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="pl-8 pr-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Transaction ID</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Paid</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Remaining</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredTransactions.map(t => {
+              <tbody>
+                {filteredTransactions.map((t, idx) => {
                   const { totalPaid, remainingAmount } = getTransactionTotals(t);
                   const isReceivable = t.mainCategory === 'Cash Inflow';
                   const hasUncleared = (t.partialPayments || []).some(p => !p.isCleared && p.method !== 'Bank');
+
                   return (
-                    <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-4 text-xs font-mono text-indigo-600">{t.transactionId || t.id}</td>
-                      <td className="px-5 py-4 text-sm text-gray-700 whitespace-nowrap">{formatDateTime(t.date, t.time)}</td>
+                    <tr
+                      key={t.id}
+                      className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? '' : ''}`}
+                    >
+                      {/* Date */}
+                      <td className="pl-8 pr-4 py-4 text-sm text-gray-900 whitespace-nowrap">
+                        {new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+
+                      {/* Transaction ID */}
+                      <td className="px-5 py-4">
+                        <span className="text-sm font-mono font-medium text-[#4f46e5]">
+                          {t.transactionId || t.id.slice(0, 16)}
+                        </span>
+                        {t.subCategory && (
+                          <p className="text-xs text-gray-400 mt-0.5 font-sans">{t.subCategory}</p>
+                        )}
+                      </td>
+
+                      {/* Type */}
                       <td className="px-5 py-4">
                         {isReceivable ? (
-                          <span className="flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full w-fit">
-                            <TrendingUp size={11} /> Receivable
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+                            <TrendingUp size={11} />
+                            Receivable
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1 text-xs font-medium text-red-700 bg-red-100 px-2 py-1 rounded-full w-fit">
-                            <ArrowDownCircle size={11} /> Payable
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">
+                            <ArrowDownCircle size={11} />
+                            Payable
                           </span>
                         )}
                       </td>
+
+                      {/* Category */}
                       <td className="px-5 py-4">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(t.mainCategory)}`}>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
                           {t.mainCategory}
                         </span>
-                        <p className="text-xs text-gray-400 mt-0.5">{t.subCategory}</p>
                       </td>
-                      <td className="px-5 py-4 text-sm font-semibold text-gray-900">{formatCurrency(t.amount)}</td>
-                      <td className="px-5 py-4 text-sm text-gray-600">{formatCurrency(totalPaid)}</td>
-                      <td className={`px-5 py-4 text-sm font-semibold ${isReceivable ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(remainingAmount)}
+
+                      {/* Amount */}
+                      <td className="px-5 py-4 text-sm font-semibold text-gray-900 whitespace-nowrap">
+                        {formatCurrency(t.amount)}
                       </td>
-                      <td className="px-5 py-4">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getPaymentStatusColor(t)}`}>
-                          {hasUncleared ? 'Uncleared' : remainingAmount > 0 ? (isReceivable ? 'Pending Receivable' : 'Partially Paid') : 'Pending'}
+
+                      {/* Paid */}
+                      <td className="px-5 py-4 text-sm font-medium text-green-600 whitespace-nowrap">
+                        {formatCurrency(totalPaid)}
+                      </td>
+
+                      {/* Remaining */}
+                      <td className="px-5 py-4 text-sm font-semibold whitespace-nowrap">
+                        <span className={isReceivable ? 'text-green-600' : 'text-red-600'}>
+                          {formatCurrency(remainingAmount)}
                         </span>
                       </td>
+
+                      {/* Status — same pill style as Bills "Full/Partial" */}
+                      <td className="px-5 py-4">
+                        {hasUncleared ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Uncleared
+                          </span>
+                        ) : remainingAmount > 0 ? (
+                          isReceivable ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                              Pending
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                              Partial
+                            </span>
+                          )
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                            Full
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Actions — same icon row as Bills screen */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-1">
+                          {/* Pay / Receive button */}
                           <button
                             onClick={() => openPayModal(t.id)}
-                            className="px-2 py-1 bg-green-500 text-white rounded text-xs font-semibold hover:bg-green-600 transition-colors">
-                            {isReceivable ? '📥 Receive' : '💳 Pay'}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg transition-colors ${
+                              isReceivable ? 'bg-green-600 hover:bg-green-700' : 'bg-[#4f46e5] hover:bg-[#4338ca]'
+                            }`}
+                          >
+                            {isReceivable ? 'Receive' : 'Pay'}
                           </button>
-                          <button onClick={() => setViewTransaction(t)} className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded" title="View"><Eye size={15} /></button>
-                          <button onClick={() => deleteTransaction(t.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded" title="Delete"><Trash2 size={15} /></button>
+                          {/* View */}
+                          <button
+                            onClick={() => setViewTransaction(t)}
+                            className="p-1.5 text-gray-400 hover:text-[#4f46e5] hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="View details"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          {/* Delete */}
+                          <button
+                            onClick={() => deleteTransaction(t.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -174,80 +273,91 @@ export function PendingPaymentsView({
         )}
       </div>
 
-      {/* View Details Modal */}
+      {/* ── View Details Modal ── */}
       {viewTransaction && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-gray-900">Payment Details</h3>
-              <button onClick={() => setViewTransaction(null)} className="p-2 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <div>
+                <h3 className="font-bold text-gray-900">Payment Details</h3>
+                <p className="text-xs font-mono text-gray-400 mt-0.5">{viewTransaction.transactionId}</p>
+              </div>
+              <button onClick={() => setViewTransaction(null)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
+                <X size={18} />
+              </button>
             </div>
             <div className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-3 text-sm">
+
+              {/* Amount summary */}
+              <div className="grid grid-cols-3 gap-3">
                 {[
-                  ['Transaction ID', viewTransaction.transactionId],
-                  ['Date & Time',   formatDateTime(viewTransaction.date, viewTransaction.time)],
-                  ['Category',      viewTransaction.mainCategory],
-                  ['Sub Category',  viewTransaction.subCategory],
-                  ['Paid By',       viewTransaction.paidBy || '—'],
-                  ['Paid To',       viewTransaction.paidTo || '—'],
-                  ['Mode',          viewTransaction.mode],
-                  ['Bank',          viewTransaction.bankName || '—'],
-                ].map(([l, v]) => (
-                  <div key={l}><p className="text-xs text-gray-400">{l}</p><p className="font-medium text-gray-900">{v}</p></div>
+                  { label: 'Total Amount', value: formatCurrency(viewTransaction.amount),                                 cls: 'bg-blue-50 text-blue-700'  },
+                  { label: 'Amount Paid',  value: formatCurrency(getTransactionTotals(viewTransaction).totalPaid),        cls: 'bg-green-50 text-green-700'},
+                  { label: 'Remaining',    value: formatCurrency(getTransactionTotals(viewTransaction).remainingAmount),  cls: 'bg-red-50 text-red-700'   },
+                ].map(({ label, value, cls }) => (
+                  <div key={label} className={`p-4 rounded-xl text-center ${cls}`}>
+                    <p className="text-xs font-medium opacity-70 mb-1">{label}</p>
+                    <p className="text-lg font-bold">{value}</p>
+                  </div>
                 ))}
               </div>
 
-              {/* Cheque details if applicable */}
+              {/* Detail grid */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {[
+                  ['Transaction ID', viewTransaction.transactionId],
+                  ['Date & Time',    formatDateTime(viewTransaction.date, viewTransaction.time)],
+                  ['Category',       viewTransaction.mainCategory],
+                  ['Sub Category',   viewTransaction.subCategory],
+                  ['Paid By',        viewTransaction.paidBy || '—'],
+                  ['Paid To',        viewTransaction.paidTo || '—'],
+                  ['Mode',           viewTransaction.mode],
+                  ['Bank',           viewTransaction.bankName || '—'],
+                ].map(([l, v]) => (
+                  <div key={l} className="bg-gray-50 rounded-lg px-4 py-3">
+                    <p className="text-xs text-gray-400 mb-0.5">{l}</p>
+                    <p className="font-medium text-gray-900">{v}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Cheque details */}
               {viewTransaction.mode === 'Cheque' && viewTransaction.chequeNumber && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-purple-700 mb-2 flex items-center gap-1">
-                    <CreditCard size={12} /> Cheque Details
+                <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-purple-700 mb-3 flex items-center gap-1.5">
+                    <CreditCard size={13} /> Cheque Details
                   </p>
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <div><p className="text-gray-400">No.</p><p className="font-medium">{viewTransaction.chequeNumber}</p></div>
-                    <div><p className="text-gray-400">Date</p><p className="font-medium">{viewTransaction.chequeDate || '—'}</p></div>
-                    <div><p className="text-gray-400">Bank</p><p className="font-medium">{viewTransaction.chequeBank || '—'}</p></div>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div><p className="text-xs text-gray-400 mb-0.5">Number</p><p className="font-semibold">{viewTransaction.chequeNumber}</p></div>
+                    <div><p className="text-xs text-gray-400 mb-0.5">Date</p><p className="font-semibold">{viewTransaction.chequeDate || '—'}</p></div>
+                    <div><p className="text-xs text-gray-400 mb-0.5">Bank</p><p className="font-semibold">{viewTransaction.chequeBank || '—'}</p></div>
                   </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  ['Total Amount',  formatCurrency(viewTransaction.amount), 'bg-blue-50 text-blue-700'],
-                  ['Amount Paid',   formatCurrency(getTransactionTotals(viewTransaction).totalPaid),     'bg-green-50 text-green-700'],
-                  ['Remaining',     formatCurrency(getTransactionTotals(viewTransaction).remainingAmount), 'bg-red-50 text-red-700'],
-                ].map(([l, v, cls]) => (
-                  <div key={l} className={`p-3 rounded-lg ${cls} text-center`}>
-                    <p className="text-xs opacity-70">{l}</p>
-                    <p className="font-bold text-lg">{v}</p>
-                  </div>
-                ))}
-              </div>
-
+              {/* Payment history */}
               {(viewTransaction.partialPayments || []).length > 0 && (
                 <div>
-                  <p className="font-semibold text-gray-800 mb-2 text-sm">Payment History</p>
+                  <p className="font-semibold text-gray-800 mb-3 text-sm">Payment History</p>
                   <div className="space-y-2">
                     {viewTransaction.partialPayments!.map(p => (
                       <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <div>
-                          <p className="text-sm font-medium">{formatCurrency(p.amount)} via {p.method}</p>
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-medium text-gray-900">
+                            {formatCurrency(p.amount)}
+                            <span className="text-xs font-normal text-gray-500 ml-1.5">via {p.method}</span>
+                          </p>
                           <p className="text-xs text-gray-400">{formatDateTime(p.date, p.time)}</p>
-                          {p.bankName && <p className="text-xs text-blue-600">{p.bankName}</p>}
-                          {p.chequeNumber && (
-                            <p className="text-xs text-purple-600">
-                              Cheque #{p.chequeNumber}{p.chequeBank ? ` · ${p.chequeBank}` : ''}
-                            </p>
-                          )}
+                          {p.bankName && <p className="text-xs text-blue-600 flex items-center gap-1"><Building2 size={10} /> {p.bankName}</p>}
+                          {p.chequeNumber && <p className="text-xs text-purple-600">Cheque #{p.chequeNumber}{p.chequeBank ? ` · ${p.chequeBank}` : ''}</p>}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${p.isCleared ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${p.isCleared ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                             {p.isCleared ? 'Cleared' : 'Pending'}
                           </span>
                           {!p.isCleared && p.method !== 'Bank' && (
                             <button onClick={() => markPaymentAsCleared(viewTransaction.id, p.id)}
-                              className="text-xs bg-[#4f46e5] text-white px-2 py-1 rounded hover:bg-[#4338ca] flex items-center gap-1">
+                              className="text-xs bg-[#4f46e5] text-white px-2.5 py-1 rounded-lg hover:bg-[#4338ca] flex items-center gap-1 transition-colors">
                               <Check size={11} /> Clear
                             </button>
                           )}
@@ -257,9 +367,10 @@ export function PendingPaymentsView({
                   </div>
                 </div>
               )}
+
               {viewTransaction.note && (
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-400 mb-1">Note</p>
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-400 mb-1 font-medium">Note</p>
                   <p className="text-sm text-gray-800">{viewTransaction.note}</p>
                 </div>
               )}
@@ -268,54 +379,54 @@ export function PendingPaymentsView({
         </div>
       )}
 
-      {/* Payment Modal */}
+      {/* ── Payment Modal ── */}
       {paymentModal && selectedTransactionId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
             <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h3 className="font-bold text-gray-900">
                 {filteredTransactions.find(t => t.id === selectedTransactionId)?.mainCategory === 'Cash Inflow'
-                  ? '📥 Record Receipt'
-                  : '💳 Add Payment'}
+                  ? 'Record Receipt'
+                  : 'Record Payment'}
               </h3>
-              <button onClick={() => { setPaymentModal(false); setSelectedTransactionId(null); }} className="p-2 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
+              <button onClick={() => { setPaymentModal(false); setSelectedTransactionId(null); }}
+                className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
+                <X size={18} />
+              </button>
             </div>
+
             <div className="p-6 space-y-4">
-              {/* Remaining amount info */}
               {(() => {
                 const tx = filteredTransactions.find(t => t.id === selectedTransactionId);
                 if (!tx) return null;
                 const { remainingAmount } = getTransactionTotals(tx);
                 const isReceivable = tx.mainCategory === 'Cash Inflow';
                 return (
-                  <div className={`p-3 rounded-lg border ${isReceivable ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
-                    <p className="text-xs text-gray-500">{isReceivable ? 'Remaining to Receive' : 'Remaining Amount'}</p>
+                  <div className={`p-4 rounded-xl border ${isReceivable ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+                    <p className="text-xs text-gray-500 mb-1">{isReceivable ? 'Remaining to Receive' : 'Remaining Amount'}</p>
                     <p className={`text-2xl font-bold ${isReceivable ? 'text-green-700' : 'text-blue-700'}`}>
                       {formatCurrency(remainingAmount)}
                     </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Transaction: {tx.transactionId} · {tx.subCategory}
-                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">{tx.transactionId} · {tx.subCategory}</p>
                   </div>
                 );
               })()}
 
-              {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-                <input type="number" min="0" step="100" value={paymentData.amount || ''}
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount *</label>
+                <input type="number" min="0" step="100"
+                  value={paymentData.amount || ''}
                   onChange={e => setPaymentData({ amount: parseFloat(e.target.value) || 0 })}
                   placeholder="Enter amount"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:outline-none" />
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5]/30 focus:border-[#4f46e5] focus:outline-none text-sm" />
               </div>
 
-              {/* Payment Method */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Method *</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(['Cash', 'Bank', 'Cheque'] as const).map(m => (
                     <button key={m} type="button" onClick={() => setPaymentData({ method: m })}
-                      className={`py-2 text-sm rounded-lg border font-medium transition-colors ${
+                      className={`py-2.5 text-sm rounded-lg border font-medium transition-colors ${
                         paymentData.method === m
                           ? 'bg-[#4f46e5] text-white border-[#4f46e5]'
                           : 'border-gray-300 text-gray-600 hover:bg-gray-50'
@@ -326,67 +437,65 @@ export function PendingPaymentsView({
                 </div>
               </div>
 
-              {/* Bank selector */}
               {paymentData.method === 'Bank' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Bank *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Select Bank *</label>
                   <select value={paymentData.bankId} onChange={e => setPaymentData({ bankId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:outline-none">
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5]/30 focus:border-[#4f46e5] focus:outline-none text-sm">
                     <option value="">— Select Bank —</option>
                     {banks.map(b => <option key={b.id} value={b.id}>{b.name} — {formatCurrency(b.balance)}</option>)}
                   </select>
                 </div>
               )}
 
-              {/* Cheque credentials */}
               {paymentData.method === 'Cheque' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CreditCard size={14} className="text-purple-600" />
-                    <span className="text-sm font-medium text-gray-700">Cheque Details</span>
-                  </div>
+                <div className="space-y-3 bg-purple-50 border border-purple-200 rounded-xl p-4">
+                  <p className="text-sm font-medium text-purple-700 flex items-center gap-1.5">
+                    <CreditCard size={14} /> Cheque Details
+                  </p>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Cheque Number *</label>
                     <input type="text" value={paymentData.chequeNumber || ''}
                       onChange={e => setPaymentData({ chequeNumber: e.target.value })}
                       placeholder="e.g. 001234"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:outline-none" />
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5]/30 focus:border-[#4f46e5] focus:outline-none text-sm" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Cheque Date</label>
                       <input type="date" value={paymentData.chequeDate || ''}
                         onChange={e => setPaymentData({ chequeDate: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:outline-none" />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5]/30 focus:border-[#4f46e5] focus:outline-none text-sm" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Bank on Cheque</label>
                       <input type="text" value={paymentData.chequeBank || ''}
                         onChange={e => setPaymentData({ chequeBank: e.target.value })}
-                        placeholder="e.g. HBL, MCB..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:outline-none" />
+                        placeholder="e.g. HBL, MCB"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5]/30 focus:border-[#4f46e5] focus:outline-none text-sm" />
                     </div>
                   </div>
-                  <p className="text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded p-2">
-                    Cheque will remain uncleared until manually marked as cleared
-                  </p>
+                  <p className="text-xs text-purple-600">Cheque will remain uncleared until manually marked as cleared.</p>
                 </div>
               )}
             </div>
 
             <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
               <button onClick={() => { setPaymentModal(false); setSelectedTransactionId(null); }}
-                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+                Cancel
+              </button>
               <button onClick={addPartialPayment} disabled={isSaving}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50">
+                className="flex items-center gap-2 px-5 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors text-sm font-semibold disabled:opacity-50">
                 {isSaving
                   ? <><Loader2 size={15} className="animate-spin" /> Saving...</>
-                  : <><Plus size={15} /> Record Payment</>}
+                  : <><Check size={15} /> Record Payment</>}
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

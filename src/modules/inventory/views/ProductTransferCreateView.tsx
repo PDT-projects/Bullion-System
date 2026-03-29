@@ -31,7 +31,8 @@ export const ProductTransferCreateView: React.FC<Props> = ({
   const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm';
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="h-full overflow-y-auto p-6">
+      <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button onClick={onBack} className="p-2 text-gray-600 hover:bg-gray-100 border border-gray-200 bg-white rounded-lg transition-colors shadow-sm">
@@ -335,6 +336,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

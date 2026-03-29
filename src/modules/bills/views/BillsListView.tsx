@@ -80,11 +80,12 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
             <Filter size={18} />
             Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
           </button>
-          <Button onClick={handleAdd} className="flex items-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca]">
+          <Button onClick={handleAdd} className="flex items-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white hover:text-white">
             <Plus size={18} /> Add Bill
           </Button>
         </div>
       </div>
+
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
