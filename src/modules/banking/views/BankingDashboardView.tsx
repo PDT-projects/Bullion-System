@@ -99,43 +99,43 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
 
       {/* Main Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-[#4f46e5] to-[#4338ca] p-6 rounded-lg text-white">
+        <div className="bg-gray-50 p-6 rounded-lg text-gray-900">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-white/20 rounded-lg">
               <Building2 size={24} />
             </div>
-            <span className="text-white/80">Total Bank Balance</span>
+            <span className="text-gray-700">Total Bank Balance</span>
           </div>
           <div className="flex items-center gap-2">
             <p className="text-3xl font-bold">{formatCurrency(stats.totalBankBalance)}</p>
             {isLoading && <Loader2 size={20} className="animate-spin" />}
           </div>
-          <p className="text-sm text-white/60 mt-1">Across {stats.bankCount} bank accounts</p>
+          <p className="text-sm text-gray-500 mt-1">Across {stats.bankCount} bank accounts</p>
         </div>
 
-        <div className="bg-gradient-to-br from-green-600 to-green-700 p-6 rounded-lg text-white">
+        <div className="bg-gray-50 p-6 rounded-lg text-gray-900">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-white/20 rounded-lg">
               <Wallet size={24} />
             </div>
-            <span className="text-white/80">Cash in Hand</span>
+            <span className="text-gray-700">Cash in Hand</span>
           </div>
           <div className="flex items-center gap-2">
             <p className="text-3xl font-bold">{formatCurrency(stats.totalCashInHand)}</p>
             {isLoading && <Loader2 size={20} className="animate-spin" />}
           </div>
-          <p className="text-sm text-white/60 mt-1">From {cashRecords.length} transaction(s)</p>
+          <p className="text-sm text-gray-500 mt-1">From {cashRecords.length} transaction(s)</p>
         </div>
 
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-lg text-white">
+        <div className="bg-gray-50 p-6 rounded-lg text-gray-900">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-white/20 rounded-lg">
               <TrendingUp size={24} />
             </div>
-            <span className="text-white/80">Total Liquidity</span>
+            <span className="text-gray-700">Total Liquidity</span>
           </div>
           <p className="text-3xl font-bold">{formatCurrency(stats.totalLiquidity)}</p>
-          <p className="text-sm text-white/60 mt-1">Combined bank + cash</p>
+          <p className="text-sm text-gray-500 mt-1">Combined bank + cash</p>
         </div>
       </div>
 
