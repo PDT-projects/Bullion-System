@@ -215,8 +215,10 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
           <div className="flex items-center justify-between pt-6 border-t border-gray-200">
             <button onClick={handleBack} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-2 font-medium"><ArrowLeft size={18} />Back</button>
             <button onClick={handleSubmit} disabled={!isValid || isSaving}
-              className={`px-8 py-4 rounded-lg font-medium text-lg shadow-lg flex items-center gap-2 ${
-                isValid && !isSaving ? 'bg-[#4f46e5] text-white hover:bg-[#4338ca]' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              className={`px-8 py-4 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-colors ${
+                isValid && !isSaving
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}>
               {isSaving ? <><Loader2 size={20} className="animate-spin" />Saving...</> : <><Save size={20} />Submit Inventory</>}
             </button>

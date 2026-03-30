@@ -74,18 +74,18 @@ export function TransactionListView({
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats — all cards now use a neutral light-grey background */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Inflow',  value: formatCurrency(stats.totalInflow),  color: 'text-green-600', icon: TrendingUp,  bg: 'bg-green-50'  },
-          { label: 'Total Outflow', value: formatCurrency(stats.totalOutflow), color: 'text-red-600',   icon: TrendingDown, bg: 'bg-red-50'    },
-          { label: 'Net Balance',   value: formatCurrency(stats.netBalance),   color: stats.netBalance >= 0 ? 'text-blue-600' : 'text-red-600', icon: Wallet, bg: 'bg-blue-50' },
-          { label: 'Pending',       value: `${stats.pendingCount} (${formatCurrency(stats.totalPending)})`, color: 'text-orange-600', icon: AlertCircle, bg: 'bg-orange-50' },
+          { label: 'Total Inflow',  value: formatCurrency(stats.totalInflow),  color: 'text-green-600', icon: TrendingUp  },
+          { label: 'Total Outflow', value: formatCurrency(stats.totalOutflow), color: 'text-red-600',   icon: TrendingDown },
+          { label: 'Net Balance',   value: formatCurrency(stats.netBalance),   color: stats.netBalance >= 0 ? 'text-blue-600' : 'text-red-600', icon: Wallet },
+          { label: 'Pending',       value: `${stats.pendingCount} (${formatCurrency(stats.totalPending)})`, color: 'text-orange-600', icon: AlertCircle },
         ].map(s => (
-          <div key={s.label} className={`${s.bg} p-4 rounded-xl border border-white/50 shadow-sm`}>
+          <div key={s.label} className="bg-gray-100 p-4 rounded-xl border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
               <s.icon size={16} className={s.color} />
-              <p className="text-xs text-gray-500 font-medium">{s.label}</p>
+              <p className="text-xs text-black font-medium">{s.label}</p>
             </div>
             <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
           </div>
@@ -96,7 +96,6 @@ export function TransactionListView({
       <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
         <div className="flex items-center gap-3">
 
-          {/* 🔥 FIXED SEARCH BAR */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
 
@@ -136,7 +135,6 @@ export function TransactionListView({
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         
-        {/* 🔥 FIXED HEADING SPACING */}
         <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
           <h3 className="font-semibold text-gray-900 mt-2 mb-1">
             All Transactions ({filteredTransactions.length})
@@ -168,7 +166,6 @@ export function TransactionListView({
                     {t.company}
                   </td>
 
-                  {/* 🔥 FIXED CATEGORY BADGE */}
                   <td className="px-4 py-3">
                     <span className={`px-3 py-1 text-xs font-medium rounded-full 
                       whitespace-nowrap inline-flex items-center justify-center leading-none

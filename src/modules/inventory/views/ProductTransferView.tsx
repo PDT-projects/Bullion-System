@@ -61,13 +61,13 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
           </p>
         </div>
 
-        {/* ✅ FIXED BUTTON */}
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2.5 
-                     bg-gray-200 text-black 
-                     rounded-lg font-medium 
-                     hover:bg-gray-300 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5
+                     bg-indigo-600 text-white
+                     rounded-lg font-semibold
+                     hover:bg-indigo-700 active:bg-indigo-800
+                     transition-colors shadow-sm"
         >
           <Plus size={18} /> New Transfer
         </button>
@@ -106,7 +106,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   {['Date', 'Product', 'Route', 'Qty', 'Serials', 'By', 'Status', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th key={h} className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       {h}
                     </th>
                   ))}
@@ -117,8 +117,8 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                 {transfers.map(t => (
                   <tr key={t.id} className="hover:bg-gray-50 transition-colors">
 
-                    {/* ✅ FIXED DATE SPACING */}
-                    <td className="pl-6 pr-5 py-4 text-sm text-gray-700 whitespace-nowrap">
+                    {/* Date */}
+                    <td className="px-5 py-4 text-sm text-gray-700 whitespace-nowrap">
                       {formatDate(t.date || t.transferDate || '')}
                     </td>
 

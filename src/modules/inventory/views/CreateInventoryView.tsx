@@ -44,7 +44,7 @@ export function CreateInventoryView({
     <div className="flex items-center justify-center mb-8">
       {steps.map((step, index) => (
         <div key={step.id} className="flex items-center">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold ${currentStep === step.id ? 'bg-[#4f46e5] text-white' : currentIdx > index ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+          <div className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold ${currentStep === step.id ? 'bg-indigo-600 text-white' : currentIdx > index ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
             {currentIdx > index ? <Check size={20} /> : step.number}
           </div>
           <span className={`ml-2 mr-4 text-sm font-medium ${currentStep === step.id ? 'text-[#4f46e5]' : 'text-gray-500'}`}>{step.label}</span>
@@ -125,7 +125,7 @@ export function CreateInventoryView({
               onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addSerialNumber())}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="City (optional)" />
           </div>
-          <button onClick={addSerialNumber} className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors flex items-center gap-2">
+          <button onClick={addSerialNumber} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition-colors flex items-center gap-2 font-semibold">
             <Plus size={18} />Add
           </button>
         </div>
@@ -222,7 +222,7 @@ export function CreateInventoryView({
               <ArrowLeft size={18} />{currentStep === 'details' ? 'Cancel' : 'Back'}
             </button>
             {currentStep !== 'confirmation' ? (
-              <button onClick={goToNextStep} className="px-6 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors flex items-center gap-2">
+              <button onClick={goToNextStep} className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition-colors flex items-center gap-2 font-semibold">
                 Next<ArrowRight size={18} />
               </button>
             ) : (

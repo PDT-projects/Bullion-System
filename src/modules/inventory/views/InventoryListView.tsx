@@ -76,13 +76,13 @@ export function InventoryListView({
         <div className="flex items-center gap-3">
           <button onClick={toggleFilters}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all shadow-sm ${
-              showFilters ? 'bg-[#4f46e5] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              showFilters ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}>
             <Filter size={20} />
             Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
           </button>
           <button onClick={onAddToExisting}
-            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg font-medium hover:from-green-700 hover:to-green-800 transition-all shadow-md">
+            className="flex items-center gap-2 bg-gray-100 text-black px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-all shadow-sm border border-gray-200">
             <Plus size={20} /> Add Stock
           </button>
           <button onClick={onAddNew}
@@ -223,16 +223,16 @@ export function InventoryListView({
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={() => setViewProduct(product)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
+                          className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="View">
                           <Eye size={18} />
                         </button>
                         <button onClick={() => onTransfer(product.id)}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Transfer">
+                          className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Transfer">
                           <ArrowRightLeft size={18} />
                         </button>
                         {onReceiveProduct && (
                           <button onClick={() => onReceiveProduct(product.id)}
-                            className="px-3 py-1 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-xs font-semibold shadow-sm"
+                            className="px-3 py-1 text-black bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-xs font-semibold border border-gray-200"
                             title="Move to Stock">
                             → Stock
                           </button>
@@ -333,7 +333,7 @@ export function InventoryListView({
                 {(!viewProduct.costingOption || viewProduct.costingOption !== 'with') && !viewProduct.costingUsdRate && (
                   <button
                     onClick={() => setViewProduct(null)}
-                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-medium hover:from-purple-700 hover:to-purple-800 transition-all shadow-md flex items-center gap-2">
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 active:bg-purple-800 transition-colors shadow-sm flex items-center gap-2">
                     <DollarSign size={18} /> Add Costing
                   </button>
                 )}
@@ -344,12 +344,12 @@ export function InventoryListView({
                   Close
                 </button>
                 <button onClick={() => { setViewProduct(null); onTransfer(viewProduct.id); }}
-                  className="px-4 py-2 bg-gradient-to-r from-[#4f46e5] to-[#6366f1] text-white rounded-lg font-medium hover:from-[#4338ca] hover:to-[#4f46e5] transition-all shadow-md">
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
                   Transfer
                 </button>
                 {onReceiveProduct && (
                   <button onClick={() => { setViewProduct(null); onReceiveProduct(viewProduct.id); }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-md">
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm">
                     Move to Stock
                   </button>
                 )}

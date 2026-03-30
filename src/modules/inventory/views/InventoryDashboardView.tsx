@@ -110,4 +110,3 @@ export function InventoryDashboardView({
     </div>
   );
 }
-

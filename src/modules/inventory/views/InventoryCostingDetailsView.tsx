@@ -160,7 +160,7 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
                 <ArrowLeft size={20} />Back
               </button>
               <button onClick={handleNext} disabled={isSaving || !isValid}
-                className={`px-8 py-4 rounded-lg transition-colors font-medium text-lg shadow-lg flex items-center gap-2 ${isSaving || !isValid ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-[#4f46e5] text-white hover:bg-[#4338ca]'}`}>
+                className={`px-8 py-4 rounded-lg transition-colors font-semibold text-lg shadow-lg flex items-center gap-2 ${isSaving || !isValid ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'}`}>
                 {isSaving ? (
                   <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving...</>
                 ) : (

@@ -305,7 +305,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
             <div className="flex items-center justify-between pt-6 border-t">
               <button onClick={handleBack} className="px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg font-medium transition-colors flex items-center gap-2"><ArrowLeft size={18} />Back</button>
               <button onClick={() => handleNext()}
-                className="px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl transition-all">
+                className="px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 transition-colors">
                 Next: Payment <ArrowRight size={20} />
               </button>
             </div>
@@ -473,9 +473,9 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               <button
                 onClick={() => handleNext(selectedModels)}
                 disabled={isLoadingModels || selectedModels.length === 0}
-                className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-all ${
+                className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-colors ${
                   !isLoadingModels && selectedModels.length > 0
-                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl hover:scale-[1.02]'
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}>
                 {isLoadingModels
