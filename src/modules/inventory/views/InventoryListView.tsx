@@ -2,7 +2,8 @@
 // InventoryListView - Product list with filters, location column, and location-grouped serial modal
 
 import React from 'react';
-import { Plus, Filter, Package, Eye, ArrowRightLeft, DollarSign, MapPin } from 'lucide-react';
+import { Plus, Filter, Package, Eye, ArrowRightLeft, DollarSign, MapPin, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 
@@ -31,9 +32,9 @@ interface InventoryListViewProps {
   onAddToExisting: () => void;
   onTransfer: (id: string) => void;
   onReceiveProduct?: (id: string) => void;
+  onBack?: () => void;
 }
 
-// ── Pure helper — declared once outside the component to avoid any re-declaration issues ──
 function getDisplayLocation(product: Product): string {
   if (product.location) return product.location;
   const cities = Object.values(product.serialCities || {}).filter(Boolean);
@@ -51,6 +52,7 @@ function getStatusColor(status: string): string {
     'Sold':       'bg-gray-100 text-gray-800',
     'Damaged':    'bg-red-100 text-red-800',
     'Returned':   'bg-purple-100 text-purple-800',
+    'On-Order':   'bg-orange-100 text-orange-800',
   };
   return colors[status] || 'bg-gray-100 text-gray-800';
 }
@@ -60,19 +62,37 @@ export function InventoryListView({
   viewProduct, isLoading, stats,
   setFilter, clearFilters, toggleFilters, setViewProduct,
   onAddNew, onAddToExisting, onTransfer, onReceiveProduct,
+  onBack,
 }: InventoryListViewProps) {
   const fmt = InventoryService.formatCurrency;
+  const navigate = useNavigate();
+  const handleBack = () => onBack ? onBack() : navigate('/inventory');
 
   return (
     <div className="p-6">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Inventory</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            {stats.totalProducts} products · {stats.totalStock} units · {fmt(stats.totalValue)} value
-          </p>
+        <div className="flex items-center gap-3">
+
+          {/* BACK BUTTON */}
+          <button
+            onClick={handleBack}
+            style={{ minWidth: 36, minHeight: 36 }}
+            className="flex items-center justify-center rounded-lg border border-gray-300 bg-white shadow-sm hover:bg-gray-100 text-gray-700"
+            title="Back to Inventory Entry"
+          >
+            <ArrowLeft size={18} />
+          </button>
+
+          <div>
+            <h2 className="text-2xl font-bold">Inventory</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {stats.totalProducts} products · {stats.totalStock} units · {fmt(stats.totalValue)} value
+            </p>
+          </div>
         </div>
+
         <div className="flex items-center gap-3">
           <button onClick={toggleFilters}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all shadow-sm ${
@@ -92,7 +112,7 @@ export function InventoryListView({
         </div>
       </div>
 
-      {/* Stats */}
+      {/* ── Stats ── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Total Products', value: stats.totalProducts, color: 'text-blue-600' },
@@ -107,7 +127,7 @@ export function InventoryListView({
         ))}
       </div>
 
-      {/* Filters */}
+      {/* ── Filters ── */}
       {showFilters && (
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -146,9 +166,7 @@ export function InventoryListView({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Location
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
               <select value={filters.locationFilter}
                 onChange={e => setFilter('locationFilter', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -158,14 +176,15 @@ export function InventoryListView({
             </div>
           </div>
           <div className="flex justify-end mt-4">
-            <button onClick={clearFilters} className="text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 py-1.5 rounded-lg font-medium transition-colors">
+            <button onClick={clearFilters}
+              className="text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 py-1.5 rounded-lg font-medium transition-colors">
               Clear all filters
             </button>
           </div>
         </div>
       )}
 
-      {/* Table */}
+      {/* ── Table ── */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center">
@@ -173,99 +192,120 @@ export function InventoryListView({
             <p className="text-gray-600">Loading inventory...</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {['Product', 'Category', 'Location', 'Stock', 'Cost Price', 'Sell Price', 'Status', 'Actions'].map(h => (
-                    <th key={h}
-                      className={`px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${h === 'Actions' ? 'text-right' : ''}`}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {products.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
-                      <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                      <p>No products found</p>
-                    </td>
-                  </tr>
-                ) : products.map(product => (
-                  <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-gray-900">{product.brandName} {product.modelName}</div>
-                      <div className="text-xs text-gray-500">{product.buyType}</div>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-gray-600">{product.category}</td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
-                        <MapPin className="w-3 h-3" />
-                        {getDisplayLocation(product)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        product.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {product.stock} units
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-gray-600">{fmt(product.costPrice)}</td>
-                    <td className="px-5 py-4 text-sm text-gray-600">{fmt(product.sellPrice)}</td>
-                    <td className="px-5 py-4">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
-                        {product.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => setViewProduct(product)}
-                          className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="View">
-                          <Eye size={18} />
-                        </button>
-                        <button onClick={() => onTransfer(product.id)}
-                          className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" title="Transfer">
-                          <ArrowRightLeft size={18} />
-                        </button>
-                        {onReceiveProduct && (
-                          <button onClick={() => onReceiveProduct(product.id)}
-                            className="px-3 py-1 text-black bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-xs font-semibold border border-gray-200"
-                            title="Move to Stock">
-                            → Stock
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+          /*
+            KEY FIX: table-fixed + colgroup percentages summing to 100%
+            eliminates all empty space after the Actions column.
+          */
+          <table className="w-full table-fixed">
+            <colgroup>
+              <col style={{ width: '22%' }} /> {/* Product */}
+              <col style={{ width: '15%' }} /> {/* Category */}
+              <col style={{ width: '13%' }} /> {/* Location */}
+              <col style={{ width: '10%' }} /> {/* Stock */}
+              <col style={{ width: '11%' }} /> {/* Cost Price */}
+              <col style={{ width: '11%' }} /> {/* Sell Price */}
+              <col style={{ width: '10%' }} /> {/* Status */}
+              <col style={{ width: '8%'  }} /> {/* Actions */}
+            </colgroup>
+
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                {['Product', 'Category', 'Location', 'Stock', 'Cost Price', 'Sell Price', 'Status', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {h}
+                  </th>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-gray-200">
+              {products.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No products found</p>
+                  </td>
+                </tr>
+              ) : products.map(product => (
+                <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-gray-900 truncate">{product.brandName} {product.modelName}</div>
+                    <div className="text-xs text-gray-500">{product.buyType}</div>
+                  </td>
+
+                  <td className="px-4 py-3 text-sm text-gray-600 truncate">{product.category}</td>
+
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
+                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                      {getDisplayLocation(product)}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      product.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {product.stock} units
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3 text-sm text-gray-600">{fmt(product.costPrice)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{fmt(product.sellPrice)}</td>
+
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
+                      {product.status}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setViewProduct(product)}
+                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="View">
+                        <Eye size={16} />
+                      </button>
+                      <button onClick={() => onTransfer(product.id)}
+                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Transfer">
+                        <ArrowRightLeft size={16} />
+                      </button>
+                      {onReceiveProduct && (
+                        <button onClick={() => onReceiveProduct(product.id)}
+                          className="px-2 py-1 text-black bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold border border-gray-200 whitespace-nowrap"
+                          title="Move to Stock">
+                          → Stock
+                        </button>
+                      )}
+                    </div>
+                  </td>
+
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
-      {/* View Modal */}
+      {/* ── View Modal ── */}
       {viewProduct && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-xl font-bold">Product Details</h3>
-              <button onClick={() => setViewProduct(null)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500">✕</button>
+              <button onClick={() => setViewProduct(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500">✕</button>
             </div>
 
             <div className="p-6 space-y-5">
-              {/* Core fields grid */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 {[
-                  ['Brand',    viewProduct.brandName],
-                  ['Model',    viewProduct.modelName],
-                  ['Category', viewProduct.category],
-                  ['Status',   viewProduct.status],
-                  ['Stock',    `${viewProduct.stock} units`],
-                  ['Warranty', `${viewProduct.warrantyYears} year${viewProduct.warrantyYears !== 1 ? 's' : ''}`],
+                  ['Brand',      viewProduct.brandName],
+                  ['Model',      viewProduct.modelName],
+                  ['Category',   viewProduct.category],
+                  ['Status',     viewProduct.status],
+                  ['Stock',      `${viewProduct.stock} units`],
+                  ['Warranty',   `${viewProduct.warrantyYears} year${viewProduct.warrantyYears !== 1 ? 's' : ''}`],
                   ['Cost Price', fmt(viewProduct.costPrice)],
                   ['Sell Price', fmt(viewProduct.sellPrice)],
                 ].map(([label, value]) => (
@@ -274,8 +314,6 @@ export function InventoryListView({
                     <p className="font-medium text-gray-900">{value}</p>
                   </div>
                 ))}
-
-                {/* Primary location — full width */}
                 <div className="col-span-2 flex items-center gap-2 pt-2 border-t border-gray-100">
                   <MapPin className="w-4 h-4 text-indigo-500 flex-shrink-0" />
                   <div>
@@ -285,7 +323,6 @@ export function InventoryListView({
                 </div>
               </div>
 
-              {/* Serial numbers grouped by location */}
               {viewProduct.serialNumbers.length > 0 && (
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-3">
@@ -331,9 +368,8 @@ export function InventoryListView({
             <div className="p-6 border-t border-gray-200 flex items-center justify-between">
               <div>
                 {(!viewProduct.costingOption || viewProduct.costingOption !== 'with') && !viewProduct.costingUsdRate && (
-                  <button
-                    onClick={() => setViewProduct(null)}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 active:bg-purple-800 transition-colors shadow-sm flex items-center gap-2">
+                  <button onClick={() => setViewProduct(null)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2">
                     <DollarSign size={18} /> Add Costing
                   </button>
                 )}
