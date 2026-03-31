@@ -1,23 +1,25 @@
 import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../api/firebase/firebase'; // Ensure this path matches your new API folder
-import { useNavigate } from 'react-router-dom'; // The GPS tool
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth } from '../api/firebase/firebase';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 
+// ✅ Add your allowed emails here — must match exactly what's in Firebase Console
+const ALLOWED_EMAILS = [
+  'fatimamalikk72@gmail.com',
+  //add emails here
+];
+
 interface LoginProps {
-  onNavigateToSignup: () => void;
   onLoginSuccess: (user: any) => void;
 }
 
-export function Login({ onNavigateToSignup, onLoginSuccess }: LoginProps) {
-  const navigate = useNavigate(); // Initialize the GPS
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
+export function Login({ onLoginSuccess }: LoginProps) {
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -42,7 +44,6 @@ export function Login({ onNavigateToSignup, onLoginSuccess }: LoginProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateForm()) return;
 
     setIsLoading(true);
@@ -50,23 +51,28 @@ export function Login({ onNavigateToSignup, onLoginSuccess }: LoginProps) {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      const user = userCredential.user;
+
+      // ✅ Whitelist check — sign out immediately if email not allowed
+      if (!ALLOWED_EMAILS.includes(user.email ?? '')) {
+        await signOut(auth);
+        toast.error('Access denied. You are not authorized to use this system.');
+        setIsLoading(false);
+        return;
+      }
+
       toast.success('Login successful!');
-      
-      // 1. Tell the AuthContext who the user is
-      onLoginSuccess(userCredential.user);
-      
-      // 2. Actually move the browser to the Dashboard URL
-      navigate('/dashboard'); 
-      
+      onLoginSuccess(user);
+      navigate('/dashboard');
+
     } catch (error: any) {
       let errorMessage = 'Login failed. Please try again.';
 
       switch (error.code) {
         case 'auth/user-not-found':
-          errorMessage = 'No account found with this email address.';
-          break;
         case 'auth/wrong-password':
-          errorMessage = 'Incorrect password.';
+        case 'auth/invalid-credential':
+          errorMessage = 'Invalid email or password.';
           break;
         case 'auth/invalid-email':
           errorMessage = 'Invalid email address.';
@@ -93,11 +99,7 @@ export function Login({ onNavigateToSignup, onLoginSuccess }: LoginProps) {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full shadow-lg mb-4">
-            <img
-              src="/PDT-logo.png"
-              alt="Logo"
-              className="w-12 h-12 object-contain"
-            />
+            <img src="/PDT-logo.png" alt="Logo" className="w-12 h-12 object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Pakistan Detectors Technologies</h1>
           <p className="text-gray-600">Cash Flow Management System</p>
@@ -145,17 +147,8 @@ export function Login({ onNavigateToSignup, onLoginSuccess }: LoginProps) {
               </Button>
             </form>
 
-            <div className="mt-8 text-center">
-              <p className="text-gray-600">
-                Don't have an account?{' '}
-                <button
-                  onClick={onNavigateToSignup}
-                  className="text-[#4f46e5] font-semibold hover:underline"
-                  disabled={isLoading}
-                >
-                  Sign up here
-                </button>
-              </p>
+            <div className="mt-8 text-center text-sm text-gray-500">
+              <p>© 2024 Pakistan Detectors Technologies. All rights reserved.</p>
             </div>
           </CardContent>
         </Card>

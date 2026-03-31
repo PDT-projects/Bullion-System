@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
-import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Dashboard } from './features/finance/Dashboard';
 
@@ -85,23 +84,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // AUTH PAGES
 // ============================================================
 
-function SignupPage() {
-  const navigate = useNavigate();
-  const { setUser } = useAuth();
-  return (
-    <Signup
-      onNavigateToLogin={() => navigate('/login')}
-      onSignupSuccess={(user) => { setUser(user); navigate('/dashboard'); }}
-    />
-  );
-}
-
 function LoginPage() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
   return (
     <Login
-      onNavigateToSignup={() => navigate('/signup')}
       onLoginSuccess={(user) => { setUser(user); navigate('/dashboard'); }}
     />
   );
@@ -274,9 +261,9 @@ function BudgetDeleteRoute() { return <BudgetDeleteWrapper />; }
 export const router = createBrowserRouter([
 
   // ── Public / Auth ─────────────────────────────────────────
-  { path: '/',       element: <Navigate to="/dashboard" replace /> },
-  { path: '/login',  element: <LoginPage /> },
-  { path: '/signup', element: <SignupPage /> },
+  { path: '/',        element: <Navigate to="/dashboard" replace /> },
+  { path: '/login',   element: <LoginPage /> },
+  { path: '/signup',  element: <Navigate to="/login" replace /> }, // signup disabled
 
   // ── Dashboard ─────────────────────────────────────────────
   {
