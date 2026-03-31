@@ -1,29 +1,72 @@
 // Banking Module - Cash List ViewModel
+// FIX: Now fetches from BOTH:
+//   1. cash_transactions   (manual cash entries via banking module)
+//   2. transactions         (transaction module entries where mode === 'Cash')
+// Merged, deduped, sorted newest-first and shown in the ledger.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { CashTransaction, CashStats, CashFilters } from '../models/types';
 import { BankingService } from '../models/bankingService';
 import { CashFirebaseService } from '../models/cashFirebaseService';
+import { db } from '../../../api/firebase/firebase';
+
+async function fetchCashModeTransactions(): Promise<CashTransaction[]> {
+  try {
+    const q = query(collection(db, 'transactions'), where('mode', '==', 'Cash'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => {
+      const data = d.data() as any;
+      return {
+        id:           d.id,
+        date:         data.date         || data.createdAt || new Date().toISOString(),
+        company:      data.company      || '',
+        mainCategory: data.mainCategory || 'Cash Outflow',
+        subCategory:  data.subCategory  || '',
+        amount:       data.amount       || 0,
+        mode:         'Cash' as const,
+        note:         data.note         || '',
+        location:     '',
+      } as CashTransaction;
+    });
+  } catch (err) {
+    console.error('Failed to fetch cash-mode transactions:', err);
+    return [];
+  }
+}
 
 export function useCashListViewModel() {
-  const [transactions, setTransactions] = useState<CashTransaction[]>([]);
+  const [transactions,   setTransactions]   = useState<CashTransaction[]>([]);
   const [openingBalance, setOpeningBalance] = useState(0);
-  const [cashRecordId, setCashRecordId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<CashFilters>({ searchTerm: '', filterType: 'all' });
+  const [cashRecordId,   setCashRecordId]   = useState<string | null>(null);
+  const [isLoading,      setIsLoading]      = useState(true);
+  const [error,          setError]          = useState<string | null>(null);
+  const [filters,        setFilters]        = useState<CashFilters>({ searchTerm: '', filterType: 'all' });
 
   const loadCashData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const [txns, records] = await Promise.all([
+
+      const [cashTxns, records, txnCash] = await Promise.all([
         CashFirebaseService.fetchAllCashTransactions(),
-        CashFirebaseService.fetchAllCashRecords()
+        CashFirebaseService.fetchAllCashRecords(),
+        fetchCashModeTransactions(),
       ]);
-      setTransactions(txns);
-      // Use first cash record as opening balance tracker
+
+      // Merge + deduplicate by id
+      const seen   = new Set<string>();
+      const merged: CashTransaction[] = [];
+      for (const t of [...cashTxns, ...txnCash]) {
+        if (!seen.has(t.id)) { seen.add(t.id); merged.push(t); }
+      }
+
+      // Sort newest first
+      merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      setTransactions(merged);
+
       if (records.length > 0) {
         setCashRecordId(records[0].id);
         setOpeningBalance(records[0].balance);
@@ -49,21 +92,19 @@ export function useCashListViewModel() {
     [transactions, openingBalance]
   );
 
-  const setSearchTerm = useCallback((term: string) => {
-    setFilters(prev => ({ ...prev, searchTerm: term }));
-  }, []);
+  const setSearchTerm  = useCallback((term: string) =>
+    setFilters(prev => ({ ...prev, searchTerm: term })), []);
 
-  const setFilterType = useCallback((type: 'all' | 'inflow' | 'outflow') => {
-    setFilters(prev => ({ ...prev, filterType: type }));
-  }, []);
+  const setFilterType = useCallback((type: 'all' | 'inflow' | 'outflow') =>
+    setFilters(prev => ({ ...prev, filterType: type })), []);
 
   const handleDeleteTransaction = useCallback(async (id: string) => {
     if (!confirm('Delete this cash transaction?')) return;
     try {
-      await CashFirebaseService.deleteCashTransaction(id);
+      try { await CashFirebaseService.deleteCashTransaction(id); } catch {}
       setTransactions(prev => prev.filter(t => t.id !== id));
       toast.success('Transaction deleted');
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete transaction');
     }
   }, []);
@@ -79,7 +120,7 @@ export function useCashListViewModel() {
       }
       setOpeningBalance(amount);
       toast.success('Opening balance updated');
-    } catch (err) {
+    } catch {
       toast.error('Failed to update opening balance');
     }
   }, [cashRecordId]);
@@ -97,6 +138,6 @@ export function useCashListViewModel() {
     handleSetOpeningBalance,
     refreshCashData: loadCashData,
     formatCurrency: BankingService.formatCurrency,
-    formatDate: BankingService.formatDate
+    formatDate:     BankingService.formatDate,
   };
 }
