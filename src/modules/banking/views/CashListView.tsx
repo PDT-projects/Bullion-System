@@ -1,7 +1,4 @@
 // Banking Module - Cash List View
-// Clean ledger: Date | Type | Sub-Category | Note | Amount | Balance
-// Removed: Company, Category columns (as requested)
-// Fixed: search icon overlap, table header spacing, border spacing
 
 import React, { useState } from 'react';
 import {
@@ -20,7 +17,7 @@ interface CashListViewProps {
   filters: CashFilters;
   setSearchTerm: (term: string) => void;
   setFilterType: (type: 'all' | 'inflow' | 'outflow') => void;
-  onAddTransaction: () => void;  // kept for prop compatibility
+  onAddTransaction: () => void;
   onDeleteTransaction: (id: string) => void;
   onBack: () => void;
   onSetOpeningBalance: (amount: number) => Promise<void>;
@@ -74,9 +71,9 @@ export const CashListView: React.FC<CashListViewProps> = ({
   filters, setSearchTerm, setFilterType,
   onDeleteTransaction, onBack, onSetOpeningBalance, refreshCashData, formatCurrency,
 }) => {
-  const [showModal,            setShowModal]            = useState(false);
-  const [openingBalanceInput,  setOpeningBalanceInput]  = useState('');
-  const [isSavingBalance,      setIsSavingBalance]      = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [openingBalanceInput, setOpeningBalanceInput] = useState('');
+  const [isSavingBalance, setIsSavingBalance] = useState(false);
 
   const handleSaveBalance = async () => {
     const amount = parseFloat(openingBalanceInput) || 0;
@@ -95,7 +92,6 @@ export const CashListView: React.FC<CashListViewProps> = ({
 
   const openingBalance = stats.openingBalance ?? 0;
 
-  // Build running balance per row (oldest→newest order for calculation, display newest first)
   const reversed = [...filteredTransactions].reverse();
   let running = openingBalance;
   const withBalance = reversed.map(txn => {
@@ -103,7 +99,6 @@ export const CashListView: React.FC<CashListViewProps> = ({
     running = isInflow ? running + txn.amount : running - txn.amount;
     return { ...txn, runningBalance: running };
   });
-  // Flip back to newest-first for display
   const ledgerRows = withBalance.reverse();
 
   // ── Loading ──
@@ -146,9 +141,9 @@ export const CashListView: React.FC<CashListViewProps> = ({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Cash in Hand',    value: formatCurrency(stats.totalCashInHand), color: 'text-[#4f46e5]', bg: 'bg-indigo-50', Icon: Wallet,      ic: 'text-[#4f46e5]' },
-          { label: 'Opening Balance', value: formatCurrency(stats.openingBalance),  color: 'text-blue-600',  bg: 'bg-blue-50',   Icon: DollarSign,   ic: 'text-blue-500'  },
-          { label: 'Total Inflow',    value: formatCurrency(stats.totalInflow),     color: 'text-green-600', bg: 'bg-green-50',  Icon: TrendingUp,   ic: 'text-green-500' },
-          { label: 'Total Outflow',   value: formatCurrency(stats.totalOutflow),    color: 'text-red-600',   bg: 'bg-red-50',    Icon: TrendingDown,  ic: 'text-red-500'   },
+          { label: 'Opening Balance', value: formatCurrency(stats.openingBalance),  color: 'text-blue-600',  bg: 'bg-blue-50',   Icon: DollarSign,  ic: 'text-blue-500'  },
+          { label: 'Total Inflow',    value: formatCurrency(stats.totalInflow),     color: 'text-green-600', bg: 'bg-green-50',  Icon: TrendingUp,  ic: 'text-green-500' },
+          { label: 'Total Outflow',   value: formatCurrency(stats.totalOutflow),    color: 'text-red-600',   bg: 'bg-red-50',    Icon: TrendingDown, ic: 'text-red-500'  },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
@@ -163,7 +158,6 @@ export const CashListView: React.FC<CashListViewProps> = ({
       {/* ── Search + Filter ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center gap-3">
-          {/* Search — icon OUTSIDE the input as a flex sibling, no absolute positioning */}
           <div className="flex-1 flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-[#4f46e5] focus-within:border-[#4f46e5] bg-white overflow-hidden">
             <span className="pl-3 pr-2 text-gray-400 shrink-0 flex items-center">
               <Search size={15} />
@@ -176,7 +170,6 @@ export const CashListView: React.FC<CashListViewProps> = ({
               className="flex-1 py-2 pr-3 text-sm bg-transparent outline-none placeholder-gray-400"
             />
           </div>
-          {/* Filter pills */}
           <div className="flex gap-1 p-1 bg-gray-100 rounded-lg shrink-0">
             {(['all', 'inflow', 'outflow'] as const).map(f => (
               <button key={f} onClick={() => setFilterType(f)}
@@ -193,37 +186,28 @@ export const CashListView: React.FC<CashListViewProps> = ({
       {/* ── Ledger Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
 
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900 text-sm">
-            Cash Ledger
-            <span className="ml-2 text-xs font-normal text-gray-400">
-              ({filteredTransactions.length} {filteredTransactions.length === 1 ? 'entry' : 'entries'})
-            </span>
-          </h3>
-        </div>
-
         {openingBalance > 0 || filteredTransactions.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full" style={{ minWidth: '600px' }}>
 
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="pl-5 pr-4 py-3.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider w-40">Date</th>
-                  <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Type</th>
-                  <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Sub-Category</th>
-                  <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Note</th>
-                  <th className="px-4 py-3.5 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Amount</th>
-                  <th className="px-4 py-3.5 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pr-5">Balance</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 w-40">Date</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Type</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Sub-Category</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Note</th>
+                  <th className="px-4 py-4 text-right text-sm font-semibold text-gray-600">Amount</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Balance</th>
                   <th className="w-10" />
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100">
 
                 {/* Opening Balance Row */}
                 {openingBalance > 0 && (
                   <tr className="bg-indigo-50/40">
-                    <td className="pl-5 pr-4 py-4">
+                    <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
                         <Clock size={11} /> Opening Balance
                       </span>
@@ -238,7 +222,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
                     <td className="px-4 py-4 text-right">
                       <span className="text-sm font-semibold text-indigo-700">{formatCurrency(openingBalance)}</span>
                     </td>
-                    <td className="px-4 py-4 pr-5 text-right">
+                    <td className="px-6 py-4 text-right">
                       <span className="text-sm font-bold text-indigo-700">{formatCurrency(openingBalance)}</span>
                     </td>
                     <td />
@@ -248,7 +232,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
                 {/* Empty message when no transactions */}
                 {ledgerRows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-14 text-center">
+                    <td colSpan={7} className="px-6 py-14 text-center">
                       <DollarSign size={32} className="text-gray-200 mx-auto mb-2" />
                       <p className="text-sm font-medium text-gray-400">No cash transactions yet</p>
                       <p className="text-xs text-gray-300 mt-1">
@@ -261,12 +245,12 @@ export const CashListView: React.FC<CashListViewProps> = ({
                 {/* Transaction rows */}
                 {ledgerRows.map(txn => {
                   const isInflow = txn.mainCategory === 'Cash Inflow';
-  const { date } = formatDateTime(txn.date);
+                  const { date } = formatDateTime(txn.date);
                   return (
                     <tr key={txn.id} className="hover:bg-gray-50/70 transition-colors">
 
-                      {/* Date & Time */}
-                      <td className="pl-5 pr-4 py-4">
+                      {/* Date */}
+                      <td className="px-6 py-4">
                         <p className="text-sm font-medium text-gray-800">{date}</p>
                       </td>
 
@@ -310,7 +294,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
                       </td>
 
                       {/* Running Balance */}
-                      <td className="px-4 py-4 pr-5 text-right">
+                      <td className="px-6 py-4 text-right">
                         <span className={`text-sm font-bold ${(txn as any).runningBalance >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                           {formatCurrency((txn as any).runningBalance)}
                         </span>
@@ -333,10 +317,10 @@ export const CashListView: React.FC<CashListViewProps> = ({
               {(openingBalance > 0 || filteredTransactions.length > 0) && (
                 <tfoot className="border-t-2 border-gray-200 bg-gray-50">
                   <tr>
-                    <td colSpan={5} className="pl-5 pr-4 py-3 text-sm font-semibold text-gray-700">
+                    <td colSpan={5} className="px-6 py-3 text-sm font-semibold text-gray-700">
                       Current Cash in Hand
                     </td>
-                    <td className="px-4 py-3 pr-5 text-right">
+                    <td className="px-6 py-3 text-right">
                       <span className={`text-base font-bold ${stats.totalCashInHand >= 0 ? 'text-[#4f46e5]' : 'text-red-600'}`}>
                         {formatCurrency(stats.totalCashInHand)}
                       </span>
