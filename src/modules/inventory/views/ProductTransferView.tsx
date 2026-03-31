@@ -63,11 +63,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
 
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2.5
-bg-indigo-600 text-black
-                     rounded-lg font-semibold
-                     hover:bg-indigo-700 active:bg-indigo-800
-                     transition-colors shadow-sm"
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#4f46e5] text-white rounded-lg font-semibold hover:bg-[#4338ca] active:bg-[#3730a3] transition-colors shadow-sm"
         >
           <Plus size={18} /> New Transfer
         </button>
@@ -90,6 +86,14 @@ bg-indigo-600 text-black
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+
+        {/* Table title row - matches Employees style */}
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-semibold text-gray-800">
+            All Transfers ({transfers.length})
+          </h3>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-16 text-gray-400">
             <Clock className="w-6 h-6 animate-spin mr-2" /> Loading transfers...
@@ -103,10 +107,10 @@ bg-indigo-600 text-black
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="border-b border-gray-200">
                 <tr>
                   {['Date', 'Product', 'Route', 'Qty', 'Serials', 'By', 'Status', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th key={h} className="px-6 py-3.5 text-left text-sm font-semibold text-gray-500">
                       {h}
                     </th>
                   ))}
@@ -118,18 +122,18 @@ bg-indigo-600 text-black
                   <tr key={t.id} className="hover:bg-gray-50 transition-colors">
 
                     {/* Date */}
-                    <td className="px-5 py-4 text-sm text-gray-700 whitespace-nowrap">
+                    <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap">
                       {formatDate(t.date || t.transferDate || '')}
                     </td>
 
-                    <td className="px-5 py-4">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span className="text-sm font-medium text-gray-900">{t.productName}</span>
+                        <span className="text-sm font-semibold text-gray-900">{t.productName}</span>
                       </div>
                     </td>
 
-                    <td className="px-5 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
                           {t.fromLocation}
@@ -141,11 +145,11 @@ bg-indigo-600 text-black
                       </div>
                     </td>
 
-                    <td className="px-5 py-4 text-sm font-semibold text-gray-900">
+                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">
                       {t.quantity}
                     </td>
 
-                    <td className="px-5 py-4">
+                    <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1 max-w-[180px]">
                         {(t.serialNumbers || []).slice(0, 2).map(s => (
                           <span key={s} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-mono">
@@ -158,18 +162,18 @@ bg-indigo-600 text-black
                       </div>
                     </td>
 
-                    <td className="px-5 py-4 text-sm text-gray-600 whitespace-nowrap">
+                    <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap">
                       {t.transferredBy || '—'}
                     </td>
 
-                    <td className="px-5 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className={statusBadge(t.status)}>
                         {statusIcon(t.status)}
                         {t.status}
                       </span>
                     </td>
 
-                    <td className="px-5 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         <button onClick={() => onView(t)}
                           className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors">
