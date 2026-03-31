@@ -384,18 +384,24 @@ export function TransactionFormView({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={lbl}>Paid By <span className="text-gray-400 font-normal">(optional)</span></label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                  <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-[#4f46e5] focus-within:border-[#4f46e5] bg-white overflow-hidden">
+                    <span className="flex items-center justify-center pl-3 pr-2 text-gray-400 shrink-0">
+                      <User size={14} />
+                    </span>
                     <input type="text" value={item.paidBy} onChange={e => updateItem(item.id, 'paidBy', e.target.value)}
-                      placeholder="Who paid" className={`${inp} pl-9`} />
+                      placeholder="Who paid"
+                      className="flex-1 py-2 pr-3 text-sm bg-transparent outline-none placeholder-gray-400" />
                   </div>
                 </div>
                 <div>
                   <label className={lbl}>Paid To <span className="text-gray-400 font-normal">(optional)</span></label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                  <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-[#4f46e5] focus-within:border-[#4f46e5] bg-white overflow-hidden">
+                    <span className="flex items-center justify-center pl-3 pr-2 text-gray-400 shrink-0">
+                      <User size={14} />
+                    </span>
                     <input type="text" value={item.paidTo} onChange={e => updateItem(item.id, 'paidTo', e.target.value)}
-                      placeholder="Who received" className={`${inp} pl-9`} />
+                      placeholder="Who received"
+                      className="flex-1 py-2 pr-3 text-sm bg-transparent outline-none placeholder-gray-400" />
                   </div>
                 </div>
               </div>
@@ -490,7 +496,7 @@ export function TransactionFormView({
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3 pb-6">
+        <div className="flex items-center justify-end gap-3 pb-10 pt-2">
           <button type="button" onClick={handleCancel}
             className="px-5 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium">
             Cancel

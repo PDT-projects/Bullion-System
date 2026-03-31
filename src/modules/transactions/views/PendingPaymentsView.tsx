@@ -131,11 +131,11 @@ export function PendingPaymentsView({
             <p className="text-sm text-gray-400 mt-1">Try a different filter or all transactions are cleared</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto px-2">
             <table className="w-full" style={{ minWidth: '900px' }}>
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="pl-8 pr-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="pl-5 pr-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
                   <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Transaction ID</th>
                   <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
                   <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
@@ -158,7 +158,7 @@ export function PendingPaymentsView({
                       className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? '' : ''}`}
                     >
                       {/* Date */}
-                      <td className="pl-8 pr-4 py-4 text-sm text-gray-900 whitespace-nowrap">
+                      <td className="pl-5 pr-4 py-4 text-sm text-gray-900 whitespace-nowrap">
                         {new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
 
