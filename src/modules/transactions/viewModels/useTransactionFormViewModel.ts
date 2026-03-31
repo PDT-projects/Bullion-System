@@ -1,8 +1,8 @@
 // Transactions Module - Form ViewModel
-// Fixes:
-// 1. Bank balance updated in Firestore on transaction save (inflow adds, outflow deducts)
-// 2. Cheque credentials (number, date, bank) saved to Firestore
-// 3. Amount Paid hidden for Cash Inflow (handled in View, flag exposed here)
+// Changes:
+// 1. New transactions saved with approvalStatus: 'pending_approval'
+// 2. Secure approvalToken generated (UUID) and stored on the transaction
+// 3. In-app notification created in Firestore after save
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -20,7 +20,6 @@ export interface UseTransactionFormViewModelReturn {
   transactionType: 'Cash Inflow' | 'Cash Outflow' | 'Loan';
   paymentMode: 'Cash' | 'Bank' | 'Cheque';
   selectedBank: string;
-  // Cheque fields
   chequeNumber: string;
   chequeDate: string;
   chequeBank: string;
@@ -67,6 +66,13 @@ const emptyItem = (type: string): TransactionItem => ({
   paymentStatus: 'Full', paidBy: '', paidTo: '', note: '',
 });
 
+/** Generate a simple secure token */
+function generateToken(): string {
+  const arr = new Uint8Array(24);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn {
   const navigate = useNavigate();
   const { id }   = useParams<{ id: string }>();
@@ -80,13 +86,12 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [isEditingId,      setIsEditingId]      = useState(false);
   const [duplicateIdError, setDuplicateIdError] = useState('');
 
-  const [office,           setOffice]           = useState(COMPANIES[0].id);
-  const [date,             setDate]             = useState(new Date().toISOString().split('T')[0]);
-  const [transactionType,  setTransactionTypeState] = useState<'Cash Inflow' | 'Cash Outflow' | 'Loan'>('Cash Inflow');
-  const [paymentMode,      setPaymentMode]      = useState<'Cash' | 'Bank' | 'Cheque'>('Cash');
-  const [selectedBank,     setSelectedBank]     = useState('');
+  const [office,          setOffice]          = useState(COMPANIES[0].id);
+  const [date,            setDate]            = useState(new Date().toISOString().split('T')[0]);
+  const [transactionType, setTransactionTypeState] = useState<'Cash Inflow' | 'Cash Outflow' | 'Loan'>('Cash Inflow');
+  const [paymentMode,     setPaymentMode]     = useState<'Cash' | 'Bank' | 'Cheque'>('Cash');
+  const [selectedBank,    setSelectedBank]    = useState('');
 
-  // FIX: cheque credential fields
   const [chequeNumber, setChequeNumber] = useState('');
   const [chequeDate,   setChequeDate]   = useState('');
   const [chequeBank,   setChequeBank]   = useState('');
@@ -118,16 +123,16 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             if (tx.chequeBank)   setChequeBank(tx.chequeBank || '');
             setTransactionItems([{
               id:              tx.id,
-              mainCategory:    tx.mainCategory || '',
-              subCategory:     tx.subCategory  || '',
-              detailCategory:  tx.detailCategory || '',
-              amount:          tx.amount || 0,
-              amountPaid:      tx.amountPaid ?? tx.amount ?? 0,
+              mainCategory:    tx.mainCategory    || '',
+              subCategory:     tx.subCategory     || '',
+              detailCategory:  tx.detailCategory  || '',
+              amount:          tx.amount          || 0,
+              amountPaid:      tx.amountPaid      ?? tx.amount ?? 0,
               remainingAmount: tx.remainingAmount ?? 0,
-              paymentStatus:   tx.paymentStatus ?? 'Full',
-              paidBy:          tx.paidBy  || '',
-              paidTo:          tx.paidTo  || '',
-              note:            tx.note    || '',
+              paymentStatus:   tx.paymentStatus   ?? 'Full',
+              paidBy:          tx.paidBy          || '',
+              paidTo:          tx.paidTo          || '',
+              note:            tx.note            || '',
             }]);
           }
         } else {
@@ -166,23 +171,27 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     }));
   }, []);
 
-  const addItem    = useCallback(() => setTransactionItems(p => [...p, { ...emptyItem(transactionType), id: Date.now().toString() }]), [transactionType]);
+  const addItem = useCallback(() =>
+    setTransactionItems(p => [...p, { ...emptyItem(transactionType), id: Date.now().toString() }]),
+    [transactionType]
+  );
+
   const removeItem = useCallback((itemId: string) => {
     setTransactionItems(p => p.length > 1 ? p.filter(i => i.id !== itemId) : p);
   }, []);
 
   const totals = useMemo(() => {
     const totalAmount = transactionItems.reduce((s, i) => s + (i.amount || 0), 0);
-    // For inflow: if amountPaid entered use it, else treat as full
-    const totalPaid = transactionItems.reduce((s, i) => {
+    const totalPaid   = transactionItems.reduce((s, i) => {
+      if (transactionType === 'Cash Inflow') return s + i.amount;
       const paid = i.amountPaid > 0 ? i.amountPaid : i.amount;
       return s + paid;
     }, 0);
     return { totalAmount, totalPaid, totalRemaining: Math.max(0, totalAmount - totalPaid) };
   }, [transactionItems, transactionType]);
 
-  const selectedBankData    = useMemo(() => banks.find(b => b.id === selectedBank), [banks, selectedBank]);
-  const currentBankBalance  = selectedBankData?.balance || 0;
+  const selectedBankData      = useMemo(() => banks.find(b => b.id === selectedBank), [banks, selectedBank]);
+  const currentBankBalance    = selectedBankData?.balance || 0;
   const remainingBalanceAfter = currentBankBalance + (transactionType === 'Cash Inflow' ? totals.totalAmount : -totals.totalPaid);
 
   const validate = useCallback((): string[] => {
@@ -203,14 +212,12 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     return errors;
   }, [office, date, transactionItems, paymentMode, selectedBank, chequeNumber, transactionType]);
 
-  // FIX: Update bank balance in Firestore after transaction save
   const updateBankBalance = useCallback(async (bankId: string, amount: number, isInflow: boolean) => {
     try {
       const bank = banks.find(b => b.id === bankId);
       if (!bank) return;
       const newBalance = isInflow ? bank.balance + amount : bank.balance - amount;
       await BankFirebaseService.updateBankBalance(bankId, newBalance);
-      // Update local banks state so UI reflects new balance immediately
       setBanks(prev => prev.map(b => b.id === bankId ? { ...b, balance: newBalance } : b));
     } catch (err) {
       console.error('Failed to update bank balance:', err);
@@ -228,16 +235,15 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
       const now  = new Date();
       const time = now.toTimeString().split(' ')[0];
 
-      // Cheque fields — only save when mode is Cheque
       const chequeFields = paymentMode === 'Cheque'
         ? { chequeNumber: chequeNumber || undefined, chequeDate: chequeDate || undefined, chequeBank: chequeBank || undefined }
         : {};
 
       if (editingTx) {
+        // Editing existing — no approval change needed
         const item = transactionItems[0];
-        // FIX: For inflow, treat full amount as paid
-        const effectivePaid    = transactionType === 'Cash Inflow' ? item.amount : (item.amountPaid > 0 ? item.amountPaid : item.amount);
-        const effectiveRemain  = Math.max(0, item.amount - effectivePaid);
+        const effectivePaid   = transactionType === 'Cash Inflow' ? item.amount : (item.amountPaid > 0 ? item.amountPaid : item.amount);
+        const effectiveRemain = Math.max(0, item.amount - effectivePaid);
 
         await TransactionFirebaseService.updateTransaction(editingTx.id, {
           date, time,
@@ -259,6 +265,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
         });
         toast.success('Transaction updated successfully');
       } else {
+        // ── New transaction ───────────────────────────────────────────────
         const isCustomId = transactionId && !transactionId.includes('###');
         const firstTxId  = isCustomId
           ? transactionId
@@ -274,10 +281,12 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
         for (const [idx, item] of transactionItems.entries()) {
           const txId = idx === 0 ? firstTxId : await TransactionFirebaseService.generateTransactionId();
 
-          // FIX: For inflow, if amountPaid entered use it, else treat as full (blank = fully received)
-          const effectivePaid    = item.amountPaid > 0 ? item.amountPaid : item.amount;
-          const effectiveRemain  = Math.max(0, item.amount - effectivePaid);
-          const effectiveStatus  = effectiveRemain <= 0 ? 'Full' : 'Partial';
+          const effectivePaid   = item.amountPaid > 0 ? item.amountPaid : item.amount;
+          const effectiveRemain = Math.max(0, item.amount - effectivePaid);
+          const effectiveStatus = effectiveRemain <= 0 ? 'Full' : 'Partial';
+
+          // Generate secure token for approval email links
+          const approvalToken = generateToken();
 
           const txData: Omit<Transaction, 'id'> = {
             transactionId:   txId,
@@ -301,16 +310,32 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             totalPaid:       effectivePaid,
             isFullyCleared:  effectiveRemain <= 0,
             linkedType:      'manual',
+            // ── Approval fields ──────────────────────────────────────────
+            approvalStatus: 'pending_approval',
+            approvalToken,
           };
-          await TransactionFirebaseService.createTransaction(txData);
 
-          // FIX: Update bank balance when payment mode is Bank
-          if (paymentMode === 'Bank' && selectedBank) {
-            const isInflow = transactionType === 'Cash Inflow';
-            await updateBankBalance(selectedBank, effectivePaid, isInflow);
-          }
+          const created = await TransactionFirebaseService.createTransaction(txData);
+
+          // Create in-app notification for pending approval
+          await TransactionFirebaseService.createNotification({
+            type:           'transaction_pending_approval',
+            title:          '⏳ Awaiting Approval',
+            message:        `Transaction ${txId} (${transactionType} — ${formatCurrency(item.amount)}) is waiting for admin approval.`,
+            transactionId:  created.id,
+            transactionRef: txId,
+            isRead:         false,
+            createdAt:      new Date().toISOString(),
+          });
+
+          // Update bank balance only after approval — skip for now on new txns
+          // (bank balance updated in approval Cloud Function instead)
         }
-        toast.success(`Transaction saved — ID: ${firstTxId}`);
+
+        toast.success(
+          `Transaction saved — waiting for admin approval`,
+          { description: `ID: ${firstTxId}`, duration: 5000 }
+        );
       }
       navigate('/transactions');
     } catch (err) {
@@ -336,7 +361,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     transactionId, isGeneratingId, isEditingId,
     setTransactionId, setIsEditingId,
     totalAmount: totals.totalAmount,
-    totalPaid: totals.totalPaid,
+    totalPaid:   totals.totalPaid,
     totalRemaining: totals.totalRemaining,
     currentBankBalance, remainingBalanceAfter,
     banks, isLoading, isSaving, isEditing: !!editingTx,

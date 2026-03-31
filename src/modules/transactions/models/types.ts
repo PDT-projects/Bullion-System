@@ -9,8 +9,8 @@ export interface PartialPayment {
   bankId?: string;
   bankName?: string;
   chequeNumber?: string;
-  chequeDate?: string;       // ← new: date on cheque
-  chequeBank?: string;       // ← new: bank name on cheque
+  chequeDate?: string;
+  chequeBank?: string;
   isCleared: boolean;
   depositedDate?: string;
 }
@@ -22,6 +22,17 @@ export interface Attachment {
   dataUrl: string;
   uploadedAt: string;
 }
+
+// ── Approval Status ────────────────────────────────────────────────────────────
+// pending_approval  → just created, waiting for admin to approve via email
+// approved          → admin clicked Approve in email
+// rejected          → admin clicked Reject in email
+// not_required      → legacy / manually bypassed
+export type ApprovalStatus =
+  | 'pending_approval'
+  | 'approved'
+  | 'rejected'
+  | 'not_required';
 
 export interface Transaction {
   id: string;
@@ -38,7 +49,7 @@ export interface Transaction {
   bankId?: string;
   chequeNumber?: string;
   chequeDate?: string;
-  chequeBank?: string;       // ← new
+  chequeBank?: string;
   transactionReference?: string;
   note: string;
   paidBy?: string;
@@ -47,6 +58,12 @@ export interface Transaction {
   transactionBy?: string;
   employeeId?: string;
   employeeName?: string;
+  // Approval workflow
+  approvalStatus?: ApprovalStatus;
+  approvalToken?: string;      // secure token embedded in email links
+  approvedAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
   // Payment tracking
   amountPaid?: number;
   paymentStatus?: 'Full' | 'Partial';
@@ -100,6 +117,7 @@ export interface TransactionFilters {
   dateTo: string;
   paymentStatus: string;
   company: string;
+  approvalStatus: string;   // '' | 'pending_approval' | 'approved' | 'rejected'
 }
 
 export interface TransactionStats {
@@ -109,6 +127,7 @@ export interface TransactionStats {
   transactionCount: number;
   pendingCount: number;
   totalPending: number;
+  pendingApprovalCount: number;  // new
 }
 
 export interface PendingPaymentData {
@@ -118,6 +137,27 @@ export interface PendingPaymentData {
   chequeNumber?: string;
   chequeDate?: string;
   chequeBank?: string;
+}
+
+// ── In-app Notification (stored in Firestore /appNotifications) ───────────────
+export type AppNotificationType =
+  | 'transaction_pending_approval'
+  | 'transaction_approved'
+  | 'transaction_rejected'
+  | 'payment_pending'
+  | 'payment_cleared'
+  | 'info';
+
+export interface AppNotification {
+  id: string;
+  type: AppNotificationType;
+  title: string;
+  message: string;
+  transactionId?: string;       // Firestore doc id
+  transactionRef?: string;      // human-readable TXN-XXXXXX
+  isRead: boolean;
+  createdAt: string;
+  expiresAt?: string;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -130,11 +170,8 @@ export const COMPANIES = [
   { id: 'rnd', name: 'Pakistan Detectors Technologies: RND/SITE Office' },
 ];
 
-// FIX 1: 'Loan' added so category filter works correctly
 export const MAIN_CATEGORIES = ['Cash Inflow', 'Cash Outflow', 'Loan'];
 
-// FIX 2: Loan sub-categories are listed under BOTH Loan key AND inside inflow/outflow
-// so filtering by mainCategory === 'Loan' correctly shows loan records.
 export const SUB_CATEGORIES: Record<string, string[]> = {
   'Cash Inflow': [
     'Product sale received',
@@ -185,7 +222,6 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
   ],
 };
 
-// Loan-related sub-categories that appear under Inflow/Outflow but belong to Loan category
 export const LOAN_SUB_CATEGORIES = new Set([
   'Loan received - From Employee',
   'Loan received - From Company',

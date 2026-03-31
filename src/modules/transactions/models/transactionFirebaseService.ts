@@ -1,26 +1,21 @@
 // Transactions Module - Firebase Service
-// All Firestore operations for transactions collection
-// Fix: deep stripUndefined removes undefined from nested objects + arrays
-//      (Firestore rejects undefined anywhere in the document tree)
+// Adds: approval workflow (approve/reject), AppNotification CRUD
 
 import {
-  collection, getDocs, getDoc, addDoc, updateDoc, setDoc,
+  collection, getDocs, getDoc, addDoc, updateDoc,
   deleteDoc, doc, query, where, runTransaction,
+  onSnapshot, orderBy, Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
-import { Transaction, PartialPayment } from './types';
+import { Transaction, PartialPayment, AppNotification } from './types';
 
-const COLLECTION  = 'transactions';
-const COUNTER_COL = 'transactionCounters';
+const COLLECTION       = 'transactions';
+const COUNTER_COL      = 'transactionCounters';
+const NOTIF_COLLECTION = 'appNotifications';
 
 // ── Deep strip of undefined values ───────────────────────────────────────────
-// Firestore rejects undefined at ANY depth — including inside arrays of objects
-// (e.g. partialPayments[].chequeNumber = undefined → crash).
-// This recursively cleans the whole tree before every Firestore write.
 function deepStripUndefined(value: any): any {
-  if (Array.isArray(value)) {
-    return value.map(deepStripUndefined);
-  }
+  if (Array.isArray(value)) return value.map(deepStripUndefined);
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value)
@@ -73,14 +68,35 @@ function docToTransaction(d: any): Transaction {
     lenderName:           data.lenderName,
     expectedReturnDate:   data.expectedReturnDate,
     dueDate:              data.dueDate,
+    // Approval fields
+    approvalStatus:       data.approvalStatus       || 'not_required',
+    approvalToken:        data.approvalToken,
+    approvedAt:           data.approvedAt,
+    rejectedAt:           data.rejectedAt,
+    rejectionReason:      data.rejectionReason,
     createdAt:            data.createdAt,
     updatedAt:            data.updatedAt,
   } as Transaction;
 }
 
+function docToNotification(d: any): AppNotification {
+  const data = d.data();
+  return {
+    id:             d.id,
+    type:           data.type           || 'info',
+    title:          data.title          || '',
+    message:        data.message        || '',
+    transactionId:  data.transactionId,
+    transactionRef: data.transactionRef,
+    isRead:         data.isRead         ?? false,
+    createdAt:      data.createdAt      || new Date().toISOString(),
+    expiresAt:      data.expiresAt,
+  };
+}
+
 export class TransactionFirebaseService {
 
-  // ── Auto-generate Transaction ID: TXN-DDMMYY-NNN ──────────────────────────
+  // ── Auto-generate Transaction ID ──────────────────────────────────────────
   static async generateTransactionId(): Promise<string> {
     const now = new Date();
     const dd  = String(now.getDate()).padStart(2, '0');
@@ -88,7 +104,6 @@ export class TransactionFirebaseService {
     const yy  = String(now.getFullYear()).slice(-2);
     const key = `${dd}${mm}${yy}`;
     const ref = doc(db, COUNTER_COL, key);
-
     try {
       const next = await runTransaction(db, async (txn) => {
         const snap = await txn.get(ref);
@@ -99,12 +114,10 @@ export class TransactionFirebaseService {
       return `TXN-${key}-${String(next).padStart(3, '0')}`;
     } catch (err) {
       console.error('Counter transaction failed, using timestamp fallback:', err);
-      const suffix = String(Date.now()).slice(-5);
-      return `TXN-${key}-${suffix}`;
+      return `TXN-${key}-${String(Date.now()).slice(-5)}`;
     }
   }
 
-  // ── Check if a transaction ID already exists ──────────────────────────────
   static async transactionIdExists(transactionId: string): Promise<boolean> {
     try {
       const q    = query(collection(db, COLLECTION), where('transactionId', '==', transactionId));
@@ -115,7 +128,7 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Fetch all transactions (newest first) ─────────────────────────────────
+  // ── Fetch all transactions ────────────────────────────────────────────────
   static async fetchAllTransactions(): Promise<Transaction[]> {
     try {
       const snapshot = await getDocs(collection(db, COLLECTION));
@@ -133,7 +146,6 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Fetch single transaction ──────────────────────────────────────────────
   static async fetchTransactionById(id: string): Promise<Transaction | null> {
     try {
       const snap = await getDoc(doc(db, COLLECTION, id));
@@ -149,7 +161,6 @@ export class TransactionFirebaseService {
   static async createTransaction(data: Omit<Transaction, 'id'>): Promise<Transaction> {
     try {
       const now  = new Date().toISOString();
-      // Deep strip so no undefined anywhere in the tree
       const body = deepStripUndefined({ ...data, createdAt: now, updatedAt: now });
       const ref  = await addDoc(collection(db, COLLECTION), body);
       console.log('✅ Transaction created:', ref.id);
@@ -163,7 +174,6 @@ export class TransactionFirebaseService {
   // ── Update transaction ────────────────────────────────────────────────────
   static async updateTransaction(id: string, data: Partial<Omit<Transaction, 'id'>>): Promise<void> {
     try {
-      // Deep strip — catches undefined inside partialPayments[] objects and any other nested fields
       const body = deepStripUndefined({ ...data, updatedAt: new Date().toISOString() });
       await updateDoc(doc(db, COLLECTION, id), body);
       console.log('✅ Transaction updated:', id);
@@ -184,23 +194,59 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Add partial payment to a transaction ─────────────────────────────────
-  // The partial payment object may contain undefined fields (chequeNumber, bankId etc.)
-  // deepStripUndefined inside updateTransaction handles these before the Firestore write.
+  // ── Approval workflow ─────────────────────────────────────────────────────
+
+  /**
+   * Called from the approve HTTP Cloud Function.
+   * Updates the transaction status to 'approved' and clears the token.
+   */
+  static async approveTransaction(firestoreId: string): Promise<void> {
+    await TransactionFirebaseService.updateTransaction(firestoreId, {
+      approvalStatus: 'approved',
+      approvedAt:     new Date().toISOString(),
+      approvalToken:  undefined,
+    });
+  }
+
+  /**
+   * Called from the reject HTTP Cloud Function.
+   */
+  static async rejectTransaction(firestoreId: string, reason?: string): Promise<void> {
+    await TransactionFirebaseService.updateTransaction(firestoreId, {
+      approvalStatus:  'rejected',
+      rejectedAt:      new Date().toISOString(),
+      rejectionReason: reason || 'Rejected by admin',
+      approvalToken:   undefined,
+    });
+  }
+
+  /**
+   * Fetch all transactions pending approval.
+   */
+  static async fetchPendingApprovals(): Promise<Transaction[]> {
+    try {
+      const q    = query(collection(db, COLLECTION), where('approvalStatus', '==', 'pending_approval'));
+      const snap = await getDocs(q);
+      return snap.docs.map(docToTransaction);
+    } catch (error) {
+      console.error('❌ Error fetching pending approvals:', error);
+      throw new Error('Failed to fetch pending approvals');
+    }
+  }
+
+  // ── Partial payments ──────────────────────────────────────────────────────
   static async addPartialPayment(transactionId: string, payment: PartialPayment): Promise<void> {
     try {
       const snap = await getDoc(doc(db, COLLECTION, transactionId));
       if (!snap.exists()) throw new Error('Transaction not found');
       const tx = docToTransaction(snap);
 
-      // Strip undefined from the new payment object before merging
       const cleanPayment    = deepStripUndefined(payment) as PartialPayment;
       const updatedPayments = [...(tx.partialPayments || []), cleanPayment];
       const totalPaid       = updatedPayments.reduce((s, p) => s + p.amount, 0);
       const remaining       = Math.max(0, tx.amount - totalPaid);
       const isFullyCleared  = remaining <= 0 && updatedPayments.every(p => p.isCleared || p.method === 'Bank');
 
-      // updateTransaction also deep-strips, so doubly safe
       await TransactionFirebaseService.updateTransaction(transactionId, {
         partialPayments: updatedPayments,
         totalPaid,
@@ -215,7 +261,6 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Mark a partial payment as cleared ────────────────────────────────────
   static async markPaymentCleared(transactionId: string, paymentId: string): Promise<void> {
     try {
       const snap = await getDoc(doc(db, COLLECTION, transactionId));
@@ -240,5 +285,61 @@ export class TransactionFirebaseService {
       console.error('❌ Error marking payment cleared:', error);
       throw new Error('Failed to mark payment as cleared');
     }
+  }
+
+  // ── App Notifications (Firestore) ─────────────────────────────────────────
+
+  /** Create a notification document */
+  static async createNotification(
+    data: Omit<AppNotification, 'id'>
+  ): Promise<AppNotification> {
+    const ref = await addDoc(collection(db, NOTIF_COLLECTION), deepStripUndefined(data));
+    return { ...data, id: ref.id };
+  }
+
+  /** Mark one notification as read */
+  static async markNotificationRead(id: string): Promise<void> {
+    await updateDoc(doc(db, NOTIF_COLLECTION, id), { isRead: true });
+  }
+
+  /** Mark all notifications as read */
+  static async markAllNotificationsRead(): Promise<void> {
+    const snap = await getDocs(
+      query(collection(db, NOTIF_COLLECTION), where('isRead', '==', false))
+    );
+    await Promise.all(snap.docs.map(d => updateDoc(d.ref, { isRead: true })));
+  }
+
+  /** Delete a notification */
+  static async deleteNotification(id: string): Promise<void> {
+    await deleteDoc(doc(db, NOTIF_COLLECTION, id));
+  }
+
+  /** Delete notifications related to a specific transaction */
+  static async deleteNotificationsForTransaction(transactionId: string): Promise<void> {
+    try {
+      const q    = query(collection(db, NOTIF_COLLECTION), where('transactionId', '==', transactionId));
+      const snap = await getDocs(q);
+      await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+    } catch (err) {
+      console.error('Failed to delete notifications for transaction:', err);
+    }
+  }
+
+  /**
+   * Real-time listener for notifications (newest first).
+   * Returns an unsubscribe function — call it on component unmount.
+   */
+  static subscribeToNotifications(
+    callback: (notifications: AppNotification[]) => void
+  ): Unsubscribe {
+    const q = query(
+      collection(db, NOTIF_COLLECTION),
+      orderBy('createdAt', 'desc')
+    );
+    return onSnapshot(q, (snap) => {
+      const notifications = snap.docs.map(docToNotification);
+      callback(notifications);
+    });
   }
 }
