@@ -34,7 +34,7 @@ export interface UseTransactionListViewModelReturn {
 
 const DEFAULT_FILTERS: TransactionFilters = {
   searchTerm: '', mainCategory: '', dateFrom: '', dateTo: '',
-  paymentStatus: '', company: '',
+  paymentStatus: '', company: '', approvalStatus: '',
 };
 
 export function useTransactionListViewModel(): UseTransactionListViewModelReturn {

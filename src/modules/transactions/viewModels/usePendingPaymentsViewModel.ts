@@ -40,6 +40,7 @@ export interface UsePendingPaymentsViewModelReturn {
   setPaymentData:           (d: Partial<PendingPaymentData>) => void;
   addPartialPayment:        () => Promise<void>;
   markPaymentAsCleared:     (transactionId: string, paymentId: string) => Promise<void>;
+  markTransactionCleared:   (transactionId: string) => Promise<void>;
   deleteTransaction:        (id: string) => Promise<void>;
   getTransactionTotals:     typeof getTransactionTotals;
   formatCurrency:           (n: number) => string;
@@ -82,31 +83,40 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
   }, []);
 
   // FIX: Filter logic — each tab correctly matches its condition
+  // Cheques: a transaction with mode=Cheque and isFullyCleared=false is "Uncleared"
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       if (filterStatus === 'All') return true;
 
       const { remainingAmount } = getTransactionTotals(t);
-      const hasUncleared = (t.partialPayments || []).some(
+      // Uncleared: partial payments not yet cleared, OR main transaction is a cheque not yet cleared
+      const hasUnclearedPayments = (t.partialPayments || []).some(
         p => !p.isCleared && p.method !== 'Bank'
       );
+      const isUnclearedChequeTx = t.mode === 'Cheque' && !t.isFullyCleared;
+      const hasUncleared = hasUnclearedPayments || isUnclearedChequeTx;
       const isReceivable = t.mainCategory === 'Cash Inflow' && remainingAmount > 0;
 
-      if (filterStatus === 'Uncleared')       return hasUncleared;
-      if (filterStatus === 'PartiallyPaid')   return remainingAmount > 0 && !isReceivable;
+      if (filterStatus === 'Uncleared')         return hasUncleared;
+      if (filterStatus === 'PartiallyPaid')     return remainingAmount > 0 && !isReceivable;
       if (filterStatus === 'PendingReceivable') return isReceivable;
       return true;
     });
   }, [transactions, filterStatus]);
 
   const summaryStats = useMemo(() => {
-    const allRemaining   = filteredTransactions.map(t => getTransactionTotals(t).remainingAmount);
-    const receivable     = transactions.filter(t => t.mainCategory === 'Cash Inflow');
-    const payable        = transactions.filter(t => t.mainCategory !== 'Cash Inflow');
+    const receivable = transactions.filter(t => t.mainCategory === 'Cash Inflow');
+    const payable    = transactions.filter(t => t.mainCategory !== 'Cash Inflow');
+    // Count uncleared: partial payments uncleared OR main tx is cheque not cleared
+    const unclearedCount = transactions.filter(t => {
+      const hasUnclearedPayments = (t.partialPayments || []).some(p => !p.isCleared && p.method !== 'Bank');
+      const isUnclearedChequeTx  = t.mode === 'Cheque' && !t.isFullyCleared;
+      return hasUnclearedPayments || isUnclearedChequeTx;
+    }).length;
     return {
       totalPending:      payable.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
       totalReceivable:   receivable.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
-      unclearedCount:    transactions.filter(t => (t.partialPayments || []).some(p => !p.isCleared)).length,
+      unclearedCount,
       totalTransactions: filteredTransactions.length,
     };
   }, [filteredTransactions, transactions]);
@@ -234,11 +244,23 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
     }
   }, []);
 
+  const markTransactionCleared = useCallback(async (transactionId: string) => {
+    try {
+      await TransactionFirebaseService.markTransactionCleared(transactionId);
+      setTransactions(prev => prev.map(t =>
+        t.id !== transactionId ? t : { ...t, isFullyCleared: true, paymentStatus: 'Full' }
+      ).filter(isPending));
+      toast.success('Cheque marked as cleared');
+    } catch {
+      toast.error('Failed to clear cheque');
+    }
+  }, []);
+
   return {
     transactions, filteredTransactions, viewTransaction, paymentModal,
     selectedTransactionId, filterStatus, paymentData, banks, isLoading, isSaving, summaryStats,
     setViewTransaction, setPaymentModal, setSelectedTransactionId, setFilterStatus, setPaymentData,
-    addPartialPayment, markPaymentAsCleared, deleteTransaction,
+    addPartialPayment, markPaymentAsCleared, markTransactionCleared, deleteTransaction,
     getTransactionTotals, formatCurrency, formatDateTime, getCategoryColor, getPaymentStatusColor,
   };
 }

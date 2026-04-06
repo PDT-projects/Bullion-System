@@ -1,16 +1,12 @@
 // Transactions Module - Form View (Create / Edit)
-// Fixes:
-// 1. Amount Paid hidden for Cash Inflow (illogical to ask)
-// 2. Cheque fields (number, date, bank name) shown when mode = Cheque
-// 3. Bank balance preview shown for both Inflow and Outflow
 
 import React, { useState } from 'react';
 import {
   ArrowLeft, Plus, Trash2, Building2, Wallet, TrendingUp, TrendingDown,
   Upload, Calculator, User, Users, CheckCircle, AlertCircle, Repeat, Loader2,
-  Hash, Edit2, Check, X, CreditCard,
+  Hash, Edit2, Check, X, CreditCard, Lock,
 } from 'lucide-react';
-import { COMPANIES, SUB_CATEGORIES, TransactionItem } from '../models/types';
+import { COMPANIES, SUB_CATEGORIES, TransactionItem, DynamicCategory } from '../models/types';
 import { UseTransactionFormViewModelReturn } from '../viewModels/useTransactionFormViewModel';
 
 interface Props extends UseTransactionFormViewModelReturn {}
@@ -30,8 +26,12 @@ export function TransactionFormView({
   setOffice, setDate, setTransactionType, setPaymentMode, setSelectedBank,
   setEnableMultiple, updateItem, addItem, removeItem,
   handleSave, handleCancel, formatCurrency, formatDateDisplay,
+  dynamicSubCategories, onAddSubCategory,
 }: Props) {
-  const [saveAttempted, setSaveAttempted] = useState(false);
+  const [saveAttempted,  setSaveAttempted]  = useState(false);
+  const [addingSubCatFor, setAddingSubCatFor] = useState<string | null>(null);
+  const [newSubCatName,  setNewSubCatName]  = useState('');
+  const [savingSubCat,   setSavingSubCat]   = useState(false);
 
   if (isLoading) {
     return (
@@ -43,13 +43,22 @@ export function TransactionFormView({
 
   const selectedBankData = banks.find(b => b.id === selectedBank);
   const isPreviewId = transactionId?.includes('###');
-  // FIX: Hide Amount Paid for Cash Inflow — it's always the full amount
   const isInflow = transactionType === 'Cash Inflow';
+
+  const handleAddSubCat = async (itemId: string) => {
+    if (!newSubCatName.trim()) return;
+    setSavingSubCat(true);
+    const added = await onAddSubCategory(transactionType, newSubCatName.trim());
+    if (added) updateItem(itemId, 'subCategory', added);
+    setNewSubCatName('');
+    setAddingSubCatFor(null);
+    setSavingSubCat(false);
+  };
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button onClick={handleCancel} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
           <ArrowLeft size={22} />
@@ -62,7 +71,7 @@ export function TransactionFormView({
 
       <div className="space-y-5">
 
-        {/* ── Transaction ID ─────────────────────────────────────────────── */}
+        {/* Transaction ID */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Hash className="w-5 h-5 text-[#4f46e5]" /> Transaction ID
@@ -112,7 +121,7 @@ export function TransactionFormView({
           </p>
         </div>
 
-        {/* ── General Information ─────────────────────────────────────────── */}
+        {/* General Information */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Building2 className="w-5 h-5 text-[#4f46e5]" /> General Information
@@ -125,14 +134,19 @@ export function TransactionFormView({
               </select>
             </div>
             <div>
-              <label className={lbl}>Date *</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inp} />
-              {date && <p className="text-xs text-gray-400 mt-1">{formatDateDisplay(date)}</p>}
+              <label className={lbl}>
+                Date <span className="text-xs font-normal text-gray-400 ml-1">(auto)</span>
+              </label>
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg min-h-[38px]">
+                  <Lock size={13} className="text-gray-400 shrink-0" />
+                  <span className="text-sm text-gray-600">{formatDateDisplay(date)}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Date is set automatically and cannot be changed</p>
             </div>
           </div>
         </div>
 
-        {/* ── Transaction Type ────────────────────────────────────────────── */}
+        {/* Transaction Type */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Wallet className="w-5 h-5 text-[#4f46e5]" /> Transaction Type
@@ -154,7 +168,7 @@ export function TransactionFormView({
           </div>
         </div>
 
-        {/* ── Payment Method ──────────────────────────────────────────────── */}
+        {/* Payment Method */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Calculator className="w-5 h-5 text-[#4f46e5]" /> Payment Method
@@ -172,7 +186,6 @@ export function TransactionFormView({
             ))}
           </div>
 
-          {/* Bank selection */}
           {paymentMode === 'Bank' && (
             <div className="space-y-3">
               <div>
@@ -194,7 +207,6 @@ export function TransactionFormView({
             </div>
           )}
 
-          {/* FIX: Cheque credentials */}
           {paymentMode === 'Cheque' && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 mb-2">
@@ -229,7 +241,6 @@ export function TransactionFormView({
             </div>
           )}
 
-          {/* Balance after transaction preview */}
           {paymentMode === 'Bank' && selectedBank && (
             <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Balance After Transaction</h4>
@@ -256,7 +267,7 @@ export function TransactionFormView({
           )}
         </div>
 
-        {/* ── Multiple toggle ─────────────────────────────────────────────── */}
+        {/* Multiple toggle */}
         <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <Repeat className="w-5 h-5 text-[#4f46e5]" />
@@ -271,7 +282,7 @@ export function TransactionFormView({
           </label>
         </div>
 
-        {/* ── Transaction Items ───────────────────────────────────────────── */}
+        {/* Transaction Items */}
         {transactionItems.map((item, index) => (
           <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -291,11 +302,59 @@ export function TransactionFormView({
               </div>
               <div>
                 <label className={lbl}>Sub Category *</label>
-                <select value={item.subCategory} onChange={e => updateItem(item.id, 'subCategory', e.target.value)}
-                  className={`${inp} ${saveAttempted && !item.subCategory ? 'border-red-400 ring-1 ring-red-300' : ''}`}>
-                  <option value="">Select sub category</option>
-                  {(SUB_CATEGORIES[transactionType] || []).map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                {addingSubCatFor === item.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newSubCatName}
+                      onChange={e => setNewSubCatName(e.target.value)}
+                      placeholder="New sub-category name..."
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { handleAddSubCat(item.id); }
+                        if (e.key === 'Escape') { setAddingSubCatFor(null); setNewSubCatName(''); }
+                      }}
+                      className="flex-1 px-3 py-2 border border-indigo-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
+                    <button type="button" disabled={savingSubCat || !newSubCatName.trim()}
+                      onClick={() => handleAddSubCat(item.id)}
+                      className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                      {savingSubCat ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                    </button>
+                    <button type="button"
+                      onClick={() => { setAddingSubCatFor(null); setNewSubCatName(''); }}
+                      className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                      <X size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={item.subCategory}
+                      onChange={e => updateItem(item.id, 'subCategory', e.target.value)}
+                      className={`flex-1 ${inp} ${saveAttempted && !item.subCategory ? 'border-red-400 ring-1 ring-red-300' : ''}`}
+                    >
+                      <option value="">Select sub category</option>
+                      {(SUB_CATEGORIES[transactionType] || []).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                      {(dynamicSubCategories || [])
+                        .filter(d => d.parentCategory === transactionType)
+                        .map(d => (
+                          <option key={d.id} value={d.name}>+ {d.name}</option>
+                        ))
+                      }
+                    </select>
+                    <button
+                      type="button"
+                      title="Add new sub-category"
+                      onClick={() => { setAddingSubCatFor(item.id); setNewSubCatName(''); }}
+                      className="p-2 text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors shrink-0"
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="col-span-2">
                 <label className={lbl}>Detail Category <span className="text-gray-400 font-normal">(optional)</span></label>
@@ -307,8 +366,6 @@ export function TransactionFormView({
             {/* Amounts */}
             <div className="border-t pt-4 mb-4">
               <h4 className="font-medium text-gray-800 text-sm mb-3">Amount Details</h4>
-
-              {/* Cash Inflow: Total Amount + Amount Received (blank = fully received) */}
               {isInflow ? (
                 <div className="grid grid-cols-3 gap-4">
                   <div>
@@ -366,7 +423,6 @@ export function TransactionFormView({
                   </div>
                 </div>
               )}
-
               {item.paymentStatus === 'Partial' && item.remainingAmount > 0 && (
                 <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
                   {isInflow
@@ -471,7 +527,7 @@ export function TransactionFormView({
           )}
         </div>
 
-        {/* Inline validation errors */}
+        {/* Validation errors */}
         {saveAttempted && !isSaving && (
           (() => {
             const errs: string[] = [];
@@ -514,7 +570,7 @@ export function TransactionFormView({
 
       </div>
 
-      {/* ── Duplicate Transaction ID Modal ─────────────────────────────────── */}
+      {/* Duplicate ID Modal */}
       {duplicateIdError && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
@@ -530,9 +586,7 @@ export function TransactionFormView({
                 <p className="text-xs text-red-400 font-medium uppercase tracking-wide mb-1">Conflicting ID</p>
                 <p className="font-mono text-xl font-bold text-red-700 tracking-widest">{duplicateIdError}</p>
               </div>
-              <p className="text-sm text-gray-600">
-                A transaction with this ID already exists. Choose an option below.
-              </p>
+              <p className="text-sm text-gray-600">A transaction with this ID already exists. Choose an option below.</p>
               <div className="text-sm text-gray-500 space-y-1.5">
                 <div className="flex items-start gap-2">
                   <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>

@@ -8,7 +8,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES } from '../models/types';
+import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES, DynamicCategory } from '../models/types';
 import { formatCurrency } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
@@ -58,6 +58,10 @@ export interface UseTransactionFormViewModelReturn {
   formatDateDisplay: (d: string) => string;
   duplicateIdError: string;
   setDuplicateIdError: (msg: string) => void;
+  // Dynamic categories
+  dynamicSubCategories: DynamicCategory[];
+  onAddSubCategory: (parentCategory: string, name: string) => Promise<string | null>;
+  onDeleteSubCategory: (id: string) => Promise<void>;
 }
 
 const emptyItem = (type: string): TransactionItem => ({
@@ -128,8 +132,9 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [chequeDate,   setChequeDate]   = useState('');
   const [chequeBank,   setChequeBank]   = useState('');
 
-  const [enableMultiple,   setEnableMultiple]   = useState(false);
-  const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([emptyItem('Cash Inflow')]);
+  const [enableMultiple,       setEnableMultiple]       = useState(false);
+  const [transactionItems,     setTransactionItems]     = useState<TransactionItem[]>([emptyItem('Cash Inflow')]);
+  const [dynamicSubCategories, setDynamicSubCategories] = useState<DynamicCategory[]>([]);
 
   // ── Load banks + existing transaction (edit mode) ──────────────────────
   useEffect(() => {
@@ -138,6 +143,10 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
       try {
         const bankList = await BankFirebaseService.fetchAllBanks().catch(() => []);
         setBanks(bankList as any[]);
+
+        // Load user-added dynamic categories
+        const dynCats = await TransactionFirebaseService.fetchDynamicCategories().catch(() => []);
+        setDynamicSubCategories(dynCats);
 
         if (id) {
           const tx = await TransactionFirebaseService.fetchTransactionById(id);
@@ -356,7 +365,8 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             note:            item.note    || '',
             partialPayments: [],
             totalPaid:       effectivePaid,
-            isFullyCleared:  effectiveRemain <= 0,
+            // Cheque payments stay pending until manually cleared
+            isFullyCleared:  effectiveRemain <= 0 && paymentMode !== 'Cheque',
             linkedType:      'manual',
             // ── Approval ──────────────────────────────────────────────────
             approvalStatus:  needsApproval ? 'pending_approval' : 'not_required',
@@ -413,6 +423,37 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
 
   const handleCancel = useCallback(() => navigate('/transactions'), [navigate]);
 
+  /** Save a new user-defined sub-category to Firestore and return its name */
+  const onAddSubCategory = useCallback(async (
+    parentCategory: string,
+    name: string,
+  ): Promise<string | null> => {
+    try {
+      const created = await TransactionFirebaseService.addDynamicCategory({
+        type:           'subCategory',
+        parentCategory,
+        name,
+        createdAt:      new Date().toISOString(),
+      });
+      setDynamicSubCategories(prev => [...prev, created]);
+      toast.success(`Sub-category "${name}" saved`);
+      return name;
+    } catch {
+      toast.error('Failed to save category');
+      return null;
+    }
+  }, []);
+
+  const onDeleteSubCategory = useCallback(async (id: string): Promise<void> => {
+    try {
+      await TransactionFirebaseService.deleteDynamicCategory(id);
+      setDynamicSubCategories(prev => prev.filter(d => d.id !== id));
+      toast.success('Category deleted');
+    } catch {
+      toast.error('Failed to delete category');
+    }
+  }, []);
+
   const formatDateDisplay = useCallback((d: string) =>
     d ? new Date(d).toLocaleDateString('en-PK', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -435,5 +476,6 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     setEnableMultiple, updateItem, addItem, removeItem,
     handleSave, handleCancel, formatCurrency, formatDateDisplay,
     duplicateIdError, setDuplicateIdError,
+    dynamicSubCategories, onAddSubCategory, onDeleteSubCategory,
   };
 }

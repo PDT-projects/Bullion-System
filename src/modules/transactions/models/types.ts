@@ -222,6 +222,15 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
   ],
 };
 
+// ── Dynamic Category (user-added, stored in Firestore /dynamicCategories) ─────
+export interface DynamicCategory {
+  id: string;
+  type: 'mainCategory' | 'subCategory';
+  parentCategory?: string;   // for subCategory: which mainCategory it belongs to
+  name: string;
+  createdAt: string;
+}
+
 export const LOAN_SUB_CATEGORIES = new Set([
   'Loan received - From Employee',
   'Loan received - From Company',

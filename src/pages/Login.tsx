@@ -3,14 +3,14 @@ import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth } from '../api/firebase/firebase';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
+import { Eye, EyeOff } from 'lucide-react';
 
 // ✅ Add your allowed emails here — must match exactly what's in Firebase Console
 const ALLOWED_EMAILS = [
   'fatimamalikk72@gmail.com',
-  //add emails here
+  'sana@gmail.com',
 ];
 
 interface LoginProps {
@@ -20,8 +20,9 @@ interface LoginProps {
 export function Login({ onLoginSuccess }: LoginProps) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: '', password: '' });
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
@@ -56,7 +57,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
       // ✅ Whitelist check — sign out immediately if email not allowed
       if (!ALLOWED_EMAILS.includes(user.email ?? '')) {
         await signOut(auth);
-        toast.error('Access denied. You are not authorized to use this system.');
+        setErrors({ general: 'Access denied. You are not authorized to use this system.' });
         setIsLoading(false);
         return;
       }
@@ -66,22 +67,33 @@ export function Login({ onLoginSuccess }: LoginProps) {
       navigate('/dashboard');
 
     } catch (error: any) {
+      console.error('Firebase auth error:', error.code, error.message);
+
       let errorMessage = 'Login failed. Please try again.';
 
       switch (error.code) {
+        case 'auth/invalid-credential':
         case 'auth/user-not-found':
         case 'auth/wrong-password':
-        case 'auth/invalid-credential':
-          errorMessage = 'Invalid email or password.';
+          errorMessage = 'Incorrect email or password. Please check your credentials.';
           break;
         case 'auth/invalid-email':
-          errorMessage = 'Invalid email address.';
+          errorMessage = 'Please enter a valid email address.';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'This account has been disabled. Contact your administrator.';
           break;
         case 'auth/too-many-requests':
           errorMessage = 'Too many failed attempts. Please try again later.';
           break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your internet connection.';
+          break;
       }
+
+      setErrors({ general: errorMessage });
       toast.error(errorMessage);
+
     } finally {
       setIsLoading(false);
     }
@@ -89,14 +101,14 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field as keyof typeof errors]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
-    }
+    setErrors(prev => ({ ...prev, [field]: undefined, general: undefined }));
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f0f2f5] via-[#e8ecf1] to-[#f8fafc] p-4">
       <div className="w-full max-w-md">
+
+        {/* Logo & Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full shadow-lg mb-4">
             <img src="/PDT-logo.png" alt="Logo" className="w-12 h-12 object-contain" />
@@ -111,40 +123,113 @@ export function Login({ onLoginSuccess }: LoginProps) {
             <CardDescription className="text-gray-600">Sign in to your account</CardDescription>
           </CardHeader>
           <CardContent className="px-8 pb-8">
+
+            {/* General error banner */}
+            {errors.general && (
+              <div className="mb-5 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm font-medium px-4 py-3 rounded-lg">
+                <span className="mt-0.5">⚠</span>
+                <span>{errors.general}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
+
+              {/* Email */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">Email Address</label>
-                <Input
+                <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`h-12 border-2 ${errors.email ? 'border-red-400' : 'border-gray-200'} rounded-lg`}
+                  style={{
+                    height: '48px',
+                    width: '100%',
+                    border: `2px solid ${errors.email ? '#f87171' : '#e5e7eb'}`,
+                    borderRadius: '8px',
+                    padding: '0 16px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    backgroundColor: 'white',
+                    boxSizing: 'border-box',
+                  }}
                   placeholder="Enter your email"
                   disabled={isLoading}
                 />
-                {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
+                {errors.email && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <span>⚠</span> {errors.email}
+                  </p>
+                )}
               </div>
 
+              {/* Password — native input with inline styles to guarantee icon on RIGHT */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">Password</label>
-                <Input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
-                  className={`h-12 border-2 ${errors.password ? 'border-red-400' : 'border-gray-200'} rounded-lg`}
-                  placeholder="Enter your password"
-                  disabled={isLoading}
-                />
-                {errors.password && <p className="text-sm text-red-600">{errors.password}</p>}
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    style={{
+                      height: '48px',
+                      width: '100%',
+                      border: `2px solid ${errors.password ? '#f87171' : '#e5e7eb'}`,
+                      borderRadius: '8px',
+                      paddingLeft: '16px',
+                      paddingRight: '48px',
+                      fontSize: '14px',
+                      outline: 'none',
+                      backgroundColor: 'white',
+                      boxSizing: 'border-box',
+                    }}
+                    placeholder="Enter your password"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    disabled={isLoading}
+                    tabIndex={-1}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#9ca3af',
+                      zIndex: 10,
+                    }}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <span>⚠</span> {errors.password}
+                  </p>
+                )}
               </div>
 
+              {/* Submit */}
               <Button
                 type="submit"
                 className="w-full h-12 bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] text-white font-semibold rounded-lg shadow-lg hover:scale-[1.02] transition-all"
                 disabled={isLoading}
               >
-                {isLoading ? 'Signing in...' : 'Sign In'}
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Signing in...
+                  </div>
+                ) : 'Sign In'}
               </Button>
+
             </form>
 
             <div className="mt-8 text-center text-sm text-gray-500">
@@ -152,6 +237,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
             </div>
           </CardContent>
         </Card>
+
       </div>
     </div>
   );

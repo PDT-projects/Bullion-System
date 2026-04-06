@@ -3,7 +3,7 @@
 // Models
 export type {
   Transaction, PartialPayment, Attachment, TransactionItem,
-  TransactionFilters, TransactionStats, PendingPaymentData,
+  TransactionFilters, TransactionStats, PendingPaymentData, DynamicCategory,
 } from './models/types';
 export { COMPANIES, MAIN_CATEGORIES, SUB_CATEGORIES } from './models/types';
 export { TransactionFirebaseService } from './models/transactionFirebaseService';
@@ -17,6 +17,7 @@ export {
 export { useTransactionListViewModel }   from './viewModels/useTransactionListViewModel';
 export { useTransactionFormViewModel }   from './viewModels/useTransactionFormViewModel';
 export { usePendingPaymentsViewModel }   from './viewModels/usePendingPaymentsViewModel';
+export { useTransactionDeleteViewModel } from './viewModels/useTransactionDeleteViewModel';
 
 // Views
 export { TransactionListView }    from './views/TransactionListView';

@@ -12,11 +12,167 @@ import { UsePendingPaymentsViewModelReturn } from '../viewModels/usePendingPayme
 
 interface Props extends UsePendingPaymentsViewModelReturn {}
 
+
+// ── Separate component to avoid IIFE-in-JSX issues ──────────────────────────
+function ViewModal({
+  viewTransaction, onClose, getTransactionTotals,
+  formatCurrency, formatDateTime, markPaymentAsCleared, markTransactionCleared,
+}: {
+  viewTransaction: Transaction;
+  onClose: () => void;
+  getTransactionTotals: any;
+  formatCurrency: (n: number) => string;
+  formatDateTime: (d: string, t?: string) => string;
+  markPaymentAsCleared: (txId: string, payId: string) => Promise<void>;
+  markTransactionCleared: (txId: string) => Promise<void>;
+}) {
+  const { totalPaid, remainingAmount } = getTransactionTotals(viewTransaction);
+  const isChequeTx = viewTransaction.mode === 'Cheque';
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl">
+
+        {/* Clean white header */}
+        <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
+          <div>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="font-mono text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                {viewTransaction.transactionId}
+              </span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                viewTransaction.mode === 'Cheque' ? 'bg-purple-100 text-purple-700' :
+                viewTransaction.mode === 'Bank'   ? 'bg-blue-100 text-blue-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>{viewTransaction.mode}</span>
+              {isChequeTx && !viewTransaction.isFullyCleared && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  Uncleared
+                </span>
+              )}
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">{viewTransaction.mainCategory}</h3>
+            <p className="text-sm text-gray-500">{viewTransaction.subCategory}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors mt-0.5">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 p-6 space-y-4">
+
+          {/* Amount summary */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Total Amount', value: formatCurrency(viewTransaction.amount),  cls: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+              { label: 'Amount Paid',  value: formatCurrency(totalPaid),               cls: 'bg-green-50 text-green-700 border-green-100'   },
+              { label: 'Remaining',    value: formatCurrency(remainingAmount),
+                cls: remainingAmount > 0 ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-gray-50 text-gray-400 border-gray-100' },
+            ].map(({ label, value, cls }) => (
+              <div key={label} className={`p-3.5 rounded-xl text-center border ${cls}`}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 mb-1">{label}</p>
+                <p className="text-base font-bold">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Mark as Cleared button for uncleared main cheque tx */}
+          {isChequeTx && !viewTransaction.isFullyCleared && (viewTransaction.partialPayments || []).length === 0 && (
+            <button
+              onClick={() => { markTransactionCleared(viewTransaction.id); onClose(); }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-colors"
+            >
+              <Check size={15} /> Mark Cheque as Cleared
+            </button>
+          )}
+
+          {/* Detail grid */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {([
+              ['Transaction ID', viewTransaction.transactionId],
+              ['Date & Time',    formatDateTime(viewTransaction.date, viewTransaction.time)],
+              ['Category',       viewTransaction.mainCategory],
+              ['Sub Category',   viewTransaction.subCategory],
+              ['Paid By',        viewTransaction.paidBy || '—'],
+              ['Paid To',        viewTransaction.paidTo || '—'],
+              ['Mode',           viewTransaction.mode],
+              ['Bank',           viewTransaction.bankName || '—'],
+            ] as [string, string][]).map(([l, v]) => (
+              <div key={l} className="bg-gray-50 rounded-lg px-4 py-3">
+                <p className="text-xs text-gray-400 mb-0.5">{l}</p>
+                <p className="font-medium text-gray-900">{v}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Cheque details */}
+          {viewTransaction.mode === 'Cheque' && viewTransaction.chequeNumber && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+              <p className="text-xs font-semibold text-purple-700 mb-3 flex items-center gap-1.5">
+                <CreditCard size={13} /> Cheque Details
+              </p>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div><p className="text-xs text-gray-400 mb-0.5">Number</p><p className="font-semibold">{viewTransaction.chequeNumber}</p></div>
+                <div><p className="text-xs text-gray-400 mb-0.5">Date</p><p className="font-semibold">{viewTransaction.chequeDate || '—'}</p></div>
+                <div><p className="text-xs text-gray-400 mb-0.5">Bank</p><p className="font-semibold">{viewTransaction.chequeBank || '—'}</p></div>
+              </div>
+            </div>
+          )}
+
+          {/* Payment history */}
+          {(viewTransaction.partialPayments || []).length > 0 && (
+            <div>
+              <p className="font-semibold text-gray-800 mb-3 text-sm">Payment History</p>
+              <div className="space-y-2">
+                {viewTransaction.partialPayments!.map(p => (
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatCurrency(p.amount)}
+                        <span className="text-xs font-normal text-gray-500 ml-1.5">via {p.method}</span>
+                      </p>
+                      <p className="text-xs text-gray-400">{formatDateTime(p.date, p.time)}</p>
+                      {p.chequeNumber && (
+                        <p className="text-xs text-purple-600">Cheque #{p.chequeNumber}{p.chequeBank ? ` · ${p.chequeBank}` : ''}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${p.isCleared ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {p.isCleared ? 'Cleared' : 'Uncleared'}
+                      </span>
+                      {!p.isCleared && p.method !== 'Bank' && (
+                        <button
+                          onClick={() => markPaymentAsCleared(viewTransaction.id, p.id)}
+                          className="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-700 flex items-center gap-1 transition-colors"
+                        >
+                          <Check size={11} /> Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {viewTransaction.note && (
+            <div className="p-4 bg-gray-50 rounded-xl">
+              <p className="text-xs text-gray-400 mb-1 font-medium">Note</p>
+              <p className="text-sm text-gray-800">{viewTransaction.note}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PendingPaymentsView({
   filteredTransactions, viewTransaction, paymentModal, selectedTransactionId,
   filterStatus, paymentData, banks, isLoading, isSaving, summaryStats,
   setViewTransaction, setPaymentModal, setSelectedTransactionId, setFilterStatus, setPaymentData,
-  addPartialPayment, markPaymentAsCleared, deleteTransaction,
+  addPartialPayment, markPaymentAsCleared, markTransactionCleared, deleteTransaction,
   getTransactionTotals, formatCurrency, formatDateTime, getCategoryColor, getPaymentStatusColor,
 }: Props) {
   if (isLoading) {
@@ -234,18 +390,28 @@ export function PendingPaymentsView({
                         )}
                       </td>
 
-                      {/* Actions — same icon row as Bills screen */}
+                      {/* Actions — cheque main tx gets "Mark Cleared", others get Pay/Receive */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-1">
-                          {/* Pay / Receive button */}
-                          <button
-                            onClick={() => openPayModal(t.id)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg transition-colors ${
-                              isReceivable ? 'bg-green-600 hover:bg-green-700' : 'bg-[#4f46e5] hover:bg-[#4338ca]'
-                            }`}
-                          >
-                            {isReceivable ? 'Receive' : 'Pay'}
-                          </button>
+                          {/* Main cheque tx (no partial payments, uncleared) → Mark as Cleared */}
+                          {t.mode === 'Cheque' && !t.isFullyCleared && (t.partialPayments || []).length === 0 ? (
+                            <button
+                              onClick={() => markTransactionCleared(t.id)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+                            >
+                              <Check size={12} /> Mark Cleared
+                            </button>
+                          ) : (
+                            /* Partially-paid or receivable → Pay / Receive */
+                            <button
+                              onClick={() => openPayModal(t.id)}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg transition-colors ${
+                                isReceivable ? 'bg-green-600 hover:bg-green-700' : 'bg-[#4f46e5] hover:bg-[#4338ca]'
+                              }`}
+                            >
+                              {isReceivable ? 'Receive' : 'Pay'}
+                            </button>
+                          )}
                           {/* View */}
                           <button
                             onClick={() => setViewTransaction(t)}
@@ -275,111 +441,18 @@ export function PendingPaymentsView({
 
       {/* ── View Details Modal ── */}
       {viewTransaction && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
-              <div>
-                <h3 className="font-bold text-gray-900">Payment Details</h3>
-                <p className="text-xs font-mono text-gray-400 mt-0.5">{viewTransaction.transactionId}</p>
-              </div>
-              <button onClick={() => setViewTransaction(null)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-6 space-y-5">
-
-              {/* Amount summary */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: 'Total Amount', value: formatCurrency(viewTransaction.amount),                                 cls: 'bg-blue-50 text-blue-700'  },
-                  { label: 'Amount Paid',  value: formatCurrency(getTransactionTotals(viewTransaction).totalPaid),        cls: 'bg-green-50 text-green-700'},
-                  { label: 'Remaining',    value: formatCurrency(getTransactionTotals(viewTransaction).remainingAmount),  cls: 'bg-red-50 text-red-700'   },
-                ].map(({ label, value, cls }) => (
-                  <div key={label} className={`p-4 rounded-xl text-center ${cls}`}>
-                    <p className="text-xs font-medium opacity-70 mb-1">{label}</p>
-                    <p className="text-lg font-bold">{value}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Detail grid */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
-                  ['Transaction ID', viewTransaction.transactionId],
-                  ['Date & Time',    formatDateTime(viewTransaction.date, viewTransaction.time)],
-                  ['Category',       viewTransaction.mainCategory],
-                  ['Sub Category',   viewTransaction.subCategory],
-                  ['Paid By',        viewTransaction.paidBy || '—'],
-                  ['Paid To',        viewTransaction.paidTo || '—'],
-                  ['Mode',           viewTransaction.mode],
-                  ['Bank',           viewTransaction.bankName || '—'],
-                ].map(([l, v]) => (
-                  <div key={l} className="bg-gray-50 rounded-lg px-4 py-3">
-                    <p className="text-xs text-gray-400 mb-0.5">{l}</p>
-                    <p className="font-medium text-gray-900">{v}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Cheque details */}
-              {viewTransaction.mode === 'Cheque' && viewTransaction.chequeNumber && (
-                <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-purple-700 mb-3 flex items-center gap-1.5">
-                    <CreditCard size={13} /> Cheque Details
-                  </p>
-                  <div className="grid grid-cols-3 gap-3 text-sm">
-                    <div><p className="text-xs text-gray-400 mb-0.5">Number</p><p className="font-semibold">{viewTransaction.chequeNumber}</p></div>
-                    <div><p className="text-xs text-gray-400 mb-0.5">Date</p><p className="font-semibold">{viewTransaction.chequeDate || '—'}</p></div>
-                    <div><p className="text-xs text-gray-400 mb-0.5">Bank</p><p className="font-semibold">{viewTransaction.chequeBank || '—'}</p></div>
-                  </div>
-                </div>
-              )}
-
-              {/* Payment history */}
-              {(viewTransaction.partialPayments || []).length > 0 && (
-                <div>
-                  <p className="font-semibold text-gray-800 mb-3 text-sm">Payment History</p>
-                  <div className="space-y-2">
-                    {viewTransaction.partialPayments!.map(p => (
-                      <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <div className="space-y-0.5">
-                          <p className="text-sm font-medium text-gray-900">
-                            {formatCurrency(p.amount)}
-                            <span className="text-xs font-normal text-gray-500 ml-1.5">via {p.method}</span>
-                          </p>
-                          <p className="text-xs text-gray-400">{formatDateTime(p.date, p.time)}</p>
-                          {p.bankName && <p className="text-xs text-blue-600 flex items-center gap-1"><Building2 size={10} /> {p.bankName}</p>}
-                          {p.chequeNumber && <p className="text-xs text-purple-600">Cheque #{p.chequeNumber}{p.chequeBank ? ` · ${p.chequeBank}` : ''}</p>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${p.isCleared ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                            {p.isCleared ? 'Cleared' : 'Pending'}
-                          </span>
-                          {!p.isCleared && p.method !== 'Bank' && (
-                            <button onClick={() => markPaymentAsCleared(viewTransaction.id, p.id)}
-                              className="text-xs bg-[#4f46e5] text-white px-2.5 py-1 rounded-lg hover:bg-[#4338ca] flex items-center gap-1 transition-colors">
-                              <Check size={11} /> Clear
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {viewTransaction.note && (
-                <div className="p-4 bg-gray-50 rounded-xl">
-                  <p className="text-xs text-gray-400 mb-1 font-medium">Note</p>
-                  <p className="text-sm text-gray-800">{viewTransaction.note}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <ViewModal
+          viewTransaction={viewTransaction}
+          onClose={() => setViewTransaction(null)}
+          getTransactionTotals={getTransactionTotals}
+          formatCurrency={formatCurrency}
+          formatDateTime={formatDateTime}
+          markPaymentAsCleared={markPaymentAsCleared}
+          markTransactionCleared={markTransactionCleared}
+        />
       )}
 
-      {/* ── Payment Modal ── */}
+            {/* ── Payment Modal ── */}
       {paymentModal && selectedTransactionId && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">

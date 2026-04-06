@@ -10,11 +10,27 @@ export const getTransactionTotals = (t: Transaction) => {
 };
 
 export const isPending = (t: Transaction): boolean => {
-  if (t.isFullyCleared)           return false;
+  // Check cheque conditions FIRST — before trusting isFullyCleared flag.
+  // A main cheque transaction is always pending until manually cleared.
+  const isChequeTx = t.mode === 'Cheque' && !t.isFullyCleared;
+
+  // Any partial payment via Cheque or Cash that hasn't been manually confirmed is pending.
+  const hasUnclearedPartial = (t.partialPayments || []).some(
+    p => !p.isCleared && (p.method === 'Cheque' || p.method === 'Cash')
+  );
+
+  // Cheque/Cash uncleared → always pending, regardless of isFullyCleared flag.
+  if (isChequeTx || hasUnclearedPartial) return true;
+
+  // At this point no uncleared cheque/cash — safe to trust isFullyCleared.
+  if (t.isFullyCleared) return false;
+
+  // Fully paid via Bank or confirmed Cash → not pending.
   if (t.paymentStatus === 'Full') return false;
+
+  // Still has remaining amount.
   const { remainingAmount } = getTransactionTotals(t);
-  const hasUncleared = (t.partialPayments || []).some(p => !p.isCleared && p.method !== 'Bank');
-  return remainingAmount > 0 || hasUncleared;
+  return remainingAmount > 0;
 };
 
 // FIX: When filtering by 'Loan', match both mainCategory === 'Loan'
@@ -61,10 +77,11 @@ export const calculateStats = (transactions: Transaction[]): TransactionStats =>
   const pending      = transactions.filter(isPending);
   return {
     totalInflow, totalOutflow,
-    netBalance:       totalInflow - totalOutflow,
-    transactionCount: transactions.length,
-    pendingCount:     pending.length,
-    totalPending:     pending.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
+    netBalance:            totalInflow - totalOutflow,
+    transactionCount:      transactions.length,
+    pendingCount:          pending.length,
+    totalPending:          pending.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
+    pendingApprovalCount:  transactions.filter(t => t.approvalStatus === 'pending_approval').length,
   };
 };
 

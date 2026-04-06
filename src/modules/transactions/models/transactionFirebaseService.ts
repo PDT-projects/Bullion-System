@@ -7,11 +7,12 @@ import {
   onSnapshot, orderBy, Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
-import { Transaction, PartialPayment, AppNotification } from './types';
+import { Transaction, PartialPayment, AppNotification, DynamicCategory } from './types';
 
 const COLLECTION       = 'transactions';
 const COUNTER_COL      = 'transactionCounters';
 const NOTIF_COLLECTION = 'appNotifications';
+const CATEGORIES_COL   = 'dynamicCategories';
 
 // ── Deep strip of undefined values ───────────────────────────────────────────
 function deepStripUndefined(value: any): any {
@@ -287,6 +288,20 @@ export class TransactionFirebaseService {
     }
   }
 
+  // ── Mark the main cheque transaction itself as cleared ────────────────────
+  static async markTransactionCleared(transactionId: string): Promise<void> {
+    try {
+      await TransactionFirebaseService.updateTransaction(transactionId, {
+        isFullyCleared: true,
+        paymentStatus:  'Full',
+      });
+      console.log('✅ Transaction cleared:', transactionId);
+    } catch (error) {
+      console.error('❌ Error clearing transaction:', error);
+      throw new Error('Failed to clear transaction');
+    }
+  }
+
   // ── App Notifications (Firestore) ─────────────────────────────────────────
 
   /** Create a notification document */
@@ -341,5 +356,32 @@ export class TransactionFirebaseService {
       const notifications = snap.docs.map(docToNotification);
       callback(notifications);
     });
+  }
+
+  // ── Dynamic Categories ────────────────────────────────────────────────────
+
+  /** Fetch all user-added categories */
+  static async fetchDynamicCategories(): Promise<DynamicCategory[]> {
+    try {
+      const snap = await getDocs(collection(db, CATEGORIES_COL));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as DynamicCategory));
+    } catch (error) {
+      console.error('❌ Error fetching dynamic categories:', error);
+      return [];
+    }
+  }
+
+  /** Add a new dynamic category */
+  static async addDynamicCategory(
+    data: Omit<DynamicCategory, 'id'>
+  ): Promise<DynamicCategory> {
+    const ref = await addDoc(collection(db, CATEGORIES_COL), deepStripUndefined(data));
+    console.log('✅ Dynamic category added:', ref.id);
+    return { ...data, id: ref.id };
+  }
+
+  /** Delete a dynamic category */
+  static async deleteDynamicCategory(id: string): Promise<void> {
+    await deleteDoc(doc(db, CATEGORIES_COL, id));
   }
 }
