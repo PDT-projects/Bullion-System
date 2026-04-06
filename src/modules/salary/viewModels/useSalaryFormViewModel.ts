@@ -7,6 +7,8 @@
 // 4. Blocks paying regular salary for a month already fully paid
 // 5. Saves bankId, chequeNumber, chequeDate, chequeBank to Firestore
 // 6. Creates linked Cash Outflow transaction record
+// 7. NEW: Auto-fills baseSalary with REMAINING amount (fullSalary - advancePaid)
+//         when advance has already been partially paid this month
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -23,7 +25,7 @@ interface UseSalaryFormViewModelProps {
   mode: 'create' | 'edit';
   type: 'regular' | 'advance';
   employees: any[];
-  banks?: any[]; // kept for backward compat but we fetch internally
+  banks?: any[];
 }
 
 interface UseSalaryFormViewModelReturn {
@@ -48,10 +50,11 @@ interface UseSalaryFormViewModelReturn {
   banks: BankInfo[];
   selectedEmployee: any | null;
   calculatedNetAmount: number;
-  advancePaidThisMonth: number;        // ← new: total advance paid for employee+month
-  regularAlreadyPaid: boolean;         // ← new: is regular salary already paid for this month?
-  regularAlreadyPaidAmount: number;    // ← new: how much regular already paid
-  isEffectivelyAdvance: boolean;       // ← new: regular form but future month selected
+  advancePaidThisMonth: number;
+  regularAlreadyPaid: boolean;
+  regularAlreadyPaidAmount: number;
+  remainingSalaryToPay: number;      // ← NEW: fullSalary - advancePaid (0 if no advance)
+  isEffectivelyAdvance: boolean;
   onFieldChange: (field: string, value: any) => void;
   onTransactionChange: (index: number, field: keyof SalaryTransaction, value: any) => void;
   onSubmit: () => void;
@@ -80,17 +83,15 @@ export function useSalaryFormViewModel({
     SalaryService.getDefaultTransaction(),
   ]);
 
-  const [banks,      setBanks]      = useState<BankInfo[]>([]);
-  const [allSalaries,setAllSalaries]= useState<Salary[]>([]);
-  const [isLoading,  setIsLoading]  = useState(false);
+  const [banks,       setBanks]       = useState<BankInfo[]>([]);
+  const [allSalaries, setAllSalaries] = useState<Salary[]>([]);
+  const [isLoading,   setIsLoading]   = useState(false);
 
-  const isEditMode = mode === 'edit';
+  const isEditMode       = mode === 'edit';
   const submitButtonText = isEditMode ? 'Update Salary' : 'Save Salary';
+  const currentMonth     = new Date().toISOString().slice(0, 7);
 
-  // Current month in YYYY-MM format
-  const currentMonth = new Date().toISOString().slice(0, 7);
-
-  // Fetch banks + all salaries on mount (need salaries to check paid status)
+  // Fetch banks + all salaries on mount
   useEffect(() => {
     const load = async () => {
       try {
@@ -112,10 +113,9 @@ export function useSalaryFormViewModel({
     [employees, formData.employeeId]
   );
 
-  // The salary month comes from transactions[0].salaryMonth
   const salaryMonth = transactionsList[0]?.salaryMonth || '';
 
-  // ── Advance paid for this employee in selected month ─────────────────────
+  // ── Advance paid for this employee in the selected month ─────────────────
   const advancePaidThisMonth = useMemo(() => {
     if (!formData.employeeId || !salaryMonth) return 0;
     return allSalaries
@@ -123,7 +123,7 @@ export function useSalaryFormViewModel({
         s.employeeId === formData.employeeId &&
         s.salaryMonth === salaryMonth &&
         s.subCategory === 'Advance salary' &&
-        (!isEditMode || s.id !== id)  // exclude current record when editing
+        (!isEditMode || s.id !== id)
       )
       .reduce((sum, s) => sum + (s.netAmount || s.amount || 0), 0);
   }, [allSalaries, formData.employeeId, salaryMonth, isEditMode, id]);
@@ -150,23 +150,27 @@ export function useSalaryFormViewModel({
     return regularAlreadyPaidAmount >= (selectedEmployee.salary || 0);
   }, [type, selectedEmployee, regularAlreadyPaidAmount]);
 
-  // ── Key logic: is this regular payment effectively an advance? ────────────
-  // True when:
-  //   - User is on the "regular salary" form, AND
-  //   - The selected salary month is AFTER the current calendar month
-  //     (e.g. paying in March but selecting April = paying ahead = advance)
+  // ── NEW: Remaining salary = full salary minus advance already given ───────
+  // This is what should be pre-filled as base salary when paying regular
+  // after some advance was already paid this month.
+  const remainingSalaryToPay = useMemo(() => {
+    if (!selectedEmployee || !salaryMonth) return 0;
+    const fullSalary = selectedEmployee.salary || 0;
+    if (advancePaidThisMonth <= 0) return 0;
+    return Math.max(0, fullSalary - advancePaidThisMonth);
+  }, [selectedEmployee, advancePaidThisMonth]);
+
+  // ── Future month selected on regular form → auto-treat as advance ─────────
   const isEffectivelyAdvance = useMemo(() => {
     if (type !== 'regular' || isEditMode || !salaryMonth) return false;
     return salaryMonth > currentMonth;
   }, [type, isEditMode, salaryMonth, currentMonth]);
 
-  // Derived subCategory — auto-switches to Advance when paying ahead
   const effectiveSubCategory: 'Employee salary' | 'Advance salary' = useMemo(() => {
     if (isEffectivelyAdvance) return 'Advance salary';
     return formData.subCategory;
   }, [isEffectivelyAdvance, formData.subCategory]);
 
-  // Dynamic page title reflects the auto-switch
   const pageTitle = isEditMode
     ? 'Edit Salary'
     : isEffectivelyAdvance
@@ -230,12 +234,18 @@ export function useSalaryFormViewModel({
     load();
   }, [isEditMode, id, navigate]);
 
-  // Auto-populate base salary from employee on new regular salary
+  // Auto-populate base salary from employee on new regular salary.
+  // If advance was already paid this month, pre-fill with REMAINING amount.
   useEffect(() => {
     if (!isEditMode && selectedEmployee && type === 'regular') {
-      setFormData(prev => ({ ...prev, baseSalary: selectedEmployee.salary || 0 }));
+      const fullSalary = selectedEmployee.salary || 0;
+      // If advance has been paid, suggest the remaining amount; otherwise full salary
+      const suggestedBase = advancePaidThisMonth > 0
+        ? Math.max(0, fullSalary - advancePaidThisMonth)
+        : fullSalary;
+      setFormData(prev => ({ ...prev, baseSalary: suggestedBase }));
     }
-  }, [selectedEmployee, isEditMode, type]);
+  }, [selectedEmployee, isEditMode, type, advancePaidThisMonth]);
 
   // Keep transaction amount in sync with net amount
   useEffect(() => {
@@ -254,12 +264,10 @@ export function useSalaryFormViewModel({
         prev.map((t, i) => {
           if (i !== index) return t;
           const updated = { ...t, [field]: value };
-          // Auto-set bankName when bankId changes
           if (field === 'bankId') {
             const bank = banks.find(b => b.id === value);
             updated.bankName = bank?.name || '';
           }
-          // Clear irrelevant fields when mode changes
           if (field === 'mode') {
             if (value === 'Cash')   { updated.bankId = ''; updated.bankName = ''; updated.chequeNumber = ''; }
             if (value === 'Bank')   { updated.chequeNumber = ''; updated.chequeDate = ''; updated.chequeBank = ''; }
@@ -273,7 +281,6 @@ export function useSalaryFormViewModel({
   );
 
   const handleSubmit = useCallback(async () => {
-    // Block paying regular salary if already fully paid for this month
     if (type === 'regular' && regularAlreadyPaid && !isEditMode) {
       toast.error(`Regular salary for ${selectedEmployee?.name} is already fully paid for ${salaryMonth}`);
       return;
@@ -301,7 +308,7 @@ export function useSalaryFormViewModel({
         employeeId:      formData.employeeId,
         employeeName:    employee?.name || '',
         mainCategory:    'Salary',
-        subCategory:     effectiveSubCategory,  // auto-switches to Advance if future month
+        subCategory:     effectiveSubCategory,
         amount:          txn.amount,
         baseSalary:      formData.baseSalary,
         commission:      formData.commission,
@@ -328,7 +335,6 @@ export function useSalaryFormViewModel({
       } else {
         await SalaryFirebaseService.createSalary(salaryPayload);
 
-        // Create linked Cash Outflow transaction
         await TransactionFirebaseService.createTransaction({
           transactionId:   salaryPayload.transactionId,
           date:            formData.date,
@@ -364,7 +370,6 @@ export function useSalaryFormViewModel({
           employeeName:    employee?.name,
         });
 
-        // Update bank balance (salary is an outflow — deduct)
         if (txn.mode === 'Bank' && txn.bankId && bank) {
           const newBalance = bank.balance - calculatedNetAmount;
           await BankFirebaseService.updateBankBalance(txn.bankId, newBalance);
@@ -381,7 +386,7 @@ export function useSalaryFormViewModel({
       setIsLoading(false);
     }
   }, [formData, transactionsList, calculatedNetAmount, isEditMode, id, employees, banks,
-      navigate, type, regularAlreadyPaid, selectedEmployee, salaryMonth]);
+      navigate, type, regularAlreadyPaid, selectedEmployee, salaryMonth, effectiveSubCategory]);
 
   const handleCancel = useCallback(
     () => navigate(type === 'advance' ? '/salary/advance' : '/salary/regular'),
@@ -391,7 +396,7 @@ export function useSalaryFormViewModel({
   return {
     formData,
     transactions: transactionsList,
-    isValid:     validation.isValid,
+    isValid:      validation.isValid,
     errorMessage: validation.error,
     fieldErrors:  validation.fieldErrors || {},
     isLoading,
@@ -405,8 +410,9 @@ export function useSalaryFormViewModel({
     advancePaidThisMonth,
     regularAlreadyPaid,
     regularAlreadyPaidAmount,
+    remainingSalaryToPay,
     isEffectivelyAdvance,
-    onFieldChange:      setField,
+    onFieldChange:       setField,
     onTransactionChange: setTransactionField,
     onSubmit:   handleSubmit,
     onCancel:   handleCancel,

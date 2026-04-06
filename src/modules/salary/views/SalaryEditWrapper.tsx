@@ -16,7 +16,6 @@ export function SalaryEditWrapper() {
       .catch(() => toast.error('Failed to load employees'));
   }, []);
 
-  // type='regular' is a safe default — subCategory is overridden from Firestore data when loaded
   const vm = useSalaryFormViewModel({ mode: 'edit', type: 'regular', employees });
 
   return (
@@ -37,6 +36,7 @@ export function SalaryEditWrapper() {
       advancePaidThisMonth={vm.advancePaidThisMonth}
       regularAlreadyPaid={vm.regularAlreadyPaid}
       regularAlreadyPaidAmount={vm.regularAlreadyPaidAmount}
+      remainingSalaryToPay={vm.remainingSalaryToPay}
       isEffectivelyAdvance={vm.isEffectivelyAdvance}
       onFieldChange={vm.onFieldChange}
       onTransactionChange={vm.onTransactionChange}

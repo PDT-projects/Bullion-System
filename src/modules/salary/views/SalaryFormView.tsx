@@ -1,10 +1,13 @@
 // Salary Module - View Layer
 // SalaryFormView - Form for create/edit salary
+// Fixes:
+// 1. Employee info panel: no more text overlap — uses clean grid layout
+// 2. Shows clear "Remaining to pay" amount when advance already given this month
+// 3. Base salary auto-filled with remaining amount (full - advance paid)
 
-import { User, Calculator, Wallet, Building2, CreditCard, AlertCircle, CheckCircle, Info, ArrowLeft } from 'lucide-react';
+import { User, Calculator, Wallet, Building2, CreditCard, AlertCircle, CheckCircle, Info, ArrowLeft, Lock } from 'lucide-react';
 import { SalaryService } from '../models/salaryService';
 
-// Inline so this file compiles even if types.ts hasn't been updated yet
 interface SalaryTransaction {
   id: string;
   amount: number;
@@ -49,6 +52,7 @@ interface SalaryFormViewProps {
   advancePaidThisMonth: number;
   regularAlreadyPaid: boolean;
   regularAlreadyPaidAmount: number;
+  remainingSalaryToPay: number;
   isEffectivelyAdvance: boolean;
   onFieldChange: (field: string, value: any) => void;
   onTransactionChange: (index: number, field: keyof SalaryTransaction, value: any) => void;
@@ -59,12 +63,22 @@ interface SalaryFormViewProps {
 const inp    = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]';
 const inpErr = 'border-red-500';
 
+// Format date for locked display
+function formatDateDisplay(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-PK', {
+      year: 'numeric', month: 'short', day: 'numeric',
+    });
+  } catch { return dateStr; }
+}
+
 export function SalaryFormView({
   formData, transactions, isValid, errorMessage, fieldErrors,
   isLoading, isEditMode, pageTitle, submitButtonText,
   employees, banks, selectedEmployee, calculatedNetAmount,
   advancePaidThisMonth, regularAlreadyPaid, regularAlreadyPaidAmount,
-  isEffectivelyAdvance,
+  remainingSalaryToPay, isEffectivelyAdvance,
   onFieldChange, onTransactionChange, onSubmit, onCancel,
 }: SalaryFormViewProps) {
   const fmt         = SalaryService.formatCurrency;
@@ -84,10 +98,7 @@ export function SalaryFormView({
 
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={onCancel}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+          <button onClick={onCancel} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
             <ArrowLeft size={22} />
           </button>
           <div>
@@ -98,9 +109,9 @@ export function SalaryFormView({
           </div>
         </div>
 
-        {/* Regular salary already paid — red block */}
+        {/* ── Banner: Regular salary already fully paid ── */}
         {regularAlreadyPaid && !isEditMode && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-300 rounded-lg flex items-start gap-3">
+          <div className="mb-4 p-4 bg-red-50 border border-red-300 rounded-lg flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
             <div>
               <p className="text-red-800 font-semibold">Regular salary already fully paid for this month</p>
@@ -113,48 +124,57 @@ export function SalaryFormView({
           </div>
         )}
 
-        {/* Future month selected on regular form — auto-treated as advance */}
+        {/* ── Banner: Future month → auto-advance ── */}
         {isEffectivelyAdvance && !isEditMode && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-start gap-3">
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-yellow-800 font-semibold">
-                This will be recorded as an Advance Salary
-              </p>
+              <p className="text-yellow-800 font-semibold">This will be recorded as an Advance Salary</p>
               <p className="text-yellow-700 text-sm mt-0.5">
-                You selected <strong>{transaction.salaryMonth}</strong> which is a future month —
-                paying salary before the month is due counts as an advance.
-                This record will be saved as <strong>Advance salary</strong> and will appear
-                in the Advance Salaries list.
+                <strong>{transaction.salaryMonth}</strong> is a future month — paying ahead counts as advance.
+                This will be saved as <strong>Advance salary</strong>.
               </p>
             </div>
           </div>
         )}
 
-        {/* Advance paid info on regular form */}
+        {/* ── Banner: Advance already paid — show remaining ── */}
         {isRegular && advancePaidThisMonth > 0 && !regularAlreadyPaid && !isEffectivelyAdvance && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
             <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-            <div>
+            <div className="flex-1">
               <p className="text-blue-800 font-semibold">Advance salary already given this month</p>
-              <p className="text-blue-700 text-sm mt-0.5">
-                {selectedEmployee?.name} received <strong>{fmt(advancePaidThisMonth)}</strong> as advance
-                for <strong>{transaction.salaryMonth}</strong>. Add it to Deductions below to recover.
+              <div className="mt-2 grid grid-cols-3 gap-3 text-sm">
+                <div className="bg-white rounded-lg p-2.5 border border-blue-100 text-center">
+                  <p className="text-xs text-gray-500 mb-0.5">Full Salary</p>
+                  <p className="font-bold text-gray-900">{fmt(selectedEmployee?.salary || 0)}</p>
+                </div>
+                <div className="bg-white rounded-lg p-2.5 border border-blue-100 text-center">
+                  <p className="text-xs text-gray-500 mb-0.5">Advance Paid</p>
+                  <p className="font-bold text-orange-600">− {fmt(advancePaidThisMonth)}</p>
+                </div>
+                <div className="bg-[#4f46e5]/10 rounded-lg p-2.5 border border-[#4f46e5]/20 text-center">
+                  <p className="text-xs text-[#4f46e5] mb-0.5">Remaining to Pay</p>
+                  <p className="font-bold text-[#4f46e5] text-base">{fmt(remainingSalaryToPay)}</p>
+                </div>
+              </div>
+              <p className="text-blue-600 text-xs mt-2">
+                Base salary has been pre-filled with the remaining amount. Adjust if needed.
               </p>
             </div>
           </div>
         )}
 
-        {/* Advance salary context panel */}
+        {/* ── Banner: Advance salary context ── */}
         {!isRegular && selectedEmployee && transaction.salaryMonth && (
-          <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3">
+          <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3">
             <Info className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
             <div>
               <p className="text-orange-800 font-semibold">Advance salary — {transaction.salaryMonth}</p>
               <p className="text-orange-700 text-sm mt-0.5">
                 Monthly salary: <strong>{fmt(selectedEmployee.salary || 0)}</strong>
                 {advancePaidThisMonth > 0 && (
-                  <> · Advance already given: <strong>{fmt(advancePaidThisMonth)}</strong></>
+                  <> · Advance already given this month: <strong>{fmt(advancePaidThisMonth)}</strong></>
                 )}
               </p>
             </div>
@@ -162,14 +182,14 @@ export function SalaryFormView({
         )}
 
         {errorMessage && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-600 font-medium">{errorMessage}</p>
           </div>
         )}
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
 
-          {/* ── Employee + Month ─────────────────────────────────────────── */}
+          {/* ── Employee + Month ─────────────────────────────────────── */}
           <div className="border-b pb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-gray-600" /> Employee Details
@@ -209,37 +229,69 @@ export function SalaryFormView({
                 />
               </div>
 
+              {/* ── FIX: Employee info card — proper grid, no text overlap ── */}
               {selectedEmployee && (
-                <div className="md:col-span-2 p-4 bg-gray-50 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                  <div><span className="text-gray-500">Name:</span><span className="ml-1 font-medium">{selectedEmployee.name}</span></div>
-                  <div><span className="text-gray-500">Position:</span><span className="ml-1 font-medium">{selectedEmployee.position}</span></div>
-                  <div><span className="text-gray-500">Monthly:</span><span className="ml-1 font-medium text-[#4f46e5]">{fmt(selectedEmployee.salary || 0)}</span></div>
-                  <div>
-                    <span className="text-gray-500">Status:</span>
-                    <span className={`ml-1 font-medium ${selectedEmployee.status === 'active' ? 'text-green-600' : 'text-red-600'}`}>
-                      {selectedEmployee.status}
-                    </span>
+                <div className="md:col-span-2 bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Employee Info</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-lg p-3 border border-gray-100">
+                      <p className="text-xs text-gray-400 mb-0.5">Name</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{selectedEmployee.name}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-100">
+                      <p className="text-xs text-gray-400 mb-0.5">Position</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{selectedEmployee.position}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-100">
+                      <p className="text-xs text-gray-400 mb-0.5">Monthly Salary</p>
+                      <p className="text-sm font-semibold text-[#4f46e5]">{fmt(selectedEmployee.salary || 0)}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-100">
+                      <p className="text-xs text-gray-400 mb-0.5">Status</p>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        selectedEmployee.status === 'active'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {selectedEmployee.status}
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Salary status for the selected month */}
                   {isRegular && transaction.salaryMonth && (
-                    <div className="md:col-span-4 pt-2 border-t">
+                    <div className="mt-3 pt-3 border-t border-gray-100">
                       {isEffectivelyAdvance ? (
-                        <span className="flex items-center gap-1.5 text-sm text-yellow-700">
-                          <AlertCircle size={14} />
-                          Future month — will be saved as <strong>Advance salary</strong>
-                        </span>
+                        <div className="flex items-center gap-2 text-sm text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2">
+                          <AlertCircle size={15} />
+                          <span>Future month selected — will save as <strong>Advance salary</strong></span>
+                        </div>
                       ) : regularAlreadyPaid ? (
-                        <span className="flex items-center gap-1.5 text-sm text-green-700">
-                          <CheckCircle size={14} /> Regular salary fully paid for {transaction.salaryMonth}
-                        </span>
+                        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+                          <CheckCircle size={15} />
+                          <span>Regular salary fully paid for <strong>{transaction.salaryMonth}</strong></span>
+                        </div>
+                      ) : advancePaidThisMonth > 0 ? (
+                        <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+                          <Info size={15} />
+                          <span>
+                            Advance paid: <strong>{fmt(advancePaidThisMonth)}</strong> ·
+                            Remaining: <strong>{fmt(remainingSalaryToPay)}</strong> for <strong>{transaction.salaryMonth}</strong>
+                          </span>
+                        </div>
                       ) : regularAlreadyPaidAmount > 0 ? (
-                        <span className="flex items-center gap-1.5 text-sm text-yellow-700">
-                          <AlertCircle size={14} />
-                          Partial paid: {fmt(regularAlreadyPaidAmount)} / {fmt(selectedEmployee.salary || 0)} for {transaction.salaryMonth}
-                        </span>
+                        <div className="flex items-center gap-2 text-sm text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2">
+                          <AlertCircle size={15} />
+                          <span>
+                            Partially paid: <strong>{fmt(regularAlreadyPaidAmount)}</strong> of{' '}
+                            <strong>{fmt(selectedEmployee.salary || 0)}</strong> for <strong>{transaction.salaryMonth}</strong>
+                          </span>
+                        </div>
                       ) : (
-                        <span className="flex items-center gap-1.5 text-sm text-gray-500">
-                          <Info size={14} /> No regular salary paid yet for {transaction.salaryMonth}
-                        </span>
+                        <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                          <Info size={15} />
+                          <span>No regular salary paid yet for <strong>{transaction.salaryMonth}</strong></span>
+                        </div>
                       )}
                     </div>
                   )}
@@ -248,7 +300,7 @@ export function SalaryFormView({
             </div>
           </div>
 
-          {/* ── Salary Calculation ──────────────────────────────────────── */}
+          {/* ── Salary Calculation ──────────────────────────────────── */}
           <div className="border-b pb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Calculator className="w-5 h-5 text-gray-600" /> Salary Calculation
@@ -257,6 +309,9 @@ export function SalaryFormView({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {isRegular ? 'Base Salary' : 'Advance Amount'} <span className="text-red-500">*</span>
+                  {isRegular && advancePaidThisMonth > 0 && !regularAlreadyPaid && (
+                    <span className="ml-1 text-xs font-normal text-[#4f46e5]">(remaining after advance)</span>
+                  )}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">PKR</span>
@@ -291,7 +346,7 @@ export function SalaryFormView({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Deductions
                   {isRegular && advancePaidThisMonth > 0 && (
-                    <span className="ml-1 text-xs text-orange-600">(advance: {fmt(advancePaidThisMonth)})</span>
+                    <span className="ml-1 text-xs text-orange-600 font-normal">(advance: {fmt(advancePaidThisMonth)})</span>
                   )}
                 </label>
                 <div className="relative">
@@ -304,29 +359,23 @@ export function SalaryFormView({
                     placeholder="0"
                   />
                 </div>
-                {isRegular && advancePaidThisMonth > 0 && (
-                  <p className="text-xs text-orange-500 mt-1">
-                    Tip: enter {fmt(advancePaidThisMonth)} to recover advance paid this month
-                  </p>
-                )}
               </div>
 
+              {/* Date — locked to today, same pattern as Bills/Transactions */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date <span className="text-red-500">*</span>
+                  Date <span className="text-xs font-normal text-gray-400 ml-1">(auto)</span>
                 </label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => onFieldChange('date', e.target.value)}
-                  className={`${inp} ${fieldErrors.date ? inpErr : ''}`}
-                />
-                {fieldErrors.date && <p className="mt-1 text-sm text-red-600">{fieldErrors.date}</p>}
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                  <Lock size={14} className="text-gray-400 shrink-0" />
+                  <span className="text-sm text-gray-600">{formatDateDisplay(formData.date)}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Date is set automatically</p>
               </div>
             </div>
           </div>
 
-          {/* ── Payment Details ──────────────────────────────────────────── */}
+          {/* ── Payment Details ──────────────────────────────────────── */}
           <div className="border-b pb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Wallet className="w-5 h-5 text-gray-600" /> Payment Details
@@ -357,7 +406,6 @@ export function SalaryFormView({
                 />
               </div>
 
-              {/* Payment method toggle buttons */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Payment Method <span className="text-red-500">*</span>
@@ -365,8 +413,7 @@ export function SalaryFormView({
                 <div className="grid grid-cols-3 gap-2">
                   {(['Cash', 'Bank', 'Cheque'] as const).map(m => (
                     <button
-                      key={m}
-                      type="button"
+                      key={m} type="button"
                       onClick={() => onTransactionChange(0, 'mode', m)}
                       className={`py-2.5 text-sm rounded-lg border font-medium transition-colors ${
                         transaction.mode === m
@@ -378,7 +425,6 @@ export function SalaryFormView({
                 </div>
               </div>
 
-              {/* Bank account selector */}
               {transaction.mode === 'Bank' && (
                 <div className="md:col-span-2 space-y-2">
                   <div>
@@ -432,7 +478,6 @@ export function SalaryFormView({
                 </div>
               )}
 
-              {/* Cheque credentials */}
               {transaction.mode === 'Cheque' && (
                 <div className="md:col-span-2 space-y-3">
                   <div className="flex items-center gap-2">
@@ -442,32 +487,21 @@ export function SalaryFormView({
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Cheque Number *</label>
-                      <input
-                        type="text"
-                        value={transaction.chequeNumber}
+                      <input type="text" value={transaction.chequeNumber}
                         onChange={(e) => onTransactionChange(0, 'chequeNumber', e.target.value)}
-                        className={inp}
-                        placeholder="e.g. 001234"
-                      />
+                        className={inp} placeholder="e.g. 001234" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Cheque Date</label>
-                      <input
-                        type="date"
-                        value={transaction.chequeDate}
+                      <input type="date" value={transaction.chequeDate}
                         onChange={(e) => onTransactionChange(0, 'chequeDate', e.target.value)}
-                        className={inp}
-                      />
+                        className={inp} />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Bank on Cheque</label>
-                      <input
-                        type="text"
-                        value={transaction.chequeBank}
+                      <input type="text" value={transaction.chequeBank}
                         onChange={(e) => onTransactionChange(0, 'chequeBank', e.target.value)}
-                        className={inp}
-                        placeholder="e.g. HBL, MCB"
-                      />
+                        className={inp} placeholder="e.g. HBL, MCB" />
                     </div>
                   </div>
                   <p className="text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded p-2">
@@ -517,39 +551,50 @@ export function SalaryFormView({
             </div>
           </div>
 
-          {/* Net Amount Summary */}
-          <div className="bg-[#4f46e5]/10 rounded-lg p-4">
-            <div className="flex items-center justify-between">
+          {/* ── Net Amount Summary ───────────────────────────────────── */}
+          <div className="bg-[#4f46e5]/10 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-3">
               <span className="text-lg font-semibold text-gray-900">Net Amount to Pay:</span>
               <span className="text-2xl font-bold text-[#4f46e5]">{fmt(calculatedNetAmount)}</span>
             </div>
-            <div className="mt-2 text-sm text-gray-600 flex flex-wrap gap-3">
-              {formData.baseSalary > 0 && <span>Base: {fmt(formData.baseSalary)}</span>}
-              {formData.commission > 0 && <span className="text-green-700">+ Commission: {fmt(formData.commission)}</span>}
-              {formData.deductions > 0 && <span className="text-red-600">− Deductions: {fmt(formData.deductions)}</span>}
+            <div className="text-sm text-gray-600 flex flex-wrap gap-4">
+              {formData.baseSalary > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="text-gray-400">Base:</span> {fmt(formData.baseSalary)}
+                </span>
+              )}
+              {formData.commission > 0 && (
+                <span className="flex items-center gap-1 text-green-700">
+                  <span>+</span> Commission: {fmt(formData.commission)}
+                </span>
+              )}
+              {formData.deductions > 0 && (
+                <span className="flex items-center gap-1 text-red-600">
+                  <span>−</span> Deductions: {fmt(formData.deductions)}
+                </span>
+              )}
             </div>
-            {isRegular && advancePaidThisMonth > 0 && (
-              <div className="mt-2 text-xs text-orange-600 bg-orange-50 rounded p-2">
-                ℹ️ Advance paid this month: {fmt(advancePaidThisMonth)} — add to Deductions above if recovering
+            {/* Show advance context at bottom of summary */}
+            {isRegular && advancePaidThisMonth > 0 && !regularAlreadyPaid && (
+              <div className="mt-3 pt-3 border-t border-[#4f46e5]/20 text-xs text-[#4f46e5]">
+                ℹ️ Advance already paid this month: {fmt(advancePaidThisMonth)} · 
+                Paying remaining: {fmt(remainingSalaryToPay)}
               </div>
             )}
           </div>
 
-          {/* Actions */}
+          {/* ── Actions ──────────────────────────────────────────────── */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t">
             <button
-              type="button"
-              onClick={onCancel}
-              disabled={isLoading}
-              className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap"
+              type="button" onClick={onCancel} disabled={isLoading}
+              className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
             >
               Cancel
             </button>
             <button
-              type="button"
-              onClick={onSubmit}
+              type="button" onClick={onSubmit}
               disabled={isLoading || (regularAlreadyPaid && !isEditMode)}
-              className="px-6 py-2.5 text-sm font-medium text-white bg-[#4f46e5] border border-[#4f46e5] rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors whitespace-nowrap"
+              className="px-6 py-2.5 text-sm font-medium text-white bg-[#4f46e5] border border-[#4f46e5] rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors"
             >
               {isLoading ? 'Saving...' : submitButtonText}
             </button>

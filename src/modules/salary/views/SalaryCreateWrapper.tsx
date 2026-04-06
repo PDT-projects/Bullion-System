@@ -40,6 +40,7 @@ export function SalaryCreateWrapper({ type }: SalaryCreateWrapperProps) {
       advancePaidThisMonth={vm.advancePaidThisMonth}
       regularAlreadyPaid={vm.regularAlreadyPaid}
       regularAlreadyPaidAmount={vm.regularAlreadyPaidAmount}
+      remainingSalaryToPay={vm.remainingSalaryToPay}
       isEffectivelyAdvance={vm.isEffectivelyAdvance}
       onFieldChange={vm.onFieldChange}
       onTransactionChange={vm.onTransactionChange}
