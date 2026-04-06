@@ -1,13 +1,10 @@
 // Bills Module - ViewModel Layer
-// Create/Edit form logic
-// Fixes:
-// 1. Fetches real banks from Firestore (BankFirebaseService)
-// 2. Saves bankId, chequeNumber, chequeDate, chequeBank to Firestore
-// 3. Updates bank balance when mode = Bank
-// 4. Creates a linked Cash Outflow transaction record
-// 5. amountPaid field: blank = full, otherwise partial
+// Changes:
+// 1. Date is locked to today (auto-set, not user-editable) — same as Transactions
+// 2. Dynamic bill categories: fetches from Firestore + allows adding new ones inline
+// 3. All existing fixes retained (bank balance, linked transaction, cheque fields)
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Bill, BillTransaction, BILL_CATEGORIES, COMPANIES } from '../models/types';
@@ -18,11 +15,18 @@ import { TransactionFirebaseService } from '../../transactions/models/transactio
 
 interface BankInfo { id: string; name: string; balance: number; }
 
+// Dynamic category stored in Firestore (reuse same collection as transactions)
+interface DynamicBillCategory {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
 interface UseBillsFormViewModelReturn {
   formData: {
     company: string;
-    billCategory: keyof typeof BILL_CATEGORIES;
-    date: string;
+    billCategory: string;
+    date: string;          // read-only display
     note: string;
   };
   billTransactions: BillTransaction[];
@@ -32,6 +36,9 @@ interface UseBillsFormViewModelReturn {
   predefinedVendors: string[];
   companies: string[];
   banks: BankInfo[];
+  // Dynamic category support
+  allBillCategories: string[];
+  onAddBillCategory: (name: string) => Promise<string | null>;
   setFormField: (field: string, value: any) => void;
   addBillTransaction: () => void;
   removeBillTransaction: (id: string) => void;
@@ -42,15 +49,20 @@ interface UseBillsFormViewModelReturn {
   calculateTotal: () => number;
 }
 
+const BASE_CATEGORIES = Object.keys(BILL_CATEGORIES);
+
 export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
   const navigate = useNavigate();
   const { id }   = useParams<{ id: string }>();
   const isEditing = !!id;
 
+  // Date is always today — locked, not user-editable
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const [formData, setFormData] = useState({
     company:      COMPANIES[0] as string,
-    billCategory: 'Electricity' as keyof typeof BILL_CATEGORIES,
-    date:         new Date().toISOString().split('T')[0],
+    billCategory: 'Electricity' as string,
+    date:         todayStr,
     note:         '',
   });
 
@@ -58,9 +70,10 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
     BillsService.getDefaultTransaction(),
   ]);
 
-  const [banks,        setBanks]        = useState<BankInfo[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors,       setErrors]       = useState<{ [key: string]: string }>({});
+  const [banks,              setBanks]              = useState<BankInfo[]>([]);
+  const [dynamicCategories,  setDynamicCategories]  = useState<DynamicBillCategory[]>([]);
+  const [isSubmitting,       setIsSubmitting]       = useState(false);
+  const [errors,             setErrors]             = useState<{ [key: string]: string }>({});
 
   const predefinedVendors = [
     'LESCO', 'IESCO', 'K-Electric', 'PTCL', 'StormFiber', 'Nayatel',
@@ -68,22 +81,38 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
     'Office Landlord', 'Maintenance Company',
   ];
 
-  // Load banks + existing bill (if editing)
+  // Combined category list: base + dynamic (deduplicated)
+  const allBillCategories = [
+    ...BASE_CATEGORIES,
+    ...dynamicCategories
+      .map(d => d.name)
+      .filter(name => !BASE_CATEGORIES.includes(name)),
+  ];
+
+  // Load banks, dynamic categories, and existing bill (if editing)
   useEffect(() => {
     const load = async () => {
       setIsSubmitting(true);
       try {
-        // Always fetch banks
-        const bankList = await BankFirebaseService.fetchAllBanks().catch(() => []);
+        const [bankList, dynCats] = await Promise.all([
+          BankFirebaseService.fetchAllBanks().catch(() => []),
+          // Reuse transactions dynamic categories collection, filtered by type 'billCategory'
+          TransactionFirebaseService.fetchDynamicCategories().catch(() => []),
+        ]);
         setBanks(bankList as BankInfo[]);
+        // Filter only bill-category type entries
+        const billDynCats = (dynCats as any[])
+          .filter(d => d.type === 'billCategory')
+          .map(d => ({ id: d.id, name: d.name, createdAt: d.createdAt }));
+        setDynamicCategories(billDynCats);
 
         if (isEditing && id) {
           const bill = await BillsFirebaseService.fetchBillById(id);
           if (!bill) { toast.error('Bill not found'); navigate('/bills'); return; }
           setFormData({
             company:      bill.company || COMPANIES[0],
-            billCategory: (bill.subCategory as keyof typeof BILL_CATEGORIES) || 'Electricity',
-            date:         bill.date || new Date().toISOString().split('T')[0],
+            billCategory: bill.subCategory || 'Electricity',
+            date:         bill.date || todayStr,   // display only
             note:         bill.note || '',
           });
           setBillTransactions([{
@@ -114,7 +143,32 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
     load();
   }, [isEditing, id, navigate]);
 
+  // Add a new dynamic bill category to Firestore
+  const onAddBillCategory = useCallback(async (name: string): Promise<string | null> => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    if (allBillCategories.includes(trimmed)) {
+      toast.error('Category already exists');
+      return null;
+    }
+    try {
+      const created = await TransactionFirebaseService.addDynamicCategory({
+        type:           'billCategory',
+        parentCategory: 'Bills',
+        name:           trimmed,
+      });
+      setDynamicCategories(prev => [...prev, { id: created.id, name: trimmed, createdAt: created.createdAt }]);
+      toast.success(`Category "${trimmed}" added`);
+      return trimmed;
+    } catch {
+      toast.error('Failed to add category');
+      return null;
+    }
+  }, [allBillCategories]);
+
   const setFormField = useCallback((field: string, value: any) => {
+    // Prevent changing the date field — it is locked
+    if (field === 'date') return;
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors(prev => { const e = { ...prev }; delete e[field]; return e; });
   }, [errors]);
@@ -132,22 +186,19 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
       if (t.id !== txnId) return t;
       const updated = { ...t, [field]: value };
 
-      // Auto-calculate remaining when amounts change
       if (field === 'amount' || field === 'amountPaid') {
-        const total = field === 'amount'    ? Number(value) : t.amount;
-        const paid  = field === 'amountPaid'? Number(value) : t.amountPaid;
+        const total = field === 'amount'     ? Number(value) : t.amount;
+        const paid  = field === 'amountPaid' ? Number(value) : t.amountPaid;
         updated.remainingAmount = Math.max(0, total - paid);
         updated.paymentStatus   = paid > 0 && paid < total ? 'Partial' : 'Full';
       }
 
-      // Reset payment fields when switching mode
       if (field === 'mode') {
         if (value === 'Cash')   { updated.bankId = ''; updated.bankName = ''; updated.chequeNumber = ''; updated.chequeDate = ''; updated.chequeBank = ''; }
         if (value === 'Bank')   { updated.chequeNumber = ''; updated.chequeDate = ''; updated.chequeBank = ''; }
         if (value === 'Cheque') { updated.bankId = ''; updated.bankName = ''; }
       }
 
-      // Set bank name automatically when bankId changes
       if (field === 'bankId') {
         const bank = banks.find(b => b.id === value);
         updated.bankName = bank?.name || '';
@@ -183,10 +234,9 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
     setIsSubmitting(true);
     try {
       if (isEditing && id) {
-        // ── EDIT ─────────────────────────────────────────────────────────────
         const txn = billTransactions[0];
-        const effectivePaid    = txn.amountPaid > 0 ? txn.amountPaid : txn.amount;
-        const effectiveRemain  = Math.max(0, txn.amount - effectivePaid);
+        const effectivePaid   = txn.amountPaid > 0 ? txn.amountPaid : txn.amount;
+        const effectiveRemain = Math.max(0, txn.amount - effectivePaid);
 
         await BillsFirebaseService.updateBill(id, {
           company:         formData.company,
@@ -211,7 +261,6 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
         });
         toast.success('Bill updated successfully');
       } else {
-        // ── CREATE ────────────────────────────────────────────────────────────
         for (const txn of billTransactions) {
           const effectivePaid   = txn.amountPaid > 0 ? txn.amountPaid : txn.amount;
           const effectiveRemain = Math.max(0, txn.amount - effectivePaid);
@@ -244,7 +293,7 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
 
           await BillsFirebaseService.createBill(billPayload);
 
-          // Create linked Cash Outflow transaction so it shows in Transactions module
+          // Also create linked Cash Outflow transaction
           await TransactionFirebaseService.createTransaction({
             transactionId:   billPayload.transactionId,
             date:            formData.date,
@@ -273,7 +322,6 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
             linkedRef:       `${formData.billCategory} — ${txn.billMonth}`,
           });
 
-          // Update bank balance for Bank mode
           if (txn.mode === 'Bank' && txn.bankId) {
             const bank = banks.find(b => b.id === txn.bankId);
             if (bank) {
@@ -283,7 +331,6 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
             }
           }
         }
-
         toast.success(`${billTransactions.length} bill(s) saved successfully`);
       }
       navigate('/bills');
@@ -306,6 +353,8 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
     predefinedVendors,
     companies: COMPANIES as unknown as string[],
     banks,
+    allBillCategories,
+    onAddBillCategory,
     setFormField,
     addBillTransaction,
     removeBillTransaction,

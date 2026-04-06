@@ -17,6 +17,8 @@ export const BillsEditWrapper: React.FC = () => {
       predefinedVendors={vm.predefinedVendors}
       companies={vm.companies}
       banks={vm.banks}
+      allBillCategories={vm.allBillCategories}
+      onAddBillCategory={vm.onAddBillCategory}
       setFormField={vm.setFormField}
       addBillTransaction={vm.addBillTransaction}
       removeBillTransaction={vm.removeBillTransaction}

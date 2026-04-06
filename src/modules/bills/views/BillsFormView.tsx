@@ -1,10 +1,8 @@
 // Bills Module - View Layer
-// Fixes:
-// 1. Vendor "Other" bug: uses separate otherVendorIds Set so the text input
-//    stays visible while typing — typing no longer collapses it
-// 2. Bank dropdown from real Firestore banks
-// 3. Cheque credential fields
-// 4. Amount Paid field with balance preview
+// Changes:
+// 1. Date field is now LOCKED (read-only display, auto today) — same pattern as Transactions
+// 2. Bill Category dropdown has an "+ Add new category" option (like Transactions sub-category)
+// 3. All existing fixes retained (vendor Other mode, bank dropdown, cheque fields, amount paid)
 
 import React, { useState } from 'react';
 import { BillTransaction, BILL_CATEGORIES, COMPANIES } from '../models/types';
@@ -13,7 +11,7 @@ import { Button } from '../../../components/ui/button';
 import {
   Plus, Trash2, Upload, X,
   Zap, Wifi, Droplets, Receipt,
-  Building2, CreditCard, AlertCircle, CheckCircle,
+  Building2, CreditCard, AlertCircle, CheckCircle, Lock, Check, Loader2,
 } from 'lucide-react';
 
 interface BankInfo { id: string; name: string; balance: number; }
@@ -21,7 +19,7 @@ interface BankInfo { id: string; name: string; balance: number; }
 interface BillsFormViewProps {
   formData: {
     company: string;
-    billCategory: keyof typeof BILL_CATEGORIES;
+    billCategory: string;
     date: string;
     note: string;
   };
@@ -32,6 +30,8 @@ interface BillsFormViewProps {
   predefinedVendors: string[];
   companies: string[];
   banks: BankInfo[];
+  allBillCategories: string[];
+  onAddBillCategory: (name: string) => Promise<string | null>;
   setFormField: (field: string, value: any) => void;
   addBillTransaction: () => void;
   removeBillTransaction: (id: string) => void;
@@ -42,11 +42,11 @@ interface BillsFormViewProps {
   calculateTotal: () => number;
 }
 
-const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm';
-const lbl = 'block text-xs font-medium text-gray-600 mb-1';
+const inp    = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm';
+const lbl    = 'block text-xs font-medium text-gray-600 mb-1';
 const errCls = 'border-red-400 ring-1 ring-red-300';
 
-const CategoryIcon: React.FC<{ category: keyof typeof BILL_CATEGORIES }> = ({ category }) => {
+const CategoryIcon: React.FC<{ category: string }> = ({ category }) => {
   switch (category) {
     case 'Electricity': return <Zap className="w-5 h-5 text-yellow-600" />;
     case 'Internet':    return <Wifi className="w-5 h-5 text-blue-600" />;
@@ -55,18 +55,46 @@ const CategoryIcon: React.FC<{ category: keyof typeof BILL_CATEGORIES }> = ({ ca
   }
 };
 
+// Format date for display (e.g. "Apr 06, 2026")
+function formatDateDisplay(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-PK', {
+      year: 'numeric', month: 'short', day: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 export const BillsFormView: React.FC<BillsFormViewProps> = ({
   formData, billTransactions, isEditing, isSubmitting, errors,
   predefinedVendors, companies, banks,
+  allBillCategories, onAddBillCategory,
   setFormField, addBillTransaction, removeBillTransaction,
   updateBillTransaction, handleImageUpload, handleSubmit, handleCancel, calculateTotal,
 }) => {
   const fmt = BillsService.formatCurrency;
 
-  // FIX: Track which transaction IDs are in "custom vendor" mode separately
-  // from paidTo value — this prevents the input from disappearing while typing
+  // ── Add new category inline state ────────────────────────────────────────────
+  const [addingCategory,  setAddingCategory]  = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [savingCategory,  setSavingCategory]  = useState(false);
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    setSavingCategory(true);
+    const added = await onAddBillCategory(newCategoryName.trim());
+    if (added) {
+      setFormField('billCategory', added);
+      setNewCategoryName('');
+      setAddingCategory(false);
+    }
+    setSavingCategory(false);
+  };
+
+  // ── Vendor "Other" mode ──────────────────────────────────────────────────────
   const [otherVendorIds, setOtherVendorIds] = useState<Set<string>>(() => {
-    // On edit load, mark any transaction whose paidTo isn't in predefined list
     const initial = new Set<string>();
     billTransactions.forEach(txn => {
       if (txn.paidTo && !predefinedVendors.includes(txn.paidTo as any)) {
@@ -78,22 +106,15 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
 
   const handleVendorSelect = (txnId: string, value: string) => {
     if (value === '__other__') {
-      // Enter custom mode — clear paidTo so user starts fresh
       setOtherVendorIds(prev => new Set(prev).add(txnId));
       updateBillTransaction(txnId, 'paidTo', '');
     } else {
-      // Predefined vendor selected — exit custom mode
-      setOtherVendorIds(prev => {
-        const next = new Set(prev);
-        next.delete(txnId);
-        return next;
-      });
+      setOtherVendorIds(prev => { const next = new Set(prev); next.delete(txnId); return next; });
       updateBillTransaction(txnId, 'paidTo', value);
     }
   };
 
   const handleCustomVendorChange = (txnId: string, value: string) => {
-    // Just update paidTo — otherVendorIds stays true so input stays visible
     updateBillTransaction(txnId, 'paidTo', value);
   };
 
@@ -116,6 +137,8 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
 
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* Company */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Company *</label>
               <div className="relative">
@@ -127,24 +150,73 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
               </div>
               {errors.company && <p className="text-red-500 text-xs mt-1">{errors.company}</p>}
             </div>
+
+            {/* Date — LOCKED, auto today */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
-              <input type="date" value={formData.date} onChange={(e) => setFormField('date', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${errors.date ? errCls : 'border-gray-300'}`} />
-              {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date}</p>}
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date <span className="text-xs font-normal text-gray-400 ml-1">(auto)</span>
+              </label>
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                <Lock size={14} className="text-gray-400 shrink-0" />
+                <span className="text-sm text-gray-600">{formatDateDisplay(formData.date)}</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Date is set automatically and cannot be changed</p>
             </div>
+
+            {/* Bill Category — with "+ Add new" option */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Bill Category *</label>
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2"><CategoryIcon category={formData.billCategory} /></div>
-                <select value={formData.billCategory}
-                  onChange={(e) => setFormField('billCategory', e.target.value as keyof typeof BILL_CATEGORIES)}
-                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${errors.subCategory ? errCls : 'border-gray-300'}`}>
-                  {Object.keys(BILL_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+
+              {/* If adding new category inline */}
+              {addingCategory ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={e => setNewCategoryName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddCategory(); if (e.key === 'Escape') { setAddingCategory(false); setNewCategoryName(''); } }}
+                      placeholder="New category name..."
+                      autoFocus
+                      className={`${inp} flex-1`}
+                    />
+                    <button type="button" onClick={handleAddCategory}
+                      disabled={savingCategory || !newCategoryName.trim()}
+                      className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                      {savingCategory ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                    </button>
+                    <button type="button" onClick={() => { setAddingCategory(false); setNewCategoryName(''); }}
+                      className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400">Press Enter to save · Esc to cancel</p>
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <CategoryIcon category={formData.billCategory} />
+                  </div>
+                  <select
+                    value={formData.billCategory}
+                    onChange={(e) => {
+                      if (e.target.value === '__add_new__') {
+                        setAddingCategory(true);
+                      } else {
+                        setFormField('billCategory', e.target.value);
+                      }
+                    }}
+                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${errors.subCategory ? errCls : 'border-gray-300'}`}>
+                    {allBillCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    <option disabled>──────────────</option>
+                    <option value="__add_new__">＋ Add new category...</option>
+                  </select>
+                </div>
+              )}
               {errors.subCategory && <p className="text-red-500 text-xs mt-1">{errors.subCategory}</p>}
             </div>
+
+            {/* Note */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
               <input type="text" value={formData.note} onChange={(e) => setFormField('note', e.target.value)}
@@ -223,22 +295,19 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
 
                   {/* Parties row */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {/* ── Vendor dropdown — FIX: otherVendorIds tracks "Other" mode ── */}
+                    {/* Vendor dropdown */}
                     <div>
                       <label className={lbl}>Paid To (Vendor) *</label>
-                      {/* Show the dropdown only when NOT in custom mode */}
                       {!otherVendorIds.has(txn.id) && (
                         <select
                           value={predefinedVendors.includes(txn.paidTo as any) ? txn.paidTo : ''}
                           onChange={(e) => handleVendorSelect(txn.id, e.target.value)}
-                          className={`${inp} ${errors[`transaction_${index}_paidTo`] ? errCls : ''}`}
-                        >
+                          className={`${inp} ${errors[`transaction_${index}_paidTo`] ? errCls : ''}`}>
                           <option value="">Select vendor</option>
                           {predefinedVendors.map(v => <option key={v} value={v}>{v}</option>)}
                           <option value="__other__">Other (custom)...</option>
                         </select>
                       )}
-                      {/* Show the text input when in custom mode */}
                       {otherVendorIds.has(txn.id) && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -250,16 +319,13 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                               placeholder="Type vendor name..."
                               autoFocus
                             />
-                            {/* Button to go back to dropdown */}
-                            <button
-                              type="button"
+                            <button type="button"
                               onClick={() => {
                                 setOtherVendorIds(prev => { const next = new Set(prev); next.delete(txn.id); return next; });
                                 updateBillTransaction(txn.id, 'paidTo', '');
                               }}
                               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg flex-shrink-0"
-                              title="Back to list"
-                            >
+                              title="Back to list">
                               <X size={14} />
                             </button>
                           </div>
@@ -302,7 +368,6 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Bank selector */}
                     {txn.mode === 'Bank' && (
                       <div className="space-y-2">
                         <div>
@@ -342,7 +407,6 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                       </div>
                     )}
 
-                    {/* Cheque credentials */}
                     {txn.mode === 'Cheque' && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
@@ -418,7 +482,6 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
             <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-[#4f46e5] hover:bg-[#4338ca] text-white hover:text-white">
               {isSubmitting ? 'Saving...' : (isEditing ? 'Update Bill' : 'Save Bill(s)')}
             </Button>
-
           </div>
         </div>
       </div>
