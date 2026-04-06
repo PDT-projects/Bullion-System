@@ -5,10 +5,20 @@ import { toast } from 'sonner';
 import { Bank, BankStats, BankFilters } from '../models/types';
 import { BankingService } from '../models/bankingService';
 import { BankFirebaseService } from '../models/bankFirebaseService';
+import { TransferFirebaseService } from '../models/Transferfirebaseservice';
+
+interface TransferModalData {
+  fromBankId: string;
+  toBankId: string;
+  amount: number;
+  date: string;
+  note: string;
+}
 
 export function useBankListViewModel() {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isTransferSaving, setIsTransferSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<BankFilters>({ searchTerm: '' });
   const [viewingBank, setViewingBank] = useState<Bank | null>(null);
@@ -56,26 +66,47 @@ export function useBankListViewModel() {
     }
   }, []);
 
-  const handleTransfer = useCallback(async (fromBankId: string, toBankId: string, amount: number) => {
-    const fromBank = banks.find(b => b.id === fromBankId);
-    const toBank = banks.find(b => b.id === toBankId);
+  // Full transfer: saves to bank_transfers collection AND updates both bank balances
+  const handleTransfer = useCallback(async (data: TransferModalData) => {
+    const fromBank = banks.find(b => b.id === data.fromBankId);
+    const toBank = banks.find(b => b.id === data.toBankId);
+
     if (!fromBank || !toBank) { toast.error('Bank not found'); return; }
-    if (amount <= 0) { toast.error('Amount must be greater than 0'); return; }
-    if (fromBank.balance < amount) { toast.error('Insufficient balance'); return; }
+    if (data.amount <= 0) { toast.error('Amount must be greater than 0'); return; }
+    if (fromBank.balance < data.amount) { toast.error('Insufficient balance'); return; }
+
+    setIsTransferSaving(true);
     try {
+      // 1. Save transfer record to Firestore (bank_transfers collection)
+      await TransferFirebaseService.createTransfer({
+        date: data.date,
+        fromBankId: data.fromBankId,
+        fromBankName: fromBank.name,
+        toBankId: data.toBankId,
+        toBankName: toBank.name,
+        amount: data.amount,
+        note: data.note || ''
+      });
+
+      // 2. Update both bank balances in Firestore
       await BankFirebaseService.updateMultipleBanks([
-        { ...fromBank, balance: fromBank.balance - amount },
-        { ...toBank, balance: toBank.balance + amount }
+        { ...fromBank, balance: fromBank.balance - data.amount },
+        { ...toBank, balance: toBank.balance + data.amount }
       ]);
+
+      // 3. Update local state to reflect new balances immediately
       setBanks(prev => prev.map(b => {
-        if (b.id === fromBankId) return { ...b, balance: b.balance - amount };
-        if (b.id === toBankId) return { ...b, balance: b.balance + amount };
+        if (b.id === data.fromBankId) return { ...b, balance: b.balance - data.amount };
+        if (b.id === data.toBankId) return { ...b, balance: b.balance + data.amount };
         return b;
       }));
+
       setIsTransferModalOpen(false);
       toast.success('Transfer completed successfully');
     } catch (err) {
       toast.error('Failed to complete transfer');
+    } finally {
+      setIsTransferSaving(false);
     }
   }, [banks]);
 
@@ -84,6 +115,7 @@ export function useBankListViewModel() {
     filteredBanks,
     stats,
     isLoading,
+    isTransferSaving,
     error,
     filters,
     setSearchTerm,

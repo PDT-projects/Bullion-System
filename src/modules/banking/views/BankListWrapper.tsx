@@ -15,6 +15,7 @@ export const BankListWrapper: React.FC = () => {
       filteredBanks={viewModel.filteredBanks}
       stats={viewModel.stats}
       isLoading={viewModel.isLoading}
+      isTransferSaving={viewModel.isTransferSaving}
       error={viewModel.error}
       filters={viewModel.filters}
       setSearchTerm={viewModel.setSearchTerm}

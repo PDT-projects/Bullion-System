@@ -17,9 +17,20 @@ import {
   TrendingDown,
   Loader2,
   RefreshCw,
-  Database
+  Database,
+  AlertCircle,
+  Calendar,
+  Save
 } from 'lucide-react';
 import { Bank, BankStats, BankFilters } from '../models/types';
+
+interface TransferModalData {
+  fromBankId: string;
+  toBankId: string;
+  amount: number;
+  date: string;
+  note: string;
+}
 
 interface BankListViewProps {
   // Data
@@ -29,6 +40,7 @@ interface BankListViewProps {
   
   // Loading State
   isLoading: boolean;
+  isTransferSaving: boolean;
   error: string | null;
   
   // Filters
@@ -48,7 +60,7 @@ interface BankListViewProps {
   onDeleteBank: (id: string) => void;
   onBack: () => void;
   handleDeleteBank: (id: string) => void;
-  handleTransfer: (fromBankId: string, toBankId: string, amount: number) => void;
+  handleTransfer: (data: TransferModalData) => Promise<void>;
   refreshBanks: () => void;
   
   // Utils
@@ -56,9 +68,11 @@ interface BankListViewProps {
 }
 
 export const BankListView: React.FC<BankListViewProps> = ({
+  banks,
   filteredBanks,
   stats,
   isLoading,
+  isTransferSaving,
   error,
   filters,
   setSearchTerm,
@@ -77,23 +91,64 @@ export const BankListView: React.FC<BankListViewProps> = ({
   formatCurrency
 }) => {
   // Transfer form state (local to view)
-  const [transferData, setTransferData] = React.useState({
+  const [transferData, setTransferData] = React.useState<TransferModalData>({
     fromBankId: '',
     toBankId: '',
-    amount: 0
+    amount: 0,
+    date: new Date().toISOString().split('T')[0],
+    note: ''
   });
+  const [transferErrors, setTransferErrors] = React.useState<Record<string, string>>({});
 
-  const onTransferSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleTransfer(transferData.fromBankId, transferData.toBankId, transferData.amount);
-    setTransferData({ fromBankId: '', toBankId: '', amount: 0 });
+  const fromBank = banks.find(b => b.id === transferData.fromBankId);
+  const toBank = banks.find(b => b.id === transferData.toBankId);
+  const hasInsufficientFunds = fromBank && transferData.amount > 0 && transferData.amount > fromBank.balance;
+
+  const validateTransfer = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!transferData.fromBankId) errs.fromBankId = 'Please select source bank';
+    if (!transferData.toBankId) errs.toBankId = 'Please select destination bank';
+    if (transferData.fromBankId && transferData.toBankId && transferData.fromBankId === transferData.toBankId) {
+      errs.toBankId = 'Cannot transfer to the same bank';
+    }
+    if (!transferData.amount || transferData.amount <= 0) errs.amount = 'Amount must be greater than 0';
+    if (!transferData.date) errs.date = 'Date is required';
+    if (fromBank && transferData.amount > fromBank.balance) errs.amount = 'Insufficient balance in source bank';
+    setTransferErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const onTransferSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault();
+    if (!validateTransfer()) return;
+    await handleTransfer(transferData);
+    // Reset only on success (handleTransfer closes modal on success)
+    setTransferData({
+      fromBankId: '',
+      toBankId: '',
+      amount: 0,
+      date: new Date().toISOString().split('T')[0],
+      note: ''
+    });
+    setTransferErrors({});
+  };
+
+  const handleCloseTransferModal = () => {
+    closeTransferModal();
+    setTransferData({
+      fromBankId: '',
+      toBankId: '',
+      amount: 0,
+      date: new Date().toISOString().split('T')[0],
+      note: ''
+    });
+    setTransferErrors({});
   };
 
   // Loading State
   if (isLoading && filteredBanks.length === 0) {
     return (
       <div className="p-6 space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -108,8 +163,6 @@ export const BankListView: React.FC<BankListViewProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Loading State */}
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-lg border border-gray-200">
           <Loader2 className="animate-spin text-[#4f46e5] mb-4" size={48} />
           <p className="text-lg font-medium text-gray-900">Loading banks...</p>
@@ -123,7 +176,6 @@ export const BankListView: React.FC<BankListViewProps> = ({
   if (error && filteredBanks.length === 0) {
     return (
       <div className="p-6 space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -138,8 +190,6 @@ export const BankListView: React.FC<BankListViewProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Error State */}
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-lg border border-red-200">
           <div className="p-4 bg-red-50 rounded-full mb-4">
             <Database className="text-red-500" size={48} />
@@ -186,7 +236,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           </button>
           <button
             onClick={openTransferModal}
-            disabled={filteredBanks.length < 2}
+            disabled={banks.length < 2}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowRightLeft size={18} />
@@ -227,16 +277,16 @@ export const BankListView: React.FC<BankListViewProps> = ({
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingDown size={18} className="text-orange-600" />
+            <TrendingDown size={18} className="text-orange-500" />
             <p className="text-sm text-gray-600">Lowest Balance</p>
           </div>
-          <p className="text-2xl font-bold text-orange-600">{formatCurrency(stats.lowestBalance)}</p>
+          <p className="text-2xl font-bold text-orange-500">{formatCurrency(stats.lowestBalance)}</p>
         </div>
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-lg border border-gray-200">
-        <div className="flex-1 relative">
+      <div className="bg-white p-4 rounded-lg border border-gray-200">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
@@ -299,7 +349,6 @@ export const BankListView: React.FC<BankListViewProps> = ({
           ))}
         </div>
       ) : (
-        /* Empty State */
         <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
           <div className="p-4 bg-gray-50 rounded-full inline-block mb-4">
             <Building2 className="text-gray-300" size={48} />
@@ -375,79 +424,238 @@ export const BankListView: React.FC<BankListViewProps> = ({
       {/* Transfer Modal */}
       {isTransferModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-xl font-bold">Transfer Between Banks</h3>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 w-full max-w-2xl max-h-[90vh] flex flex-col">
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">New Bank Transfer</h2>
+                <p className="text-gray-600 mt-1">Transfer funds between bank accounts</p>
+              </div>
               <button
-                onClick={closeTransferModal}
-                className="p-2 text-gray-500 hover:text-gray-700"
+                onClick={handleCloseTransferModal}
+                disabled={isTransferSaving}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
               >
                 <X size={24} />
               </button>
             </div>
-            <form onSubmit={onTransferSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">From Bank *</label>
-                <select
-                  value={transferData.fromBankId}
-                  onChange={(e) => setTransferData({ ...transferData, fromBankId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                  required
-                >
-                  <option value="">Select bank</option>
-                  {filteredBanks.map(bank => (
-                    <option key={bank.id} value={bank.id}>
-                      {bank.name} - {formatCurrency(bank.balance)}
-                    </option>
-                  ))}
-                </select>
+
+            {/* Modal Body — scrollable */}
+            <div className="overflow-y-auto flex-1 min-h-0 p-6">
+              <div className="space-y-6">
+
+                {/* From Bank */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    From Bank *
+                  </label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-red-500" size={20} />
+                    <select
+                      value={transferData.fromBankId}
+                      onChange={(e) => {
+                        setTransferData(prev => ({ ...prev, fromBankId: e.target.value }));
+                        setTransferErrors(prev => { const er = { ...prev }; delete er.fromBankId; return er; });
+                      }}
+                      disabled={isTransferSaving}
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                        transferErrors.fromBankId
+                          ? 'border-red-300 focus:ring-red-200'
+                          : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      } ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    >
+                      <option value="">Select source bank</option>
+                      {banks.map(bank => (
+                        <option key={bank.id} value={bank.id}>
+                          {bank.name} - {formatCurrency(bank.balance)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {transferErrors.fromBankId && (
+                    <p className="mt-1 text-sm text-red-600">{transferErrors.fromBankId}</p>
+                  )}
+                </div>
+
+                {/* To Bank */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    To Bank *
+                  </label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-500" size={20} />
+                    <select
+                      value={transferData.toBankId}
+                      onChange={(e) => {
+                        setTransferData(prev => ({ ...prev, toBankId: e.target.value }));
+                        setTransferErrors(prev => { const er = { ...prev }; delete er.toBankId; return er; });
+                      }}
+                      disabled={isTransferSaving}
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                        transferErrors.toBankId
+                          ? 'border-red-300 focus:ring-red-200'
+                          : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      } ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    >
+                      <option value="">Select destination bank</option>
+                      {banks.map(bank => (
+                        <option key={bank.id} value={bank.id} disabled={bank.id === transferData.fromBankId}>
+                          {bank.name} {bank.id === transferData.fromBankId ? '(same as source)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {transferErrors.toBankId && (
+                    <p className="mt-1 text-sm text-red-600">{transferErrors.toBankId}</p>
+                  )}
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Transfer Amount *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
+                      PKR
+                    </span>
+                    <input
+                      type="number"
+                      value={transferData.amount || ''}
+                      onChange={(e) => {
+                        setTransferData(prev => ({ ...prev, amount: Number(e.target.value) }));
+                        setTransferErrors(prev => { const er = { ...prev }; delete er.amount; return er; });
+                      }}
+                      disabled={isTransferSaving}
+                      className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                        transferErrors.amount || hasInsufficientFunds
+                          ? 'border-red-300 focus:ring-red-200'
+                          : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      } ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      placeholder="0"
+                      min="1"
+                      step="0.01"
+                    />
+                  </div>
+                  {transferErrors.amount && (
+                    <p className="mt-1 text-sm text-red-600">{transferErrors.amount}</p>
+                  )}
+                  {hasInsufficientFunds && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle size={14} />
+                      Insufficient funds. Available: {formatCurrency(fromBank!.balance)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Transfer Date *
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                    <input
+                      type="date"
+                      value={transferData.date}
+                      onChange={(e) => {
+                        setTransferData(prev => ({ ...prev, date: e.target.value }));
+                        setTransferErrors(prev => { const er = { ...prev }; delete er.date; return er; });
+                      }}
+                      disabled={isTransferSaving}
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                        transferErrors.date
+                          ? 'border-red-300 focus:ring-red-200'
+                          : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      } ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+                  {transferErrors.date && (
+                    <p className="mt-1 text-sm text-red-600">{transferErrors.date}</p>
+                  )}
+                </div>
+
+                {/* Note */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Note (Optional)
+                  </label>
+                  <textarea
+                    value={transferData.note}
+                    onChange={(e) => setTransferData(prev => ({ ...prev, note: e.target.value }))}
+                    disabled={isTransferSaving}
+                    rows={3}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    placeholder="Add any additional notes about this transfer..."
+                  />
+                </div>
+
+                {/* Transfer Preview */}
+                {(fromBank && toBank && transferData.amount > 0) && (
+                  <div className="bg-[#4f46e5]/10 border border-[#4f46e5]/20 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <ArrowRightLeft size={18} className="text-[#4f46e5]" />
+                      Transfer Preview
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">From:</span>
+                        <span className="font-medium text-red-600">{fromBank.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">To:</span>
+                        <span className="font-medium text-green-600">{toBank.name}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-[#4f46e5]/20 pt-2 mt-2">
+                        <span className="text-gray-600">Amount:</span>
+                        <span className="font-bold text-[#4f46e5]">{formatCurrency(transferData.amount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>From bank balance after:</span>
+                        <span>{formatCurrency(fromBank.balance - transferData.amount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>To bank balance after:</span>
+                        <span>{formatCurrency(toBank.balance + transferData.amount)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">To Bank *</label>
-                <select
-                  value={transferData.toBankId}
-                  onChange={(e) => setTransferData({ ...transferData, toBankId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                  required
-                >
-                  <option value="">Select bank</option>
-                  {filteredBanks.map(bank => (
-                    <option key={bank.id} value={bank.id}>
-                      {bank.name} - {formatCurrency(bank.balance)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-                <input
-                  type="number"
-                  value={transferData.amount || ''}
-                  onChange={(e) => setTransferData({ ...transferData, amount: Number(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-                  placeholder="Enter amount"
-                  min="1"
-                  required
-                />
-              </div>
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={closeTransferModal}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
-                  {isLoading && <Loader2 size={18} className="animate-spin" />}
-                  Transfer
-                </button>
-              </div>
-            </form>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-4 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleCloseTransferModal}
+                disabled={isTransferSaving}
+                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onTransferSubmit}
+                disabled={isTransferSaving || !!hasInsufficientFunds}
+                className="flex items-center gap-2 px-6 py-3 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isTransferSaving ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    Complete Transfer
+                  </>
+                )}
+              </button>
+            </div>
+
           </div>
         </div>
       )}
