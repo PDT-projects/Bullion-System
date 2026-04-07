@@ -147,17 +147,29 @@ export function TransactionDeleteWrapper() {
         <p className="text-gray-600 text-sm mb-4">
           Type <strong className="text-red-600">DELETE</strong> to confirm:
         </p>
-        <input type="text" value={confirmText} onChange={e => setConfirmText(e.target.value)}
+        <input 
+          type="text" 
+          value={confirmText} 
+          onChange={e => setConfirmText(e.target.value)}
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-400 focus:outline-none mb-5 text-sm"
-          placeholder="Type DELETE to confirm" />
+          placeholder="Type DELETE to confirm" 
+        />
         <div className="flex items-center justify-end gap-3">
           <button onClick={() => navigate('/transactions')}
-            className="px-5 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium">
+            className="flex items-center gap-2 px-5 py-2.5 bg-gray-200! text-black! rounded-lg hover:bg-gray-300! font-medium">
             Cancel
           </button>
           <button onClick={handleDelete} disabled={isDeleting || confirmText !== 'DELETE'}
-            className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium">
-            {isDeleting ? <><Loader2 size={16} className="animate-spin" /> Deleting...</> : <><Trash2 size={16} /> Delete Transaction</>}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gray-200! text-black! rounded-lg hover:bg-gray-300! disabled:bg-gray-300! disabled:text-gray-500! font-medium">
+            {isDeleting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Deleting...
+              </>
+            ) : (
+              <>
+                <Trash2 size={16} /> Delete Transaction
+              </>
+            )}
           </button>
         </div>
       </div>
