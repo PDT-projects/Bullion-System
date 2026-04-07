@@ -5,6 +5,7 @@
 // 3. Paid and Remaining columns now show real values
 // 4. Date-range filter (From / To) added to filter panel
 // 5. Pending badge shown in table for unpaid transactions
+// 6. Modal header: light grey background + black text (removed coloured gradient)
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -405,7 +406,7 @@ export function TransactionListView({
         </div>
       </div>
 
-      {/* View Transaction Modal — redesigned */}
+      {/* View Transaction Modal */}
       {viewTransaction && (() => {
         const { totalPaid, remainingAmount } = getTransactionTotals(viewTransaction);
         const pending  = isPending(viewTransaction);
@@ -413,11 +414,12 @@ export function TransactionListView({
         const isLoan   = viewTransaction.mainCategory === 'Loan';
         const branch   = viewTransaction.company.includes(': ') ? viewTransaction.company.split(': ')[1] : viewTransaction.company;
 
-        const headerGradient = isInflow
-          ? 'from-emerald-500 to-green-600'
+        // Amount colour only — header bg is always light grey now
+        const amountColor = isInflow
+          ? 'text-green-600'
           : isLoan
-            ? 'from-blue-500 to-indigo-600'
-            : 'from-rose-500 to-red-600';
+            ? 'text-indigo-600'
+            : 'text-red-600';
 
         const amountSign = isInflow ? '+' : '−';
 
@@ -442,52 +444,52 @@ export function TransactionListView({
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden">
 
-              {/* Coloured header */}
-              <div className={`bg-gradient-to-r ${headerGradient} px-6 pt-5 pb-6 relative`}>
+              {/* ── LIGHT GREY HEADER (replaces coloured gradient) ── */}
+              <div className="bg-gray-100 border-b border-gray-200 px-6 pt-5 pb-6 relative">
+
+                {/* Close button */}
                 <button
                   onClick={() => setViewTransaction(null)}
-                  className="absolute top-4 right-4 p-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-white transition-colors"
+                  className="absolute top-4 right-4 p-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-600 transition-colors"
                 >
                   <X size={16} />
                 </button>
 
-                {/* TXN ID + category badges */}
+                {/* TXN ID + category + mode badges */}
                 <div className="flex items-center gap-2 flex-wrap mb-3">
-                  <span className="px-2.5 py-0.5 bg-white/20 text-white text-xs font-mono rounded-full tracking-wide">
+                  <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-mono rounded-full tracking-wide">
                     {viewTransaction.transactionId || '—'}
                   </span>
-                  <span className="px-2.5 py-0.5 bg-white/20 text-white text-xs font-semibold rounded-full">
+                  <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-full">
                     {viewTransaction.mainCategory}
                   </span>
-                  <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
-                    viewTransaction.mode === 'Cash'   ? 'bg-white/20 text-white' :
-                    viewTransaction.mode === 'Bank'   ? 'bg-blue-200/40 text-white' :
-                    'bg-purple-200/40 text-white'
-                  }`}>
+                  <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-full">
                     {viewTransaction.mode}
                   </span>
                   {approvalBadge()}
                 </div>
 
-                {/* Big amount */}
-                <div className="text-white">
-                  <p className="text-sm text-white/70 mb-0.5">{viewTransaction.subCategory}</p>
-                  <p className="text-4xl font-extrabold tracking-tight">
+                {/* Sub-category + big amount + branch / date */}
+                <div>
+                  <p className="text-sm text-gray-500 mb-0.5">{viewTransaction.subCategory}</p>
+                  <p className={`text-4xl font-extrabold tracking-tight ${amountColor}`}>
                     {amountSign}{formatCurrency(viewTransaction.amount || 0)}
                   </p>
-                  <p className="text-sm text-white/80 mt-1">{branch} &bull; {formatDate(viewTransaction.date)}</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {branch} &bull; {formatDate(viewTransaction.date)}
+                  </p>
                 </div>
 
-                {/* Payment progress bar (if partial) */}
+                {/* Payment progress bar */}
                 {viewTransaction.amount > 0 && (
                   <div className="mt-4">
-                    <div className="flex justify-between text-xs text-white/70 mb-1">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>Paid: {formatCurrency(totalPaid)}</span>
                       <span>{remainingAmount > 0 ? `Remaining: ${formatCurrency(remainingAmount)}` : 'Fully cleared'}</span>
                     </div>
-                    <div className="h-1.5 bg-white/25 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-gray-300 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-white rounded-full transition-all"
+                        className="h-full bg-indigo-500 rounded-full transition-all"
                         style={{ width: `${Math.min(100, (totalPaid / viewTransaction.amount) * 100)}%` }}
                       />
                     </div>
@@ -525,12 +527,12 @@ export function TransactionListView({
                     ['Payment Mode', viewTransaction.mode],
                     ['Paid By',      viewTransaction.paidBy || '—'],
                     ['Paid To',      viewTransaction.paidTo || '—'],
-                    ...(viewTransaction.bankName ? [['Bank', viewTransaction.bankName] as [string, string]] : []),
-                    ...(viewTransaction.chequeNumber ? [['Cheque #', viewTransaction.chequeNumber] as [string, string]] : []),
-                    ...(viewTransaction.chequeBank ? [['Cheque Bank', viewTransaction.chequeBank] as [string, string]] : []),
-                    ...(viewTransaction.accountablePerson ? [['Accountable', viewTransaction.accountablePerson] as [string, string]] : []),
-                    ...(viewTransaction.salaryMonth ? [['Salary Month', viewTransaction.salaryMonth] as [string, string]] : []),
-                    ...(viewTransaction.linkedRef ? [['Linked Ref', viewTransaction.linkedRef] as [string, string]] : []),
+                    ...(viewTransaction.bankName          ? [['Bank',          viewTransaction.bankName]          as [string, string]] : []),
+                    ...(viewTransaction.chequeNumber      ? [['Cheque #',      viewTransaction.chequeNumber]      as [string, string]] : []),
+                    ...(viewTransaction.chequeBank        ? [['Cheque Bank',   viewTransaction.chequeBank]        as [string, string]] : []),
+                    ...(viewTransaction.accountablePerson ? [['Accountable',   viewTransaction.accountablePerson] as [string, string]] : []),
+                    ...(viewTransaction.salaryMonth       ? [['Salary Month',  viewTransaction.salaryMonth]       as [string, string]] : []),
+                    ...(viewTransaction.linkedRef         ? [['Linked Ref',    viewTransaction.linkedRef]         as [string, string]] : []),
                   ] as [string, string][]).map(([label, value]) => (
                     <div key={label} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">{label}</p>
@@ -550,7 +552,9 @@ export function TransactionListView({
                     <p className="text-base font-bold text-green-700">{formatCurrency(totalPaid)}</p>
                   </div>
                   <div className={`p-3 rounded-xl border text-center ${remainingAmount > 0 ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${remainingAmount > 0 ? 'text-orange-400' : 'text-gray-400'}`}>Remaining</p>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${remainingAmount > 0 ? 'text-orange-400' : 'text-gray-400'}`}>
+                      Remaining
+                    </p>
                     <p className={`text-base font-bold ${remainingAmount > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
                       {remainingAmount > 0 ? formatCurrency(remainingAmount) : 'PKR 0'}
                     </p>
@@ -628,6 +632,7 @@ export function TransactionListView({
                   Close
                 </button>
               </div>
+
             </div>
           </div>
         );
