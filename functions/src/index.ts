@@ -1,6 +1,5 @@
 import { setGlobalOptions } from "firebase-functions";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
@@ -72,16 +71,79 @@ async function deleteNotificationsForTransaction(
   await batch.commit();
 }
 
+// Sub-categories that classify a Loan transaction as money going OUT
+// (requires approval and triggers a bank deduction on approval)
+const LOAN_GIVEN_SUB_CATEGORIES = new Set([
+  "Loan given",
+  "Official Loan",
+  "Personal loan",
+  "Other loan - Full",
+  "Other loan - Partial",
+  "Loan paid to employee",
+]);
+
+/**
+ * Apply deferred bank balance change for transactions that required approval.
+ *
+ * Background:
+ *   When a Cash Outflow / Loan-given transaction is created with
+ *   approvalStatus = 'pending_approval', the frontend deliberately does NOT
+ *   touch the bank balance. This means a rejection leaves liquidity fully
+ *   intact. Only on approval do we execute the deduction here, server-side,
+ *   so there is no race condition and no need for a manual rollback.
+ *
+ * @param after  - Firestore document data after the update
+ */
+async function applyDeferredBankBalanceOnApproval(
+  after: FirebaseFirestore.DocumentData
+): Promise<void> {
+  // Only applies to Bank-mode transactions
+  if (after.mode !== "Bank" || !after.bankId) return;
+
+  const isOutflow =
+    after.mainCategory === "Cash Outflow" ||
+    (after.mainCategory === "Loan" &&
+      LOAN_GIVEN_SUB_CATEGORIES.has(after.subCategory));
+
+  // Safety: Cash Inflow approvals are 'not_required', so this path should
+  // never be reached for inflows — but handle gracefully just in case.
+  const isInflow = after.mainCategory === "Cash Inflow";
+
+  if (!isOutflow && !isInflow) return; // Unrecognised category — skip
+
+  try {
+    const bankRef  = db.collection("banks").doc(after.bankId);
+    const bankSnap = await bankRef.get();
+
+    if (!bankSnap.exists) {
+      console.warn(`⚠️ Bank ${after.bankId} not found — skipping balance update`);
+      return;
+    }
+
+    const currentBalance = bankSnap.data()!.balance ?? 0;
+    const txAmount       = after.amount ?? 0;
+    const newBalance     = isOutflow
+      ? currentBalance - txAmount  // money left the account
+      : currentBalance + txAmount; // money entered the account
+
+    await bankRef.update({
+      balance:   newBalance,
+      updatedAt: new Date().toISOString(),
+    });
+
+    console.log(
+      `✅ Deferred bank balance applied on approval: ` +
+      `bank=${after.bankId}, was=${currentBalance}, now=${newBalance} ` +
+      `(${isOutflow ? "deducted" : "added"} ${txAmount})`
+    );
+  } catch (err) {
+    // Non-fatal — log for manual reconciliation; approval notification still fires.
+    console.error("❌ Deferred bank balance update failed:", err);
+  }
+}
+
 // =============================================================================
 // TRIGGER 1 — New transaction created
-//
-// approvalStatus === 'pending_approval'
-//   → Cash Outflow or Loan given
-//   → Send approval email (Approve / Reject buttons) to approvers
-//
-// approvalStatus === 'not_required'
-//   → Cash Inflow or Loan received
-//   → Send simple notification email (no approval buttons)
 // =============================================================================
 export const onTransactionCreated = onDocumentCreated(
   "transactions/{transactionId}",
@@ -146,6 +208,9 @@ export const onTransactionCreated = onDocumentCreated(
     }
 
     // ── Cash Outflow / Loan given → approval email ─────────────────────────
+    // NOTE: Bank balance is NOT touched here. It will only be updated in
+    // onTransactionUpdated when approvalStatus changes to 'approved'.
+    // A rejection hard-deletes the document, leaving liquidity unchanged.
     const token   = data.approvalToken || "";
     const region  = "us-central1";
     const project = process.env.GCLOUD_PROJECT || "";
@@ -156,7 +221,6 @@ export const onTransactionCreated = onDocumentCreated(
     const html = `
       <div style="font-family:sans-serif;max-width:640px;margin:auto;
         border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
-
         <div style="background:#4f46e5;padding:24px 28px;">
           <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">
             ⏳ Transaction Awaiting Your Approval
@@ -165,7 +229,6 @@ export const onTransactionCreated = onDocumentCreated(
             Pakistan Detectors ERP System
           </p>
         </div>
-
         <div style="padding:28px;background:#fff;">
           <p style="color:#374151;margin-top:0;">
             A new <strong>${data.mainCategory}</strong> transaction has been
@@ -185,7 +248,6 @@ export const onTransactionCreated = onDocumentCreated(
             ${cell("Payment Mode",   data.mode         || "—", true)}
             ${cell("Note",           data.note         || "—", false)}
           </table>
-
           <p style="color:#374151;font-weight:600;margin-bottom:12px;">
             Please take action:
           </p>
@@ -204,21 +266,20 @@ export const onTransactionCreated = onDocumentCreated(
               ❌ Reject
             </a>
           </div>
-
           <div style="background:#fef3c7;border:1px solid #fbbf24;
             border-radius:8px;padding:14px;">
             <p style="margin:0;color:#92400e;font-size:13px;">
               ⚠️ These links are single-use and secure.
               The transaction will remain pending until you act.
+              Rejecting will permanently cancel and delete the transaction —
+              no financial changes will be made.
             </p>
           </div>
         </div>
-
         <div style="padding:16px 28px;background:#f9fafb;
           border-top:1px solid #e5e7eb;">
           <p style="margin:0;font-size:12px;color:#9ca3af;">
-            Automated notification from Pakistan Detectors ERP.
-            Do not reply.
+            Automated notification from Pakistan Detectors ERP. Do not reply.
           </p>
         </div>
       </div>`;
@@ -238,7 +299,14 @@ export const onTransactionCreated = onDocumentCreated(
 );
 
 // =============================================================================
-// TRIGGER 2 — Transaction updated → watch approvalStatus changes
+// TRIGGER 2 — Transaction updated → watch approvalStatus changes (approved only)
+//
+// Key behaviour:
+//   approved  → apply deferred bank balance deduction, send confirmation email
+//   rejected  → hard-delete now happens in the HTTP handler (rejectTransaction),
+//               so this trigger only fires for 'approved' status changes.
+//               Bank balance is NOT touched on rejection — the document is simply
+//               gone, leaving liquidity exactly as it was.
 // =============================================================================
 export const onTransactionUpdated = onDocumentUpdated(
   "transactions/{transactionId}",
@@ -257,10 +325,17 @@ export const onTransactionUpdated = onDocumentUpdated(
 
     // ── Approved ───────────────────────────────────────────────────────────
     if (newStatus === "approved") {
+      // 1. Clean up pending-approval notification
       await deleteNotificationsForTransaction(firestoreId, [
         "transaction_pending_approval",
       ]);
 
+      // 2. Deferred bank balance update — only now that the admin approved.
+      //    If the payment mode is Bank, we deduct (outflow) or add (inflow).
+      //    Cash / Cheque transactions don't need a balance update here.
+      await applyDeferredBankBalanceOnApproval(after);
+
+      // 3. In-app notification
       await createNotification({
         type:           "transaction_approved",
         title:          "✅ Transaction Approved",
@@ -269,6 +344,7 @@ export const onTransactionUpdated = onDocumentUpdated(
         transactionRef: txRef,
       });
 
+      // 4. Confirmation email to internal team
       try {
         await transporter.sendMail({
           from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
@@ -284,58 +360,22 @@ export const onTransactionUpdated = onDocumentUpdated(
               <table style="width:100%;border-collapse:collapse;">
                 ${cell("Transaction ID", txRef,                     true)}
                 ${cell("Category",       after.mainCategory || "—", false)}
-                ${cell("Amount",         amount,                     true)}
+                ${cell("Amount",         amount,                    true)}
+                ${cell("Payment Mode",   after.mode         || "—", false)}
                 ${cell("Approved At",
-                  new Date().toLocaleString("en-PK"),               false)}
+                  new Date().toLocaleString("en-PK"),               true)}
               </table>
+              ${after.mode === "Bank" ? `
+              <div style="margin-top:16px;background:#eff6ff;border:1px solid #bfdbfe;
+                border-radius:8px;padding:12px 14px;">
+                <p style="margin:0;color:#1e40af;font-size:13px;">
+                  💳 Bank balance has been updated to reflect this transaction.
+                </p>
+              </div>` : ""}
             </div>`,
         });
       } catch (err) {
         console.error("❌ Approval confirmation email failed:", err);
-      }
-    }
-
-    // ── Rejected ───────────────────────────────────────────────────────────
-    if (newStatus === "rejected") {
-      await deleteNotificationsForTransaction(firestoreId, [
-        "transaction_pending_approval",
-      ]);
-
-      await createNotification({
-        type:           "transaction_rejected",
-        title:          "❌ Transaction Rejected",
-        message:
-          `${txRef} (${after.mainCategory} — ${amount}) was rejected. ` +
-          `Reason: ${after.rejectionReason || "No reason given"}.`,
-        transactionId:  firestoreId,
-        transactionRef: txRef,
-      });
-
-      try {
-        await transporter.sendMail({
-          from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
-          to:      process.env.GMAIL_TO || "",
-          subject: `❌ Rejected: ${txRef} — ${amount}`,
-          html: `
-            <div style="font-family:sans-serif;max-width:500px;
-              margin:auto;padding:24px;">
-              <div style="background:#fef2f2;border:1px solid #fecaca;
-                border-radius:8px;padding:16px;margin-bottom:20px;">
-                <h2 style="color:#dc2626;margin:0;">❌ Transaction Rejected</h2>
-              </div>
-              <table style="width:100%;border-collapse:collapse;">
-                ${cell("Transaction ID", txRef,                           true)}
-                ${cell("Category",       after.mainCategory        || "—", false)}
-                ${cell("Amount",         amount,                           true)}
-                ${cell("Reason",
-                  after.rejectionReason || "No reason given",             false)}
-                ${cell("Rejected At",
-                  new Date().toLocaleString("en-PK"),                     true)}
-              </table>
-            </div>`,
-        });
-      } catch (err) {
-        console.error("❌ Rejection email failed:", err);
       }
     }
   }
@@ -363,11 +403,6 @@ export const approveTransaction = onRequest(async (req, res) => {
         "This transaction was already approved.", data.transactionId || id));
       return;
     }
-    if (data.approvalStatus === "rejected") {
-      res.send(errorPage("Already Rejected",
-        "This transaction was already rejected and cannot be approved."));
-      return;
-    }
     if (data.approvalToken !== token) {
       res.status(403).send(
         errorPage("Invalid Token", "This link is invalid or has expired."));
@@ -379,6 +414,7 @@ export const approveTransaction = onRequest(async (req, res) => {
       approvalToken:  admin.firestore.FieldValue.delete(),
       updatedAt:      new Date().toISOString(),
     });
+    // onTransactionUpdated fires next and applies the deferred bank balance.
     console.log(`✅ Approved via email link: ${id}`);
     res.send(successPage("Transaction Approved!",
       "The transaction has been approved and is now active.",
@@ -391,6 +427,13 @@ export const approveTransaction = onRequest(async (req, res) => {
 
 // =============================================================================
 // HTTP — Reject via email link
+//
+// BEHAVIOUR:
+//   • Hard-deletes the Firestore document.
+//   • Makes ZERO financial changes — no bank balance, no cash, nothing.
+//   • Because the frontend never applied a bank deduction for pending_approval
+//     transactions, the deletion is a complete no-op financially.
+//   • Cleans up related in-app notifications.
 // =============================================================================
 export const rejectTransaction = onRequest(async (req, res) => {
   const { id, token } = req.query as { id?: string; token?: string };
@@ -401,41 +444,106 @@ export const rejectTransaction = onRequest(async (req, res) => {
   try {
     const docRef = db.collection("transactions").doc(id);
     const snap   = await docRef.get();
+
+    // Already deleted
     if (!snap.exists) {
-      res.status(404).send(errorPage("Not Found", "Transaction not found."));
+      res.send(errorPage(
+        "Already Removed",
+        "This transaction no longer exists — it may have already been rejected and deleted."
+      ));
       return;
     }
+
     const data = snap.data()!;
-    if (data.approvalStatus === "rejected") {
-      res.send(errorPage("Already Rejected",
-        "This transaction was already rejected."));
-      return;
-    }
+
+    // Already approved — cannot reject
     if (data.approvalStatus === "approved") {
-      res.send(errorPage("Already Approved",
-        "This transaction was already approved and cannot be rejected."));
+      res.send(errorPage(
+        "Already Approved",
+        "This transaction was already approved and cannot be rejected."
+      ));
       return;
     }
+
+    // Invalid token
     if (data.approvalToken !== token) {
       res.status(403).send(
         errorPage("Invalid Token", "This link is invalid or has expired."));
       return;
     }
+
+    // Show reason form on GET
     if (req.method === "GET") {
       res.send(rejectFormPage(id, token, data.transactionId || id));
       return;
     }
-    const reason = (req.body?.reason as string) || "Rejected by admin";
-    await docRef.update({
-      approvalStatus:  "rejected",
-      rejectedAt:      new Date().toISOString(),
-      rejectionReason: reason,
-      approvalToken:   admin.firestore.FieldValue.delete(),
-      updatedAt:       new Date().toISOString(),
+
+    // ── POST: hard-delete the transaction ─────────────────────────────────
+    // Financial note: because the bank balance was NOT updated at creation
+    // for pending_approval transactions, this delete is purely a record
+    // removal — liquidity is untouched.
+    const txRef  = data.transactionId || id;
+    const amount = fmt(data.amount || 0);
+    const reason = (req.body?.reason as string)?.trim() || "Rejected by admin";
+
+    // 1. Delete the transaction document
+    await docRef.delete();
+    console.log(`❌ Rejected & deleted via email link: ${id} (no financial changes)`);
+
+    // 2. Clean up notifications + add rejected in-app notification
+    const notifSnap = await db
+      .collection("appNotifications")
+      .where("transactionId", "==", id)
+      .get();
+
+    const batch = db.batch();
+    notifSnap.docs.forEach((d) => batch.delete(d.ref));
+
+    const notifRef = db.collection("appNotifications").doc();
+    batch.set(notifRef, {
+      type:           "transaction_rejected",
+      title:          "❌ Transaction Rejected & Removed",
+      message:        `${txRef} (${data.mainCategory} — ${amount}) was rejected and permanently deleted. Reason: ${reason}. No financial changes were made.`,
+      transactionId:  id,
+      transactionRef: txRef,
+      isRead:         false,
+      createdAt:      new Date().toISOString(),
     });
-    console.log(`❌ Rejected via email link: ${id}`);
-    res.send(errorPage("Transaction Rejected",
-      `The transaction has been rejected. Reason: ${reason}`));
+
+    await batch.commit();
+
+    // 3. Confirmation email to internal team
+    try {
+      await transporter.sendMail({
+        from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
+        to:      process.env.GMAIL_TO || "",
+        subject: `❌ Rejected & Deleted: ${txRef} — ${amount}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:500px;
+            margin:auto;padding:24px;">
+            <div style="background:#fef2f2;border:1px solid #fecaca;
+              border-radius:8px;padding:16px;margin-bottom:20px;">
+              <h2 style="color:#dc2626;margin:0;">❌ Transaction Rejected & Deleted</h2>
+              <p style="color:#7f1d1d;margin:8px 0 0;font-size:13px;">
+                This transaction has been permanently removed.
+                No financial changes (bank balance, cash) were made.
+              </p>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">
+              ${cell("Transaction ID", txRef,                     true)}
+              ${cell("Category",       data.mainCategory || "—", false)}
+              ${cell("Amount",         amount,                    true)}
+              ${cell("Reason",         reason,                    false)}
+              ${cell("Rejected At",
+                new Date().toLocaleString("en-PK"),               true)}
+            </table>
+          </div>`,
+      });
+    } catch (err) {
+      console.error("❌ Rejection confirmation email failed:", err);
+    }
+
+    res.send(rejectedPage(txRef, reason));
   } catch (err) {
     console.error("rejectTransaction error:", err);
     res.status(500).send(errorPage("Error", "Something went wrong."));
@@ -495,6 +603,38 @@ function errorPage(title: string, message: string): string {
   </body></html>`;
 }
 
+function rejectedPage(txRef: string, reason: string): string {
+  return `<!DOCTYPE html><html><head>
+    <title>Transaction Rejected</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      body{font-family:sans-serif;display:flex;align-items:center;
+        justify-content:center;min-height:100vh;margin:0;background:#fef2f2;}
+      .card{background:#fff;border-radius:16px;padding:40px;max-width:480px;
+        width:90%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08);
+        border:1px solid #fecaca;}
+      .icon{font-size:64px;margin-bottom:16px;}
+      h1{color:#dc2626;font-size:24px;margin:0 0 8px;}
+      .sub{color:#6b7280;font-size:14px;margin:0 0 20px;}
+      .ref{font-family:monospace;background:#fef2f2;padding:6px 12px;
+        border-radius:6px;color:#dc2626;font-size:14px;display:inline-block;
+        margin-bottom:16px;}
+      .reason{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;
+        padding:12px 16px;color:#374151;font-size:14px;text-align:left;}
+      .note{margin-top:20px;font-size:12px;color:#9ca3af;}
+    </style>
+  </head><body>
+    <div class="card">
+      <div class="icon">❌</div>
+      <h1>Transaction Rejected & Deleted</h1>
+      <p class="sub">This transaction has been permanently removed.<br>No financial changes were made.</p>
+      <div class="ref">${txRef}</div>
+      <div class="reason"><strong>Reason:</strong> ${reason}</div>
+      <p class="note">The ERP system has been notified automatically.</p>
+    </div>
+  </body></html>`;
+}
+
 function rejectFormPage(id: string, token: string, txRef: string): string {
   return `<!DOCTYPE html><html><head>
     <title>Reject Transaction</title>
@@ -506,6 +646,10 @@ function rejectFormPage(id: string, token: string, txRef: string): string {
         width:90%;box-shadow:0 4px 24px rgba(0,0,0,.08);border:1px solid #fecaca;}
       h1{color:#dc2626;font-size:22px;margin:0 0 8px;}
       p{color:#6b7280;margin:0 0 20px;font-size:14px;}
+      .warning{background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;
+        padding:12px 14px;margin-bottom:20px;font-size:13px;color:#92400e;}
+      .safe{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;
+        padding:12px 14px;margin-bottom:20px;font-size:13px;color:#166534;}
       .ref{font-family:monospace;background:#fef2f2;padding:6px 12px;
         border-radius:6px;color:#dc2626;font-size:13px;margin-bottom:20px;
         display:inline-block;}
@@ -519,14 +663,22 @@ function rejectFormPage(id: string, token: string, txRef: string): string {
   </head><body>
     <div class="card">
       <h1>❌ Reject Transaction</h1>
-      <p>You are about to reject this transaction:</p>
+      <p>You are about to permanently cancel this transaction:</p>
       <div class="ref">${txRef}</div>
+      <div class="warning">
+        ⚠️ This will <strong>permanently delete</strong> the transaction record.
+      </div>
+      <div class="safe">
+        ✅ <strong>No financial changes will be made.</strong>
+        Bank balances and cash amounts remain exactly as they were —
+        this transaction was never applied to your accounts.
+      </div>
       <form method="POST">
         <input type="hidden" name="id"    value="${id}">
         <input type="hidden" name="token" value="${token}">
         <textarea name="reason"
           placeholder="Enter reason for rejection (optional)"></textarea>
-        <button type="submit">Confirm Rejection</button>
+        <button type="submit">Confirm Rejection & Delete</button>
       </form>
     </div>
   </body></html>`;

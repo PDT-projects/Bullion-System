@@ -375,6 +375,17 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
 
           const created = await TransactionFirebaseService.createTransaction(txData);
 
+          // ── Bank balance update (only for non-approval transactions) ────
+          // IMPORTANT: For pending_approval transactions (Cash Outflow / Loan given),
+          // we deliberately do NOT touch the bank balance here. The balance is
+          // updated by the Cloud Function's onTransactionUpdated trigger only after
+          // the admin approves via email. This way, a rejection leaves the bank
+          // balance completely unchanged — no manual rollback needed.
+          if (!needsApproval && paymentMode === 'Bank' && selectedBank) {
+            const isInflow = transactionType === 'Cash Inflow';
+            await updateBankBalance(selectedBank, item.amount, isInflow);
+          }
+
           // ── In-app notification ──────────────────────────────────────────
           if (needsApproval) {
             // Pending approval notification for outflow / loan given
