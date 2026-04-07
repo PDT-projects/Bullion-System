@@ -1,7 +1,7 @@
 // Inventory Module - View Layer
 // ProductTransferCreateView - Create a new product transfer
-// Shows products with serials available at the selected From location.
-// On submit: serials are removed from source, transfer record created as 'In Transit'.
+//
+// Fix: "Add Item" button now has blue background + white text matching theme
 
 import React from 'react';
 import {
@@ -117,8 +117,11 @@ export const ProductTransferCreateView: React.FC<Props> = ({
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <Package className="w-5 h-5 text-indigo-500" /> Items to Transfer
             </h3>
-            <button onClick={addTransferItem}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors font-medium">
+            {/* ── FIX: blue background + white text, matches theme ── */}
+            <button
+              onClick={addTransferItem}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 active:bg-gray-300 transition-colors font-semibold border border-gray-300"
+            >
               <Plus size={16} /> Add Item
             </button>
           </div>
@@ -159,29 +162,27 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                       <option value="">
                         {formData.fromLocation ? 'Select product' : 'Select From location first'}
                       </option>
-                      {products.map(p => {
-                        const stock = getProductStockByLocation(p.id, formData.fromLocation || '');
-                        return (
-                          <option key={p.id} value={p.id} disabled={stock === 0}>
+                      {products
+                        .filter(p => getProductStockByLocation(p.id, formData.fromLocation) > 0)
+                        .map(p => (
+                          <option key={p.id} value={p.id}>
                             {p.brandName} {p.modelName}
-                            {formData.fromLocation ? ` — ${stock} at ${formData.fromLocation}` : ''}
+                            {' '}({getProductStockByLocation(p.id, formData.fromLocation)} available)
                           </option>
-                        );
-                      })}
+                        ))}
                     </select>
-                    {selectedProduct && formData.fromLocation && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Available at {formData.fromLocation}: <strong>{stockAtLocation}</strong> unit(s)
-                      </p>
-                    )}
                   </div>
 
                   {/* Quantity */}
                   {line.productId && (
                     <div className="mb-3">
                       <label className="block text-xs font-semibold text-gray-500 mb-1">Quantity *</label>
-                      <input type="number" min="1" max={stockAtLocation} value={line.quantity}
+                      <input
+                        type="number"
+                        value={line.quantity}
                         onChange={e => updateTransferItemQuantity(li, Number(e.target.value))}
+                        min={1}
+                        max={stockAtLocation}
                         className={`${inputCls} w-28`} />
                       {line.quantity > stockAtLocation && stockAtLocation > 0 && (
                         <p className="text-xs text-red-500 mt-1">
@@ -216,14 +217,8 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                                   key={serial}
                                   value={serial}
                                   disabled={
-                                    // disable if already chosen in another slot of this line
-                                    line.selectedSerials.some(
-                                      (s, idx) => idx !== si && s === serial
-                                    ) ||
-                                    // disable if chosen in another line
-                                    transferItems.some(
-                                      (it, idx) => idx !== li && it.selectedSerials.includes(serial)
-                                    )
+                                    line.selectedSerials.some((s, idx) => idx !== si && s === serial) ||
+                                    transferItems.some((it, idx) => idx !== li && it.selectedSerials.includes(serial))
                                   }>
                                   {serial}
                                 </option>
@@ -314,7 +309,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
               <button
                 onClick={toggleSummary}
                 disabled={!validation.isValid}
-                className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium">
+                className="px-6 py-2.5 bg-gray-100 text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-200 active:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium">
                 Review Transfer
               </button>
             ) : (

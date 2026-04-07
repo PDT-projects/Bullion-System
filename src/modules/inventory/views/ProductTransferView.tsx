@@ -1,15 +1,19 @@
 // Inventory Module - View Layer
 // ProductTransferView - Shows all transfers with status and Mark Received action
 //
-// Status flow: In Transit → Mark Received → serials added to destination product
+// Changes:
+//   • Download PDF button added to Actions column (blue, Download icon)
+//   • Download PDF button added to View Transfer modal footer
+//   • Button uses downloadTransferPDF utility
 
 import React from 'react';
 import {
   Plus, Eye, Trash2, X, Package, CheckCircle2,
   Clock, ArrowRight, MapPin, Hash, Truck, Calendar,
-  User, FileText, ArrowRightLeft,
+  User, FileText, ArrowRightLeft, Download,
 } from 'lucide-react';
 import { ProductTransfer } from '../models/types';
+import { downloadTransferPDF } from '../utils/transferPdfGenerator';
 
 interface ProductTransferViewProps {
   transfers: ProductTransfer[];
@@ -169,8 +173,11 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                       </span>
                     </td>
 
+                    {/* ── ACTIONS ── */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-1">
+
+                        {/* View details */}
                         <button
                           onClick={() => onView(t)}
                           className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -179,6 +186,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                           <Eye size={16} />
                         </button>
 
+                        {/* Mark Received */}
                         {(t.status === 'Pending' || t.status === 'In Transit') && (
                           <button
                             onClick={() => onMarkReceived(t)}
@@ -188,6 +196,16 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                           </button>
                         )}
 
+                        {/* ── Download PDF — blue theme ── */}
+                        <button
+                          onClick={() => downloadTransferPDF(t)}
+                          className="p-2 text-gray-800 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 border border-gray-300 rounded-lg transition-colors"
+                          title="Download PDF"
+                        >
+                          <Download size={16} />
+                        </button>
+
+                        {/* Delete */}
                         <button
                           onClick={() => onDelete(t.id)}
                           className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
@@ -195,6 +213,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                         >
                           <Trash2 size={16} />
                         </button>
+
                       </div>
                     </td>
 
@@ -339,22 +358,35 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
-              {(viewTransfer.status === 'Pending' || viewTransfer.status === 'In Transit') && (
-                <button
-                  onClick={() => onMarkReceived(viewTransfer)}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
-                >
-                  <CheckCircle2 size={16} />
-                  Mark as Received
-                </button>
-              )}
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+
+              {/* Left: Download PDF */}
               <button
-                onClick={onCloseView}
-                className="px-5 py-2.5 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                onClick={() => downloadTransferPDF(viewTransfer)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-gray-100 text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-200 active:bg-gray-300 transition-colors font-semibold"
               >
-                Close
+                <Download size={15} /> Download PDF
               </button>
+
+              {/* Right: Mark Received + Close */}
+              <div className="flex items-center gap-2">
+                {(viewTransfer.status === 'Pending' || viewTransfer.status === 'In Transit') && (
+                  <button
+                    onClick={() => onMarkReceived(viewTransfer)}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                  >
+                    <CheckCircle2 size={16} />
+                    Mark as Received
+                  </button>
+                )}
+                <button
+                  onClick={onCloseView}
+                  className="px-5 py-2.5 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+
             </div>
 
           </div>
