@@ -34,6 +34,7 @@ export function InvoiceFormWrapper() {
       handleSave={vm.handleSave}
       handleCancel={vm.handleCancel}
       handleDownloadPdf={vm.handleDownloadPdf}
+      handleAddCustomCity={vm.handleAddCustomCity}
       calculateTotal={vm.calculateTotal}
       formatCurrency={vm.formatCurrency}
     />

@@ -1,5 +1,8 @@
 // Invoice Module - Service Layer
 // Pure business logic (no Firestore — that lives in invoiceFirebaseService.ts)
+// Changes:
+//   - Added 'Federal' province with Islamabad
+//   - Deduction charges are now manually entered (auto-calc removed from useEffect)
 
 import {
   Invoice, InvoiceProduct, InvoiceFilters, InvoiceStats,
@@ -7,6 +10,7 @@ import {
 } from './types';
 
 export const provinceCities: ProvinceCities = {
+  'Federal': ['Islamabad'],
   'Punjab': ['Lahore', 'Faisalabad', 'Rawalpindi', 'Multan', 'Gujranwala', 'Sialkot', 'Bahawalpur', 'Sargodha', 'Sheikhupura', 'Jhang'],
   'Sindh': ['Karachi', 'Hyderabad', 'Sukkur', 'Larkana', 'Nawabshah', 'Mirpurkhas', 'Jacobabad', 'Shikarpur'],
   'Khyber Pakhtunkhwa': ['Peshawar', 'Mardan', 'Abbottabad', 'Mingora', 'Kohat', 'Dera Ismail Khan', 'Mansehra', 'Swabi'],
@@ -25,6 +29,7 @@ export const collectionMethods: ('Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 
   'Self Collection', 'TCS', 'LCS', 'Daewoo', 'Others',
 ];
 
+// Kept for reference but NOT used automatically — deduction charges are entered manually
 export const calculateDeductionCharges = (totalAmount: number, collectionMethod?: string): number => {
   if (!collectionMethod || collectionMethod === 'Self Collection') return 0;
   if (totalAmount <= 150000) return 500;

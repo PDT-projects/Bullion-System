@@ -1,389 +1,319 @@
 // Invoice Module - PDF Generation Service
-// Pure jsPDF native drawing — NO html2canvas (causes blank PDFs).
-// Key fix: jsPDF has NO doc.circle() — use doc.ellipse(cx, cy, r, r, style).
+// Layout mirrors the real Pakistan Detector Technologies invoice exactly:
+//   Logo (left) | Company name + address (right of logo)
+//   "Invoice To" heading + full-width underline
+//   Customer block (left) | Inv No + Date (right)
+//   Table: Sr.No | Product Name | Product Detail | Batch No | Amount
+//   Note (left) + Total (right) on same line  ← bold on both sides
+//   Terms and Conditions with filled-circle (●) bullets
+//   "Thank you for your purchase!" centred at bottom
 
 import jsPDF from 'jspdf';
 import { Invoice } from './types';
 
-// ── Palette ───────────────────────────────────────────────────────────────────
+// ── Page geometry ─────────────────────────────────────────────────────────────
+const PW = 210;
+const PH = 297;
+const ML = 14;
+const MR = 14;
+const CW = PW - ML - MR; // 182 mm
+
 type RGB = [number, number, number];
-const INDIGO_DARK:   RGB = [67,  56,  202];
-const INDIGO:        RGB = [79,  70,  229];
-const INDIGO_MID:    RGB = [99,  102, 241];
-const INDIGO_DEEP:   RGB = [30,  27,   75];
-const INDIGO_LIGHT:  RGB = [238, 242, 255];
-const INDIGO_BORDER: RGB = [199, 210, 254];
-const INDIGO_3:      RGB = [55,  48,  163];
-const WHITE:         RGB = [255, 255, 255];
-const BLACK:         RGB = [17,  24,   39];
-const GRAY:          RGB = [107, 114, 128];
-const GRAY_STRIPE:   RGB = [245, 247, 255];
-const GRAY_LINE:     RGB = [229, 231, 235];
-const GREEN:         RGB = [22,  163,  74];
-const RED:           RGB = [220,  38,  38];
-const YELLOW_BG:     RGB = [254, 252, 232];
-const YELLOW_BD:     RGB = [234, 179,   8];
-const YELLOW_TXT:    RGB = [120,  53,  15];
-const PURPLE_LIGHT:  RGB = [245, 243, 255];
-const PURPLE_BD:     RGB = [224, 231, 255];
-const PURPLE_BADGE:  RGB = [91,  33,  182];
-const VIOLET:        RGB = [196, 181, 253];
+const DARK:       RGB = [17,  17,  17];
+const GRAY:       RGB = [90,  90,  90];
+const LIGHT_GRAY: RGB = [200, 200, 200];
+const WHITE:      RGB = [255, 255, 255];
+const GREEN_DARK: RGB = [34,  85,  34];
 
 const sf = (d: jsPDF, c: RGB) => d.setFillColor(c[0], c[1], c[2]);
 const sd = (d: jsPDF, c: RGB) => d.setDrawColor(c[0], c[1], c[2]);
 const st = (d: jsPDF, c: RGB) => d.setTextColor(c[0], c[1], c[2]);
 
-// ── Layout ────────────────────────────────────────────────────────────────────
-const PW = 210, PH = 297, ML = 14, MR = 14, CW = PW - ML - MR;
-const FOOTER_H = 11;
+const fmtAmt  = (n: number) =>
+  new Intl.NumberFormat('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+const fmtDate = (d: string) => d ? new Date(d).toISOString().split('T')[0] : '';
 
-// Table columns  (all x are page-absolute; total content = ML … PW-MR = 14 … 196)
-const COL = {
-  num:    { x: ML,        w: 10 },
-  prod:   { x: ML + 10,   w: 52 },
-  serial: { x: ML + 62,   w: 58 },
-  qty:    { x: ML + 120,  w: 14 },
-  price:  { x: ML + 134,  w: 26 },
-  total:  { x: ML + 160,  w: 22 },   // right edge = 196 ✓
-};
-
-// ── Formatters ────────────────────────────────────────────────────────────────
-const fmtCurrency = (n: number) =>
-  new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n);
-
-const fmtDate = (d: string) =>
-  d ? new Date(d).toLocaleDateString('en-PK', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-
-// ── Draw checkmark via two lines ──────────────────────────────────────────────
-function drawCheck(doc: jsPDF, cx: number, cy: number, s: number, c: RGB) {
-  sd(doc, c);
-  doc.setLineWidth(s * 0.18);
-  doc.line(cx - s * 0.38, cy,            cx - s * 0.05, cy + s * 0.40);
-  doc.line(cx - s * 0.05, cy + s * 0.40, cx + s * 0.48, cy - s * 0.35);
-}
-
-// ── Circular seal (drawn entirely with ellipse + rect + text) ────────────────
-function drawSeal(doc: jsPDF, cx: number, cy: number) {
-  const r = 21;
-
-  // background fill
-  sf(doc, INDIGO_LIGHT);
-  sd(doc, INDIGO_LIGHT);
+// ── Vector logo (green circle with white box + green cross) ──────────────────
+function drawLogo(doc: jsPDF, x: number, y: number, size: number) {
+  const cx = x + size / 2, cy = y + size / 2, r = size / 2;
+  sf(doc, GREEN_DARK); sd(doc, GREEN_DARK); doc.setLineWidth(0);
   doc.ellipse(cx, cy, r, r, 'F');
-
-  // outer ring
-  sd(doc, INDIGO);
-  doc.setLineWidth(0.9);
-  doc.ellipse(cx, cy, r, r, 'S');
-
-  // second ring
-  doc.setLineWidth(0.45);
-  doc.ellipse(cx, cy, r - 3.5, r - 3.5, 'S');
-
-  // inner ring (solid thin — skip dash, jsPDF version may not support it)
-  doc.setLineWidth(0.25);
-  doc.ellipse(cx, cy, r - 8, r - 8, 'S');
-
-  // horizontal dividers
-  const lw = (r - 9) * 2;
-  doc.setLineWidth(0.28);
-  doc.line(cx - lw / 2, cy - 5,  cx + lw / 2, cy - 5);
-  doc.line(cx - lw / 2, cy + 6,  cx + lw / 2, cy + 6);
-
-  // large checkmark
-  drawCheck(doc, cx, cy + 0.5, 8.5, INDIGO);
-
-  // top label
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(4.8);
-  st(doc, INDIGO_3);
-  doc.text('PAKISTAN DETECTORS', cx, cy - r + 8,  { align: 'center' });
-  doc.setFontSize(4.5);
-  doc.text('TECHNOLOGIES',       cx, cy - r + 13, { align: 'center' });
-
-  // bottom label
-  doc.setFontSize(4.8);
-  st(doc, INDIGO);
-  doc.text('VERIFIED INVOICE',   cx, cy + r - 5.5, { align: 'center' });
-
-  // small dot at top of ring
-  sf(doc, INDIGO); sd(doc, INDIGO);
-  doc.ellipse(cx, cy - r + 4, 1, 1, 'F');
+  const iw = size * 0.55, ih = size * 0.55;
+  sf(doc, WHITE); sd(doc, WHITE);
+  doc.roundedRect(cx - iw / 2, cy - ih / 2, iw, ih, 1.2, 1.2, 'F');
+  const arm = size * 0.09, len = size * 0.30;
+  sf(doc, GREEN_DARK); sd(doc, GREEN_DARK);
+  doc.rect(cx - arm / 2, cy - len / 2, arm, len, 'F');
+  doc.rect(cx - len / 2, cy - arm / 2, len, arm, 'F');
+  sf(doc, WHITE); sd(doc, WHITE);
+  doc.ellipse(cx, y + size * 0.11, size * 0.17, size * 0.12, 'F');
+  sf(doc, GREEN_DARK); sd(doc, GREEN_DARK);
+  doc.ellipse(cx, y + size * 0.12, size * 0.09, size * 0.07, 'F');
 }
 
-// ── Footer ────────────────────────────────────────────────────────────────────
-function drawFooter(doc: jsPDF, invN: string) {
-  const fy = PH - FOOTER_H;
-  sf(doc, INDIGO_DEEP);
-  doc.rect(0, fy, PW, FOOTER_H, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  st(doc, [165, 180, 252]);
-  doc.text('Pakistan Detectors Technologies', ML,     fy + 7);
-  doc.text('Thank you for your business!',   PW / 2, fy + 7, { align: 'center' });
-  doc.text(invN,                             PW - MR,fy + 7, { align: 'right'  });
+// ── Table cell: draws border + wraps text. Returns actual height. ─────────────
+function tCell(
+  doc: jsPDF,
+  x: number, y: number, w: number, minH: number,
+  lines: string[],
+  opts: { bold?: boolean; align?: 'left' | 'center' | 'right'; fs?: number } = {},
+): number {
+  const { bold = false, align = 'left', fs = 9 } = opts;
+  const LH  = fs * 0.42;
+  const PAD = 2.2;
+  const h   = Math.max(minH, lines.length * LH + PAD * 2 + (lines.length > 1 ? (lines.length - 1) * 0.4 : 0));
+
+  sd(doc, LIGHT_GRAY); doc.setLineWidth(0.2);
+  doc.rect(x, y, w, h, 'S');
+
+  doc.setFont('helvetica', bold ? 'bold' : 'normal');
+  doc.setFontSize(fs); st(doc, DARK);
+
+  const baseY = lines.length === 1
+    ? y + h / 2 + LH * 0.35
+    : y + PAD + LH;
+
+  lines.forEach((ln, i) => {
+    const ty = baseY + i * (LH + 0.4);
+    if (align === 'center') doc.text(ln, x + w / 2, ty, { align: 'center' });
+    else if (align === 'right') doc.text(ln, x + w - PAD, ty, { align: 'right' });
+    else doc.text(ln, x + PAD, ty);
+  });
+  return h;
 }
 
-// ── Page break guard ──────────────────────────────────────────────────────────
-function guard(doc: jsPDF, y: number, need: number, invN: string): number {
-  if (y + need > PH - FOOTER_H - 6) {
-    drawFooter(doc, invN);
-    doc.addPage();
-    return 15;
-  }
+// ── Column definitions (14 … 196 = 182 mm total) ─────────────────────────────
+// Sr.No=13 | ProductName=45 | ProductDetail=55 | BatchNo=42 | Amount=27 → 182 ✓
+const C = {
+  sr:  { x: ML,       w: 13 },
+  pn:  { x: ML + 13,  w: 45 },
+  pd:  { x: ML + 58,  w: 55 },
+  bn:  { x: ML + 113, w: 42 },
+  am:  { x: ML + 155, w: 27 },
+} as const;
+const ROW_H = 9;
+
+// ── Page-break guard ──────────────────────────────────────────────────────────
+function pb(doc: jsPDF, y: number, need: number): number {
+  if (y + need > PH - 10) { doc.addPage(); return 12; }
   return y;
 }
 
+// ── Terms ─────────────────────────────────────────────────────────────────────
+const TERMS = [
+  'Company guarantees that this device is a 100% genuine branded product with an official warranty.',
+  'We are not responsible for the performance, accuracy, and results of any device as per the claims of the manufacturer.',
+  'Customer hereby agrees that the above-purchased product is non-returnable, neither exchangeable nor refundable.',
+  'Customer hereby acknowledged that all accessories and parts of the device are complete and the device is in working condition.',
+  'The company is not responsible for field testing of the machine.',
+  'Customers can watch/visit our YouTube Channel for machine training and Air testing before purchasing the machine.',
+  'Machines work well on old/buried objects .',
+  'Company is exclusively responsible for providing after-sales services to customers who have purchased machines from us.',
+  'For warranty claims, the client must show the person who purchased the machine and whose CNIC is written on the invoice, as well as a copy of the CNIC and the invoice',
+  'Warranty claim takes around 90 working days.',
+  'The COMPANY shall not be held responsible for any illegal activities undertaken by clients.',
+  'CLIENTS are strictly prohibited from excavating on legally owned properties; the COMPANY disclaims any responsibility for such actions',
+  'The COMPANY will not hold customers responsible for any illegal activities they may engage in, and will also discourage them from engaging in illegal activities.',
+];
+
 // ── Main builder ──────────────────────────────────────────────────────────────
 function buildPdf(invoice: Invoice): Blob {
-  const doc  = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-  const net  = invoice.totalAmount - (invoice.deductionCharges || 0);
-  const invN = invoice.invoiceNumber || 'INVOICE';
-  let   y    = 0;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  let y = 12;
 
-  // ── HEADER ─────────────────────────────────────────────────────────────────
-  sf(doc, INDIGO_DARK); doc.rect(0, 0, PW, 22, 'F');
-  st(doc, WHITE);
-  doc.setFont('helvetica', 'bold');   doc.setFontSize(14);
-  doc.text('Pakistan Detectors Technologies', ML, 10);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-  st(doc, INDIGO_BORDER);
-  doc.text('Professional Detection Equipment', ML, 16.5);
-  st(doc, WHITE);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(20);
-  doc.text('INVOICE', PW - MR, 13, { align: 'right' });
+  // ══════════════════════════════════════════════════════════════════
+  // 1. HEADER  —  logo left, company name/address right-of-logo
+  // ══════════════════════════════════════════════════════════════════
+  const LOGO = 22;
+  // drawLogo(doc, ML, y, LOGO);
+  doc.addImage('/PDT-logo.png', 'PNG', ML, y, LOGO, LOGO);
 
-  if (invoice.digitalStamp) {
-    sd(doc, WHITE); doc.setLineWidth(0.3); doc.setFontSize(7);
-    const bw = 36, bh = 5.5, bx = PW - MR - bw, by = 15.5;
-    doc.roundedRect(bx, by, bw, bh, 2, 2, 'S');
-    doc.text('✓ DIGITALLY STAMPED', bx + bw / 2, by + 3.8, { align: 'center' });
+  const nx = ML + LOGO + 4;   // text starts here
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); st(doc, DARK);
+  doc.text('Pakistan Detector Technologies Pvt. Ltd - Islamabad', nx, y + 7);
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); st(doc, GRAY);
+  // centre the address between nx and right edge
+  const midX = (nx + PW - MR) / 2;
+  doc.text('Office#5, 4th floor, Gulberg Trade center, Gulberg Green Islamabad', midX, y + 13, { align: 'center' });
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); st(doc, DARK);
+  doc.text('Phone No:', nx, y + 19);
+  doc.setFont('helvetica', 'normal'); doc.text(' 03111444615', nx + 21, y + 19);
+  doc.setFont('helvetica', 'bold');
+  doc.text('NTN:', nx, y + 24.5);
+  doc.setFont('helvetica', 'normal'); doc.text(' 52723', nx + 9.5, y + 24.5);
+
+  y += LOGO + 10;
+
+  // ══════════════════════════════════════════════════════════════════
+  // 2. "Invoice To" heading + full-width underline
+  // ══════════════════════════════════════════════════════════════════
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); st(doc, DARK);
+  doc.text('Invoice To', ML, y);
+  y += 2;
+  sd(doc, DARK); doc.setLineWidth(0.5);
+  doc.line(ML, y, PW - MR, y);
+  y += 7;
+
+  // ══════════════════════════════════════════════════════════════════
+  // 3. CUSTOMER block (left) + Inv No / Date (right)
+  // ══════════════════════════════════════════════════════════════════
+  const RX = ML + 88;   // right-column x
+  let lY = y;
+
+  // Customer name — bold
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); st(doc, DARK);
+  doc.text(invoice.customerName || '', ML, lY); lY += 5.5;
+
+  // City (no label)
+  if (invoice.customerCity) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); st(doc, DARK);
+    doc.text(invoice.customerCity, ML, lY); lY += 5;
   }
-  y = 22;
 
-  // ── META BAR ───────────────────────────────────────────────────────────────
-  sf(doc, INDIGO_LIGHT); doc.rect(0, y, PW, 15, 'F');
-  sd(doc, INDIGO_BORDER); doc.setLineWidth(0.5);
-  doc.line(0, y + 15, PW, y + 15);
+  // CNIC  bold label + normal value
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
+  doc.text('CNIC: ', ML, lY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(invoice.customerCNIC || '', ML + 13, lY);
+  lY += 5;
 
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); st(doc, GRAY);
-  const mx = [ML, ML + 52, ML + 104, ML + 152];
-  ['INVOICE NUMBER', 'DATE', 'PAYMENT STATUS', 'DELIVERY'].forEach((lbl, i) => {
-    if (i === 3 && !invoice.deliveryStatus) return;
-    doc.text(lbl, mx[i], y + 5);
+  // Mobile  bold label + normal value
+  doc.setFont('helvetica', 'bold');
+  doc.text('Mobile: ', ML, lY);
+  doc.setFont('helvetica', 'normal');
+  const phone = invoice.customerPhone2
+    ? `${invoice.customerPhone}   /   ${invoice.customerPhone2}`
+    : (invoice.customerPhone || '');
+  doc.text(phone, ML + 16, lY);
+  lY += 5;
+
+  // Email label (blank value)
+  doc.setFont('helvetica', 'bold');
+  doc.text('Email', ML, lY);
+  lY += 5;
+
+  // Right column — align with the CNIC line (i.e. after name + optional city)
+  const rStartY = y + 5.5 + (invoice.customerCity ? 5 : 0);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
+  doc.text('Inv No:', RX, rStartY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(invoice.invoiceNumber || '', RX + 16, rStartY);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Date:', RX, rStartY + 6);
+  doc.setFont('helvetica', 'normal');
+  doc.text(fmtDate(invoice.date), RX + 13, rStartY + 6);
+
+  y = lY + 3;
+
+  // ══════════════════════════════════════════════════════════════════
+  // 4. PRODUCTS TABLE
+  // ══════════════════════════════════════════════════════════════════
+
+  // Header
+  tCell(doc, C.sr.x,  y, C.sr.w,  ROW_H, ['Sr.No'],          { bold: true, align: 'center' });
+  tCell(doc, C.pn.x,  y, C.pn.w,  ROW_H, ['Product Name'],   { bold: true });
+  tCell(doc, C.pd.x,  y, C.pd.w,  ROW_H, ['Product Detail'], { bold: true });
+  tCell(doc, C.bn.x,  y, C.bn.w,  ROW_H, ['Batch No'],       { bold: true });
+  tCell(doc, C.am.x,  y, C.am.w,  ROW_H, ['Amount'],         { bold: true });
+  y += ROW_H;
+
+  invoice.products.forEach((p, idx) => {
+    const serials = (p.serialNumbers || []).filter(s => s.trim() !== '');
+
+    const srLines  = [String(idx + 1)];
+    const pnLines  = doc.splitTextToSize(p.productName || '', C.pn.w - 5) as string[];
+    // Product Detail = exchangeWarrantyNote if it looks like warranty info, else description
+    const detailRaw = p.description?.trim() || '';
+    const pdLines  = detailRaw ? doc.splitTextToSize(detailRaw, C.pd.w - 5) as string[] : [''];
+    const bnLines  = serials.length > 0
+      ? doc.splitTextToSize(serials.join('\n'), C.bn.w - 5) as string[]
+      : [''];
+    const amLines  = [fmtAmt(p.total)];
+
+    const LH_MM = 9 * 0.42;
+    const maxLn = Math.max(srLines.length, pnLines.length, pdLines.length, bnLines.length, 1);
+    const rH    = Math.max(ROW_H, maxLn * LH_MM + 5);
+
+    y = pb(doc, y, rH);
+
+    tCell(doc, C.sr.x, y, C.sr.w, rH, srLines,  { align: 'center' });
+    tCell(doc, C.pn.x, y, C.pn.w, rH, pnLines,  {});
+    tCell(doc, C.pd.x, y, C.pd.w, rH, pdLines,  {});
+    tCell(doc, C.bn.x, y, C.bn.w, rH, bnLines,  {});
+    tCell(doc, C.am.x, y, C.am.w, rH, amLines,  {});
+
+    y += rH;
   });
 
-  doc.setFont('helvetica', 'bold'); st(doc, INDIGO_DEEP);
-  doc.setFontSize(9);  doc.text(invN,                 mx[0], y + 12);
-  doc.setFontSize(8.5);
-  st(doc, BLACK); doc.text(fmtDate(invoice.date),     mx[1], y + 12);
-  st(doc, invoice.status === 'Paid' ? GREEN : RED);
-  doc.text(invoice.status,                            mx[2], y + 12);
-  if (invoice.deliveryStatus) {
-    st(doc, BLACK); doc.text(invoice.deliveryStatus,  mx[3], y + 12);
-  }
-  y += 18;
+  y += 5;
 
-  // ── CUSTOMER ───────────────────────────────────────────────────────────────
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); st(doc, INDIGO);
-  doc.text('BILL TO', ML, y); y += 6;
+  // ══════════════════════════════════════════════════════════════════
+  // 5. NOTE  (left, bold label)  +  TOTAL  (right, bold)
+  // ══════════════════════════════════════════════════════════════════
+  y = pb(doc, y, 10);
 
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); st(doc, BLACK);
-  doc.text(invoice.customerName, ML, y); y += 6;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
+  doc.text('Note:', ML, y);
 
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); st(doc, GRAY);
-  const custLines = [
-    `Phone: ${invoice.customerPhone}${invoice.customerPhone2 ? ' / ' + invoice.customerPhone2 : ''}`,
-    ...(invoice.customerCNIC ? [`CNIC: ${invoice.customerCNIC}`] : []),
-    ...((invoice.customerCity || invoice.customerProvince)
-      ? [`Location: ${[invoice.customerCity, invoice.customerProvince].filter(Boolean).join(', ')}`] : []),
-    ...(invoice.customerAddress ? [`Address: ${invoice.customerAddress}`] : []),
-  ];
-  custLines.forEach(line => { doc.text(line, ML, y); y += 5; });
-
-  if (invoice.warrantyLocation) {
-    const wbx = PW - MR - 52, wby = y - custLines.length * 5 - 6;
-    sf(doc, [240, 253, 244]); sd(doc, [187, 247, 208]);
-    doc.setLineWidth(0.4); doc.roundedRect(wbx, wby, 52, 18, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); st(doc, [22, 101, 52]);
-    doc.text('WARRANTY LOCATION', wbx + 26, wby + 6,  { align: 'center' });
-    doc.setFontSize(9); st(doc, [20, 83, 45]);
-    doc.text(invoice.warrantyLocation,  wbx + 26, wby + 14, { align: 'center' });
+  if (invoice.exchangeWarrantyNote?.trim()) {
+    doc.setFont('helvetica', 'normal'); st(doc, GRAY);
+    const nLines = doc.splitTextToSize(invoice.exchangeWarrantyNote, 95) as string[];
+    doc.text(nLines[0], ML + 12, y);
+    nLines.slice(1).forEach((ln, i) => doc.text(ln, ML + 12, y + (i + 1) * 4.5));
   }
 
-  y += 4;
-  sd(doc, GRAY_LINE); doc.setLineWidth(0.4);
-  doc.line(ML, y, PW - MR, y); y += 6;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
+  doc.text(`Total: ${fmtAmt(invoice.totalAmount)}`, PW - MR, y, { align: 'right' });
 
-  // ── PRODUCTS TABLE ─────────────────────────────────────────────────────────
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); st(doc, INDIGO);
-  doc.text('PRODUCTS & ITEMS', ML, y); y += 5;
+  y += 12;
 
-  // header row
-  sf(doc, INDIGO); doc.rect(ML, y, CW, 8, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); st(doc, WHITE);
-  const hy = y + 5.5;
-  doc.text('#',              COL.num.x    + COL.num.w    / 2, hy, { align: 'center' });
-  doc.text('Product',        COL.prod.x   + 2,                hy);
-  doc.text('Serial Numbers', COL.serial.x + 2,                hy);
-  doc.text('Qty',            COL.qty.x    + COL.qty.w    / 2, hy, { align: 'center' });
-  doc.text('Unit Price',     COL.price.x  + COL.price.w,      hy, { align: 'right'  });
-  doc.text('Total',          COL.total.x  + COL.total.w,      hy, { align: 'right'  });
+  // ══════════════════════════════════════════════════════════════════
+  // 6. TERMS AND CONDITIONS
+  // ══════════════════════════════════════════════════════════════════
+  y = pb(doc, y, 16);
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); st(doc, DARK);
+  doc.text('Terms and Conditions', ML, y);
   y += 8;
 
-  // product rows
-  invoice.products.forEach((p, idx) => {
-    const serials   = (p.serialNumbers || []).filter(s => s.trim() !== '');
-    const sPerRow   = 4;
-    const sRowCount = serials.length > 0 ? Math.ceil(serials.length / sPerRow) : 1;
-    const rowH      = Math.max(11, sRowCount * 5 + 7);
+  const BX   = ML + 3;    // bullet centre X
+  const TX   = ML + 8;    // text X
+  const TW   = CW - 8;    // text wrap width
+  const BFS  = 8;         // body font size
+  const BLH  = BFS * 0.42; // line height mm
+  const BR   = 1.1;       // bullet radius
 
-    y = guard(doc, y, rowH + 1, invN);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(BFS); st(doc, DARK);
 
-    sf(doc, idx % 2 === 0 ? WHITE : GRAY_STRIPE);
-    sd(doc, GRAY_LINE); doc.setLineWidth(0.15);
-    doc.rect(ML, y, CW, rowH, 'FD');
+  for (const term of TERMS) {
+    const lines  = doc.splitTextToSize(term, TW) as string[];
+    const termH  = lines.length * BLH + (lines.length - 1) * 0.3 + 2;
+    y = pb(doc, y, termH + 2);
 
-    const ry = y + 6.5;
+    // Filled circle bullet — vertically centred on first text line
+    sf(doc, DARK); sd(doc, DARK); doc.setLineWidth(0.01);
+    doc.ellipse(BX, y - 0.5, BR, BR, 'F');
 
-    // index
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); st(doc, INDIGO);
-    doc.text(String(idx + 1), COL.num.x + COL.num.w / 2, ry, { align: 'center' });
-
-    // product name
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); st(doc, BLACK);
-    const pName = doc.splitTextToSize(p.productName, COL.prod.w - 3);
-    doc.text(pName[0], COL.prod.x + 2, ry);
-    if (p.category) {
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); st(doc, GRAY);
-      doc.text(p.category, COL.prod.x + 2, ry + 4.5);
-    }
-
-    // serials as small badges
-    if (serials.length > 0) {
-      let sx = COL.serial.x + 2, sy = y + 3.5;
-      serials.forEach((s, si) => {
-        if (si > 0 && si % sPerRow === 0) { sx = COL.serial.x + 2; sy += 5; }
-        const sw = Math.min(Math.max(s.length * 1.9 + 5, 14), 34);
-        sf(doc, INDIGO_LIGHT); sd(doc, INDIGO_BORDER);
-        doc.setLineWidth(0.2); doc.roundedRect(sx, sy - 2, sw, 4.5, 0.8, 0.8, 'FD');
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(6); st(doc, INDIGO_DARK);
-        doc.text(s, sx + sw / 2, sy + 0.8, { align: 'center' });
-        sx += sw + 1.5;
-      });
-    } else {
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); st(doc, GRAY);
-      doc.text('—', COL.serial.x + 2, ry);
-    }
-
-    // qty, price, total
-    doc.setFont('helvetica', 'bold');   doc.setFontSize(8.5); st(doc, BLACK);
-    doc.text(String(p.quantity),          COL.qty.x   + COL.qty.w   / 2, ry, { align: 'center' });
-    doc.setFont('helvetica', 'normal');  doc.setFontSize(7.5);
-    doc.text(fmtCurrency(p.price),        COL.price.x + COL.price.w,      ry, { align: 'right'  });
-    doc.setFont('helvetica', 'bold');    doc.setFontSize(8);
-    doc.text(fmtCurrency(p.total),        COL.total.x + COL.total.w,      ry, { align: 'right'  });
-
-    y += rowH;
-  });
-
-  y += 6;
-
-  // ── TOTALS ─────────────────────────────────────────────────────────────────
-  y = guard(doc, y, 40, invN);
-  const totX = PW - MR - 72;
-
-  const totRow = (label: string, value: string, bold = false, color: RGB = BLACK) => {
-    sd(doc, GRAY_LINE); doc.setLineWidth(0.2);
-    doc.line(totX, y + 2, PW - MR, y + 2);
-    doc.setFont('helvetica', bold ? 'bold' : 'normal');
-    doc.setFontSize(bold ? 8.5 : 8);
-    st(doc, GRAY);   doc.text(label, totX + 2, y);
-    st(doc, color);  doc.text(value, PW - MR, y, { align: 'right' });
-    y += 7;
-  };
-
-  totRow('Subtotal', fmtCurrency(invoice.totalAmount));
-  if ((invoice.deductionCharges || 0) > 0)
-    totRow('Deduction Charges', `- ${fmtCurrency(invoice.deductionCharges)}`, false, RED);
-  if (invoice.paymentStatus === 'Partial' && invoice.paidAmount) {
-    totRow('Paid Amount',       fmtCurrency(invoice.paidAmount),           false, GREEN);
-    totRow('Remaining Balance', fmtCurrency(invoice.remainingAmount || 0), false, RED);
+    lines.forEach((ln, i) => doc.text(ln, TX, y + i * (BLH + 0.3)));
+    y += termH;
   }
 
-  y += 1;
-  sf(doc, INDIGO); doc.rect(totX, y - 4, 72, 11, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); st(doc, WHITE);
-  doc.text('Net Total',      totX + 3, y + 3);
-  doc.setFontSize(12);
-  doc.text(fmtCurrency(net), PW - MR,  y + 3, { align: 'right' });
-  y += 14;
+  y += 10;
 
-  // ── WARRANTY NOTE ──────────────────────────────────────────────────────────
-  if (invoice.exchangeWarrantyNote?.trim()) {
-    y = guard(doc, y, 30, invN); y += 2;
-    const nLines = doc.splitTextToSize(invoice.exchangeWarrantyNote, CW - 10);
-    const nH     = nLines.length * 5 + 13;
-    sf(doc, YELLOW_BG); sd(doc, YELLOW_BD);
-    doc.setLineWidth(0.55); doc.roundedRect(ML, y, CW, nH, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold');   doc.setFontSize(7); st(doc, [146, 64, 14]);
-    doc.text('EXCHANGE & WARRANTY POLICY', ML + 5, y + 6.5);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); st(doc, YELLOW_TXT);
-    doc.text(nLines, ML + 5, y + 13);
-    y += nH + 7;
-  }
-
-  // ── DIGITAL STAMP BLOCK ────────────────────────────────────────────────────
-  if (invoice.digitalStamp) {
-    const stampH = 52;
-    y = guard(doc, y, stampH + 4, invN); y += 2;
-
-    sf(doc, PURPLE_LIGHT); sd(doc, PURPLE_BD);
-    doc.setLineWidth(0.7); doc.roundedRect(ML, y, CW, stampH, 3, 3, 'FD');
-
-    // seal circle centred vertically in the block
-    drawSeal(doc, ML + 27, y + stampH / 2);
-
-    // text block
-    const tx = ML + 52;
-    doc.setFont('helvetica', 'bold');   doc.setFontSize(13); st(doc, INDIGO_3);
-    doc.text('Digitally Stamped & Verified', tx, y + 13);
-    doc.setFont('helvetica', 'bold');   doc.setFontSize(9);  st(doc, INDIGO);
-    doc.text('Pakistan Detectors Technologies', tx, y + 21);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); st(doc, INDIGO_MID);
-    const desc = doc.splitTextToSize(
-      'This invoice has been officially issued and digitally stamped by Pakistan Detectors Technologies.',
-      CW - 56 - 30,
-    );
-    doc.text(desc, tx, y + 29);
-
-    doc.setFont('helvetica', 'bold');   doc.setFontSize(7.5); st(doc, INDIGO);
-    doc.text('Invoice No:', tx,      y + 41);
-    doc.setFont('helvetica', 'normal'); st(doc, BLACK);
-    doc.text(invN,           tx + 22, y + 41);
-    doc.setFont('helvetica', 'bold');   st(doc, INDIGO);
-    doc.text('Net Total:',   tx + 70, y + 41);
-    doc.setFont('helvetica', 'normal'); st(doc, BLACK);
-    doc.text(fmtCurrency(net), tx + 88, y + 41);
-
-    // verified badge (right side) — uses ellipse, NOT circle
-    const bcx = PW - MR - 17, bcy = y + 26;
-    sf(doc, INDIGO); sd(doc, VIOLET); doc.setLineWidth(0.9);
-    doc.ellipse(bcx, bcy, 13, 13, 'FD');          // ← ellipse, not circle
-    drawCheck(doc, bcx, bcy + 0.5, 6.5, WHITE);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(5.5); st(doc, PURPLE_BADGE);
-    doc.text('AUTHENTIC', bcx, y + 44, { align: 'center' });
-
-    y += stampH + 8;
-  }
-
-  // ── FOOTER ─────────────────────────────────────────────────────────────────
-  drawFooter(doc, invN);
+  // ══════════════════════════════════════════════════════════════════
+  // 7. THANK YOU
+  // ══════════════════════════════════════════════════════════════════
+  y = pb(doc, y, 10);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); st(doc, DARK);
+  doc.text('Thank you for your purchase!', PW / 2, y, { align: 'center' });
 
   return doc.output('blob');
 }
 
-// ── Public API (async wrappers for drop-in compatibility) ─────────────────────
+// ── Public API ────────────────────────────────────────────────────────────────
 export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
   return buildPdf(invoice);
 }

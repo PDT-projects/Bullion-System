@@ -1,19 +1,24 @@
 // Invoice Module - Form ViewModel
-// Fixes:
-//   1. PDF is auto-generated + downloaded on every Create/Update Invoice save.
-//   2. generateAndSavePdf moved above handleSave to fix stale-closure / hoisting bug.
-//   3. getAvailableSerialsForProduct now excludes serials already selected in OTHER rows.
-//   4. Product dropdown label includes category + stock count for clarity.
+// Changes:
+//   1. Deduction charges are manually entered — removed auto-calc useEffect.
+//   2. Payment mode now supports Cash / Online / Cheque with cheque fields.
+//   3. Federal + Islamabad added via provinceCities (in invoiceService).
+//   4. City dropdown supports "Add new city" — custom cities saved to Firestore
+//      under a 'customCities' collection keyed by province.
+//   5. Inventory deduction on create/update uses totalAmount (gross), deductionCharges
+//      is commission-only and does NOT affect inventory stock figures.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
 import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
 import {
   createEmptyInvoiceProduct, updateProductWithSelection, updateProductQuantity,
   updateProductPrice, updateSerialNumber, getAvailableSerials,
-  validateInvoice, calculateTotal, calculateDeductionCharges,
-  provinceCities, salespersonLocations, deliveryStatuses, collectionMethods, formatCurrency,
+  validateInvoice, calculateTotal,
+  provinceCities as baseCities, salespersonLocations, deliveryStatuses, collectionMethods, formatCurrency,
 } from '../models/invoiceService';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
 import { generateInvoicePdf, downloadInvoicePdf } from '../models/invoicePdfService';
@@ -52,8 +57,37 @@ export interface UseInvoiceFormViewModelReturn {
   handleSave: () => void;
   handleCancel: () => void;
   handleDownloadPdf: () => void;
+  handleAddCustomCity: (province: string, city: string) => Promise<void>;
   calculateTotal: () => number;
   formatCurrency: (amount: number) => string;
+}
+
+// ── Load/save custom cities from Firestore ─────────────────────────────────────
+async function loadCustomCities(): Promise<Record<string, string[]>> {
+  try {
+    const snap = await getDoc(doc(db, 'appConfig', 'customCities'));
+    return snap.exists() ? (snap.data() as Record<string, string[]>) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveCustomCities(cities: Record<string, string[]>): Promise<void> {
+  await setDoc(doc(db, 'appConfig', 'customCities'), cities);
+}
+
+// ── Merge base + custom cities ────────────────────────────────────────────────
+function mergeCities(
+  base: Record<string, string[]>,
+  custom: Record<string, string[]>,
+): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  const allProvinces = new Set([...Object.keys(base), ...Object.keys(custom)]);
+  allProvinces.forEach(p => {
+    const merged = [...(base[p] || []), ...(custom[p] || [])];
+    result[p] = [...new Set(merged)].sort();
+  });
+  return result;
 }
 
 export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
@@ -69,6 +103,12 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [isSaving,         setIsSaving]         = useState(false);
   const [pdfGenerating,    setPdfGenerating]    = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [customCities,     setCustomCities]     = useState<Record<string, string[]>>({});
+
+  const provinceCitiesMerged = useMemo(
+    () => mergeCities(baseCities, customCities),
+    [customCities],
+  );
 
   const [formData, setFormDataState] = useState<Partial<Invoice>>({
     date: new Date().toISOString().split('T')[0],
@@ -80,7 +120,9 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     clientDealBy: '', referralBy: '', createdBy: '',
     paymentMode: 'Cash', paymentStatus: 'Full', paidAmount: 0,
     remainingAmount: 0, collectionMethod: 'Self Collection',
-    deductionCharges: 0, bankId: '', bankName: '', bankAccountNumber: '',
+    deductionCharges: 0,
+    bankId: '', bankName: '', bankAccountNumber: '',
+    chequeNumber: '', chequeBank: '', chequeDate: '',
     digitalStamp: false,
   });
 
@@ -92,10 +134,13 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     const load = async () => {
       setIsLoading(true);
       try {
+        // Load custom cities first
+        const cc = await loadCustomCities();
+        setCustomCities(cc);
+
         let rawProducts: any[] = [];
         try {
           rawProducts = await InventoryFirebaseService.fetchAllProducts();
-          console.log('✅ Raw products from Firestore:', rawProducts.length, rawProducts[0]);
         } catch (productErr) {
           console.error('❌ fetchAllProducts failed:', productErr);
           toast.error('Could not load products — check Firestore rules or collection name');
@@ -108,8 +153,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         ]);
         setAllInvoices(invoices);
 
-        // Map raw Firestore docs → ProductInfo
-        // Include all fields needed for the product row display
         const productInfos: ProductInfo[] = rawProducts
           .filter(p => p.receivableStatus !== 'Pending')
           .map(p => ({
@@ -118,14 +161,12 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
             modelName:     p.modelName     || p.model     || '',
             category:      p.category      || '',
             sellPrice:     p.sellPrice     || p.salePrice || p.price || 0,
-            // ── FIX: ensure stock reflects the actual count of available serials ──
             stock:         typeof p.stock === 'number' ? p.stock : (p.serialNumbers?.length ?? 0),
             serialNumbers: p.serialNumbers || [],
             serialCities:  p.serialCities  || {},
             serialStatus:  p.serialStatus  || {},
             description:   p.description   || '',
           }));
-        console.log('✅ Mapped productInfos:', productInfos.length, productInfos[0]);
         setAllProducts(productInfos);
         setActiveEmployees((employees as any[]).filter(e => e.status === 'active'));
         setBanks(bankList as any[]);
@@ -156,6 +197,22 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const setFormData = useCallback((data: Partial<Invoice>) => {
     setFormDataState(prev => ({ ...prev, ...data }));
   }, []);
+
+  // ── Add a custom city to a province and persist it ─────────────────────────
+  const handleAddCustomCity = useCallback(async (province: string, city: string) => {
+    const trimmed = city.trim();
+    if (!trimmed || !province) return;
+    const updated = { ...customCities };
+    updated[province] = [...new Set([...(updated[province] || []), trimmed])];
+    setCustomCities(updated);
+    setFormData({ customerCity: trimmed });
+    try {
+      await saveCustomCities(updated);
+      toast.success(`"${trimmed}" added to ${province}`);
+    } catch {
+      toast.error('City added locally but could not save to database');
+    }
+  }, [customCities, setFormData]);
 
   const handleCustomerSearch = useCallback((value: string, field: 'customerName' | 'customerPhone') => {
     setFormData({ [field]: value });
@@ -207,19 +264,15 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     );
   }, []);
 
-  // ── FIX: exclude serials already picked in OTHER rows of the same invoice ──
   const getAvailableSerialsForProduct = useCallback((productId: string, rowId: string): string[] => {
     const p = allProducts.find(x => x.id === productId);
     if (!p) return [];
-
-    // Collect serials already assigned to OTHER product rows
     const usedElsewhere = new Set<string>();
     selectedProducts.forEach(row => {
-      if (row.id === rowId) return;            // skip own row
-      if (row.productId !== productId) return; // only same product matters
+      if (row.id === rowId) return;
+      if (row.productId !== productId) return;
       (row.serialNumbers || []).forEach(s => { if (s.trim()) usedElsewhere.add(s); });
     });
-
     return (p.serialNumbers || []).filter(s => {
       if (!s.trim()) return false;
       if (usedElsewhere.has(s)) return false;
@@ -230,30 +283,24 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
   const total = useMemo(() => calculateTotal(selectedProducts), [selectedProducts]);
 
-  useEffect(() => {
-    const charges = calculateDeductionCharges(total, formData.collectionMethod);
-    setFormData({ deductionCharges: charges });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [total, formData.collectionMethod]);
+  // ── NOTE: deductionCharges is NOT auto-calculated — it is entered manually ──
+  // The old useEffect that called calculateDeductionCharges has been removed.
 
-  // ── Helper: strip internal fields from the customer-facing PDF copy ──────────
   const toCustomerInvoice = useCallback((inv: Invoice): Invoice => ({
     ...inv,
     salesperson: undefined, salespersonLocation: undefined,
     clientDealBy: undefined, referralBy: undefined, createdBy: undefined,
     paymentMode: undefined, bankId: undefined, bankName: undefined,
-    bankAccountNumber: undefined, collectionMethod: undefined,
+    bankAccountNumber: undefined, chequeNumber: undefined, chequeBank: undefined,
+    chequeDate: undefined, collectionMethod: undefined,
   }), []);
 
-  // ── Background: generate + upload PDF to Firebase Storage ────────────────────
-  // IMPORTANT: defined BEFORE handleSave so the reference is stable
   const generateAndSavePdf = useCallback(async (savedInvoice: Invoice): Promise<void> => {
     setPdfGenerating(true);
     try {
       const pdfBlob = await generateInvoicePdf(savedInvoice);
       const pdfUrl  = await InvoiceFirebaseService.uploadInvoicePdf(savedInvoice.id, pdfBlob);
       await InvoiceFirebaseService.savePdfUrl(savedInvoice.id, pdfUrl);
-      console.log('✅ PDF saved to cloud:', pdfUrl);
     } catch (err) {
       console.error('⚠️ PDF cloud upload failed:', err);
       toast.error('Invoice saved but PDF cloud upload failed.');
@@ -262,7 +309,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     }
   }, []);
 
-  // ── Manual "Download PDF" button ─────────────────────────────────────────────
   const handleDownloadPdf = useCallback(async () => {
     if (!formData.customerName?.trim()) {
       toast.error('Please enter customer name before downloading PDF');
@@ -293,16 +339,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         paidAmount:             formData.paymentStatus === 'Full' ? total : formData.paidAmount,
         remainingAmount:        formData.paymentStatus === 'Full' ? 0 : formData.remainingAmount,
         digitalStamp:           formData.digitalStamp,
-        salesperson:            undefined,
-        salespersonLocation:    undefined,
-        clientDealBy:           undefined,
-        referralBy:             undefined,
-        createdBy:              undefined,
-        paymentMode:            undefined,
-        bankId:                 undefined,
-        bankName:               undefined,
-        bankAccountNumber:      undefined,
-        collectionMethod:       undefined,
       };
       await downloadInvoicePdf(previewInvoice);
     } catch (err) {
@@ -313,7 +349,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     }
   }, [formData, selectedProducts, total, editingInvoice]);
 
-  // ── Save ──────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     const validation = validateInvoice(formData, selectedProducts);
     if (!validation.isValid) { toast.error(validation.error || 'Please fix errors'); return; }
@@ -335,6 +370,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         exchangeWarrantyNote:   formData.exchangeWarrantyNote || '',
         deliveryStatus:         formData.deliveryStatus || 'Self-collect',
         deliveryReceivedStatus: editingInvoice?.deliveryReceivedStatus || 'Pending',
+        // totalAmount is the gross sale amount — deductionCharges is commission only
         totalAmount:            total,
         status:                 formData.status  || 'Unpaid',
         salesperson:            formData.salesperson,
@@ -343,36 +379,30 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         referralBy:             formData.referralBy,
         createdBy:              formData.createdBy,
         paymentMode:            formData.paymentMode,
-        bankId:                 formData.bankId,
-        bankName:               formData.bankName,
-        bankAccountNumber:      formData.bankAccountNumber,
+        bankId:                 formData.paymentMode === 'Online' ? formData.bankId : undefined,
+        bankName:               formData.paymentMode === 'Online' ? formData.bankName : undefined,
+        bankAccountNumber:      formData.paymentMode === 'Online' ? formData.bankAccountNumber : undefined,
+        chequeNumber:           formData.paymentMode === 'Cheque' ? formData.chequeNumber : undefined,
+        chequeBank:             formData.paymentMode === 'Cheque' ? formData.chequeBank : undefined,
+        chequeDate:             formData.paymentMode === 'Cheque' ? formData.chequeDate : undefined,
         paymentStatus:          formData.paymentStatus,
         paidAmount:             formData.paymentStatus === 'Full' ? total : formData.paidAmount,
         remainingAmount:        formData.paymentStatus === 'Full' ? 0    : formData.remainingAmount,
         collectionMethod:       formData.collectionMethod,
+        // deductionCharges = commission/logistics cost — does NOT alter inventory amounts
         deductionCharges:       formData.deductionCharges || 0,
         digitalStamp:           formData.digitalStamp,
       };
 
       if (isEditing && editingInvoice) {
-        // ── UPDATE ────────────────────────────────────────────────────────────
         await InvoiceFirebaseService.updateInvoice(editingInvoice.id, invoiceData);
         const saved: Invoice = { ...invoiceData, id: editingInvoice.id };
         toast.success('Invoice updated — downloading PDF…');
-
-        // Auto-download PDF immediately on save
-        try {
-          await downloadInvoicePdf(toCustomerInvoice(saved));
-        } catch {
-          toast.error('Invoice updated but PDF download failed');
-        }
-
-        // Background cloud upload
+        try { await downloadInvoicePdf(toCustomerInvoice(saved)); }
+        catch { toast.error('Invoice updated but PDF download failed'); }
         generateAndSavePdf(saved);
-
       } else {
-        // ── CREATE ────────────────────────────────────────────────────────────
-        // Deduct inventory first
+        // ── Deduct inventory (stock/serials only — deductionCharges not involved) ──
         for (const ip of selectedProducts) {
           if (!ip.productId || !ip.serialNumbers?.length) continue;
           try {
@@ -394,15 +424,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
         const created = await InvoiceFirebaseService.createInvoice(invoiceData);
         toast.success('Invoice created — downloading PDF…');
-
-        // Auto-download PDF immediately on save
-        try {
-          await downloadInvoicePdf(toCustomerInvoice(created));
-        } catch {
-          toast.error('Invoice created but PDF download failed');
-        }
-
-        // Background cloud upload
+        try { await downloadInvoicePdf(toCustomerInvoice(created)); }
+        catch { toast.error('Invoice created but PDF download failed'); }
         generateAndSavePdf(created);
       }
 
@@ -420,7 +443,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   return {
     formData, selectedProducts, customerSuggestions, showSuggestions,
     isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
-    provinceCities, salespersonLocations,
+    provinceCities: provinceCitiesMerged,
+    salespersonLocations,
     deliveryStatuses: deliveryStatuses as string[],
     collectionMethods: collectionMethods as string[],
     availableProducts: allProducts, activeEmployees, banks,
@@ -428,6 +452,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     addProduct, removeProduct, updateProduct, updateSerial,
     getAvailableSerialsForProduct,
     handleSave, handleCancel, handleDownloadPdf,
+    handleAddCustomCity,
     calculateTotal: () => total,
     formatCurrency,
   };
