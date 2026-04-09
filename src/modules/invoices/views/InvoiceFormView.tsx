@@ -131,8 +131,8 @@ export function InvoiceFormView({
               <input type="text" value={formData.invoiceNumber || ''} readOnly className={`${inp} bg-gray-50`} />
             </div>
             <div>
-              <label className={lbl}>Date *</label>
-              <input type="date" value={formData.date || ''} onChange={e => setFormData({ date: e.target.value })} className={inp} />
+              <label className={lbl}>Date</label>
+              <input type="date" value={formData.date || ''} readOnly className={`${inp} bg-gray-50 cursor-not-allowed`} />
             </div>
             <div className="relative">
               <label className={lbl}>Customer Name *</label>
