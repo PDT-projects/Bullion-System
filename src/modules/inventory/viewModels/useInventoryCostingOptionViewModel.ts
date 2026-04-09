@@ -8,6 +8,7 @@ import { CostingOption } from '../models/types';
 export interface UseInventoryCostingOptionViewModelReturn {
   selectedOption: CostingOption | null;
   selectOption: (option: CostingOption) => void;
+  selectOptionAndContinue: (option: CostingOption) => void;
   handleContinue: () => void;
   handleBack: () => void;
   canContinue: boolean;
@@ -21,6 +22,15 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
 
   const selectOption = useCallback((option: CostingOption) => setSelectedOption(option), []);
 
+  const selectOptionAndContinue = useCallback((option: CostingOption) => {
+    setSelectedOption(option);
+    if (option === 'with') {
+      navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${option}`);
+    } else {
+      navigate(`/inventory/create-new/details?type=${inventoryType}&costing=${option}`);
+    }
+  }, [navigate, inventoryType]);
+
   const handleContinue = useCallback(() => {
     if (!selectedOption) return;
     if (selectedOption === 'with') {
@@ -32,5 +42,5 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
 
   const handleBack = useCallback(() => navigate('/inventory/create-new'), [navigate]);
 
-  return { selectedOption, selectOption, handleContinue, handleBack, canContinue: selectedOption !== null };
+  return { selectedOption, selectOption, selectOptionAndContinue, handleContinue, handleBack, canContinue: selectedOption !== null };
 }

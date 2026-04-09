@@ -1,7 +1,8 @@
-# TODO: Make "Add 2 Units to Stock" button text black in InventoryAddExistingView
+# TODO: Fix CostingOptionView cards not advancing (add auto-continue)
 
 ## Steps:
-- [x] Create TODO.md
-- [x] Edit button className in src/modules/inventory/views/InventoryAddExistingView.tsx
-- [x] Test the change
-- [x] Mark complete
+- [x] Analyze bug in viewModels
+- [x] Add selectOptionAndContinue to useInventoryCostingOptionViewModel.ts
+- [x] Update InventoryCostingOptionView.tsx card onClick to use it
+- [x] Test full flow
+- [x] Complete

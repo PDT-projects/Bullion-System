@@ -184,27 +184,6 @@ export const InventoryTypeSelectionView: React.FC<InventoryTypeSelectionViewProp
             </button>
           </div>
 
-          {/* Footer action */}
-          <div className="flex items-center justify-between pt-5 mt-5 border-t border-gray-200">
-            <p className="text-sm text-gray-400">
-              {canContinue
-                ? `Selected: ${selectedType === 'in-stock' ? 'In-Stock / Received' : 'On-Order / Pending'}`
-                : 'Select an inventory type above to continue'}
-            </p>
-            <button
-              onClick={handleContinue}
-              disabled={!canContinue}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                canContinue
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              Continue to Costing
-              <ChevronRight size={16} />
-            </button>
-          </div>
-
         </div>
       </div>
     </div>

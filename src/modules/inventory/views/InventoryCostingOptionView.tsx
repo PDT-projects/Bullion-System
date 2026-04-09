@@ -10,6 +10,7 @@ interface InventoryCostingOptionViewProps extends UseInventoryCostingOptionViewM
 export const InventoryCostingOptionView: React.FC<InventoryCostingOptionViewProps> = ({
   selectedOption,
   selectOption,
+  selectOptionAndContinue,
   handleContinue,
   handleBack,
   canContinue,
@@ -105,7 +106,7 @@ export const InventoryCostingOptionView: React.FC<InventoryCostingOptionViewProp
 
             {/* With Costing */}
             <button
-              onClick={() => selectOption('with')}
+              onClick={() => selectOptionAndContinue('with')}
               className={`flex flex-col p-6 border-2 rounded-2xl text-left transition-all duration-200 w-full ${
                 selectedOption === 'with'
                   ? 'border-indigo-500 bg-indigo-50 shadow-md ring-2 ring-indigo-100'
@@ -141,7 +142,7 @@ export const InventoryCostingOptionView: React.FC<InventoryCostingOptionViewProp
 
             {/* Without Costing */}
             <button
-              onClick={() => selectOption('without')}
+              onClick={() => selectOptionAndContinue('without')}
               className={`flex flex-col p-6 border-2 rounded-2xl text-left transition-all duration-200 w-full ${
                 selectedOption === 'without'
                   ? 'border-orange-500 bg-orange-50 shadow-md ring-2 ring-orange-100'
@@ -173,27 +174,6 @@ export const InventoryCostingOptionView: React.FC<InventoryCostingOptionViewProp
                   Select <ChevronRight size={16} />
                 </span>
               </div>
-            </button>
-          </div>
-
-          {/* Footer action */}
-          <div className="flex items-center justify-between pt-5 mt-5 border-t border-gray-200">
-            <p className="text-sm text-gray-400">
-              {canContinue
-                ? `Selected: ${selectedOption === 'with' ? 'With Costing' : 'Without Costing'}`
-                : 'Select a costing option above to continue'}
-            </p>
-            <button
-              onClick={handleContinue}
-              disabled={!canContinue}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                canContinue
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              Continue to Details
-              <ChevronRight size={16} />
             </button>
           </div>
 
