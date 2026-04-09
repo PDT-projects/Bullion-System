@@ -38,6 +38,11 @@ export function SalaryEditWrapper() {
       regularAlreadyPaidAmount={vm.regularAlreadyPaidAmount}
       remainingSalaryToPay={vm.remainingSalaryToPay}
       isEffectivelyAdvance={vm.isEffectivelyAdvance}
+      // Commission auto-fill props (edit mode will have isCommissionAutoFilled=false
+      // so the badge won't show — existing data is preserved as-is)
+      confirmedCommissionAmount={vm.confirmedCommissionAmount}
+      isCommissionAutoFilled={vm.isCommissionAutoFilled}
+      commissionSource={vm.commissionSource}
       onFieldChange={vm.onFieldChange}
       onTransactionChange={vm.onTransactionChange}
       onSubmit={vm.onSubmit}

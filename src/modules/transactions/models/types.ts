@@ -73,6 +73,12 @@ export interface Transaction {
   isFullyCleared?: boolean;
   depositedToBank?: boolean;
   attachments?: Attachment[];
+  // Profit & Loss classification
+  plMainCategory?: PLMainCategory;
+  plSubCategory?: string;
+  // Balance Sheet classification
+  bsMainCategory?: BSMainCategory;
+  bsSubCategory?: string;
   // Linked record info
   linkedType?: 'salary' | 'loan' | 'bill' | 'invoice' | 'commission' | 'manual';
   linkedId?: string;
@@ -225,11 +231,74 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
 // ── Dynamic Category (user-added, stored in Firestore /dynamicCategories) ─────
 export interface DynamicCategory {
   id: string;
-  type: 'mainCategory' | 'subCategory';
-  parentCategory?: string;   // for subCategory: which mainCategory it belongs to
+  // 'mainCategory' / 'subCategory'        → transaction category tree
+  // 'plMainCategory' / 'plSubCategory'    → P&L category tree
+  // 'bsMainCategory' / 'bsSubCategory'    → Balance Sheet category tree
+  type: 'mainCategory' | 'subCategory' | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory';
+  parentCategory?: string;   // for subCategory / plSubCategory: which parent it belongs to
   name: string;
   createdAt: string;
 }
+
+// ── Profit & Loss Categories ───────────────────────────────────────────────────
+
+export type PLMainCategory =
+  | 'Revenue'
+  | 'Cost of Goods Sold (COGS)'
+  | 'Operating Expenses';
+
+export interface PLCategory {
+  main: PLMainCategory;
+  sub: string;
+}
+
+export const PL_CATEGORIES: Record<PLMainCategory, string[]> = {
+  'Revenue': [
+    'Service / Invoice Sales',
+    'Service Income',
+  ],
+  'Cost of Goods Sold (COGS)': [
+    'Purchase & Inventory',
+  ],
+  'Operating Expenses': [
+    'Salaries & Wages',
+    'Utilities',
+    'Rent',
+    'Marketing',
+    'Miscellaneous',
+  ],
+};
+
+// ── Balance Sheet Categories ───────────────────────────────────────────────────
+
+export type BSMainCategory =
+  | 'Assets'
+  | 'Liabilities & Equity';
+
+export interface BSCategory {
+  main: BSMainCategory;
+  sub: string;
+}
+
+export const BS_CATEGORIES: Record<BSMainCategory, string[]> = {
+  'Assets': [
+    'Cash & Cash Equivalents',
+    'Accounts Receivable',
+    'Inventory',
+    'Prepaid Expenses',
+    'Fixed Assets',
+    'Other Assets',
+  ],
+  'Liabilities & Equity': [
+    'Accounts Payable',
+    'Short-term Loans',
+    'Long-term Loans',
+    'Accrued Expenses',
+    'Owner Equity / Capital',
+    'Retained Earnings',
+    'Other Liabilities',
+  ],
+};
 
 export const LOAN_SUB_CATEGORIES = new Set([
   'Loan received - From Employee',

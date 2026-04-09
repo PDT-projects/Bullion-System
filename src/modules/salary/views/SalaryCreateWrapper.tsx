@@ -42,6 +42,10 @@ export function SalaryCreateWrapper({ type }: SalaryCreateWrapperProps) {
       regularAlreadyPaidAmount={vm.regularAlreadyPaidAmount}
       remainingSalaryToPay={vm.remainingSalaryToPay}
       isEffectivelyAdvance={vm.isEffectivelyAdvance}
+      // NEW: commission auto-fill props
+      confirmedCommissionAmount={vm.confirmedCommissionAmount}
+      isCommissionAutoFilled={vm.isCommissionAutoFilled}
+      commissionSource={vm.commissionSource}
       onFieldChange={vm.onFieldChange}
       onTransactionChange={vm.onTransactionChange}
       onSubmit={vm.onSubmit}

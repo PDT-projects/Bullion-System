@@ -1,4 +1,6 @@
 // Commission Calculation ViewModel — saves results to Firestore
+// UPDATED: After saving commissions, also writes commission amounts to salary records
+//          so the salary form can auto-populate the commission field.
 
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
@@ -15,6 +17,7 @@ import {
   CITIES
 } from '../models/commissionService';
 import { CommissionFirebaseService } from '../models/Commissionfirebaseservice';
+import { SalaryFirebaseService } from '../../salary/models/salaryFirebaseService';
 
 // ─── Per-salesperson invoice breakdown (shown in the UI before final save) ───
 
@@ -24,6 +27,10 @@ export interface SalespersonInvoiceBreakdown {
   invoices: InvoiceReference[];
   totalSales: number;
   invoiceCount: number;
+  // Slab progress info for the progress bar
+  slabFrom: number;
+  slabTo: number;
+  nextSlabThreshold: number | null; // null if no higher slab exists for this sp+city
 }
 
 // ─── Local calculation helper ────────────────────────────────────────────────
@@ -82,15 +89,6 @@ function calculateCommissionsFromInvoices(
       return;
     }
 
-    // Store breakdown for display
-    breakdowns.push({
-      salespersonId,
-      salespersonName: employee.name,
-      invoices: spInvoices,
-      totalSales,
-      invoiceCount: spInvoices.length,
-    });
-
     // Find applicable commission slab
     const applicableSlab = slabs.find(
       (slab) =>
@@ -99,6 +97,30 @@ function calculateCommissionsFromInvoices(
         totalSales >= slab.fromAmount &&
         totalSales <= slab.toAmount
     );
+
+    // Find the next higher slab (for progress bar)
+    const higherSlabs = slabs
+      .filter(
+        (slab) =>
+          slab.salesperson === salespersonId &&
+          slab.city === city &&
+          slab.fromAmount > totalSales
+      )
+      .sort((a, b) => a.fromAmount - b.fromAmount);
+
+    const nextSlabThreshold = higherSlabs.length > 0 ? higherSlabs[0].fromAmount : null;
+
+    // Store breakdown for display
+    breakdowns.push({
+      salespersonId,
+      salespersonName: employee.name,
+      invoices: spInvoices,
+      totalSales,
+      invoiceCount: spInvoices.length,
+      slabFrom: applicableSlab?.fromAmount ?? 0,
+      slabTo: applicableSlab?.toAmount ?? 0,
+      nextSlabThreshold,
+    });
 
     if (!applicableSlab) {
       errors.push(
@@ -117,7 +139,7 @@ function calculateCommissionsFromInvoices(
       city,
       month,
       totalSales,
-      invoiceCount: spInvoices.length,   // ← store invoice count on the commission record
+      invoiceCount: spInvoices.length,
       appliedSlabFrom: applicableSlab.fromAmount,
       appliedSlabTo: applicableSlab.toAmount,
       commissionPercentage: applicableSlab.commissionPercentage,
@@ -139,7 +161,7 @@ function calculateCommissionsFromInvoices(
       totalSalespeople: commissions.length,
       totalSales,
       totalCommission,
-      totalInvoicesUsed: relevantInvoices.length,   // ← total paid invoices used
+      totalInvoicesUsed: relevantInvoices.length,
     },
     breakdowns,
   };
@@ -160,7 +182,6 @@ interface UseCommissionCalculationViewModelReturn {
     totalCommission: number;
     totalInvoicesUsed: number;
   } | null;
-  // Invoice breakdown per salesperson — shown in the breakdown panel
   invoiceBreakdowns: SalespersonInvoiceBreakdown[];
   expandedSalesperson: string | null;
   setExpandedSalesperson: (id: string | null) => void;
@@ -325,6 +346,11 @@ export function useCommissionCalculationViewModel(
 
   const cancelCalculation = useCallback(() => resetState(), [resetState]);
 
+  // ─── KEY INTEGRATION: After saving commissions to Firestore, also update
+  //     any existing salary record for the same employee+month by writing the
+  //     commission amount onto it. If no salary record exists yet the amount
+  //     is stored on the commission record; useSalaryFormViewModel will pick
+  //     it up when the user opens the salary form for that employee+month.
   const handleModalConfirm = useCallback(async () => {
     try {
       const toSave = commissionData.map(({ id, ...rest }) => ({
@@ -335,9 +361,54 @@ export function useCommissionCalculationViewModel(
         isLocked: true,
       }));
 
-      await CommissionFirebaseService.saveCommissions(toSave);
+      const savedCommissions = await CommissionFirebaseService.saveCommissions(toSave);
 
-      toast.success(`${toSave.length} commission(s) saved successfully`);
+      // ── Link commission amounts to existing salary records ──────────────
+      // For each confirmed commission, look for a salary record for the same
+      // employee + salaryMonth and update its commission field.  We do this
+      // silently — a missing salary record is not an error; the salary form
+      // will auto-populate when the user creates/edits salary later.
+      try {
+        const allSalaries = await SalaryFirebaseService.fetchAllSalaries();
+
+        const updatePromises = savedCommissions.map(async (commission) => {
+          const commissionAmount =
+            commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount;
+
+          // Find matching regular salary for this employee + month
+          const matchingSalary = allSalaries.find(
+            (s) =>
+              s.employeeId === commission.salesperson &&
+              s.salaryMonth === commission.month &&
+              s.subCategory === 'Employee salary'
+          );
+
+          if (matchingSalary) {
+            await SalaryFirebaseService.updateSalary(matchingSalary.id, {
+              commission: commissionAmount,
+              // Recalculate netAmount
+              netAmount: Math.max(
+                0,
+                (matchingSalary.baseSalary || 0) +
+                  commissionAmount -
+                  (matchingSalary.deductions || 0)
+              ),
+            });
+          }
+          // If no salary record yet, nothing to update — the salary form
+          // will auto-fetch the commission amount from the commission record.
+        });
+
+        await Promise.allSettled(updatePromises);
+      } catch (linkErr) {
+        // Non-fatal: salary linking failure should not block commission save
+        console.warn('⚠️ Could not link commissions to salary records:', linkErr);
+      }
+      // ── end salary linking ───────────────────────────────────────────────
+
+      toast.success(
+        `${toSave.length} commission(s) saved. Commission amounts will appear automatically on salary forms.`
+      );
       setShowModal(false);
       resetState();
       onCommissionsSaved();

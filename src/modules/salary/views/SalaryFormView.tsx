@@ -1,11 +1,9 @@
 // Salary Module - View Layer
 // SalaryFormView - Form for create/edit salary
-// Fixes:
-// 1. Employee info panel: no more text overlap — uses clean grid layout
-// 2. Shows clear "Remaining to pay" amount when advance already given this month
-// 3. Base salary auto-filled with remaining amount (full - advance paid)
+// UPDATED: Shows commission auto-fill badge when a Confirmed commission record
+//          is found for the selected employee + salary month.
 
-import { User, Calculator, Wallet, Building2, CreditCard, AlertCircle, CheckCircle, Info, ArrowLeft, Lock } from 'lucide-react';
+import { User, Calculator, Wallet, Building2, CreditCard, AlertCircle, CheckCircle, Info, ArrowLeft, Lock, TrendingUp, Sparkles } from 'lucide-react';
 import { SalaryService } from '../models/salaryService';
 
 interface SalaryTransaction {
@@ -54,6 +52,10 @@ interface SalaryFormViewProps {
   regularAlreadyPaidAmount: number;
   remainingSalaryToPay: number;
   isEffectivelyAdvance: boolean;
+  // NEW: commission auto-fill props
+  confirmedCommissionAmount?: number;
+  isCommissionAutoFilled?: boolean;
+  commissionSource?: string;
   onFieldChange: (field: string, value: any) => void;
   onTransactionChange: (index: number, field: keyof SalaryTransaction, value: any) => void;
   onSubmit: () => void;
@@ -63,7 +65,6 @@ interface SalaryFormViewProps {
 const inp    = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]';
 const inpErr = 'border-red-500';
 
-// Format date for locked display
 function formatDateDisplay(dateStr: string): string {
   if (!dateStr) return '';
   try {
@@ -79,6 +80,9 @@ export function SalaryFormView({
   employees, banks, selectedEmployee, calculatedNetAmount,
   advancePaidThisMonth, regularAlreadyPaid, regularAlreadyPaidAmount,
   remainingSalaryToPay, isEffectivelyAdvance,
+  confirmedCommissionAmount = 0,
+  isCommissionAutoFilled = false,
+  commissionSource = '',
   onFieldChange, onTransactionChange, onSubmit, onCancel,
 }: SalaryFormViewProps) {
   const fmt         = SalaryService.formatCurrency;
@@ -165,6 +169,29 @@ export function SalaryFormView({
           </div>
         )}
 
+        {/* ── NEW Banner: Commission auto-filled from confirmed commission record ── */}
+        {isRegular && isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode && (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
+            <div className="p-1.5 bg-green-100 rounded-lg flex-shrink-0">
+              <TrendingUp className="w-4 h-4 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-green-800 font-semibold">Commission auto-filled from Commission Module</p>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 border border-green-200">
+                  <Sparkles size={10} />
+                  Auto
+                </span>
+              </div>
+              <p className="text-green-700 text-sm mt-0.5">
+                A confirmed commission of <strong>{fmt(confirmedCommissionAmount)}</strong> was found
+                {commissionSource ? <> for <strong>{commissionSource}</strong></> : ''} and has been
+                pre-filled below. You can edit it manually if needed.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Banner: Advance salary context ── */}
         {!isRegular && selectedEmployee && transaction.salaryMonth && (
           <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3">
@@ -229,7 +256,7 @@ export function SalaryFormView({
                 />
               </div>
 
-              {/* ── FIX: Employee info card — proper grid, no text overlap ── */}
+              {/* Employee info card */}
               {selectedEmployee && (
                 <div className="md:col-span-2 bg-gray-50 border border-gray-200 rounded-xl p-4">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Employee Info</p>
@@ -328,17 +355,37 @@ export function SalaryFormView({
 
               {isRegular && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Commission</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                    Commission
+                    {/* ── Auto-fill badge ── */}
+                    {isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 border border-green-200">
+                        <Sparkles size={9} />
+                        Auto-filled
+                      </span>
+                    )}
+                  </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">PKR</span>
                     <input
                       type="number"
                       value={formData.commission}
                       onChange={(e) => onFieldChange('commission', parseFloat(e.target.value) || 0)}
-                      className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                      className={`w-full pl-12 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${
+                        isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode
+                          ? 'border-green-400 bg-green-50/50'
+                          : 'border-gray-300'
+                      }`}
                       placeholder="0"
                     />
                   </div>
+                  {/* Source hint below the field */}
+                  {isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode && (
+                    <p className="mt-1 text-xs text-green-600 flex items-center gap-1">
+                      <TrendingUp size={10} />
+                      From commission module{commissionSource ? ` · ${commissionSource}` : ''}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -361,7 +408,7 @@ export function SalaryFormView({
                 </div>
               </div>
 
-              {/* Date — locked to today, same pattern as Bills/Transactions */}
+              {/* Date — locked to today */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date <span className="text-xs font-normal text-gray-400 ml-1">(auto)</span>
@@ -566,6 +613,9 @@ export function SalaryFormView({
               {formData.commission > 0 && (
                 <span className="flex items-center gap-1 text-green-700">
                   <span>+</span> Commission: {fmt(formData.commission)}
+                  {isCommissionAutoFilled && !isEditMode && (
+                    <span className="text-xs text-green-500">(from commission module)</span>
+                  )}
                 </span>
               )}
               {formData.deductions > 0 && (
@@ -574,7 +624,6 @@ export function SalaryFormView({
                 </span>
               )}
             </div>
-            {/* Show advance context at bottom of summary */}
             {isRegular && advancePaidThisMonth > 0 && !regularAlreadyPaid && (
               <div className="mt-3 pt-3 border-t border-[#4f46e5]/20 text-xs text-[#4f46e5]">
                 ℹ️ Advance already paid this month: {fmt(advancePaidThisMonth)} · 

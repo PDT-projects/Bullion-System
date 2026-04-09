@@ -1,14 +1,16 @@
 // Salary Module - ViewModel Layer
 // Form logic for create/edit salary
-// Changes:
-// 1. Fetches real banks from Firestore (BankFirebaseService)
-// 2. Updates bank balance on save (deduct outflow)
-// 3. Calculates advance paid for selected employee+month and shows deduction
-// 4. Blocks paying regular salary for a month already fully paid
-// 5. Saves bankId, chequeNumber, chequeDate, chequeBank to Firestore
-// 6. Creates linked Cash Outflow transaction record
-// 7. NEW: Auto-fills baseSalary with REMAINING amount (fullSalary - advancePaid)
-//         when advance has already been partially paid this month
+// UPDATED:
+//  1. Fetches real banks from Firestore (BankFirebaseService)
+//  2. Updates bank balance on save (deduct outflow)
+//  3. Calculates advance paid for selected employee+month and shows deduction
+//  4. Blocks paying regular salary for a month already fully paid
+//  5. Saves bankId, chequeNumber, chequeDate, chequeBank to Firestore
+//  6. Creates linked Cash Outflow transaction record
+//  7. Auto-fills baseSalary with REMAINING amount (fullSalary - advancePaid)
+//     when advance has already been partially paid this month
+//  8. NEW: Auto-fills commission from a Confirmed commission record for the
+//     selected employee + salaryMonth (from the commissions collection)
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -18,6 +20,7 @@ import { SalaryService } from '../models/salaryService';
 import { SalaryFirebaseService } from '../models/salaryFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { TransactionFirebaseService } from '../../transactions/models/transactionFirebaseService';
+import { CommissionFirebaseService } from '../../commission/models/Commissionfirebaseservice';
 
 interface BankInfo { id: string; name: string; balance: number; }
 
@@ -53,8 +56,12 @@ interface UseSalaryFormViewModelReturn {
   advancePaidThisMonth: number;
   regularAlreadyPaid: boolean;
   regularAlreadyPaidAmount: number;
-  remainingSalaryToPay: number;      // ← NEW: fullSalary - advancePaid (0 if no advance)
+  remainingSalaryToPay: number;
   isEffectivelyAdvance: boolean;
+  // NEW: commission auto-fill state
+  confirmedCommissionAmount: number;        // amount found in commissions collection
+  isCommissionAutoFilled: boolean;          // true when commission was auto-populated
+  commissionSource: string;                 // human-readable label, e.g. "Karachi · April 2025"
   onFieldChange: (field: string, value: any) => void;
   onTransactionChange: (index: number, field: keyof SalaryTransaction, value: any) => void;
   onSubmit: () => void;
@@ -86,6 +93,13 @@ export function useSalaryFormViewModel({
   const [banks,       setBanks]       = useState<BankInfo[]>([]);
   const [allSalaries, setAllSalaries] = useState<Salary[]>([]);
   const [isLoading,   setIsLoading]   = useState(false);
+
+  // ── NEW: commission auto-fill state ──────────────────────────────────────
+  const [confirmedCommissionAmount, setConfirmedCommissionAmount] = useState(0);
+  const [isCommissionAutoFilled,    setIsCommissionAutoFilled]    = useState(false);
+  const [commissionSource,          setCommissionSource]          = useState('');
+  // Flag to prevent auto-fill from overwriting a manual user edit
+  const [commissionManuallyEdited,  setCommissionManuallyEdited]  = useState(false);
 
   const isEditMode       = mode === 'edit';
   const submitButtonText = isEditMode ? 'Update Salary' : 'Save Salary';
@@ -150,9 +164,7 @@ export function useSalaryFormViewModel({
     return regularAlreadyPaidAmount >= (selectedEmployee.salary || 0);
   }, [type, selectedEmployee, regularAlreadyPaidAmount]);
 
-  // ── NEW: Remaining salary = full salary minus advance already given ───────
-  // This is what should be pre-filled as base salary when paying regular
-  // after some advance was already paid this month.
+  // ── Remaining salary = full salary minus advance already given ────────────
   const remainingSalaryToPay = useMemo(() => {
     if (!selectedEmployee || !salaryMonth) return 0;
     const fullSalary = selectedEmployee.salary || 0;
@@ -191,6 +203,55 @@ export function useSalaryFormViewModel({
     );
   }, [formData, calculatedNetAmount, transactionsList]);
 
+  // ── NEW: Auto-fetch confirmed commission for employee + salaryMonth ────────
+  // Runs whenever employeeId or salaryMonth changes (create mode only, regular type only)
+  // If the user has already manually edited the commission field, we skip the auto-fill.
+  useEffect(() => {
+    if (isEditMode) return;                        // don't overwrite existing records
+    if (type !== 'regular') return;                // commissions only apply to regular salary
+    if (!formData.employeeId || !salaryMonth) return;
+    if (commissionManuallyEdited) return;          // user has overridden — respect it
+
+    let cancelled = false;
+
+    const fetchCommission = async () => {
+      try {
+        const allCommissions = await CommissionFirebaseService.fetchAllCommissions();
+
+        // Find the most recent Confirmed commission for this employee + month
+        const match = allCommissions.find(
+          (c) =>
+            c.salesperson === formData.employeeId &&
+            c.month === salaryMonth &&
+            c.status === 'Confirmed'
+        );
+
+        if (cancelled) return;
+
+        if (match) {
+          const amount = match.overriddenCommissionAmount ?? match.calculatedCommissionAmount;
+          setConfirmedCommissionAmount(amount);
+          setIsCommissionAutoFilled(true);
+          setCommissionSource(`${match.city} · ${match.month}`);
+          // Only auto-fill if user hasn't manually changed the field
+          setFormData((prev) => ({ ...prev, commission: amount }));
+        } else {
+          // No confirmed commission found — clear any previously auto-filled value
+          setConfirmedCommissionAmount(0);
+          setIsCommissionAutoFilled(false);
+          setCommissionSource('');
+          setFormData((prev) => ({ ...prev, commission: 0 }));
+        }
+      } catch (err) {
+        // Non-fatal: if commission fetch fails, just leave the field at 0
+        console.warn('⚠️ Could not fetch commission for salary form:', err);
+      }
+    };
+
+    fetchCommission();
+    return () => { cancelled = true; };
+  }, [formData.employeeId, salaryMonth, isEditMode, type, commissionManuallyEdited]);
+
   // Load existing salary in edit mode
   useEffect(() => {
     if (!isEditMode || !id) return;
@@ -200,7 +261,7 @@ export function useSalaryFormViewModel({
         const salary = await SalaryFirebaseService.fetchSalaryById(id);
         if (!salary) { toast.error('Salary record not found'); navigate('/salary'); return; }
         setFormData({
-          employeeId:  salary.employeeId || '',
+          employeeId:  salary.employeeId,
           subCategory: salary.subCategory,
           date:        salary.date,
           note:        salary.note || '',
@@ -209,13 +270,13 @@ export function useSalaryFormViewModel({
           deductions:  salary.deductions || 0,
         });
         setTransactionsList([{
-          id:              salary.id,
-          amount:          salary.amount,
+          id:              Date.now().toString(),
+          amount:          salary.netAmount || salary.amount,
           paidBy:          salary.paidBy,
-          transactionBy:   salary.transactionBy,
+          transactionBy:   salary.transactionBy || '',
           mode:            salary.mode,
           bankId:          salary.bankId || '',
-          bankName:        salary.bankName,
+          bankName:        salary.bankName || '',
           chequeNumber:    salary.chequeNumber || '',
           chequeDate:      salary.chequeDate || '',
           chequeBank:      salary.chequeBank || '',
@@ -239,7 +300,6 @@ export function useSalaryFormViewModel({
   useEffect(() => {
     if (!isEditMode && selectedEmployee && type === 'regular') {
       const fullSalary = selectedEmployee.salary || 0;
-      // If advance has been paid, suggest the remaining amount; otherwise full salary
       const suggestedBase = advancePaidThisMonth > 0
         ? Math.max(0, fullSalary - advancePaidThisMonth)
         : fullSalary;
@@ -255,6 +315,11 @@ export function useSalaryFormViewModel({
   }, [calculatedNetAmount]);
 
   const setField = useCallback((field: string, value: any) => {
+    // If user is manually editing the commission field, stop future auto-fills
+    if (field === 'commission') {
+      setCommissionManuallyEdited(true);
+      setIsCommissionAutoFilled(false);
+    }
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
 
@@ -272,6 +337,11 @@ export function useSalaryFormViewModel({
             if (value === 'Cash')   { updated.bankId = ''; updated.bankName = ''; updated.chequeNumber = ''; }
             if (value === 'Bank')   { updated.chequeNumber = ''; updated.chequeDate = ''; updated.chequeBank = ''; }
             if (value === 'Cheque') { updated.bankId = ''; updated.bankName = ''; }
+          }
+          // When salaryMonth changes, reset the manual-edit flag so commission
+          // can be re-fetched for the new month
+          if (field === 'salaryMonth') {
+            setCommissionManuallyEdited(false);
           }
           return updated;
         })
@@ -412,6 +482,9 @@ export function useSalaryFormViewModel({
     regularAlreadyPaidAmount,
     remainingSalaryToPay,
     isEffectivelyAdvance,
+    confirmedCommissionAmount,
+    isCommissionAutoFilled,
+    commissionSource,
     onFieldChange:       setField,
     onTransactionChange: setTransactionField,
     onSubmit:   handleSubmit,

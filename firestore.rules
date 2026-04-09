@@ -1,18 +1,313 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ==================== COMMON FUNCTIONS ====================
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function hasField(field) {
+      return field in request.resource.data && request.resource.data[field] != null;
+    }
+
+    function isNonEmptyString(field) {
+      return hasField(field)
+        && request.resource.data[field] is string
+        && request.resource.data[field].size() > 0;
+    }
+
+    function isNumber(field) {
+      return hasField(field)
+        && request.resource.data[field] is number;
+    }
+
+    function isPartialUpdate() {
+      return request.resource.data.keys().hasAny(resource.data.keys());
+    }
+
+    // ==================== COUNTERS ====================
+
+    match /transactionCounters/{docId} {
+      allow read, write: if isAuth();
+    }
+
+    match /invoiceCounters/{docId} {
+      allow read, write: if isAuth();
+    }
+
+    match /inv_counters/{docId} {
+      allow read, write: if isAuth();
+    }
+
+    // ==================== TRANSACTIONS ====================
+
+    match /transactions/{txnId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('transactionId')
+        && isNonEmptyString('mainCategory')
+        && isNonEmptyString('date');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== BILLS ====================
+
+    match /bills/{billId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('date')
+        && isNonEmptyString('company');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== INVOICES ====================
+
+    match /invoices/{invoiceId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('invoiceNumber')
+        && isNonEmptyString('customerName')
+        && isNonEmptyString('customerPhone')
+        && isNonEmptyString('date');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== SALARIES ====================
+
+    match /salaries/{salaryId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('employeeId')
+        && isNonEmptyString('date')
+        && isNonEmptyString('subCategory');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== EMPLOYEES ====================
+
+    match /employees/{employeeId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('name')
+        && isNonEmptyString('position');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== BANKS ====================
+
+    match /banks/{bankId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('name');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== PRODUCTS ====================
+
+    match /products/{productId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('brandName')
+        && isNonEmptyString('modelName')
+        && isNonEmptyString('category');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== TRANSFERS ====================
+
+    match /transfers/{transferId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('productId')
+        && isNonEmptyString('fromLocation')
+        && isNonEmptyString('toLocation');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    match /bank_transfers/{transferId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('date')
+        && isNonEmptyString('fromBankId')
+        && isNonEmptyString('toBankId');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== BRANDS ====================
+
+    match /brands/{brandId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('name');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    match /brandModels/{modelId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('name')
+        && isNonEmptyString('brandId');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== COMMISSION SLABS ====================
+
+    match /commission_slabs/{slabId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('salesperson')
+        && isNonEmptyString('city')
+        && isNumber('fromAmount')
+        && isNumber('toAmount')
+        && isNumber('commissionPercentage');
+
+      allow update: if isAuth() && isPartialUpdate();
+
+      allow delete: if isAuth();
+    }
+
+    // ==================== COMMISSIONS ====================
+
+    match /commissions/{commissionId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('employeeId')
+        && isNonEmptyString('month');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== BUDGETS ====================
+
+    match /budgets/{budgetId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('category')
+        && isNonEmptyString('subCategory')
+        && isNumber('budgetLimit');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== LOANS ====================
+
+    match /loans/{loanId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNumber('loanAmount')
+        && isNonEmptyString('entityName')
+        && isNonEmptyString('date')
+        && isNonEmptyString('type');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== CASH ====================
+
+    match /cash_transactions/{docId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('date');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    match /cashInHand/{docId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('location');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // ==================== NOTIFICATIONS ====================
+
+    match /appNotifications/{notifId} {
+      allow read, write: if isAuth();
+    }
+
+    // ==================== CATEGORIES ====================
+
+    match /categories/{categoryId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('name');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    match /subCategories/{subCategoryId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('name');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    match /dynamicCategories/{categoryId} {
+      allow read: if isAuth();
+
+      allow create: if isAuth()
+        && isNonEmptyString('name');
+
+      allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    // 🔒 DEFAULT DENY (VERY IMPORTANT)
     match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 4, 12);
+      allow read, write: if false;
     }
   }
 }

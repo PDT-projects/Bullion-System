@@ -8,7 +8,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES, DynamicCategory } from '../models/types';
+import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES, DynamicCategory, PLMainCategory, BSMainCategory } from '../models/types';
 import { formatCurrency } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
@@ -58,10 +58,30 @@ export interface UseTransactionFormViewModelReturn {
   formatDateDisplay: (d: string) => string;
   duplicateIdError: string;
   setDuplicateIdError: (msg: string) => void;
-  // Dynamic categories
+  // Profit & Loss
+  plMainCategory: PLMainCategory | '';
+  plSubCategory: string;
+  setPlMainCategory: (v: PLMainCategory | '') => void;
+  setPlSubCategory: (v: string) => void;
+  // Balance Sheet
+  bsMainCategory: BSMainCategory | '';
+  bsSubCategory: string;
+  setBsMainCategory: (v: BSMainCategory | '') => void;
+  setBsSubCategory: (v: string) => void;
+  // Dynamic categories (transaction)
   dynamicSubCategories: DynamicCategory[];
   onAddSubCategory: (parentCategory: string, name: string) => Promise<string | null>;
   onDeleteSubCategory: (id: string) => Promise<void>;
+  // Dynamic categories (P&L)
+  dynamicPLCategories: DynamicCategory[];
+  onAddPLMainCategory: (name: string) => Promise<string | null>;
+  onAddPLSubCategory: (parentCategory: string, name: string) => Promise<string | null>;
+  onDeletePLCategory: (id: string) => Promise<void>;
+  // Dynamic categories (Balance Sheet)
+  dynamicBSCategories: DynamicCategory[];
+  onAddBSMainCategory: (name: string) => Promise<string | null>;
+  onAddBSSubCategory: (parentCategory: string, name: string) => Promise<string | null>;
+  onDeleteBSCategory: (id: string) => Promise<void>;
 }
 
 const emptyItem = (type: string): TransactionItem => ({
@@ -135,6 +155,12 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [enableMultiple,       setEnableMultiple]       = useState(false);
   const [transactionItems,     setTransactionItems]     = useState<TransactionItem[]>([emptyItem('Cash Inflow')]);
   const [dynamicSubCategories, setDynamicSubCategories] = useState<DynamicCategory[]>([]);
+  const [dynamicPLCategories,  setDynamicPLCategories]  = useState<DynamicCategory[]>([]);
+  const [dynamicBSCategories,  setDynamicBSCategories]  = useState<DynamicCategory[]>([]);
+  const [plMainCategory,       setPlMainCategoryState]  = useState<PLMainCategory | ''>('');
+  const [plSubCategory,        setPlSubCategory]        = useState('');
+  const [bsMainCategory,       setBsMainCategoryState]  = useState<BSMainCategory | ''>('');
+  const [bsSubCategory,        setBsSubCategory]        = useState('');
 
   // ── Load banks + existing transaction (edit mode) ──────────────────────
   useEffect(() => {
@@ -146,7 +172,9 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
 
         // Load user-added dynamic categories
         const dynCats = await TransactionFirebaseService.fetchDynamicCategories().catch(() => []);
-        setDynamicSubCategories(dynCats);
+        setDynamicSubCategories(dynCats.filter(d => d.type === 'subCategory' || d.type === 'mainCategory'));
+        setDynamicPLCategories(dynCats.filter(d => d.type === 'plMainCategory' || d.type === 'plSubCategory'));
+        setDynamicBSCategories(dynCats.filter(d => d.type === 'bsMainCategory' || d.type === 'bsSubCategory'));
 
         if (id) {
           const tx = await TransactionFirebaseService.fetchTransactionById(id);
@@ -163,6 +191,10 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             if (tx.chequeNumber) setChequeNumber(tx.chequeNumber);
             if (tx.chequeDate)   setChequeDate(tx.chequeDate);
             if (tx.chequeBank)   setChequeBank(tx.chequeBank || '');
+            if (tx.plMainCategory) setPlMainCategoryState(tx.plMainCategory);
+            if (tx.plSubCategory)  setPlSubCategory(tx.plSubCategory);
+            if (tx.bsMainCategory) setBsMainCategoryState(tx.bsMainCategory);
+            if (tx.bsSubCategory)  setBsSubCategory(tx.bsSubCategory);
             setTransactionItems([{
               id:              tx.id,
               mainCategory:    tx.mainCategory    || '',
@@ -197,6 +229,16 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const setTransactionType = useCallback((type: 'Cash Inflow' | 'Cash Outflow' | 'Loan') => {
     setTransactionTypeState(type);
     setTransactionItems(items => items.map(i => ({ ...i, mainCategory: type, subCategory: '' })));
+  }, []);
+
+  const setPlMainCategory = useCallback((v: PLMainCategory | '') => {
+    setPlMainCategoryState(v);
+    setPlSubCategory('');
+  }, []);
+
+  const setBsMainCategory = useCallback((v: BSMainCategory | '') => {
+    setBsMainCategoryState(v);
+    setBsSubCategory('');
   }, []);
 
   const updateItem = useCallback((itemId: string, field: keyof TransactionItem, value: any) => {
@@ -315,6 +357,10 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
           paidBy:          item.paidBy || undefined,
           paidTo:          item.paidTo || undefined,
           note:            item.note   || '',
+          plMainCategory:  plMainCategory || undefined,
+          plSubCategory:   plSubCategory  || undefined,
+          bsMainCategory:  bsMainCategory || undefined,
+          bsSubCategory:   bsSubCategory  || undefined,
         });
         toast.success('Transaction updated successfully');
 
@@ -368,6 +414,12 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             // Cheque payments stay pending until manually cleared
             isFullyCleared:  effectiveRemain <= 0 && paymentMode !== 'Cheque',
             linkedType:      'manual',
+            // ── P&L classification ─────────────────────────────────────────
+            plMainCategory:  plMainCategory || undefined,
+            plSubCategory:   plSubCategory  || undefined,
+            // ── Balance Sheet classification ───────────────────────────────
+            bsMainCategory:  bsMainCategory || undefined,
+            bsSubCategory:   bsSubCategory  || undefined,
             // ── Approval ──────────────────────────────────────────────────
             approvalStatus:  needsApproval ? 'pending_approval' : 'not_required',
             approvalToken,
@@ -429,7 +481,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     validate, editingTx, transactionItems, office, date,
     transactionType, paymentMode, selectedBank, banks,
     navigate, transactionId, chequeNumber, chequeDate, chequeBank,
-    updateBankBalance,
+    updateBankBalance, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory,
   ]);
 
   const handleCancel = useCallback(() => navigate('/transactions'), [navigate]);
@@ -465,6 +517,100 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     }
   }, []);
 
+  /** Add a brand-new P&L main category (e.g. "Other Income") */
+  const onAddPLMainCategory = useCallback(async (name: string): Promise<string | null> => {
+    try {
+      const created = await TransactionFirebaseService.addDynamicCategory({
+        type:      'plMainCategory',
+        name:      name.trim(),
+        createdAt: new Date().toISOString(),
+      });
+      setDynamicPLCategories(prev => [...prev, created]);
+      toast.success(`P&L category "${name}" saved`);
+      return name.trim();
+    } catch {
+      toast.error('Failed to save P&L category');
+      return null;
+    }
+  }, []);
+
+  /** Add a new sub-category under an existing P&L main category */
+  const onAddPLSubCategory = useCallback(async (
+    parentCategory: string,
+    name: string,
+  ): Promise<string | null> => {
+    try {
+      const created = await TransactionFirebaseService.addDynamicCategory({
+        type:           'plSubCategory',
+        parentCategory,
+        name:           name.trim(),
+        createdAt:      new Date().toISOString(),
+      });
+      setDynamicPLCategories(prev => [...prev, created]);
+      toast.success(`P&L sub-category "${name}" saved`);
+      return name.trim();
+    } catch {
+      toast.error('Failed to save P&L sub-category');
+      return null;
+    }
+  }, []);
+
+  const onDeletePLCategory = useCallback(async (id: string): Promise<void> => {
+    try {
+      await TransactionFirebaseService.deleteDynamicCategory(id);
+      setDynamicPLCategories(prev => prev.filter(d => d.id !== id));
+      toast.success('P&L category deleted');
+    } catch {
+      toast.error('Failed to delete P&L category');
+    }
+  }, []);
+
+  const onAddBSMainCategory = useCallback(async (name: string): Promise<string | null> => {
+    try {
+      const created = await TransactionFirebaseService.addDynamicCategory({
+        type:      'bsMainCategory',
+        name:      name.trim(),
+        createdAt: new Date().toISOString(),
+      });
+      setDynamicBSCategories(prev => [...prev, created]);
+      toast.success(`Balance Sheet category "${name}" saved`);
+      return name.trim();
+    } catch {
+      toast.error('Failed to save Balance Sheet category');
+      return null;
+    }
+  }, []);
+
+  const onAddBSSubCategory = useCallback(async (
+    parentCategory: string,
+    name: string,
+  ): Promise<string | null> => {
+    try {
+      const created = await TransactionFirebaseService.addDynamicCategory({
+        type:           'bsSubCategory',
+        parentCategory,
+        name:           name.trim(),
+        createdAt:      new Date().toISOString(),
+      });
+      setDynamicBSCategories(prev => [...prev, created]);
+      toast.success(`Balance Sheet sub-category "${name}" saved`);
+      return name.trim();
+    } catch {
+      toast.error('Failed to save Balance Sheet sub-category');
+      return null;
+    }
+  }, []);
+
+  const onDeleteBSCategory = useCallback(async (id: string): Promise<void> => {
+    try {
+      await TransactionFirebaseService.deleteDynamicCategory(id);
+      setDynamicBSCategories(prev => prev.filter(d => d.id !== id));
+      toast.success('Balance Sheet category deleted');
+    } catch {
+      toast.error('Failed to delete Balance Sheet category');
+    }
+  }, []);
+
   const formatDateDisplay = useCallback((d: string) =>
     d ? new Date(d).toLocaleDateString('en-PK', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -487,6 +633,10 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     setEnableMultiple, updateItem, addItem, removeItem,
     handleSave, handleCancel, formatCurrency, formatDateDisplay,
     duplicateIdError, setDuplicateIdError,
+    plMainCategory, plSubCategory, setPlMainCategory, setPlSubCategory,
+    bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
     dynamicSubCategories, onAddSubCategory, onDeleteSubCategory,
+    dynamicPLCategories, onAddPLMainCategory, onAddPLSubCategory, onDeletePLCategory,
+    dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
   };
 }

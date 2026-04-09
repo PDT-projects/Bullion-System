@@ -77,6 +77,12 @@ function docToTransaction(d: any): Transaction {
     rejectionReason:      data.rejectionReason,
     createdAt:            data.createdAt,
     updatedAt:            data.updatedAt,
+    // P&L classification
+    plMainCategory:       data.plMainCategory,
+    plSubCategory:        data.plSubCategory,
+    // Balance Sheet classification
+    bsMainCategory:       data.bsMainCategory,
+    bsSubCategory:        data.bsSubCategory,
   } as Transaction;
 }
 

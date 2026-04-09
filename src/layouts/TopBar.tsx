@@ -51,7 +51,7 @@ const getModuleTitle = (moduleId: string): string => {
   };
   return moduleTitles[moduleId] || 'Dashboard';
 };
-
+ 
 export function TopBar({ activeModule, user }: Props) {
   const title = getModuleTitle(activeModule);
 

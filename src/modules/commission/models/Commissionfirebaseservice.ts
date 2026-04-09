@@ -1,7 +1,4 @@
-// Commission Module - Firebase Service Layer
-// All Firestore operations for commission_slabs and commissions collections
-
-import {
+ import {
   collection,
   getDocs,
   getDoc,
@@ -10,127 +7,137 @@ import {
   deleteDoc,
   doc,
   query,
-  orderBy,
-  where
+  orderBy
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
+import { getAuth } from 'firebase/auth';
 import { CommissionSlab, Commission } from './types';
 
 const SLABS_COLLECTION = 'commission_slabs';
 const COMMISSIONS_COLLECTION = 'commissions';
 
+// ==================== HELPERS ====================
+
+// Safe number conversion
+function toNumber(value: any, field: string): number {
+  if (value === "" || value === null || value === undefined) {
+    throw new Error(`${field} is required`);
+  }
+
+  const num = Number(value);
+
+  if (isNaN(num)) {
+    throw new Error(`${field} must be a valid number`);
+  }
+
+  return num;
+}
+
+// Remove undefined
 function stripUndefined<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== undefined)
   ) as Partial<T>;
 }
 
-// ==================== COMMISSION SLABS ====================
+// ==================== SERVICE ====================
 
 export class CommissionFirebaseService {
 
+  // ==================== SLABS ====================
+
   static async fetchAllSlabs(): Promise<CommissionSlab[]> {
-    try {
-      const q = query(collection(db, SLABS_COLLECTION), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CommissionSlab));
-    } catch (error) {
-      console.error('❌ Error fetching slabs:', error);
-      throw new Error('Failed to fetch commission slabs');
-    }
+    const q = query(collection(db, SLABS_COLLECTION), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CommissionSlab));
   }
 
   static async fetchSlabById(id: string): Promise<CommissionSlab | null> {
-    try {
-      const snapshot = await getDoc(doc(db, SLABS_COLLECTION, id));
-      if (!snapshot.exists()) return null;
-      return { id: snapshot.id, ...snapshot.data() } as CommissionSlab;
-    } catch (error) {
-      console.error('❌ Error fetching slab:', error);
-      throw new Error('Failed to fetch commission slab');
-    }
+    const snapshot = await getDoc(doc(db, SLABS_COLLECTION, id));
+    if (!snapshot.exists()) return null;
+    return { id: snapshot.id, ...snapshot.data() } as CommissionSlab;
   }
 
   static async createSlab(data: Omit<CommissionSlab, 'id'>): Promise<CommissionSlab> {
     try {
+      // ✅ Ensure user is logged in
+      const user = getAuth().currentUser;
+      if (!user) throw new Error("User not authenticated");
+
       const now = new Date().toISOString();
-      const payload = stripUndefined({ ...data, createdAt: now, updatedAt: now });
+
+      // 🔥 SAFE PAYLOAD (NO NaN POSSIBLE) - Include all fields from DTO
+      const payload = {
+        salesperson: data.salesperson,
+        city: data.city,
+        fromAmount: toNumber(data.fromAmount, "From Amount"),
+        toAmount: toNumber(data.toAmount, "To Amount"),
+        commissionPercentage: toNumber(data.commissionPercentage, "Commission Percentage"),
+        createdAt: now,
+        updatedAt: now
+      }; 
+      console.log("✅ FINAL PAYLOAD:", payload);
+
       const docRef = await addDoc(collection(db, SLABS_COLLECTION), payload);
-      console.log('✅ Slab created:', docRef.id);
-      return { id: docRef.id, ...payload } as CommissionSlab;
-    } catch (error) {
-      console.error('❌ Error creating slab:', error);
-      throw new Error('Failed to create commission slab');
+
+      return { id: docRef.id, ...payload };
+
+    } catch (error: any) {
+      console.error('❌ Error creating slab:', error.message);
+      throw new Error(error.message || 'Failed to create commission slab');
     }
   }
 
-  static async updateSlab(id: string, data: Partial<Omit<CommissionSlab, 'id'>>): Promise<void> {
+  static async updateSlab(id: string, data: Partial<Omit<CommissionSlab, 'id'>>) {
     try {
-      const payload = stripUndefined({ ...data, updatedAt: new Date().toISOString() });
+      const payload = stripUndefined({
+        ...data,
+        salesperson: data.salesperson,
+        city: data.city,
+        fromAmount: data.fromAmount !== undefined ? toNumber(data.fromAmount, "From Amount") : undefined,
+        toAmount: data.toAmount !== undefined ? toNumber(data.toAmount, "To Amount") : undefined,
+        commissionPercentage: data.commissionPercentage !== undefined ? toNumber(data.commissionPercentage, "Commission Percentage") : undefined,
+        updatedAt: new Date().toISOString()
+      });
+
       await updateDoc(doc(db, SLABS_COLLECTION, id), payload);
-      console.log('✅ Slab updated:', id);
-    } catch (error) {
-      console.error('❌ Error updating slab:', error);
-      throw new Error('Failed to update commission slab');
+
+    } catch (error: any) {
+      console.error('❌ Error updating slab:', error.message);
+      throw new Error(error.message || 'Failed to update slab');
     }
   }
 
-  static async deleteSlab(id: string): Promise<void> {
-    try {
-      await deleteDoc(doc(db, SLABS_COLLECTION, id));
-      console.log('✅ Slab deleted:', id);
-    } catch (error) {
-      console.error('❌ Error deleting slab:', error);
-      throw new Error('Failed to delete commission slab');
-    }
+  static async deleteSlab(id: string) {
+    await deleteDoc(doc(db, SLABS_COLLECTION, id));
   }
 
   // ==================== COMMISSIONS ====================
 
   static async fetchAllCommissions(): Promise<Commission[]> {
-    try {
-      const q = query(collection(db, COMMISSIONS_COLLECTION), orderBy('calculatedAt', 'desc'));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Commission));
-    } catch (error) {
-      console.error('❌ Error fetching commissions:', error);
-      throw new Error('Failed to fetch commissions');
-    }
+    const q = query(collection(db, COMMISSIONS_COLLECTION), orderBy('calculatedAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Commission));
   }
 
   static async saveCommissions(commissions: Omit<Commission, 'id'>[]): Promise<Commission[]> {
-    try {
-      const saved: Commission[] = [];
-      for (const commission of commissions) {
-        const payload = stripUndefined(commission);
-        const docRef = await addDoc(collection(db, COMMISSIONS_COLLECTION), payload);
-        saved.push({ id: docRef.id, ...payload } as Commission);
-      }
-      console.log(`✅ Saved ${saved.length} commissions`);
-      return saved;
-    } catch (error) {
-      console.error('❌ Error saving commissions:', error);
-      throw new Error('Failed to save commissions');
+    const saved: Commission[] = [];
+
+    for (const commission of commissions) {
+      const payload = stripUndefined(commission);
+      const docRef = await addDoc(collection(db, COMMISSIONS_COLLECTION), payload);
+      saved.push({ id: docRef.id, ...payload } as Commission);
     }
+
+    return saved;
   }
 
-  static async updateCommission(id: string, data: Partial<Omit<Commission, 'id'>>): Promise<void> {
-    try {
-      const payload = stripUndefined(data);
-      await updateDoc(doc(db, COMMISSIONS_COLLECTION, id), payload);
-      console.log('✅ Commission updated:', id);
-    } catch (error) {
-      console.error('❌ Error updating commission:', error);
-      throw new Error('Failed to update commission');
-    }
+  static async updateCommission(id: string, data: Partial<Omit<Commission, 'id'>>) {
+    const payload = stripUndefined(data);
+    await updateDoc(doc(db, COMMISSIONS_COLLECTION, id), payload);
   }
 
-  static async deleteCommission(id: string): Promise<void> {
-    try {
-      await deleteDoc(doc(db, COMMISSIONS_COLLECTION, id));
-    } catch (error) {
-      console.error('❌ Error deleting commission:', error);
-      throw new Error('Failed to delete commission');
-    }
+  static async deleteCommission(id: string) {
+    await deleteDoc(doc(db, COMMISSIONS_COLLECTION, id));
   }
 }

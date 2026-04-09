@@ -4,9 +4,9 @@ import React, { useState } from 'react';
 import {
   ArrowLeft, Plus, Trash2, Building2, Wallet, TrendingUp, TrendingDown,
   Upload, Calculator, User, Users, CheckCircle, AlertCircle, Repeat, Loader2,
-  Hash, Edit2, Check, X, CreditCard, Lock,
+  Hash, Edit2, Check, X, CreditCard, Lock, BarChart2,
 } from 'lucide-react';
-import { COMPANIES, SUB_CATEGORIES, TransactionItem, DynamicCategory } from '../models/types';
+import { COMPANIES, SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory } from '../models/types';
 import { UseTransactionFormViewModelReturn } from '../viewModels/useTransactionFormViewModel';
 
 interface Props extends UseTransactionFormViewModelReturn {}
@@ -26,12 +26,30 @@ export function TransactionFormView({
   setOffice, setDate, setTransactionType, setPaymentMode, setSelectedBank,
   setEnableMultiple, updateItem, addItem, removeItem,
   handleSave, handleCancel, formatCurrency, formatDateDisplay,
+  plMainCategory, plSubCategory, setPlMainCategory, setPlSubCategory,
   dynamicSubCategories, onAddSubCategory,
+  dynamicPLCategories, onAddPLMainCategory, onAddPLSubCategory, onDeletePLCategory,
+  dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
+  bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
 }: Props) {
-  const [saveAttempted,  setSaveAttempted]  = useState(false);
-  const [addingSubCatFor, setAddingSubCatFor] = useState<string | null>(null);
-  const [newSubCatName,  setNewSubCatName]  = useState('');
-  const [savingSubCat,   setSavingSubCat]   = useState(false);
+  const [saveAttempted,    setSaveAttempted]    = useState(false);
+  const [addingSubCatFor,  setAddingSubCatFor]  = useState<string | null>(null);
+  const [newSubCatName,    setNewSubCatName]    = useState('');
+  const [savingSubCat,     setSavingSubCat]     = useState(false);
+  // P&L inline-add state
+  const [addingPLMain,     setAddingPLMain]     = useState(false);
+  const [newPLMainName,    setNewPLMainName]    = useState('');
+  const [savingPLMain,     setSavingPLMain]     = useState(false);
+  const [addingPLSub,      setAddingPLSub]      = useState(false);
+  const [newPLSubName,     setNewPLSubName]     = useState('');
+  const [savingPLSub,      setSavingPLSub]      = useState(false);
+  // Balance Sheet inline-add state
+  const [addingBSMain,     setAddingBSMain]     = useState(false);
+  const [newBSMainName,    setNewBSMainName]    = useState('');
+  const [savingBSMain,     setSavingBSMain]     = useState(false);
+  const [addingBSSub,      setAddingBSSub]      = useState(false);
+  const [newBSSubName,     setNewBSSubName]     = useState('');
+  const [savingBSSub,      setSavingBSSub]      = useState(false);
 
   if (isLoading) {
     return (
@@ -53,6 +71,46 @@ export function TransactionFormView({
     setNewSubCatName('');
     setAddingSubCatFor(null);
     setSavingSubCat(false);
+  };
+
+  const handleAddPLMain = async () => {
+    if (!newPLMainName.trim()) return;
+    setSavingPLMain(true);
+    const added = await onAddPLMainCategory(newPLMainName.trim());
+    if (added) setPlMainCategory(added as any);
+    setNewPLMainName('');
+    setAddingPLMain(false);
+    setSavingPLMain(false);
+  };
+
+  const handleAddPLSub = async () => {
+    if (!newPLSubName.trim() || !plMainCategory) return;
+    setSavingPLSub(true);
+    const added = await onAddPLSubCategory(plMainCategory, newPLSubName.trim());
+    if (added) setPlSubCategory(added);
+    setNewPLSubName('');
+    setAddingPLSub(false);
+    setSavingPLSub(false);
+  };
+
+  const handleAddBSMain = async () => {
+    if (!newBSMainName.trim()) return;
+    setSavingBSMain(true);
+    const added = await onAddBSMainCategory(newBSMainName.trim());
+    if (added) setBsMainCategory(added as any);
+    setNewBSMainName('');
+    setAddingBSMain(false);
+    setSavingBSMain(false);
+  };
+
+  const handleAddBSSub = async () => {
+    if (!newBSSubName.trim() || !bsMainCategory) return;
+    setSavingBSSub(true);
+    const added = await onAddBSSubCategory(bsMainCategory, newBSSubName.trim());
+    if (added) setBsSubCategory(added);
+    setNewBSSubName('');
+    setAddingBSSub(false);
+    setSavingBSSub(false);
   };
 
   return (
@@ -494,6 +552,318 @@ export function TransactionFormView({
             <Plus size={16} /> Add Another Transaction
           </button>
         )}
+
+        {/* Profit & Loss Classification */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-[#4f46e5]" /> Profit &amp; Loss Classification
+            <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
+          </h3>
+          <p className="text-xs text-gray-400 mb-4">
+            Tag this transaction to a P&amp;L category so it flows into Revenue, COGS, or Operating Expenses automatically.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+            {/* ── P&L Main Category ── */}
+            <div>
+              <label className={lbl}>P&amp;L Category</label>
+              {addingPLMain ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text" autoFocus value={newPLMainName}
+                    onChange={e => setNewPLMainName(e.target.value)}
+                    placeholder="e.g. Other Income"
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddPLMain(); if (e.key === 'Escape') { setAddingPLMain(false); setNewPLMainName(''); } }}
+                    className="flex-1 px-3 py-2 border border-indigo-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  />
+                  <button type="button" disabled={savingPLMain || !newPLMainName.trim()} onClick={handleAddPLMain}
+                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    {savingPLMain ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  </button>
+                  <button type="button" onClick={() => { setAddingPLMain(false); setNewPLMainName(''); }}
+                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><X size={15} /></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select value={plMainCategory} onChange={e => setPlMainCategory(e.target.value as any)}
+                    className={`flex-1 ${inp}`}>
+                    <option value="">— Not classified —</option>
+                    {/* Built-in P&L main categories */}
+                    {(Object.keys(PL_CATEGORIES) as PLMainCategory[]).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    {/* User-added P&L main categories */}
+                    {dynamicPLCategories.filter(d => d.type === 'plMainCategory').map(d => (
+                      <option key={d.id} value={d.name}>✦ {d.name}</option>
+                    ))}
+                  </select>
+                  <button type="button" title="Add new P&L category"
+                    onClick={() => { setAddingPLMain(true); setNewPLMainName(''); }}
+                    className="p-2 text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors shrink-0">
+                    <Plus size={15} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ── P&L Sub Category ── */}
+            <div>
+              <label className={lbl}>P&amp;L Sub Category</label>
+              {addingPLSub ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text" autoFocus value={newPLSubName}
+                    onChange={e => setNewPLSubName(e.target.value)}
+                    placeholder={plMainCategory ? `Sub-category under ${plMainCategory}` : 'Select main category first'}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddPLSub(); if (e.key === 'Escape') { setAddingPLSub(false); setNewPLSubName(''); } }}
+                    className="flex-1 px-3 py-2 border border-indigo-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  />
+                  <button type="button" disabled={savingPLSub || !newPLSubName.trim() || !plMainCategory} onClick={handleAddPLSub}
+                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    {savingPLSub ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  </button>
+                  <button type="button" onClick={() => { setAddingPLSub(false); setNewPLSubName(''); }}
+                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><X size={15} /></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select value={plSubCategory} onChange={e => setPlSubCategory(e.target.value)}
+                    disabled={!plMainCategory}
+                    className={`flex-1 ${inp} ${!plMainCategory ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}`}>
+                    <option value="">— Select sub category —</option>
+                    {/* Built-in sub-categories for selected main */}
+                    {plMainCategory && (PL_CATEGORIES[plMainCategory as PLMainCategory] || []).map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                    {/* User-added sub-categories for selected main */}
+                    {plMainCategory && dynamicPLCategories
+                      .filter(d => d.type === 'plSubCategory' && d.parentCategory === plMainCategory)
+                      .map(d => (
+                        <option key={d.id} value={d.name}>✦ {d.name}</option>
+                      ))}
+                  </select>
+                  <button type="button" title="Add new P&L sub-category"
+                    disabled={!plMainCategory}
+                    onClick={() => { setAddingPLSub(true); setNewPLSubName(''); }}
+                    className="p-2 text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <Plus size={15} />
+                  </button>
+                </div>
+              )}
+              {!plMainCategory && !addingPLSub && (
+                <p className="text-xs text-gray-400 mt-1">Select a P&amp;L category first</p>
+              )}
+            </div>
+          </div>
+
+          {/* P&L live preview card */}
+          {plMainCategory && (
+            <div className={`rounded-xl border p-4 text-sm ${
+              plMainCategory === 'Revenue'
+                ? 'bg-green-50 border-green-200'
+                : plMainCategory === 'Cost of Goods Sold (COGS)'
+                ? 'bg-orange-50 border-orange-200'
+                : 'bg-purple-50 border-purple-200'
+            }`}>
+              <p className={`font-semibold mb-2 ${
+                plMainCategory === 'Revenue' ? 'text-green-800'
+                : plMainCategory === 'Cost of Goods Sold (COGS)' ? 'text-orange-800'
+                : 'text-purple-800'
+              }`}>
+                {plMainCategory === 'Revenue' && '📈 Revenue'}
+                {plMainCategory === 'Cost of Goods Sold (COGS)' && '📦 Cost of Goods Sold (COGS)'}
+                {plMainCategory === 'Operating Expenses' && '🏢 Operating Expenses'}
+                {/* User-added main categories */}
+                {!['Revenue','Cost of Goods Sold (COGS)','Operating Expenses'].includes(plMainCategory) && `✦ ${plMainCategory}`}
+              </p>
+              <div className={`text-xs space-y-1 ${
+                plMainCategory === 'Revenue' ? 'text-green-700'
+                : plMainCategory === 'Cost of Goods Sold (COGS)' ? 'text-orange-700'
+                : 'text-purple-700'
+              }`}>
+                {plMainCategory === 'Revenue' && <><p>• Adds to <strong>Total Revenue</strong></p><p>• Gross Profit = Revenue − COGS</p></>}
+                {plMainCategory === 'Cost of Goods Sold (COGS)' && <><p>• Deducted from Revenue → <strong>Gross Profit</strong></p><p>• Gross Profit = Revenue − COGS</p></>}
+                {plMainCategory === 'Operating Expenses' && <><p>• Added to <strong>Total Operating Expenses</strong></p><p>• Net Profit = Gross Profit − Total OpEx</p></>}
+                {!['Revenue','Cost of Goods Sold (COGS)','Operating Expenses'].includes(plMainCategory) && <p>• Custom P&amp;L category — tracked separately in reports</p>}
+                {plSubCategory && <p className="mt-1 font-medium">Sub: {plSubCategory}</p>}
+              </div>
+
+              {/* P&L waterfall mini-diagram */}
+              <div className="mt-3 pt-3 border-t border-white/60 grid grid-cols-3 gap-2 text-center text-xs font-medium">
+                <div className={`rounded-lg py-1.5 px-2 ${plMainCategory === 'Revenue' ? 'bg-green-200/70 ring-2 ring-green-400' : 'bg-white/70'}`}>
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Revenue</p>
+                  <p className="text-green-700">Sales</p>
+                </div>
+                <div className={`rounded-lg py-1.5 px-2 ${plMainCategory === 'Cost of Goods Sold (COGS)' ? 'bg-orange-200/70 ring-2 ring-orange-400' : 'bg-white/70'}`}>
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Gross Profit</p>
+                  <p className="text-blue-700">Rev − COGS</p>
+                </div>
+                <div className={`rounded-lg py-1.5 px-2 ${plMainCategory === 'Operating Expenses' ? 'bg-purple-200/70 ring-2 ring-purple-400' : 'bg-white/70'}`}>
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Net Profit</p>
+                  <p className="text-indigo-700">GP − OpEx</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Balance Sheet Classification */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-emerald-600" /> Balance Sheet Classification
+            <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
+          </h3>
+          <p className="text-xs text-gray-400 mb-4">
+            Tag this transaction as an <strong>Asset</strong> or a <strong>Liability / Equity</strong> item so it appears correctly on the Balance Sheet.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+            {/* ── BS Main Category ── */}
+            <div>
+              <label className={lbl}>Balance Sheet Side</label>
+              {addingBSMain ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text" autoFocus value={newBSMainName}
+                    onChange={e => setNewBSMainName(e.target.value)}
+                    placeholder="e.g. Other Assets"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter')  handleAddBSMain();
+                      if (e.key === 'Escape') { setAddingBSMain(false); setNewBSMainName(''); }
+                    }}
+                    className="flex-1 px-3 py-2 border border-emerald-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
+                  <button type="button" disabled={savingBSMain || !newBSMainName.trim()} onClick={handleAddBSMain}
+                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    {savingBSMain ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  </button>
+                  <button type="button" onClick={() => { setAddingBSMain(false); setNewBSMainName(''); }}
+                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><X size={15} /></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select value={bsMainCategory} onChange={e => setBsMainCategory(e.target.value as BSMainCategory | '')}
+                    className={`flex-1 ${inp}`}>
+                    <option value="">— Not classified —</option>
+                    {(Object.keys(BS_CATEGORIES) as BSMainCategory[]).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    {dynamicBSCategories.filter(d => d.type === 'bsMainCategory').map(d => (
+                      <option key={d.id} value={d.name}>✦ {d.name}</option>
+                    ))}
+                  </select>
+                  <button type="button" title="Add new Balance Sheet category"
+                    onClick={() => { setAddingBSMain(true); setNewBSMainName(''); }}
+                    className="p-2 text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shrink-0">
+                    <Plus size={15} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ── BS Sub Category ── */}
+            <div>
+              <label className={lbl}>Balance Sheet Line Item</label>
+              {addingBSSub ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text" autoFocus value={newBSSubName}
+                    onChange={e => setNewBSSubName(e.target.value)}
+                    placeholder={bsMainCategory ? `Line item under ${bsMainCategory}` : 'Select side first'}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter')  handleAddBSSub();
+                      if (e.key === 'Escape') { setAddingBSSub(false); setNewBSSubName(''); }
+                    }}
+                    className="flex-1 px-3 py-2 border border-emerald-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
+                  <button type="button" disabled={savingBSSub || !newBSSubName.trim() || !bsMainCategory} onClick={handleAddBSSub}
+                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    {savingBSSub ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  </button>
+                  <button type="button" onClick={() => { setAddingBSSub(false); setNewBSSubName(''); }}
+                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><X size={15} /></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select value={bsSubCategory} onChange={e => setBsSubCategory(e.target.value)}
+                    disabled={!bsMainCategory}
+                    className={`flex-1 ${inp} ${!bsMainCategory ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}`}>
+                    <option value="">— Select line item —</option>
+                    {bsMainCategory && (BS_CATEGORIES[bsMainCategory as BSMainCategory] || []).map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                    {bsMainCategory && dynamicBSCategories
+                      .filter(d => d.type === 'bsSubCategory' && d.parentCategory === bsMainCategory)
+                      .map(d => (
+                        <option key={d.id} value={d.name}>✦ {d.name}</option>
+                      ))}
+                  </select>
+                  <button type="button" title="Add new line item"
+                    disabled={!bsMainCategory}
+                    onClick={() => { setAddingBSSub(true); setNewBSSubName(''); }}
+                    className="p-2 text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <Plus size={15} />
+                  </button>
+                </div>
+              )}
+              {!bsMainCategory && !addingBSSub && (
+                <p className="text-xs text-gray-400 mt-1">Select a Balance Sheet side first</p>
+              )}
+            </div>
+          </div>
+
+          {/* BS live preview */}
+          {bsMainCategory && (
+            <div className={`rounded-xl border p-4 text-sm ${
+              bsMainCategory === 'Assets'
+                ? 'bg-emerald-50 border-emerald-200'
+                : 'bg-rose-50 border-rose-200'
+            }`}>
+              {/* Header */}
+              <p className={`font-semibold mb-2 ${
+                bsMainCategory === 'Assets' ? 'text-emerald-800' : 'text-rose-800'
+              }`}>
+                {bsMainCategory === 'Assets' ? '🏦 Assets' : '📋 Liabilities & Equity'}
+                {!['Assets','Liabilities & Equity'].includes(bsMainCategory) && `✦ ${bsMainCategory}`}
+              </p>
+
+              <div className={`text-xs space-y-1 mb-3 ${
+                bsMainCategory === 'Assets' ? 'text-emerald-700' : 'text-rose-700'
+              }`}>
+                {bsMainCategory === 'Assets' && (
+                  <><p>• Recorded on the <strong>left side</strong> of the Balance Sheet</p>
+                  <p>• Represents what the business <strong>owns</strong></p></>
+                )}
+                {bsMainCategory === 'Liabilities & Equity' && (
+                  <><p>• Recorded on the <strong>right side</strong> of the Balance Sheet</p>
+                  <p>• Represents what the business <strong>owes or is funded by</strong></p></>
+                )}
+                {!['Assets','Liabilities & Equity'].includes(bsMainCategory) && (
+                  <p>• Custom Balance Sheet category — tracked separately in reports</p>
+                )}
+                {bsSubCategory && <p className="mt-1 font-medium">Line item: {bsSubCategory}</p>}
+              </div>
+
+              {/* Accounting equation visual */}
+              <div className="mt-2 pt-3 border-t border-white/60">
+                <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-2 text-center font-medium">Accounting Equation</p>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
+                  <div className={`rounded-lg py-2 px-1 ${bsMainCategory === 'Assets' ? 'bg-emerald-200/80 ring-2 ring-emerald-500 text-emerald-900' : 'bg-white/70 text-emerald-700'}`}>
+                    <p className="text-[10px] font-normal text-gray-400 mb-0.5">LEFT</p>
+                    Assets
+                  </div>
+                  <div className="flex items-center justify-center text-gray-400 text-lg font-bold">=</div>
+                  <div className={`rounded-lg py-2 px-1 ${bsMainCategory === 'Liabilities & Equity' ? 'bg-rose-200/80 ring-2 ring-rose-500 text-rose-900' : 'bg-white/70 text-rose-700'}`}>
+                    <p className="text-[10px] font-normal text-gray-400 mb-0.5">RIGHT</p>
+                    Liabilities + Equity
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Grand Total */}
         <div className="bg-[#4f46e5] text-white rounded-xl p-5">
