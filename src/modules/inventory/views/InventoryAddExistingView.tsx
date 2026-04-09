@@ -244,7 +244,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 active:bg-indigo-800 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-black rounded-xl font-semibold hover:bg-indigo-700 active:bg-indigo-800 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isSaving ? (
                     <>
