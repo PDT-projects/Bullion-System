@@ -96,12 +96,12 @@ export function SalaryListView({
                 Pay {type === 'regular' ? 'Regular' : 'Advance'} Salary
               </button>
             )}
-            {type === 'all' && (
+{type === 'all' && (
               <div className="flex gap-2">
                 <button onClick={() => handleAdd('regular')} className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm">
                   <Plus size={16} /> Regular
                 </button>
-                <button onClick={() => handleAdd('advance')} className="flex items-center gap-1.5 bg-orange-600 text-white px-3 py-2 rounded-lg hover:bg-orange-700 text-sm">
+                <button onClick={() => handleAdd('advance')} className="flex items-center gap-1.5 bg-orange-600 text-black px-3 py-2 rounded-lg hover:bg-orange-700 text-sm">
                   <Plus size={16} /> Advance
                 </button>
               </div>
