@@ -422,7 +422,7 @@ export function InvoiceFormView({
               <label className={lbl}>Salesperson</label>
               <select value={formData.salesperson || ''} onChange={e => setFormData({ salesperson: e.target.value })} className={inp}>
                 <option value="">Select salesperson</option>
-                {activeEmployees.map(e => <option key={e.id} value={e.name}>{e.name} — {e.position}</option>)}
+                {activeEmployees.map(e => <option key={e.id} value={e.id}>{e.name} — {e.position}</option>)}
               </select>
             </div>
             <div>

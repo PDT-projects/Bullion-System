@@ -7,6 +7,9 @@
 //      under a 'customCities' collection keyed by province.
 //   5. Inventory deduction on create/update uses totalAmount (gross), deductionCharges
 //      is commission-only and does NOT affect inventory stock figures.
+//   6. NEW: After a Paid invoice is saved, auto-calculates commission in the
+//      background via autoCalculateCommissionOnInvoiceSave(). Non-blocking —
+//      any failure here never prevents the invoice save from succeeding.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -25,6 +28,7 @@ import { generateInvoicePdf, downloadInvoicePdf } from '../models/invoicePdfServ
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
+import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/autoCommissionService';
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; }
@@ -284,7 +288,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const total = useMemo(() => calculateTotal(selectedProducts), [selectedProducts]);
 
   // ── NOTE: deductionCharges is NOT auto-calculated — it is entered manually ──
-  // The old useEffect that called calculateDeductionCharges has been removed.
 
   const toCustomerInvoice = useCallback((inv: Invoice): Invoice => ({
     ...inv,
@@ -352,8 +355,14 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const handleSave = useCallback(async () => {
     const validation = validateInvoice(formData, selectedProducts);
     if (!validation.isValid) { toast.error(validation.error || 'Please fix errors'); return; }
-    setIsSaving(true);
 
+    // NEW: Step 3 - Salesperson required for Paid invoices (commission)
+    if (formData.status === 'Paid' && !formData.salesperson?.trim()) {
+      toast.error('Salesperson is required for Paid invoices (commission calculation)');
+      return;
+    }
+    setIsSaving(true);
+  
     try {
       const invoiceData: Omit<Invoice, 'id'> = {
         invoiceNumber:          formData.invoiceNumber!,
@@ -370,7 +379,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         exchangeWarrantyNote:   formData.exchangeWarrantyNote || '',
         deliveryStatus:         formData.deliveryStatus || 'Self-collect',
         deliveryReceivedStatus: editingInvoice?.deliveryReceivedStatus || 'Pending',
-        // totalAmount is the gross sale amount — deductionCharges is commission only
         totalAmount:            total,
         status:                 formData.status  || 'Unpaid',
         salesperson:            formData.salesperson,
@@ -389,20 +397,22 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         paidAmount:             formData.paymentStatus === 'Full' ? total : formData.paidAmount,
         remainingAmount:        formData.paymentStatus === 'Full' ? 0    : formData.remainingAmount,
         collectionMethod:       formData.collectionMethod,
-        // deductionCharges = commission/logistics cost — does NOT alter inventory amounts
         deductionCharges:       formData.deductionCharges || 0,
         digitalStamp:           formData.digitalStamp,
       };
 
+      let savedId: string;
+
       if (isEditing && editingInvoice) {
         await InvoiceFirebaseService.updateInvoice(editingInvoice.id, invoiceData);
         const saved: Invoice = { ...invoiceData, id: editingInvoice.id };
+        savedId = editingInvoice.id;
         toast.success('Invoice updated — downloading PDF…');
         try { await downloadInvoicePdf(toCustomerInvoice(saved)); }
         catch { toast.error('Invoice updated but PDF download failed'); }
         generateAndSavePdf(saved);
       } else {
-        // ── Deduct inventory (stock/serials only — deductionCharges not involved) ──
+        // ── Deduct inventory ──────────────────────────────────────────────
         for (const ip of selectedProducts) {
           if (!ip.productId || !ip.serialNumbers?.length) continue;
           try {
@@ -423,11 +433,34 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         }
 
         const created = await InvoiceFirebaseService.createInvoice(invoiceData);
+        savedId = created.id;
         toast.success('Invoice created — downloading PDF…');
         try { await downloadInvoicePdf(toCustomerInvoice(created)); }
         catch { toast.error('Invoice created but PDF download failed'); }
         generateAndSavePdf(created);
       }
+
+      // ── Auto-commission trigger (non-blocking) ────────────────────────
+      // Fires only for Paid invoices with a salesperson. Runs in the
+      // background — failure here never blocks the invoice save.
+      if (invoiceData.status === 'Paid' && invoiceData.salesperson) {
+        autoCalculateCommissionOnInvoiceSave(savedId, invoiceData.createdBy || 'Admin')
+          .then((result) => {
+            if (result?.triggered) {
+              console.log(`[AutoCommission] ✅ ${result.message}`);
+              toast.info(
+                `Commission updated for ${invoiceData.salesperson}: PKR ${result.commissionAmount.toLocaleString()}`,
+                { duration: 3000, id: `commission-${savedId}` }
+              );
+            } else if (result) {
+              console.log('[AutoCommission] Skipped:', result.message);
+            }
+          })
+          .catch((err) => {
+            console.warn('[AutoCommission] Background calculation failed:', err);
+          });
+      }
+      // ── end auto-commission ───────────────────────────────────────────
 
       navigate('/invoices');
     } catch (err) {

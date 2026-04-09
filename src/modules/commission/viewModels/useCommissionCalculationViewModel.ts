@@ -1,59 +1,63 @@
-// Commission Calculation ViewModel — saves results to Firestore
-// UPDATED: After saving commissions, also writes commission amounts to salary records
-//          so the salary form can auto-populate the commission field.
+// Commission Calculation ViewModel
+// UPDATED:
+//   1. After saving commissions to Firestore, also writes commission amounts to
+//      existing salary records for the same employee+month (salary linking).
+//   2. Exposes `liveCommissions` — the real-time Calculated records already
+//      written by the auto-commission service when invoices were saved.
+//      This lets the UI show progress before the admin confirms.
+//   3. handleModalConfirm upgrades all Calculated → Confirmed and then
+//      patches any existing salary records.
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import type {
   Commission,
   CommissionCalculationResult,
   InvoiceReference,
-  EmployeeReference
+  EmployeeReference,
 } from '../models/types';
 import {
   formatCurrency,
   formatMonth,
   getCurrentMonth,
-  CITIES
+  CITIES,
 } from '../models/commissionService';
 import { CommissionFirebaseService } from '../models/Commissionfirebaseservice';
-import { SalaryFirebaseService } from '../../salary/models/salaryFirebaseService';
+import { SalaryFirebaseService }     from '../../salary/models/salaryFirebaseService';
 
-// ─── Per-salesperson invoice breakdown (shown in the UI before final save) ───
+// ─── Per-salesperson invoice breakdown ──────────────────────────────────────
 
 export interface SalespersonInvoiceBreakdown {
-  salespersonId: string;
-  salespersonName: string;
-  invoices: InvoiceReference[];
-  totalSales: number;
-  invoiceCount: number;
-  // Slab progress info for the progress bar
-  slabFrom: number;
-  slabTo: number;
-  nextSlabThreshold: number | null; // null if no higher slab exists for this sp+city
+  salespersonId:       string;
+  salespersonName:     string;
+  invoices:            InvoiceReference[];
+  totalSales:          number;
+  invoiceCount:        number;
+  slabFrom:            number;
+  slabTo:              number;
+  nextSlabThreshold:   number | null;
+  // Progress towards the next slab (0-100)
+  slabProgressPercent: number;
 }
 
 // ─── Local calculation helper ────────────────────────────────────────────────
 
 function calculateCommissionsFromInvoices(
-  city: string,
-  month: string,
-  invoices: InvoiceReference[],
-  employees: EmployeeReference[],
-  slabs: any[],
-  calculatedBy: string = 'Admin'
-): CommissionCalculationResult & {
-  breakdowns: SalespersonInvoiceBreakdown[];
-} {
+  city:          string,
+  month:         string,
+  invoices:      InvoiceReference[],
+  employees:     EmployeeReference[],
+  slabs:         any[],
+  calculatedBy   = 'Admin'
+): CommissionCalculationResult & { breakdowns: SalespersonInvoiceBreakdown[] } {
   const errors: string[] = [];
 
-  // 1. Filter: correct city, correct month, Paid only, has a salesperson
   const relevantInvoices = invoices.filter((inv) => {
-    if (inv.status !== 'Paid') return false;
-    if (!inv.salesperson) return false;
+    if (inv.status !== 'Paid')   return false;
+    if (!inv.salesperson)        return false;
     if (inv.customerCity !== city) return false;
     const d = new Date(inv.date);
-    if (isNaN(d.getTime())) return false;
+    if (isNaN(d.getTime()))      return false;
     const invMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     return invMonth === month;
   });
@@ -68,64 +72,75 @@ function calculateCommissionsFromInvoices(
     };
   }
 
-  // 2. Group invoices per salesperson
-  const invoicesBySalesperson: Record<string, InvoiceReference[]> = {};
+  // Group per salesperson
+  const grouped: Record<string, InvoiceReference[]> = {};
   relevantInvoices.forEach((inv) => {
     const key = inv.salesperson!;
-    if (!invoicesBySalesperson[key]) invoicesBySalesperson[key] = [];
-    invoicesBySalesperson[key].push(inv);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(inv);
   });
 
-  // 3. Build breakdowns + commissions
   const commissions: Commission[] = [];
   const breakdowns: SalespersonInvoiceBreakdown[] = [];
 
-  Object.entries(invoicesBySalesperson).forEach(([salespersonId, spInvoices]) => {
+  Object.entries(grouped).forEach(([salespersonId, spInvoices]) => {
     const totalSales = spInvoices.reduce((s, inv) => s + inv.totalAmount, 0);
-    const employee = employees.find((e) => e.id === salespersonId);
+    const employee   = employees.find((e) => e.id === salespersonId);
 
     if (!employee) {
-      errors.push(`Employee record not found for salesperson ID: ${salespersonId}`);
+      errors.push(`Employee not found for salesperson ID: ${salespersonId}`);
       return;
     }
 
-    // Find applicable commission slab
     const applicableSlab = slabs.find(
       (slab) =>
         slab.salesperson === salespersonId &&
-        slab.city === city &&
-        totalSales >= slab.fromAmount &&
-        totalSales <= slab.toAmount
+        slab.city        === city           &&
+        totalSales       >= slab.fromAmount &&
+        totalSales       <= slab.toAmount
     );
 
-    // Find the next higher slab (for progress bar)
+    // Next-higher slab for the progress bar
     const higherSlabs = slabs
       .filter(
         (slab) =>
           slab.salesperson === salespersonId &&
-          slab.city === city &&
-          slab.fromAmount > totalSales
+          slab.city        === city           &&
+          slab.fromAmount  >  totalSales
       )
       .sort((a, b) => a.fromAmount - b.fromAmount);
 
     const nextSlabThreshold = higherSlabs.length > 0 ? higherSlabs[0].fromAmount : null;
 
-    // Store breakdown for display
+    // Progress percentage towards next slab (or 100% if in a slab)
+    let slabProgressPercent = 0;
+    if (applicableSlab) {
+      slabProgressPercent = 100;
+    } else if (nextSlabThreshold) {
+      // Progress from 0 to the first slab's start
+      const firstSlab = slabs
+        .filter((s) => s.salesperson === salespersonId && s.city === city)
+        .sort((a, b) => a.fromAmount - b.fromAmount)[0];
+      const rangeStart = firstSlab ? 0 : 0;
+      const rangeEnd   = nextSlabThreshold;
+      slabProgressPercent = Math.min(100, Math.round((totalSales / rangeEnd) * 100));
+    }
+
     breakdowns.push({
       salespersonId,
-      salespersonName: employee.name,
-      invoices: spInvoices,
+      salespersonName:   employee.name,
+      invoices:          spInvoices,
       totalSales,
-      invoiceCount: spInvoices.length,
-      slabFrom: applicableSlab?.fromAmount ?? 0,
-      slabTo: applicableSlab?.toAmount ?? 0,
+      invoiceCount:      spInvoices.length,
+      slabFrom:          applicableSlab?.fromAmount ?? 0,
+      slabTo:            applicableSlab?.toAmount   ?? 0,
       nextSlabThreshold,
+      slabProgressPercent,
     });
 
     if (!applicableSlab) {
       errors.push(
-        `No commission slab found for ${employee.name} in ${city} ` +
-        `covering sales of ${formatCurrency(totalSales)}`
+        `No commission slab for ${employee.name} in ${city} covering sales of ${formatCurrency(totalSales)}`
       );
       return;
     }
@@ -133,32 +148,32 @@ function calculateCommissionsFromInvoices(
     const commissionAmount = (totalSales * applicableSlab.commissionPercentage) / 100;
 
     commissions.push({
-      id: `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      salesperson: salespersonId,
-      salespersonName: employee.name,
+      id:                         `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      salesperson:                salespersonId,
+      salespersonName:            employee.name,
       city,
       month,
       totalSales,
-      invoiceCount: spInvoices.length,
-      appliedSlabFrom: applicableSlab.fromAmount,
-      appliedSlabTo: applicableSlab.toAmount,
-      commissionPercentage: applicableSlab.commissionPercentage,
+      invoiceCount:               spInvoices.length,
+      appliedSlabFrom:            applicableSlab.fromAmount,
+      appliedSlabTo:              applicableSlab.toAmount,
+      commissionPercentage:       applicableSlab.commissionPercentage,
       calculatedCommissionAmount: commissionAmount,
-      status: 'Calculated',
+      status:                     'Calculated',
       calculatedBy,
-      calculatedAt: new Date().toISOString(),
-      isLocked: false,
+      calculatedAt:               new Date().toISOString(),
+      isLocked:                   false,
     });
   });
 
-  const totalSales = commissions.reduce((s, c) => s + c.totalSales, 0);
+  const totalSales      = commissions.reduce((s, c) => s + c.totalSales, 0);
   const totalCommission = commissions.reduce((s, c) => s + c.calculatedCommissionAmount, 0);
 
   return {
     commissions,
     errors,
     summary: {
-      totalSalespeople: commissions.length,
+      totalSalespeople:  commissions.length,
       totalSales,
       totalCommission,
       totalInvoicesUsed: relevantInvoices.length,
@@ -167,87 +182,111 @@ function calculateCommissionsFromInvoices(
   };
 }
 
-// ─── ViewModel ───────────────────────────────────────────────────────────────
+// ─── Return type ─────────────────────────────────────────────────────────────
 
 interface UseCommissionCalculationViewModelReturn {
-  selectedCity: string;
-  setSelectedCity: (city: string) => void;
-  selectedMonth: string;
-  setSelectedMonth: (month: string) => void;
-  commissionData: Commission[];
-  calculationErrors: string[];
+  selectedCity:            string;
+  setSelectedCity:         (city: string) => void;
+  selectedMonth:           string;
+  setSelectedMonth:        (month: string) => void;
+  commissionData:          Commission[];
+  calculationErrors:       string[];
   summary: {
     totalSalespeople: number;
-    totalSales: number;
-    totalCommission: number;
+    totalSales:       number;
+    totalCommission:  number;
     totalInvoicesUsed: number;
   } | null;
-  invoiceBreakdowns: SalespersonInvoiceBreakdown[];
-  expandedSalesperson: string | null;
-  setExpandedSalesperson: (id: string | null) => void;
-  showModal: boolean;
-  setShowModal: (show: boolean) => void;
-  isFullScreen: boolean;
-  setIsFullScreen: (full: boolean) => void;
-  isCalculating: boolean;
-  isEditing: string | null;
-  editValues: { percentage: number; amount: number };
-  setEditValues: (values: { percentage: number; amount: number }) => void;
-  calculateCommission: (invoices: InvoiceReference[], employees: EmployeeReference[]) => Promise<boolean>;
+  invoiceBreakdowns:       SalespersonInvoiceBreakdown[];
+  expandedSalesperson:     string | null;
+  setExpandedSalesperson:  (id: string | null) => void;
+  showModal:               boolean;
+  setShowModal:            (show: boolean) => void;
+  isFullScreen:            boolean;
+  setIsFullScreen:         (full: boolean) => void;
+  isCalculating:           boolean;
+  isEditing:               string | null;
+  editValues:              { percentage: number; amount: number };
+  setEditValues:           (values: { percentage: number; amount: number }) => void;
+  // Live auto-calculated commissions (written by invoice saves before admin confirms)
+  liveCommissions:         Commission[];
+  liveCommissionsLoading:  boolean;
+  refreshLiveCommissions:  () => void;
+  calculateCommission:     (invoices: InvoiceReference[], employees: EmployeeReference[]) => Promise<boolean>;
   confirmSingleCommission: (commissionId: string) => void;
-  confirmAllCommissions: () => void;
-  startEdit: (commission: Commission) => void;
-  saveEdit: (commissionId: string) => void;
-  cancelEdit: () => void;
-  cancelCalculation: () => void;
-  handleModalConfirm: () => Promise<void>;
-  handleModalCancel: () => void;
-  formatCurrency: (amount: number) => string;
-  formatMonth: (monthStr: string) => string;
-  cities: readonly string[];
+  confirmAllCommissions:   () => void;
+  startEdit:               (commission: Commission) => void;
+  saveEdit:                (commissionId: string) => void;
+  cancelEdit:              () => void;
+  cancelCalculation:       () => void;
+  handleModalConfirm:      () => Promise<void>;
+  handleModalCancel:       () => void;
+  formatCurrency:          (amount: number) => string;
+  formatMonth:             (monthStr: string) => string;
+  cities:                  readonly string[];
 }
+
+// ─── ViewModel ───────────────────────────────────────────────────────────────
 
 export function useCommissionCalculationViewModel(
   onCommissionsSaved: () => void
 ): UseCommissionCalculationViewModelReturn {
-  const [selectedCity, setSelectedCity] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
-  const [commissionData, setCommissionData] = useState<Commission[]>([]);
-  const [calculationErrors, setCalculationErrors] = useState<string[]>([]);
-  const [summary, setSummary] = useState<{
-    totalSalespeople: number;
-    totalSales: number;
-    totalCommission: number;
-    totalInvoicesUsed: number;
-  } | null>(null);
-  const [invoiceBreakdowns, setInvoiceBreakdowns] = useState<SalespersonInvoiceBreakdown[]>([]);
-  const [expandedSalesperson, setExpandedSalesperson] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [isFullScreen, setIsFullScreen] = useState(false);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [isEditing, setIsEditing] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState({ percentage: 0, amount: 0 });
 
+  const [selectedCity,          setSelectedCity]          = useState('');
+  const [selectedMonth,         setSelectedMonth]         = useState(getCurrentMonth());
+  const [commissionData,        setCommissionData]        = useState<Commission[]>([]);
+  const [calculationErrors,     setCalculationErrors]     = useState<string[]>([]);
+  const [summary,               setSummary]               = useState<{
+    totalSalespeople: number; totalSales: number;
+    totalCommission: number;  totalInvoicesUsed: number;
+  } | null>(null);
+  const [invoiceBreakdowns,     setInvoiceBreakdowns]     = useState<SalespersonInvoiceBreakdown[]>([]);
+  const [expandedSalesperson,   setExpandedSalesperson]   = useState<string | null>(null);
+  const [showModal,             setShowModal]             = useState(false);
+  const [isFullScreen,          setIsFullScreen]          = useState(false);
+  const [isCalculating,         setIsCalculating]         = useState(false);
+  const [isEditing,             setIsEditing]             = useState<string | null>(null);
+  const [editValues,            setEditValues]            = useState({ percentage: 0, amount: 0 });
+
+  // Live Calculated records written automatically when invoices are saved
+  const [liveCommissions,       setLiveCommissions]       = useState<Commission[]>([]);
+  const [liveCommissionsLoading,setLiveCommissionsLoading]= useState(false);
+
+  // ── Fetch live (auto-calculated) commissions for selected city+month ──
+  const refreshLiveCommissions = useCallback(async () => {
+    if (!selectedCity || !selectedMonth) return;
+    setLiveCommissionsLoading(true);
+    try {
+      const all = await CommissionFirebaseService.fetchAllCommissions();
+      const filtered = all.filter(
+        (c) => c.city === selectedCity && c.month === selectedMonth
+      );
+      setLiveCommissions(filtered);
+    } catch (err) {
+      console.warn('[CommissionCalc] Could not load live commissions:', err);
+    } finally {
+      setLiveCommissionsLoading(false);
+    }
+  }, [selectedCity, selectedMonth]);
+
+  useEffect(() => {
+    refreshLiveCommissions();
+  }, [refreshLiveCommissions]);
+
+  // ── Manual calculate (admin-initiated) ───────────────────────────────
   const calculateCommission = useCallback(
     async (invoices: InvoiceReference[], employees: EmployeeReference[]): Promise<boolean> => {
       if (!selectedCity || !selectedMonth) {
         setCalculationErrors(['Please select both a city and a month']);
         return false;
       }
-
       setIsCalculating(true);
       setCalculationErrors([]);
 
       try {
-        const slabs = await CommissionFirebaseService.fetchAllSlabs();
-
+        const slabs  = await CommissionFirebaseService.fetchAllSlabs();
         const result = calculateCommissionsFromInvoices(
-          selectedCity,
-          selectedMonth,
-          invoices,
-          employees,
-          slabs,
-          'Admin'
+          selectedCity, selectedMonth, invoices, employees, slabs, 'Admin'
         );
 
         setCommissionData(result.commissions);
@@ -255,10 +294,7 @@ export function useCommissionCalculationViewModel(
         setSummary(result.summary);
         setInvoiceBreakdowns(result.breakdowns);
 
-        if (result.commissions.length === 0) {
-          return false;
-        }
-
+        if (result.commissions.length === 0) return false;
         setShowModal(true);
         return true;
       } catch (error) {
@@ -273,17 +309,12 @@ export function useCommissionCalculationViewModel(
     [selectedCity, selectedMonth]
   );
 
+  // ── Confirm helpers ───────────────────────────────────────────────────
   const confirmSingleCommission = useCallback((commissionId: string) => {
     setCommissionData((prev) =>
       prev.map((c) =>
         c.id === commissionId
-          ? {
-              ...c,
-              status: 'Confirmed' as const,
-              confirmedBy: 'Admin',
-              confirmedAt: new Date().toISOString(),
-              isLocked: true,
-            }
+          ? { ...c, status: 'Confirmed' as const, confirmedBy: 'Admin', confirmedAt: new Date().toISOString(), isLocked: true }
           : c
       )
     );
@@ -292,48 +323,36 @@ export function useCommissionCalculationViewModel(
   const confirmAllCommissions = useCallback(() => {
     const now = new Date().toISOString();
     setCommissionData((prev) =>
-      prev.map((c) => ({
-        ...c,
-        status: 'Confirmed' as const,
-        confirmedBy: 'Admin',
-        confirmedAt: now,
-        isLocked: true,
-      }))
+      prev.map((c) => ({ ...c, status: 'Confirmed' as const, confirmedBy: 'Admin', confirmedAt: now, isLocked: true }))
     );
   }, []);
 
+  // ── Edit helpers ──────────────────────────────────────────────────────
   const startEdit = useCallback((commission: Commission) => {
     setIsEditing(commission.id);
     setEditValues({
       percentage: commission.overriddenCommissionPercentage ?? commission.commissionPercentage,
-      amount: commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount,
+      amount:     commission.overriddenCommissionAmount     ?? commission.calculatedCommissionAmount,
     });
   }, []);
 
-  const saveEdit = useCallback(
-    (commissionId: string) => {
-      setCommissionData((prev) =>
-        prev.map((c) =>
-          c.id === commissionId
-            ? {
-                ...c,
-                overriddenCommissionPercentage: editValues.percentage,
-                overriddenCommissionAmount: editValues.amount,
-                status: 'Adjusted' as const,
-              }
-            : c
-        )
-      );
-      setIsEditing(null);
-    },
-    [editValues]
-  );
+  const saveEdit = useCallback((commissionId: string) => {
+    setCommissionData((prev) =>
+      prev.map((c) =>
+        c.id === commissionId
+          ? { ...c, overriddenCommissionPercentage: editValues.percentage, overriddenCommissionAmount: editValues.amount, status: 'Adjusted' as const }
+          : c
+      )
+    );
+    setIsEditing(null);
+  }, [editValues]);
 
   const cancelEdit = useCallback(() => {
     setIsEditing(null);
     setEditValues({ percentage: 0, amount: 0 });
   }, []);
 
+  // ── Reset ─────────────────────────────────────────────────────────────
   const resetState = useCallback(() => {
     setCommissionData([]);
     setSelectedCity('');
@@ -346,28 +365,24 @@ export function useCommissionCalculationViewModel(
 
   const cancelCalculation = useCallback(() => resetState(), [resetState]);
 
-  // ─── KEY INTEGRATION: After saving commissions to Firestore, also update
-  //     any existing salary record for the same employee+month by writing the
-  //     commission amount onto it. If no salary record exists yet the amount
-  //     is stored on the commission record; useSalaryFormViewModel will pick
-  //     it up when the user opens the salary form for that employee+month.
+  // ── Save to Firestore + link to salary records ────────────────────────
   const handleModalConfirm = useCallback(async () => {
     try {
       const toSave = commissionData.map(({ id, ...rest }) => ({
         ...rest,
-        status: 'Confirmed' as const,
+        status:      'Confirmed' as const,
         confirmedBy: 'Admin',
         confirmedAt: new Date().toISOString(),
-        isLocked: true,
+        isLocked:    true,
       }));
 
       const savedCommissions = await CommissionFirebaseService.saveCommissions(toSave);
 
-      // ── Link commission amounts to existing salary records ──────────────
-      // For each confirmed commission, look for a salary record for the same
-      // employee + salaryMonth and update its commission field.  We do this
-      // silently — a missing salary record is not an error; the salary form
-      // will auto-populate when the user creates/edits salary later.
+      // ── Link commission amounts to existing salary records ─────────────
+      // For each confirmed commission, find the matching Employee salary for
+      // the same employee + salaryMonth and update its commission + netAmount.
+      // Non-fatal: if no salary record exists yet the salary form will
+      // auto-populate when the user opens it.
       try {
         const allSalaries = await SalaryFirebaseService.fetchAllSalaries();
 
@@ -375,48 +390,45 @@ export function useCommissionCalculationViewModel(
           const commissionAmount =
             commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount;
 
-          // Find matching regular salary for this employee + month
           const matchingSalary = allSalaries.find(
             (s) =>
-              s.employeeId === commission.salesperson &&
-              s.salaryMonth === commission.month &&
+              s.employeeId  === commission.salesperson &&
+              s.salaryMonth === commission.month       &&
               s.subCategory === 'Employee salary'
           );
 
           if (matchingSalary) {
             await SalaryFirebaseService.updateSalary(matchingSalary.id, {
               commission: commissionAmount,
-              // Recalculate netAmount
-              netAmount: Math.max(
+              netAmount:  Math.max(
                 0,
-                (matchingSalary.baseSalary || 0) +
-                  commissionAmount -
-                  (matchingSalary.deductions || 0)
+                (matchingSalary.baseSalary || 0) + commissionAmount - (matchingSalary.deductions || 0)
               ),
             });
+            console.log(
+              `[CommissionCalc] Linked commission PKR ${commissionAmount} to salary record ${matchingSalary.id}`
+            );
           }
-          // If no salary record yet, nothing to update — the salary form
-          // will auto-fetch the commission amount from the commission record.
         });
 
         await Promise.allSettled(updatePromises);
       } catch (linkErr) {
-        // Non-fatal: salary linking failure should not block commission save
-        console.warn('⚠️ Could not link commissions to salary records:', linkErr);
+        console.warn('[CommissionCalc] Salary linking failed (non-fatal):', linkErr);
       }
-      // ── end salary linking ───────────────────────────────────────────────
 
+      const linkedCount = updatedSalaries.length;
       toast.success(
-        `${toSave.length} commission(s) saved. Commission amounts will appear automatically on salary forms.`
+        `${toSave.length} commission(s) confirmed & saved. ${linkedCount > 0 ? `Linked to ${linkedCount} salary record(s).` : 'Ready for salary forms.'}`
       );
       setShowModal(false);
       resetState();
+      refreshLiveCommissions();
       onCommissionsSaved();
     } catch (error) {
-      toast.error('Failed to save commissions to Firestore');
+      toast.error('Failed to save commissions');
       console.error(error);
     }
-  }, [commissionData, onCommissionsSaved, resetState]);
+  }, [commissionData, onCommissionsSaved, resetState, refreshLiveCommissions]);
 
   const handleModalCancel = useCallback(() => {
     setShowModal(false);
@@ -424,24 +436,21 @@ export function useCommissionCalculationViewModel(
   }, [resetState]);
 
   return {
-    selectedCity,
-    setSelectedCity,
-    selectedMonth,
-    setSelectedMonth,
+    selectedCity,          setSelectedCity,
+    selectedMonth,         setSelectedMonth,
     commissionData,
     calculationErrors,
     summary,
     invoiceBreakdowns,
-    expandedSalesperson,
-    setExpandedSalesperson,
-    showModal,
-    setShowModal,
-    isFullScreen,
-    setIsFullScreen,
+    expandedSalesperson,   setExpandedSalesperson,
+    showModal,             setShowModal,
+    isFullScreen,          setIsFullScreen,
     isCalculating,
     isEditing,
-    editValues,
-    setEditValues,
+    editValues,            setEditValues,
+    liveCommissions,
+    liveCommissionsLoading,
+    refreshLiveCommissions,
     calculateCommission,
     confirmSingleCommission,
     confirmAllCommissions,

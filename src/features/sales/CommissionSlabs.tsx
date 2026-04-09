@@ -2,25 +2,22 @@ import { useState } from 'react';
 import { Plus, Edit, Trash2, X, Maximize2, Minimize2, Percent, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
-type CommissionSlab = {
-  id: string;
-  salesperson: string;
-  city: string;
-  fromAmount: number;
-  toAmount: number;
-  commissionPercentage: number;
-};
+import type { CommissionSlab } from '../../modules/commission/models/types';
 
-type CommissionSlabsProps = {
-  commissionSlabs: CommissionSlab[];
-  setCommissionSlabs: (slabs: CommissionSlab[]) => void;
+interface CommissionSlabsProps {
   employees: any[];
   setActiveModule: (module: string) => void;
-};
+}
+
 
 const cities = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'];
 
-export function CommissionSlabs({ commissionSlabs, setCommissionSlabs, employees, setActiveModule }: CommissionSlabsProps) {
+import { useState, useEffect, useCallback } from 'react';
+import { CommissionFirebaseService } from '../../modules/commission/models/Commissionfirebaseservice';
+
+export function CommissionSlabs({ employees, setActiveModule }: CommissionSlabsProps) {
+  const [commissionSlabs, setCommissionSlabs] = useState<CommissionSlab[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [editingSlab, setEditingSlab] = useState<CommissionSlab | null>(null);
@@ -32,6 +29,33 @@ export function CommissionSlabs({ commissionSlabs, setCommissionSlabs, employees
     toAmount: 0,
     commissionPercentage: 0,
   });
+
+  // Load slabs on mount
+  useEffect(() => {
+    const loadSlabs = async () => {
+      try {
+        setIsLoading(true);
+        const slabs = await CommissionFirebaseService.fetchAllSlabs();
+        setCommissionSlabs(slabs);
+      } catch (error) {
+        toast.error('Failed to load commission slabs');
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadSlabs();
+  }, []);
+
+  const refetchSlabs = useCallback(async () => {
+    try {
+      const slabs = await CommissionFirebaseService.fetchAllSlabs();
+      setCommissionSlabs(slabs);
+    } catch (error) {
+      toast.error('Failed to refresh slabs');
+    }
+  }, []);
+
 
   const handleAdd = () => {
     setEditingSlab(null);
@@ -53,62 +77,62 @@ export function CommissionSlabs({ commissionSlabs, setCommissionSlabs, employees
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this commission slab?')) {
-      setCommissionSlabs(commissionSlabs.filter(item => item.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this commission slab?')) return;
+    try {
+      await CommissionFirebaseService.deleteSlab(id);
+      await refetchSlabs();
       toast.success('Commission slab deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete slab');
+      console.error(error);
     }
   };
 
-  const handleSave = () => {
-    if (!formData.salesperson || !formData.city || !formData.fromAmount || !formData.toAmount || formData.commissionPercentage === undefined) {
+  const handleSave = async () => {
+    if (!formData.salesperson || !formData.city || formData.fromAmount === undefined || !formData.toAmount || formData.commissionPercentage === undefined) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    if (formData.fromAmount >= formData.toAmount) {
+    const fd = formData as CommissionSlab;
+
+    if (fd.fromAmount >= fd.toAmount) {
       toast.error('From Amount must be less than To Amount');
       return;
     }
 
-    if (formData.commissionPercentage < 0 || formData.commissionPercentage > 100) {
+    if (fd.commissionPercentage < 0 || fd.commissionPercentage > 100) {
       toast.error('Commission Percentage must be between 0 and 100');
       return;
     }
 
-    // Check for overlapping slabs for same salesperson and city
-    const overlappingSlab = commissionSlabs.find(slab =>
-      slab.id !== editingSlab?.id &&
-      slab.salesperson === formData.salesperson &&
-      slab.city === formData.city &&
-      (
-        ((formData.fromAmount ?? 0) >= slab.fromAmount && (formData.fromAmount ?? 0) < slab.toAmount) ||
-        ((formData.toAmount ?? 0) > slab.fromAmount && (formData.toAmount ?? 0) <= slab.toAmount) ||
-        ((formData.fromAmount ?? 0) <= slab.fromAmount && (formData.toAmount ?? 0) >= slab.toAmount)
-      )
-    );
-
-    if (overlappingSlab) {
-      toast.error('Commission slabs cannot overlap for the same salesperson and city');
-      return;
+    try {
+      if (editingSlab) {
+        await CommissionFirebaseService.updateSlab(editingSlab.id, {
+          salesperson: fd.salesperson,
+          city: fd.city,
+          fromAmount: fd.fromAmount,
+          toAmount: fd.toAmount,
+          commissionPercentage: fd.commissionPercentage,
+        });
+        toast.success('Commission slab updated successfully');
+      } else {
+        await CommissionFirebaseService.createSlab({
+          salesperson: fd.salesperson,
+          city: fd.city,
+          fromAmount: fd.fromAmount,
+          toAmount: fd.toAmount,
+          commissionPercentage: fd.commissionPercentage,
+        });
+        toast.success('Commission slab created successfully');
+      }
+      setIsModalOpen(false);
+      await refetchSlabs();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save slab');
+      console.error(error);
     }
-
-    const slabRecord = {
-      ...formData,
-      id: editingSlab?.id || Date.now().toString(),
-    } as CommissionSlab;
-
-    if (editingSlab) {
-      setCommissionSlabs(commissionSlabs.map(item =>
-        item.id === editingSlab.id ? slabRecord : item
-      ));
-      toast.success('Commission slab updated successfully');
-    } else {
-      setCommissionSlabs([...commissionSlabs, slabRecord]);
-      toast.success('Commission slab added successfully');
-    }
-
-    setIsModalOpen(false);
   };
 
   const formatCurrency = (amount: number) => {
@@ -204,10 +228,30 @@ export function CommissionSlabs({ commissionSlabs, setCommissionSlabs, employees
                 </tr>
               ))}
 
-              {commissionSlabs.length === 0 && (
+{isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    No commission slabs available. Click "Add Commission Slab" to create your first slab.
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="inline-flex items-center gap-2 text-gray-500">
+                      <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                      Loading commission slabs...
+                    </div>
+                  </td>
+                </tr>
+              ) : commissionSlabs.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+                    <div className="text-yellow-800">
+                      <h3 className="text-lg font-semibold mb-2">⚠️ No Commission Slabs Found</h3>
+                      <p className="mb-4">Commission calculation is <strong>disabled</strong> until you create slabs.</p>
+                      <p className="text-sm mb-4">Slabs define rates (e.g. 10k-50k sales = 5%) per salesperson+city.</p>
+                      <button
+                        onClick={handleAdd}
+                        className="inline-flex items-center gap-2 bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors font-medium"
+                      >
+                        <Plus size={16} />
+                        Create First Slab
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}
