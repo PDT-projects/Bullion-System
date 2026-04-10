@@ -397,7 +397,7 @@ export function PendingPaymentsView({
                           {t.mode === 'Cheque' && !t.isFullyCleared && (t.partialPayments || []).length === 0 ? (
                             <button
                               onClick={() => markTransactionCleared(t.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#4f46e5] hover:bg-[#4338ca] rounded-lg transition-colors"
                             >
                               <Check size={12} /> Mark Cleared
                             </button>
