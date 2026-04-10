@@ -40,19 +40,7 @@ export function CreateInventoryView({
 
   const currentIdx = steps.findIndex(s => s.id === currentStep);
 
-  const renderStepIndicator = () => (
-    <div className="flex items-center justify-center mb-8">
-      {steps.map((step, index) => (
-        <div key={step.id} className="flex items-center">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold ${currentStep === step.id ? 'bg-indigo-600 text-white' : currentIdx > index ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-            {currentIdx > index ? <Check size={20} /> : step.number}
-          </div>
-          <span className={`ml-2 mr-4 text-sm font-medium ${currentStep === step.id ? 'text-[#4f46e5]' : 'text-gray-500'}`}>{step.label}</span>
-          {index < steps.length - 1 && <div className={`w-12 h-0.5 mx-2 ${currentIdx > index ? 'bg-green-600' : 'bg-gray-200'}`} />}
-        </div>
-      ))}
-    </div>
-  );
+
 
   const renderProductDetailsStep = () => (
     <div className="space-y-6">
@@ -204,14 +192,64 @@ export function CreateInventoryView({
   return (
     <div className="p-6">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4 mb-2">
           <button onClick={handleCancel} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><ArrowLeft size={24} /></button>
           <div>
             <h2 className="text-2xl font-bold">Create New Inventory</h2>
             <p className="text-sm text-gray-600">Add a new product to your inventory</p>
           </div>
         </div>
-        {renderStepIndicator()}
+
+        {/* ── Stepper ── */}
+        <div className="flex-shrink-0 sticky top-16 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-lg px-6 py-5 mb-6">
+          <div className="flex items-center w-full max-w-2xl mx-auto">
+            {steps.map((step, index) => {
+              const isActive = step.id === currentStep;
+              const isDone   = currentIdx > index;
+              const isLast   = index === steps.length - 1;
+
+              return (
+                <React.Fragment key={step.id}>
+                  <div className="flex flex-col items-center flex-shrink-0 min-w-[160px]">
+                    <div
+                      className={`
+                        w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-lg shadow-xl transition-all duration-300
+                        border-3 ${isDone || isActive ? 'ring-4 ring-indigo-100/50' : ''}
+                        ${isDone
+                          ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 border-indigo-600 text-white shadow-indigo-500/50'
+                          : isActive
+                          ? 'bg-gradient-to-br from-indigo-400 to-indigo-500 border-white text-white shadow-indigo-400/75 scale-105'
+                          : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:shadow-md hover:text-indigo-600 hover:scale-105'
+                        }
+                      `}
+                    >
+                      {isDone ? <Check className="w-7 h-7 stroke-width-2.5" /> : step.number}
+                    </div>
+                    <span
+                      className={`
+                        mt-3.5 text-sm font-semibold tracking-wide leading-tight px-3 py-1.5 rounded-full shadow-sm transition-all
+                        ${isDone || isActive 
+                          ? 'bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-900 ring-1 ring-indigo-200' 
+                          : 'text-gray-500 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700'
+                        }
+                      `}
+                    >
+                      {step.label}
+                    </span>
+                  </div>
+                  {!isLast && (
+                    <div className="flex-1 mx-4">
+                      <div className={`h-2 rounded-xl shadow-md transition-all ${isDone 
+                        ? 'bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 shadow-indigo-300/50' 
+                        : 'bg-gradient-to-r from-gray-200 to-gray-300 hover:from-indigo-200 hover:to-indigo-300'
+                      }`} />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           {currentStep === 'details' && renderProductDetailsStep()}
           {currentStep === 'payment' && renderPaymentStep()}

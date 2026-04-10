@@ -1,1 +1,0 @@
-# TODO: Fix Mark Cleared Button Styling\n\n1. [ ] Edit src/modules/transactions/views/PendingPaymentsView.tsx - Update className of Mark Cleared button to match Pay button (bg-[#4f46e5] hover:bg-[#4338ca])\n2. [ ] Verify the change in Pending Payments table\n3. [ ] Mark complete

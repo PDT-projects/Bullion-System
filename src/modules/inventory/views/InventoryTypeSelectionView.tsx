@@ -49,8 +49,8 @@ export const InventoryTypeSelectionView: React.FC<InventoryTypeSelectionViewProp
       </div>
 
       {/* ── Stepper ── */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-5">
-        <div className="flex items-center w-full max-w-3xl">
+      <div className="flex-shrink-0 sticky top-16 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm px-6 py-5">
+        <div className="flex items-center w-full max-w-4xl mx-auto">
           {steps.map((step, index) => {
             const isActive = step.number === currentStep;
             const isDone   = step.number < currentStep;
@@ -59,27 +59,30 @@ export const InventoryTypeSelectionView: React.FC<InventoryTypeSelectionViewProp
             return (
               <React.Fragment key={step.number}>
                 {/* Step node */}
-                <div className="flex flex-col items-center flex-shrink-0">
+                <div className="flex flex-col items-center flex-shrink-0 min-w-[120px]">
                   {/* Circle */}
                   <div
                     className={`
-                      w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
-                      border-2 transition-all duration-200 shadow-sm
+                      w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-lg transition-all duration-300
+                      border-3 ${isDone || isActive ? 'ring-4 ring-indigo-100/50' : ''}
                       ${isDone
-                        ? 'bg-green-500 border-green-500 text-white'
+                        ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 border-indigo-600 text-white shadow-indigo-500/25'
                         : isActive
-                        ? 'bg-indigo-600 border-indigo-600 text-white ring-4 ring-indigo-100'
-                        : 'bg-white border-gray-300 text-gray-400'
+                        ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 border-white text-white shadow-indigo-400/50'
+                        : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:shadow-md'
                       }
                     `}
                   >
-                    {isDone ? <Check size={16} strokeWidth={3} /> : step.number}
+                    {isDone ? <Check className="w-6 h-6 stroke-width-3" /> : step.number}
                   </div>
                   {/* Label */}
                   <span
                     className={`
-                      mt-2 text-xs font-semibold whitespace-nowrap tracking-wide
-                      ${isActive ? 'text-indigo-600' : isDone ? 'text-green-600' : 'text-gray-400'}
+                      mt-3 text-sm font-semibold tracking-wide leading-tight px-2 py-1 rounded-full transition-colors
+                      ${isDone || isActive 
+                        ? 'bg-indigo-50 text-indigo-800 shadow-sm' 
+                        : 'text-gray-500 group-hover:text-gray-700'
+                      }
                     `}
                   >
                     {step.label}
@@ -88,9 +91,12 @@ export const InventoryTypeSelectionView: React.FC<InventoryTypeSelectionViewProp
 
                 {/* Connector line (not after last step) */}
                 {!isLast && (
-                  <div className="flex-1 mx-3 mb-5">
+                  <div className="flex-1 mx-4 max-w-xs">
                     <div
-                      className={`h-0.5 w-full rounded-full ${isDone ? 'bg-green-400' : 'bg-gray-200'}`}
+                      className={`h-1.5 rounded-full shadow-sm transition-all ${isDone 
+                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 shadow-indigo-200/50' 
+                        : 'bg-gray-200 hover:bg-gray-300'
+                      }`}
                     />
                   </div>
                 )}

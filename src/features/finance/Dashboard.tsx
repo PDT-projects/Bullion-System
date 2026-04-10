@@ -41,8 +41,7 @@ import {
   BalanceSheetReport }        from './BalanceSheetReport';
 import { 
   LoanHistory }               from './LoanHistory';
-import { 
-  TransactionHistory }        from './TransactionHistory';
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -117,8 +116,7 @@ export function Dashboard() {
         return <InventoryReport products={products} />;
       case 'transactions':
         return <TransactionHistoryReport transactions={transactions} />;
-      case 'transaction-history':
-        return <TransactionHistory transactions={transactions} />;
+
       case 'referral':
         return <ReferralReport invoices={invoices} />;
       case 'commission':
@@ -139,7 +137,7 @@ export function Dashboard() {
     { id: 'balance-sheet',       name: 'Balance Sheet',              description: 'Assets, liabilities, and equity statement',                  icon: FileText,    color: 'from-blue-500 to-blue-600',      bg: 'bg-blue-50',    text: 'text-blue-700',    tag: 'Financial Position' },
     { id: 'inventory',           name: 'Inventory Report',           description: 'Stock levels, product distribution, and inventory value',     icon: Package,     color: 'from-purple-500 to-purple-600',  bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Stock Management' },
     { id: 'transactions',        name: 'Transaction History Report', description: 'Detailed transaction history with filtering and export',       icon: Receipt,     color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Detailed History' },
-    { id: 'transaction-history', name: 'Transaction History',        description: 'Complete transaction history with search capabilities',        icon: BarChart2,   color: 'from-teal-500 to-teal-600',      bg: 'bg-teal-50',    text: 'text-teal-700',    tag: 'Complete History' },
+
     { id: 'referral',            name: 'Referral Report',            description: 'Track referral performance and earnings',                      icon: Users,       color: 'from-pink-500 to-pink-600',      bg: 'bg-pink-50',    text: 'text-pink-700',    tag: 'Referral Network' },
     { id: 'commission',          name: 'Commission Report',          description: 'Salesperson commissions and performance metrics',              icon: CreditCard,  color: 'from-orange-500 to-orange-600',  bg: 'bg-orange-50',  text: 'text-orange-700',  tag: 'Performance Bonus' },
 { id: 'expenses',          name: 'Expenses Report',              description: 'All expenses, categories, and spending analysis',               icon: Receipt,     color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Spending Analysis' },
