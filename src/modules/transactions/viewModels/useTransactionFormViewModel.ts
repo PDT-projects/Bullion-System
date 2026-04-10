@@ -106,10 +106,6 @@ function generateToken(): string {
  *  - Loan (given/payable)    → needs approval  (loan given out = money leaving)
  *  - Cash Inflow             → NO approval needed (money coming in)
  *  - Loan (received)         → NO approval needed (money coming in)
- *
- * "Loan given" sub-categories that require approval:
- *   'Loan given', 'Official Loan', 'Personal loan',
- *   'Other loan - Full', 'Other loan - Partial', 'Loan paid to employee'
  */
 const LOAN_GIVEN_SUB_CATEGORIES = new Set([
   'Loan given',
@@ -383,13 +379,34 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             ? firstTxId
             : await TransactionFirebaseService.generateTransactionId();
 
-          const effectivePaid   = item.amountPaid > 0 ? item.amountPaid : item.amount;
-          const effectiveRemain = Math.max(0, item.amount - effectivePaid);
-          const effectiveStatus = effectiveRemain <= 0 ? 'Full' : 'Partial';
-
-          // ── Decide approval status based on transaction type ─────────────
           const needsApproval = requiresApproval(transactionType, item.subCategory);
           const approvalToken = needsApproval ? generateToken() : undefined;
+
+          // ── KEY FIX: pending_approval transactions store ZERO financial impact ──
+          // amountPaid, totalPaid, remainingAmount, isFullyCleared, and paymentStatus
+          // are all kept neutral until the Cloud Function fires after admin approval.
+          // This ensures no liquidity change occurs before approval.
+          const financialFields = needsApproval
+            ? {
+                // Record the intended amount only; no money has moved yet
+                amountPaid:      0,
+                remainingAmount: item.amount,   // full amount is "still outstanding"
+                paymentStatus:   'Partial' as const,  // not 'Full' — not cleared
+                totalPaid:       0,
+                isFullyCleared:  false,
+              }
+            : (() => {
+                const effectivePaid   = item.amountPaid > 0 ? item.amountPaid : item.amount;
+                const effectiveRemain = Math.max(0, item.amount - effectivePaid);
+                return {
+                  amountPaid:      effectivePaid,
+                  remainingAmount: effectiveRemain,
+                  paymentStatus:   (effectiveRemain <= 0 ? 'Full' : 'Partial') as 'Full' | 'Partial',
+                  totalPaid:       effectivePaid,
+                  // Cheque payments stay pending until manually cleared
+                  isFullyCleared:  effectiveRemain <= 0 && paymentMode !== 'Cheque',
+                };
+              })();
 
           const txData: Omit<Transaction, 'id'> = {
             transactionId:   txId,
@@ -400,19 +417,14 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             detailCategory:  item.detailCategory || undefined,
             amount:          item.amount,
             mode:            paymentMode,
-            bankId:          paymentMode === 'Bank' ? selectedBank         : undefined,
+            bankId:          paymentMode === 'Bank' ? selectedBank          : undefined,
             bankName:        paymentMode === 'Bank' ? selectedBankInfo?.name : undefined,
             ...chequeFields,
-            amountPaid:      effectivePaid,
-            remainingAmount: effectiveRemain,
-            paymentStatus:   effectiveStatus,
+            ...financialFields,
             paidBy:          item.paidBy  || undefined,
             paidTo:          item.paidTo  || undefined,
             note:            item.note    || '',
             partialPayments: [],
-            totalPaid:       effectivePaid,
-            // Cheque payments stay pending until manually cleared
-            isFullyCleared:  effectiveRemain <= 0 && paymentMode !== 'Cheque',
             linkedType:      'manual',
             // ── P&L classification ─────────────────────────────────────────
             plMainCategory:  plMainCategory || undefined,
@@ -427,12 +439,9 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
 
           const created = await TransactionFirebaseService.createTransaction(txData);
 
-          // ── Bank balance update (only for non-approval transactions) ────
-          // IMPORTANT: For pending_approval transactions (Cash Outflow / Loan given),
-          // we deliberately do NOT touch the bank balance here. The balance is
-          // updated by the Cloud Function's onTransactionUpdated trigger only after
-          // the admin approves via email. This way, a rejection leaves the bank
-          // balance completely unchanged — no manual rollback needed.
+          // ── Bank balance update: ONLY for transactions that don't need approval ──
+          // For pending_approval transactions, the Cloud Function updates the bank
+          // balance AFTER admin approves. Rejection = zero financial impact, no rollback.
           if (!needsApproval && paymentMode === 'Bank' && selectedBank) {
             const isInflow = transactionType === 'Cash Inflow';
             await updateBankBalance(selectedBank, item.amount, isInflow);
@@ -440,7 +449,6 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
 
           // ── In-app notification ──────────────────────────────────────────
           if (needsApproval) {
-            // Pending approval notification for outflow / loan given
             await TransactionFirebaseService.createNotification({
               type:           'transaction_pending_approval',
               title:          '⏳ Awaiting Approval',
@@ -451,8 +459,6 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
               createdAt:      new Date().toISOString(),
             });
           }
-          // Note: for inflow / loan received, the Cloud Function
-          // sends a simple notification email — no in-app pending notification needed.
         }
 
         // ── Success toast ────────────────────────────────────────────────
@@ -517,7 +523,6 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     }
   }, []);
 
-  /** Add a brand-new P&L main category (e.g. "Other Income") */
   const onAddPLMainCategory = useCallback(async (name: string): Promise<string | null> => {
     try {
       const created = await TransactionFirebaseService.addDynamicCategory({
@@ -534,7 +539,6 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     }
   }, []);
 
-  /** Add a new sub-category under an existing P&L main category */
   const onAddPLSubCategory = useCallback(async (
     parentCategory: string,
     name: string,

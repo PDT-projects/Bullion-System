@@ -1,11 +1,4 @@
 // Transactions Module - Transaction List View
-// Changes:
-// 1. Table ID column now shows transactionId (human-readable) not Firebase doc ID
-// 2. Action buttons (View, Edit, Delete) are fully wired up
-// 3. Paid and Remaining columns now show real values
-// 4. Date-range filter (From / To) added to filter panel
-// 5. Pending badge shown in table for unpaid transactions
-// 6. Modal header: light grey background + black text (removed coloured gradient)
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +6,7 @@ import {
   Plus, Eye, Edit, Trash2, Search, Download,
   TrendingUp, TrendingDown, Wallet, X,
   AlertCircle, Loader2, Filter,
-  CheckCircle, Clock,
+  CheckCircle, Clock, ShieldAlert, Ban,
 } from 'lucide-react';
 import {
   Transaction, TransactionFilters, TransactionStats,
@@ -56,6 +49,51 @@ export function TransactionListView({
       Cheque: 'bg-purple-100 text-purple-700',
     };
     return colors[mode] || 'bg-gray-100 text-gray-700';
+  };
+
+  /** Row-level visual state based on approval status */
+  const rowMeta = (t: Transaction): {
+    rowClass: string;
+    statusBadge: React.ReactNode;
+    dimAmount: boolean;
+  } => {
+    if (t.approvalStatus === 'rejected') {
+      return {
+        rowClass:  'bg-red-50 opacity-75',
+        dimAmount: true,
+        statusBadge: (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-300 whitespace-nowrap">
+            <Ban size={10} /> Rejected
+          </span>
+        ),
+      };
+    }
+    if (t.approvalStatus === 'pending_approval') {
+      return {
+        rowClass:  'bg-amber-50',
+        dimAmount: true,
+        statusBadge: (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 border border-amber-300 whitespace-nowrap">
+            <ShieldAlert size={10} /> Awaiting Approval
+          </span>
+        ),
+      };
+    }
+    // Normal approved / not_required transactions
+    const pending = isPending(t);
+    return {
+      rowClass:  '',
+      dimAmount: false,
+      statusBadge: pending ? (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700 border border-orange-200 whitespace-nowrap">
+          <Clock size={10} /> Pending
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 border border-green-200 whitespace-nowrap">
+          <CheckCircle size={10} /> Cleared
+        </span>
+      ),
+    };
   };
 
   if (isLoading) {
@@ -119,6 +157,17 @@ export function TransactionListView({
         ))}
       </div>
 
+      {/* Pending-approval notice banner — shown only when there are unapproved transactions */}
+      {stats.pendingApprovalCount > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <ShieldAlert size={18} className="shrink-0 text-amber-500" />
+          <span>
+            <strong>{stats.pendingApprovalCount} transaction{stats.pendingApprovalCount > 1 ? 's' : ''}</strong> {stats.pendingApprovalCount > 1 ? 'are' : 'is'} awaiting admin approval.
+            These are <strong>not included</strong> in the financial totals above until approved.
+          </span>
+        </div>
+      )}
+
       {/* Search + Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
         <div className="flex items-center gap-3">
@@ -176,6 +225,22 @@ export function TransactionListView({
               </select>
             </div>
 
+            {/* Approval status filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Approval Status</label>
+              <select
+                value={filters.approvalStatus}
+                onChange={e => setFilters({ approvalStatus: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-300"
+              >
+                <option value="">All</option>
+                <option value="pending_approval">Awaiting Approval</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="not_required">No Approval Required</option>
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Company / Branch</label>
               <select
@@ -223,7 +288,7 @@ export function TransactionListView({
         )}
 
         {/* Active filter chips */}
-        {(filters.dateFrom || filters.dateTo || filters.mainCategory || filters.paymentStatus || filters.company) && (
+        {(filters.dateFrom || filters.dateTo || filters.mainCategory || filters.paymentStatus || filters.company || filters.approvalStatus) && (
           <div className="flex flex-wrap gap-2 pt-2">
             {filters.dateFrom && (
               <span className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-200">
@@ -247,6 +312,12 @@ export function TransactionListView({
               <span className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-200">
                 {filters.paymentStatus}
                 <button onClick={() => setFilters({ paymentStatus: '' })}><X size={11} /></button>
+              </span>
+            )}
+            {filters.approvalStatus && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 text-xs rounded-full border border-amber-200">
+                Approval: {filters.approvalStatus.replace('_', ' ')}
+                <button onClick={() => setFilters({ approvalStatus: '' })}><X size={11} /></button>
               </span>
             )}
           </div>
@@ -289,14 +360,30 @@ export function TransactionListView({
               ) : (
                 filteredTransactions.map(t => {
                   const { totalPaid, remainingAmount } = getTransactionTotals(t);
-                  const pending = isPending(t);
+                  const { rowClass, statusBadge, dimAmount } = rowMeta(t);
+                  const isRejected      = t.approvalStatus === 'rejected';
+                  const isPendingApproval = t.approvalStatus === 'pending_approval';
 
                   return (
-                    <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={t.id} className={`transition-colors hover:brightness-95 ${rowClass}`}>
 
-                      {/* TXN ID — human-readable, NOT Firebase doc id */}
-                      <td className="px-4 py-3 text-xs font-mono text-indigo-600 whitespace-nowrap">
-                        {t.transactionId || '—'}
+                      {/* TXN ID */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs font-mono ${isRejected ? 'text-red-400 line-through' : 'text-indigo-600'}`}>
+                            {t.transactionId || '—'}
+                          </span>
+                          {isRejected && (
+                            <span className="text-[10px] font-bold text-red-500 bg-red-100 px-1 py-0.5 rounded uppercase tracking-wide">
+                              Rejected
+                            </span>
+                          )}
+                          {isPendingApproval && (
+                            <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded uppercase tracking-wide">
+                              Pending
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Date */}
@@ -315,7 +402,11 @@ export function TransactionListView({
                       {/* Main Category */}
                       <td className="px-4 py-3">
                         <span
-                          className={`px-2.5 py-1 text-xs font-medium rounded-full whitespace-nowrap inline-flex items-center leading-none ${getCategoryColor(t.mainCategory)}`}
+                          className={`px-2.5 py-1 text-xs font-medium rounded-full whitespace-nowrap inline-flex items-center leading-none ${
+                            isRejected
+                              ? 'bg-red-100 text-red-500 line-through'
+                              : getCategoryColor(t.mainCategory)
+                          }`}
                         >
                           {t.mainCategory}
                         </span>
@@ -329,38 +420,42 @@ export function TransactionListView({
                         {t.subCategory}
                       </td>
 
-                      {/* Amount */}
+                      {/* Amount — dimmed/struck for rejected/pending */}
                       <td className="px-4 py-3 font-semibold text-sm whitespace-nowrap">
-                        <span className={t.mainCategory === 'Cash Inflow' ? 'text-green-700' : 'text-red-700'}>
-                          {t.mainCategory === 'Cash Inflow' ? '+' : '−'}
-                          {formatCurrency(t.amount || 0)}
-                        </span>
+                        {isRejected ? (
+                          <span className="text-red-400 line-through">
+                            {t.mainCategory === 'Cash Inflow' ? '+' : '−'}
+                            {formatCurrency(t.amount || 0)}
+                          </span>
+                        ) : (
+                          <span className={`${dimAmount ? 'text-gray-400' : t.mainCategory === 'Cash Inflow' ? 'text-green-700' : 'text-red-700'}`}>
+                            {t.mainCategory === 'Cash Inflow' ? '+' : '−'}
+                            {formatCurrency(t.amount || 0)}
+                          </span>
+                        )}
                       </td>
 
-                      {/* Paid */}
+                      {/* Paid — zero for pending/rejected approval */}
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className="text-green-700 font-medium">{formatCurrency(totalPaid)}</span>
+                        {(isRejected || isPendingApproval)
+                          ? <span className="text-gray-300">—</span>
+                          : <span className="text-green-700 font-medium">{formatCurrency(totalPaid)}</span>
+                        }
                       </td>
 
-                      {/* Remaining */}
+                      {/* Remaining — zero for pending/rejected approval */}
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        {remainingAmount > 0
-                          ? <span className="text-orange-600 font-medium">{formatCurrency(remainingAmount)}</span>
-                          : <span className="text-gray-400">PKR 0</span>
+                        {(isRejected || isPendingApproval)
+                          ? <span className="text-gray-300">—</span>
+                          : remainingAmount > 0
+                            ? <span className="text-orange-600 font-medium">{formatCurrency(remainingAmount)}</span>
+                            : <span className="text-gray-400">PKR 0</span>
                         }
                       </td>
 
                       {/* Status */}
                       <td className="px-4 py-3">
-                        {pending ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700 border border-orange-200 whitespace-nowrap">
-                            <Clock size={10} /> Pending
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 border border-green-200 whitespace-nowrap">
-                            <CheckCircle size={10} /> Cleared
-                          </span>
-                        )}
+                        {statusBadge}
                       </td>
 
                       {/* Mode */}
@@ -370,7 +465,7 @@ export function TransactionListView({
                         </span>
                       </td>
 
-                      {/* Actions — fully wired */}
+                      {/* Actions — disable Edit for rejected */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
                           <button
@@ -380,13 +475,15 @@ export function TransactionListView({
                           >
                             <Eye size={15} />
                           </button>
-                          <button
-                            onClick={() => handleEditTransaction(t.id)}
-                            title="Edit transaction"
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            <Edit size={15} />
-                          </button>
+                          {!isRejected && (
+                            <button
+                              onClick={() => handleEditTransaction(t.id)}
+                              title="Edit transaction"
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Edit size={15} />
+                            </button>
+                          )}
                           <button
                             onClick={() => navigate(`/transactions/${t.id}/delete`)}
                             title="Delete transaction"
@@ -409,17 +506,19 @@ export function TransactionListView({
       {/* View Transaction Modal */}
       {viewTransaction && (() => {
         const { totalPaid, remainingAmount } = getTransactionTotals(viewTransaction);
-        const pending  = isPending(viewTransaction);
-        const isInflow = viewTransaction.mainCategory === 'Cash Inflow';
-        const isLoan   = viewTransaction.mainCategory === 'Loan';
-        const branch   = viewTransaction.company.includes(': ') ? viewTransaction.company.split(': ')[1] : viewTransaction.company;
+        const pending    = isPending(viewTransaction);
+        const isRejected = viewTransaction.approvalStatus === 'rejected';
+        const isInflow   = viewTransaction.mainCategory === 'Cash Inflow';
+        const isLoan     = viewTransaction.mainCategory === 'Loan';
+        const branch     = viewTransaction.company.includes(': ') ? viewTransaction.company.split(': ')[1] : viewTransaction.company;
 
-        // Amount colour only — header bg is always light grey now
-        const amountColor = isInflow
-          ? 'text-green-600'
-          : isLoan
-            ? 'text-indigo-600'
-            : 'text-red-600';
+        const amountColor = isRejected
+          ? 'text-red-400 line-through'
+          : isInflow
+            ? 'text-green-600'
+            : isLoan
+              ? 'text-indigo-600'
+              : 'text-red-600';
 
         const amountSign = isInflow ? '+' : '−';
 
@@ -442,12 +541,11 @@ export function TransactionListView({
 
         return (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden">
+            <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden ${isRejected ? 'ring-2 ring-red-300' : ''}`}>
 
-              {/* ── LIGHT GREY HEADER (replaces coloured gradient) ── */}
-              <div className="bg-gray-100 border-b border-gray-200 px-6 pt-5 pb-6 relative">
+              {/* Header — red tint for rejected */}
+              <div className={`border-b px-6 pt-5 pb-6 relative ${isRejected ? 'bg-red-50 border-red-200' : 'bg-gray-100 border-gray-200'}`}>
 
-                {/* Close button */}
                 <button
                   onClick={() => setViewTransaction(null)}
                   className="absolute top-4 right-4 p-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-600 transition-colors"
@@ -455,7 +553,6 @@ export function TransactionListView({
                   <X size={16} />
                 </button>
 
-                {/* TXN ID + category + mode badges */}
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-mono rounded-full tracking-wide">
                     {viewTransaction.transactionId || '—'}
@@ -469,7 +566,6 @@ export function TransactionListView({
                   {approvalBadge()}
                 </div>
 
-                {/* Sub-category + big amount + branch / date */}
                 <div>
                   <p className="text-sm text-gray-500 mb-0.5">{viewTransaction.subCategory}</p>
                   <p className={`text-4xl font-extrabold tracking-tight ${amountColor}`}>
@@ -478,10 +574,15 @@ export function TransactionListView({
                   <p className="text-sm text-gray-500 mt-1">
                     {branch} &bull; {formatDate(viewTransaction.date)}
                   </p>
+                  {isRejected && (
+                    <p className="mt-2 text-xs font-semibold text-red-600 uppercase tracking-wide">
+                      ⚠ This transaction was rejected — no financial impact recorded
+                    </p>
+                  )}
                 </div>
 
-                {/* Payment progress bar */}
-                {viewTransaction.amount > 0 && (
+                {/* Payment progress bar — hidden for rejected/pending approval */}
+                {viewTransaction.amount > 0 && !isRejected && viewTransaction.approvalStatus !== 'pending_approval' && (
                   <div className="mt-4">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>Paid: {formatCurrency(totalPaid)}</span>
@@ -502,7 +603,15 @@ export function TransactionListView({
 
                 {/* Status row */}
                 <div className="flex items-center gap-3">
-                  {pending ? (
+                  {isRejected ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-300">
+                      <Ban size={13} /> Rejected — No Liquidity Impact
+                    </span>
+                  ) : viewTransaction.approvalStatus === 'pending_approval' ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-amber-100 text-amber-700 border border-amber-300">
+                      <ShieldAlert size={13} /> Awaiting Admin Approval
+                    </span>
+                  ) : pending ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-orange-100 text-orange-700 border border-orange-200">
                       <Clock size={13} /> Pending Payment
                     </span>
@@ -541,25 +650,27 @@ export function TransactionListView({
                   ))}
                 </div>
 
-                {/* Payment breakdown */}
-                <div className="grid grid-cols-3 gap-2.5">
-                  <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400 mb-1">Total Amount</p>
-                    <p className="text-base font-bold text-indigo-700">{formatCurrency(viewTransaction.amount || 0)}</p>
+                {/* Payment breakdown — hidden for rejected/pending approval */}
+                {!isRejected && viewTransaction.approvalStatus !== 'pending_approval' && (
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400 mb-1">Total Amount</p>
+                      <p className="text-base font-bold text-indigo-700">{formatCurrency(viewTransaction.amount || 0)}</p>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-xl border border-green-100 text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-green-500 mb-1">Amount Paid</p>
+                      <p className="text-base font-bold text-green-700">{formatCurrency(totalPaid)}</p>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${remainingAmount > 0 ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
+                      <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${remainingAmount > 0 ? 'text-orange-400' : 'text-gray-400'}`}>
+                        Remaining
+                      </p>
+                      <p className={`text-base font-bold ${remainingAmount > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                        {remainingAmount > 0 ? formatCurrency(remainingAmount) : 'PKR 0'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="p-3 bg-green-50 rounded-xl border border-green-100 text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-green-500 mb-1">Amount Paid</p>
-                    <p className="text-base font-bold text-green-700">{formatCurrency(totalPaid)}</p>
-                  </div>
-                  <div className={`p-3 rounded-xl border text-center ${remainingAmount > 0 ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${remainingAmount > 0 ? 'text-orange-400' : 'text-gray-400'}`}>
-                      Remaining
-                    </p>
-                    <p className={`text-base font-bold ${remainingAmount > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
-                      {remainingAmount > 0 ? formatCurrency(remainingAmount) : 'PKR 0'}
-                    </p>
-                  </div>
-                </div>
+                )}
 
                 {/* Note */}
                 {viewTransaction.note && (
@@ -570,15 +681,18 @@ export function TransactionListView({
                 )}
 
                 {/* Rejection reason */}
-                {viewTransaction.approvalStatus === 'rejected' && viewTransaction.rejectionReason && (
+                {viewTransaction.approvalStatus === 'rejected' && (
                   <div className="p-3.5 bg-red-50 rounded-xl border border-red-200">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 mb-1">Rejection Reason</p>
-                    <p className="text-sm text-red-700">{viewTransaction.rejectionReason}</p>
+                    <p className="text-sm text-red-700">
+                      {viewTransaction.rejectionReason || 'Rejected by admin'}
+                    </p>
                   </div>
                 )}
 
-                {/* Partial payments timeline */}
-                {(viewTransaction.partialPayments || []).length > 0 && (
+                {/* Partial payments timeline — hidden for rejected/pending approval */}
+                {!isRejected && viewTransaction.approvalStatus !== 'pending_approval' &&
+                  (viewTransaction.partialPayments || []).length > 0 && (
                   <div>
                     <p className="text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
                       <span className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">
@@ -619,12 +733,14 @@ export function TransactionListView({
 
               {/* Footer actions */}
               <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3">
-                <button
-                  onClick={() => { setViewTransaction(null); handleEditTransaction(viewTransaction.id); }}
-                  className="flex-1 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:border-gray-400 flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Edit size={15} /> Edit
-                </button>
+                {!isRejected && (
+                  <button
+                    onClick={() => { setViewTransaction(null); handleEditTransaction(viewTransaction.id); }}
+                    className="flex-1 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:border-gray-400 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Edit size={15} /> Edit
+                  </button>
+                )}
                 <button
                   onClick={() => setViewTransaction(null)}
                   className="flex-1 py-2.5 bg-[#4f46e5] text-white rounded-xl text-sm font-semibold hover:bg-[#4338ca] transition-colors"

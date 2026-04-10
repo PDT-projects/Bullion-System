@@ -10,8 +10,12 @@ export const getTransactionTotals = (t: Transaction) => {
 };
 
 export const isPending = (t: Transaction): boolean => {
+  // Transactions awaiting or rejected from approval are NEVER shown as payment-pending.
+  // They have no liquidity impact until approved.
+  if (t.approvalStatus === 'pending_approval') return false;
+  if (t.approvalStatus === 'rejected')         return false;
+
   // Check cheque conditions FIRST — before trusting isFullyCleared flag.
-  // A main cheque transaction is always pending until manually cleared.
   const isChequeTx = t.mode === 'Cheque' && !t.isFullyCleared;
 
   // Any partial payment via Cheque or Cash that hasn't been manually confirmed is pending.
@@ -19,16 +23,10 @@ export const isPending = (t: Transaction): boolean => {
     p => !p.isCleared && (p.method === 'Cheque' || p.method === 'Cash')
   );
 
-  // Cheque/Cash uncleared → always pending, regardless of isFullyCleared flag.
   if (isChequeTx || hasUnclearedPartial) return true;
-
-  // At this point no uncleared cheque/cash — safe to trust isFullyCleared.
   if (t.isFullyCleared) return false;
-
-  // Fully paid via Bank or confirmed Cash → not pending.
   if (t.paymentStatus === 'Full') return false;
 
-  // Still has remaining amount.
   const { remainingAmount } = getTransactionTotals(t);
   return remainingAmount > 0;
 };
@@ -53,7 +51,6 @@ export const filterTransactions = (transactions: Transaction[], filters: Transac
           !(t.paidBy || '').toLowerCase().includes(s) &&
           !(t.paidTo || '').toLowerCase().includes(s)) return false;
     }
-    // FIX: Loan filter — match Loan main category OR loan sub-categories in inflow/outflow
     if (filters.mainCategory) {
       if (filters.mainCategory === 'Loan') {
         if (!isLoanTransaction(t)) return false;
@@ -68,17 +65,31 @@ export const filterTransactions = (transactions: Transaction[], filters: Transac
       if (filters.paymentStatus === 'Pending' && !isPending(t)) return false;
       if (filters.paymentStatus === 'Full' && isPending(t)) return false;
     }
+    // Approval status filter
+    if (filters.approvalStatus) {
+      if (t.approvalStatus !== filters.approvalStatus) return false;
+    }
     return true;
   });
 
+/**
+ * Calculate stats for APPROVED / not_required transactions only.
+ * pending_approval and rejected transactions have zero liquidity impact
+ * and must not inflate inflow/outflow/balance figures.
+ */
 export const calculateStats = (transactions: Transaction[]): TransactionStats => {
-  const totalInflow  = transactions.filter(t => t.mainCategory === 'Cash Inflow').reduce((s, t) => s + t.amount, 0);
-  const totalOutflow = transactions.filter(t => t.mainCategory === 'Cash Outflow').reduce((s, t) => s + t.amount, 0);
-  const pending      = transactions.filter(isPending);
+  // Only count transactions that have cleared the approval gate
+  const liquid = transactions.filter(
+    t => t.approvalStatus === 'approved' || t.approvalStatus === 'not_required' || !t.approvalStatus
+  );
+
+  const totalInflow  = liquid.filter(t => t.mainCategory === 'Cash Inflow').reduce((s, t) => s + t.amount, 0);
+  const totalOutflow = liquid.filter(t => t.mainCategory === 'Cash Outflow').reduce((s, t) => s + t.amount, 0);
+  const pending      = liquid.filter(isPending);
   return {
     totalInflow, totalOutflow,
     netBalance:            totalInflow - totalOutflow,
-    transactionCount:      transactions.length,
+    transactionCount:      transactions.length,   // total count includes all for display
     pendingCount:          pending.length,
     totalPending:          pending.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
     pendingApprovalCount:  transactions.filter(t => t.approvalStatus === 'pending_approval').length,
@@ -112,14 +123,16 @@ export const getPaymentStatusColor = (t: Transaction): string => {
 };
 
 export const exportToCSV = (transactions: Transaction[]): string => {
-  const headers = ['Transaction ID', 'Date', 'Time', 'Company', 'Main Category', 'Sub Category', 'Amount', 'Paid', 'Remaining', 'Mode', 'Paid By', 'Paid To', 'Status', 'Note'];
+  const headers = ['Transaction ID', 'Date', 'Time', 'Company', 'Main Category', 'Sub Category', 'Amount', 'Paid', 'Remaining', 'Mode', 'Paid By', 'Paid To', 'Status', 'Approval', 'Note'];
   const rows = transactions.map(t => {
     const { totalPaid, remainingAmount } = getTransactionTotals(t);
     return [
       t.transactionId, t.date, t.time, t.company, t.mainCategory, t.subCategory,
       t.amount.toString(), totalPaid.toString(), remainingAmount.toString(),
       t.mode, t.paidBy || '', t.paidTo || '',
-      isPending(t) ? 'Pending' : 'Cleared', t.note,
+      isPending(t) ? 'Pending' : 'Cleared',
+      t.approvalStatus || 'not_required',
+      t.note,
     ];
   });
   return [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
