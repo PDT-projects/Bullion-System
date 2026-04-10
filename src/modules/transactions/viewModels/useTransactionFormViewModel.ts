@@ -244,8 +244,11 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
       if (field === 'amount' || field === 'amountPaid') {
         const amount     = field === 'amount'     ? Number(value) : item.amount;
         const amountPaid = field === 'amountPaid' ? Number(value) : item.amountPaid;
-        updated.remainingAmount = Math.max(0, amount - amountPaid);
-        updated.paymentStatus   = amountPaid >= amount ? 'Full' : 'Partial';
+        // Blank / zero amountPaid means fully paid — only mark Partial when a
+        // specific partial amount has been explicitly entered (> 0 and < total).
+        const isExplicitPartial = amountPaid > 0 && amountPaid < amount;
+        updated.remainingAmount = isExplicitPartial ? amount - amountPaid : 0;
+        updated.paymentStatus   = isExplicitPartial ? 'Partial' : 'Full';
       }
       return updated;
     }));
@@ -396,15 +399,17 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
                 isFullyCleared:  false,
               }
             : (() => {
-                const effectivePaid   = item.amountPaid > 0 ? item.amountPaid : item.amount;
-                const effectiveRemain = Math.max(0, item.amount - effectivePaid);
+                // blank (0) amountPaid = fully paid; only partial when explicitly set < amount
+                const isExplicitPartial = item.amountPaid > 0 && item.amountPaid < item.amount;
+                const effectivePaid   = isExplicitPartial ? item.amountPaid : item.amount;
+                const effectiveRemain = isExplicitPartial ? item.amount - item.amountPaid : 0;
                 return {
                   amountPaid:      effectivePaid,
                   remainingAmount: effectiveRemain,
-                  paymentStatus:   (effectiveRemain <= 0 ? 'Full' : 'Partial') as 'Full' | 'Partial',
+                  paymentStatus:   (isExplicitPartial ? 'Partial' : 'Full') as 'Full' | 'Partial',
                   totalPaid:       effectivePaid,
                   // Cheque payments stay pending until manually cleared
-                  isFullyCleared:  effectiveRemain <= 0 && paymentMode !== 'Cheque',
+                  isFullyCleared:  !isExplicitPartial && paymentMode !== 'Cheque',
                 };
               })();
 

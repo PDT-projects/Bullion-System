@@ -1,9 +1,9 @@
 // Commission Calculation ViewModel
-// FIXED:
-//   - `updatedSalaries` was referenced but never defined — fixed
-//   - liveCommissions now fetches ALL commissions (no city/month filter)
-//     so the dashboard and live panel show everything
-//   - refreshLiveCommissions works without requiring city+month selection
+// UPDATED: Auto-saves commissions without manual confirmation modal
+// - calculateCommission() now auto-saves results to Firestore
+// - No modal shown — automatic silent save
+// - User sees toast notification of success
+// - refreshLiveCommissions() fetches saved data immediately
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
@@ -245,7 +245,7 @@ export function useCommissionCalculationViewModel(
     refreshLiveCommissions();
   }, [refreshLiveCommissions]);
 
-  // ── Manual calculate (admin-initiated) ───────────────────────────────
+  // ── Manual calculate + AUTO SAVE (no modal) ──────────────────────────
   const calculateCommission = useCallback(
     async (invoices: InvoiceReference[], employees: EmployeeReference[]): Promise<boolean> => {
       if (!selectedCity || !selectedMonth) {
@@ -260,14 +260,82 @@ export function useCommissionCalculationViewModel(
         const result = calculateCommissionsFromInvoices(
           selectedCity, selectedMonth, invoices, employees, slabs, 'Admin'
         );
+        
         setCommissionData(result.commissions);
         setCalculationErrors(result.errors);
         setSummary(result.summary);
         setInvoiceBreakdowns(result.breakdowns);
 
-        if (result.commissions.length === 0) return false;
-        setShowModal(true);
-        return true;
+        if (result.commissions.length === 0) {
+          toast.error('No commissions to save');
+          return false;
+        }
+
+        // ✅ AUTO-SAVE: Immediately save all commissions to Firestore
+        try {
+          const toSave = result.commissions.map(({ id, ...rest }) => ({
+            ...rest,
+            status:      'Confirmed' as const,
+            confirmedBy: 'Admin',
+            confirmedAt: new Date().toISOString(),
+            isLocked:    true,
+          }));
+
+          const savedCommissions = await CommissionFirebaseService.saveCommissions(toSave);
+
+          // ✅ Link commission amounts to existing salary records (non-fatal)
+          let linkedCount = 0;
+          try {
+            const allSalaries = await SalaryFirebaseService.fetchAllSalaries();
+
+            const updatePromises = savedCommissions.map(async (commission) => {
+              const commissionAmount =
+                commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount;
+
+              const matchingSalary = allSalaries.find(
+                (s) =>
+                  s.employeeId  === commission.salesperson &&
+                  s.salaryMonth === commission.month       &&
+                  s.subCategory === 'Employee salary'
+              );
+
+              if (matchingSalary) {
+                await SalaryFirebaseService.updateSalary(matchingSalary.id, {
+                  commission: commissionAmount,
+                  netAmount:  Math.max(
+                    0,
+                    (matchingSalary.baseSalary || 0) + commissionAmount - (matchingSalary.deductions || 0)
+                  ),
+                });
+                linkedCount++;
+                console.log(`[CommissionCalc] Linked PKR ${commissionAmount} to salary ${matchingSalary.id}`);
+              }
+            });
+
+            await Promise.allSettled(updatePromises);
+          } catch (linkErr) {
+            console.warn('[CommissionCalc] Salary linking failed (non-fatal):', linkErr);
+          }
+
+          // ✅ Show success toast + refresh data
+          toast.success(
+            `${toSave.length} commission(s) saved.` +
+            (linkedCount > 0 ? ` Linked to ${linkedCount} salary record(s).` : ' Ready for salary forms.')
+          );
+
+          // Reset state and refresh live commissions
+          resetState();
+          await refreshLiveCommissions();
+          onCommissionsSaved();
+          return true;
+
+        } catch (saveErr) {
+          const msg = saveErr instanceof Error ? saveErr.message : 'Failed to save commissions';
+          toast.error(msg);
+          console.error('[CommissionCalc] Save error:', saveErr);
+          return false;
+        }
+
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Calculation failed';
         setCalculationErrors([msg]);
@@ -277,10 +345,10 @@ export function useCommissionCalculationViewModel(
         setIsCalculating(false);
       }
     },
-    [selectedCity, selectedMonth]
+    [selectedCity, selectedMonth, onCommissionsSaved, refreshLiveCommissions]
   );
 
-  // ── Confirm helpers ───────────────────────────────────────────────────
+  // ── Confirm helpers (for live commissions modal editing) ──────────────
   const confirmSingleCommission = useCallback((commissionId: string) => {
     setCommissionData((prev) =>
       prev.map((c) =>
@@ -336,66 +404,11 @@ export function useCommissionCalculationViewModel(
 
   const cancelCalculation = useCallback(() => resetState(), [resetState]);
 
-  // ── Save to Firestore + link to salary records ────────────────────────
+  // ── Unused: Modal confirm (kept for backward compatibility) ──────────
   const handleModalConfirm = useCallback(async () => {
-    try {
-      const toSave = commissionData.map(({ id, ...rest }) => ({
-        ...rest,
-        status:      'Confirmed' as const,
-        confirmedBy: 'Admin',
-        confirmedAt: new Date().toISOString(),
-        isLocked:    true,
-      }));
-
-      const savedCommissions = await CommissionFirebaseService.saveCommissions(toSave);
-
-      // Link commission amounts to existing salary records (non-fatal)
-      let linkedCount = 0;
-      try {
-        const allSalaries = await SalaryFirebaseService.fetchAllSalaries();
-
-        const updatePromises = savedCommissions.map(async (commission) => {
-          const commissionAmount =
-            commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount;
-
-          const matchingSalary = allSalaries.find(
-            (s) =>
-              s.employeeId  === commission.salesperson &&
-              s.salaryMonth === commission.month       &&
-              s.subCategory === 'Employee salary'
-          );
-
-          if (matchingSalary) {
-            await SalaryFirebaseService.updateSalary(matchingSalary.id, {
-              commission: commissionAmount,
-              netAmount:  Math.max(
-                0,
-                (matchingSalary.baseSalary || 0) + commissionAmount - (matchingSalary.deductions || 0)
-              ),
-            });
-            linkedCount++;
-            console.log(`[CommissionCalc] Linked PKR ${commissionAmount} to salary ${matchingSalary.id}`);
-          }
-        });
-
-        await Promise.allSettled(updatePromises);
-      } catch (linkErr) {
-        console.warn('[CommissionCalc] Salary linking failed (non-fatal):', linkErr);
-      }
-
-      toast.success(
-        `${toSave.length} commission(s) confirmed & saved.` +
-        (linkedCount > 0 ? ` Linked to ${linkedCount} salary record(s).` : ' Ready for salary forms.')
-      );
-      setShowModal(false);
-      resetState();
-      refreshLiveCommissions();
-      onCommissionsSaved();
-    } catch (error) {
-      toast.error('Failed to save commissions');
-      console.error(error);
-    }
-  }, [commissionData, onCommissionsSaved, resetState, refreshLiveCommissions]);
+    // This is now handled in calculateCommission() itself
+    toast.info('Commissions already saved automatically');
+  }, []);
 
   const handleModalCancel = useCallback(() => {
     setShowModal(false);

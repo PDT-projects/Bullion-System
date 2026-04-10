@@ -1,7 +1,8 @@
 // Commission Report View - Presentational Component
 // UPDATED: Shows salary linkage status badge on each commission row
+// Added refresh button to manually reload commission data
 
-import { Download, Filter, FileText, TrendingUp, DollarSign, CheckCircle, Receipt, Link, AlertCircle, Clock } from 'lucide-react';
+import { Download, Filter, FileText, TrendingUp, DollarSign, CheckCircle, Receipt, Link, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 import type { Commission, CommissionFilter, CommissionStats } from '../models/types';
 import type { SalaryLinkStatus } from '../viewModels/useCommissionReportViewModel';
 
@@ -54,7 +55,7 @@ export function CommissionReportView({
   commissions, filteredCommissions, isLoading,
   filters, updateFilter, clearFilters, activeFilterCount,
   showFilters, setShowFilters, stats,
-  exportToCSV, formatCurrency, formatMonth, cities, employees,
+  refreshCommissions, exportToCSV, formatCurrency, formatMonth, cities, employees,
   getSalaryLinkStatus, salaryLinkLoading,
 }: CommissionReportViewProps) {
 
@@ -86,6 +87,15 @@ export function CommissionReportView({
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={refreshCommissions}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            title="Refresh commission data"
+          >
+            <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
               showFilters ? 'bg-[#4f46e5] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -102,6 +112,19 @@ export function CommissionReportView({
           </button>
         </div>
       </div>
+
+      {/* Data Status */}
+      {commissions.length === 0 && !isLoading && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-medium text-blue-900">No commission records yet</h3>
+            <p className="text-sm text-blue-700 mt-1">
+              Commission records are created automatically when paid invoices are saved, or manually calculated via the Commission Calculation tab.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-5">
