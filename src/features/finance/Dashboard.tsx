@@ -15,16 +15,34 @@ import {
 
 import { useDashboardData } from './UseDashboardData';
 
-import { SalesReport }               from '../sales/SalesReport';
-import { InventoryReport }           from '../../features/inventory/InventoryReport';
-import { TransactionHistoryReport }  from './TransactionHistoryReport';
-import { ReferralReport }            from '../sales/ReferralReport';
-import { CommissionReport }          from '../sales/CommissionReport';
-import { InventoryAuditLogComponent } from '../inventory/InventoryAuditLog';
-import { ProfitLossReport }          from './ProfitLossReport';
-import { BalanceSheetReport }        from './BalanceSheetReport';
-import { LoanHistory }               from './LoanHistory';
-import { TransactionHistory }        from './TransactionHistory';
+import { 
+  SalesReport }               from '../sales/SalesReport';
+import { 
+  ExpensesReport }            from './ExpensesReport';
+import { 
+  BankBalanceReport }         from './BankBalanceReport';
+import { 
+  SalariesReport }            from './SalariesReport';
+import { 
+  FixedBillsReport }          from './FixedBillsReport';
+import { 
+  InventoryReport }           from '../../features/inventory/InventoryReport';
+import { 
+  ProductTransferReport }     from '../inventory/ProductTransferReport';
+import { 
+  TransactionHistoryReport }  from './TransactionHistoryReport';
+import { 
+  ReferralReport }            from '../sales/ReferralReport';
+import { 
+  CommissionReport }          from '../sales/CommissionReport';
+import { 
+  ProfitLossReport }          from './ProfitLossReport';
+import { 
+  BalanceSheetReport }        from './BalanceSheetReport';
+import { 
+  LoanHistory }               from './LoanHistory';
+import { 
+  TransactionHistory }        from './TransactionHistory';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -105,8 +123,8 @@ export function Dashboard() {
         return <ReferralReport invoices={invoices} />;
       case 'commission':
         return <CommissionReport commissions={commissions} />;
-      case 'inventory-audit-log':
-        return <InventoryAuditLogComponent auditLogs={[]} />;
+      case 'product-transfer':
+        return <ProductTransferReport transferLogs={[]} />;
       case 'loan-history':
         return <LoanHistory loans={loans} />;
       default:
@@ -124,7 +142,12 @@ export function Dashboard() {
     { id: 'transaction-history', name: 'Transaction History',        description: 'Complete transaction history with search capabilities',        icon: BarChart2,   color: 'from-teal-500 to-teal-600',      bg: 'bg-teal-50',    text: 'text-teal-700',    tag: 'Complete History' },
     { id: 'referral',            name: 'Referral Report',            description: 'Track referral performance and earnings',                      icon: Users,       color: 'from-pink-500 to-pink-600',      bg: 'bg-pink-50',    text: 'text-pink-700',    tag: 'Referral Network' },
     { id: 'commission',          name: 'Commission Report',          description: 'Salesperson commissions and performance metrics',              icon: CreditCard,  color: 'from-orange-500 to-orange-600',  bg: 'bg-orange-50',  text: 'text-orange-700',  tag: 'Performance Bonus' },
-    { id: 'inventory-audit-log', name: 'Inventory Audit Log',        description: 'Inventory changes, audits, and stock adjustments',             icon: FileText,    color: 'from-slate-500 to-slate-600',    bg: 'bg-slate-50',   text: 'text-slate-700',   tag: 'Audit Trail' },
+{ id: 'expenses',          name: 'Expenses Report',              description: 'All expenses, categories, and spending analysis',               icon: Receipt,     color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Spending Analysis' },
+    { id: 'bank-balance',        name: 'Bank Balance Report',        description: 'Bank accounts, balances, and transaction history',             icon: Building2,   color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Banking' },
+    { id: 'salaries',            name: 'Salaries Report',            description: 'Employee salaries, payments, and payroll summary',              icon: Users,       color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Payroll' },
+
+    { id: 'fixed-bills',         name: 'Fixed Bills Report',         description: 'Recurring bills, due dates, and payment status',               icon: FileText,    color: 'from-purple-500 to-purple-600', bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Recurring Expenses' },
+    { id: 'product-transfer', name: 'Product Transfer Report',        description: 'Inventory changes, audits, and stock adjustments',             icon: FileText,    color: 'from-slate-500 to-slate-600',    bg: 'bg-slate-50',   text: 'text-slate-700',   tag: 'Audit Trail' },
     { id: 'loan-history',        name: 'Loan History',               description: 'Loan transactions, payments, and outstanding balances',         icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Loan Tracking' },
   ];
 

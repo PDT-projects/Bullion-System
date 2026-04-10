@@ -1,9 +1,12 @@
 import { useState, useMemo } from 'react';
-import { InventoryAuditLog } from '../App';
+// import { InventoryAuditLog } from '../App';
+type InventoryAuditLog = any;
 import { History, Filter, Download, Eye, Calendar, User, Package, ArrowRightLeft, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
-type ProductTransferReportProps = {\n  transferLogs: InventoryAuditLog[];\n};
+type ProductTransferReportProps = {
+  transferLogs: InventoryAuditLog[];
+};
 
 export function ProductTransferReport({ transferLogs }: ProductTransferReportProps) {
   const [selectedAction, setSelectedAction] = useState<string>('');
@@ -15,31 +18,31 @@ export function ProductTransferReport({ transferLogs }: ProductTransferReportPro
   // Get unique values for filters
   const actions = useMemo(() => {
     const actionSet = new Set<string>();
-    auditLogs.forEach(log => actionSet.add(log.action));
+    transferLogs.forEach(log => actionSet.add(log.action));
     return Array.from(actionSet).sort();
-  }, [auditLogs]);
+  }, [transferLogs]);
 
   const products = useMemo(() => {
     const productSet = new Set<string>();
-    auditLogs.forEach(log => productSet.add(`${log.brandName} ${log.modelName}`));
+    transferLogs.forEach(log => productSet.add(`${log.brandName} ${log.modelName}`));
     return Array.from(productSet).sort();
-  }, [auditLogs]);
+  }, [transferLogs]);
 
   const performers = useMemo(() => {
     const performerSet = new Set<string>();
-    auditLogs.forEach(log => performerSet.add(log.performedBy));
+    transferLogs.forEach(log => performerSet.add(log.performedBy));
     return Array.from(performerSet).sort();
-  }, [auditLogs]);
+  }, [transferLogs]);
 
   // Filtered logs
   const filteredLogs = useMemo(() => {
-    return auditLogs.filter(log => {
+    return transferLogs.filter(log => {
       if (selectedAction && log.action !== selectedAction) return false;
       if (selectedProduct && `${log.brandName} ${log.modelName}` !== selectedProduct) return false;
       if (selectedPerformedBy && log.performedBy !== selectedPerformedBy) return false;
       return true;
     });
-  }, [auditLogs, selectedAction, selectedProduct, selectedPerformedBy]);
+  }, [transferLogs, selectedAction, selectedProduct, selectedPerformedBy]);
 
   const getActionIcon = (action: string) => {
     switch (action) {
@@ -102,9 +105,9 @@ export function ProductTransferReport({ transferLogs }: ProductTransferReportPro
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-  a.download = `product-transfer-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `product-transfer-report-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
-toast.success('Product transfer report exported successfully');
+    toast.success('Product transfer report exported successfully');
   };
 
   const clearFilters = () => {
@@ -117,8 +120,8 @@ toast.success('Product transfer report exported successfully');
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
-<h2 className="text-2xl font-bold text-gray-900">Product Transfer Report</h2>
-<p className="text-sm text-gray-600 mt-1">Complete history of product transfers and inventory movements</p>
+        <h2 className="text-2xl font-bold text-gray-900">Product Transfer Report</h2>
+        <p className="text-sm text-gray-600 mt-1">Complete history of product transfers and inventory movements</p>
       </div>
 
       {/* Summary Cards */}
@@ -218,7 +221,7 @@ toast.success('Product transfer report exported successfully');
           <button
             onClick={handleExportCSV}
             className="px-4 py-2 text-sm font-medium text-white bg-[#10b981] rounded-lg hover:bg-[#059669] flex items-center gap-2"
-          >
+            >
             <Download size={16} />
             Export CSV
           </button>
@@ -311,7 +314,9 @@ toast.success('Product transfer report exported successfully');
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-xl font-bold">Audit Log Details</h3>
-<button onClick={() => setViewLog(null)} className="text-gray-500 hover:text-gray-700">\n                <XCircle size={24} />\n              </button>
+              <button onClick={() => setViewLog(null)} className="text-gray-500 hover:text-gray-700">
+                <XCircle size={24} />
+              </button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -351,7 +356,7 @@ toast.success('Product transfer report exported successfully');
               <div className="border-t pt-4">
                 <p className="text-sm text-gray-600 mb-2">Serial Numbers ({viewLog.serialNumbers.length})</p>
                 <div className="flex flex-wrap gap-2">
-                  {viewLog.serialNumbers.map((serial, idx) => (
+{viewLog.serialNumbers.map((serial: string, idx: number) => (
                     <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded text-xs font-mono">
                       <Package size={10} />
                       {serial}
