@@ -1,59 +1,77 @@
 // Commission Report View - Presentational Component
+// UPDATED: Shows salary linkage status badge on each commission row
 
-import { Download, Filter, FileText, TrendingUp, DollarSign, CheckCircle, Receipt } from 'lucide-react';
+import { Download, Filter, FileText, TrendingUp, DollarSign, CheckCircle, Receipt, Link, AlertCircle, Clock } from 'lucide-react';
 import type { Commission, CommissionFilter, CommissionStats } from '../models/types';
+import type { SalaryLinkStatus } from '../viewModels/useCommissionReportViewModel';
 
 interface CommissionReportViewProps {
-  commissions: Commission[];
+  commissions:         Commission[];
   filteredCommissions: Commission[];
-  isLoading: boolean;
-  filters: CommissionFilter;
-  updateFilter: (key: keyof CommissionFilter, value: string) => void;
-  clearFilters: () => void;
-  activeFilterCount: number;
-  showFilters: boolean;
-  setShowFilters: (show: boolean) => void;
-  stats: CommissionStats;
-  refreshCommissions: () => void;
-  exportToCSV: () => string;
-  formatCurrency: (amount: number) => string;
-  formatMonth: (monthStr: string) => string;
-  cities: readonly string[];
-  employees: any[];
+  isLoading:           boolean;
+  filters:             CommissionFilter;
+  updateFilter:        (key: keyof CommissionFilter, value: string) => void;
+  clearFilters:        () => void;
+  activeFilterCount:   number;
+  showFilters:         boolean;
+  setShowFilters:      (show: boolean) => void;
+  stats:               CommissionStats;
+  refreshCommissions:  () => void;
+  exportToCSV:         () => string;
+  formatCurrency:      (amount: number) => string;
+  formatMonth:         (monthStr: string) => string;
+  cities:              readonly string[];
+  employees:           any[];
+  getSalaryLinkStatus: (commission: Commission) => SalaryLinkStatus;
+  salaryLinkLoading:   boolean;
+}
+
+function SalaryLinkBadge({ status }: { status: SalaryLinkStatus }) {
+  if (status === 'not-confirmed') return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">
+      <Clock size={9} /> Not confirmed
+    </span>
+  );
+  if (status === 'linked') return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 font-medium">
+      <Link size={9} /> Linked to salary
+    </span>
+  );
+  if (status === 'salary-exists-no-commission') return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-700 font-medium">
+      <AlertCircle size={9} /> Salary exists, not linked
+    </span>
+  );
+  // no-salary
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+      <Clock size={9} /> Salary not created
+    </span>
+  );
 }
 
 export function CommissionReportView({
-  commissions,
-  filteredCommissions,
-  isLoading,
-  filters,
-  updateFilter,
-  clearFilters,
-  activeFilterCount,
-  showFilters,
-  setShowFilters,
-  stats,
-  exportToCSV,
-  formatCurrency,
-  formatMonth,
-  cities,
-  employees
+  commissions, filteredCommissions, isLoading,
+  filters, updateFilter, clearFilters, activeFilterCount,
+  showFilters, setShowFilters, stats,
+  exportToCSV, formatCurrency, formatMonth, cities, employees,
+  getSalaryLinkStatus, salaryLinkLoading,
 }: CommissionReportViewProps) {
+
   const getEmployeeName = (id: string) =>
     employees.find(e => e.id === id)?.name || id;
 
   const handleExport = () => {
-    const csv = exportToCSV();
+    const csv  = exportToCSV();
     const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+    const url  = window.URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
     a.download = `commission-report-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
 
-  // Total invoices across the filtered set
   const totalInvoicesInReport = filteredCommissions.reduce(
     (sum, c) => sum + (c.invoiceCount ?? 0), 0
   );
@@ -64,7 +82,7 @@ export function CommissionReportView({
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Commission Report</h1>
-          <p className="text-gray-600 mt-1">View and analyze commission data</p>
+          <p className="text-gray-600 mt-1">Full history of all commission records</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -80,13 +98,12 @@ export function CommissionReportView({
             onClick={handleExport}
             className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
           >
-            <Download size={20} />
-            Export CSV
+            <Download size={20} /> Export CSV
           </button>
         </div>
       </div>
 
-      {/* Stats Cards — now 5 cards including invoice count */}
+      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-5">
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
@@ -95,8 +112,6 @@ export function CommissionReportView({
           </div>
           <div className="text-2xl font-bold text-gray-900">{stats.totalCommissions}</div>
         </div>
-
-        {/* ← New: total invoices card */}
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total Invoices</span>
@@ -105,7 +120,6 @@ export function CommissionReportView({
           <div className="text-2xl font-bold text-blue-600">{totalInvoicesInReport}</div>
           <p className="text-xs text-gray-500">across filtered records</p>
         </div>
-
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total Amount</span>
@@ -188,10 +202,7 @@ export function CommissionReportView({
             </div>
           </div>
           <div className="flex justify-end mt-4">
-            <button
-              onClick={clearFilters}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700"
-            >
+            <button onClick={clearFilters} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
               Clear Filters
             </button>
           </div>
@@ -223,13 +234,13 @@ export function CommissionReportView({
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Salesperson</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">City</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
-                    {/* ← New column */}
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Invoices</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sales</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Applied Slab</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commission %</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Salary Link</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -240,11 +251,9 @@ export function CommissionReportView({
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">{commission.city}</td>
                       <td className="px-4 py-3 text-sm text-gray-900">{formatMonth(commission.month)}</td>
-                      {/* ← Invoice count badge */}
                       <td className="px-4 py-3 text-center">
                         <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                          <Receipt size={11} />
-                          {commission.invoiceCount ?? '—'}
+                          <Receipt size={11} />{commission.invoiceCount ?? '—'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(commission.totalSales)}</td>
@@ -265,6 +274,13 @@ export function CommissionReportView({
                         }`}>
                           {commission.status}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {salaryLinkLoading ? (
+                          <span className="text-xs text-gray-400">—</span>
+                        ) : (
+                          <SalaryLinkBadge status={getSalaryLinkStatus(commission)} />
+                        )}
                       </td>
                     </tr>
                   ))}

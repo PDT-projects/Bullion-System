@@ -36,6 +36,8 @@ export function CommissionReportWrapper() {
       formatMonth={vm.formatMonth}
       cities={CITIES}
       employees={employees}
+      getSalaryLinkStatus={vm.getSalaryLinkStatus}
+      salaryLinkLoading={vm.salaryLinkLoading}
     />
   );
 }

@@ -1,14 +1,11 @@
 // Commission Calculation ViewModel
-// UPDATED:
-//   1. After saving commissions to Firestore, also writes commission amounts to
-//      existing salary records for the same employee+month (salary linking).
-//   2. Exposes `liveCommissions` — the real-time Calculated records already
-//      written by the auto-commission service when invoices were saved.
-//      This lets the UI show progress before the admin confirms.
-//   3. handleModalConfirm upgrades all Calculated → Confirmed and then
-//      patches any existing salary records.
+// FIXED:
+//   - `updatedSalaries` was referenced but never defined — fixed
+//   - liveCommissions now fetches ALL commissions (no city/month filter)
+//     so the dashboard and live panel show everything
+//   - refreshLiveCommissions works without requiring city+month selection
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import type {
   Commission,
@@ -36,28 +33,27 @@ export interface SalespersonInvoiceBreakdown {
   slabFrom:            number;
   slabTo:              number;
   nextSlabThreshold:   number | null;
-  // Progress towards the next slab (0-100)
   slabProgressPercent: number;
 }
 
 // ─── Local calculation helper ────────────────────────────────────────────────
 
 function calculateCommissionsFromInvoices(
-  city:          string,
-  month:         string,
-  invoices:      InvoiceReference[],
-  employees:     EmployeeReference[],
-  slabs:         any[],
-  calculatedBy   = 'Admin'
+  city:        string,
+  month:       string,
+  invoices:    InvoiceReference[],
+  employees:   EmployeeReference[],
+  slabs:       any[],
+  calculatedBy = 'Admin'
 ): CommissionCalculationResult & { breakdowns: SalespersonInvoiceBreakdown[] } {
   const errors: string[] = [];
 
   const relevantInvoices = invoices.filter((inv) => {
-    if (inv.status !== 'Paid')   return false;
-    if (!inv.salesperson)        return false;
-    if (inv.customerCity !== city) return false;
+    if (inv.status !== 'Paid')      return false;
+    if (!inv.salesperson)           return false;
+    if (inv.customerCity !== city)  return false;
     const d = new Date(inv.date);
-    if (isNaN(d.getTime()))      return false;
+    if (isNaN(d.getTime()))         return false;
     const invMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     return invMonth === month;
   });
@@ -65,14 +61,12 @@ function calculateCommissionsFromInvoices(
   if (relevantInvoices.length === 0) {
     errors.push(`No paid invoices found for "${city}" in ${month}`);
     return {
-      commissions: [],
-      errors,
+      commissions: [], errors,
       summary: { totalSalespeople: 0, totalSales: 0, totalCommission: 0, totalInvoicesUsed: 0 },
       breakdowns: [],
     };
   }
 
-  // Group per salesperson
   const grouped: Record<string, InvoiceReference[]> = {};
   relevantInvoices.forEach((inv) => {
     const key = inv.salesperson!;
@@ -95,35 +89,25 @@ function calculateCommissionsFromInvoices(
     const applicableSlab = slabs.find(
       (slab) =>
         slab.salesperson === salespersonId &&
-        slab.city        === city           &&
+        slab.city        === city &&
         totalSales       >= slab.fromAmount &&
         totalSales       <= slab.toAmount
     );
 
-    // Next-higher slab for the progress bar
     const higherSlabs = slabs
-      .filter(
-        (slab) =>
-          slab.salesperson === salespersonId &&
-          slab.city        === city           &&
-          slab.fromAmount  >  totalSales
-      )
+      .filter((s) => s.salesperson === salespersonId && s.city === city && s.fromAmount > totalSales)
       .sort((a, b) => a.fromAmount - b.fromAmount);
 
     const nextSlabThreshold = higherSlabs.length > 0 ? higherSlabs[0].fromAmount : null;
 
-    // Progress percentage towards next slab (or 100% if in a slab)
     let slabProgressPercent = 0;
     if (applicableSlab) {
-      slabProgressPercent = 100;
+      slabProgressPercent = Math.min(
+        100,
+        Math.round(((totalSales - applicableSlab.fromAmount) / (applicableSlab.toAmount - applicableSlab.fromAmount)) * 100)
+      );
     } else if (nextSlabThreshold) {
-      // Progress from 0 to the first slab's start
-      const firstSlab = slabs
-        .filter((s) => s.salesperson === salespersonId && s.city === city)
-        .sort((a, b) => a.fromAmount - b.fromAmount)[0];
-      const rangeStart = firstSlab ? 0 : 0;
-      const rangeEnd   = nextSlabThreshold;
-      slabProgressPercent = Math.min(100, Math.round((totalSales / rangeEnd) * 100));
+      slabProgressPercent = Math.min(100, Math.round((totalSales / nextSlabThreshold) * 100));
     }
 
     breakdowns.push({
@@ -139,9 +123,7 @@ function calculateCommissionsFromInvoices(
     });
 
     if (!applicableSlab) {
-      errors.push(
-        `No commission slab for ${employee.name} in ${city} covering sales of ${formatCurrency(totalSales)}`
-      );
+      errors.push(`No commission slab for ${employee.name} in ${city} covering sales of ${formatCurrency(totalSales)}`);
       return;
     }
 
@@ -151,9 +133,7 @@ function calculateCommissionsFromInvoices(
       id:                         `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       salesperson:                salespersonId,
       salespersonName:            employee.name,
-      city,
-      month,
-      totalSales,
+      city, month, totalSales,
       invoiceCount:               spInvoices.length,
       appliedSlabFrom:            applicableSlab.fromAmount,
       appliedSlabTo:              applicableSlab.toAmount,
@@ -166,16 +146,12 @@ function calculateCommissionsFromInvoices(
     });
   });
 
-  const totalSales      = commissions.reduce((s, c) => s + c.totalSales, 0);
-  const totalCommission = commissions.reduce((s, c) => s + c.calculatedCommissionAmount, 0);
-
   return {
-    commissions,
-    errors,
+    commissions, errors,
     summary: {
       totalSalespeople:  commissions.length,
-      totalSales,
-      totalCommission,
+      totalSales:        commissions.reduce((s, c) => s + c.totalSales, 0),
+      totalCommission:   commissions.reduce((s, c) => s + c.calculatedCommissionAmount, 0),
       totalInvoicesUsed: relevantInvoices.length,
     },
     breakdowns,
@@ -192,10 +168,8 @@ interface UseCommissionCalculationViewModelReturn {
   commissionData:          Commission[];
   calculationErrors:       string[];
   summary: {
-    totalSalespeople: number;
-    totalSales:       number;
-    totalCommission:  number;
-    totalInvoicesUsed: number;
+    totalSalespeople: number; totalSales: number;
+    totalCommission: number;  totalInvoicesUsed: number;
   } | null;
   invoiceBreakdowns:       SalespersonInvoiceBreakdown[];
   expandedSalesperson:     string | null;
@@ -208,7 +182,6 @@ interface UseCommissionCalculationViewModelReturn {
   isEditing:               string | null;
   editValues:              { percentage: number; amount: number };
   setEditValues:           (values: { percentage: number; amount: number }) => void;
-  // Live auto-calculated commissions (written by invoice saves before admin confirms)
   liveCommissions:         Commission[];
   liveCommissionsLoading:  boolean;
   refreshLiveCommissions:  () => void;
@@ -232,42 +205,41 @@ export function useCommissionCalculationViewModel(
   onCommissionsSaved: () => void
 ): UseCommissionCalculationViewModelReturn {
 
-  const [selectedCity,          setSelectedCity]          = useState('');
-  const [selectedMonth,         setSelectedMonth]         = useState(getCurrentMonth());
-  const [commissionData,        setCommissionData]        = useState<Commission[]>([]);
-  const [calculationErrors,     setCalculationErrors]     = useState<string[]>([]);
-  const [summary,               setSummary]               = useState<{
+  const [selectedCity,        setSelectedCity]        = useState('');
+  const [selectedMonth,       setSelectedMonth]       = useState(getCurrentMonth());
+  const [commissionData,      setCommissionData]      = useState<Commission[]>([]);
+  const [calculationErrors,   setCalculationErrors]   = useState<string[]>([]);
+  const [summary,             setSummary]             = useState<{
     totalSalespeople: number; totalSales: number;
     totalCommission: number;  totalInvoicesUsed: number;
   } | null>(null);
-  const [invoiceBreakdowns,     setInvoiceBreakdowns]     = useState<SalespersonInvoiceBreakdown[]>([]);
-  const [expandedSalesperson,   setExpandedSalesperson]   = useState<string | null>(null);
-  const [showModal,             setShowModal]             = useState(false);
-  const [isFullScreen,          setIsFullScreen]          = useState(false);
-  const [isCalculating,         setIsCalculating]         = useState(false);
-  const [isEditing,             setIsEditing]             = useState<string | null>(null);
-  const [editValues,            setEditValues]            = useState({ percentage: 0, amount: 0 });
+  const [invoiceBreakdowns,   setInvoiceBreakdowns]   = useState<SalespersonInvoiceBreakdown[]>([]);
+  const [expandedSalesperson, setExpandedSalesperson] = useState<string | null>(null);
+  const [showModal,           setShowModal]           = useState(false);
+  const [isFullScreen,        setIsFullScreen]        = useState(false);
+  const [isCalculating,       setIsCalculating]       = useState(false);
+  const [isEditing,           setIsEditing]           = useState<string | null>(null);
+  const [editValues,          setEditValues]          = useState({ percentage: 0, amount: 0 });
+  const [liveCommissions,         setLiveCommissions]         = useState<Commission[]>([]);
+  const [liveCommissionsLoading,  setLiveCommissionsLoading]  = useState(false);
 
-  // Live Calculated records written automatically when invoices are saved
-  const [liveCommissions,       setLiveCommissions]       = useState<Commission[]>([]);
-  const [liveCommissionsLoading,setLiveCommissionsLoading]= useState(false);
-
-  // ── Fetch live (auto-calculated) commissions for selected city+month ──
+  // ── Fetch ALL commissions for live panel / dashboard ─────────────────
+  // No city+month filter — fetches everything so dashboard always shows data
   const refreshLiveCommissions = useCallback(async () => {
-    if (!selectedCity || !selectedMonth) return;
     setLiveCommissionsLoading(true);
     try {
       const all = await CommissionFirebaseService.fetchAllCommissions();
-      const filtered = all.filter(
-        (c) => c.city === selectedCity && c.month === selectedMonth
+      // Sort newest first
+      const sorted = [...all].sort(
+        (a, b) => new Date(b.calculatedAt).getTime() - new Date(a.calculatedAt).getTime()
       );
-      setLiveCommissions(filtered);
+      setLiveCommissions(sorted);
     } catch (err) {
       console.warn('[CommissionCalc] Could not load live commissions:', err);
     } finally {
       setLiveCommissionsLoading(false);
     }
-  }, [selectedCity, selectedMonth]);
+  }, []);
 
   useEffect(() => {
     refreshLiveCommissions();
@@ -288,7 +260,6 @@ export function useCommissionCalculationViewModel(
         const result = calculateCommissionsFromInvoices(
           selectedCity, selectedMonth, invoices, employees, slabs, 'Admin'
         );
-
         setCommissionData(result.commissions);
         setCalculationErrors(result.errors);
         setSummary(result.summary);
@@ -378,11 +349,8 @@ export function useCommissionCalculationViewModel(
 
       const savedCommissions = await CommissionFirebaseService.saveCommissions(toSave);
 
-      // ── Link commission amounts to existing salary records ─────────────
-      // For each confirmed commission, find the matching Employee salary for
-      // the same employee + salaryMonth and update its commission + netAmount.
-      // Non-fatal: if no salary record exists yet the salary form will
-      // auto-populate when the user opens it.
+      // Link commission amounts to existing salary records (non-fatal)
+      let linkedCount = 0;
       try {
         const allSalaries = await SalaryFirebaseService.fetchAllSalaries();
 
@@ -405,9 +373,8 @@ export function useCommissionCalculationViewModel(
                 (matchingSalary.baseSalary || 0) + commissionAmount - (matchingSalary.deductions || 0)
               ),
             });
-            console.log(
-              `[CommissionCalc] Linked commission PKR ${commissionAmount} to salary record ${matchingSalary.id}`
-            );
+            linkedCount++;
+            console.log(`[CommissionCalc] Linked PKR ${commissionAmount} to salary ${matchingSalary.id}`);
           }
         });
 
@@ -416,9 +383,9 @@ export function useCommissionCalculationViewModel(
         console.warn('[CommissionCalc] Salary linking failed (non-fatal):', linkErr);
       }
 
-      const linkedCount = updatedSalaries.length;
       toast.success(
-        `${toSave.length} commission(s) confirmed & saved. ${linkedCount > 0 ? `Linked to ${linkedCount} salary record(s).` : 'Ready for salary forms.'}`
+        `${toSave.length} commission(s) confirmed & saved.` +
+        (linkedCount > 0 ? ` Linked to ${linkedCount} salary record(s).` : ' Ready for salary forms.')
       );
       setShowModal(false);
       resetState();

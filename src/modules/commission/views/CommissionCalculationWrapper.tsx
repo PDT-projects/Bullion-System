@@ -101,6 +101,10 @@ export function CommissionCalculationWrapper({
       invoiceBreakdowns={vm.invoiceBreakdowns}
       expandedSalesperson={vm.expandedSalesperson}
       setExpandedSalesperson={vm.setExpandedSalesperson}
+      // ← FIX: Missing live commissions props
+      liveCommissions={vm.liveCommissions}
+      liveCommissionsLoading={vm.liveCommissionsLoading}
+      refreshLiveCommissions={vm.refreshLiveCommissions}
     />
   );
 }
