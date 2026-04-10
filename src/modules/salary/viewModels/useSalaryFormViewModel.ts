@@ -1,18 +1,11 @@
 // Salary Module - ViewModel Layer
 // Form logic for create/edit salary
-// UPDATED:
-//  1. Fetches real banks from Firestore (BankFirebaseService)
-//  2. Updates bank balance on save (deduct outflow)
-//  3. Calculates advance paid for selected employee+month and shows deduction
-//  4. Blocks paying regular salary for a month already fully paid
-//  5. Saves bankId, chequeNumber, chequeDate, chequeBank to Firestore
-//  6. Creates linked Cash Outflow transaction record
-//  7. Auto-fills baseSalary with REMAINING amount (fullSalary - advancePaid)
-//     when advance has already been partially paid this month
-//  8. NEW: Auto-fills commission from a Confirmed commission record for the
-//     selected employee + salaryMonth (from the commissions collection)
+//
+// KEY FIX: calculateAutoCommission now receives BOTH employeeId AND employeeName.
+//   - employeeName is used to match invoices (invoices store name, not ID)
+//   - employeeId   is used to match commission slabs (slabs store ID)
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Salary, SalaryTransaction } from '../models/types';
@@ -20,7 +13,14 @@ import { SalaryService } from '../models/salaryService';
 import { SalaryFirebaseService } from '../models/salaryFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { TransactionFirebaseService } from '../../transactions/models/transactionFirebaseService';
+import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { CommissionFirebaseService } from '../../commission/models/Commissionfirebaseservice';
+import {
+  calculateAutoCommission,
+  formatCommissionSummary,
+  type CommissionAutoResult,
+  type CommissionCityBreakdown,
+} from '../../commission/models/Commissionautoservice';
 
 interface BankInfo { id: string; name: string; balance: number; }
 
@@ -28,10 +28,9 @@ interface UseSalaryFormViewModelProps {
   mode: 'create' | 'edit';
   type: 'regular' | 'advance';
   employees: any[];
-  banks?: any[];
 }
 
-interface UseSalaryFormViewModelReturn {
+export interface UseSalaryFormViewModelReturn {
   formData: {
     employeeId: string;
     subCategory: 'Employee salary' | 'Advance salary';
@@ -58,10 +57,11 @@ interface UseSalaryFormViewModelReturn {
   regularAlreadyPaidAmount: number;
   remainingSalaryToPay: number;
   isEffectivelyAdvance: boolean;
-  // NEW: commission auto-fill state
-  confirmedCommissionAmount: number;        // amount found in commissions collection
-  isCommissionAutoFilled: boolean;          // true when commission was auto-populated
-  commissionSource: string;                 // human-readable label, e.g. "Karachi · April 2025"
+  commissionResult: CommissionAutoResult | null;
+  isCommissionAutoFilled: boolean;
+  isCommissionLoading: boolean;
+  commissionSummary: string;
+  commissionBreakdown: CommissionCityBreakdown[];
   onFieldChange: (field: string, value: any) => void;
   onTransactionChange: (index: number, field: keyof SalaryTransaction, value: any) => void;
   onSubmit: () => void;
@@ -77,13 +77,13 @@ export function useSalaryFormViewModel({
   const { id }   = useParams<{ id: string }>();
 
   const [formData, setFormData] = useState({
-    employeeId:   '',
-    subCategory:  type === 'regular' ? 'Employee salary' as const : 'Advance salary' as const,
-    date:         new Date().toISOString().split('T')[0],
-    note:         '',
-    baseSalary:   0,
-    commission:   0,
-    deductions:   0,
+    employeeId:  '',
+    subCategory: type === 'regular' ? 'Employee salary' as const : 'Advance salary' as const,
+    date:        new Date().toISOString().split('T')[0],
+    note:        '',
+    baseSalary:  0,
+    commission:  0,
+    deductions:  0,
   });
 
   const [transactionsList, setTransactionsList] = useState<SalaryTransaction[]>([
@@ -94,12 +94,10 @@ export function useSalaryFormViewModel({
   const [allSalaries, setAllSalaries] = useState<Salary[]>([]);
   const [isLoading,   setIsLoading]   = useState(false);
 
-  // ── NEW: commission auto-fill state ──────────────────────────────────────
-  const [confirmedCommissionAmount, setConfirmedCommissionAmount] = useState(0);
-  const [isCommissionAutoFilled,    setIsCommissionAutoFilled]    = useState(false);
-  const [commissionSource,          setCommissionSource]          = useState('');
-  // Flag to prevent auto-fill from overwriting a manual user edit
-  const [commissionManuallyEdited,  setCommissionManuallyEdited]  = useState(false);
+  const [commissionResult,       setCommissionResult]       = useState<CommissionAutoResult | null>(null);
+  const [isCommissionAutoFilled, setIsCommissionAutoFilled] = useState(false);
+  const [isCommissionLoading,    setIsCommissionLoading]    = useState(false);
+  const commissionManuallyEdited = useRef(false);
 
   const isEditMode       = mode === 'edit';
   const submitButtonText = isEditMode ? 'Update Salary' : 'Save Salary';
@@ -129,7 +127,6 @@ export function useSalaryFormViewModel({
 
   const salaryMonth = transactionsList[0]?.salaryMonth || '';
 
-  // ── Advance paid for this employee in the selected month ─────────────────
   const advancePaidThisMonth = useMemo(() => {
     if (!formData.employeeId || !salaryMonth) return 0;
     return allSalaries
@@ -142,7 +139,6 @@ export function useSalaryFormViewModel({
       .reduce((sum, s) => sum + (s.netAmount || s.amount || 0), 0);
   }, [allSalaries, formData.employeeId, salaryMonth, isEditMode, id]);
 
-  // ── Regular salary already paid for this employee+month ──────────────────
   const regularPaidRecords = useMemo(() => {
     if (!formData.employeeId || !salaryMonth) return [];
     return allSalaries.filter(s =>
@@ -164,7 +160,6 @@ export function useSalaryFormViewModel({
     return regularAlreadyPaidAmount >= (selectedEmployee.salary || 0);
   }, [type, selectedEmployee, regularAlreadyPaidAmount]);
 
-  // ── Remaining salary = full salary minus advance already given ────────────
   const remainingSalaryToPay = useMemo(() => {
     if (!selectedEmployee || !salaryMonth) return 0;
     const fullSalary = selectedEmployee.salary || 0;
@@ -172,7 +167,6 @@ export function useSalaryFormViewModel({
     return Math.max(0, fullSalary - advancePaidThisMonth);
   }, [selectedEmployee, advancePaidThisMonth]);
 
-  // ── Future month selected on regular form → auto-treat as advance ─────────
   const isEffectivelyAdvance = useMemo(() => {
     if (type !== 'regular' || isEditMode || !salaryMonth) return false;
     return salaryMonth > currentMonth;
@@ -196,61 +190,84 @@ export function useSalaryFormViewModel({
     [formData.baseSalary, formData.commission, formData.deductions]
   );
 
-  const validation = useMemo(() => {
-    return SalaryService.validateSalary(
+  const validation = useMemo(
+    () => SalaryService.validateSalary(
       { ...formData, amount: calculatedNetAmount },
       transactionsList
-    );
-  }, [formData, calculatedNetAmount, transactionsList]);
+    ),
+    [formData, calculatedNetAmount, transactionsList]
+  );
 
-  // ── NEW: Auto-fetch confirmed commission for employee + salaryMonth ────────
-  // Runs whenever employeeId or salaryMonth changes (create mode only, regular type only)
-  // If the user has already manually edited the commission field, we skip the auto-fill.
+  // ── AUTO-COMMISSION CALCULATION ───────────────────────────────────────────
+  // Runs when employee or month changes (create mode, regular only).
+  // Uses BOTH employeeId (for slab matching) and employeeName (for invoice matching).
   useEffect(() => {
-    if (isEditMode) return;                        // don't overwrite existing records
-    if (type !== 'regular') return;                // commissions only apply to regular salary
-    if (!formData.employeeId || !salaryMonth) return;
-    if (commissionManuallyEdited) return;          // user has overridden — respect it
+    if (isEditMode) return;
+    if (type !== 'regular') return;
+    if (!formData.employeeId || !salaryMonth) {
+      setCommissionResult(null);
+      setIsCommissionAutoFilled(false);
+      return;
+    }
+    if (commissionManuallyEdited.current) return;
+
+    // Need the employee name to match invoices
+    const employeeName = selectedEmployee?.name;
+    if (!employeeName) {
+      console.warn('[CommissionAuto] Employee name not found for ID:', formData.employeeId);
+      return;
+    }
 
     let cancelled = false;
+    setIsCommissionLoading(true);
 
-    const fetchCommission = async () => {
+    const run = async () => {
       try {
-        const allCommissions = await CommissionFirebaseService.fetchAllCommissions();
-
-        // Find the most recent Confirmed commission for this employee + month
-        const match = allCommissions.find(
-          (c) =>
-            c.salesperson === formData.employeeId &&
-            c.month === salaryMonth &&
-            c.status === 'Confirmed'
+        console.log(
+          `[CommissionAuto] Fetching invoices + slabs for "${employeeName}" (${formData.employeeId}) / ${salaryMonth}`
         );
+
+        const [invoices, slabs] = await Promise.all([
+          InvoiceFirebaseService.fetchAllInvoices(),
+          CommissionFirebaseService.fetchAllSlabs(),
+        ]);
 
         if (cancelled) return;
 
-        if (match) {
-          const amount = match.overriddenCommissionAmount ?? match.calculatedCommissionAmount;
-          setConfirmedCommissionAmount(amount);
+        console.log(`[CommissionAuto] Fetched ${invoices.length} invoices, ${slabs.length} slabs`);
+
+        const result = calculateAutoCommission(
+          formData.employeeId,  // used to match slabs
+          employeeName,         // used to match invoices
+          salaryMonth,
+          invoices,
+          slabs
+        );
+
+        console.log('[CommissionAuto] Result:', result);
+
+        setCommissionResult(result);
+
+        if (result.commissionAmount > 0 && result.hasMatch) {
           setIsCommissionAutoFilled(true);
-          setCommissionSource(`${match.city} · ${match.month}`);
-          // Only auto-fill if user hasn't manually changed the field
-          setFormData((prev) => ({ ...prev, commission: amount }));
+          setFormData(prev => ({ ...prev, commission: Math.round(result.commissionAmount) }));
         } else {
-          // No confirmed commission found — clear any previously auto-filled value
-          setConfirmedCommissionAmount(0);
           setIsCommissionAutoFilled(false);
-          setCommissionSource('');
-          setFormData((prev) => ({ ...prev, commission: 0 }));
+          setFormData(prev => ({ ...prev, commission: 0 }));
         }
       } catch (err) {
-        // Non-fatal: if commission fetch fails, just leave the field at 0
-        console.warn('⚠️ Could not fetch commission for salary form:', err);
+        console.error('[CommissionAuto] Error:', err);
+        setCommissionResult(null);
+        setIsCommissionAutoFilled(false);
+      } finally {
+        if (!cancelled) setIsCommissionLoading(false);
       }
     };
 
-    fetchCommission();
+    run();
     return () => { cancelled = true; };
-  }, [formData.employeeId, salaryMonth, isEditMode, type, commissionManuallyEdited]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.employeeId, salaryMonth, isEditMode, type, selectedEmployee?.name]);
 
   // Load existing salary in edit mode
   useEffect(() => {
@@ -259,15 +276,19 @@ export function useSalaryFormViewModel({
       try {
         setIsLoading(true);
         const salary = await SalaryFirebaseService.fetchSalaryById(id);
-        if (!salary) { toast.error('Salary record not found'); navigate('/salary'); return; }
+        if (!salary) {
+          toast.error('Salary record not found');
+          navigate('/salary');
+          return;
+        }
         setFormData({
           employeeId:  salary.employeeId,
           subCategory: salary.subCategory,
           date:        salary.date,
           note:        salary.note || '',
-          baseSalary:  salary.baseSalary || 0,
-          commission:  salary.commission || 0,
-          deductions:  salary.deductions || 0,
+          baseSalary:  salary.baseSalary  || 0,
+          commission:  salary.commission  || 0,
+          deductions:  salary.deductions  || 0,
         });
         setTransactionsList([{
           id:              Date.now().toString(),
@@ -275,11 +296,11 @@ export function useSalaryFormViewModel({
           paidBy:          salary.paidBy,
           transactionBy:   salary.transactionBy || '',
           mode:            salary.mode,
-          bankId:          salary.bankId || '',
-          bankName:        salary.bankName || '',
-          chequeNumber:    salary.chequeNumber || '',
-          chequeDate:      salary.chequeDate || '',
-          chequeBank:      salary.chequeBank || '',
+          bankId:          salary.bankId          || '',
+          bankName:        salary.bankName        || '',
+          chequeNumber:    salary.chequeNumber    || '',
+          chequeDate:      salary.chequeDate      || '',
+          chequeBank:      salary.chequeBank      || '',
           imageUrl:        salary.imageUrl,
           paymentStatus:   salary.paymentStatus,
           remainingAmount: salary.remainingAmount,
@@ -295,11 +316,10 @@ export function useSalaryFormViewModel({
     load();
   }, [isEditMode, id, navigate]);
 
-  // Auto-populate base salary from employee on new regular salary.
-  // If advance was already paid this month, pre-fill with REMAINING amount.
+  // Auto-fill baseSalary from employee record
   useEffect(() => {
     if (!isEditMode && selectedEmployee && type === 'regular') {
-      const fullSalary = selectedEmployee.salary || 0;
+      const fullSalary    = selectedEmployee.salary || 0;
       const suggestedBase = advancePaidThisMonth > 0
         ? Math.max(0, fullSalary - advancePaidThisMonth)
         : fullSalary;
@@ -307,7 +327,7 @@ export function useSalaryFormViewModel({
     }
   }, [selectedEmployee, isEditMode, type, advancePaidThisMonth]);
 
-  // Keep transaction amount in sync with net amount
+  // Keep transaction[0].amount in sync with net amount
   useEffect(() => {
     setTransactionsList(prev =>
       prev.map((t, i) => i === 0 ? { ...t, amount: calculatedNetAmount } : t)
@@ -315,9 +335,8 @@ export function useSalaryFormViewModel({
   }, [calculatedNetAmount]);
 
   const setField = useCallback((field: string, value: any) => {
-    // If user is manually editing the commission field, stop future auto-fills
     if (field === 'commission') {
-      setCommissionManuallyEdited(true);
+      commissionManuallyEdited.current = true;
       setIsCommissionAutoFilled(false);
     }
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -338,10 +357,11 @@ export function useSalaryFormViewModel({
             if (value === 'Bank')   { updated.chequeNumber = ''; updated.chequeDate = ''; updated.chequeBank = ''; }
             if (value === 'Cheque') { updated.bankId = ''; updated.bankName = ''; }
           }
-          // When salaryMonth changes, reset the manual-edit flag so commission
-          // can be re-fetched for the new month
           if (field === 'salaryMonth') {
-            setCommissionManuallyEdited(false);
+            // Reset manual flag → re-calculate for new month
+            commissionManuallyEdited.current = false;
+            setIsCommissionAutoFilled(false);
+            setCommissionResult(null);
           }
           return updated;
         })
@@ -352,7 +372,9 @@ export function useSalaryFormViewModel({
 
   const handleSubmit = useCallback(async () => {
     if (type === 'regular' && regularAlreadyPaid && !isEditMode) {
-      toast.error(`Regular salary for ${selectedEmployee?.name} is already fully paid for ${salaryMonth}`);
+      toast.error(
+        `Regular salary for ${selectedEmployee?.name} is already fully paid for ${salaryMonth}`
+      );
       return;
     }
 
@@ -385,11 +407,11 @@ export function useSalaryFormViewModel({
         deductions:      formData.deductions,
         netAmount:       calculatedNetAmount,
         mode:            txn.mode,
-        bankId:          txn.mode === 'Bank'   ? txn.bankId        : undefined,
-        bankName:        txn.mode === 'Bank'   ? txn.bankName      : '',
-        chequeNumber:    txn.mode === 'Cheque' ? txn.chequeNumber  : undefined,
-        chequeDate:      txn.mode === 'Cheque' ? txn.chequeDate    : undefined,
-        chequeBank:      txn.mode === 'Cheque' ? txn.chequeBank    : undefined,
+        bankId:          txn.mode === 'Bank'   ? txn.bankId       : undefined,
+        bankName:        txn.mode === 'Bank'   ? txn.bankName     : '',
+        chequeNumber:    txn.mode === 'Cheque' ? txn.chequeNumber : undefined,
+        chequeDate:      txn.mode === 'Cheque' ? txn.chequeDate   : undefined,
+        chequeBank:      txn.mode === 'Cheque' ? txn.chequeBank   : undefined,
         paidBy:          txn.paidBy,
         transactionBy:   txn.transactionBy || '',
         salaryMonth:     txn.salaryMonth,
@@ -441,8 +463,10 @@ export function useSalaryFormViewModel({
         });
 
         if (txn.mode === 'Bank' && txn.bankId && bank) {
-          const newBalance = bank.balance - calculatedNetAmount;
-          await BankFirebaseService.updateBankBalance(txn.bankId, newBalance);
+          await BankFirebaseService.updateBankBalance(
+            txn.bankId,
+            bank.balance - calculatedNetAmount
+          );
         }
 
         toast.success('Salary payment recorded successfully');
@@ -455,20 +479,32 @@ export function useSalaryFormViewModel({
     } finally {
       setIsLoading(false);
     }
-  }, [formData, transactionsList, calculatedNetAmount, isEditMode, id, employees, banks,
-      navigate, type, regularAlreadyPaid, selectedEmployee, salaryMonth, effectiveSubCategory]);
+  }, [
+    formData, transactionsList, calculatedNetAmount, isEditMode, id,
+    employees, banks, navigate, type, regularAlreadyPaid,
+    selectedEmployee, salaryMonth, effectiveSubCategory,
+  ]);
 
   const handleCancel = useCallback(
     () => navigate(type === 'advance' ? '/salary/advance' : '/salary/regular'),
     [navigate, type]
   );
 
+  const commissionSummary = useMemo(() => {
+    if (!commissionResult) return '';
+    return formatCommissionSummary(commissionResult, (n) =>
+      new Intl.NumberFormat('en-US', {
+        style: 'currency', currency: 'PKR', minimumFractionDigits: 0,
+      }).format(n)
+    );
+  }, [commissionResult]);
+
   return {
     formData,
-    transactions: transactionsList,
-    isValid:      validation.isValid,
-    errorMessage: validation.error,
-    fieldErrors:  validation.fieldErrors || {},
+    transactions:           transactionsList,
+    isValid:                validation.isValid,
+    errorMessage:           validation.error,
+    fieldErrors:            validation.fieldErrors || {},
     isLoading,
     isEditMode,
     pageTitle,
@@ -482,12 +518,14 @@ export function useSalaryFormViewModel({
     regularAlreadyPaidAmount,
     remainingSalaryToPay,
     isEffectivelyAdvance,
-    confirmedCommissionAmount,
+    commissionResult,
     isCommissionAutoFilled,
-    commissionSource,
-    onFieldChange:       setField,
-    onTransactionChange: setTransactionField,
-    onSubmit:   handleSubmit,
-    onCancel:   handleCancel,
+    isCommissionLoading,
+    commissionSummary,
+    commissionBreakdown:    commissionResult?.breakdown ?? [],
+    onFieldChange:          setField,
+    onTransactionChange:    setTransactionField,
+    onSubmit:               handleSubmit,
+    onCancel:               handleCancel,
   };
 }

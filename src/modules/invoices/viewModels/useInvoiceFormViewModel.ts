@@ -28,9 +28,7 @@ import { generateInvoicePdf, downloadInvoicePdf } from '../models/invoicePdfServ
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
-import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/autoCommissionService';
-
-interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
+import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/Commissionautoservice';interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; }
 
 export interface UseInvoiceFormViewModelReturn {
@@ -427,7 +425,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
               stock: Math.max(0, product.stock - ip.quantity),
               serialNumbers: remaining, serialCities: newCities, serialStatus: newStatus as any,
             });
-          } catch (err) {
+          } catch (err) { 
             console.error('Inventory update failed for', ip.productId, err);
           }
         }
