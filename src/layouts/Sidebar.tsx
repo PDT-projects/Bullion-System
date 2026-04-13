@@ -139,7 +139,7 @@ export function Sidebar() {
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
       <div className="p-6 border-b border-gray-200">
-        <h1 className="font-bold text-xl text-[#4f46e5]">ERP System</h1>
+        <h1 className="font-bold text-xl text-[#4f46e5]">Pakistan Detector Technologies</h1>
       </div>
       
       <nav className="flex-1 p-4 overflow-y-auto">

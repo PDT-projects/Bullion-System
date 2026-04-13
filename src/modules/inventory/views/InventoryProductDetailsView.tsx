@@ -3,6 +3,7 @@
 // Changes:
 //   - Added optional "Dealer Price (PKR)" field for both with-costing and without-costing paths
 //   - Location dropdown (required) retained for both paths
+//   - Fixed "Next: Payment" button text color to black in without-costing flow
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -102,20 +103,41 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     );
   };
 
-  // Pass dealerPrice into selectedModels before navigating
-  const handleNextWithDealer = (models?: SelectedModel[]) => {
-    // Attach dealerPrice as a field on each selected model for the payment step to persist
-    const enriched = models?.map(m => ({
-      ...m,
-      dealerPrice: dealerPrice !== '' ? Number(dealerPrice) : undefined,
-    }));
-    handleNext(enriched as any);
-  };
-
   const inputCls =
     'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500';
 
-  // ── Shared: Dealer Price field ──────────────────────────────────────────────
+  // ── SHARED COMPONENTS (moved to top-level scope for both paths) ────────────
+  const ProgressBar = () => (
+    <div className="mb-6 bg-white rounded-xl shadow-lg border p-6">
+      <div className="flex items-center justify-between">
+        {[{ label: 'Type' }, { label: 'Costing' }].map((s, i) => (
+          <React.Fragment key={i}>
+            <div className="flex flex-col items-center min-w-[70px]">
+              <div className="w-12 h-12 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-md">
+                ✓
+              </div>
+              <span className="text-xs font-medium text-green-600 mt-1 text-center">{s.label}</span>
+            </div>
+            <div className="flex-1 h-1 bg-green-500 rounded-full mx-2" />
+          </React.Fragment>
+        ))}
+        <div className="flex flex-col items-center min-w-[70px]">
+          <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-xl font-bold shadow-md ring-4 ring-blue-100">
+            3
+          </div>
+          <span className="text-xs font-semibold text-blue-600 mt-1 text-center">Details</span>
+        </div>
+        <div className="flex-1 h-1 bg-gray-200 rounded-full mx-2" />
+        <div className="flex flex-col items-center min-w-[70px]">
+          <div className="w-12 h-12 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xl font-bold shadow-sm border border-gray-300">
+            4
+          </div>
+          <span className="text-xs font-medium text-gray-400 mt-1 text-center">Payment</span>
+        </div>
+      </div>
+    </div>
+  );
+
   const DealerPriceField = () => (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
@@ -137,7 +159,6 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     </div>
   );
 
-  // ── Shared: Location field ──────────────────────────────────────────────────
   const LocationField = () => (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
@@ -208,6 +229,8 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     </div>
   );
 
+  // Pass dealerPrice into selectedModels before navigating
+  const handleNextWithDealer = (models?: SelectedModel[]) => {
   const ProgressBar = () => (
     <div className="mb-6 bg-white rounded-xl shadow-lg border p-6">
       <div className="flex items-center justify-between">
@@ -239,9 +262,108 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     </div>
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // WITHOUT COSTING — single model
-  // ═══════════════════════════════════════════════════════════════════════════
+  const DealerPriceField = () => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+        <Tag className="w-4 h-4 text-emerald-500" />
+        Dealer Price (PKR)
+        <span className="ml-1 text-xs text-gray-400 font-normal">(Optional)</span>
+      </label>
+      <input
+        type="number"
+        value={dealerPrice}
+        onChange={e => setDealerPrice(e.target.value === '' ? '' : Number(e.target.value))}
+        className={inputCls}
+        min={0}
+        placeholder="e.g. 85000"
+      />
+      <p className="text-xs text-gray-400 mt-1">
+        Special price offered to dealers. Leave blank if not applicable.
+      </p>
+    </div>
+  );
+
+  const LocationField = () => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+        <MapPin className="w-4 h-4 text-indigo-500" />
+        Stocking Location <span className="text-red-500">*</span>
+      </label>
+      <select
+        value={formData.location || ''}
+        onChange={e => setLocation(e.target.value)}
+        className={`${inputCls} ${validationErrors.location ? 'border-red-500' : ''}`}
+      >
+        <option value="">Select location</option>
+        {cities.map(city => (
+          <option key={city} value={city}>{city}</option>
+        ))}
+      </select>
+      {validationErrors.location && (
+        <p className="text-red-500 text-sm mt-1">{validationErrors.location}</p>
+      )}
+      <p className="text-xs text-gray-400 mt-1">
+        Where these units are being stocked. Serial numbers will be assigned to this location.
+      </p>
+    </div>
+  );
+
+  const CommonFields = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+        <select
+          value={formData.category}
+          onChange={e => setCategory(e.target.value)}
+          className={`${inputCls} ${validationErrors.category ? 'border-red-500' : ''}`}
+        >
+          <option value="">Select category</option>
+          {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+        </select>
+        {validationErrors.category && (
+          <p className="text-red-500 text-sm mt-1">{validationErrors.category}</p>
+        )}
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+        <select
+          value={formData.status}
+          onChange={e => setStatus(e.target.value as any)}
+          className={inputCls}
+        >
+          <option value="New">New</option>
+          <option value="Used">Used</option>
+          <option value="Returned">Returned</option>
+        </select>
+      </div>
+      <LocationField />
+      <DealerPriceField />
+      <div className="md:col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+        <textarea
+          value={formData.description}
+          onChange={e => setDescription(e.target.value)}
+          rows={3}
+          className={`${inputCls} resize-vertical`}
+        />
+        {validationErrors.description && (
+          <p className="text-red-500 text-sm mt-1">{validationErrors.description}</p>
+        )}
+      </div>
+    </div>
+  );
+
+  // Attach dealerPrice as a field on each selected model for the payment step to persist
+    const enriched = models?.map(m => ({
+      ...m,
+      dealerPrice: dealerPrice !== '' ? Number(dealerPrice) : undefined,
+    }));
+    handleNext(enriched as any);
+  };
+
+
+
+  // WITHOUT COSTING — single model (moved up)
   if (costingOption === 'without') {
     return (
       <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
@@ -478,7 +600,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               </button>
               <button
                 onClick={() => handleNext()}
-                className="px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 transition-colors"
+className="px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 bg-indigo-600 text-black hover:bg-indigo-600/90 hover:text-gray-900 active:bg-indigo-600/80 active:text-gray-800 transition-all duration-200"
               >
                 Next: Payment <ArrowRight size={20} />
               </button>
@@ -489,9 +611,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
   // WITH COSTING — per-model serial inputs + dealer price in common section
-  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <div className="max-w-7xl mx-auto">

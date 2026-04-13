@@ -97,8 +97,6 @@ export function Dashboard() {
         return (
           <ProfitLossReport
             transactions={transactions}
-            salaries={[]}
-            bills={[]}
             onBack={() => setSelectedReport(null)}
           />
         );
