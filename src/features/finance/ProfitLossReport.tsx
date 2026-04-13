@@ -292,6 +292,10 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
   const cogsRows     = sectionRows('Cost of Goods Sold (COGS)');
   const expenseRows  = sectionRows('Operating Expenses');
 
+  // Custom (dynamically-added) P&L main categories — everything outside the 3 known ones
+  const knownMains   = new Set(['Revenue', 'Cost of Goods Sold (COGS)', 'Operating Expenses']);
+  const customMains  = Array.from(buckets.keys()).filter(k => !knownMains.has(k));
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -454,6 +458,26 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
           }
           <SectionTotal label="Total Operating Expenses" value={totalExpenses} colorClass="bg-red-50" />
         </div>
+
+        {/* Custom / Dynamic P&L categories */}
+        {customMains.map(main => {
+          const rows  = sectionRows(main);
+          const total = sectionTotal(main);
+          return (
+            <div key={main} className="bg-white rounded-xl shadow-sm border border-indigo-200 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-indigo-100 flex items-center gap-2">
+                <Tag size={15} className="text-indigo-500" />
+                {main}
+                <span className="text-xs font-normal text-indigo-400 ml-1">(custom category)</span>
+              </h2>
+              {rows.length === 0
+                ? <p className="text-sm text-gray-400 py-2">No transactions in this period.</p>
+                : <div className="space-y-1">{rows.map(([sub, val]) => <Row key={sub} label={sub} value={val} />)}</div>
+              }
+              <SectionTotal label={`Total ${main}`} value={total} colorClass="bg-indigo-50" />
+            </div>
+          );
+        })}
 
         {/* Net Profit / Loss */}
         <div className={`rounded-xl shadow-sm border p-6 ${

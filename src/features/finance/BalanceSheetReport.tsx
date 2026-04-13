@@ -3,13 +3,25 @@
 // Assets = Cash + Banks + Inventory + Loans Receivable
 // Liabilities = Loans Payable + Pending Bills
 // Equity = Assets − Liabilities (accounting identity)
+//
+// ALSO: renders a "Manual BS Classification" panel driven by the
+// bsMainCategory / bsSubCategory fields saved on each transaction.
+// Priority: manual classification (saved from form) → shown in dedicated section.
 
-import { useMemo } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ArrowLeft, Tag, ChevronDown, ChevronUp } from 'lucide-react';
 
 type Transaction = {
   id: string; date: string; mainCategory: string;
   subCategory: string; amount: number;
+  company?: string;
+  remainingAmount?: number;
+  mode?: string;
+  // Manual Balance Sheet classification (saved from form to Firestore)
+  bsMainCategory?: string;
+  bsSubCategory?: string;
+  // Approval — pending/rejected have zero financial impact
+  approvalStatus?: string;
 };
 type Bank      = { id: string; name: string; balance: number; accountNumber: string; };
 type Loan      = { id: string; type: 'Payable' | 'Receivable'; remaining: number; loanAmount: number; paid: number; status: string; };
@@ -46,19 +58,65 @@ const SubTotal = ({ label, value, colorClass = 'bg-blue-50' }: { label: string; 
 );
 
 export function BalanceSheetReport({ transactions, banks, loans, products, bills = [], onBack }: BalanceSheetReportProps) {
+  const [showBSClassified, setShowBSClassified] = useState(true);
+  const [expandedSubs,     setExpandedSubs]     = useState<Set<string>>(new Set());
+  const toggleSub = (key: string) =>
+    setExpandedSubs(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
+  // Only approved / not_required transactions affect balance sheet figures
+  const liquid = useMemo(
+    () => transactions.filter(
+      t => t.approvalStatus === 'approved' || t.approvalStatus === 'not_required' || !t.approvalStatus
+    ),
+    [transactions]
+  );
+
+  // ── Manual BS classification grouping ─────────────────────────────────────
+  // Groups transactions that have bsMainCategory + bsSubCategory set on them.
+  const bsClassified = useMemo(() => {
+    const map = new Map<string, Map<string, { total: number; txns: Transaction[] }>>();
+    for (const t of liquid) {
+      if (!t.bsMainCategory || !t.bsSubCategory) continue;
+      if (!map.has(t.bsMainCategory)) map.set(t.bsMainCategory, new Map());
+      const inner = map.get(t.bsMainCategory)!;
+      if (!inner.has(t.bsSubCategory)) inner.set(t.bsSubCategory, { total: 0, txns: [] });
+      const entry = inner.get(t.bsSubCategory)!;
+      entry.total += t.amount || 0;
+      entry.txns.push(t);
+    }
+    return map;
+  }, [liquid]);
+
+  const bsClassifiedCount = useMemo(() => {
+    let count = 0;
+    bsClassified.forEach(inner => inner.forEach(v => { count += v.txns.length; }));
+    return count;
+  }, [bsClassified]);
+
+  const bsSectionTotal = (main: string) => {
+    const inner = bsClassified.get(main);
+    if (!inner) return 0;
+    let total = 0;
+    inner.forEach(v => { total += v.total; });
+    return total;
+  };
 
   const bs = useMemo(() => {
     // ── ASSETS ──────────────────────────────────────────────────────────────
     // Cash in Hand: total inflow − total outflow from Cash-mode transactions
-    const cashIn  = transactions.filter(t => t.mainCategory === 'Cash Inflow'  && t.mode === 'Cash').reduce((s, t) => s + t.amount, 0);
-    const cashOut = transactions.filter(t => t.mainCategory === 'Cash Outflow' && t.mode === 'Cash').reduce((s, t) => s + t.amount, 0);
+    const cashIn  = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && t.mode === 'Cash').reduce((s, t) => s + t.amount, 0);
+    const cashOut = liquid.filter(t => t.mainCategory === 'Cash Outflow' && t.mode === 'Cash').reduce((s, t) => s + t.amount, 0);
     const cashInHand = Math.max(0, cashIn - cashOut);
 
     // Bank balance: from banks collection
     const bankBalance = banks.reduce((s, b) => s + (b.balance || 0), 0);
 
     // Accounts receivable: pending inflow (partial / cheque uncleared)
-    const accountsReceivable = transactions
+    const accountsReceivable = liquid
       .filter(t => t.mainCategory === 'Cash Inflow' && (t.remainingAmount ?? 0) > 0)
       .reduce((s, t) => s + (t.remainingAmount ?? 0), 0);
 
@@ -79,7 +137,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
     // ── LIABILITIES ──────────────────────────────────────────────────────────
     // Accounts payable: pending outflow
-    const accountsPayable = transactions
+    const accountsPayable = liquid
       .filter(t => t.mainCategory === 'Cash Outflow' && (t.remainingAmount ?? 0) > 0)
       .reduce((s, t) => s + (t.remainingAmount ?? 0), 0);
 
@@ -115,7 +173,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       totalLiabilitiesAndEquity,
       balanced: Math.abs(totalAssets - totalLiabilitiesAndEquity) < 1,
     };
-  }, [transactions, banks, loans, products, bills]);
+  }, [liquid, banks, loans, products, bills]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -123,7 +181,14 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Balance Sheet</h1>
-          <p className="text-gray-500 mt-1 text-sm">Computed from live Firestore data · as of today</p>
+          <p className="text-gray-500 mt-1 text-sm">
+            Computed from live Firestore data · as of today
+            {bsClassifiedCount > 0 && (
+              <span className="ml-2 inline-flex items-center gap-1 text-indigo-600">
+                <Tag size={12} /> {bsClassifiedCount} manually classified
+              </span>
+            )}
+          </p>
         </div>
         <button
           onClick={onBack}
@@ -198,6 +263,93 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           </div>
         </div>
       </div>
+
+      {/* ── Manual BS Classification Panel ── */}
+      {bsClassifiedCount > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-indigo-200 overflow-hidden">
+          <button
+            onClick={() => setShowBSClassified(v => !v)}
+            className="w-full flex items-center justify-between p-5 hover:bg-indigo-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Tag size={16} className="text-indigo-600" />
+              <h2 className="text-base font-bold text-gray-900">
+                Balance Sheet — Manual Classification
+              </h2>
+              <span className="bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                {bsClassifiedCount} transactions
+              </span>
+            </div>
+            {showBSClassified
+              ? <ChevronUp size={20} className="text-gray-500" />
+              : <ChevronDown size={20} className="text-gray-500" />
+            }
+          </button>
+          {showBSClassified && (
+            <div className="p-5 border-t border-indigo-100 space-y-6">
+              <p className="text-xs text-gray-400">
+                Transactions with a manual Balance Sheet category override set in the transaction form.
+                These reflect your deliberate classification and are shown here for reporting.
+              </p>
+
+              {Array.from(bsClassified.entries()).map(([mainCat, subMap]) => (
+                <div key={mainCat}>
+                  <div className={`flex justify-between items-center px-3 py-2 rounded-lg mb-3 font-semibold text-sm ${
+                    mainCat === 'Assets' ? 'bg-blue-50 text-blue-800' : 'bg-red-50 text-red-800'
+                  }`}>
+                    <span>{mainCat}</span>
+                    <span>{formatCurrency(bsSectionTotal(mainCat))}</span>
+                  </div>
+                  {Array.from(subMap.entries()).map(([subCat, { total, txns }]) => {
+                    const key      = `${mainCat}__${subCat}`;
+                    const expanded = expandedSubs.has(key);
+                    return (
+                    <div key={subCat} className="mb-4">
+                      <div className="flex justify-between items-center py-1.5 border-b border-gray-200 mb-2">
+                        <span className="text-sm font-medium text-gray-700">{subCat}</span>
+                        <span className="text-sm font-semibold text-gray-900">{formatCurrency(total)}</span>
+                      </div>
+                      <button
+                        onClick={() => toggleSub(key)}
+                        className="text-xs text-indigo-500 hover:text-indigo-700 mb-2 flex items-center gap-1"
+                      >
+                        {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        {txns.length} transaction{txns.length !== 1 ? 's' : ''}
+                      </button>
+                      {expanded && (
+                        <div className="overflow-x-auto rounded-lg border border-gray-100">
+                          <table className="w-full text-xs">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                {['Date', 'Company', 'Sub Category', 'Amount'].map(h => (
+                                  <th key={h} className="px-3 py-2 text-left text-gray-500 font-semibold uppercase tracking-wider">
+                                    {h}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {txns.map(t => (
+                                <tr key={t.id} className="hover:bg-gray-50">
+                                  <td className="px-3 py-2 text-gray-700">{(t.date || '').slice(0, 10)}</td>
+                                  <td className="px-3 py-2 text-gray-700">{t.company || '—'}</td>
+                                  <td className="px-3 py-2 text-gray-500">{t.subCategory}</td>
+                                  <td className="px-3 py-2 font-semibold text-gray-900">{formatCurrency(t.amount || 0)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Balance verification */}
       <div className={`rounded-xl p-6 border text-center ${bs.balanced ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-300'}`}>

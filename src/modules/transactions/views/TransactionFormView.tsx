@@ -63,6 +63,10 @@ export function TransactionFormView({
   const isPreviewId = transactionId?.includes('###');
   const isInflow = transactionType === 'Cash Inflow';
 
+  // Classification is required — at least one of P&L or BS must be fully set
+  const hasClassification = (plMainCategory && plSubCategory) || (bsMainCategory && bsSubCategory);
+  const classificationError = saveAttempted && !hasClassification;
+
   const handleAddSubCat = async (itemId: string) => {
     if (!newSubCatName.trim()) return;
     setSavingSubCat(true);
@@ -554,10 +558,16 @@ export function TransactionFormView({
         )}
 
         {/* Profit & Loss Classification */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className={`bg-white rounded-xl border p-5 shadow-sm transition-colors ${
+          classificationError && !plMainCategory
+            ? 'border-red-400 ring-1 ring-red-300'
+            : 'border-gray-200'
+        }`}>
           <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-[#4f46e5]" /> Profit &amp; Loss Classification
-            <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
+            <span className="ml-1 text-xs font-normal text-orange-500 font-medium">
+              {classificationError && !plMainCategory ? '* required (or fill Balance Sheet below)' : '(at least one required)'}
+            </span>
           </h3>
           <p className="text-xs text-gray-400 mb-4">
             Tag this transaction to a P&amp;L category so it flows into Revenue, COGS, or Operating Expenses automatically.
@@ -709,10 +719,16 @@ export function TransactionFormView({
         </div>
 
         {/* Balance Sheet Classification */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className={`bg-white rounded-xl border p-5 shadow-sm transition-colors ${
+          classificationError && !bsMainCategory
+            ? 'border-red-400 ring-1 ring-red-300'
+            : 'border-gray-200'
+        }`}>
           <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-emerald-600" /> Balance Sheet Classification
-            <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
+            <span className="ml-1 text-xs font-normal text-orange-500 font-medium">
+              {classificationError && !bsMainCategory ? '* required (or fill P&L above)' : '(at least one required)'}
+            </span>
           </h3>
           <p className="text-xs text-gray-400 mb-4">
             Tag this transaction as an <strong>Asset</strong> or a <strong>Liability / Equity</strong> item so it appears correctly on the Balance Sheet.
@@ -909,6 +925,7 @@ export function TransactionFormView({
               if (!item.amount || item.amount <= 0) errs.push(`Amount must be greater than 0${n}`);
               if (!isInflow && item.amountPaid > item.amount) errs.push(`Amount paid cannot exceed total${n}`);
             });
+            if (!hasClassification) errs.push('Select at least a P&L category or a Balance Sheet category (with sub-category)');
             if (paymentMode === 'Bank' && !selectedBank)          errs.push('Select a bank for bank transactions');
             if (paymentMode === 'Cheque' && !chequeNumber.trim()) errs.push('Enter the cheque number');
             if (errs.length === 0) return null;

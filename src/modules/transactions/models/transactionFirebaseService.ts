@@ -4,7 +4,7 @@
 import {
   collection, getDocs, getDoc, addDoc, updateDoc,
   deleteDoc, doc, query, where, runTransaction,
-  onSnapshot, orderBy, Unsubscribe,
+  onSnapshot, orderBy, Unsubscribe, deleteField,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import { Transaction, PartialPayment, AppNotification, DynamicCategory } from './types';
@@ -169,6 +169,15 @@ export class TransactionFirebaseService {
     try {
       const now  = new Date().toISOString();
       const body = deepStripUndefined({ ...data, createdAt: now, updatedAt: now });
+
+      // Debug: confirm classification fields reach Firestore (remove once confirmed working)
+      console.log('📊 Saving classification:', {
+        plMainCategory: body.plMainCategory ?? '(not set)',
+        plSubCategory:  body.plSubCategory  ?? '(not set)',
+        bsMainCategory: body.bsMainCategory ?? '(not set)',
+        bsSubCategory:  body.bsSubCategory  ?? '(not set)',
+      });
+
       const ref  = await addDoc(collection(db, COLLECTION), body);
       console.log('✅ Transaction created:', ref.id);
       return { ...data, id: ref.id, createdAt: now, updatedAt: now };
@@ -181,8 +190,31 @@ export class TransactionFirebaseService {
   // ── Update transaction ────────────────────────────────────────────────────
   static async updateTransaction(id: string, data: Partial<Omit<Transaction, 'id'>>): Promise<void> {
     try {
-      const body = deepStripUndefined({ ...data, updatedAt: new Date().toISOString() });
-      await updateDoc(doc(db, COLLECTION, id), body);
+      // Strip undefined from everything except classification fields which may need
+      // to be explicitly deleted when the user clears them in the form.
+      // Firestore updateDoc is a MERGE — omitting a key leaves the old value untouched,
+      // so we must send deleteField() when the user clears a classification.
+      const base = deepStripUndefined({ ...data, updatedAt: new Date().toISOString() });
+
+      // Override classification fields: empty string → deleteField() sentinel
+      if ('plMainCategory' in data)
+        base.plMainCategory = data.plMainCategory || deleteField();
+      if ('plSubCategory' in data)
+        base.plSubCategory  = data.plSubCategory  || deleteField();
+      if ('bsMainCategory' in data)
+        base.bsMainCategory = data.bsMainCategory || deleteField();
+      if ('bsSubCategory' in data)
+        base.bsSubCategory  = data.bsSubCategory  || deleteField();
+
+      // Debug: confirm classification fields (remove once confirmed working)
+      console.log('📊 Updating classification:', {
+        plMainCategory: data.plMainCategory ?? '(unchanged)',
+        plSubCategory:  data.plSubCategory  ?? '(unchanged)',
+        bsMainCategory: data.bsMainCategory ?? '(unchanged)',
+        bsSubCategory:  data.bsSubCategory  ?? '(unchanged)',
+      });
+
+      await updateDoc(doc(db, COLLECTION, id), base);
       console.log('✅ Transaction updated:', id);
     } catch (error) {
       console.error('❌ Error updating transaction:', error);

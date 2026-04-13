@@ -296,8 +296,13 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     }
     if (paymentMode === 'Bank'   && !selectedBank)          errors.push('Select a bank for bank transactions');
     if (paymentMode === 'Cheque' && !chequeNumber.trim())   errors.push('Enter the cheque number');
+    // ── Classification: at least one of P&L or BS must be set ─────────────
+    const hasClassification = (plMainCategory && plSubCategory) || (bsMainCategory && bsSubCategory);
+    if (!hasClassification) {
+      errors.push('Classification required: select at least a P&L category or a Balance Sheet category (with sub-category)');
+    }
     return errors;
-  }, [office, date, transactionItems, paymentMode, selectedBank, chequeNumber, transactionType]);
+  }, [office, date, transactionItems, paymentMode, selectedBank, chequeNumber, transactionType, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory]);
 
   const updateBankBalance = useCallback(async (bankId: string, amount: number, isInflow: boolean) => {
     try {
