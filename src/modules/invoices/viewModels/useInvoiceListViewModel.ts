@@ -166,10 +166,10 @@ interface ViewModelProps {
   onViewInvoice: (invoice: Invoice) => void;
   onCloseView: () => void;
   onEditInvoice: (id: string) => void;
-  onDeleteInvoice: (id: string) => void;
   onCreateInvoice: () => void;
   formatCurrency: (amount: number) => string;
   formatDate: (dateString: string) => string;
+
 }
 
 export function useInvoiceListViewModel(): ViewModelProps {
@@ -260,20 +260,6 @@ export function useInvoiceListViewModel(): ViewModelProps {
     navigate(`/invoices/${id}/edit`);
   }, [navigate]);
 
-  const onDeleteInvoice = useCallback(async (id: string) => {
-    if (!confirm('Are you sure you want to delete this invoice? This action cannot be undone.')) return;
-
-    try {
-      await InvoiceFirebaseService.deleteInvoice(id);
-      // Refetch invoices
-      const updated = await InvoiceFirebaseService.fetchAllInvoices();
-      setInvoices(updated);
-    } catch (error) {
-      console.error('Failed to delete invoice:', error);
-      alert('Failed to delete invoice. Please try again.');
-    }
-  }, []);
-
   const onCreateInvoice = useCallback(() => {
     navigate('/invoices/new');
   }, [navigate]);
@@ -307,10 +293,10 @@ export function useInvoiceListViewModel(): ViewModelProps {
     onViewInvoice,
     onCloseView,
     onEditInvoice,
-    onDeleteInvoice,
     onCreateInvoice,
     formatCurrency,
     formatDate,
   };
+
 }
 

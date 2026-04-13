@@ -20,16 +20,15 @@ interface Props {
   onViewInvoice: (invoice: Invoice) => void;
   onCloseView: () => void;
   onEditInvoice: (id: string) => void;
-  onDeleteInvoice: (id: string) => void;
   onCreateInvoice: () => void;
   formatCurrency: (amount: number) => string;
   formatDate: (dateString: string) => string;
+
 }
 
 export function InvoiceListView({
   invoices, filteredInvoices, stats, filters, viewingInvoice, isLoading,
-  onSearch, onStatusFilter, onViewInvoice, onCloseView,
-  onEditInvoice, onDeleteInvoice, onCreateInvoice,
+  onSearch, onStatusFilter, onViewInvoice, onCloseView, onEditInvoice, onCreateInvoice,
   formatCurrency, formatDate,
 }: Props) {
   // Track which invoice IDs are currently generating a PDF
@@ -162,10 +161,6 @@ export function InvoiceListView({
                         ? <Loader2 size={16} className="animate-spin" />
                         : <FileDown size={16} />
                       }
-                    </button>
-                    <button onClick={() => onDeleteInvoice(invoice.id)}
-                      className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
-                      <Trash2 size={16} />
                     </button>
                   </div>
                 </td>

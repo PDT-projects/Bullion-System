@@ -237,10 +237,84 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
     setBsSubCategory('');
   }, []);
 
+// NEW: Classification suggestion mappings
+interface ClassificationSuggestion {
+  plMain?: PLMainCategory;
+  plSub?: string;
+  bsMain?: BSMainCategory;
+  bsSub?: string;
+}
+
+const getSuggestedClassification = (
+  mainCategory: 'Cash Inflow' | 'Cash Outflow' | 'Loan',
+  subCategory: string
+): ClassificationSuggestion | null => {
+  const sub = subCategory.toLowerCase();
+  
+  // P&L Revenue (Cash Inflow - sales)
+  if (mainCategory === 'Cash Inflow') {
+    if (sub.includes('sale') || sub.includes('payment received')) {
+      return { plMain: 'Revenue', plSub: 'Service / Invoice Sales' };
+    }
+    if (sub.includes('commission')) {
+      return { plMain: 'Revenue', plSub: 'Service Income' };
+    }
+  }
+  
+  // P&L COGS (Purchases)
+  if (sub === 'purchase') {
+    return { plMain: 'Cost of Goods Sold (COGS)', plSub: 'Purchase & Inventory' };
+  }
+  
+  // P&L OpEx (Salaries, Utilities, Rent)
+  if (mainCategory === 'Cash Outflow') {
+    if (sub.includes('salary') || sub.includes('commission paid')) {
+      return { plMain: 'Operating Expenses', plSub: 'Salaries & Wages' };
+    }
+    if (sub.includes('rent') || sub.includes('electricity') || sub.includes('gas') || sub.includes('internet')) {
+      return { plMain: 'Operating Expenses', plSub: 'Utilities' };
+    }
+    if (sub.includes('office rent')) {
+      return { plMain: 'Operating Expenses', plSub: 'Rent' };
+    }
+  }
+  
+  // BS Assets (Inventory, Receivables)
+  if (sub === 'purchase') {
+    return { bsMain: 'Assets', bsSub: 'Inventory' };
+  }
+  if (mainCategory === 'Cash Inflow' && !sub.includes('loan')) {
+    return { bsMain: 'Assets', bsSub: 'Cash & Cash Equivalents' };
+  }
+  
+  // BS Liabilities (Payables, Loans)
+  if (mainCategory === 'Cash Outflow' && (sub.includes('payment to') || sub.includes('loan paid'))) {
+    return { bsMain: 'Liabilities & Equity', bsSub: 'Accounts Payable' };
+  }
+  
+  return null;
+};
+
   const updateItem = useCallback((itemId: string, field: keyof TransactionItem, value: any) => {
     setTransactionItems(prev => prev.map(item => {
       if (item.id !== itemId) return item;
       const updated = { ...item, [field]: value };
+      
+      // NEW: Auto-suggest classification on subCategory change
+      if (field === 'subCategory' && value && !plMainCategory && !bsMainCategory) {
+        const suggestion = getSuggestedClassification(transactionType, value as string);
+        if (suggestion) {
+          if (suggestion.plMain) {
+            setPlMainCategoryState(suggestion.plMain);
+            if (suggestion.plSub) setPlSubCategory(suggestion.plSub);
+          } else if (suggestion.bsMain) {
+            setBsMainCategoryState(suggestion.bsMain);
+            if (suggestion.bsSub) setBsSubCategory(suggestion.bsSub);
+          }
+          toast.message('💡 Suggested classification applied (edit if needed)');
+        }
+      }
+      
       if (field === 'amount' || field === 'amountPaid') {
         const amount     = field === 'amount'     ? Number(value) : item.amount;
         const amountPaid = field === 'amountPaid' ? Number(value) : item.amountPaid;
@@ -252,7 +326,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
       }
       return updated;
     }));
-  }, []);
+  }, [transactionType, plMainCategory, bsMainCategory]);
 
   const addItem = useCallback(() =>
     setTransactionItems(p => [...p, { ...emptyItem(transactionType), id: Date.now().toString() }]),

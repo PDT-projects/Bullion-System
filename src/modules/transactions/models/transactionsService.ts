@@ -1,6 +1,6 @@
 // Transactions Module - Business Logic Service (no Firestore)
 
-import { Transaction, TransactionFilters, TransactionStats, LOAN_SUB_CATEGORIES } from './types';
+import { Transaction, TransactionFilters, TransactionStats, LOAN_SUB_CATEGORIES, BSMainCategory } from './types';
 
 export const getTransactionTotals = (t: Transaction) => {
   const partialTotal = (t.partialPayments || []).reduce((s, p) => s + p.amount, 0);
@@ -145,3 +145,57 @@ export const downloadCSV = (csv: string, filename: string) => {
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 };
+
+// ── Balance Sheet Bucket Resolver (NEW) ───────────────────────────────────────
+// Mirrors resolvePLBucket() pattern for BalanceSheetReport integration
+// Priority: manual bs* → auto-classify subCategory → null (excluded)
+export const resolveBSBucket = (t: Transaction): { bsMain: string; bsSub: string } | null => {
+  // Priority 1: manual override from form (saved to Firestore)
+  if (t.bsMainCategory && t.bsSubCategory) {
+  return { bsMain: t.bsMainCategory!, bsSub: t.bsSubCategory! };
+  }
+
+  // Priority 2: auto-classify by mainCategory + subCategory
+  const sub = t.subCategory || '';
+
+  // ASSETS: Cash inflow → Cash & Equivalents
+  if (t.mainCategory === 'Cash Inflow' && !LOAN_SUB_CATEGORIES.has(sub)) {
+    return { bsMain: 'Assets', bsSub: 'Cash & Cash Equivalents' };
+  }
+
+  // ASSETS: Inventory purchases
+  if (sub === 'Purchase') {
+    return { bsMain: 'Assets', bsSub: 'Inventory' };
+  }
+
+  // ASSETS: Loans receivable (inflow side)
+  if (LOAN_SUB_CATEGORIES.has(sub) && t.mainCategory === 'Cash Inflow') {
+    return { bsMain: 'Assets', bsSub: 'Accounts Receivable' };
+  }
+
+  // LIABILITIES: Cash outflow payables
+  if (t.mainCategory === 'Cash Outflow') {
+    const payableSubs = [
+      'Payment to company', 'Payment to person', 'Purchase', 
+      'Office Rent', 'Electricity Bill', 'Gas Bill'
+    ];
+    if (payableSubs.includes(sub)) {
+      return { bsMain: 'Liabilities & Equity', bsSub: 'Accounts Payable' };
+    }
+  }
+
+  // LIABILITIES: Loans payable (outflow side)
+  if (LOAN_SUB_CATEGORIES.has(sub) && t.mainCategory === 'Cash Outflow') {
+    return { bsMain: 'Liabilities & Equity', bsSub: 'Short-term Loans' };
+  }
+
+  // Operating expenses → typically Accrued Expenses (liability until paid)
+  const opExSubs = ['Employee salary', 'Office Rent', 'Utilities'];
+  if (t.mainCategory === 'Cash Outflow' && opExSubs.some(s => sub.includes(s))) {
+    return { bsMain: 'Liabilities & Equity', bsSub: 'Accrued Expenses' };
+  }
+
+  // Default: null → handled by heuristics (cash calc, external data)
+  return null;
+};
+

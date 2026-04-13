@@ -9,20 +9,11 @@
 // Priority: manual classification (saved from form) → shown in dedicated section.
 
 import { useMemo, useState } from 'react';
+import { resolveBSBucket } from '../../modules/transactions/models/transactionsService';
+import type { Transaction } from '../../modules/transactions/models/types';
 import { ArrowLeft, Tag, ChevronDown, ChevronUp } from 'lucide-react';
 
-type Transaction = {
-  id: string; date: string; mainCategory: string;
-  subCategory: string; amount: number;
-  company?: string;
-  remainingAmount?: number;
-  mode?: string;
-  // Manual Balance Sheet classification (saved from form to Firestore)
-  bsMainCategory?: string;
-  bsSubCategory?: string;
-  // Approval — pending/rejected have zero financial impact
-  approvalStatus?: string;
-};
+// Remove local type - use imported Transaction type
 type Bank      = { id: string; name: string; balance: number; accountNumber: string; };
 type Loan      = { id: string; type: 'Payable' | 'Receivable'; remaining: number; loanAmount: number; paid: number; status: string; };
 type Product   = { id: string; costPrice: number; stock: number; };
@@ -75,8 +66,25 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     [transactions]
   );
 
-  // ── Manual BS classification grouping ─────────────────────────────────────
-  // Groups transactions that have bsMainCategory + bsSubCategory set on them.
+  // ── FULL BS Classification (manual + auto) ─────────────────────────────────
+  const classifiedBS = useMemo(() => {
+    const map = new Map<string, Map<string, { total: number; txns: Transaction[]; manual: boolean[] }>>();
+    for (const t of liquid) {
+      const bucket = resolveBSBucket(t);
+      if (!bucket) continue;
+      
+      if (!map.has(bucket.bsMain)) map.set(bucket.bsMain, new Map());
+      const inner = map.get(bucket.bsMain)!;
+      if (!inner.has(bucket.bsSub)) inner.set(bucket.bsSub, { total: 0, txns: [], manual: [] });
+      const entry = inner.get(bucket.bsSub)!;
+      entry.total += t.amount || 0;
+      entry.txns.push(t);
+      entry.manual.push(!!(t.bsMainCategory && t.bsSubCategory));
+    }
+    return map;
+  }, [liquid]);
+
+  // ── Manual-only for legacy panel (backwards compatible)
   const bsClassified = useMemo(() => {
     const map = new Map<string, Map<string, { total: number; txns: Transaction[] }>>();
     for (const t of liquid) {
@@ -128,7 +136,9 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       .filter(l => l.type === 'Receivable' && l.status !== 'Full')
       .reduce((s, l) => s + (l.remaining || 0), 0);
 
-    const totalCurrentAssets = cashInHand + bankBalance + accountsReceivable + inventoryValue + loansReceivable;
+    // Add classified assets to heuristic totals
+    const classifiedAssets = Array.from(classifiedBS.get('Assets')?.values() || []).reduce((sum, entry) => sum + entry.total, 0);
+    const totalCurrentAssets = cashInHand + bankBalance + accountsReceivable + inventoryValue + loansReceivable + classifiedAssets;
 
     // Fixed assets — keep as 0 unless a fixed asset module is added
     const totalFixedAssets = 0;
@@ -151,7 +161,9 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       .filter(b => b.status === 'Pending' || b.status === 'Overdue')
       .reduce((s, b) => s + b.amount, 0);
 
-    const totalCurrentLiabilities = accountsPayable + loansPayable + pendingBills;
+    // Add classified liabilities to heuristic totals
+    const classifiedLiabilities = Array.from(classifiedBS.get('Liabilities & Equity')?.values() || []).reduce((sum, entry) => sum + entry.total, 0);
+    const totalCurrentLiabilities = accountsPayable + loansPayable + pendingBills + classifiedLiabilities;
     const totalLiabilities        = totalCurrentLiabilities;
 
     // ── EQUITY ───────────────────────────────────────────────────────────────
