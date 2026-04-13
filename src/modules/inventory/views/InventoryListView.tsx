@@ -192,20 +192,18 @@ export function InventoryListView({
             <p className="text-gray-600">Loading inventory...</p>
           </div>
         ) : (
-          /*
-            KEY FIX: table-fixed + colgroup percentages summing to 100%
-            eliminates all empty space after the Actions column.
-          */
+          // FIX: Removed JSX comments from inside <colgroup> — whitespace text nodes
+          // are invalid as children of <colgroup> and cause a React DOM warning.
           <table className="w-full table-fixed">
             <colgroup>
-              <col style={{ width: '22%' }} /> {/* Product */}
-              <col style={{ width: '15%' }} /> {/* Category */}
-              <col style={{ width: '13%' }} /> {/* Location */}
-              <col style={{ width: '10%' }} /> {/* Stock */}
-              <col style={{ width: '11%' }} /> {/* Cost Price */}
-              <col style={{ width: '11%' }} /> {/* Sell Price */}
-              <col style={{ width: '10%' }} /> {/* Status */}
-              <col style={{ width: '8%'  }} /> {/* Actions */}
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '8%'  }} />
             </colgroup>
 
             <thead className="bg-gray-50 border-b border-gray-200">

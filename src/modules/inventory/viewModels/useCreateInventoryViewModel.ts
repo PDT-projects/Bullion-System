@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ProductFormData, InventoryEntryStep, ValidationResult } from '../models/types';
+import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
 
 export interface UseCreateInventoryViewModelReturn {
   currentStep: InventoryEntryStep;
@@ -68,7 +69,9 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     setFormData(prev => ({
       ...prev,
       serialNumbers: [...prev.serialNumbers, serialInput],
-      serialCities: { ...prev.serialCities, [serialInput]: serialCity || '' }
+      serialCities: { ...prev.serialCities, [serialInput]: serialCity || '' },
+      // Auto-sync stock count to number of serial numbers
+      stock: prev.serialNumbers.length + 1,
     }));
     setSerialInput('');
     setSerialCity('');
@@ -79,14 +82,20 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
       const newSerials = prev.serialNumbers.filter(s => s !== serial);
       const newCities = { ...prev.serialCities };
       delete newCities[serial];
-      return { ...prev, serialNumbers: newSerials, serialCities: newCities };
+      return {
+        ...prev,
+        serialNumbers: newSerials,
+        serialCities: newCities,
+        // Keep stock in sync when removing
+        stock: newSerials.length,
+      };
     });
   }, []);
 
   const validateCurrentStep = useCallback((): boolean => {
     const fieldErrors: { [key: string]: string } = {};
     const validSerials = formData.serialNumbers.filter(s => s.trim() !== '');
-    
+
     if (currentStep === 'details') {
       if (!formData.brandName) fieldErrors.brandName = 'Brand is required';
       if (!formData.modelName) fieldErrors.modelName = 'Model is required';
@@ -118,19 +127,22 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     }
   }, [currentStep]);
 
+  // FIX: Actually save to Firebase — previously this was a TODO placeholder,
+  // causing the list view to show nothing after "successful" creation.
   const handleSubmit = useCallback(async () => {
     if (!validateCurrentStep()) return;
     setIsSubmitting(true);
     try {
-      // TODO: Save to Firebase
+      await InventoryFirebaseService.createProduct(formData);
       toast.success('Inventory item created successfully!');
       navigate('/inventory');
     } catch (error) {
+      console.error('Error creating inventory item:', error);
       toast.error('Failed to create inventory item');
     } finally {
       setIsSubmitting(false);
     }
-  }, [validateCurrentStep, navigate]);
+  }, [validateCurrentStep, formData, navigate]);
 
   const handleCancel = useCallback(() => {
     navigate('/inventory');
