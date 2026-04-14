@@ -1,53 +1,39 @@
-# CashFlow User Management Fixes - TODO
+# Invoice PDF Email Notification - Send PDF to acctsdetectors4563@gmail.com on creation
 
-## Status: 10/10 ✅ Completed
+## Status: 🚀 Implementation Started
 
-**ALL CHANGES IMPLEMENTED SUCCESSFULLY! 🎉**
+## Detailed Steps:
 
-### Step 1: Create TODO.md [✅ DONE]
+### 1. **Add Cloud Function** `[✅ DONE]`  
+   - File: `functions/src/index.ts`
+   - Add `onInvoiceCreated` trigger on `invoices/{invoiceId}`
+   - Fetch invoice data + pdfUrl
+   - Download PDF from Storage
+   - Send email w/ PDF attachment to approver emails
+   - Create appNotification
 
-### Step 2: Fix Sidebar.tsx permissions mapping [✅ DONE]
-- Updated SCREEN_PERMISSIONS to exact Screen matches + Screen type
-- Section headers show if children permitted
+### 2. **Build & Deploy** `[pending]`
+   ```
+   cd functions
+   npm run build
+   firebase deploy --only functions
+   ```
 
-### Step 3: Update routes.tsx with ProtectedRoute(screen) [PENDING]
+### 3. **Configure Env Vars** `[pending]`
+   ```
+   firebase functions:config:set approver_emails=\"acctsdetectors4563@gmail.com\"
+   firebase functions:config:get
+   ```
 
-### Step 4: Add Cloud Function for user deletion [PENDING]
+### 4. **Test** `[pending]`
+   - Create new invoice in app
+   - Check email delivery w/ PDF attachment
+   - Verify `appNotifications` collection
+   - Check Functions logs: Firebase Console > Functions
 
-### Step 2: Fix Sidebar.tsx permissions mapping [✅ DONE]
-- Updated SCREEN_PERMISSIONS object with exact Screen enum matches
-- Menu items now show only permitted screens
+### 5. **Production Notes** `[pending]`
+   - Gmail app password needed in Functions env: GMAIL_USER, GMAIL_PASS
+   - Monitor quota: nodemailer + Storage downloads
 
-### Step 3: Update routes.tsx with ProtectedRoute(screen) [✅ DONE]
-- All module routes wrapped with ScreenProtectedRoute and exact screen permissions
-- Routes now fully protected by user permissions
-
-### Step 4: Add Cloud Function for user deletion [✅ DONE]
-- Added onUserDeleted trigger in functions/src/index.ts
-- Deletes Firebase Auth user when Firestore doc deleted
-- Ready for `firebase deploy --only functions`
-
-### Step 5: Update deleteUser in userService.ts (optional)
-- Add disableUser before delete for grace period
-
-### Step 6: Test Sidebar permissions
-- Login as restricted user → only permitted screens visible
-
-### Step 7: Test Route protection  
-- Navigate to unpermitted route → Access Denied page
-
-### Step 8: Test User Creation
-- Super admin creates user → stays logged in, no switch
-
-### Step 9: Test Edit permissions
-- Edit user screens → sidebar/routes update on relogin
-
-### Step 10: Test Full Delete
-- Delete user → Firebase Auth + Firestore both gone → can't login
-
-## Commands to run after changes:
-```bash
-npm run dev  # Test frontend
-firebase deploy --only functions  # Deploy user delete trigger
-```
+**Next Action: Edit functions/src/index.ts**
 

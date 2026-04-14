@@ -1,5 +1,6 @@
 import { setGlobalOptions } from "firebase-functions";
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
@@ -555,37 +556,134 @@ export const rejectTransaction = onRequest(async (req, res) => {
 // =============================================================================
 export const onUserDeleted = onDocumentDeleted(
   "users/{userId}",
-  async (event) => {
+  async (event: any) => {
     const userId = event.params.userId;
     try {
       await admin.auth().deleteUser(userId);
-      console.log(`✅ Firebase Auth user ${userId} deleted after Firestore deletion`);
+      console.log("Firebase Auth user " + userId + " deleted after Firestore deletion");
     } catch (error: any) {
-      if (error.code === 'auth/user-not-found') {
-        console.log(`ℹ️ Firebase Auth user ${userId} already deleted`);
+      if (error.code === "auth/user-not-found") {
+        console.log("Firebase Auth user " + userId + " already deleted");
       } else {
-        console.error(`❌ Failed to delete Firebase Auth user ${userId}:`, error);
+        console.error("Failed to delete Firebase Auth user " + userId + ":", error);
       }
     }
   }
 );
 
 // =============================================================================
-// User deletion trigger - Delete Firebase Auth user when Firestore user doc is deleted
+// TRIGGER: Invoice PDF ready → send email with PDF attachment
+//
+// WHY onDocumentUpdated instead of onDocumentCreated:
+//   The frontend flow is intentionally two-step:
+//     1. createInvoice()     → Firestore doc written WITHOUT pdfUrl
+//     2. generateAndSavePdf() → PDF uploaded to Storage, pdfUrl written back
+//
+//   If we used onDocumentCreated, pdfUrl would always be missing at that
+//   moment and the email would be skipped every time.
+//
+//   This trigger watches for the exact transition:
+//     before.pdfUrl = absent/empty  →  after.pdfUrl = populated
+//   ...which fires precisely once per invoice, when the PDF is ready.
+//   The email then downloads the PDF from Storage and sends it as an
+//   attachment to acctsdetectors4563@gmail.com.
 // =============================================================================
-export const onUserDeleted = onDocumentDeleted(
-  "users/{userId}",
+export const onInvoicePdfReady = onDocumentUpdated(
+  "invoices/{invoiceId}",
   async (event) => {
-    const userId = event.params.userId;
+    const before    = event.data?.before.data();
+    const after     = event.data?.after.data();
+    const invoiceId = event.params.invoiceId;
+
+    if (!before || !after) return;
+
+    // Guard: only proceed when pdfUrl transitions from absent → present.
+    // This ensures the trigger fires exactly once per invoice and ignores
+    // all other field updates (status changes, delivery updates, etc.).
+    const hadPdf = !!(before.pdfUrl);
+    const hasPdf = !!(after.pdfUrl);
+
+    if (hadPdf || !hasPdf) {
+      // Either pdfUrl was already there (not a new PDF), or it's still missing
+      return;
+    }
+
+    console.log(`📄 pdfUrl detected for invoice ${invoiceId} — preparing email`);
+
+    const invoiceNumber = after.invoiceNumber || invoiceId;
+    const customerName  = after.customerName  || "Customer";
+    const totalAmount   = fmt(after.totalAmount || 0);
+    const salesperson   = after.salesperson   || "—";
+    const status        = after.status        || "Unpaid";
+    const date          = after.date          || new Date().toISOString().slice(0, 10);
+    const createdBy     = after.createdBy     || "Admin";
+
     try {
-      await admin.auth().deleteUser(userId);
-      console.log(`✅ Firebase Auth user ${userId} deleted after Firestore deletion`);
-    } catch (error: any) {
-      if (error.code === 'auth/user-not-found') {
-        console.log(`ℹ️ Firebase Auth user ${userId} already deleted`);
-      } else {
-        console.error(`❌ Failed to delete Firebase Auth user ${userId}:`, error);
-      }
+      // 1. Download PDF from Firebase Storage using the real invoice ID.
+      //    Path must match what InvoiceFirebaseService.uploadInvoicePdf() writes:
+      //    invoices/pdfs/{invoiceId}.pdf
+      const bucket      = admin.storage().bucket();
+      const pdfFileName = `invoices/pdfs/${invoiceId}.pdf`;
+      const [pdfBuffer] = await bucket.file(pdfFileName).download();
+      console.log(`✅ PDF downloaded from Storage for email: ${invoiceId}`);
+
+      // 2. Build HTML email body (style consistent with transaction emails)
+      const html = `
+        <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;">
+          <div style="background:#10b981;padding:20px 24px;border-radius:8px 8px 0 0;">
+            <h2 style="color:#fff;margin:0;font-size:20px;">
+              📄 New Invoice Created
+            </h2>
+            <p style="color:#d1fae5;margin:4px 0 0;font-size:14px;">
+              Pakistan Detectors ERP System
+            </p>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-top:none;
+            padding:24px;border-radius:0 0 8px 8px;">
+            <p style="color:#6b7280;margin-top:0;">
+              A new invoice has been created. PDF is attached to this email.
+            </p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+              ${cell("Invoice #",    invoiceNumber, true)}
+              ${cell("Date",         date,          false)}
+              ${cell("Customer",     customerName,  true)}
+              ${cell("Salesperson",  salesperson,   false)}
+              ${cell("Status",       status,        true)}
+              ${cell("Total Amount", totalAmount,   false)}
+              ${cell("Created By",   createdBy,     true)}
+            </table>
+            <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;
+              padding-top:16px;margin-top:24px;">
+              Automated notification from Pakistan Detectors ERP. PDF attached.
+            </p>
+          </div>
+        </div>`;
+
+      // 3. Send email with PDF attached
+      await transporter.sendMail({
+        from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
+        to:      "acctsdetectors4563@gmail.com",
+        subject: `📄 New Invoice: ${invoiceNumber} — ${totalAmount}`,
+        html,
+        attachments: [{
+          filename: `${invoiceNumber}.pdf`,
+          content:  pdfBuffer,
+        }],
+      });
+
+      console.log(`✅ Invoice email + PDF sent to acctsdetectors4563@gmail.com: ${invoiceId}`);
+
+      // 4. In-app notification
+      await createNotification({
+        type:           "invoice_created",
+        title:          "📄 New Invoice Created",
+        message:        `${invoiceNumber} (${totalAmount}) by ${createdBy}`,
+        transactionId:  invoiceId,
+        transactionRef: invoiceNumber,
+      });
+
+    } catch (err) {
+      console.error(`❌ Invoice email/PDF failed for ${invoiceId}:`, err);
     }
   }
 );
