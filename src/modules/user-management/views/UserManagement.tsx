@@ -468,9 +468,10 @@ export function UserManagement() {
                         <div className="flex gap-2 flex-shrink-0">
                           <button
                             onClick={() => handleDeleteUser(user.uid, user.email)}
-                            className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 flex items-center gap-1"
+                            className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1 border border-transparent"
+                            style={{ backgroundColor: '#ef4444' }}
                           >
-                            <Trash2 size={12} /> Delete
+                            <Trash2 size={12} className="text-white" /> Delete
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(null)}
