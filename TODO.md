@@ -1,9 +1,8 @@
-# CashFlow_System - Remove Invoice Delete Functionality
+# Inventory Submit Button Fix - Black Text on White Backgrounds
+## Steps:
+1. [x] Update InventoryPaymentView.tsx: Submit Inventory button now uses text-gray-900 (black) in enabled state, gray-700 (dark gray) in disabled.
+2. [x] Update InventoryProductDetailsView.tsx: Next buttons enhanced with consistent text-gray-900 black text, dark disabled state.
+3. [x] Verified changes in both without-costing and with-costing paths.
+4. [x] Ready for testing.
 
-## Plan Steps:
-- [x] Step 1: Remove Trash2 delete button from InvoiceListView.tsx (table actions + modal)
-- [x] Step 2: Remove onDeleteInvoice handler from useInvoiceListViewModel.ts 
-- [ ] Step 3: Test invoices list - verify no delete option visible/functional
-- [ ] Step 4: Complete task
-
-**Current Status**: Steps 1-2 complete
+All changes complete. Task finished.

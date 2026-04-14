@@ -600,7 +600,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               </button>
               <button
                 onClick={() => handleNext()}
-className="px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 bg-indigo-600 text-black hover:bg-indigo-600/90 hover:text-gray-900 active:bg-indigo-600/80 active:text-gray-800 transition-all duration-200"
+className="px-8 py-3 rounded-lg font-semibold text-gray-900 text-lg shadow-lg flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 hover:text-gray-900 active:bg-indigo-800 active:text-gray-900 transition-all duration-200"
               >
                 Next: Payment <ArrowRight size={20} />
               </button>
@@ -822,8 +822,8 @@ className="px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-cente
                 disabled={isLoadingModels || selectedModels.length === 0}
                 className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-colors ${
                   !isLoadingModels && selectedModels.length > 0
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    ? 'bg-indigo-600 text-gray-900 hover:bg-indigo-700 hover:text-gray-900 active:bg-indigo-800 active:text-gray-900'
+                      : 'bg-gray-200 text-gray-700 cursor-not-allowed'
                 }`}
               >
                 {isLoadingModels ? (
