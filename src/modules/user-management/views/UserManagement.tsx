@@ -1,23 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from '../../../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
-import { Input } from '../../../components/ui/input';
-import { Label } from '../../../components/ui/label';
-import { Checkbox } from '../../../components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../../components/ui/accordion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Trash2, Edit2, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
-import { 
-  createUser, 
-  getAllUsers, 
-  deleteUser, 
+import {
+  Trash2, Edit2, ChevronDown, ChevronUp, AlertCircle,
+  Eye, EyeOff, UserPlus, Users, X, Check, Shield
+} from 'lucide-react';
+import {
+  createUser,
+  getAllUsers,
+  deleteUser,
   updateUserPermissions,
   updateUserBranch,
   type UserData,
   type Screen,
-  type ScreenGroup,
   ALL_SCREEN_GROUPS
 } from '../models/userService';
 
@@ -38,478 +33,562 @@ interface EditingUser {
 
 export function UserManagement() {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<FormState>({
-    email: '',
-    password: '',
-    branch: '',
-  });
+  const [formData, setFormData] = useState<FormState>({ email: '', password: '', branch: '' });
   const [permissions, setPermissions] = useState<Screen[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [users, setUsers] = useState<UserData[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
-  const [generalError, setGeneralError] = useState<string>('');
+  const [generalError, setGeneralError] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const getCurrentUserEmail = () => {
-    const userInfo = localStorage.getItem('userInfo');
-    if (userInfo) {
-      try {
-        const parsed = JSON.parse(userInfo);
-        return parsed.email;
-      } catch {
-        return 'unknown';
-      }
-    }
-    return 'unknown';
+    try {
+      const userInfo = localStorage.getItem('userInfo');
+      return userInfo ? JSON.parse(userInfo).email : 'unknown';
+    } catch { return 'unknown'; }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   const fetchUsers = async () => {
     try {
       setIsLoadingUsers(true);
       const allUsers = await getAllUsers();
-      const regularUsers = allUsers.filter(u => u.role === 'user');
-      setUsers(regularUsers);
-    } catch (error: any) {
-      console.error('Failed to fetch users:', error);
+      setUsers(allUsers.filter(u => u.role === 'user'));
+    } catch {
       toast.error('Failed to load users');
     } finally {
       setIsLoadingUsers(false);
     }
   };
 
-  const handleCheckboxChange = (screen: Screen) => {
-    setPermissions(prev => 
-      prev.includes(screen)
-        ? prev.filter(p => p !== screen)
-        : [...prev, screen]
+  const togglePermission = (screen: Screen) => {
+    setPermissions(prev =>
+      prev.includes(screen) ? prev.filter(p => p !== screen) : [...prev, screen]
     );
   };
 
-  const handleEditCheckboxChange = (screen: Screen) => {
+  const toggleEditPermission = (screen: Screen) => {
     if (!editingUser) return;
-    setEditingUser(prev => 
-      prev ? {
-        ...prev,
-        permissions: prev.permissions.includes(screen)
-          ? prev.permissions.filter(p => p !== screen)
-          : [...prev.permissions, screen]
-      } : null
-    );
+    setEditingUser(prev => prev ? {
+      ...prev,
+      permissions: prev.permissions.includes(screen)
+        ? prev.permissions.filter(p => p !== screen)
+        : [...prev.permissions, screen]
+    } : null);
+  };
+
+  const toggleGroupPermissions = (screens: Screen[], currentPermissions: Screen[], setter: (fn: (prev: Screen[]) => Screen[]) => void) => {
+    const allSelected = screens.every(s => currentPermissions.includes(s));
+    if (allSelected) {
+      setter(prev => prev.filter(p => !screens.includes(p)));
+    } else {
+      setter(prev => [...new Set([...prev, ...screens])]);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError('');
 
-    if (!formData.email.trim()) {
-      setGeneralError('Email is required');
-      return;
+    if (!formData.email.trim() || !/\S+@\S+\.\S+/.test(formData.email)) {
+      setGeneralError('Please enter a valid email address'); return;
     }
-    if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      setGeneralError('Please enter a valid email address');
-      return;
-    }
-    if (!formData.password) {
-      setGeneralError('Password is required');
-      return;
-    }
-    if (formData.password.length < 6) {
-      setGeneralError('Password must be at least 6 characters');
-      return;
+    if (!formData.password || formData.password.length < 6) {
+      setGeneralError('Password must be at least 6 characters'); return;
     }
     if (!formData.branch) {
-      setGeneralError('Branch is required');
-      return;
+      setGeneralError('Please select a branch'); return;
     }
     if (permissions.length === 0) {
-      setGeneralError('Please select at least one screen permission');
-      return;
+      setGeneralError('Please select at least one screen permission'); return;
     }
 
     setIsSubmitting(true);
-
     try {
-      const currentUserEmail = getCurrentUserEmail();
-      await createUser(
-        formData.email, 
-        formData.password, 
-        formData.branch, 
-        permissions,
-        currentUserEmail
-      );
-      
+      await createUser(formData.email, formData.password, formData.branch, permissions, getCurrentUserEmail());
       toast.success(`User "${formData.email}" created successfully!`);
-      
       setFormData({ email: '', password: '', branch: '' });
       setPermissions([]);
-      
       await fetchUsers();
     } catch (error: any) {
-      const errorMsg = error.message || 'Failed to create user';
-      setGeneralError(errorMsg);
-      toast.error(errorMsg);
+      const msg = error.message || 'Failed to create user';
+      setGeneralError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteUser = async (uid: string, email: string) => {
-    if (!window.confirm(`Are you sure you want to delete user "${email}"? This action cannot be undone.`)) {
-      return;
-    }
-
     try {
       await deleteUser(uid);
-      toast.success(`User "${email}" deleted successfully`);
+      toast.success(`User "${email}" deleted`);
       setUsers(prev => prev.filter(u => u.uid !== uid));
+      setDeleteConfirm(null);
     } catch (error: any) {
-      const errorMsg = error.message || 'Failed to delete user';
-      toast.error(errorMsg);
+      toast.error(error.message || 'Failed to delete user');
     }
-  };
-
-  const handleEditUser = (user: UserData) => {
-    setEditingUser({
-      uid: user.uid,
-      email: user.email,
-      branch: user.branch,
-      permissions: [...user.permissions],
-    });
   };
 
   const handleSaveEdit = async () => {
     if (!editingUser) return;
-
-    setGeneralError('');
-
     if (editingUser.permissions.length === 0) {
-      setGeneralError('User must have at least one screen permission');
-      return;
+      toast.error('User must have at least one screen permission'); return;
     }
-
     try {
-      const currentUserEmail = getCurrentUserEmail();
-      
-      if (editingUser.permissions.length > 0) {
-        await updateUserPermissions(editingUser.uid, editingUser.permissions, currentUserEmail);
+      const email = getCurrentUserEmail();
+      await updateUserPermissions(editingUser.uid, editingUser.permissions, email);
+      const original = users.find(u => u.uid === editingUser.uid);
+      if (original && original.branch !== editingUser.branch) {
+        await updateUserBranch(editingUser.uid, editingUser.branch, email);
       }
-      
-      const originalUser = users.find(u => u.uid === editingUser.uid);
-      if (originalUser && originalUser.branch !== editingUser.branch) {
-        await updateUserBranch(editingUser.uid, editingUser.branch, currentUserEmail);
-      }
-
       toast.success('User updated successfully');
       setEditingUser(null);
       await fetchUsers();
     } catch (error: any) {
-      const errorMsg = error.message || 'Failed to update user';
-      setGeneralError(errorMsg);
-      toast.error(errorMsg);
+      toast.error(error.message || 'Failed to update user');
     }
   };
 
-  return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-600 mt-1">Create and manage users with role-based access control</p>
-        </div>
-        <Button onClick={() => navigate('/dashboard')} variant="outline">Back to Dashboard</Button>
-      </div>
-
-      {/* Create User Card */}
-      <Card className="border-2 border-blue-100 shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-          <CardTitle className="text-xl">Create New User</CardTitle>
-          <CardDescription>Add new branch user with screen permissions</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {generalError && (
-            <div className="mb-6 flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 text-sm font-medium px-4 py-3 rounded-lg">
-              <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold">Error</p>
-                <p>{generalError}</p>
+  const PermissionGrid = ({
+    selectedPermissions,
+    onToggle,
+    onGroupToggle,
+  }: {
+    selectedPermissions: Screen[];
+    onToggle: (s: Screen) => void;
+    onGroupToggle: (screens: Screen[]) => void;
+  }) => (
+    <div className="space-y-4">
+      {ALL_SCREEN_GROUPS.map((group, gi) => {
+        const allSelected = group.screens.every(s => selectedPermissions.includes(s));
+        const someSelected = group.screens.some(s => selectedPermissions.includes(s));
+        return (
+          <div key={gi} className="border border-gray-200 rounded-xl overflow-hidden">
+            {/* Group Header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                  onChange={() => onGroupToggle(group.screens)}
+                  className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                />
+                <span className="font-semibold text-gray-800 text-sm">{group.title}</span>
+                <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                  {group.screens.filter(s => selectedPermissions.includes(s)).length}/{group.screens.length}
+                </span>
               </div>
             </div>
-          )}
+            {/* Screens Grid */}
+            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              {group.screens.map((screen) => (
+                <label
+                  key={screen}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-all text-sm ${
+                    selectedPermissions.includes(screen)
+                      ? 'bg-indigo-50 border-indigo-300 text-indigo-800'
+                      : 'bg-white border-gray-200 text-gray-700 hover:border-indigo-200 hover:bg-indigo-50/40'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedPermissions.includes(screen)}
+                    onChange={() => onToggle(screen)}
+                    className="w-3.5 h-3.5 accent-indigo-600 flex-shrink-0"
+                  />
+                  <span className="leading-tight">{screen}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="font-semibold">Email Address</Label>
-                <Input
-                  id="email"
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+
+        {/* Page Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Shield size={24} className="text-indigo-600" />
+              User Management
+            </h1>
+            <p className="text-gray-500 text-sm mt-1">Create and manage branch users with role-based access control</p>
+          </div>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
+
+        {/* Create User Card */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-blue-50 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <UserPlus size={16} className="text-white" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900">Create New User</h2>
+              <p className="text-xs text-gray-500">Add a branch user with specific screen access</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {generalError && (
+              <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                <span>{generalError}</span>
+                <button type="button" onClick={() => setGeneralError('')} className="ml-auto">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {/* Email / Password / Branch row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-gray-700">Email Address</label>
+                <input
                   type="email"
                   placeholder="user@example.com"
                   value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
                   disabled={isSubmitting}
-                  className="h-10 border-gray-300"
+                  style={{
+                    height: '42px', width: '100%', border: '1.5px solid #e5e7eb',
+                    borderRadius: '10px', padding: '0 14px', fontSize: '14px',
+                    outline: 'none', backgroundColor: 'white', boxSizing: 'border-box',
+                  }}
+                  onFocus={e => (e.target.style.borderColor = '#6366f1')}
+                  onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="font-semibold">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="At least 6 characters"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  disabled={isSubmitting}
-                  className="h-10 border-gray-300"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="branch" className="font-semibold">Branch</Label>
-                            <Select value={formData.branch} onValueChange={(value) => setFormData({...formData, branch: value})}>
-                  <SelectTrigger className="h-10 border-gray-300">
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRANCHES.map(branch => (
-                      <SelectItem key={branch} value={branch.toLowerCase()}>{branch}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            {/* Permissions Accordion */}
-            <div className="space-y-3">
-              <Label className="font-semibold block">Screen Permissions ({permissions.length} selected)</Label>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <Accordion type="multiple" defaultValue={['dashboard', 'transactions'] } className="w-full">
-                  {ALL_SCREEN_GROUPS.map((group, groupIndex) => (
-                    <AccordionItem key={groupIndex} value={`group-${groupIndex}`}>
-                      <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                          <span className="font-semibold">{group.title}</span>
-                          <span className="text-sm text-gray-500 ml-auto">({group.screens.length})</span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-6 pb-6 pt-0">
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                          {group.screens.map((screen) => (
-                            <div key={screen} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded-lg">
-                              <Checkbox 
-                                id={`create-${screen}`}
-                                checked={permissions.includes(screen)}
-                                onCheckedChange={() => handleCheckboxChange(screen)}
-                                disabled={isSubmitting}
-                              />
-                              <Label htmlFor={`create-${screen}`} className="text-sm font-medium cursor-pointer flex-1">
-                                {screen}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              </div>
-              {permissions.length === 0 && (
-                <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded">
-                  ⚠ Please select at least one screen permission
-                </p>
-              )}
-            </div>
-
-            <Button 
-              type="submit" 
-              className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Creating User...
-                </div>
-              ) : (
-                'Create User'
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* Users List Card */}
-      <Card>
-        <CardHeader className="bg-gray-50 border-b">
-          <CardTitle className="text-xl">Manage Users</CardTitle>
-          <CardDescription>{users.length} user{users.length !== 1 ? 's' : ''} in system</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {isLoadingUsers ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-6 h-6 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-              <span className="ml-2 text-gray-600">Loading users...</span>
-            </div>
-          ) : users.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <p className="text-lg font-medium">👥 No users yet</p>
-              <p className="text-sm">Create your first user above to get started</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {users.map((user) => (
-                <div key={user.uid} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                  {/* User Header */}
-                  <div
-                    className="p-4 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
-                    onClick={() => setExpandedUser(expandedUser === user.uid ? null : user.uid)}
+              {/* Password */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-gray-700">Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="At least 6 characters"
+                    value={formData.password}
+                    onChange={e => setFormData({ ...formData, password: e.target.value })}
+                    disabled={isSubmitting}
+                    style={{
+                      height: '42px', width: '100%', border: '1.5px solid #e5e7eb',
+                      borderRadius: '10px', paddingLeft: '14px', paddingRight: '42px',
+                      fontSize: '14px', outline: 'none', backgroundColor: 'white', boxSizing: 'border-box',
+                    }}
+                    onFocus={e => (e.target.style.borderColor = '#6366f1')}
+                    onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(p => !p)}
+                    style={{
+                      position: 'absolute', right: '12px', top: '50%',
+                      transform: 'translateY(-50%)', background: 'none', border: 'none',
+                      cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center',
+                    }}
                   >
-                    <div className="flex-1">
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Branch */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-gray-700">Branch</label>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    value={formData.branch}
+                    onChange={e => setFormData({ ...formData, branch: e.target.value })}
+                    disabled={isSubmitting}
+                    style={{
+                      height: '42px', width: '100%', border: '1.5px solid #e5e7eb',
+                      borderRadius: '10px', padding: '0 36px 0 14px', fontSize: '14px',
+                      outline: 'none', backgroundColor: '#f9fafb', color: formData.branch ? '#111827' : '#6b7280',
+                      boxSizing: 'border-box', appearance: 'none', cursor: 'pointer',
+                    }}
+                    onFocus={e => (e.target.style.borderColor = '#6366f1')}
+                    onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
+                  >
+                    <option value="" disabled>Select branch</option>
+                    {BRANCHES.map(b => (
+                      <option key={b} value={b.toLowerCase()} style={{ backgroundColor: '#f3f4f6', color: '#111827' }}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Screen Permissions */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-gray-700">
+                  Screen Permissions
+                  {permissions.length > 0 && (
+                    <span className="ml-2 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium">
+                      {permissions.length} selected
+                    </span>
+                  )}
+                </label>
+                {permissions.length > 0 && (
+                  <button type="button" onClick={() => setPermissions([])} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+                    <X size={12} /> Clear all
+                  </button>
+                )}
+              </div>
+              <PermissionGrid
+                selectedPermissions={permissions}
+                onToggle={togglePermission}
+                onGroupToggle={(screens) => toggleGroupPermissions(screens, permissions, setPermissions)}
+              />
+            </div>
+
+            {/* Submit */}
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                style={{
+                  height: '44px', padding: '0 32px',
+                  background: isSubmitting ? '#a5b4fc' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  color: 'white', fontWeight: '600', fontSize: '14px',
+                  border: 'none', borderRadius: '10px', cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 8px rgba(79,70,229,0.3)',
+                }}
+              >
+                {isSubmitting ? (
+                  <>
+                    <div style={{ width: '16px', height: '16px', border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    Creating...
+                  </>
+                ) : (
+                  <><UserPlus size={16} /> Create User</>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Users List */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
+              <Users size={16} className="text-white" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900">Manage Users</h2>
+              <p className="text-xs text-gray-500">{users.length} user{users.length !== 1 ? 's' : ''} in system</p>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {isLoadingUsers ? (
+              <div className="flex items-center justify-center py-12 gap-3 text-gray-500">
+                <div style={{ width: '20px', height: '20px', border: '2px solid #e5e7eb', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                Loading users...
+              </div>
+            ) : users.length === 0 ? (
+              <div className="py-12 text-center">
+                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Users size={20} className="text-gray-400" />
+                </div>
+                <p className="text-gray-600 font-medium">No users yet</p>
+                <p className="text-gray-400 text-sm">Create your first user above</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {users.map((user) => (
+                  <div key={user.uid} className="border border-gray-200 rounded-xl overflow-hidden hover:border-indigo-200 transition-colors">
+                    {/* User Row */}
+                    <div
+                      className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => setExpandedUser(expandedUser === user.uid ? null : user.uid)}
+                    >
                       <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm flex-shrink-0">
+                          {user.email[0].toUpperCase()}
+                        </div>
                         <div>
-                          <p className="font-semibold text-gray-900">{user.email}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                          <p className="font-semibold text-gray-900 text-sm">{user.email}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-md">
                               {user.branch}
                             </span>
-                            <span className="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded">
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-md">
                               {user.permissions.length} screen{user.permissions.length !== 1 ? 's' : ''}
                             </span>
                           </div>
                         </div>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={e => { e.stopPropagation(); setExpandedUser(expandedUser === user.uid ? null : user.uid); setEditingUser({ uid: user.uid, email: user.email, branch: user.branch, permissions: [...user.permissions] }); }}
+                          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="Edit user"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setDeleteConfirm(user.uid); }}
+                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                          title="Delete user"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                        {expandedUser === user.uid
+                          ? <ChevronUp size={16} className="text-gray-400" />
+                          : <ChevronDown size={16} className="text-gray-400" />}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {expandedUser === user.uid ? (
-                        <ChevronUp size={20} className="text-gray-500" />
-                      ) : (
-                        <ChevronDown size={20} className="text-gray-500" />
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Expanded Details */}
-                  {expandedUser === user.uid && (
-                    <div className="p-4 border-t border-gray-200 bg-white space-y-4">
-                      {editingUser?.uid === user.uid ? (
-                        // Edit Mode
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label className="font-semibold">Branch</Label>
-                            <Select value={editingUser.branch} onValueChange={(value) => setEditingUser({...editingUser, branch: value})}>
-                              <SelectTrigger className="h-10 border-gray-300">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {BRANCHES.map(branch => (
-                                  <SelectItem key={branch} value={branch.toLowerCase()}>{branch}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                    {/* Delete Confirm */}
+                    {deleteConfirm === user.uid && (
+                      <div className="px-4 py-3 bg-red-50 border-t border-red-200 flex items-center justify-between gap-3">
+                        <p className="text-sm text-red-700 font-medium">Delete "{user.email}"? This cannot be undone.</p>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handleDeleteUser(user.uid, user.email)}
+                            className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 flex items-center gap-1"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm(null)}
+                            className="px-3 py-1.5 bg-white text-gray-700 text-xs font-semibold rounded-lg border border-gray-300 hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                          <div className="space-y-3">
-                            <Label className="font-semibold block">Update Permissions</Label>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
-                              {ALL_SCREEN_GROUPS.flatMap(group => group.screens).map((screen) => (
-                                <div key={screen} className="flex items-center space-x-2">
-                                  <Checkbox 
-                                    id={`edit-${screen}`}
-                                    checked={editingUser!.permissions.includes(screen)}
-                                    onCheckedChange={() => handleEditCheckboxChange(screen)}
-                                  />
-                                  <Label htmlFor={`edit-${screen}`} className="text-sm font-medium cursor-pointer">
-                                    {screen}
-                                  </Label>
-                                </div>
+                    {/* Expanded Edit Panel */}
+                    {expandedUser === user.uid && editingUser?.uid === user.uid && (
+                      <div className="p-5 border-t border-gray-200 bg-gray-50 space-y-5">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-gray-800 text-sm">Edit User Access</h3>
+                          <span className="text-xs text-gray-500">{editingUser.permissions.length} screens selected</span>
+                        </div>
+
+                        {/* Branch selector in edit */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Branch</label>
+                          <div style={{ position: 'relative', maxWidth: '280px' }}>
+                            <select
+                              value={editingUser.branch}
+                              onChange={e => setEditingUser({ ...editingUser, branch: e.target.value })}
+                              style={{
+                                height: '40px', width: '100%', border: '1.5px solid #e5e7eb',
+                                borderRadius: '10px', padding: '0 36px 0 14px', fontSize: '14px',
+                                outline: 'none', backgroundColor: '#f9fafb', color: '#111827',
+                                boxSizing: 'border-box', appearance: 'none', cursor: 'pointer',
+                              }}
+                            >
+                              {BRANCHES.map(b => (
+                                <option key={b} value={b.toLowerCase()} style={{ backgroundColor: '#f3f4f6', color: '#111827' }}>
+                                  {b}
+                                </option>
                               ))}
-                            </div>
-                          </div>
-
-                          {generalError && (
-                            <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded">
-                              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                              <span>{generalError}</span>
-                            </div>
-                          )}
-
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={handleSaveEdit}
-                              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                              size="sm"
-                            >
-                              Save Changes
-                            </Button>
-                            <Button
-                              onClick={() => setEditingUser(null)}
-                              variant="outline"
-                              size="sm"
-                              className="flex-1"
-                            >
-                              Cancel
-                            </Button>
+                            </select>
+                            <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
                           </div>
                         </div>
-                      ) : (
-                        // View Mode
-                        <div className="space-y-3">
-                          <div>
-                            <p className="text-sm text-gray-600 mb-2">
-                              <span className="font-semibold">Created by:</span> {user.createdBy}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              <span className="font-semibold">Created at:</span> {new Date(user.createdAt?.toDate?.() || user.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
 
-                          <div>
-                            <p className="text-sm font-semibold text-gray-700 mb-2">Assigned Screens:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {user.permissions.length > 0 ? (
-                                user.permissions.map(screen => (
-                                  <span key={screen} className="inline-block px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded-full">
-                                    {screen}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-sm text-gray-500 italic">No permissions assigned</span>
-                              )}
-                            </div>
-                          </div>
+                        {/* Permissions grid */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Screen Permissions</label>
+                          <PermissionGrid
+                            selectedPermissions={editingUser.permissions}
+                            onToggle={toggleEditPermission}
+                            onGroupToggle={(screens) => {
+                              const allSelected = screens.every(s => editingUser.permissions.includes(s));
+                              setEditingUser(prev => prev ? {
+                                ...prev,
+                                permissions: allSelected
+                                  ? prev.permissions.filter(p => !screens.includes(p))
+                                  : [...new Set([...prev.permissions, ...screens])]
+                              } : null);
+                            }}
+                          />
+                        </div>
 
-                          <div className="flex gap-2 pt-2">
-                            <Button
-                              onClick={() => handleEditUser(user)}
-                              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
-                              size="sm"
-                            >
-                              <Edit2 size={16} /> Edit
-                            </Button>
-                            <Button
-                              onClick={() => handleDeleteUser(user.uid, user.email)}
-                              variant="destructive"
-                              size="sm"
-                              className="flex-1 flex items-center justify-center gap-2"
-                            >
-                              <Trash2 size={16} /> Delete
-                            </Button>
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={handleSaveEdit}
+                            style={{
+                              height: '38px', padding: '0 20px',
+                              background: 'linear-gradient(135deg, #059669, #047857)',
+                              color: 'white', fontWeight: '600', fontSize: '13px',
+                              border: 'none', borderRadius: '8px', cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: '6px',
+                            }}
+                          >
+                            <Check size={14} /> Save Changes
+                          </button>
+                          <button
+                            onClick={() => { setEditingUser(null); setExpandedUser(null); }}
+                            style={{
+                              height: '38px', padding: '0 20px', background: 'white',
+                              color: '#374151', fontWeight: '600', fontSize: '13px',
+                              border: '1.5px solid #e5e7eb', borderRadius: '8px', cursor: 'pointer',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Expanded View (when not editing) */}
+                    {expandedUser === user.uid && editingUser?.uid !== user.uid && (
+                      <div className="px-5 py-4 border-t border-gray-200 bg-gray-50 space-y-3">
+                        <div className="flex gap-6 text-xs text-gray-500">
+                          <span><span className="font-semibold text-gray-700">Created by:</span> {user.createdBy}</span>
+                          <span><span className="font-semibold text-gray-700">Date:</span> {new Date(user.createdAt?.toDate?.() || user.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Assigned Screens</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {user.permissions.length > 0
+                              ? user.permissions.map(s => (
+                                <span key={s} className="px-2.5 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded-lg">{s}</span>
+                              ))
+                              : <span className="text-gray-400 text-sm italic">No permissions assigned</span>
+                            }
                           </div>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
