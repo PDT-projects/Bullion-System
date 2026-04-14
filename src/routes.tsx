@@ -66,6 +66,7 @@ import {
 import { Sidebar }  from './layouts/Sidebar';
 import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
+import { UserManagement } from './modules/user-management';
 import { AppData, initialData } from './App';
 
 
@@ -86,10 +87,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { setUser, setRole } = useAuth();
   return (
     <Login
-      onLoginSuccess={(user) => { setUser(user); navigate('/dashboard'); }}
+      onLoginSuccess={(user: any, role: 'super_admin' | 'user') => { 
+        setUser(user); 
+        setRole(role);
+        navigate('/dashboard'); 
+      }}
     />
   );
 }
@@ -421,5 +426,12 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <BudgetDeleteRoute /> },
     ],
   },
-
+  // ── User Management ──────────────────────────────────────
+  {
+    path: '/user-management',
+    element: (<ProtectedRoute><OutletLayout activeModule="user-management" /></ProtectedRoute>),
+    children: [
+      { index: true, element: <UserManagement /> },
+    ],
+  }
 ]);

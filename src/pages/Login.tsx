@@ -1,20 +1,15 @@
 import { useState } from 'react';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { auth } from '../api/firebase/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../api/firebase/firebase';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 import { Eye, EyeOff } from 'lucide-react';
 
-// ✅ Add your allowed emails here — must match exactly what's in Firebase Console
-const ALLOWED_EMAILS = [
-  'fatimamalikk72@gmail.com',
-  'sana@gmail.com',
-];
-
 interface LoginProps {
-  onLoginSuccess: (user: any) => void;
+  onLoginSuccess: (user: any, role: 'super_admin' | 'user', permissions?: string[], branch?: string) => void;
 }
 
 export function Login({ onLoginSuccess }: LoginProps) {
@@ -26,19 +21,16 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
-
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -54,23 +46,37 @@ export function Login({ onLoginSuccess }: LoginProps) {
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
 
-      // ✅ Whitelist check — sign out immediately if email not allowed
-      if (!ALLOWED_EMAILS.includes(user.email ?? '')) {
+      // Check Firestore for user document
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+
+      if (!userDoc.exists()) {
         await signOut(auth);
         setErrors({ general: 'Access denied. You are not authorized to use this system.' });
         setIsLoading(false);
         return;
       }
 
+      const userData = userDoc.data();
+      const role: 'super_admin' | 'user' = userData.role === 'superAdmin' ? 'super_admin' : 'user';
+      const permissions: string[] = userData.permissions || [];
+      const branch: string = userData.branch || '';
+
+      // ✅ Save to localStorage immediately before redirect
+      localStorage.setItem('userInfo', JSON.stringify({
+        uid: user.uid,
+        email: user.email,
+        role,
+        permissions,
+        branch,
+      }));
+
       toast.success('Login successful!');
-      onLoginSuccess(user);
+      onLoginSuccess(user, role, permissions, branch);
       navigate('/dashboard');
 
     } catch (error: any) {
       console.error('Firebase auth error:', error.code, error.message);
-
       let errorMessage = 'Login failed. Please try again.';
-
       switch (error.code) {
         case 'auth/invalid-credential':
         case 'auth/user-not-found':
@@ -90,10 +96,8 @@ export function Login({ onLoginSuccess }: LoginProps) {
           errorMessage = 'Network error. Please check your internet connection.';
           break;
       }
-
       setErrors({ general: errorMessage });
       toast.error(errorMessage);
-
     } finally {
       setIsLoading(false);
     }
@@ -124,7 +128,6 @@ export function Login({ onLoginSuccess }: LoginProps) {
           </CardHeader>
           <CardContent className="px-8 pb-8">
 
-            {/* General error banner */}
             {errors.general && (
               <div className="mb-5 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm font-medium px-4 py-3 rounded-lg">
                 <span className="mt-0.5">⚠</span>
@@ -162,7 +165,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                 )}
               </div>
 
-              {/* Password — native input with inline styles to guarantee icon on RIGHT */}
+              {/* Password */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">Password</label>
                 <div style={{ position: 'relative', width: '100%' }}>
@@ -201,7 +204,6 @@ export function Login({ onLoginSuccess }: LoginProps) {
                       padding: '0',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
                       color: '#9ca3af',
                       zIndex: 10,
                     }}
