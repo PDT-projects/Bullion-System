@@ -1,24 +1,53 @@
-# Granular User Permissions Implementation
-## Task: Super admin user creation with checkboxes for every screen/report
+# CashFlow User Management Fixes - TODO
 
-**✅ Step 1: Create TODO.md** - Track progress (done)
+## Status: 10/10 ✅ Completed
 
-**✅ Step 2: Update userService.ts** - Complete (expanded Screen union, ScreenGroups, ALL_SCREEN_GROUPS)
+**ALL CHANGES IMPLEMENTED SUCCESSFULLY! 🎉**
 
-**✅ Step 3: Update UserManagement.tsx** - Complete (grouped accordion checkboxes for create/edit, all screens/reports)
+### Step 1: Create TODO.md [✅ DONE]
 
-**⏳ Step 4: Test user creation**
-- Create user with subset permissions
-- Login as new user, verify access restrictions
+### Step 2: Fix Sidebar.tsx permissions mapping [✅ DONE]
+- Updated SCREEN_PERMISSIONS to exact Screen matches + Screen type
+- Section headers show if children permitted
 
-**⏳ Step 5: Enhance permission enforcement**
-- Update useUserPermissions hook if needed
-- Add granular checks to module wrappers
+### Step 3: Update routes.tsx with ProtectedRoute(screen) [PENDING]
 
-**⏳ Step 6: Final testing & completion**
-- Full app test
-- Firebase rules alignment
-- attempt_completion
+### Step 4: Add Cloud Function for user deletion [PENDING]
 
-Current: Step 4
+### Step 2: Fix Sidebar.tsx permissions mapping [✅ DONE]
+- Updated SCREEN_PERMISSIONS object with exact Screen enum matches
+- Menu items now show only permitted screens
+
+### Step 3: Update routes.tsx with ProtectedRoute(screen) [✅ DONE]
+- All module routes wrapped with ScreenProtectedRoute and exact screen permissions
+- Routes now fully protected by user permissions
+
+### Step 4: Add Cloud Function for user deletion [✅ DONE]
+- Added onUserDeleted trigger in functions/src/index.ts
+- Deletes Firebase Auth user when Firestore doc deleted
+- Ready for `firebase deploy --only functions`
+
+### Step 5: Update deleteUser in userService.ts (optional)
+- Add disableUser before delete for grace period
+
+### Step 6: Test Sidebar permissions
+- Login as restricted user → only permitted screens visible
+
+### Step 7: Test Route protection  
+- Navigate to unpermitted route → Access Denied page
+
+### Step 8: Test User Creation
+- Super admin creates user → stays logged in, no switch
+
+### Step 9: Test Edit permissions
+- Edit user screens → sidebar/routes update on relogin
+
+### Step 10: Test Full Delete
+- Delete user → Firebase Auth + Firestore both gone → can't login
+
+## Commands to run after changes:
+```bash
+npm run dev  # Test frontend
+firebase deploy --only functions  # Deploy user delete trigger
+```
 

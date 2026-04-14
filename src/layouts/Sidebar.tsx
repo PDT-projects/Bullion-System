@@ -26,30 +26,33 @@ import {
 
 import { useAuth } from '../providers/context/AuthContext';
 
-// Map each screen name to its permission key (must match Screen type in userService.ts)
-const SCREEN_PERMISSIONS: Record<string, string> = {
+// Map each screen name to its permission key (must match EXACT Screen type in userService.ts)
+const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'dashboard': 'Dashboard',
-  'add-transaction': 'Transactions',
-  'pending-payment': 'Transactions',
-  'bills': 'Bills',
-  'salary': 'Salary',
-  'banking-overview': 'Banking',
-  'bank-accounts': 'Banking',
-  'transfers': 'Banking',
-  'cash-in-hand': 'Banking',
-  'budgets': 'Budgets',
-  'employees': 'Employees',
-  'product-transfer': 'Inventory',
-  'inventory-entry': 'Inventory',
-  'invoices': 'Invoices',
-  'all-loans': 'Loans',
-  'payable': 'Loans',
-  'receivable': 'Loans',
-  'commission-overview': 'Commission',
-  'commission-slabs': 'Commission',
-  'commission-calculate': 'Commission',
-  'commission-reports': 'Commission',
-};
+  'add-transaction': 'Add Transaction',
+  'pending-payment': 'Pending Payments',
+  'bills': 'Bills List',
+  'salary': 'Salary Dashboard',
+  'banking-overview': 'Banking Dashboard',
+  'bank-accounts': 'Bank Accounts List',
+  'transfers': 'Bank Transfers List',
+  'cash-in-hand': 'Cash List',
+  'budgets': 'Budgets List',
+  'employees': 'Employees List',
+  'product-transfer': 'Product Transfer List',
+  'inventory-entry': 'Inventory Dashboard',
+  'invoices': 'Invoices List',
+  'all-loans': 'Loans Dashboard',
+  'payable': 'Loans Payable',
+  'receivable': 'Loans Receivable',
+  'commission-overview': 'Commission Slabs',
+  'commission-slabs': 'Commission Slabs',
+  'commission-calculate': 'Commission Calculation',
+  'commission-reports': 'Commission Reports',
+  'user-management': 'User Management',
+} as const;
+
+import type { Screen } from '../modules/user-management/models/userService';
 
 export function Sidebar() {
   const [expandedSections, setExpandedSections] = useState<string[]>([
@@ -71,7 +74,7 @@ export function Sidebar() {
   const sectionHasVisibleChildren = (children: any[]): boolean => {
     return children.some((child) => {
       if (child.children) return sectionHasVisibleChildren(child.children);
-      return canSee(child.id);
+      return canSee(child.id) || !SCREEN_PERMISSIONS[child.id]; // Show section headers always
     });
   };
 

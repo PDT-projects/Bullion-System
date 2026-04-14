@@ -551,6 +551,46 @@ export const rejectTransaction = onRequest(async (req, res) => {
 });
 
 // =============================================================================
+// User deletion trigger - Delete Firebase Auth user when Firestore user doc is deleted
+// =============================================================================
+export const onUserDeleted = onDocumentDeleted(
+  "users/{userId}",
+  async (event) => {
+    const userId = event.params.userId;
+    try {
+      await admin.auth().deleteUser(userId);
+      console.log(`✅ Firebase Auth user ${userId} deleted after Firestore deletion`);
+    } catch (error: any) {
+      if (error.code === 'auth/user-not-found') {
+        console.log(`ℹ️ Firebase Auth user ${userId} already deleted`);
+      } else {
+        console.error(`❌ Failed to delete Firebase Auth user ${userId}:`, error);
+      }
+    }
+  }
+);
+
+// =============================================================================
+// User deletion trigger - Delete Firebase Auth user when Firestore user doc is deleted
+// =============================================================================
+export const onUserDeleted = onDocumentDeleted(
+  "users/{userId}",
+  async (event) => {
+    const userId = event.params.userId;
+    try {
+      await admin.auth().deleteUser(userId);
+      console.log(`✅ Firebase Auth user ${userId} deleted after Firestore deletion`);
+    } catch (error: any) {
+      if (error.code === 'auth/user-not-found') {
+        console.log(`ℹ️ Firebase Auth user ${userId} already deleted`);
+      } else {
+        console.error(`❌ Failed to delete Firebase Auth user ${userId}:`, error);
+      }
+    }
+  }
+);
+
+// =============================================================================
 // HTML helpers
 // =============================================================================
 function successPage(title: string, message: string, txRef: string): string {

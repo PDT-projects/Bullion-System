@@ -110,10 +110,11 @@ export function UserManagement() {
     setIsSubmitting(true);
     try {
       await createUser(formData.email, formData.password, formData.branch, permissions, getCurrentUserEmail());
-      toast.success(`User "${formData.email}" created successfully!`);
+      toast.success(`User "${formData.email}" created successfully - credentials saved!`);
       setFormData({ email: '', password: '', branch: '' });
       setPermissions([]);
       await fetchUsers();
+      // No auto-switch - super admin stays logged in
     } catch (error: any) {
       const msg = error.message || 'Failed to create user';
       setGeneralError(msg);

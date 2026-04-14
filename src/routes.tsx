@@ -67,12 +67,15 @@ import { Sidebar }  from './layouts/Sidebar';
 import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
 import { UserManagement } from './modules/user-management';
-import { AppData, initialData } from './App';
+import { mockData } from './mockData';
+const initialData = mockData;
 
 
 // ============================================================
 // PROTECTED ROUTE
 // ============================================================
+
+import { ProtectedRoute as ScreenProtectedRoute } from './modules/user-management/components/protectedroute';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -128,10 +131,9 @@ function OutletLayout({ activeModule }: { activeModule: string }) {
 }
 
 function DashboardLayout() {
-  const [data] = useState<AppData>(() => initialData);
   return (
     <AppLayout activeModule="dashboard">
-      <Dashboard data={data} />
+      <Dashboard />
     </AppLayout>
   );
 }
@@ -281,10 +283,10 @@ export const router = createBrowserRouter([
     path: '/employees',
     element: (<ProtectedRoute><OutletLayout activeModule="employees" /></ProtectedRoute>),
     children: [
-      { index: true,        element: <EmployeeListRoute /> },
-      { path: 'create',     element: <EmployeeCreateRoute /> },
-      { path: ':id/edit',   element: <EmployeeEditRoute /> },
-      { path: ':id/delete', element: <EmployeeDeleteRoute /> },
+      { index: true,        element: <ScreenProtectedRoute requiredScreen="Employees List"><EmployeeListRoute /></ScreenProtectedRoute> },
+      { path: 'create',     element: <ScreenProtectedRoute requiredScreen="Create Employee"><EmployeeCreateRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Employee"><EmployeeEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Employee"><EmployeeDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -293,15 +295,15 @@ export const router = createBrowserRouter([
     path: '/loans',
     element: (<ProtectedRoute><OutletLayout activeModule="loans" /></ProtectedRoute>),
     children: [
-      { index: true,               element: <LoanDashboardRoute /> },
-      { path: 'all',               element: <LoanListRoute /> },
-      { path: 'payable',           element: <LoanPayableListRoute /> },
-      { path: 'receivable',        element: <LoanReceivableListRoute /> },
-      { path: 'create',            element: <LoanCreateRoute /> },
-      { path: 'create-payable',    element: <LoanCreatePayableRoute /> },
-      { path: 'create-receivable', element: <LoanCreateReceivableRoute /> },
-      { path: ':id/edit',          element: <LoanEditRoute /> },
-      { path: ':id/payment',       element: <LoanPaymentRoute /> },
+      { index: true,               element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanDashboardRoute /></ScreenProtectedRoute> },
+      { path: 'all',               element: <ScreenProtectedRoute requiredScreen="All Loans List"><LoanListRoute /></ScreenProtectedRoute> },
+      { path: 'payable',           element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanPayableListRoute /></ScreenProtectedRoute> },
+      { path: 'receivable',        element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanReceivableListRoute /></ScreenProtectedRoute> },
+      { path: 'create',            element: <ScreenProtectedRoute requiredScreen="Create Loan"><LoanCreateRoute /></ScreenProtectedRoute> },
+      { path: 'create-payable',    element: <ScreenProtectedRoute requiredScreen="Create Payable Loan"><LoanCreatePayableRoute /></ScreenProtectedRoute> },
+      { path: 'create-receivable', element: <ScreenProtectedRoute requiredScreen="Create Receivable Loan"><LoanCreateReceivableRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',          element: <ScreenProtectedRoute requiredScreen="Edit Loan"><LoanEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/payment',       element: <ScreenProtectedRoute requiredScreen="Loan Payment"><LoanPaymentRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -310,14 +312,14 @@ export const router = createBrowserRouter([
     path: '/salary',
     element: (<ProtectedRoute><OutletLayout activeModule="salary" /></ProtectedRoute>),
     children: [
-      { index: true,            element: <SalaryDashboardRoute /> },
-      { path: 'all',            element: <SalaryAllListRoute /> },
-      { path: 'regular',        element: <SalaryRegularListRoute /> },
-      { path: 'advance',        element: <SalaryAdvanceListRoute /> },
-      { path: 'create-regular', element: <SalaryCreateRegularRoute /> },
-      { path: 'create-advance', element: <SalaryCreateAdvanceRoute /> },
-      { path: ':id/edit',       element: <SalaryEditRoute /> },
-      { path: ':id/delete',     element: <SalaryDeleteRoute /> },
+      { index: true,            element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryDashboardRoute /></ScreenProtectedRoute> },
+      { path: 'all',            element: <ScreenProtectedRoute requiredScreen="Salary All List"><SalaryAllListRoute /></ScreenProtectedRoute> },
+      { path: 'regular',        element: <ScreenProtectedRoute requiredScreen="Salary Regular List"><SalaryRegularListRoute /></ScreenProtectedRoute> },
+      { path: 'advance',        element: <ScreenProtectedRoute requiredScreen="Salary Advance List"><SalaryAdvanceListRoute /></ScreenProtectedRoute> },
+      { path: 'create-regular', element: <ScreenProtectedRoute requiredScreen="Create Regular Salary"><SalaryCreateRegularRoute /></ScreenProtectedRoute> },
+      { path: 'create-advance', element: <ScreenProtectedRoute requiredScreen="Create Advance Salary"><SalaryCreateAdvanceRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',       element: <ScreenProtectedRoute requiredScreen="Salary Edit"><SalaryEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/delete',     element: <ScreenProtectedRoute requiredScreen="Salary Delete"><SalaryDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -326,10 +328,10 @@ export const router = createBrowserRouter([
     path: '/bills',
     element: (<ProtectedRoute><OutletLayout activeModule="bills" /></ProtectedRoute>),
     children: [
-      { index: true,        element: <BillsListRoute /> },
-      { path: 'create',     element: <BillsCreateRoute /> },
-      { path: ':id/edit',   element: <BillsEditRoute /> },
-      { path: ':id/delete', element: <BillsDeleteRoute /> },
+      { index: true,        element: <ScreenProtectedRoute requiredScreen="Bills List"><BillsListRoute /></ScreenProtectedRoute> },
+      { path: 'create',     element: <ScreenProtectedRoute requiredScreen="Create Bill"><BillsCreateRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Bill"><BillsEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Bill"><BillsDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -338,10 +340,10 @@ export const router = createBrowserRouter([
     path: '/commission',
     element: (<ProtectedRoute><OutletLayout activeModule="commission" /></ProtectedRoute>),
     children: [
-      { index: true,       element: <CommissionSlabsRoute /> },
-      { path: 'slabs',     element: <CommissionSlabsRoute /> },
-      { path: 'calculate', element: <CommissionCalculationRoute /> },
-      { path: 'reports',   element: <CommissionReportsRoute /> },
+      { index: true,       element: <ScreenProtectedRoute requiredScreen="Commission Slabs"><CommissionSlabsRoute /></ScreenProtectedRoute> },
+      { path: 'slabs',     element: <ScreenProtectedRoute requiredScreen="Commission Slabs"><CommissionSlabsRoute /></ScreenProtectedRoute> },
+      { path: 'calculate', element: <ScreenProtectedRoute requiredScreen="Commission Calculation"><CommissionCalculationRoute /></ScreenProtectedRoute> },
+      { path: 'reports',   element: <ScreenProtectedRoute requiredScreen="Commission Reports"><CommissionReportsRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -350,15 +352,15 @@ export const router = createBrowserRouter([
     path: '/banking',
     element: (<ProtectedRoute><OutletLayout activeModule="banking" /></ProtectedRoute>),
     children: [
-      { index: true,              element: <BankingDashboardRoute /> },
-      { path: 'banks',            element: <BankListRoute /> },
-      { path: 'banks/new',        element: <BankCreateRoute /> },
-      { path: 'banks/:id/edit',   element: <BankEditRoute /> },
-      { path: 'banks/:id/delete', element: <BankDeleteRoute /> },
-      { path: 'transfers',        element: <BankTransferListRoute /> },
-      { path: 'transfers/new',    element: <BankTransferCreateRoute /> },
-      { path: 'cash',             element: <CashListRoute /> },
-      { path: 'cash/new',         element: <CashCreateRoute /> },
+      { index: true,              element: <ScreenProtectedRoute requiredScreen="Banking Dashboard"><BankingDashboardRoute /></ScreenProtectedRoute> },
+      { path: 'banks',            element: <ScreenProtectedRoute requiredScreen="Bank Accounts List"><BankListRoute /></ScreenProtectedRoute> },
+      { path: 'banks/new',        element: <ScreenProtectedRoute requiredScreen="Create Bank"><BankCreateRoute /></ScreenProtectedRoute> },
+      { path: 'banks/:id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Bank"><BankEditRoute /></ScreenProtectedRoute> },
+      { path: 'banks/:id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Bank"><BankDeleteRoute /></ScreenProtectedRoute> },
+      { path: 'transfers',        element: <ScreenProtectedRoute requiredScreen="Bank Transfers List"><BankTransferListRoute /></ScreenProtectedRoute> },
+      { path: 'transfers/new',    element: <ScreenProtectedRoute requiredScreen="Create Bank Transfer"><BankTransferCreateRoute /></ScreenProtectedRoute> },
+      { path: 'cash',             element: <ScreenProtectedRoute requiredScreen="Cash List"><CashListRoute /></ScreenProtectedRoute> },
+      { path: 'cash/new',         element: <ScreenProtectedRoute requiredScreen="Create Cash Entry"><CashCreateRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -367,11 +369,11 @@ export const router = createBrowserRouter([
     path: '/transactions',
     element: (<ProtectedRoute><OutletLayout activeModule="transactions" /></ProtectedRoute>),
     children: [
-      { index: true,        element: <TransactionListRoute /> },
-      { path: 'new',        element: <TransactionCreateRoute /> },
-      { path: ':id/edit',   element: <TransactionEditRoute /> },
-      { path: ':id/delete', element: <TransactionDeleteRoute /> },
-      { path: 'pending',    element: <PendingPaymentsRoute /> },
+      { index: true,        element: <ScreenProtectedRoute requiredScreen="Transaction List"><TransactionListRoute /></ScreenProtectedRoute> },
+      { path: 'new',        element: <ScreenProtectedRoute requiredScreen="Add Transaction"><TransactionCreateRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Transaction Edit"><TransactionEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Transaction Delete"><TransactionDeleteRoute /></ScreenProtectedRoute> },
+      { path: 'pending',    element: <ScreenProtectedRoute requiredScreen="Pending Payments"><PendingPaymentsRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -380,11 +382,11 @@ export const router = createBrowserRouter([
     path: '/invoices',
     element: (<ProtectedRoute><OutletLayout activeModule="invoices" /></ProtectedRoute>),
     children: [
-      { index: true,        element: <InvoiceListRoute /> },
-      { path: 'new',        element: <InvoiceFormRoute /> },
-      { path: ':id/edit',   element: <InvoiceEditRoute /> },
-      { path: ':id/delete', element: <InvoiceDeleteRoute /> },
-      { path: 'reports',    element: <InvoiceReportRoute /> },
+      { index: true,        element: <ScreenProtectedRoute requiredScreen="Invoices List"><InvoiceListRoute /></ScreenProtectedRoute> },
+      { path: 'new',        element: <ScreenProtectedRoute requiredScreen="Create Invoice"><InvoiceFormRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Invoice"><InvoiceEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Invoice"><InvoiceDeleteRoute /></ScreenProtectedRoute> },
+      { path: 'reports',    element: <ScreenProtectedRoute requiredScreen="Invoice Reports"><InvoiceReportRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -393,15 +395,15 @@ export const router = createBrowserRouter([
     path: '/inventory',
     element: (<ProtectedRoute><OutletLayout activeModule="inventory" /></ProtectedRoute>),
     children: [
-      { index: true,                        element: <InventoryDashboardRoute /> },
-      { path: 'view',                       element: <InventoryViewRoute /> },
-      { path: 'receivable',                 element: <InventoryReceivableRoute /> },
-      { path: 'create-new',                 element: <InventoryTypeSelectionRoute /> },
-      { path: 'create-new/costing',         element: <InventoryCostingOptionRoute /> },
-      { path: 'create-new/costing-details', element: <InventoryCostingDetailsRoute /> },
-      { path: 'create-new/details',         element: <InventoryProductDetailsRoute /> },
-      { path: 'create-new/payment',         element: <InventoryPaymentRoute /> },
-      { path: 'add-existing',               element: <InventoryAddExistingRoute /> },
+      { index: true,                        element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><InventoryDashboardRoute /></ScreenProtectedRoute> },
+      { path: 'view',                       element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryViewRoute /></ScreenProtectedRoute> },
+      { path: 'receivable',                 element: <ScreenProtectedRoute requiredScreen="Inventory Receivable"><InventoryReceivableRoute /></ScreenProtectedRoute> },
+      { path: 'create-new',                 element: <ScreenProtectedRoute requiredScreen="Inventory Type Selection"><InventoryTypeSelectionRoute /></ScreenProtectedRoute> },
+      { path: 'create-new/costing',         element: <ScreenProtectedRoute requiredScreen="Inventory Costing Option"><InventoryCostingOptionRoute /></ScreenProtectedRoute> },
+      { path: 'create-new/costing-details', element: <ScreenProtectedRoute requiredScreen="Inventory Costing Details"><InventoryCostingDetailsRoute /></ScreenProtectedRoute> },
+      { path: 'create-new/details',         element: <ScreenProtectedRoute requiredScreen="Inventory Product Details"><InventoryProductDetailsRoute /></ScreenProtectedRoute> },
+      { path: 'create-new/payment',         element: <ScreenProtectedRoute requiredScreen="Inventory Payment"><InventoryPaymentRoute /></ScreenProtectedRoute> },
+      { path: 'add-existing',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Existing"><InventoryAddExistingRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -410,8 +412,8 @@ export const router = createBrowserRouter([
     path: '/product-transfer',
     element: (<ProtectedRoute><OutletLayout activeModule="inventory" /></ProtectedRoute>),
     children: [
-      { index: true, element: <ProductTransferListRoute /> },
-      { path: 'new', element: <ProductTransferNewRoute /> },
+      { index: true, element: <ScreenProtectedRoute requiredScreen="Product Transfer List"><ProductTransferListRoute /></ScreenProtectedRoute> },
+      { path: 'new', element: <ScreenProtectedRoute requiredScreen="Create Product Transfer"><ProductTransferNewRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -420,10 +422,10 @@ export const router = createBrowserRouter([
     path: '/budgets',
     element: (<ProtectedRoute><OutletLayout activeModule="budgets" /></ProtectedRoute>),
     children: [
-      { index: true,        element: <BudgetListRoute /> },
-      { path: 'create',     element: <BudgetCreateRoute /> },
-      { path: ':id/edit',   element: <BudgetEditRoute /> },
-      { path: ':id/delete', element: <BudgetDeleteRoute /> },
+      { index: true,        element: <ScreenProtectedRoute requiredScreen="Budgets List"><BudgetListRoute /></ScreenProtectedRoute> },
+      { path: 'create',     element: <ScreenProtectedRoute requiredScreen="Create Budget"><BudgetCreateRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Budget"><BudgetEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Budget"><BudgetDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
   // ── User Management ──────────────────────────────────────
@@ -431,7 +433,7 @@ export const router = createBrowserRouter([
     path: '/user-management',
     element: (<ProtectedRoute><OutletLayout activeModule="user-management" /></ProtectedRoute>),
     children: [
-      { index: true, element: <UserManagement /> },
+      { index: true, element: <ScreenProtectedRoute requiredScreen="User Management"><UserManagement /></ScreenProtectedRoute> },
     ],
   }
 ]);

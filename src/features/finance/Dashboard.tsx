@@ -3,6 +3,7 @@
 // No more hardcoded/mock chart data — all numbers come from live collections.
 
 import { useState } from 'react';
+import { useUserPermissions, type Screen } from '../../modules/user-management/hooks/useUserPermissions';
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -57,6 +58,7 @@ export function Dashboard() {
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
 
   // All data from Firestore — no props needed
+  const { hasPermission } = useUserPermissions();
   const {
     transactions, banks, loans, invoices, commissions, products,
     loading, error, refresh,
@@ -129,7 +131,23 @@ export function Dashboard() {
   };
 
   // ── Report cards config ─────────────────────────────────────────────────
-  const reportCards = [
+  const screenMap: Record<string, Screen> = {
+    'sales': 'Sales Report',
+    'profit-loss': 'Profit Loss Report',
+    'balance-sheet': 'Balance Sheet Report',
+    'inventory': 'Inventory Report',
+    'transactions': 'Transaction History Report',
+    'referral': 'Referral Report',
+    'commission': 'Commission Report',
+    'expenses': 'Expenses Report',
+    'bank-balance': 'Bank Balance Report',
+    'salaries': 'Salaries Report',
+    'fixed-bills': 'Fixed Bills Report',
+    'product-transfer': 'Product Transfer Report',
+    'loan-history': 'Loan History',
+  };
+  
+  const filteredReports = [
     { id: 'sales',               name: 'Sales Report',               description: 'Sales performance, revenue trends, and customer analytics', icon: TrendingUp,  color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Revenue & Analytics' },
     { id: 'profit-loss',         name: 'Profit & Loss',              description: 'Revenue, expenses, and net profit calculations',             icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Financial Analysis' },
     { id: 'balance-sheet',       name: 'Balance Sheet',              description: 'Assets, liabilities, and equity statement',                  icon: FileText,    color: 'from-blue-500 to-blue-600',      bg: 'bg-blue-50',    text: 'text-blue-700',    tag: 'Financial Position' },
@@ -138,14 +156,20 @@ export function Dashboard() {
 
     { id: 'referral',            name: 'Referral Report',            description: 'Track referral performance and earnings',                      icon: Users,       color: 'from-pink-500 to-pink-600',      bg: 'bg-pink-50',    text: 'text-pink-700',    tag: 'Referral Network' },
     { id: 'commission',          name: 'Commission Report',          description: 'Salesperson commissions and performance metrics',              icon: CreditCard,  color: 'from-orange-500 to-orange-600',  bg: 'bg-orange-50',  text: 'text-orange-700',  tag: 'Performance Bonus' },
-{ id: 'expenses',          name: 'Expenses Report',              description: 'All expenses, categories, and spending analysis',               icon: Receipt,     color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Spending Analysis' },
+    { id: 'expenses',            name: 'Expenses Report',            description: 'All expenses, categories, and spending analysis',               icon: Receipt,     color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Spending Analysis' },
     { id: 'bank-balance',        name: 'Bank Balance Report',        description: 'Bank accounts, balances, and transaction history',             icon: Building2,   color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Banking' },
     { id: 'salaries',            name: 'Salaries Report',            description: 'Employee salaries, payments, and payroll summary',              icon: Users,       color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Payroll' },
 
     { id: 'fixed-bills',         name: 'Fixed Bills Report',         description: 'Recurring bills, due dates, and payment status',               icon: FileText,    color: 'from-purple-500 to-purple-600', bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Recurring Expenses' },
-    { id: 'product-transfer', name: 'Product Transfer Report',        description: 'Inventory changes, audits, and stock adjustments',             icon: FileText,    color: 'from-slate-500 to-slate-600',    bg: 'bg-slate-50',   text: 'text-slate-700',   tag: 'Audit Trail' },
+    { id: 'product-transfer',    name: 'Product Transfer Report',    description: 'Inventory changes, audits, and stock adjustments',             icon: FileText,    color: 'from-slate-500 to-slate-600',    bg: 'bg-slate-50',   text: 'text-slate-700',   tag: 'Audit Trail' },
     { id: 'loan-history',        name: 'Loan History',               description: 'Loan transactions, payments, and outstanding balances',         icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Loan Tracking' },
   ];
+
+  const reportCards = filteredReports.filter((report: any) => {
+    const screen = screenMap[report.id as keyof typeof screenMap];
+    if (!screen) return false;
+    return hasPermission(screen);
+  });
 
   // ── Render content by tab ───────────────────────────────────────────────
   const renderContent = () => {
