@@ -1,11 +1,13 @@
 // Invoice Module - Form View
 // Changes:
+//   - Customer Information: 4-column grid (fields are ~1/4 width each)
 //   - Province dropdown includes 'Federal' with Islamabad
 //   - City dropdown has "+ Add City" option that opens an inline input
 //   - Payment mode now supports Cash / Online (Bank) / Cheque
 //   - Cheque: shows cheque number, bank, and date fields
 //   - Online: shows bank selector dropdown
 //   - Deduction Charges: now an editable input (manual entry)
+//   - Compact layout to reduce scrolling
 
 import React, { useState } from 'react';
 import {
@@ -50,8 +52,8 @@ interface Props {
   formatCurrency: (amount: number) => string;
 }
 
-const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm';
-const lbl = 'block text-sm font-medium text-gray-700 mb-1';
+const inp = 'w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm h-8';
+const lbl = 'block text-xs font-medium text-gray-700 mb-0.5';
 
 export function InvoiceFormView({
   formData, selectedProducts, customerSuggestions, showSuggestions,
@@ -66,7 +68,6 @@ export function InvoiceFormView({
 }: Props) {
   const total = calculateTotal();
 
-  // "Add new city" inline state
   const [addingCity, setAddingCity] = useState(false);
   const [newCityName, setNewCityName] = useState('');
 
@@ -93,39 +94,41 @@ export function InvoiceFormView({
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-        <h3 className="text-xl font-bold text-gray-900">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 flex-shrink-0">
+        <h3 className="text-base font-bold text-gray-900">
           {isEditing ? 'Edit Invoice' : 'Create Invoice'}
         </h3>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {pdfGenerating && (
-            <div className="flex items-center gap-2 text-sm text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg">
-              <Loader2 size={14} className="animate-spin" />
+            <div className="flex items-center gap-2 text-xs text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
+              <Loader2 size={12} className="animate-spin" />
               Saving PDF to cloud…
             </div>
           )}
           <button
             onClick={handleDownloadPdf}
             disabled={isDownloadingPdf}
-            className="flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors text-sm font-medium shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-300 text-indigo-700 bg-white rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors text-xs font-medium shadow-sm"
           >
             {isDownloadingPdf
-              ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
-              : <><FileDown size={15} /> Download PDF</>
+              ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
+              : <><FileDown size={13} /> Download PDF</>
             }
           </button>
-          <button onClick={handleCancel} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-            <X size={24} />
+          <button onClick={handleCancel} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg">
+            <X size={20} />
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
 
-        {/* ── Customer Information ── */}
-        <div className="border-b pb-6">
-          <h4 className="font-semibold text-gray-900 mb-4">Customer Information</h4>
-          <div className="grid grid-cols-2 gap-4">
+        {/* ── Customer Information — 4-column grid ── */}
+        <div className="border-b pb-2">
+          <h4 className="font-semibold text-gray-900 mb-1.5 text-sm">Customer Information</h4>
+
+          {/* Row 1: Invoice Number | Date | Customer Name | CNIC */}
+          <div className="grid grid-cols-4 gap-2 mb-2">
             <div>
               <label className={lbl}>Invoice Number</label>
               <input type="text" value={formData.invoiceNumber || ''} readOnly className={`${inp} bg-gray-50`} />
@@ -136,14 +139,18 @@ export function InvoiceFormView({
             </div>
             <div className="relative">
               <label className={lbl}>Customer Name *</label>
-              <input type="text" value={formData.customerName || ''}
+              <input
+                type="text"
+                value={formData.customerName || ''}
                 onChange={e => handleCustomerSearch(e.target.value, 'customerName')}
-                placeholder="Enter customer name" className={inp} />
+                placeholder="Enter customer name"
+                className={inp}
+              />
               {showSuggestions && (
                 <div className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg w-full max-h-40 overflow-y-auto mt-1">
                   {customerSuggestions.map(s => (
                     <div key={s.id} onClick={() => handleCustomerSelect(s)}
-                      className="px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm">
+                      className="px-3 py-2 cursor-pointer hover:bg-gray-50 text-xs">
                       {s.customerName} <span className="text-gray-400">({s.customerPhone})</span>
                     </div>
                   ))}
@@ -152,18 +159,36 @@ export function InvoiceFormView({
             </div>
             <div>
               <label className={lbl}>CNIC *</label>
-              <input type="text" value={formData.customerCNIC || ''} onChange={e => setFormData({ customerCNIC: e.target.value })}
-                placeholder="42101-1234567-1" className={inp} />
+              <input
+                type="text"
+                value={formData.customerCNIC || ''}
+                onChange={e => setFormData({ customerCNIC: e.target.value })}
+                placeholder="42101-1234567-1"
+                className={inp}
+              />
             </div>
+          </div>
+
+          {/* Row 2: Phone Number | Second Phone | Province | City */}
+          <div className="grid grid-cols-4 gap-2 mb-2">
             <div className="relative">
               <label className={lbl}>Phone Number *</label>
-              <input type="tel" value={formData.customerPhone || ''}
+              <input
+                type="tel"
+                value={formData.customerPhone || ''}
                 onChange={e => handleCustomerSearch(e.target.value, 'customerPhone')}
-                placeholder="+92 300 1234567" className={inp} />
+                placeholder="+92 300 1234567"
+                className={inp}
+              />
             </div>
             <div>
               <label className={lbl}>Second Phone</label>
-              <input type="tel" value={formData.customerPhone2 || ''} onChange={e => setFormData({ customerPhone2: e.target.value })} className={inp} />
+              <input
+                type="tel"
+                value={formData.customerPhone2 || ''}
+                onChange={e => setFormData({ customerPhone2: e.target.value })}
+                className={inp}
+              />
             </div>
 
             {/* Province */}
@@ -187,29 +212,32 @@ export function InvoiceFormView({
             <div>
               <label className={lbl}>City</label>
               {addingCity ? (
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   <input
                     type="text"
                     value={newCityName}
                     onChange={e => setNewCityName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSaveNewCity(); if (e.key === 'Escape') { setAddingCity(false); setNewCityName(''); } }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSaveNewCity();
+                      if (e.key === 'Escape') { setAddingCity(false); setNewCityName(''); }
+                    }}
                     placeholder="New city name"
                     autoFocus
                     className={`${inp} flex-1`}
                   />
                   <button
                     onClick={handleSaveNewCity}
-                    className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors"
+                    className="px-2 py-1 bg-indigo-600 text-white rounded-md text-xs hover:bg-indigo-700 transition-colors"
                   >Save</button>
                   <button
                     onClick={() => { setAddingCity(false); setNewCityName(''); }}
-                    className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors"
+                    className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs hover:bg-gray-200 transition-colors"
                   >
-                    <X size={14} />
+                    <X size={12} />
                   </button>
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   <select
                     value={formData.customerCity || ''}
                     onChange={e => setFormData({ customerCity: e.target.value })}
@@ -223,40 +251,55 @@ export function InvoiceFormView({
                     <button
                       onClick={() => setAddingCity(true)}
                       title="Add new city"
-                      className="flex items-center gap-1 px-3 py-2 border border-dashed border-indigo-400 text-indigo-600 rounded-lg text-xs hover:bg-indigo-50 transition-colors whitespace-nowrap"
+                      className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-indigo-400 text-indigo-600 rounded-md text-xs hover:bg-indigo-50 transition-colors whitespace-nowrap"
                     >
-                      <Plus size={13} /> Add
+                      <Plus size={11} /> Add
                     </button>
                   )}
                 </div>
               )}
             </div>
+          </div>
 
-            <div>
+          {/* Row 3: Address | Warranty Location (span 2 each) */}
+          <div className="grid grid-cols-4 gap-2">
+            <div className="col-span-2">
               <label className={lbl}>Address</label>
-              <input type="text" value={formData.customerAddress || ''} onChange={e => setFormData({ customerAddress: e.target.value })} className={inp} />
+              <input
+                type="text"
+                value={formData.customerAddress || ''}
+                onChange={e => setFormData({ customerAddress: e.target.value })}
+                className={inp}
+              />
             </div>
-            <div>
+            <div className="col-span-2">
               <label className={lbl}>Warranty Location</label>
-              <input type="text" value={formData.warrantyLocation || ''} onChange={e => setFormData({ warrantyLocation: e.target.value })} className={inp} />
+              <input
+                type="text"
+                value={formData.warrantyLocation || ''}
+                onChange={e => setFormData({ warrantyLocation: e.target.value })}
+                className={inp}
+              />
             </div>
           </div>
         </div>
 
         {/* ── Products ── */}
-        <div className="border-b pb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold text-gray-900">Products</h4>
-            <button onClick={addProduct}
-              className="flex items-center gap-1 text-sm bg-[#4f46e5] text-white px-3 py-1.5 rounded-lg hover:bg-[#4338ca] transition-colors">
-              <Plus size={16} /> Add Product
+        <div className="border-b pb-2">
+          <div className="flex items-center justify-between mb-1.5">
+            <h4 className="font-semibold text-gray-900 text-sm">Products</h4>
+            <button
+              onClick={addProduct}
+              className="flex items-center gap-1 text-xs bg-[#4f46e5] text-white px-2.5 py-1.5 rounded-lg hover:bg-[#4338ca] transition-colors"
+            >
+              <Plus size={14} /> Add Product
             </button>
           </div>
 
           {selectedProducts.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-6 bg-gray-50 rounded-lg">No products added yet</p>
+            <p className="text-xs text-gray-500 text-center py-3 bg-gray-50 rounded-lg">No products added yet</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {selectedProducts.map((product, index) => {
                 const serials = product.productId
                   ? getAvailableSerialsForProduct(product.productId, product.id)
@@ -266,15 +309,17 @@ export function InvoiceFormView({
                 const maxQty       = Math.max(totalChoices, product.quantity);
 
                 return (
-                  <div key={product.id} className="border rounded-xl p-4 bg-gray-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-semibold text-gray-700">Product {index + 1}</span>
-                      <button onClick={() => removeProduct(product.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
+                  <div key={product.id} className="border rounded-lg p-2 bg-gray-50">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-gray-700">Product {index + 1}</span>
+                      <button onClick={() => removeProduct(product.id)} className="text-red-500 hover:text-red-700">
+                        <Trash2 size={14} />
+                      </button>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="grid grid-cols-3 gap-2 mb-1.5">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Product *</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-0.5">Product *</label>
                         <select value={product.productId} onChange={e => updateProduct(product.id, 'productId', e.target.value)} className={inp}>
                           <option value="">— Select product —</option>
                           {availableProducts.map(p => {
@@ -285,8 +330,8 @@ export function InvoiceFormView({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                          Quantity * {product.productId && <span className="text-indigo-500 font-normal">(max {maxQty})</span>}
+                        <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                          Qty * {product.productId && <span className="text-indigo-500 font-normal">(max {maxQty})</span>}
                         </label>
                         <input type="number" min="1" max={maxQty || undefined} value={product.quantity}
                           onChange={e => {
@@ -295,14 +340,14 @@ export function InvoiceFormView({
                           }} className={inp} />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Unit Price (PKR)</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-0.5">Unit Price (PKR)</label>
                         <input type="number" min="0" value={product.price}
                           onChange={e => updateProduct(product.id, 'price', Number(e.target.value))} className={inp} />
                       </div>
                     </div>
 
                     {product.productId && (
-                      <div className="mb-3 flex flex-wrap gap-2 text-xs">
+                      <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
                         {product.brandName   && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-medium">{product.brandName}</span>}
                         {product.modelName   && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-medium">{product.modelName}</span>}
                         {product.category    && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{product.category}</span>}
@@ -311,16 +356,16 @@ export function InvoiceFormView({
                     )}
 
                     {product.productId && product.quantity > 0 && (
-                      <div className="border-t pt-3">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <Hash size={13} className="text-[#4f46e5]" />
+                      <div className="border-t pt-2">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Hash size={12} className="text-[#4f46e5]" />
                           <span className="text-xs font-semibold text-gray-700">Serial Numbers ({product.quantity} required)</span>
                           {serials.length === 0 && ownSelected.length === 0 && (
                             <span className="ml-2 text-xs text-red-500">No available serials</span>
                           )}
                         </div>
                         {(serials.length > 0 || ownSelected.length > 0) ? (
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-3 gap-1.5">
                             {Array.from({ length: product.quantity }, (_, i) => {
                               const currentVal = product.serialNumbers?.[i] || '';
                               const options = currentVal && !serials.includes(currentVal) ? [currentVal, ...serials] : serials;
@@ -340,7 +385,7 @@ export function InvoiceFormView({
                       </div>
                     )}
 
-                    <div className="mt-3 text-right text-sm font-semibold text-gray-900">
+                    <div className="mt-2 text-right text-xs font-semibold text-gray-900">
                       Total: {formatCurrency(product.total)}
                     </div>
                   </div>
@@ -351,12 +396,12 @@ export function InvoiceFormView({
         </div>
 
         {/* ── Delivery & Information ── */}
-        <div className="border-b pb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Truck size={18} className="text-[#4f46e5]" />
-            <h4 className="font-semibold text-gray-900">Delivery & Information</h4>
+        <div className="border-b pb-2">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Truck size={14} className="text-[#4f46e5]" />
+            <h4 className="font-semibold text-gray-900 text-sm">Delivery & Information</h4>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-4 gap-2">
             <div>
               <label className={lbl}>Delivery Status</label>
               <select value={formData.deliveryStatus || 'Self-collect'} onChange={e => setFormData({ deliveryStatus: e.target.value as any })} className={inp}>
@@ -370,54 +415,50 @@ export function InvoiceFormView({
                 <option value="Paid">Paid</option>
               </select>
             </div>
+
+            {/* Digital Stamp Toggle — spans 2 cols */}
+            <div className="col-span-2">
+              <label className={lbl}>Digital Stamp</label>
+              <button
+                type="button"
+                onClick={() => setFormData({ digitalStamp: !formData.digitalStamp })}
+                className={`w-full flex items-center justify-between px-3 h-8 rounded-md border-2 transition-all ${
+                  formData.digitalStamp ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-200'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Stamp size={13} className={formData.digitalStamp ? 'text-indigo-600' : 'text-gray-400'} />
+                  <span className={`text-xs font-medium ${formData.digitalStamp ? 'text-indigo-800' : 'text-gray-600'}`}>
+                    {formData.digitalStamp ? 'Stamped — verification seal enabled' : 'Add verification seal to PDF'}
+                  </span>
+                </div>
+                <div className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${formData.digitalStamp ? 'bg-indigo-600' : 'bg-gray-300'}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${formData.digitalStamp ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+              </button>
+            </div>
           </div>
 
-          {/* Digital Stamp Toggle */}
-          <div className="mt-5">
-            <button
-              type="button"
-              onClick={() => setFormData({ digitalStamp: !formData.digitalStamp })}
-              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 transition-all ${
-                formData.digitalStamp ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${formData.digitalStamp ? 'bg-indigo-600' : 'bg-gray-100'}`}>
-                  <Stamp size={18} className={formData.digitalStamp ? 'text-white' : 'text-gray-400'} />
-                </div>
-                <div className="text-left">
-                  <p className={`text-sm font-semibold ${formData.digitalStamp ? 'text-indigo-800' : 'text-gray-700'}`}>Digital Stamp</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Adds a verification seal to the customer PDF</p>
-                </div>
-              </div>
-              <div className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${formData.digitalStamp ? 'bg-indigo-600' : 'bg-gray-300'}`}>
-                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${formData.digitalStamp ? 'translate-x-5' : 'translate-x-0'}`} />
-              </div>
-            </button>
-            {formData.digitalStamp && (
-              <p className="mt-2 ml-1 text-xs text-indigo-600 flex items-center gap-1.5">
-                <span className="text-base">✓</span>
-                PDF will include a "Digitally Stamped — Pakistan Detectors Technologies" verification seal
-              </p>
-            )}
-          </div>
-
-          <div className="mt-4">
+          <div className="mt-2">
             <label className={lbl}>Exchange & Warranty Note</label>
-            <textarea value={formData.exchangeWarrantyNote || ''} onChange={e => setFormData({ exchangeWarrantyNote: e.target.value })}
-              rows={3} placeholder="e.g., 2 years warranty, no exchange after 7 days"
-              className={`${inp} resize-none`} />
+            <textarea
+              value={formData.exchangeWarrantyNote || ''}
+              onChange={e => setFormData({ exchangeWarrantyNote: e.target.value })}
+              rows={2}
+              placeholder="e.g., 2 years warranty, no exchange after 7 days"
+              className={`${inp} resize-none h-auto`}
+            />
           </div>
         </div>
 
         {/* ── Sales Details (internal) ── */}
-        <div className="border-b pb-6 bg-blue-50 p-4 rounded-xl">
-          <div className="flex items-center gap-2 mb-4">
-            <User size={18} className="text-[#4f46e5]" />
-            <h4 className="font-semibold text-gray-900">Sales Details</h4>
+        <div className="border-b pb-2 bg-blue-50 p-2 rounded-xl">
+          <div className="flex items-center gap-2 mb-1.5">
+            <User size={13} className="text-[#4f46e5]" />
+            <h4 className="font-semibold text-gray-900 text-sm">Sales Details</h4>
             <span className="text-xs text-gray-400 ml-auto">Internal — not shown on invoice</span>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-4 gap-2">
             <div>
               <label className={lbl}>Salesperson</label>
               <select value={formData.salesperson || ''} onChange={e => setFormData({ salesperson: e.target.value })} className={inp}>
@@ -440,7 +481,7 @@ export function InvoiceFormView({
               <label className={lbl}>Referral From</label>
               <input type="text" value={formData.referralBy || ''} onChange={e => setFormData({ referralBy: e.target.value })} className={inp} />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-4">
               <label className={lbl}>Created By</label>
               <input type="text" value={formData.createdBy || ''} onChange={e => setFormData({ createdBy: e.target.value })} className={inp} />
             </div>
@@ -448,15 +489,13 @@ export function InvoiceFormView({
         </div>
 
         {/* ── Payment & Collection (internal) ── */}
-        <div className="border-b pb-6 bg-green-50 p-4 rounded-xl">
-          <div className="flex items-center gap-2 mb-4">
-            <CreditCard size={18} className="text-green-600" />
-            <h4 className="font-semibold text-gray-900">Payment & Collection</h4>
+        <div className="border-b pb-2 bg-green-50 p-2 rounded-xl">
+          <div className="flex items-center gap-2 mb-1.5">
+            <CreditCard size={13} className="text-green-600" />
+            <h4 className="font-semibold text-gray-900 text-sm">Payment & Collection</h4>
             <span className="text-xs text-gray-400 ml-auto">Internal — not shown on invoice</span>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-
-            {/* Payment Mode — Cash / Online / Cheque */}
+          <div className="grid grid-cols-4 gap-2">
             <div>
               <label className={lbl}>Payment Mode</label>
               <select
@@ -474,7 +513,6 @@ export function InvoiceFormView({
               </select>
             </div>
 
-            {/* Payment Status */}
             <div>
               <label className={lbl}>Payment Status</label>
               <select value={formData.paymentStatus || 'Full'} onChange={e => {
@@ -484,6 +522,29 @@ export function InvoiceFormView({
                 <option value="Full">Full Payment</option>
                 <option value="Partial">Partial Payment</option>
               </select>
+            </div>
+
+            <div>
+              <label className={lbl}>Collection Method</label>
+              <select value={formData.collectionMethod || 'Self Collection'}
+                onChange={e => setFormData({ collectionMethod: e.target.value as any })} className={inp}>
+                {collectionMethods.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className={lbl}>
+                Deduction Charges
+                <span className="ml-1 text-xs font-normal text-gray-400">(manual)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.deductionCharges ?? 0}
+                onChange={e => setFormData({ deductionCharges: Number(e.target.value) })}
+                className={inp}
+                placeholder="0"
+              />
             </div>
 
             {/* Partial payment fields */}
@@ -504,7 +565,7 @@ export function InvoiceFormView({
 
             {/* Online — bank selector */}
             {formData.paymentMode === 'Online' && (
-              <div className="col-span-2">
+              <div className="col-span-4">
                 <label className={lbl}>Company Bank Account (receiving payment)</label>
                 <select value={formData.bankId || ''} onChange={e => {
                   const bank = banks.find(b => b.id === e.target.value);
@@ -514,7 +575,7 @@ export function InvoiceFormView({
                   {banks.map(b => <option key={b.id} value={b.id}>{b.name} — {b.accountNumber}</option>)}
                 </select>
                 {formData.bankName && (
-                  <p className="mt-1.5 text-xs text-green-700 bg-green-100 px-3 py-1.5 rounded-lg">
+                  <p className="mt-1 text-xs text-green-700 bg-green-100 px-3 py-1 rounded-lg">
                     Payment to: <strong>{formData.bankName}</strong> · A/C: {formData.bankAccountNumber}
                   </p>
                 )}
@@ -543,79 +604,53 @@ export function InvoiceFormView({
                 </div>
               </>
             )}
-
-            {/* Collection Method */}
-            <div>
-              <label className={lbl}>Collection Method</label>
-              <select value={formData.collectionMethod || 'Self Collection'}
-                onChange={e => setFormData({ collectionMethod: e.target.value as any })} className={inp}>
-                {collectionMethods.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-
-            {/* Deduction Charges — manually entered, commission only */}
-            <div>
-              <label className={lbl}>
-                Deduction Charges
-                <span className="ml-1 text-xs font-normal text-gray-400">(commission/logistics — manual)</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={formData.deductionCharges ?? 0}
-                onChange={e => setFormData({ deductionCharges: Number(e.target.value) })}
-                className={inp}
-                placeholder="0"
-              />
-            </div>
-
           </div>
         </div>
 
         {/* ── Total & Save ── */}
-        <div className="bg-indigo-50 rounded-xl p-5">
-          <div className="space-y-2 mb-4">
-            <div className="flex justify-between items-center">
-              <span className="text-lg font-semibold text-gray-900">Total Amount:</span>
-              <span className="text-3xl font-bold text-[#4f46e5]">{formatCurrency(total)}</span>
-            </div>
-            {(formData.deductionCharges || 0) > 0 && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-500">Deduction Charges (commission):</span>
-                <span className="text-red-600 font-medium">− {formatCurrency(formData.deductionCharges || 0)}</span>
+        <div className="bg-indigo-50 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-semibold text-gray-900">Total Amount:</span>
+                <span className="text-xl font-bold text-[#4f46e5]">{formatCurrency(total)}</span>
               </div>
-            )}
-          </div>
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handleDownloadPdf}
-              disabled={isDownloadingPdf}
-              className="flex items-center gap-2 px-4 py-2.5 border border-indigo-300 text-indigo-700 bg-white rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors text-sm font-medium"
-            >
-              {isDownloadingPdf
-                ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
-                : <><FileDown size={15} /> Download PDF</>
-              }
-            </button>
-            <div className="flex items-center gap-3">
-              <button onClick={handleCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+              {(formData.deductionCharges || 0) > 0 && (
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="text-gray-500">Deduction Charges:</span>
+                  <span className="text-red-600 font-medium">− {formatCurrency(formData.deductionCharges || 0)}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                className="flex items-center gap-1.5 px-3 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors text-xs font-medium"
+              >
+                {isDownloadingPdf
+                  ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
+                  : <><FileDown size={13} /> Download PDF</>
+                }
+              </button>
+              <button onClick={handleCancel} className="px-3 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-xs">
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors font-semibold"
+                className="flex items-center gap-1.5 px-5 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors font-semibold text-sm"
               >
                 {isSaving
-                  ? <><Loader2 size={18} className="animate-spin" /> Saving &amp; Generating PDF…</>
+                  ? <><Loader2 size={16} className="animate-spin" /> Saving…</>
                   : isEditing ? 'Update Invoice' : 'Create Invoice'
                 }
               </button>
             </div>
           </div>
           {pdfGenerating && (
-            <p className="text-xs text-indigo-500 text-right mt-3 flex items-center justify-end gap-1.5">
-              <Loader2 size={11} className="animate-spin" />
+            <p className="text-xs text-indigo-500 text-right flex items-center justify-end gap-1.5">
+              <Loader2 size={10} className="animate-spin" />
               PDF uploading to cloud storage…
             </p>
           )}
