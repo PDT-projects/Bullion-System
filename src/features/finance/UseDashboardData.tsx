@@ -37,6 +37,16 @@ interface DashboardData {
   refresh: () => Promise<void>;
 }
 
+/** Returns true if the transaction's date falls within the current calendar month */
+function isCurrentMonth(dateStr: string): boolean {
+  const now = new Date();
+  const txDate = new Date(dateStr);
+  return (
+    txDate.getFullYear() === now.getFullYear() &&
+    txDate.getMonth() === now.getMonth()
+  );
+}
+
 export function useDashboardData(): DashboardData {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
@@ -68,22 +78,36 @@ export function useDashboardData(): DashboardData {
     };
   }, []);
 
-  const rawStats = calculateStats(transactions);
+  // ── Current-month transactions only (for the stat cards) ─────────────────
+  const currentMonthTransactions = transactions.filter(t => isCurrentMonth(t.date));
+
+  // Stats cards show current month figures only
+  const rawStats = calculateStats(currentMonthTransactions);
+
+  const totalBankBalance = banks.reduce((sum, b: any) => sum + (b.balance || 0), 0);
+
   const stats = {
     ...rawStats,
     cashInflow: rawStats.totalInflow,
     cashOutflow: rawStats.totalOutflow,
     cashBalance: rawStats.netBalance,
-    totalBankBalance: banks.reduce((sum, b: any) => sum + (b.balance || 0), 0),
-    overallBalance: rawStats.netBalance + banks.reduce((sum, b: any) => sum + (b.balance || 0), 0),
+    totalBankBalance,
+    // Overall balance = this month's net cash movement + current bank balances
+    overallBalance: rawStats.netBalance + totalBankBalance,
     pendingTransactions: rawStats.pendingCount,
     pendingAmount: rawStats.totalPending,
-    totalLoansReceivable: loans.filter((l: any) => l.type === 'Receivable').reduce((sum: number, l: any) => sum + (l.remaining || 0), 0),
-    totalLoansPayable: loans.filter((l: any) => l.type === 'Payable').reduce((sum: number, l: any) => sum + (l.remaining || 0), 0),
+    // Loans are running totals (not time-bound), so still use all loans
+    totalLoansReceivable: loans
+      .filter((l: any) => l.type === 'Receivable')
+      .reduce((sum: number, l: any) => sum + (l.remaining || 0), 0),
+    totalLoansPayable: loans
+      .filter((l: any) => l.type === 'Payable')
+      .reduce((sum: number, l: any) => sum + (l.remaining || 0), 0),
     pendingBills: 0,
     pendingBillsAmount: 0,
   };
 
+  // ── Chart data uses ALL transactions (last 12 months) ────────────────────
   const monthlyChartData = transactions
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .reduce((acc: any[], t) => {
@@ -94,11 +118,11 @@ export function useDashboardData(): DashboardData {
         else if (t.mainCategory === 'Cash Outflow') acc[idx].outflow += t.amount;
         acc[idx].net = acc[idx].inflow - acc[idx].outflow;
       } else {
-        acc.push({ 
-          month, 
-          inflow: t.mainCategory === 'Cash Inflow' ? t.amount : 0, 
-          outflow: t.mainCategory === 'Cash Outflow' ? t.amount : 0, 
-          net: 0 
+        acc.push({
+          month,
+          inflow: t.mainCategory === 'Cash Inflow' ? t.amount : 0,
+          outflow: t.mainCategory === 'Cash Outflow' ? t.amount : 0,
+          net: 0,
         });
       }
       return acc;
@@ -127,4 +151,3 @@ export function useDashboardData(): DashboardData {
     refresh,
   };
 }
-
