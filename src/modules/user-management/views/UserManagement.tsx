@@ -16,7 +16,7 @@ import {
   ALL_SCREEN_GROUPS
 } from '../models/userService';
 
-const BRANCHES = ['Lahore', 'Karachi', 'Islamabad', 'Bullion', 'R&D'] as const;
+const BRANCHES = ['Lahore', 'Karachi', 'Islamabad', 'Bullion', 'R&D', 'Asif'] as const;
 
 interface FormState {
   email: string;
@@ -328,11 +328,11 @@ export function UserManagement() {
                     onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
                   >
                     <option value="" disabled>Select branch</option>
-                    {BRANCHES.map(b => (
-                      <option key={b} value={b.toLowerCase()} style={{ backgroundColor: '#f3f4f6', color: '#111827' }}>
-                        {b}
-                      </option>
-                    ))}
+                              {BRANCHES.map(b => (
+                                <option key={b} value={b.toLowerCase()} style={{ backgroundColor: '#f3f4f6', color: '#111827' }}>
+                                  {b}
+                                </option>
+                              ))}
                   </select>
                   <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
                 </div>

@@ -22,6 +22,7 @@ import {
   Percent,
   Calculator,
   UserCheck,
+  HardDrive,
 } from 'lucide-react';
 
 import { useAuth } from '../providers/context/AuthContext';
@@ -50,6 +51,7 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'commission-calculate': 'Commission Calculation',
   'commission-reports': 'Commission Reports',
   'user-management': 'User Management',
+  'assets-management': 'Assets Management',
 } as const;
 
 import type { Screen } from '../modules/user-management/models/userService';
@@ -130,6 +132,7 @@ export function Sidebar() {
         { id: 'product-transfer', name: 'Product Transfer', icon: Package, path: '/product-transfer' },
         { id: 'inventory-entry', name: 'Inventory Entry', icon: Package, path: '/inventory' },
         { id: 'invoices', name: 'Invoices', icon: FileText, path: '/invoices' },
+        { id: 'assets-management', name: 'Assets Management', icon: HardDrive, path: '/assets-management' },
       ],
     },
     {

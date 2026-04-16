@@ -16,7 +16,7 @@ import type {
   SlabOverlap
 } from './types';
 
-export const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'] as const;
+export const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE', 'Asif'] as const;
 
 export const formatCurrency = (amount: number): string =>
   new Intl.NumberFormat('en-US', {

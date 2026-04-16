@@ -174,6 +174,7 @@ export const COMPANIES = [
   { id: 'lhr', name: 'Pakistan Detectors Technologies: Lahore' },
   { id: 'bul', name: 'Pakistan Detectors Technologies: Bullion' },
   { id: 'rnd', name: 'Pakistan Detectors Technologies: RND/SITE Office' },
+  { id: 'asf', name: 'Pakistan Detectors Technologies: Asif' },
 ];
 
 export const MAIN_CATEGORIES = ['Cash Inflow', 'Cash Outflow', 'Loan'];

@@ -204,5 +204,6 @@ export const CASH_LOCATIONS = [
   'Head Office - Islamabad',
   'Karachi Branch',
   'Lahore Branch',
-  'Bullion RND/SITE'
+  'Bullion RND/SITE',
+  'Asif Branch'
 ] as const;

@@ -49,7 +49,7 @@ export interface UseInventoryAddExistingViewModelReturn {
   formatCurrency: (n: number) => string;
 }
 
-const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE'];
+const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE', 'Asif'];
 
 export function useInventoryAddExistingViewModel(): UseInventoryAddExistingViewModelReturn {
   const navigate = useNavigate();

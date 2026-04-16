@@ -54,7 +54,7 @@ export interface UseProductTransferCreateViewModelReturn {
   getProductById: (productId: string) => Product | undefined;
 }
 
-const LOCATIONS = ['Islamabad', 'Karachi', 'Lahore', 'Bullion RND/SITE'];
+const LOCATIONS = ['Islamabad', 'Karachi', 'Lahore', 'Bullion RND/SITE', 'Asif'];
 
 export function useProductTransferCreateViewModel(): UseProductTransferCreateViewModelReturn {
   const navigate = useNavigate();

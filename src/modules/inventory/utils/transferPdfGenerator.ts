@@ -21,6 +21,7 @@ const COMPANY = {
   address: 'Office#5, 4th floor, Gulberg Trade center, Gulberg Green Islamabad',
   phone:   '03111444615',
   ntn:     '52723',
+  asifAddress: 'Asif Branch Address - TBD',
   // Dark green matching company logo/theme
   themeR: 45, themeG: 80, themeB: 22,
 };

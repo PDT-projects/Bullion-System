@@ -67,6 +67,7 @@ import { Sidebar }  from './layouts/Sidebar';
 import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
 import { UserManagement } from './modules/user-management';
+import { AssetsManagement } from './modules/assets-management';
 import { mockData } from './mockData';
 const initialData = mockData;
 
@@ -426,6 +427,14 @@ export const router = createBrowserRouter([
       { path: 'create',     element: <ScreenProtectedRoute requiredScreen="Create Budget"><BudgetCreateRoute /></ScreenProtectedRoute> },
       { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Budget"><BudgetEditRoute /></ScreenProtectedRoute> },
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Budget"><BudgetDeleteRoute /></ScreenProtectedRoute> },
+    ],
+  },
+  // ── Assets Management ──────────────────────────────────────
+  {
+    path: '/assets-management',
+    element: (<ProtectedRoute><OutletLayout activeModule="assets-management" /></ProtectedRoute>),
+    children: [
+      { index: true, element: <ScreenProtectedRoute requiredScreen="Assets Management"><AssetsManagement /></ScreenProtectedRoute> },
     ],
   },
   // ── User Management ──────────────────────────────────────

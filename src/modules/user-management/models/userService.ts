@@ -104,7 +104,8 @@ export type Screen =
   | 'Product Transfer Report'
   | 'Inventory Charts'
   // User Management (super admin only)
-  | 'User Management';
+  | 'User Management'
+  | 'Assets Management';
 
 export interface ScreenGroup {
   title: string;
@@ -186,6 +187,10 @@ export const ALL_SCREEN_GROUPS: ScreenGroup[] = [
   {
     title: 'Inventory Reports',
     screens: ['Inventory Report', 'Product Transfer Report', 'Inventory Charts']
+  },
+  {
+    title: 'Assets Management',
+    screens: ['Assets Management']
   }
 ];
 
