@@ -1,13 +1,14 @@
 // Inventory Module - View Layer
 // InventoryDashboardView - Main entry page for inventory operations
 
-import { Plus, Package, ArrowRight, Boxes, PackagePlus, PackageSearch } from 'lucide-react';
+import { Plus, Package, ArrowRight, Boxes, PackagePlus, PackageSearch, ArrowRightLeft } from 'lucide-react';
 
 interface InventoryDashboardViewProps {
   onAddNewInventory: () => void;
   onAddToExisting: () => void;
   onViewReceivable: () => void;
   onViewInventory: () => void;
+  onProductTransfer: () => void;
 }
 
 export function InventoryDashboardView({
@@ -15,6 +16,7 @@ export function InventoryDashboardView({
   onAddToExisting,
   onViewReceivable,
   onViewInventory,
+  onProductTransfer,
 }: InventoryDashboardViewProps) {
   const cards = [
     {
@@ -61,6 +63,17 @@ export function InventoryDashboardView({
       hoverBg: 'hover:bg-purple-50',
       onClick: onViewInventory,
     },
+    {
+      title: 'Product Transfer',
+      description: 'Transfer products between locations or warehouses',
+      icon: ArrowRightLeft,
+      iconBg: 'bg-white border shadow-sm',
+      iconColor: 'text-slate-600',
+      borderColor: 'border-slate-200',
+      hoverBorder: 'hover:border-slate-400',
+      hoverBg: 'hover:bg-slate-50',
+      onClick: onProductTransfer,
+    },
   ];
 
   return (
@@ -72,7 +85,7 @@ export function InventoryDashboardView({
             <Package className="w-6 h-6 text-indigo-600" />
           </div>
           <div>
-            <h2 className="text-3xl font-bold text-gray-900">Inventory Entry</h2>
+            <h2 className="text-3xl font-bold text-gray-900">Inventory</h2>
             <p className="text-lg text-gray-600 mt-1">
               Smart inventory intake flow with conditional costing and payment tracking
             </p>

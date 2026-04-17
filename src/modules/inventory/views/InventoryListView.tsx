@@ -80,7 +80,7 @@ export function InventoryListView({
             onClick={handleBack}
             style={{ minWidth: 36, minHeight: 36 }}
             className="flex items-center justify-center rounded-lg border border-gray-300 bg-white shadow-sm hover:bg-gray-100 text-gray-700"
-            title="Back to Inventory Entry"
+title="Back to Inventory"
           >
             <ArrowLeft size={18} />
           </button>

@@ -9,6 +9,7 @@ interface UseInventoryDashboardViewModelReturn {
   onAddToExisting: () => void;
   onViewReceivable: () => void;
   onViewInventory: () => void;
+  onProductTransfer: () => void;
 }
 
 export function useInventoryDashboardViewModel(): UseInventoryDashboardViewModelReturn {
@@ -18,6 +19,7 @@ export function useInventoryDashboardViewModel(): UseInventoryDashboardViewModel
   const onAddToExisting = useCallback(() => navigate('/inventory/add-existing'), [navigate]);
   const onViewReceivable = useCallback(() => navigate('/inventory/receivable'), [navigate]);
   const onViewInventory = useCallback(() => navigate('/inventory/view'), [navigate]);
+  const onProductTransfer = useCallback(() => navigate('/product-transfer'), [navigate]);
 
-  return { onAddNewInventory, onAddToExisting, onViewReceivable, onViewInventory };
+  return { onAddNewInventory, onAddToExisting, onViewReceivable, onViewInventory, onProductTransfer };
 }

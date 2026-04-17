@@ -40,7 +40,7 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'cash-in-hand': 'Cash List',
   'budgets': 'Budgets List',
   'employees': 'Employees List',
-  'product-transfer': 'Product Transfer List',
+
   'inventory-entry': 'Inventory Dashboard',
   'invoices': 'Invoices List',
   'all-loans': 'Loans Dashboard',
@@ -129,8 +129,8 @@ export function Sidebar() {
       icon: Package,
       children: [
         { id: 'employees', name: 'Employees', icon: Users, path: '/employees' },
-        { id: 'product-transfer', name: 'Product Transfer', icon: Package, path: '/product-transfer' },
-        { id: 'inventory-entry', name: 'Inventory Entry', icon: Package, path: '/inventory' },
+
+{ id: 'inventory-entry', name: 'Inventory', icon: Package, path: '/inventory' },
         { id: 'invoices', name: 'Invoices', icon: FileText, path: '/invoices' },
         { id: 'assets-management', name: 'Assets Management', icon: HardDrive, path: '/assets-management' },
       ],

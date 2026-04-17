@@ -59,7 +59,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
         <button
           onClick={() => navigate('/inventory')}
           className="flex items-center justify-center w-10 h-10 bg-white border-2 border-gray-300 rounded-xl shadow-sm hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-700 flex-shrink-0"
-          title="Back to Inventory Entry"
+title="Back to Inventory"
         >
           <ArrowLeft size={20} strokeWidth={2.5} />
         </button>
