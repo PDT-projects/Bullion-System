@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { Dashboard } from './features/finance/Dashboard';
+import { ReportsPage } from './features/finance/ReportsPage';
 
 // ── Module imports ──────────────────────────────────────────────────────────
 
@@ -444,5 +445,16 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <ScreenProtectedRoute requiredScreen="User Management"><UserManagement /></ScreenProtectedRoute> },
     ],
+  }, 
+  // ── Reports ───────────────────────────────────────────────
+  {
+    path: '/reports',
+    element: (
+      <ProtectedRoute>
+        <AppLayout activeModule="reports">
+          <ReportsPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
   }
 ]);

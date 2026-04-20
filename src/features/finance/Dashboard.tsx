@@ -1,8 +1,10 @@
 // Dashboard.tsx
 // Fully wired to real Firestore data via useDashboardData hook.
 // No more hardcoded/mock chart data — all numbers come from live collections.
+// Permission-aware: if user lacks 'Dashboard' permission, Overview tab is hidden
+// and Reports tab is shown directly.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUserPermissions, type Screen } from '../../modules/user-management/hooks/useUserPermissions';
 import {
   LineChart, Line, BarChart, Bar,
@@ -16,33 +18,19 @@ import {
 
 import { useDashboardData } from './UseDashboardData';
 
-import { 
-  SalesReport }               from '../sales/SalesReport';
-import { 
-  ExpensesReport }            from './ExpensesReport';
-import { 
-  BankBalanceReport }         from './BankBalanceReport';
-import { 
-  SalariesReport }            from './SalariesReport';
-import { 
-  FixedBillsReport }          from './FixedBillsReport';
-import { 
-  InventoryReport }           from '../../features/inventory/InventoryReport';
-import { 
-  ProductTransferReport }     from '../inventory/ProductTransferReport';
-import { 
-  TransactionHistoryReport }  from './TransactionHistoryReport';
-import { 
-  ReferralReport }            from '../sales/ReferralReport';
-import { 
-  CommissionReport }          from '../sales/CommissionReport';
-import { 
-  ProfitLossReport }          from './ProfitLossReport';
-import { 
-  BalanceSheetReport }        from './BalanceSheetReport';
-import { 
-  LoanHistory }               from './LoanHistory';
-
+import { SalesReport }               from '../sales/SalesReport';
+import { ExpensesReport }            from './ExpensesReport';
+import { BankBalanceReport }         from './BankBalanceReport';
+import { SalariesReport }            from './SalariesReport';
+import { FixedBillsReport }          from './FixedBillsReport';
+import { InventoryReport }           from '../../features/inventory/InventoryReport';
+import { ProductTransferReport }     from '../inventory/ProductTransferReport';
+import { TransactionHistoryReport }  from './TransactionHistoryReport';
+import { ReferralReport }            from '../sales/ReferralReport';
+import { CommissionReport }          from '../sales/CommissionReport';
+import { ProfitLossReport }          from './ProfitLossReport';
+import { BalanceSheetReport }        from './BalanceSheetReport';
+import { LoanHistory }               from './LoanHistory';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -54,16 +42,38 @@ const formatCurrency = (amount: number) =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Dashboard() {
-  const [activeTab, setActiveTab]       = useState('overview');
+  const { hasPermission, hasAnyReportPermission, isLoading: permissionsLoading } = useUserPermissions();
+
+  const canViewOverview = hasPermission('Dashboard');
+
+  // Initialize to null — wait for permissions to load before setting the tab
+  // This prevents the race condition where userData is null on first render
+  // and canViewOverview incorrectly returns false, defaulting to 'reports'.
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
 
-  // All data from Firestore — no props needed
-  const { hasPermission } = useUserPermissions();
+  // Set correct tab once permissions have finished loading from localStorage
+  useEffect(() => {
+    if (!permissionsLoading) {
+      setActiveTab(prev => prev === null ? (canViewOverview ? 'overview' : 'reports') : prev);
+    }
+  }, [permissionsLoading, canViewOverview]);
+
   const {
     transactions, banks, loans, invoices, commissions, products,
     loading, error, refresh,
     stats, monthlyChartData,
   } = useDashboardData();
+
+  // ── Wait for permissions to resolve before rendering ───────────────────
+  if (permissionsLoading || activeTab === null) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <Loader2 size={40} className="animate-spin text-[#4f46e5]" />
+        <p className="text-gray-500 text-lg">Loading...</p>
+      </div>
+    );
+  }
 
   // ── Loading / error states ──────────────────────────────────────────────
   if (loading) {
@@ -116,7 +126,6 @@ export function Dashboard() {
         return <InventoryReport products={products} />;
       case 'transactions':
         return <TransactionHistoryReport transactions={transactions} />;
-
       case 'referral':
         return <ReferralReport invoices={invoices} />;
       case 'commission':
@@ -132,37 +141,35 @@ export function Dashboard() {
 
   // ── Report cards config ─────────────────────────────────────────────────
   const screenMap: Record<string, Screen> = {
-    'sales': 'Sales Report',
-    'profit-loss': 'Profit Loss Report',
-    'balance-sheet': 'Balance Sheet Report',
-    'inventory': 'Inventory Report',
-    'transactions': 'Transaction History Report',
-    'referral': 'Referral Report',
-    'commission': 'Commission Report',
-    'expenses': 'Expenses Report',
-    'bank-balance': 'Bank Balance Report',
-    'salaries': 'Salaries Report',
-    'fixed-bills': 'Fixed Bills Report',
+    'sales':            'Sales Report',
+    'profit-loss':      'Profit Loss Report',
+    'balance-sheet':    'Balance Sheet Report',
+    'inventory':        'Inventory Report',
+    'transactions':     'Transaction History Report',
+    'referral':         'Referral Report',
+    'commission':       'Commission Report',
+    'expenses':         'Expenses Report',
+    'bank-balance':     'Bank Balance Report',
+    'salaries':         'Salaries Report',
+    'fixed-bills':      'Fixed Bills Report',
     'product-transfer': 'Product Transfer Report',
-    'loan-history': 'Loan History',
+    'loan-history':     'Loan History',
   };
   
   const filteredReports = [
-    { id: 'sales',               name: 'Sales Report',               description: 'Sales performance, revenue trends, and customer analytics', icon: TrendingUp,  color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Revenue & Analytics' },
-    { id: 'profit-loss',         name: 'Profit & Loss',              description: 'Revenue, expenses, and net profit calculations',             icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Financial Analysis' },
-    { id: 'balance-sheet',       name: 'Balance Sheet',              description: 'Assets, liabilities, and equity statement',                  icon: FileText,    color: 'from-blue-500 to-blue-600',      bg: 'bg-blue-50',    text: 'text-blue-700',    tag: 'Financial Position' },
-    { id: 'inventory',           name: 'Inventory Report',           description: 'Stock levels, product distribution, and inventory value',     icon: Package,     color: 'from-purple-500 to-purple-600',  bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Stock Management' },
-    { id: 'transactions',        name: 'Transaction History Report', description: 'Detailed transaction history with filtering and export',       icon: Receipt,     color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Detailed History' },
-
-    { id: 'referral',            name: 'Referral Report',            description: 'Track referral performance and earnings',                      icon: Users,       color: 'from-pink-500 to-pink-600',      bg: 'bg-pink-50',    text: 'text-pink-700',    tag: 'Referral Network' },
-    { id: 'commission',          name: 'Commission Report',          description: 'Salesperson commissions and performance metrics',              icon: CreditCard,  color: 'from-orange-500 to-orange-600',  bg: 'bg-orange-50',  text: 'text-orange-700',  tag: 'Performance Bonus' },
-    { id: 'expenses',            name: 'Expenses Report',            description: 'All expenses, categories, and spending analysis',               icon: Receipt,     color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Spending Analysis' },
-    { id: 'bank-balance',        name: 'Bank Balance Report',        description: 'Bank accounts, balances, and transaction history',             icon: Building2,   color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Banking' },
-    { id: 'salaries',            name: 'Salaries Report',            description: 'Employee salaries, payments, and payroll summary',              icon: Users,       color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Payroll' },
-
-    { id: 'fixed-bills',         name: 'Fixed Bills Report',         description: 'Recurring bills, due dates, and payment status',               icon: FileText,    color: 'from-purple-500 to-purple-600', bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Recurring Expenses' },
-    { id: 'product-transfer',    name: 'Product Transfer Report',    description: 'Inventory changes, audits, and stock adjustments',             icon: FileText,    color: 'from-slate-500 to-slate-600',    bg: 'bg-slate-50',   text: 'text-slate-700',   tag: 'Audit Trail' },
-    { id: 'loan-history',        name: 'Loan History',               description: 'Loan transactions, payments, and outstanding balances',         icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Loan Tracking' },
+    { id: 'sales',            name: 'Sales Report',               description: 'Sales performance, revenue trends, and customer analytics', icon: TrendingUp,  color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Revenue & Analytics' },
+    { id: 'profit-loss',      name: 'Profit & Loss',              description: 'Revenue, expenses, and net profit calculations',             icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Financial Analysis' },
+    { id: 'balance-sheet',    name: 'Balance Sheet',              description: 'Assets, liabilities, and equity statement',                  icon: FileText,    color: 'from-blue-500 to-blue-600',      bg: 'bg-blue-50',    text: 'text-blue-700',    tag: 'Financial Position' },
+    { id: 'inventory',        name: 'Inventory Report',           description: 'Stock levels, product distribution, and inventory value',     icon: Package,     color: 'from-purple-500 to-purple-600',  bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Stock Management' },
+    { id: 'transactions',     name: 'Transaction History Report', description: 'Detailed transaction history with filtering and export',       icon: Receipt,     color: 'from-indigo-500 to-indigo-600',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  tag: 'Detailed History' },
+    { id: 'referral',         name: 'Referral Report',            description: 'Track referral performance and earnings',                      icon: Users,       color: 'from-pink-500 to-pink-600',      bg: 'bg-pink-50',    text: 'text-pink-700',    tag: 'Referral Network' },
+    { id: 'commission',       name: 'Commission Report',          description: 'Salesperson commissions and performance metrics',              icon: CreditCard,  color: 'from-orange-500 to-orange-600',  bg: 'bg-orange-50',  text: 'text-orange-700',  tag: 'Performance Bonus' },
+    { id: 'expenses',         name: 'Expenses Report',            description: 'All expenses, categories, and spending analysis',               icon: Receipt,     color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Spending Analysis' },
+    { id: 'bank-balance',     name: 'Bank Balance Report',        description: 'Bank accounts, balances, and transaction history',             icon: Building2,   color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Banking' },
+    { id: 'salaries',         name: 'Salaries Report',            description: 'Employee salaries, payments, and payroll summary',              icon: Users,       color: 'from-gray-200 to-gray-100',     bg: 'bg-white',      text: 'text-black',      tag: 'Payroll' },
+    { id: 'fixed-bills',      name: 'Fixed Bills Report',         description: 'Recurring bills, due dates, and payment status',               icon: FileText,    color: 'from-purple-500 to-purple-600', bg: 'bg-purple-50',  text: 'text-purple-700',  tag: 'Recurring Expenses' },
+    { id: 'product-transfer', name: 'Product Transfer Report',    description: 'Inventory changes, audits, and stock adjustments',             icon: FileText,    color: 'from-slate-500 to-slate-600',    bg: 'bg-slate-50',   text: 'text-slate-700',   tag: 'Audit Trail' },
+    { id: 'loan-history',     name: 'Loan History',               description: 'Loan transactions, payments, and outstanding balances',         icon: DollarSign,  color: 'from-gray-500 to-gray-600',      bg: 'bg-gray-50',    text: 'text-gray-700',    tag: 'Loan Tracking' },
   ];
 
   const reportCards = filteredReports.filter((report: any) => {
@@ -170,6 +177,12 @@ export function Dashboard() {
     if (!screen) return false;
     return hasPermission(screen);
   });
+
+  // ── Tabs config — only show tabs the user is allowed to see ────────────
+  const tabs = [
+    ...(canViewOverview ? [{ id: 'overview', label: 'Overview', icon: Activity }] : []),
+    ...(hasAnyReportPermission ? [{ id: 'reports', label: 'Reports', icon: FileText }] : []),
+  ];
 
   // ── Render content by tab ───────────────────────────────────────────────
   const renderContent = () => {
@@ -217,36 +230,44 @@ export function Dashboard() {
             </div>
 
             {/* Report cards grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {reportCards.map((card, i) => (
-                <div
-                  key={card.id}
-                  onClick={() => setSelectedReport(card.id)}
-                  className="group relative bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-300 cursor-pointer hover:-translate-y-1 overflow-hidden"
-                  style={{ animationDelay: `${i * 60}ms` }}
-                >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-2xl`} />
-                  <div className="relative z-10">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`w-14 h-14 bg-gradient-to-br ${card.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                        <card.icon size={28} className="text-white" />
+            {reportCards.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
+                <BarChart2 size={48} className="opacity-30" />
+                <p className="text-lg font-medium">No reports available</p>
+                <p className="text-sm">Contact your administrator to request report access.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {reportCards.map((card, i) => (
+                  <div
+                    key={card.id}
+                    onClick={() => setSelectedReport(card.id)}
+                    className="group relative bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-300 cursor-pointer hover:-translate-y-1 overflow-hidden"
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  >
+                    <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-2xl`} />
+                    <div className="relative z-10">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={`w-14 h-14 bg-gradient-to-br ${card.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                          <card.icon size={28} className="text-white" />
+                        </div>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${card.bg} ${card.text}`}>
+                          {card.tag}
+                        </span>
                       </div>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${card.bg} ${card.text}`}>
-                        {card.tag}
-                      </span>
-                    </div>
-                    <h4 className="text-xl font-bold text-gray-900 mb-2">{card.name}</h4>
-                    <p className="text-gray-600 text-sm leading-relaxed mb-4">{card.description}</p>
-                    <div className="flex items-center text-sm text-gray-500 group-hover:text-[#4f46e5] transition-colors">
-                      <span>View Report</span>
-                      <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                      <h4 className="text-xl font-bold text-gray-900 mb-2">{card.name}</h4>
+                      <p className="text-gray-600 text-sm leading-relaxed mb-4">{card.description}</p>
+                      <div className="flex items-center text-sm text-gray-500 group-hover:text-[#4f46e5] transition-colors">
+                        <span>View Report</span>
+                        <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             <div className="text-center py-4">
               <span className="text-sm text-gray-400 flex items-center justify-center gap-2">
@@ -310,7 +331,6 @@ export function Dashboard() {
                 <p className="text-xs text-gray-500 mt-1">{banks.length} account{banks.length !== 1 ? 's' : ''}</p>
               </div>
 
-              {/* ── Overall Balance — now matches other cards ── */}
               <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Overall Balance</span>
@@ -461,37 +481,49 @@ export function Dashboard() {
     }
   };
 
+  // If user has no accessible tabs at all, show a neutral message
+  if (tabs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4 text-gray-400">
+        <BarChart2 size={48} className="opacity-30" />
+        <p className="text-lg font-medium">No access</p>
+        <p className="text-sm">Contact your administrator to request access.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">Dashboard Overview</h2>
+        <h2 className="text-2xl font-bold">
+          {canViewOverview ? 'Dashboard Overview' : 'Reports Hub'}
+        </h2>
         <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
           Live • Firestore
         </span>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="flex border-b border-gray-200">
-          {[
-            { id: 'overview', label: 'Overview',  icon: Activity  },
-            { id: 'reports',  label: 'Reports',   icon: FileText  },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); if (tab.id === 'reports') setSelectedReport(null); }}
-              className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'text-[#4f46e5] border-b-2 border-[#4f46e5] bg-[#4f46e5]/5'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <tab.icon size={18} />
-              {tab.label}
-            </button>
-          ))}
+      {/* Tabs — only rendered when there's more than one option */}
+      {tabs.length > 1 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div className="flex border-b border-gray-200">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); if (tab.id === 'reports') setSelectedReport(null); }}
+                className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'text-[#4f46e5] border-b-2 border-[#4f46e5] bg-[#4f46e5]/5'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <tab.icon size={18} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {renderContent()}
     </div>

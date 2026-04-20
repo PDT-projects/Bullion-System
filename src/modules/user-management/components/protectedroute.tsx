@@ -16,7 +16,7 @@ export function ProtectedRoute({
   requiredScreen,
   fallback
 }: ProtectedRouteProps) {
-  const { hasPermission, isLoading, userData } = useUserPermissions();
+  const { hasPermission, isLoading, userData, isSuperAdmin } = useUserPermissions();
 
   if (isLoading) {
     return (
@@ -33,7 +33,17 @@ export function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
+  // ✅ Super admin always has access to everything — skip permission check entirely
+  if (isSuperAdmin) {
+    return <>{children}</>;
+  }
+
   if (!hasPermission(requiredScreen)) {
+    // Dashboard specifically: redirect to /reports silently instead of error wall.
+    if (requiredScreen === 'Dashboard') {
+      return <Navigate to="/reports" replace />;
+    }
+
     return (
       fallback || (
         <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">

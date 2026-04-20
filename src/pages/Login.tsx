@@ -57,7 +57,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
       }
 
       const userData = userDoc.data();
-      const role: 'super_admin' | 'user' = userData.role === 'superAdmin' ? 'super_admin' : 'user';
+
+      // ✅ Handle both 'superAdmin' (camelCase) and 'super_admin' (snake_case) stored in Firestore
+      const rawRole = userData.role as string;
+      const role: 'super_admin' | 'user' =
+        rawRole === 'super_admin' || rawRole === 'superAdmin' ? 'super_admin' : 'user';
+
       const permissions: string[] = userData.permissions || [];
       const branch: string = userData.branch || '';
 
@@ -65,13 +70,16 @@ export function Login({ onLoginSuccess }: LoginProps) {
       localStorage.setItem('userInfo', JSON.stringify({
         uid: user.uid,
         email: user.email,
-        role,
+        role,        // always stored as 'super_admin' or 'user'
         permissions,
         branch,
       }));
 
       toast.success('Login successful!');
       onLoginSuccess(user, role, permissions, branch);
+
+      // ✅ super_admin always goes to dashboard; regular users go to dashboard too,
+      //    and ProtectedRoute will redirect them if they lack permission.
       navigate('/dashboard');
 
     } catch (error: any) {

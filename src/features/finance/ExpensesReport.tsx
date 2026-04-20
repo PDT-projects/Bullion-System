@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Filter, Download, Eye, Calendar, DollarSign, TrendingDown, Receipt, XCircle } from 'lucide-react';
+import { Download, Eye, Calendar, DollarSign, TrendingDown, Receipt, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Expense = {
@@ -22,7 +22,6 @@ interface ExpensesReportProps {
 export function ExpensesReport({ data }: ExpensesReportProps) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedMode, setSelectedMode] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
   const [viewExpense, setViewExpense] = useState<Expense | null>(null);
 
   const categories = useMemo(() => {
@@ -45,10 +44,6 @@ export function ExpensesReport({ data }: ExpensesReportProps) {
     return mode === 'Cash' ? <DollarSign size={16} className="text-black" /> : <TrendingDown size={16} className="text-black" />;
   };
 
-  const getModeColor = (mode: string) => {
-    return 'bg-gray-100 text-black';
-  };
-
   const handleExportCSV = () => {
     const headers = ['Date', 'ID', 'Category', 'Amount', 'Mode', 'Bank', 'Notes'];
     const rows = filteredData.map(exp => [
@@ -68,11 +63,6 @@ export function ExpensesReport({ data }: ExpensesReportProps) {
     a.download = `expenses-report-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     toast.success('Expenses exported');
-  };
-
-  const clearFilters = () => {
-    setSelectedCategory('');
-    setSelectedMode('');
   };
 
   return (
@@ -217,55 +207,9 @@ export function ExpensesReport({ data }: ExpensesReportProps) {
                 ))
               )}
             </tbody>
-            </table>
+          </table>
         </div>
-
-        {viewExpense && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-8">
-            <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
-              <div className="flex items-center justify-between p-8 border-b border-gray-200">
-                <h3 className="text-3xl font-bold text-black">Expense Details</h3>
-                <button onClick={() => setViewExpense(null)} className="p-3 rounded-xl hover:bg-gray-100 transition-all">
-                  <XCircle size={28} className="text-black" />
-                </button>
-              </div>
-              <div className="p-8 space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <p className="text-lg font-semibold text-black mb-2">Date</p>
-                    <p className="text-2xl font-bold text-black">{new Date(viewExpense.date).toLocaleDateString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold text-black mb-2">Category</p>
-                    <p className="text-2xl font-bold text-black">{viewExpense.subCategory}</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold text-black mb-2">Amount</p>
-                    <p className="text-4xl font-bold text-black">{viewExpense.amount.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold text-black mb-2">Mode</p>
-                    <p className="text-2xl font-bold text-black">{viewExpense.mode}</p>
-                  </div>
-                </div>
-                {viewExpense.bankName && (
-                  <div>
-                    <p className="text-lg font-semibold text-black mb-4">Bank</p>
-                    <p className="text-2xl font-bold text-black">{viewExpense.bankName}</p>
-                  </div>
-                )}
-                {viewExpense.notes && (
-                  <div>
-                    <p className="text-lg font-semibold text-black mb-4">Notes</p>
-                    <p className="text-xl text-black">{viewExpense.notes}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-    );
-  }
+    </div>
+  );
 }
-

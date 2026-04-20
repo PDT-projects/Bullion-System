@@ -1,3 +1,9 @@
+// Sidebar.tsx — updated
+// Changes:
+//   - "Reports" sidebar link added directly below Dashboard
+//   - Only visible when user has at least one report permission
+//   - Uses hasAnyReportPermission from useUserPermissions
+
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
@@ -23,13 +29,16 @@ import {
   Calculator,
   UserCheck,
   HardDrive,
+  BarChart2,
 } from 'lucide-react';
 
 import { useAuth } from '../providers/context/AuthContext';
+import { useUserPermissions } from '../modules/user-management/hooks/useUserPermissions';
 
 // Map each screen name to its permission key (must match EXACT Screen type in userService.ts)
 const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'dashboard': 'Dashboard',
+  'reports': 'Sales Report',             // Reports link shown if any report permission exists
   'add-transaction': 'Add Transaction',
   'pending-payment': 'Pending Payments',
   'bills': 'Bills List',
@@ -62,21 +71,22 @@ export function Sidebar() {
   ]);
 
   const { role, permissions } = useAuth();
+  const { hasAnyReportPermission, hasPermission } = useUserPermissions();
   const location = useLocation();
 
   // Check if a menu item id is allowed for current user
   const canSee = (id: string): boolean => {
     if (role === 'super_admin') return true;
     const requiredScreen = SCREEN_PERMISSIONS[id];
-    if (!requiredScreen) return true; // section headers (Finance, Operations) always show if they have visible children
+    if (!requiredScreen) return true;
     return permissions.includes(requiredScreen);
   };
 
-  // Check if a section has at least one visible child (so we don't show empty sections)
+  // Check if a section has at least one visible child
   const sectionHasVisibleChildren = (children: any[]): boolean => {
     return children.some((child) => {
       if (child.children) return sectionHasVisibleChildren(child.children);
-      return canSee(child.id) || !SCREEN_PERMISSIONS[child.id]; // Show section headers always
+      return canSee(child.id) || !SCREEN_PERMISSIONS[child.id];
     });
   };
 
@@ -93,6 +103,8 @@ export function Sidebar() {
       icon: LayoutDashboard,
       path: '/dashboard',
     },
+    // ── Reports direct link — shown when user has any report permission ──
+    // Rendered conditionally below, not here in the static array
     {
       id: 'finance',
       name: 'Finance',
@@ -129,8 +141,7 @@ export function Sidebar() {
       icon: Package,
       children: [
         { id: 'employees', name: 'Employees', icon: Users, path: '/employees' },
-
-{ id: 'inventory-entry', name: 'Inventory', icon: Package, path: '/inventory' },
+        { id: 'inventory-entry', name: 'Inventory', icon: Package, path: '/inventory' },
         { id: 'invoices', name: 'Invoices', icon: FileText, path: '/invoices' },
         { id: 'assets-management', name: 'Assets Management', icon: HardDrive, path: '/assets-management' },
       ],
@@ -191,7 +202,6 @@ export function Sidebar() {
       const hasNestedChildren = child.children && child.children.length > 0;
 
       if (hasNestedChildren) {
-        // Only show this sub-section if it has visible children
         if (!sectionHasVisibleChildren(child.children)) return null;
 
         return (
@@ -218,7 +228,6 @@ export function Sidebar() {
         );
       }
 
-      // Regular child — check permission
       if (!canSee(child.id)) return null;
 
       return (
@@ -245,7 +254,43 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 p-4 overflow-y-auto">
-        {menuItems.map((item) => {
+        {/* ── Dashboard ── */}
+        {(() => {
+          const dashItem = menuItems[0]; // Dashboard is always first
+          if (!canSee(dashItem.id)) return null;
+          return (
+            <NavLink
+              key={dashItem.id}
+              to={dashItem.path!}
+              className={({ isActive }) =>
+                `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${
+                  isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-700 hover:bg-gray-100'
+                }`
+              }
+            >
+              <dashItem.icon size={18} />
+              <span className="font-medium text-sm">{dashItem.name}</span>
+            </NavLink>
+          );
+        })()}
+
+        {/* ── Reports — right below Dashboard ── */}
+        {(role === 'super_admin' || hasAnyReportPermission) && (
+          <NavLink
+            to="/reports"
+            className={({ isActive }) =>
+              `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${
+                isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-700 hover:bg-gray-100'
+              }`
+            }
+          >
+            <BarChart2 size={18} />
+            <span className="font-medium text-sm">Reports</span>
+          </NavLink>
+        )}
+
+        {/* ── Rest of menu items (skip Dashboard which is index 0) ── */}
+        {menuItems.slice(1).map((item) => {
           const Icon = item.icon;
           const hasChildren = item.children && item.children.length > 0;
 

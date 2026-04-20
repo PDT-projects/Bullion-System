@@ -251,7 +251,6 @@ export function SalariesReport({ data }: SalariesReportProps) {
           </div>
         )}
       </div>
-    );
-  }
+    </div>
+  );
 }
-

@@ -103,6 +103,9 @@ export type Screen =
   | 'Inventory Report'
   | 'Product Transfer Report'
   | 'Inventory Charts'
+  // Reports (Other)
+  | 'Transaction History Report'
+  | 'Loan History'
   // User Management (super admin only)
   | 'User Management'
   | 'Assets Management';
@@ -177,7 +180,8 @@ export const ALL_SCREEN_GROUPS: ScreenGroup[] = [
     title: 'Finance Reports',
     screens: [
       'Balance Sheet Report', 'Bank Balance Report', 'Expenses Report', 
-      'Fixed Bills Report', 'Profit Loss Report', 'Salaries Report'
+      'Fixed Bills Report', 'Profit Loss Report', 'Salaries Report',
+      'Transaction History Report', 'Loan History'
     ]
   },
   {
