@@ -359,6 +359,26 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       toast.error('Salesperson is required for Paid invoices (commission calculation)');
       return;
     }
+
+    // ── Duplicate invoice number check ──────────────────────────────
+    // When creating, make sure no existing invoice already uses this number.
+    // When editing, allow the same number to belong to the current invoice only.
+    const proposedNumber = formData.invoiceNumber?.trim();
+    if (proposedNumber) {
+      const conflict = allInvoices.find(inv =>
+        inv.invoiceNumber === proposedNumber &&
+        (!isEditing || inv.id !== editingInvoice?.id)
+      );
+      if (conflict) {
+        toast.error(
+          `Invoice number "${proposedNumber}" is already in use. Please change the last 3 digits before saving.`,
+          { duration: 6000 }
+        );
+        return;
+      }
+    }
+    // ── end duplicate check ──────────────────────────────────────────
+
     setIsSaving(true);
   
     try {

@@ -794,7 +794,33 @@ export function InvoiceFormView({
           <div className="grid grid-cols-4 gap-2 mb-2">
             <div>
               <label className={lbl}>Invoice Number</label>
-              <input type="text" value={formData.invoiceNumber || ''} readOnly className={`${inp} bg-gray-50`} />
+              {(() => {
+                // Format: "PDT-25189"  →  prefix "PDT-" (read-only) + editable last 3 digits
+                const full     = formData.invoiceNumber || '';
+                const dashIdx  = full.lastIndexOf('-');
+                const prefix   = dashIdx >= 0 ? full.slice(0, dashIdx + 1) : '';   // "PDT-"
+                const suffix   = dashIdx >= 0 ? full.slice(dashIdx + 1)    : full; // "25189"
+                const fixedPart    = suffix.length > 3 ? suffix.slice(0, suffix.length - 3) : ''; // "25"
+                const editablePart = suffix.slice(-3);                                             // "189"
+                return (
+                  <div className="flex items-center h-8 border border-gray-300 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5] bg-white">
+                    <span className="px-2 text-sm text-gray-500 bg-gray-50 whitespace-nowrap border-r border-gray-200 select-none h-full flex items-center">
+                      {prefix}{fixedPart}
+                    </span>
+                    <input
+                      type="text"
+                      value={editablePart}
+                      maxLength={3}
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 3);
+                        setFormData({ invoiceNumber: `${prefix}${fixedPart}${val}` });
+                      }}
+                      className="flex-1 px-1 text-sm font-semibold text-gray-900 bg-white focus:outline-none text-center min-w-0"
+                      title="Edit last 3 digits of invoice number"
+                    />
+                  </div>
+                );
+              })()}
             </div>
             <div>
               <label className={lbl}>Date</label>

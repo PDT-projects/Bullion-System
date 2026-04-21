@@ -128,21 +128,40 @@ function buildPdf(invoice: Invoice): Blob {
   // drawLogo(doc, ML, y, LOGO);
   doc.addImage('/PDT-logo.png', 'PNG', ML, y, LOGO, LOGO);
 
-  const nx = ML + LOGO + 4;   // text starts here
+  // Company name centred on full page width
   doc.setFont('helvetica', 'bold'); doc.setFontSize(15); st(doc, DARK);
-  doc.text('Pakistan Detector Technologies Pvt. Ltd - Islamabad', nx, y + 7);
+  doc.text('Pakistan Detector Technologies Pvt. Ltd - Islamabad', PW / 2, y + 7, { align: 'center' });
 
+  // Address centred
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); st(doc, GRAY);
-  // centre the address between nx and right edge
-  const midX = (nx + PW - MR) / 2;
-  doc.text('Office#5, 4th floor, Gulberg Trade center, Gulberg Green Islamabad', midX, y + 13, { align: 'center' });
+  doc.text('Office#5, 4th floor, Gulberg Trade center, Gulberg Green Islamabad', PW / 2, y + 13, { align: 'center' });
 
+  // Phone No and NTN — centred below address
+  const phoneNtnY = y + 19;
+  const pLabel = 'Phone No:';
+  const pVal   = ' 03111444615';
+  const nLabel = 'NTN:';
+  const nVal   = ' 52723';
+  // Measure widths and place centred
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8); st(doc, DARK);
-  doc.text('Phone No:', nx, y + 19);
-  doc.setFont('helvetica', 'normal'); doc.text(' 03111444615', nx + 21, y + 19);
+  const pLW = doc.getTextWidth(pLabel);
+  doc.setFont('helvetica', 'normal');
+  const pVW = doc.getTextWidth(pVal);
   doc.setFont('helvetica', 'bold');
-  doc.text('NTN:', nx, y + 24.5);
-  doc.setFont('helvetica', 'normal'); doc.text(' 52723', nx + 9.5, y + 24.5);
+  const nLW = doc.getTextWidth(nLabel);
+  doc.setFont('helvetica', 'normal');
+  const nVW = doc.getTextWidth(nVal);
+  const GAP = 8; // gap between phone block and NTN block
+  const totalW = pLW + pVW + GAP + nLW + nVW;
+  let cx = PW / 2 - totalW / 2;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); st(doc, DARK);
+  doc.text(pLabel, cx, phoneNtnY); cx += pLW;
+  doc.setFont('helvetica', 'normal'); st(doc, DARK);
+  doc.text(pVal, cx, phoneNtnY); cx += pVW + GAP;
+  doc.setFont('helvetica', 'bold'); st(doc, DARK);
+  doc.text(nLabel, cx, phoneNtnY); cx += nLW;
+  doc.setFont('helvetica', 'normal'); st(doc, DARK);
+  doc.text(nVal, cx, phoneNtnY);
 
   y += LOGO + 10;
 
@@ -159,7 +178,10 @@ function buildPdf(invoice: Invoice): Blob {
   // ══════════════════════════════════════════════════════════════════
   // 3. CUSTOMER block (left) + Inv No / Date (right)
   // ══════════════════════════════════════════════════════════════════
-  const RX = ML + 88;   // right-column x
+  // Left column: 0–100 mm   Right column: 100–196 mm
+  const LEFT_W  = 100;
+  const RIGHT_X = ML + LEFT_W;   // ~114 mm from page left
+
   let lY = y;
 
   // Customer name — bold
@@ -174,14 +196,14 @@ function buildPdf(invoice: Invoice): Blob {
 
   // CNIC  bold label + normal value
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
-  doc.text('CNIC: ', ML, lY);
+  doc.text('CNIC:', ML, lY);
   doc.setFont('helvetica', 'normal');
   doc.text(invoice.customerCNIC || '', ML + 13, lY);
   lY += 5;
 
   // Mobile  bold label + normal value
   doc.setFont('helvetica', 'bold');
-  doc.text('Mobile: ', ML, lY);
+  doc.text('Mobile:', ML, lY);
   doc.setFont('helvetica', 'normal');
   const phone = invoice.customerPhone2
     ? `${invoice.customerPhone}   /   ${invoice.customerPhone2}`
@@ -189,22 +211,29 @@ function buildPdf(invoice: Invoice): Blob {
   doc.text(phone, ML + 16, lY);
   lY += 5;
 
-  // Email label (blank value)
-  doc.setFont('helvetica', 'bold');
-  doc.text('Email', ML, lY);
-  lY += 5;
+  // Email — only show if a value is present
+  if (invoice.customerEmail?.trim()) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('Email:', ML, lY);
+    doc.setFont('helvetica', 'normal');
+    doc.text(invoice.customerEmail.trim(), ML + 13, lY);
+    lY += 5;
+  }
 
-  // Right column — align with the CNIC line (i.e. after name + optional city)
-  const rStartY = y + 5.5 + (invoice.customerCity ? 5 : 0);
+  // Right column — Inv No & Date aligned at RIGHT_X
+  // Start at same vertical position as CNIC row for clean alignment
+  const rY = y + 5.5 + (invoice.customerCity ? 5 : 0);
+  const VAL_X = RIGHT_X + 18;   // value starts after label
+
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
-  doc.text('Inv No:', RX, rStartY);
+  doc.text('Inv No:', RIGHT_X, rY);
   doc.setFont('helvetica', 'normal');
-  doc.text(invoice.invoiceNumber || '', RX + 16, rStartY);
+  doc.text(invoice.invoiceNumber || '', VAL_X, rY);
 
   doc.setFont('helvetica', 'bold');
-  doc.text('Date:', RX, rStartY + 6);
+  doc.text('Date:', RIGHT_X, rY + 6);
   doc.setFont('helvetica', 'normal');
-  doc.text(fmtDate(invoice.date), RX + 13, rStartY + 6);
+  doc.text(fmtDate(invoice.date), VAL_X, rY + 6);
 
   y = lY + 3;
 
@@ -304,11 +333,28 @@ function buildPdf(invoice: Invoice): Blob {
   y += 10;
 
   // ══════════════════════════════════════════════════════════════════
-  // 7. THANK YOU
+  // 7. THANK YOU  (centred, above signatures)
   // ══════════════════════════════════════════════════════════════════
-  y = pb(doc, y, 10);
+  y = pb(doc, y, 30);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); st(doc, DARK);
   doc.text('Thank you for your purchase!', PW / 2, y, { align: 'center' });
+
+  y += 22;
+
+  // ══════════════════════════════════════════════════════════════════
+  // 8. SIGNATURE LINES  —  Dealer left | Client right, same Y
+  // ══════════════════════════════════════════════════════════════════
+  const SIG_W     = 65;                    // line length
+  const L_SIG_X   = ML;                   // dealer line start
+  const R_SIG_X   = PW - MR - SIG_W;      // client line start (flush to right margin)
+
+  sd(doc, DARK); doc.setLineWidth(0.4);
+  doc.line(L_SIG_X, y, L_SIG_X + SIG_W, y);
+  doc.line(R_SIG_X, y, R_SIG_X + SIG_W, y);
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
+  doc.text('Dealer Signature', L_SIG_X + SIG_W / 2, y + 5, { align: 'center' });
+  doc.text('Client Signature', R_SIG_X + SIG_W / 2, y + 5, { align: 'center' });
 
   return doc.output('blob');
 }
