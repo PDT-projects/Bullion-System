@@ -20,7 +20,7 @@ interface InventoryProductDetailsViewProps extends UseInventoryProductDetailsVie
 export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewProps> = ({
   formData, costingOption, singleModel, setSingleModelField,
   serialInputs, validationErrors,
-  setBrandName, setModelName, setCategory, setSellPrice, setStock,
+  setBrandName, setModelName, setCategory, setCostPrice, setSellPrice, setStock,
   setLocation, setDescription, setStatus, updateSerialNumber, updateSerialCity,
   handleNext, handleBack, categories, cities,
   costingBrandId, costingBrandName, preloadedModels, isLoadingModels,
@@ -427,7 +427,10 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                 <input
                   type="number"
                   value={singleModel.costPrice || ''}
-                  onChange={e => setSingleModelField('costPrice', Number(e.target.value))}
+                  onChange={e => {
+                    setSingleModelField('costPrice', Number(e.target.value));
+                    setCostPrice(Number(e.target.value));  // ← FIX: was missing, so formData.costPrice never updated
+                  }}
                   className={inputCls}
                   min={0}
                   placeholder="0"

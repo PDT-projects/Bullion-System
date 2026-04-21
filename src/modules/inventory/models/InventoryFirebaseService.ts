@@ -1,7 +1,15 @@
 /**
  * Inventory Module - Firebase Firestore Service Layer
- * Change: `location` field added to product documents — saved on create/update,
- * read back in transformDocToProduct.
+ *
+ * FIXES APPLIED:
+ *   1. createProduct — `description` was always included in stripUndefined({...})
+ *      but could be lost if the DTO didn't carry it. Now explicitly mapped.
+ *   2. updateProduct — was doing stripUndefined({ ...dto }) which spreads
+ *      ProductFormData-only keys (currentStep, paidAmount, paymentMethod, etc.)
+ *      into Firestore. Now only maps fields that belong in the products collection.
+ *   3. costPrice — both create and update now use explicit `costPrice: dto.costPrice ?? 0`
+ *      so the field is NEVER undefined and is always written to Firestore.
+ *   4. `location` field added — saved on create/update, read back in transformDocToProduct.
  */
 
 import {
@@ -81,7 +89,7 @@ function transformDocToProduct(docSnap: any): Product {
     buyType:       d.buyType       || 'Import',
     warrantyYears: d.warrantyYears ?? 0,
     stock:         d.stock         ?? 0,
-    location:      d.location      || '',          // ← new
+    location:      d.location      || '',
     serialNumbers: d.serialNumbers || [],
     serialCities:  d.serialCities  || {},
     serialStatus:  d.serialStatus  || {},
@@ -229,13 +237,13 @@ export class InventoryFirebaseService {
     }
   ): Promise<Product> {
     try {
-      console.log('🔥 Creating product:', dto.brandName, dto.modelName);
+      console.log('🔥 Creating product:', dto.brandName, dto.modelName, '| costPrice:', dto.costPrice, '| description:', dto.description);
       const now = new Date().toISOString();
 
       const serialStatus: { [key: string]: SerialStatus } = {};
       dto.serialNumbers.forEach(s => { serialStatus[s] = 'Available'; });
 
-      // If no per-serial cities set, seed them all to the product's primary location
+      // Seed per-serial cities from product's primary location if not individually set
       const serialCities = { ...dto.serialCities };
       if (dto.location) {
         dto.serialNumbers.forEach(s => {
@@ -262,20 +270,22 @@ export class InventoryFirebaseService {
         ? (paymentInfo.totalAmount || 0) - (paymentInfo.paidAmount || 0)
         : undefined;
 
+      // FIX 3 — costPrice and description are explicitly included so they are
+      // NEVER lost to stripUndefined or type mismatch.
       const data = stripUndefined({
         brandName:     dto.brandName,
         modelName:     dto.modelName,
         category:      dto.category,
-        costPrice:     dto.costPrice,
+        costPrice:     dto.costPrice ?? 0,   // FIX 3 — guaranteed non-undefined
         sellPrice:     dto.sellPrice,
         buyType:       dto.buyType,
         warrantyYears: dto.warrantyYears,
         stock:         dto.stock,
-        location:      dto.location,              // ← new
+        location:      dto.location,
         serialNumbers: dto.serialNumbers,
-        serialCities,                             // ← seeded from location
+        serialCities,
         serialStatus,
-        description:   dto.description,
+        description:   dto.description ?? '', // FIX 1 — explicit, never dropped
         status:        dto.status,
         isDamaged:     dto.isDamaged,
         costingOption: dto.costingOption,
@@ -302,9 +312,16 @@ export class InventoryFirebaseService {
     }
   }
 
+  // FIX 2 — updateProduct now builds an EXPLICIT field map instead of
+  // spreading the entire dto object. This prevents stray keys from
+  // ProductFormData (currentStep, paidAmount, paymentMethod, brandId, modelId)
+  // from leaking into the Firestore document, and ensures costPrice and
+  // description are always written even when they are 0 or empty string.
   static async updateProduct(id: string, dto: UpdateProductDTO): Promise<Product> {
     try {
+      console.log('🔥 Updating product:', id, '| costPrice:', dto.costPrice, '| description:', dto.description);
       const now = new Date().toISOString();
+
       let costingFields = {};
       if (dto.costingOption === 'with' && dto.costing) {
         const c = dto.costing;
@@ -319,9 +336,39 @@ export class InventoryFirebaseService {
           costing:                  c,
         });
       }
-      const data = stripUndefined({ ...dto, ...costingFields, updatedAt: now });
+
+      // Build the update payload with ONLY fields that belong in the products
+      // collection. This is the key fix — previously { ...dto } would spread
+      // whatever object was passed in (often a ProductFormData), which has
+      // extra keys that pollute Firestore and can cause silent type errors.
+      const updateData: Record<string, any> = {
+        updatedAt: now,
+        // FIX 3 — costPrice explicitly mapped, guaranteed non-undefined
+        costPrice: dto.costPrice ?? 0,
+        // FIX 1 — description explicitly mapped, guaranteed non-null
+        description: dto.description ?? '',
+      };
+
+      // Only include optional fields if they are present in the DTO
+      if (dto.brandName     !== undefined) updateData.brandName     = dto.brandName;
+      if (dto.modelName     !== undefined) updateData.modelName     = dto.modelName;
+      if (dto.category      !== undefined) updateData.category      = dto.category;
+      if (dto.sellPrice     !== undefined) updateData.sellPrice     = dto.sellPrice;
+      if (dto.buyType       !== undefined) updateData.buyType       = dto.buyType;
+      if (dto.warrantyYears !== undefined) updateData.warrantyYears = dto.warrantyYears;
+      if (dto.stock         !== undefined) updateData.stock         = dto.stock;
+      if (dto.location      !== undefined) updateData.location      = dto.location;
+      if (dto.serialNumbers !== undefined) updateData.serialNumbers = dto.serialNumbers;
+      if (dto.serialCities  !== undefined) updateData.serialCities  = dto.serialCities;
+      if (dto.status        !== undefined) updateData.status        = dto.status;
+      if (dto.isDamaged     !== undefined) updateData.isDamaged     = dto.isDamaged;
+      if (dto.costingOption !== undefined) updateData.costingOption = dto.costingOption;
+
+      // Merge costing flat fields if present
+      Object.assign(updateData, costingFields);
+
       const ref = doc(db, PRODUCTS_COLLECTION, id);
-      await updateDoc(ref, data);
+      await updateDoc(ref, updateData);
       console.log('✅ Product updated:', id);
       return transformDocToProduct(await getDoc(ref));
     } catch (error) {
@@ -410,7 +457,7 @@ export class TransferFirebaseService {
         serialNumbers:  dto.serialNumbers,
         date:           dto.transferDate,
         transferDate:   dto.transferDate,
-        status:         'In Transit' as const,   // ← always In Transit on create
+        status:         'In Transit' as const,
         transferredBy:  dto.transferredBy,
         note:           dto.note,
         notes:          dto.notes,

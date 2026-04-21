@@ -52,3 +52,4 @@ export { InventoryProductDetailsWrapper } from './views/InventoryProductDetailsW
 export { InventoryPaymentWrapper } from './views/InventoryPaymentWrapper';
 export { ProductTransferWrapper } from './views/ProductTransferWrapper';
 export { ProductTransferCreateWrapper } from './views/ProductTransferCreateWrapper';
+export { InventoryEditWrapper } from './views/InventoryEditWrapper';

@@ -47,6 +47,7 @@ export interface UseInventoryProductDetailsViewModelReturn {
   setBrandName: (v: string) => void;
   setModelName: (v: string) => void;
   setCategory: (v: string) => void;
+  setCostPrice: (v: number) => void;  // ← FIX: was missing
   setSellPrice: (v: number) => void;
   setBuyType: (v: BuyType) => void;
   setWarrantyYears: (v: number) => void;
@@ -134,6 +135,7 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     brandName:     costingBrandName,
     modelName:     '',
     category:      '',
+    costPrice:     0,
     sellPrice:     0,
     buyType:       'Import',
     warrantyYears: 0,
@@ -205,6 +207,7 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   const setBrandName     = useCallback((v: string)        => setFormData(p => ({ ...p, brandName: v })), []);
   const setModelName     = useCallback((v: string)        => setFormData(p => ({ ...p, modelName: v })), []);
   const setCategory      = useCallback((v: string)        => setFormData(p => ({ ...p, category: v })), []);
+  const setCostPrice     = useCallback((v: number)        => setFormData(p => ({ ...p, costPrice: v })), []); // ← FIX: was missing entirely
   const setSellPrice     = useCallback((v: number)        => setFormData(p => ({ ...p, sellPrice: v })), []);
   const setBuyType       = useCallback((v: BuyType)       => setFormData(p => ({ ...p, buyType: v })), []);
   const setWarrantyYears = useCallback((v: number)        => setFormData(p => ({ ...p, warrantyYears: v })), []);
@@ -348,7 +351,8 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     const params = new URLSearchParams({
       type: inventoryType, costing: costingOption,
       brandName: formData.brandName, modelName: formData.modelName,
-      category: formData.category, sellPrice: formData.sellPrice.toString(),
+      category: formData.category, costPrice: (formData.costPrice ?? 0).toString(),
+      sellPrice: formData.sellPrice.toString(),
       buyType: formData.buyType, warrantyYears: formData.warrantyYears.toString(),
       stock: formData.stock.toString(), description: formData.description,
       status: formData.status, isDamaged: formData.isDamaged.toString(),
@@ -385,7 +389,7 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
     costingBrandId, costingBrandName,
     preloadedModels, isLoadingModels,
     serialInputs, validationErrors, isValid,
-    setBrandName, setModelName, setCategory, setSellPrice, setBuyType,
+    setBrandName, setModelName, setCategory, setCostPrice, setSellPrice, setBuyType,
     setWarrantyYears, setStock, setLocation, setDescription, setStatus, setIsDamaged,
     setCostingBrandName: setCostingBrandNameFn,
     setUsdRate, setTotalCustomsValue, setTotalFreightValue,

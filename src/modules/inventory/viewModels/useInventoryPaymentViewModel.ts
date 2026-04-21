@@ -64,6 +64,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const status        = (searchParams.get('status') as ProductStatus) || 'New';
   const isDamaged     = searchParams.get('isDamaged') === 'true';
   const location      = searchParams.get('location')     || '';  // ← new
+  const costPrice     = Number(searchParams.get('costPrice'))     || 0;  // ← FIX: was never parsed
   const serialNumbers: string[]                = JSON.parse(searchParams.get('serialNumbers') || '[]');
   const serialCities:  { [k: string]: string } = JSON.parse(searchParams.get('serialCities')  || '{}');
   const costingBrandId = searchParams.get('costingBrandId') || '';
@@ -185,6 +186,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             brandName,
             modelName:     sm.modelName,
             category,
+            costPrice:     sm.costPrice,  // ← FIX: was missing
             sellPrice:     sm.salePrice,
             buyType,
             warrantyYears,
@@ -211,8 +213,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
           });
         }
         const dto: CreateProductDTO = {
-          brandName, modelName, category, sellPrice, buyType, warrantyYears,
-          stock, location,                                      // ← new
+          brandName, modelName, category, costPrice, sellPrice, buyType, warrantyYears,  // ← FIX: costPrice added
+          stock, location,
           serialNumbers, serialCities: seededCities,
           description,
           status:        isOnOrder ? 'On-Order'  : status,
@@ -246,7 +248,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const handleBack = useCallback(() => {
     const params = new URLSearchParams({
       type: inventoryType, costing: costingOption, brandName, modelName,
-      category, sellPrice: sellPrice.toString(), buyType,
+      category, costPrice: costPrice.toString(), sellPrice: sellPrice.toString(), buyType,  // ← FIX: costPrice added
       warrantyYears: warrantyYears.toString(), stock: stock.toString(),
       description, status, isDamaged: isDamaged.toString(),
       location,                                                 // ← new

@@ -39,6 +39,7 @@ import {
   InventoryAddExistingWrapper,
   ProductTransferWrapper,
   ProductTransferCreateWrapper,
+  InventoryEditWrapper,
 } from './modules/inventory';
 
 import {
@@ -406,6 +407,7 @@ export const router = createBrowserRouter([
       { path: 'create-new/details',         element: <ScreenProtectedRoute requiredScreen="Inventory Product Details"><InventoryProductDetailsRoute /></ScreenProtectedRoute> },
       { path: 'create-new/payment',         element: <ScreenProtectedRoute requiredScreen="Inventory Payment"><InventoryPaymentRoute /></ScreenProtectedRoute> },
       { path: 'add-existing',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Existing"><InventoryAddExistingRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',                element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryEditWrapper /></ScreenProtectedRoute> },
     ],
   },
 

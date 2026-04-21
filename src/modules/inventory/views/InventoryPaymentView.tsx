@@ -220,13 +220,29 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
           {/* Actions */}
           <div className="flex items-center justify-between pt-6 border-t border-gray-200">
             <button onClick={handleBack} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-2 font-medium"><ArrowLeft size={18} />Back</button>
-            <button onClick={handleSubmit} disabled={!isValid || isSaving}
-              className={`px-8 py-4 rounded-lg font-semibold text-gray-900 text-lg shadow-lg flex items-center gap-2 transition-colors ${
-                isValid && !isSaving
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:text-white active:bg-indigo-800 active:text-white'
-                    : 'bg-gray-200 text-gray-700 cursor-not-allowed'
-              }`}>
-              {isSaving ? <><Loader2 size={20} className="animate-spin" />Saving...</> : <><Save size={20} />Submit Inventory</>}
+            <button onClick={handleSubmit} disabled={!isValid || isSaving || isGeneratingId}
+              style={{
+                padding: '14px 32px',
+                borderRadius: 8,
+                fontSize: 17,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                border: 'none',
+                cursor: (!isValid || isSaving || isGeneratingId) ? 'not-allowed' : 'pointer',
+                backgroundColor: (isSaving || isGeneratingId) ? '#6366f1' : isValid ? '#4f46e5' : '#e5e7eb',
+                color: isValid || isSaving || isGeneratingId ? '#ffffff' : '#9ca3af',
+                opacity: (!isValid && !isGeneratingId) ? 0.6 : 1,
+                boxShadow: isValid ? '0 4px 14px rgba(79,70,229,0.4)' : 'none',
+                transition: 'background-color 0.2s',
+              }}>
+              {isGeneratingId
+                ? <><Loader2 size={20} className="animate-spin" />Preparing...</>
+                : isSaving
+                ? <><Loader2 size={20} className="animate-spin" />Saving...</>
+                : <><Save size={20} />Submit Inventory</>
+              }
             </button>
           </div>
         </div>

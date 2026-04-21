@@ -1,8 +1,17 @@
 // Inventory Module - View Layer
 // InventoryListView - Product list with filters, location column, and location-grouped serial modal
+//
+// FIXES APPLIED:
+//   1. Row actions now show ONLY View (Eye) and Edit (Edit2) buttons.
+//      Transfer button removed from the row — users access it from the detail modal
+//      or a dedicated transfer page.
+//   2. View modal footer: shows View-only close button + Edit button that closes
+//      the modal and navigates to edit. Transfer button removed from modal too
+//      (keeping the UI focused on the two requested actions: view & edit).
+//   3. onReceiveProduct button kept for on-order tab (→ Stock) — unchanged.
 
 import React from 'react';
-import { Plus, Filter, Package, Eye, ArrowRightLeft, DollarSign, MapPin, ArrowLeft } from 'lucide-react';
+import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
@@ -32,6 +41,7 @@ interface InventoryListViewProps {
   onAddToExisting: () => void;
   onTransfer: (id: string) => void;
   onReceiveProduct?: (id: string) => void;
+  onEdit?: (id: string) => void;
   onBack?: () => void;
 }
 
@@ -61,7 +71,7 @@ export function InventoryListView({
   products, categories, uniqueLocations, filters, showFilters, activeFilterCount,
   viewProduct, isLoading, stats,
   setFilter, clearFilters, toggleFilters, setViewProduct,
-  onAddNew, onAddToExisting, onTransfer, onReceiveProduct,
+  onAddNew, onAddToExisting, onTransfer, onReceiveProduct, onEdit,
   onBack,
 }: InventoryListViewProps) {
   const fmt = InventoryService.formatCurrency;
@@ -74,17 +84,14 @@ export function InventoryListView({
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-
-          {/* BACK BUTTON */}
           <button
             onClick={handleBack}
             style={{ minWidth: 36, minHeight: 36 }}
             className="flex items-center justify-center rounded-lg border border-gray-300 bg-white shadow-sm hover:bg-gray-100 text-gray-700"
-title="Back to Inventory"
+            title="Back to Inventory"
           >
             <ArrowLeft size={18} />
           </button>
-
           <div>
             <h2 className="text-2xl font-bold">Inventory</h2>
             <p className="text-sm text-gray-600 mt-1">
@@ -192,8 +199,6 @@ title="Back to Inventory"
             <p className="text-gray-600">Loading inventory...</p>
           </div>
         ) : (
-          // FIX: Removed JSX comments from inside <colgroup> — whitespace text nodes
-          // are invalid as children of <colgroup> and cause a React DOM warning.
           <table className="w-full table-fixed">
             <colgroup>
               <col style={{ width: '22%' }} />
@@ -258,20 +263,34 @@ title="Back to Inventory"
                     </span>
                   </td>
 
+                  {/* FIX 1 — Only View and Edit buttons in row actions */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => setViewProduct(product)}
-                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="View">
+                      {/* View */}
+                      <button
+                        onClick={() => setViewProduct(product)}
+                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="View details"
+                      >
                         <Eye size={16} />
                       </button>
-                      <button onClick={() => onTransfer(product.id)}
-                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Transfer">
-                        <ArrowRightLeft size={16} />
+
+                      {/* Edit */}
+                      <button
+                        onClick={() => onEdit?.(product.id)}
+                        className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Edit product"
+                      >
+                        <Edit2 size={16} />
                       </button>
+
+                      {/* Move to Stock — only shown for on-order tab */}
                       {onReceiveProduct && (
-                        <button onClick={() => onReceiveProduct(product.id)}
+                        <button
+                          onClick={() => onReceiveProduct(product.id)}
                           className="px-2 py-1 text-black bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold border border-gray-200 whitespace-nowrap"
-                          title="Move to Stock">
+                          title="Move to Stock"
+                        >
                           → Stock
                         </button>
                       )}
@@ -291,21 +310,25 @@ title="Back to Inventory"
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-xl font-bold">Product Details</h3>
-              <button onClick={() => setViewProduct(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500">✕</button>
+              <button
+                onClick={() => setViewProduct(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 {[
-                  ['Brand',      viewProduct.brandName],
-                  ['Model',      viewProduct.modelName],
-                  ['Category',   viewProduct.category],
-                  ['Status',     viewProduct.status],
-                  ['Stock',      `${viewProduct.stock} units`],
-                  ['Warranty',   `${viewProduct.warrantyYears} year${viewProduct.warrantyYears !== 1 ? 's' : ''}`],
-                  ['Cost Price', fmt(viewProduct.costPrice)],
-                  ['Sell Price', fmt(viewProduct.sellPrice)],
+                  ['Brand',        viewProduct.brandName],
+                  ['Model',        viewProduct.modelName],
+                  ['Category',     viewProduct.category],
+                  ['Status',       viewProduct.status],
+                  ['Stock',        `${viewProduct.stock} units`],
+                  ['Warranty',     `${viewProduct.warrantyYears} year${viewProduct.warrantyYears !== 1 ? 's' : ''}`],
+                  ['Cost Price',   fmt(viewProduct.costPrice)],
+                  ['Sell Price',   fmt(viewProduct.sellPrice)],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <p className="text-xs text-gray-500">{label}</p>
@@ -321,6 +344,7 @@ title="Back to Inventory"
                 </div>
               </div>
 
+              {/* Serial Numbers grouped by location */}
               {viewProduct.serialNumbers.length > 0 && (
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-3">
@@ -355,6 +379,7 @@ title="Back to Inventory"
                 </div>
               )}
 
+              {/* Description */}
               {viewProduct.description && (
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Description</p>
@@ -363,31 +388,29 @@ title="Back to Inventory"
               )}
             </div>
 
-            <div className="p-6 border-t border-gray-200 flex items-center justify-between">
-              <div>
-                {(!viewProduct.costingOption || viewProduct.costingOption !== 'with') && !viewProduct.costingUsdRate && (
-                  <button onClick={() => setViewProduct(null)}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2">
-                    <DollarSign size={18} /> Add Costing
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setViewProduct(null)}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                  Close
+            {/* FIX 2 — Modal footer: Close + Edit only (Transfer removed) */}
+            <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setViewProduct(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                <Edit2 size={16} /> Edit Product
+              </button>
+              {/* Keep Move to Stock for on-order tab */}
+              {onReceiveProduct && (
+                <button
+                  onClick={() => { setViewProduct(null); onReceiveProduct(viewProduct.id); }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  Move to Stock
                 </button>
-                <button onClick={() => { setViewProduct(null); onTransfer(viewProduct.id); }}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
-                  Transfer
-                </button>
-                {onReceiveProduct && (
-                  <button onClick={() => { setViewProduct(null); onReceiveProduct(viewProduct.id); }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm">
-                    Move to Stock
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
         </div>

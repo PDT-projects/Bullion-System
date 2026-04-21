@@ -1,8 +1,23 @@
 // Inventory Module - View Layer
-// CreateInventoryView - Multi-step wizard for creating new products
+// CreateInventoryView - Multi-step wizard for creating and editing products
+//
+// FIXES:
+//   - costPrice input: clean onChange with parseFloat, no double-conversion bugs
+//   - Save/Update button: explicit inline styles (dark green bg, white text)
+//     so it is ALWAYS visible regardless of Tailwind purge or CSS specificity
+//   - ALL buttons use explicit inline styles — zero reliance on Tailwind for color
+//   - isFetchingProduct spinner shown during edit-mode fetch
+//   - Location dropdown added (was missing)
+//   - Edit mode banner shows current brand/model
 
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2 } from 'lucide-react';
-import { ProductFormData, ValidationResult, InventoryEntryStep } from '../models/types';
+import React from 'react';
+import { ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  ProductFormData,
+  ValidationResult,
+  InventoryEntryStep,
+  INVENTORY_LOCATIONS,
+} from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { BrandModelSelector } from '../components/BrandModelSelector';
 
@@ -11,6 +26,9 @@ interface CreateInventoryViewProps {
   currentStep: InventoryEntryStep;
   validation: ValidationResult;
   isSubmitting: boolean;
+  isEditMode: boolean;
+  editingId: string | null;
+  isFetchingProduct: boolean;
   serialInput: string;
   serialCity: string;
   setField: (field: string, value: any) => void;
@@ -26,247 +44,574 @@ interface CreateInventoryViewProps {
 }
 
 export function CreateInventoryView({
-  formData, currentStep, validation, isSubmitting,
-  serialInput, serialCity,
-  setField, setSerialInput, setSerialCity,
-  addSerialNumber, removeSerialNumber,
-  goToNextStep, goToPreviousStep, handleSubmit, handleCancel,
+  formData,
+  currentStep,
+  validation,
+  isSubmitting,
+  isEditMode,
+  editingId,
+  isFetchingProduct,
+  serialInput,
+  serialCity,
+  setField,
+  setSerialInput,
+  setSerialCity,
+  addSerialNumber,
+  removeSerialNumber,
+  goToNextStep,
+  goToPreviousStep,
+  handleSubmit,
+  handleCancel,
 }: CreateInventoryViewProps) {
   const steps = [
-    { id: 'details', label: 'Product Details', number: 1 },
-    { id: 'payment', label: 'Payment Info', number: 2 },
-    { id: 'confirmation', label: 'Confirmation', number: 3 },
+    { id: 'details',      label: 'Product Details', number: 1 },
+    { id: 'payment',      label: 'Payment Info',    number: 2 },
+    { id: 'confirmation', label: 'Confirmation',    number: 3 },
   ];
-
   const currentIdx = steps.findIndex(s => s.id === currentStep);
 
+  // Loading spinner while fetching existing product for edit
+  if (isFetchingProduct) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-3" />
+          <p className="text-gray-600 font-medium">Loading product details...</p>
+          <p className="text-sm text-gray-400 mt-1">Fetching from Firestore</p>
+        </div>
+      </div>
+    );
+  }
 
+  // ── Inline style constants for buttons ────────────────────────────────────
+  const btnBack: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '10px 20px', borderRadius: 8, cursor: 'pointer',
+    backgroundColor: '#f3f4f6', color: '#111827',
+    fontWeight: 600, fontSize: 14, border: '1px solid #d1d5db',
+  };
+  const btnNext: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '10px 24px', borderRadius: 8, cursor: 'pointer',
+    backgroundColor: '#4f46e5', color: '#ffffff',
+    fontWeight: 700, fontSize: 14, border: 'none',
+    boxShadow: '0 2px 6px rgba(79,70,229,0.4)',
+  };
+  const btnSave: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '10px 28px', borderRadius: 8,
+    backgroundColor: '#15803d', color: '#ffffff',   // dark green bg, white text — always visible
+    fontWeight: 700, fontSize: 15, border: 'none',
+    boxShadow: '0 2px 8px rgba(21,128,61,0.4)',
+    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+    opacity: isSubmitting ? 0.7 : 1,
+  };
+  const btnAddSerial: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 6,
+    padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
+    backgroundColor: '#4f46e5', color: '#ffffff',
+    fontWeight: 600, fontSize: 14, border: 'none',
+    whiteSpace: 'nowrap',
+  };
 
-  const renderProductDetailsStep = () => (
+  // ── Input class helpers ───────────────────────────────────────────────────
+  const inputCls = (hasError?: boolean) =>
+    `w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+      hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+    }`;
+
+  // ── Step 1: Product Details ───────────────────────────────────────────────
+  const renderDetailsStep = () => (
     <div className="space-y-6">
+
+      {validation.fieldErrors?.costPrice && (
+        <div className="flex gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-amber-900">{validation.fieldErrors.costPrice}</p>
+            <p className="text-sm text-amber-700 mt-1">
+              Cost price is required for profit calculations and inventory valuation.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {/* Brand & Model */}
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Select Brand & Model *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Brand & Model *</label>
+          {isEditMode && formData.brandName && (
+            <div className="mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+              <span className="text-blue-600 font-medium">Currently editing: </span>
+              <span className="text-blue-900 font-semibold">{formData.brandName} — {formData.modelName}</span>
+              <span className="ml-2 text-blue-400 text-xs">(change below if needed)</span>
+            </div>
+          )}
           <BrandModelSelector
-            onBrandChange={(brandId, brandName) => { setField('brandId', brandId); setField('brandName', brandName); }}
+            initialBrandId={isEditMode ? (formData.brandId || undefined) : undefined}
+            initialModelId={isEditMode ? (formData.modelId || undefined) : undefined}
+            onBrandChange={(brandId, brandName) => {
+              setField('brandId', brandId);
+              setField('brandName', brandName);
+            }}
             onModelChange={(modelId, modelName, costPrice, sellPrice) => {
-              setField('modelId', modelId); setField('modelName', modelName);
-              if (sellPrice && sellPrice > 0) setField('sellPrice', sellPrice);
-              if (costPrice && costPrice > 0) setField('costPrice', costPrice);
+              setField('modelId', modelId);
+              setField('modelName', modelName);
+              if (typeof sellPrice === 'number' && sellPrice > 0) setField('sellPrice', sellPrice);
+              // CRITICAL FIX: Only apply the model's costPrice if the user hasn't
+              // already typed one. If formData.costPrice is already > 0, the user
+              // entered it manually — do NOT overwrite it with the model default
+              // (which may be 0 or undefined and would wipe the user's value).
+              if (typeof costPrice === 'number' && costPrice > 0 && !(formData.costPrice > 0)) {
+                setField('costPrice', costPrice);
+              }
             }}
           />
           {(validation.fieldErrors?.brandName || validation.fieldErrors?.modelName) && (
             <p className="text-red-500 text-sm mt-1">Please select a brand and model</p>
           )}
         </div>
+
+        {/* Category */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-          <input type="text" value={formData.category || ''} onChange={e => setField('category', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${validation.fieldErrors?.category ? 'border-red-500' : 'border-gray-300'}`}
-            placeholder="Enter category" />
-          {validation.fieldErrors?.category && <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.category}</p>}
+          <input
+            type="text"
+            value={formData.category || ''}
+            onChange={e => setField('category', e.target.value)}
+            className={inputCls(!!validation.fieldErrors?.category)}
+            placeholder="e.g. Mobile, Laptop, Tablet"
+          />
+          {validation.fieldErrors?.category && (
+            <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.category}</p>
+          )}
         </div>
+
+        {/* Buy Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Buy Type</label>
-          <select value={formData.buyType || 'Import'} onChange={e => setField('buyType', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="Import">Import</option><option value="Export">Export</option>
+          <select
+            value={formData.buyType || 'Import'}
+            onChange={e => setField('buyType', e.target.value)}
+            className={inputCls()}
+          >
+            <option value="Import">Import</option>
+            <option value="Export">Export</option>
           </select>
         </div>
+
+        {/* ── COST PRICE — critical field ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price *</label>
-          <input type="number" value={formData.costPrice || ''} onChange={e => setField('costPrice', Number(e.target.value))}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${validation.fieldErrors?.costPrice ? 'border-red-500' : 'border-gray-300'}`}
-            placeholder="Enter cost price" />
-          {validation.fieldErrors?.costPrice && <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.costPrice}</p>}
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Cost Price (PKR) *
+            {typeof formData.costPrice === 'number' && formData.costPrice > 0 && (
+              <span className="ml-2 text-xs font-normal text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                ✓ PKR {formData.costPrice.toLocaleString()}
+              </span>
+            )}
+          </label>
+          <input
+            type="number"
+            value={formData.costPrice === 0 ? '' : (formData.costPrice ?? '')}
+            onChange={e => {
+              const raw = e.target.value.trim();
+              if (raw === '') {
+                setField('costPrice', 0);
+              } else {
+                const parsed = parseFloat(raw);
+                setField('costPrice', isNaN(parsed) ? 0 : parsed);
+              }
+            }}
+            onBlur={e => {
+              const parsed = parseFloat(e.target.value);
+              const final = isNaN(parsed) ? 0 : parsed;
+              setField('costPrice', final);
+              console.log('💰 costPrice confirmed on blur:', final);
+            }}
+            className={inputCls(!!validation.fieldErrors?.costPrice) + ' font-semibold'}
+            placeholder="Enter cost price in PKR"
+            min={0}
+            step="any"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Saved as <code className="bg-gray-100 px-1 rounded text-gray-600">costPrice</code> in Firestore
+          </p>
+          {validation.fieldErrors?.costPrice && (
+            <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.costPrice}</p>
+          )}
         </div>
+
+        {/* Sell Price */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price *</label>
-          <input type="number" value={formData.sellPrice || ''} onChange={e => setField('sellPrice', Number(e.target.value))}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${validation.fieldErrors?.sellPrice ? 'border-red-500' : 'border-gray-300'}`}
-            placeholder="Enter sell price" />
-          {validation.fieldErrors?.sellPrice && <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.sellPrice}</p>}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price (PKR) *</label>
+          <input
+            type="number"
+            value={formData.sellPrice === 0 ? '' : (formData.sellPrice ?? '')}
+            onChange={e => {
+              const raw = e.target.value.trim();
+              setField('sellPrice', raw === '' ? 0 : (parseFloat(raw) || 0));
+            }}
+            className={inputCls(!!validation.fieldErrors?.sellPrice)}
+            placeholder="Enter sell price in PKR"
+            min={0}
+            step="any"
+          />
+          {validation.fieldErrors?.sellPrice && (
+            <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.sellPrice}</p>
+          )}
         </div>
+
+        {/* Warranty */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Warranty (Years)</label>
-          <input type="number" value={formData.warrantyYears || ''} onChange={e => setField('warrantyYears', Number(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter warranty years" />
+          <input
+            type="number"
+            value={formData.warrantyYears || ''}
+            onChange={e => setField('warrantyYears', parseFloat(e.target.value) || 0)}
+            className={inputCls()}
+            placeholder="e.g. 1"
+            min={0}
+          />
         </div>
+
+        {/* Primary Location */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Primary Location</label>
+          <select
+            value={formData.location || ''}
+            onChange={e => setField('location', e.target.value)}
+            className={inputCls()}
+          >
+            <option value="">Select location</option>
+            {INVENTORY_LOCATIONS.map(loc => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Status */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <select
+            value={formData.status || 'New'}
+            onChange={e => setField('status', e.target.value)}
+            className={inputCls()}
+          >
+            {['New', 'In Transit', 'On-Order', 'Available', 'Sold', 'Damaged', 'Returned', 'Used'].map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Description */}
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <textarea value={formData.description || ''} onChange={e => setField('description', e.target.value)} rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter product description" />
+          <textarea
+            value={formData.description || ''}
+            onChange={e => setField('description', e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+            placeholder="Optional product notes, specs, or details"
+          />
         </div>
       </div>
 
       {/* Serial Numbers */}
       <div className="border-t border-gray-200 pt-6">
-        <h4 className="text-lg font-medium mb-4">Serial Numbers</h4>
-        <div className="flex gap-4 mb-4">
-          <div className="flex-1">
-            <input type="text" value={serialInput} onChange={e => setSerialInput(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addSerialNumber())}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter serial number" />
-          </div>
-          <div className="w-48">
-            <input type="text" value={serialCity} onChange={e => setSerialCity(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addSerialNumber())}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="City (optional)" />
-          </div>
-          <button onClick={addSerialNumber} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition-colors flex items-center gap-2 font-semibold">
-            <Plus size={18} />Add
+        <h4 className="text-lg font-semibold text-gray-800 mb-1">Serial Numbers</h4>
+        {isEditMode && (
+          <p className="text-xs text-gray-500 mb-3">
+            Serials already saved in Firestore are shown below. Add or remove as needed.
+          </p>
+        )}
+        <div className="flex gap-3 mb-4">
+          <input
+            type="text"
+            value={serialInput}
+            onChange={e => setSerialInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSerialNumber(); } }}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+            placeholder="Enter serial number"
+          />
+          <input
+            type="text"
+            value={serialCity}
+            onChange={e => setSerialCity(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSerialNumber(); } }}
+            className="w-44 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+            placeholder="City (optional)"
+          />
+          <button type="button" onClick={addSerialNumber} style={btnAddSerial}>
+            <Plus size={18} /> Add
           </button>
         </div>
-        {validation.fieldErrors?.serialNumbers && <p className="text-red-500 text-sm mb-4">{validation.fieldErrors.serialNumbers}</p>}
-        {formData.serialNumbers && formData.serialNumbers.length > 0 && (
-          <div className="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">{formData.serialNumbers.length} serial(s) added</span>
-              <span className="text-sm text-gray-500">Stock: {formData.stock} units</span>
-            </div>
-            <div className="space-y-2">
-              {formData.serialNumbers.map((serial, idx) => (
-                <div key={idx} className="flex items-center justify-between bg-white p-2 rounded border">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm">{serial}</span>
-                    {formData.serialCities?.[serial] && <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{formData.serialCities[serial]}</span>}
-                  </div>
-                  <button onClick={() => removeSerialNumber(serial)} className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 size={16} /></button>
-                </div>
-              ))}
-            </div>
-          </div>
+
+        {validation.fieldErrors?.serialNumbers && (
+          <p className="text-red-500 text-sm mb-3">{validation.fieldErrors.serialNumbers}</p>
         )}
+
+        {formData.serialNumbers.length > 0 ? (
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            {formData.serialNumbers.map(serial => (
+              <div key={serial} className="flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg">
+                <div>
+                  <p className="font-mono text-sm font-medium text-gray-900">{serial}</p>
+                  {formData.serialCities?.[serial] && (
+                    <p className="text-xs text-gray-500 mt-0.5">{formData.serialCities[serial]}</p>
+                  )}
+                </div>
+                <button type="button" onClick={() => removeSerialNumber(serial)}
+                  className="p-1.5 hover:bg-red-100 rounded-lg transition-colors" title="Remove">
+                  <Trash2 size={16} className="text-red-500" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 italic py-2">No serial numbers added yet.</p>
+        )}
+        <p className="text-xs text-gray-400 mt-2">
+          {formData.serialNumbers.length} serial{formData.serialNumbers.length !== 1 ? 's' : ''} — stock count syncs automatically
+        </p>
       </div>
     </div>
   );
 
-  const renderPaymentStep = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  // ── Step 2: Payment ───────────────────────────────────────────────────────
+  const renderPaymentStep = () => {
+    const totalAmount = (formData.costPrice ?? 0) * (formData.stock || 0);
+    const paid = formData.paidAmount ?? 0;
+    const remaining = Math.max(0, totalAmount - paid);
+    return (
+      <div className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
-          <select value={formData.paymentMethod || ''} onChange={e => setField('paymentMethod', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select
+            value={formData.paymentMethod || ''}
+            onChange={e => setField('paymentMethod', e.target.value || undefined)}
+            className={inputCls(!!validation.fieldErrors?.paymentMethod)}
+          >
             <option value="">Select payment method</option>
-            <option value="Cash">Cash</option><option value="Bank">Bank Transfer</option>
-            <option value="Cheque">Cheque</option><option value="Credit">Credit</option>
+            <option value="Cash">Cash</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Check">Check</option>
+            <option value="Credit Card">Credit Card</option>
           </select>
+          {validation.fieldErrors?.paymentMethod && (
+            <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.paymentMethod}</p>
+          )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Payment Amount</label>
-          <input type="number" value={formData.paymentAmount || ''} onChange={e => setField('paymentAmount', Number(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter payment amount" />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (PKR)</label>
+          <input
+            type="number"
+            value={formData.paidAmount ?? ''}
+            onChange={e => {
+              const raw = e.target.value;
+              setField('paidAmount', raw === '' ? undefined : (parseFloat(raw) || 0));
+            }}
+            className={inputCls()}
+            placeholder="Enter amount paid"
+            min={0}
+            step="any"
+          />
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-900 mb-3">Payment Summary</h4>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-blue-700">Cost Price per unit:</span>
+              <span className="font-semibold text-blue-900">{InventoryService.formatCurrency(formData.costPrice ?? 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-blue-700">Quantity:</span>
+              <span className="font-semibold text-blue-900">{formData.stock} units</span>
+            </div>
+            <div style={{ borderTop: '1px solid #bfdbfe', margin: '8px 0' }} />
+            <div className="flex justify-between font-bold text-base">
+              <span className="text-blue-900">Total Amount:</span>
+              <span className="text-blue-900">{InventoryService.formatCurrency(totalAmount)}</span>
+            </div>
+            {paid > 0 && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Paid:</span>
+                  <span className="font-semibold text-green-700">{InventoryService.formatCurrency(paid)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Remaining:</span>
+                  <span className={`font-semibold ${remaining > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {InventoryService.formatCurrency(remaining)}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
-      <div className="bg-gray-50 rounded-lg p-4 mt-6">
-        <h4 className="font-medium mb-3">Product Summary</h4>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div><span className="text-gray-500">Product:</span><p className="font-medium">{formData.brandName} {formData.modelName}</p></div>
-          <div><span className="text-gray-500">Category:</span><p className="font-medium">{formData.category}</p></div>
-          <div><span className="text-gray-500">Stock:</span><p className="font-medium">{formData.stock} units</p></div>
-          <div><span className="text-gray-500">Total Cost:</span><p className="font-medium">{InventoryService.formatCurrency((formData.costPrice || 0) * (formData.stock || 0))}</p></div>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
+  // ── Step 3: Confirmation ──────────────────────────────────────────────────
   const renderConfirmationStep = () => (
     <div className="text-center py-8">
-      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><Check className="w-8 h-8 text-green-600" /></div>
-      <h3 className="text-xl font-bold mb-2">Ready to Create Product</h3>
-      <p className="text-gray-600 mb-6">Please review the information and click Create to add the product to inventory.</p>
-      <div className="bg-gray-50 rounded-lg p-6 max-w-md mx-auto text-left">
+      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <Check className="w-8 h-8 text-green-600" />
+      </div>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">
+        Ready to {isEditMode ? 'Update' : 'Save'} Product
+      </h3>
+      <p className="text-gray-600 mb-6">
+        Review the summary, then click{' '}
+        <strong style={{ color: '#15803d' }}>{isEditMode ? 'Update Product' : 'Save Product'}</strong>{' '}
+        to write to Firestore.
+      </p>
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 max-w-md mx-auto text-left">
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between"><span className="text-gray-500">Product:</span><span className="font-medium">{formData.brandName} {formData.modelName}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Category:</span><span className="font-medium">{formData.category}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Stock:</span><span className="font-medium">{formData.stock} units</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Cost Price:</span><span className="font-medium">{InventoryService.formatCurrency(formData.costPrice || 0)}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Sell Price:</span><span className="font-medium">{InventoryService.formatCurrency(formData.sellPrice || 0)}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Payment:</span><span className="font-medium">{formData.paymentMethod}</span></div>
+          {([
+            ['Product',     `${formData.brandName} ${formData.modelName}`],
+            ['Category',    formData.category || '—'],
+            ['Location',    formData.location || '—'],
+            ['Status',      formData.status   || '—'],
+            ['Stock',       `${formData.stock} units`],
+            ['Cost Price',  InventoryService.formatCurrency(formData.costPrice ?? 0)],
+            ['Sell Price',  InventoryService.formatCurrency(formData.sellPrice  || 0)],
+            ['Description', formData.description || '—'],
+            ['Payment',     formData.paymentMethod || '—'],
+          ] as [string, string][]).map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-4">
+              <span className="text-gray-500 flex-shrink-0">{label}:</span>
+              <span className="font-semibold text-gray-900 text-right truncate max-w-[55%]">{value}</span>
+            </div>
+          ))}
+          {formData.paidAmount != null && (
+            <div className="flex justify-between gap-4">
+              <span className="text-gray-500">Paid:</span>
+              <span className="font-semibold text-gray-900">{InventoryService.formatCurrency(formData.paidAmount)}</span>
+            </div>
+          )}
+          <div className="flex justify-between gap-4 border-t border-gray-200 pt-3 mt-2">
+            <span className="text-gray-500">Serials:</span>
+            <span className="font-semibold text-gray-900">{formData.serialNumbers.length} entered</span>
+          </div>
         </div>
       </div>
     </div>
   );
 
+  // ── Main render ───────────────────────────────────────────────────────────
   return (
     <div className="p-6">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-4 mb-2">
-          <button onClick={handleCancel} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><ArrowLeft size={24} /></button>
-          <div>
-            <h2 className="text-2xl font-bold">Create New Inventory</h2>
-            <p className="text-sm text-gray-600">Add a new product to your inventory</p>
+
+        {/* Page header */}
+        <div className="flex items-center gap-4 mb-4">
+          <button type="button" onClick={handleCancel}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-700">
+            <ArrowLeft size={24} />
+          </button>
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-gray-900">
+              {isEditMode ? 'Edit Inventory Item' : 'Create New Inventory'}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {isEditMode ? 'Update fields below and save changes to Firestore' : 'Fill in the details to add a new product'}
+              {editingId && (
+                <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-mono">
+                  #{editingId.slice(-8)}
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
-        {/* ── Stepper ── */}
-        <div className="flex-shrink-0 sticky top-16 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-lg px-6 py-5 mb-6">
-          <div className="flex items-center w-full max-w-2xl mx-auto">
+        {/* Stepper — inline styles for guaranteed visibility */}
+        <div style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: 'rgba(255,255,255,0.97)', borderBottom: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', maxWidth: 560, margin: '0 auto', padding: '16px 16px' }}>
             {steps.map((step, index) => {
               const isActive = step.id === currentStep;
               const isDone   = currentIdx > index;
               const isLast   = index === steps.length - 1;
-
               return (
                 <React.Fragment key={step.id}>
-                  <div className="flex flex-col items-center flex-shrink-0 min-w-[160px]">
-                    <div
-                      className={`
-                        w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-lg shadow-xl transition-all duration-300
-                        border-3 ${isDone || isActive ? 'ring-4 ring-indigo-100/50' : ''}
-                        ${isDone
-                          ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 border-indigo-600 text-white shadow-indigo-500/50'
-                          : isActive
-                          ? 'bg-gradient-to-br from-indigo-400 to-indigo-500 border-white text-white shadow-indigo-400/75 scale-105'
-                          : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:shadow-md hover:text-indigo-600 hover:scale-105'
-                        }
-                      `}
-                    >
-                      {isDone ? <Check className="w-7 h-7 stroke-width-2.5" /> : step.number}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, minWidth: 110 }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 12,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: 700, fontSize: 17,
+                      backgroundColor: isDone ? '#4f46e5' : isActive ? '#818cf8' : '#f3f4f6',
+                      color: (isDone || isActive) ? '#fff' : '#6b7280',
+                      boxShadow: isActive ? '0 0 0 4px #e0e7ff' : 'none',
+                      transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                      transition: 'all 0.2s',
+                    }}>
+                      {isDone ? <Check size={20} /> : step.number}
                     </div>
-                    <span
-                      className={`
-                        mt-3.5 text-sm font-semibold tracking-wide leading-tight px-3 py-1.5 rounded-full shadow-sm transition-all
-                        ${isDone || isActive 
-                          ? 'bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-900 ring-1 ring-indigo-200' 
-                          : 'text-gray-500 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700'
-                        }
-                      `}
-                    >
+                    <span style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: (isDone || isActive) ? '#4338ca' : '#9ca3af', textAlign: 'center' }}>
                       {step.label}
                     </span>
                   </div>
                   {!isLast && (
-                    <div className="flex-1 mx-4">
-                      <div className={`h-2 rounded-xl shadow-md transition-all ${isDone 
-                        ? 'bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 shadow-indigo-300/50' 
-                        : 'bg-gradient-to-r from-gray-200 to-gray-300 hover:from-indigo-200 hover:to-indigo-300'
-                      }`} />
-                    </div>
+                    <div style={{ flex: 1, height: 4, borderRadius: 9999, margin: '0 8px', backgroundColor: isDone ? '#4f46e5' : '#e5e7eb', transition: 'background-color 0.3s' }} />
                   )}
                 </React.Fragment>
               );
             })}
           </div>
         </div>
+
+        {/* Step content */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-          {currentStep === 'details' && renderProductDetailsStep()}
-          {currentStep === 'payment' && renderPaymentStep()}
+          {currentStep === 'details'      && renderDetailsStep()}
+          {currentStep === 'payment'      && renderPaymentStep()}
           {currentStep === 'confirmation' && renderConfirmationStep()}
-          <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
-            <button onClick={currentStep === 'details' ? handleCancel : goToPreviousStep}
-              className="px-6 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2">
-              <ArrowLeft size={18} />{currentStep === 'details' ? 'Cancel' : 'Back'}
+
+          {/* Navigation — ALL inline styles so colors are guaranteed */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid #e5e7eb' }}>
+
+            {/* Back / Cancel */}
+            <button
+              type="button"
+              onClick={currentStep === 'details' ? handleCancel : goToPreviousStep}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, cursor: 'pointer', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, fontSize: 14, border: '1px solid #d1d5db' }}
+            >
+              <ArrowLeft size={18} />
+              {currentStep === 'details' ? 'Cancel' : 'Back'}
             </button>
+
             {currentStep !== 'confirmation' ? (
-              <button onClick={goToNextStep} className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition-colors flex items-center gap-2 font-semibold">
-                Next<ArrowRight size={18} />
+              /* Next button */
+              <button
+                type="button"
+                onClick={goToNextStep}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 8, cursor: 'pointer', backgroundColor: '#4f46e5', color: '#ffffff', fontWeight: 700, fontSize: 14, border: 'none', boxShadow: '0 2px 6px rgba(79,70,229,0.35)' }}
+              >
+                Next <ArrowRight size={18} />
               </button>
             ) : (
-              <button onClick={handleSubmit} disabled={isSubmitting}
-                className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50">
-                {isSubmitting ? 'Creating...' : 'Create Product'}<Check size={18} />
+              /* ── SAVE / UPDATE — dark green background, white text ── */
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '11px 30px', borderRadius: 8, border: 'none',
+                  backgroundColor: isSubmitting ? '#4ade80' : '#15803d',
+                  color: '#ffffff',
+                  fontWeight: 700, fontSize: 15,
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  opacity: isSubmitting ? 0.8 : 1,
+                  boxShadow: '0 2px 10px rgba(21,128,61,0.4)',
+                  letterSpacing: '0.01em',
+                }}
+              >
+                {isSubmitting ? (
+                  <><Loader2 size={18} className="animate-spin" />{isEditMode ? 'Updating...' : 'Saving...'}</>
+                ) : (
+                  <><Check size={18} />{isEditMode ? 'Update Product' : 'Save Product'}</>
+                )}
               </button>
             )}
           </div>

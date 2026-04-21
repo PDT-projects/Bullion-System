@@ -35,6 +35,7 @@ interface UseInventoryListViewModelReturn {
   onAddToExisting: () => void;
   onTransfer: (id: string) => void;
   onReceiveProduct?: (id: string) => void;
+  onEdit: (id: string) => void;
 }
 
 const DEFAULT_FILTERS: ProductFilters = {
@@ -90,6 +91,8 @@ export function useInventoryListViewModel(
   const onAddToExisting = useCallback(() => navigate('/inventory/add-existing'), [navigate]);
   const onTransfer    = useCallback((id: string) => navigate(`/product-transfer?productId=${id}`), [navigate]);
 
+  const onEdit         = useCallback((id: string) => navigate(`/inventory/${id}/edit`), [navigate]);
+
   const onReceiveProduct = useCallback(async (id: string) => {
     try {
       await InventoryFirebaseService.receiveProduct(id);
@@ -116,5 +119,6 @@ export function useInventoryListViewModel(
     setFilter, clearFilters, toggleFilters, setViewProduct,
     onAddNew, onAddToExisting, onTransfer,
     onReceiveProduct: inventoryType === 'on-order' ? onReceiveProduct : undefined,
+    onEdit,
   };
 }
