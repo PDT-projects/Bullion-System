@@ -106,34 +106,41 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   const inputCls =
     'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500';
 
-  // ── SHARED COMPONENTS (moved to top-level scope for both paths) ────────────
+  // ── SHARED COMPONENTS ────────────────────────────────────────────────────────
+  const stepsDef = costingOption === 'with'
+    ? [{ n: 1, l: 'Type' }, { n: 2, l: 'Costing' }, { n: 3, l: 'Details' }, { n: 4, l: 'Products' }, { n: 5, l: 'Payment' }]
+    : [{ n: 1, l: 'Type' }, { n: 2, l: 'Costing' }, { n: 3, l: 'Details' }, { n: 4, l: 'Payment' }];
+  const currentStepNum = costingOption === 'with' ? 4 : 3;
+
   const ProgressBar = () => (
-    <div className="mb-6 bg-white rounded-xl shadow-lg border p-6">
-      <div className="flex items-center justify-between">
-        {[{ label: 'Type' }, { label: 'Costing' }].map((s, i) => (
-          <React.Fragment key={i}>
-            <div className="flex flex-col items-center min-w-[70px]">
-              <div className="w-12 h-12 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-md">
-                ✓
+    <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 32px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', maxWidth: costingOption === 'with' ? 640 : 560, margin: '0 auto' }}>
+        {stepsDef.map((step, i) => {
+          const active = step.n === currentStepNum;
+          const done   = step.n < currentStepNum;
+          const last   = i === stepsDef.length - 1;
+          return (
+            <React.Fragment key={step.n}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, fontSize: 13, flexShrink: 0,
+                  backgroundColor: done || active ? '#4f46e5' : '#e5e7eb',
+                  color: done || active ? '#fff' : '#9ca3af',
+                  boxShadow: active ? '0 0 0 4px rgba(79,70,229,0.18)' : 'none',
+                }}>
+                  {done ? '✓' : step.n}
+                </div>
+                <span style={{ marginTop: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: done || active ? '#4f46e5' : '#94a3b8', whiteSpace: 'nowrap' as const }}>
+                  {step.l}
+                </span>
               </div>
-              <span className="text-xs font-medium text-green-600 mt-1 text-center">{s.label}</span>
-            </div>
-            <div className="flex-1 h-1 bg-green-500 rounded-full mx-2" />
-          </React.Fragment>
-        ))}
-        <div className="flex flex-col items-center min-w-[70px]">
-          <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-xl font-bold shadow-md ring-4 ring-blue-100">
-            3
-          </div>
-          <span className="text-xs font-semibold text-blue-600 mt-1 text-center">Details</span>
-        </div>
-        <div className="flex-1 h-1 bg-gray-200 rounded-full mx-2" />
-        <div className="flex flex-col items-center min-w-[70px]">
-          <div className="w-12 h-12 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xl font-bold shadow-sm border border-gray-300">
-            4
-          </div>
-          <span className="text-xs font-medium text-gray-400 mt-1 text-center">Payment</span>
-        </div>
+              {!last && (
+                <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 8px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb' }} />
+              )}
+            </React.Fragment>
+          );
+        })}
       </div>
     </div>
   );
@@ -231,129 +238,6 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
 
   // Pass dealerPrice into selectedModels before navigating
   const handleNextWithDealer = (models?: SelectedModel[]) => {
-  const ProgressBar = () => (
-    <div className="mb-6 bg-white rounded-xl shadow-lg border p-6">
-      <div className="flex items-center justify-between">
-        {[{ label: 'Type' }, { label: 'Costing' }].map((s, i) => (
-          <React.Fragment key={i}>
-            <div className="flex flex-col items-center min-w-[70px]">
-              <div className="w-12 h-12 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-md">
-                ✓
-              </div>
-              <span className="text-xs font-medium text-green-600 mt-1 text-center">{s.label}</span>
-            </div>
-            <div className="flex-1 h-1 bg-green-500 rounded-full mx-2" />
-          </React.Fragment>
-        ))}
-        <div className="flex flex-col items-center min-w-[70px]">
-          <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-xl font-bold shadow-md ring-4 ring-blue-100">
-            3
-          </div>
-          <span className="text-xs font-semibold text-blue-600 mt-1 text-center">Details</span>
-        </div>
-        <div className="flex-1 h-1 bg-gray-200 rounded-full mx-2" />
-        <div className="flex flex-col items-center min-w-[70px]">
-          <div className="w-12 h-12 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xl font-bold shadow-sm border border-gray-300">
-            4
-          </div>
-          <span className="text-xs font-medium text-gray-400 mt-1 text-center">Payment</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  const DealerPriceField = () => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
-        <Tag className="w-4 h-4 text-emerald-500" />
-        Dealer Price (PKR)
-        <span className="ml-1 text-xs text-gray-400 font-normal">(Optional)</span>
-      </label>
-      <input
-        type="number"
-        value={dealerPrice}
-        onChange={e => setDealerPrice(e.target.value === '' ? '' : Number(e.target.value))}
-        className={inputCls}
-        min={0}
-        placeholder="e.g. 85000"
-      />
-      <p className="text-xs text-gray-400 mt-1">
-        Special price offered to dealers. Leave blank if not applicable.
-      </p>
-    </div>
-  );
-
-  const LocationField = () => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
-        <MapPin className="w-4 h-4 text-indigo-500" />
-        Stocking Location <span className="text-red-500">*</span>
-      </label>
-      <select
-        value={formData.location || ''}
-        onChange={e => setLocation(e.target.value)}
-        className={`${inputCls} ${validationErrors.location ? 'border-red-500' : ''}`}
-      >
-        <option value="">Select location</option>
-        {cities.map(city => (
-          <option key={city} value={city}>{city}</option>
-        ))}
-      </select>
-      {validationErrors.location && (
-        <p className="text-red-500 text-sm mt-1">{validationErrors.location}</p>
-      )}
-      <p className="text-xs text-gray-400 mt-1">
-        Where these units are being stocked. Serial numbers will be assigned to this location.
-      </p>
-    </div>
-  );
-
-  const CommonFields = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-        <select
-          value={formData.category}
-          onChange={e => setCategory(e.target.value)}
-          className={`${inputCls} ${validationErrors.category ? 'border-red-500' : ''}`}
-        >
-          <option value="">Select category</option>
-          {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
-        {validationErrors.category && (
-          <p className="text-red-500 text-sm mt-1">{validationErrors.category}</p>
-        )}
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-        <select
-          value={formData.status}
-          onChange={e => setStatus(e.target.value as any)}
-          className={inputCls}
-        >
-          <option value="New">New</option>
-          <option value="Used">Used</option>
-          <option value="Returned">Returned</option>
-        </select>
-      </div>
-      <LocationField />
-      <DealerPriceField />
-      <div className="md:col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
-        <textarea
-          value={formData.description}
-          onChange={e => setDescription(e.target.value)}
-          rows={3}
-          className={`${inputCls} resize-vertical`}
-        />
-        {validationErrors.description && (
-          <p className="text-red-500 text-sm mt-1">{validationErrors.description}</p>
-        )}
-      </div>
-    </div>
-  );
-
-  // Attach dealerPrice as a field on each selected model for the payment step to persist
     const enriched = models?.map(m => ({
       ...m,
       dealerPrice: dealerPrice !== '' ? Number(dealerPrice) : undefined,
@@ -366,29 +250,29 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   // WITHOUT COSTING — single model (moved up)
   if (costingOption === 'without') {
     return (
-      <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-4 mb-8">
-            <button
-              onClick={handleBack}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 shadow-md border"
-            >
-              <ArrowLeft size={20} /> Back
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>
+
+        {/* Header */}
+        <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={handleBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
+              <ArrowLeft size={16} /> Back
             </button>
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl shadow-lg">
-                <Package className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  Simple Product Entry
-                </h2>
-                <p className="text-lg text-gray-600">Quick entry without detailed costing</p>
-              </div>
+            <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Package size={17} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Simple Product Entry</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>Quick entry without detailed costing</div>
             </div>
           </div>
-          <ProgressBar />
+        </div>
 
+        <ProgressBar />
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+          <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div className="bg-white rounded-lg shadow-sm border p-8 space-y-6">
             {/* Brand / Model / Prices */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -609,6 +493,7 @@ className="px-8 py-3 rounded-lg font-semibold text-gray-900 text-lg shadow-lg fl
               </button>
             </div>
           </div>
+          </div>
         </div>
       </div>
     );
@@ -616,32 +501,29 @@ className="px-8 py-3 rounded-lg font-semibold text-gray-900 text-lg shadow-lg fl
 
   // WITH COSTING — per-model serial inputs + dealer price in common section
   return (
-    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center gap-4 mb-8">
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 shadow-md border"
-          >
-            <ArrowLeft size={20} /> Back
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>
+
+      {/* Header */}
+      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={handleBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
+            <ArrowLeft size={16} /> Back
           </button>
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-              <Package className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                Product Details
-              </h2>
-              <p className="text-lg text-gray-600">
-                Set sale prices &amp; serial numbers for{' '}
-                <span className="font-semibold text-indigo-700">{costingBrandName}</span> models
-              </p>
-            </div>
+          <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Package size={17} color="#fff" />
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Product Details</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>Set sale prices & serial numbers for <strong>{costingBrandName}</strong> models</div>
           </div>
         </div>
-        <ProgressBar />
+      </div>
 
+      <ProgressBar />
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto' }}>
         <div className="bg-white rounded-lg shadow-sm border p-8 space-y-6">
           {/* Loading / status banner */}
           {isLoadingModels ? (
@@ -837,6 +719,7 @@ className="px-8 py-3 rounded-lg font-semibold text-gray-900 text-lg shadow-lg fl
               </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

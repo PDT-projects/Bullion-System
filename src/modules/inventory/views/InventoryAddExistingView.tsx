@@ -1,9 +1,5 @@
 // Inventory Module - View Layer
 // InventoryAddExistingView
-// Changes:
-//   - Serial number inputs shown when addQty > 0
-//   - City/location selector per serial
-//   - Updated sell price / cost price fields shown
 
 import React from 'react';
 import { Search, Package, ArrowLeft, Loader2, Plus, Hash } from 'lucide-react';
@@ -29,12 +25,17 @@ export const InventoryAddExistingView: React.FC<Props> = ({
     return acc;
   }, {});
 
+  const inp: React.CSSProperties = {
+    width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8,
+    fontSize: 13, outline: 'none', color: '#111827', backgroundColor: '#fff', boxSizing: 'border-box',
+  };
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mx-auto mb-3" />
-          <p className="text-gray-500">Loading products...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <div style={{ textAlign: 'center' }}>
+          <Loader2 size={36} color="#6366f1" style={{ animation: 'spin 1s linear infinite', marginBottom: 12 }} />
+          <p style={{ fontSize: 13, color: '#6b7280' }}>Loading products...</p>
         </div>
       </div>
     );
@@ -42,197 +43,151 @@ export const InventoryAddExistingView: React.FC<Props> = ({
 
   if (error) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-red-700">{error}</div>
+      <div style={{ padding: 24 }}>
+        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 20, color: '#dc2626', fontSize: 13 }}>{error}</div>
       </div>
     );
   }
 
-  const inputCls =
-    'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:outline-none text-sm';
-
   return (
-    <div className="h-full overflow-y-auto p-6 max-w-6xl mx-auto">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>
 
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => navigate('/inventory')}
-          className="flex items-center justify-center w-10 h-10 bg-white border-2 border-gray-300 rounded-xl shadow-sm hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-700 flex-shrink-0"
-title="Back to Inventory"
-        >
-          <ArrowLeft size={20} strokeWidth={2.5} />
-        </button>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Add to Existing Inventory</h2>
-          <p className="text-gray-500 text-sm mt-1">
-            Select a product to add more units, update prices, or add serial numbers
-          </p>
+      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => navigate('/inventory')}
+            style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0 }}
+          >
+            <ArrowLeft size={17} />
+          </button>
+          <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Package size={17} color="#fff" />
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Add to Existing Inventory</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>Select a product to add units, update prices, or add serial numbers</div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Body — two columns */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '340px 1fr', overflow: 'hidden' }}>
 
-        {/* ── LEFT: product list ── */}
-        <div>
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Search by brand, model, category..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-300 focus:outline-none"
-            />
+        {/* LEFT — product list */}
+        <div style={{ borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden' }}>
+          {/* Search */}
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={15} color="#9ca3af" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Search brand, model, category..."
+                style={{ ...inp, paddingLeft: 32, borderRadius: 8 }}
+              />
+            </div>
           </div>
 
-          {filteredProducts.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border">
-              <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No products found</p>
-            </div>
-          ) : (
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-              {Object.entries(grouped).map(([brand, prods]) => (
-                <div key={brand} className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                  <div className="px-4 py-3 bg-indigo-50 border-b flex items-center gap-2">
-                    <Package className="w-4 h-4 text-indigo-600" />
-                    <span className="font-semibold text-indigo-800 text-sm">{brand}</span>
+          {/* List */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {filteredProducts.length === 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, gap: 10 }}>
+                <Package size={32} color="#d1d5db" />
+                <p style={{ fontSize: 13, color: '#9ca3af' }}>No products found</p>
+              </div>
+            ) : (
+              Object.entries(grouped).map(([brand, prods]) => (
+                <div key={brand}>
+                  <div style={{ padding: '8px 16px', backgroundColor: '#f8fafc', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Package size={12} color="#6366f1" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{brand}</span>
                   </div>
                   {prods.map(product => {
-                    const isSelected = selectedProduct?.id === product.id;
+                    const sel = selectedProduct?.id === product.id;
                     return (
                       <button
                         key={product.id}
                         onClick={() => selectProduct(product)}
-                        className={`w-full text-left transition-colors ${
-                          isSelected
-                            ? 'bg-indigo-50 border-l-4 border-indigo-500 px-4 py-3'
-                            : 'hover:bg-gray-50 px-5 py-3'
-                        }`}
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '10px 16px', cursor: 'pointer', border: 'none',
+                          borderBottom: '1px solid #f8fafc',
+                          backgroundColor: sel ? '#eef2ff' : '#fff',
+                          borderLeft: sel ? '3px solid #4f46e5' : '3px solid transparent',
+                          transition: 'all 0.15s',
+                        }}
                       >
-                        <p className="font-medium text-gray-900">{product.modelName}</p>
-                        <div className="flex gap-3 mt-0.5">
-                          <span className="text-xs text-gray-500">Stock: {product.stock}</span>
-                          {product.location && (
-                            <span className="text-xs text-indigo-500">📍 {product.location}</span>
-                          )}
-                          <span className="text-xs text-gray-400">
-                            {formatCurrency(product.sellPrice)}
-                          </span>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: sel ? '#3730a3' : '#111827' }}>{product.modelName}</div>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
+                          <span style={{ fontSize: 11, color: '#6b7280' }}>Stock: {product.stock}</span>
+                          {product.location && <span style={{ fontSize: 11, color: '#6366f1' }}>📍 {product.location}</span>}
+                          <span style={{ fontSize: 11, color: '#9ca3af' }}>{formatCurrency(product.sellPrice)}</span>
                         </div>
                       </button>
                     );
                   })}
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
 
-        {/* ── RIGHT: edit panel ── */}
-        <div>
+        {/* RIGHT — edit panel */}
+        <div style={{ overflowY: 'auto', padding: 24, backgroundColor: '#f8fafc' }}>
           {!selectedProduct || !entry ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[200px] bg-white border rounded-xl gap-3">
-              <Package className="w-10 h-10 text-gray-200" />
-              <p className="text-gray-400 font-medium">Select a product to continue</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+              <Package size={40} color="#d1d5db" />
+              <p style={{ fontSize: 13, color: '#9ca3af', fontWeight: 500 }}>Select a product to continue</p>
             </div>
           ) : (
-            <div className="bg-white rounded-xl border shadow-sm">
-              <div className="p-5 space-y-5">
+            <div style={{ maxWidth: 560, margin: '0 auto' }}>
 
-                {/* Product info banner */}
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
-                  <p className="text-sm font-semibold text-indigo-800">
-                    {entry.brandName} — {entry.modelName}
-                  </p>
-                  <p className="text-xs text-indigo-500 mt-0.5">
-                    Current stock: {entry.currentStock} units
-                  </p>
-                </div>
+              {/* Banner */}
+              <div style={{ backgroundColor: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#3730a3' }}>{entry.brandName} — {entry.modelName}</div>
+                <div style={{ fontSize: 11, color: '#6366f1', marginTop: 2 }}>Current stock: {entry.currentStock} units</div>
+              </div>
 
-                {/* Units to add */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                {/* Units to Add */}
                 <div>
-                  <label className="block text-sm font-semibold mb-1.5 text-gray-700">
-                    Units to Add *
-                  </label>
-                  <input
-                    type="number"
-                    value={entry.addQty}
-                    onChange={e => setAddQty(Number(e.target.value))}
-                    className={inputCls}
-                    min={1}
-                  />
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Units to Add *</label>
+                  <input type="number" value={entry.addQty} onChange={e => setAddQty(Number(e.target.value))} style={inp} min={1} />
                 </div>
 
-                {/* Sell price */}
-                <div>
-                  <label className="block text-sm font-semibold mb-1.5 text-gray-700">
-                    Updated Sell Price (PKR)
-                  </label>
-                  <input
-                    type="number"
-                    value={entry.newSellPrice || ''}
-                    onChange={e => setNewSellPrice(Number(e.target.value))}
-                    className={inputCls}
-                    min={0}
-                    placeholder="0"
-                  />
+                {/* Prices */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Updated Sell Price (PKR)</label>
+                    <input type="number" value={entry.newSellPrice || ''} onChange={e => setNewSellPrice(Number(e.target.value))} style={inp} min={0} placeholder="0" />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Updated Cost Price (PKR)</label>
+                    <input type="number" value={entry.newCostPrice || ''} onChange={e => setNewCostPrice(Number(e.target.value))} style={inp} min={0} placeholder="0" />
+                  </div>
                 </div>
 
-                {/* Cost price */}
-                <div>
-                  <label className="block text-sm font-semibold mb-1.5 text-gray-700">
-                    Updated Cost Price (PKR)
-                  </label>
-                  <input
-                    type="number"
-                    value={entry.newCostPrice || ''}
-                    onChange={e => setNewCostPrice(Number(e.target.value))}
-                    className={inputCls}
-                    min={0}
-                    placeholder="0"
-                  />
-                </div>
-
-                {/* Serial numbers — one input per unit */}
+                {/* Serials */}
                 {entry.addQty > 0 && (
                   <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Hash className="w-4 h-4 text-indigo-500" />
-                      <span className="text-sm font-semibold text-gray-700">
-                        Serial Numbers ({entry.addQty} required)
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                      <Hash size={14} color="#6366f1" />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Serial Numbers ({entry.addQty} required)</span>
                     </div>
-                    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 260, overflowY: 'auto' }}>
                       {Array.from({ length: entry.addQty }, (_, i) => (
-                        <div
-                          key={i}
-                          className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-2"
-                        >
-                          <label className="block text-xs font-semibold text-gray-500">
-                            Unit {i + 1}
-                          </label>
-                          <input
-                            type="text"
-                            value={entry.newSerials[i] || ''}
-                            onChange={e => setNewSerial(i, e.target.value)}
-                            placeholder={`Serial #${i + 1}`}
-                            className={inputCls}
-                          />
+                        <div key={i} style={{ backgroundColor: '#fff', borderRadius: 8, padding: '12px 14px', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unit {i + 1}</label>
+                          <input type="text" value={entry.newSerials[i] || ''} onChange={e => setNewSerial(i, e.target.value)} placeholder={`Serial #${i + 1}`} style={inp} />
                           <select
-                            value={
-                              entry.newSerials[i]
-                                ? entry.newSerialCities[entry.newSerials[i]] || ''
-                                : ''
-                            }
+                            value={entry.newSerials[i] ? entry.newSerialCities[entry.newSerials[i]] || '' : ''}
                             onChange={e => setNewSerialCity(i, e.target.value)}
-                            className={inputCls}
+                            style={inp}
                           >
                             <option value="">Select location (optional)</option>
-                            {cities.map(city => (
-                              <option key={city} value={city}>{city}</option>
-                            ))}
+                            {cities.map(city => <option key={city} value={city}>{city}</option>)}
                           </select>
                         </div>
                       ))}
@@ -240,30 +195,27 @@ title="Back to Inventory"
                   </div>
                 )}
 
-                {/* Save button */}
+                {/* Save */}
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-black rounded-xl font-semibold hover:bg-indigo-700 active:bg-indigo-800 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '12px 20px', borderRadius: 10, border: 'none', cursor: isSaving ? 'not-allowed' : 'pointer',
+                    backgroundColor: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 14,
+                    boxShadow: '0 2px 8px rgba(22,163,74,0.35)', opacity: isSaving ? 0.7 : 1, transition: 'all 0.2s',
+                  }}
                 >
                   {isSaving ? (
-                    <>
-                      <Loader2 size={20} className="animate-spin" />
-                      Saving...
-                    </>
+                    <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Saving...</>
                   ) : (
-                    <>
-                      <Plus size={20} />
-                      Add {entry.addQty} Unit{entry.addQty > 1 ? 's' : ''} to Stock
-                    </>
+                    <><Plus size={16} /> Add {entry.addQty} Unit{entry.addQty > 1 ? 's' : ''} to Stock</>
                   )}
                 </button>
-
               </div>
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

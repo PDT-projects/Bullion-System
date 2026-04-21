@@ -12,109 +12,103 @@ interface InventoryDashboardViewProps {
 }
 
 export function InventoryDashboardView({
-  onAddNewInventory,
-  onAddToExisting,
-  onViewReceivable,
-  onViewInventory,
-  onProductTransfer,
+  onAddNewInventory, onAddToExisting, onViewReceivable, onViewInventory, onProductTransfer,
 }: InventoryDashboardViewProps) {
   const cards = [
     {
       title: 'Add New Inventory',
       description: 'Create a new product entry with optional costing information',
       icon: Plus,
-      iconBg: 'bg-white border shadow-sm',
-      iconColor: 'text-blue-600',
-      borderColor: 'border-blue-200',
-      hoverBorder: 'hover:border-blue-400',
-      hoverBg: 'hover:bg-blue-50',
+      iconColor: '#2563eb', iconBg: '#eff6ff', borderColor: '#bfdbfe', hoverBorder: '#3b82f6', hoverBg: '#eff6ff',
       onClick: onAddNewInventory,
     },
     {
-      title: 'Add to Existing Inventory',
+      title: 'Add to Existing',
       description: 'Add more units to an existing product in inventory',
       icon: PackagePlus,
-      iconBg: 'bg-white border shadow-sm',
-      iconColor: 'text-green-600',
-      borderColor: 'border-green-200',
-      hoverBorder: 'hover:border-green-400',
-      hoverBg: 'hover:bg-green-50',
+      iconColor: '#16a34a', iconBg: '#f0fdf4', borderColor: '#bbf7d0', hoverBorder: '#22c55e', hoverBg: '#f0fdf4',
       onClick: onAddToExisting,
     },
     {
       title: 'Receivable Stock',
       description: 'View shipments on the way but not yet received',
       icon: PackageSearch,
-      iconBg: 'bg-white border shadow-sm',
-      iconColor: 'text-orange-600',
-      borderColor: 'border-orange-200',
-      hoverBorder: 'hover:border-orange-400',
-      hoverBg: 'hover:bg-orange-50',
+      iconColor: '#d97706', iconBg: '#fffbeb', borderColor: '#fde68a', hoverBorder: '#f59e0b', hoverBg: '#fffbeb',
       onClick: onViewReceivable,
     },
     {
       title: 'View Inventory',
-      description: 'View existing inventory items',
+      description: 'Browse and manage all existing inventory items',
       icon: Boxes,
-      iconBg: 'bg-white border shadow-sm',
-      iconColor: 'text-purple-600',
-      borderColor: 'border-purple-200',
-      hoverBorder: 'hover:border-purple-400',
-      hoverBg: 'hover:bg-purple-50',
+      iconColor: '#7c3aed', iconBg: '#f5f3ff', borderColor: '#ddd6fe', hoverBorder: '#8b5cf6', hoverBg: '#f5f3ff',
       onClick: onViewInventory,
     },
     {
       title: 'Product Transfer',
       description: 'Transfer products between locations or warehouses',
       icon: ArrowRightLeft,
-      iconBg: 'bg-white border shadow-sm',
-      iconColor: 'text-slate-600',
-      borderColor: 'border-slate-200',
-      hoverBorder: 'hover:border-slate-400',
-      hoverBg: 'hover:bg-slate-50',
+      iconColor: '#0f766e', iconBg: '#f0fdfa', borderColor: '#99f6e4', hoverBorder: '#14b8a6', hoverBg: '#f0fdfa',
       onClick: onProductTransfer,
     },
   ];
 
   return (
-    <div className="min-h-screen overflow-y-auto bg-gray-50 p-8">
-      {/* Page Header - Full width */}
-      <div className="mb-12">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="p-3 bg-white shadow-sm border border-gray-200 rounded-xl">
-            <Package className="w-6 h-6 text-indigo-600" />
-          </div>
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900">Inventory</h2>
-            <p className="text-lg text-gray-600 mt-1">
-              Smart inventory intake flow with conditional costing and payment tracking
-            </p>
-          </div>
+    <div style={{ width: '100%', height: '100%', overflowY: 'auto', backgroundColor: '#f8fafc', padding: '28px 32px' }}>
+
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
+        <div style={{ width: 42, height: 42, borderRadius: 10, backgroundColor: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Package size={22} color="#fff" />
+        </div>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>Inventory</h2>
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0, marginTop: 2 }}>
+            Smart inventory intake flow with conditional costing and payment tracking
+          </p>
         </div>
       </div>
 
-      {/* Cards Grid - Full width, no inner container */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Cards grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }}>
         {cards.map((card, index) => {
           const Icon = card.icon;
           return (
             <button
               key={index}
               onClick={card.onClick}
-              className={`group w-full h-52 flex flex-col justify-between p-6 border-2 rounded-2xl transition-all duration-200 shadow-sm ${card.borderColor} ${card.hoverBorder} ${card.hoverBg} hover:shadow-lg hover:scale-[1.02]`}
+              style={{
+                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                padding: '20px 20px', minHeight: 160,
+                border: `1.5px solid ${card.borderColor}`,
+                borderRadius: 14, backgroundColor: '#fff',
+                cursor: 'pointer', textAlign: 'left', width: '100%',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = card.hoverBorder;
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = card.hoverBg;
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)';
+                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = card.borderColor;
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#fff';
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)';
+                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+              }}
             >
-              <div className="flex items-start gap-4">
-                <div className={`p-3 rounded-xl ${card.iconBg} shrink-0`}>
-                  <Icon className={`w-7 h-7 ${card.iconColor}`} />
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                <div style={{ padding: 10, borderRadius: 10, backgroundColor: card.iconBg, flexShrink: 0 }}>
+                  <Icon size={22} color={card.iconColor} />
                 </div>
                 <div>
-                  <h4 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h4>
-                  <p className="text-gray-600 leading-relaxed">{card.description}</p>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>{card.title}</div>
+                  <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, margin: 0 }}>{card.description}</p>
                 </div>
               </div>
-              <div className="flex items-center text-sm font-semibold text-gray-700 group-hover:text-indigo-600 transition-colors">
-                Get Started 
-                <ArrowRight className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: card.iconColor, marginTop: 16 }}>
+                Get Started <ArrowRight size={14} />
               </div>
             </button>
           );

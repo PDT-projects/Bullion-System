@@ -1,5 +1,5 @@
 // Inventory Module - View Layer
-// InventoryPaymentView - Step 5: Payment information
+// InventoryPaymentView - Last Step: Payment information
 
 import React from 'react';
 import {
@@ -10,6 +10,39 @@ import { UseInventoryPaymentViewModelReturn } from '../viewModels/useInventoryPa
 
 interface InventoryPaymentViewProps extends UseInventoryPaymentViewModelReturn {}
 
+const Stepper = ({ steps, current }: { steps: { number: number; label: string }[]; current: number }) => (
+  <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 32px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', maxWidth: 700, margin: '0 auto' }}>
+      {steps.map((step, i) => {
+        const active = step.number === current;
+        const done   = step.number < current;
+        const last   = i === steps.length - 1;
+        return (
+          <React.Fragment key={step.number}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 13, flexShrink: 0,
+                backgroundColor: done || active ? '#4f46e5' : '#e5e7eb',
+                color: done || active ? '#fff' : '#9ca3af',
+                boxShadow: active ? '0 0 0 4px rgba(79,70,229,0.18)' : 'none',
+              }}>
+                {done ? <Check size={14} strokeWidth={3} /> : step.number}
+              </div>
+              <span style={{ marginTop: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: done || active ? '#4f46e5' : '#94a3b8', whiteSpace: 'nowrap' }}>
+                {step.label}
+              </span>
+            </div>
+            {!last && (
+              <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 6px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb', transition: 'background-color 0.3s' }} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  </div>
+);
+
 export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   costingOption, inventoryType, totalAmount,
   paymentStatus, transactionId, isGeneratingId, isEditingTransactionId,
@@ -17,234 +50,204 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   setPaymentStatus, setTransactionId, setIsEditingTransactionId,
   setPaidAmount, handleSubmit, handleBack, formatCurrency, productSummary,
 }) => {
-
-  // Steps vary based on whether costing is included
   const steps = costingOption === 'with'
     ? [
-        { number: 1, label: 'Inventory Type' },
-        { number: 2, label: 'Costing Option' },
-        { number: 3, label: 'Costing Details' },
-        { number: 4, label: 'Product Details' },
+        { number: 1, label: 'Type' },
+        { number: 2, label: 'Costing' },
+        { number: 3, label: 'Details' },
+        { number: 4, label: 'Products' },
         { number: 5, label: 'Payment' },
       ]
     : [
-        { number: 1, label: 'Inventory Type' },
-        { number: 2, label: 'Costing Option' },
-        { number: 3, label: 'Product Details' },
+        { number: 1, label: 'Type' },
+        { number: 2, label: 'Costing' },
+        { number: 3, label: 'Details' },
         { number: 4, label: 'Payment' },
       ];
+  const currentStep = steps.length;
 
-  const currentStep = steps.length; // Payment is always the last step
+  const inp = { width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' as const, color: '#111827', backgroundColor: '#fff' };
 
   return (
-    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-      <div className="inventory-entry-container max-w-7xl mx-auto">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>
 
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <button onClick={handleBack} className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 shadow-md border">
-            <ArrowLeft size={20} /><span className="font-medium">Back</span>
+      {/* Header */}
+      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={handleBack}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}
+          >
+            <ArrowLeft size={16} /> Back
           </button>
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-              <CreditCard className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent tracking-tight mb-2">
-                Payment Information
-              </h2>
-              <p className="text-lg text-gray-600 leading-relaxed">Complete payment details to finalize inventory creation</p>
-            </div>
+          <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <CreditCard size={17} color="#fff" />
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Payment Information</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>Complete payment details to finalize inventory creation</div>
           </div>
         </div>
+      </div>
 
-        {/* ── Stepper ── */}
-        <div className="mb-6 flex-shrink-0 sticky top-24 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-lg px-6 py-5 rounded-xl">
-          <div className="flex items-center w-full max-w-5xl mx-auto">
-            {steps.map((step, index) => {
-              const isActive = step.number === currentStep;
-              const isDone   = step.number < currentStep;
-              const isLast   = index === steps.length - 1;
+      <Stepper steps={steps} current={currentStep} />
 
-              return (
-                <React.Fragment key={step.number}>
-                  <div className="flex flex-col items-center flex-shrink-0 min-w-[140px]">
-                    <div
-                      className={`
-                        w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-lg shadow-xl transition-all duration-300
-                        border-3 ${isDone || isActive ? 'ring-4 ring-indigo-100/50' : ''}
-                        ${isDone
-                          ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 border-indigo-600 text-white shadow-indigo-500/50'
-                          : isActive
-                          ? 'bg-gradient-to-br from-indigo-400 to-indigo-500 border-white text-white shadow-indigo-400/75 scale-105'
-                          : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:shadow-md hover:text-indigo-600 hover:scale-105'
-                        }
-                      `}
-                    >
-                      {isDone ? <Check className="w-7 h-7 stroke-width-2.5" /> : step.number}
-                    </div>
-                    <span
-                      className={`
-                        mt-3.5 text-sm font-semibold tracking-wide leading-tight px-3 py-1.5 rounded-full shadow-sm transition-all
-                        ${isDone || isActive 
-                          ? 'bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-900 ring-1 ring-indigo-200' 
-                          : 'text-gray-500 bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700'
-                        }
-                      `}
-                    >
-                      {step.label}
-                    </span>
-                  </div>
-                  {!isLast && (
-                    <div className="flex-1 mx-4 max-w-md">
-                      <div className={`h-2 rounded-xl shadow-md transition-all duration-300 ${isDone 
-                        ? 'bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 shadow-indigo-300/50' 
-                        : 'bg-gradient-to-r from-gray-200 to-gray-300 hover:from-indigo-200 hover:to-indigo-300'
-                      }`} />
-                    </div>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Payment Form */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-6">
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Transaction ID */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Transaction ID</label>
+          <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>Transaction ID</label>
             {isGeneratingId ? (
-              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-                <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
-                <span className="text-sm text-gray-500">Generating transaction ID...</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                <Loader2 size={16} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: 13, color: '#6b7280' }}>Generating transaction ID...</span>
               </div>
             ) : isEditingTransactionId ? (
-              <div className="flex items-center gap-2">
-                <input type="text" value={transactionId}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  value={transactionId}
                   onChange={e => setTransactionId(e.target.value.toUpperCase())}
                   autoFocus
-                  className={`flex-1 px-4 py-3 border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 ${
-                    validationErrors.transactionId ? 'border-red-400 focus:ring-red-200' : 'border-indigo-400 focus:ring-indigo-200'
-                  }`}
-                  placeholder="e.g. INV-150326-001" />
-                <button type="button" onClick={() => setIsEditingTransactionId(false)}
-                  className="p-3 bg-green-600 text-white rounded-lg hover:bg-green-700"><Check size={18} /></button>
-                <button type="button" onClick={() => setIsEditingTransactionId(false)}
-                  className="p-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"><X size={18} /></button>
+                  style={{ ...inp, flex: 1, border: `1px solid ${validationErrors.transactionId ? '#ef4444' : '#6366f1'}`, fontFamily: 'monospace', fontWeight: 600 }}
+                  placeholder="e.g. INV-150326-001"
+                />
+                <button onClick={() => setIsEditingTransactionId(false)} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#22c55e', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <Check size={16} />
+                </button>
+                <button onClick={() => setIsEditingTransactionId(false)} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#374151' }}>
+                  <X size={16} />
+                </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-                  <span className="font-mono text-sm font-semibold text-indigo-800 tracking-widest">{transactionId}</span>
-                  <span className="text-xs text-indigo-400 ml-auto">auto-generated</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8 }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: '#4338ca', letterSpacing: '0.05em' }}>{transactionId}</span>
+                  <span style={{ fontSize: 10, color: '#818cf8', fontWeight: 600 }}>AUTO-GENERATED</span>
                 </div>
-                <button type="button" onClick={() => setIsEditingTransactionId(true)}
-                  className="p-3 bg-white border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-indigo-400 hover:text-indigo-600"><Edit2 size={18} /></button>
+                <button onClick={() => setIsEditingTransactionId(true)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#6b7280' }}>
+                  <Edit2 size={15} />
+                </button>
               </div>
             )}
-            {validationErrors.transactionId && <p className="text-red-500 text-xs mt-1">{validationErrors.transactionId}</p>}
-            <p className="text-xs text-gray-500 mt-1">Auto-generated in format INV-DDMMYY-NNN. Click the pencil icon to customise.</p>
+            {validationErrors.transactionId && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 5 }}>{validationErrors.transactionId}</p>}
+            <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>Auto-generated in format INV-DDMMYY-NNN. Click the pencil icon to customise.</p>
           </div>
 
           {/* Payment Status */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">Payment Status *</label>
-            <div className="grid grid-cols-3 gap-4">
+          <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 14 }}>Payment Status *</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               {([
-                { value: 'paid',    icon: CheckCircle, label: 'Paid',    desc: 'Full payment received', activeColor: 'border-green-600 text-green-600' },
-                { value: 'unpaid',  icon: X,           label: 'Unpaid',  desc: 'No payment yet',        activeColor: 'border-red-600 text-red-600' },
-                { value: 'partial', icon: AlertCircle, label: 'Partial', desc: 'Partial payment',        activeColor: 'border-yellow-600 text-yellow-600' },
-              ] as const).map(({ value, icon: Icon, label, desc, activeColor }) => (
-                <button key={value} onClick={() => setPaymentStatus(value)}
-                  className={`p-4 border-2 rounded-lg transition-colors ${
-                    paymentStatus === value ? `${activeColor} bg-white` : 'border-gray-200 text-gray-700 hover:border-gray-400 hover:bg-gray-50'
-                  }`}>
-                  <div className="flex items-center justify-center mb-2"><Icon className="w-6 h-6" /></div>
-                  <div className="text-center">
-                    <div className="font-medium">{label}</div>
-                    <div className="text-xs text-gray-600">{desc}</div>
-                  </div>
-                </button>
-              ))}
+                { value: 'paid',    icon: CheckCircle, label: 'Paid',    desc: 'Full payment received', activeColor: '#16a34a', activeBg: '#f0fdf4', activeBorder: '#22c55e' },
+                { value: 'unpaid',  icon: X,           label: 'Unpaid',  desc: 'No payment yet',        activeColor: '#dc2626', activeBg: '#fef2f2', activeBorder: '#f87171' },
+                { value: 'partial', icon: AlertCircle, label: 'Partial', desc: 'Partial payment',        activeColor: '#d97706', activeBg: '#fffbeb', activeBorder: '#fbbf24' },
+              ] as const).map(({ value, icon: Icon, label, desc, activeColor, activeBg, activeBorder }) => {
+                const sel = paymentStatus === value;
+                return (
+                  <button key={value} onClick={() => setPaymentStatus(value)} style={{
+                    padding: '14px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                    border: `2px solid ${sel ? activeBorder : '#e2e8f0'}`,
+                    backgroundColor: sel ? activeBg : '#fff',
+                    transition: 'all 0.15s',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
+                      <Icon size={22} color={sel ? activeColor : '#9ca3af'} />
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: sel ? activeColor : '#374151' }}>{label}</div>
+                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{desc}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
+          {/* Partial amount */}
           {paymentStatus === 'partial' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount *</label>
+            <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Paid Amount *</label>
               <input type="number" min="0" step="0.01" value={paidAmount || ''}
                 onChange={e => setPaidAmount(Number(e.target.value))}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 ${
-                  validationErrors.paidAmount ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
-                }`} placeholder="0.00" />
-              {validationErrors.paidAmount && <p className="text-red-500 text-xs mt-1">{validationErrors.paidAmount}</p>}
+                style={{ ...inp, border: `1px solid ${validationErrors.paidAmount ? '#ef4444' : '#d1d5db'}` }}
+                placeholder="0.00" />
+              {validationErrors.paidAmount && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{validationErrors.paidAmount}</p>}
             </div>
           )}
 
-          {/* Payment Summary */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between"><span className="text-sm text-gray-600">Total Amount:</span><span className="text-sm font-medium">{formatCurrency(totalAmount)}</span></div>
-              <div className="flex justify-between"><span className="text-sm text-gray-600">Paid Amount:</span><span className="text-sm font-medium">{formatCurrency(paidAmount || 0)}</span></div>
-              <div className="flex justify-between border-t pt-2"><span className="text-sm font-medium">Remaining Amount:</span><span className="text-sm font-medium text-red-600">{formatCurrency(remainingAmount)}</span></div>
-            </div>
-          </div>
+          {/* Payment Summary + Product Summary side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
-          {/* Product Summary */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <h4 className="font-medium text-blue-900 mb-3">Product Summary</h4>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            {/* Payment summary */}
+            <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14 }}>Payment Summary</div>
               {[
-                ['Brand',    productSummary.brandName],
-                ['Model',    productSummary.modelName],
-                ['Category', productSummary.category],
-                ['Stock',    `${productSummary.stock} units`],
-                ['Sell Price', formatCurrency(productSummary.sellPrice)],
-                ['Status',   productSummary.status],
-                ['Costing',  costingOption === 'with' ? 'With Costing' : 'Without Costing'],
-                ['Type',     inventoryType === 'in-stock' ? 'In-Stock / Received' : 'On-Order / Pending'],
-              ].map(([l, v]) => (
-                <div key={l}><span className="text-blue-700">{l}:</span><span className="ml-2 font-medium text-blue-900">{v}</span></div>
+                { label: 'Total Amount', value: formatCurrency(totalAmount), color: '#111827' },
+                { label: 'Paid Amount',  value: formatCurrency(paidAmount || 0), color: '#111827' },
+                { label: 'Remaining',    value: formatCurrency(remainingAmount), color: '#dc2626', border: true },
+              ].map(({ label, value, color, border }) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: border ? '10px 0 0 0' : '5px 0', borderTop: border ? '1px solid #f1f5f9' : 'none', marginTop: border ? 8 : 0 }}>
+                  <span style={{ fontSize: 12, color: '#6b7280' }}>{label}:</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color }}>{value}</span>
+                </div>
               ))}
-              <div className="col-span-2 flex items-center gap-2 mt-1 pt-2 border-t border-blue-200">
-                <MapPin className="w-4 h-4 text-indigo-500" />
-                <span className="text-blue-700 font-medium">Stocking Location:</span>
-                <span className="font-bold text-indigo-700 text-base">{productSummary.location || '—'}</span>
+            </div>
+
+            {/* Product summary */}
+            <div style={{ backgroundColor: '#eef2ff', borderRadius: 12, border: '1px solid #c7d2fe', padding: '20px 24px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#3730a3', marginBottom: 14 }}>Product Summary</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 8px' }}>
+                {[
+                  ['Brand', productSummary.brandName],
+                  ['Model', productSummary.modelName],
+                  ['Category', productSummary.category],
+                  ['Stock', `${productSummary.stock} units`],
+                  ['Sell Price', formatCurrency(productSummary.sellPrice)],
+                  ['Status', productSummary.status],
+                  ['Costing', costingOption === 'with' ? 'With Costing' : 'Without Costing'],
+                  ['Type', inventoryType === 'in-stock' ? 'In-Stock' : 'On-Order'],
+                ].map(([l, v]) => (
+                  <div key={l}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</span>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1e1b4b', marginTop: 2 }}>{v}</div>
+                  </div>
+                ))}
               </div>
+              {productSummary.location && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid #c7d2fe' }}>
+                  <MapPin size={13} color="#6366f1" />
+                  <span style={{ fontSize: 12, color: '#4338ca', fontWeight: 700 }}>{productSummary.location}</span>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-            <button onClick={handleBack} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-2 font-medium"><ArrowLeft size={18} />Back</button>
-            <button onClick={handleSubmit} disabled={!isValid || isSaving || isGeneratingId}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 }}>
+            <button onClick={handleBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
+              <ArrowLeft size={16} /> Back
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!isValid || isSaving || isGeneratingId}
               style={{
-                padding: '14px 32px',
-                borderRadius: 8,
-                fontSize: 17,
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                border: 'none',
-                cursor: (!isValid || isSaving || isGeneratingId) ? 'not-allowed' : 'pointer',
-                backgroundColor: (isSaving || isGeneratingId) ? '#6366f1' : isValid ? '#4f46e5' : '#e5e7eb',
-                color: isValid || isSaving || isGeneratingId ? '#ffffff' : '#9ca3af',
-                opacity: (!isValid && !isGeneratingId) ? 0.6 : 1,
-                boxShadow: isValid ? '0 4px 14px rgba(79,70,229,0.4)' : 'none',
-                transition: 'background-color 0.2s',
-              }}>
+                display: 'flex', alignItems: 'center', gap: 8, padding: '11px 28px', borderRadius: 8, border: 'none',
+                backgroundColor: !isValid ? '#e5e7eb' : '#4f46e5', color: !isValid ? '#9ca3af' : '#fff',
+                fontWeight: 700, fontSize: 14, cursor: (!isValid || isSaving || isGeneratingId) ? 'not-allowed' : 'pointer',
+                boxShadow: isValid ? '0 2px 10px rgba(79,70,229,0.35)' : 'none',
+                opacity: isSaving || isGeneratingId ? 0.8 : 1, transition: 'all 0.2s',
+              }}
+            >
               {isGeneratingId
-                ? <><Loader2 size={20} className="animate-spin" />Preparing...</>
+                ? <><Loader2 size={16} className="animate-spin" /> Preparing...</>
                 : isSaving
-                ? <><Loader2 size={20} className="animate-spin" />Saving...</>
-                : <><Save size={20} />Submit Inventory</>
+                ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
+                : <><Save size={16} /> Submit Inventory</>
               }
             </button>
           </div>
+
         </div>
       </div>
     </div>
