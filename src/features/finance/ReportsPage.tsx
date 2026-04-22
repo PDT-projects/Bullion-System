@@ -1,6 +1,7 @@
 // ReportsPage.tsx
 // Standalone reports hub — accessible to users who have report permissions
 // but may NOT have Dashboard access. Lives at /reports route.
+// UPDATED: Added Bank Activity Report card + inline render support
 
 import { useState } from 'react';
 import {
@@ -26,6 +27,9 @@ import { BalanceSheetReport }       from './BalanceSheetReport';
 import { LoanHistory }              from './LoanHistory';
 import { useDashboardData }         from './UseDashboardData';
 
+// ── NEW: Bank Activity Report (reused from banking module) ──
+import { BankActivityView }         from '../../modules/banking/views/BankActivityView';
+
 const screenMap: Record<string, Screen> = {
   'sales':            'Sales Report',
   'profit-loss':      'Profit Loss Report',
@@ -40,22 +44,25 @@ const screenMap: Record<string, Screen> = {
   'fixed-bills':      'Fixed Bills Report',
   'product-transfer': 'Product Transfer Report',
   'loan-history':     'Loan History',
+  'bank-activity':    'Bank Activity Report',   // ← NEW
 };
 
 const ALL_REPORT_CARDS = [
-  { id: 'sales',            name: 'Sales Report',        description: 'Revenue trends, customer analytics & performance',    icon: TrendingUp,  accent: '#4f46e5', lightBg: '#eef2ff', tag: 'Revenue'  },
-  { id: 'profit-loss',      name: 'Profit & Loss',       description: 'Net profit, expense breakdowns & margins',            icon: DollarSign,  accent: '#0f766e', lightBg: '#f0fdfa', tag: 'Finance'  },
-  { id: 'balance-sheet',    name: 'Balance Sheet',       description: 'Assets, liabilities & equity position',               icon: FileText,    accent: '#2563eb', lightBg: '#eff6ff', tag: 'Finance'  },
-  { id: 'inventory',        name: 'Inventory Report',    description: 'Stock levels, distribution & valuation',              icon: Package,     accent: '#7c3aed', lightBg: '#f5f3ff', tag: 'Stock'    },
-  { id: 'transactions',     name: 'Transaction History', description: 'Full ledger with filters & export',                   icon: Receipt,     accent: '#0369a1', lightBg: '#f0f9ff', tag: 'History'  },
-  { id: 'referral',         name: 'Referral Report',     description: 'Referral performance & network earnings',             icon: Users,       accent: '#be185d', lightBg: '#fdf2f8', tag: 'Network'  },
-  { id: 'commission',       name: 'Commission Report',   description: 'Salesperson bonuses & metrics',                       icon: CreditCard,  accent: '#c2410c', lightBg: '#fff7ed', tag: 'Payroll'  },
-  { id: 'expenses',         name: 'Expenses Report',     description: 'Category spending & trend analysis',                  icon: Receipt,     accent: '#374151', lightBg: '#f9fafb', tag: 'Spending' },
-  { id: 'bank-balance',     name: 'Bank Balance',        description: 'Account balances & transaction logs',                 icon: Building2,   accent: '#1d4ed8', lightBg: '#eff6ff', tag: 'Banking'  },
-  { id: 'salaries',         name: 'Salaries Report',     description: 'Payroll summary & employee payments',                 icon: Users,       accent: '#065f46', lightBg: '#ecfdf5', tag: 'HR'       },
-  { id: 'fixed-bills',      name: 'Fixed Bills',         description: 'Recurring bills, due dates & status',                 icon: FileText,    accent: '#6d28d9', lightBg: '#f5f3ff', tag: 'Expenses' },
-  { id: 'product-transfer', name: 'Product Transfer',    description: 'Inventory changes & audit trail',                     icon: FileText,    accent: '#475569', lightBg: '#f8fafc', tag: 'Audit'    },
-  { id: 'loan-history',     name: 'Loan History',        description: 'Loans, repayments & outstanding balances',            icon: DollarSign,  accent: '#92400e', lightBg: '#fffbeb', tag: 'Loans'    },
+  { id: 'sales',            name: 'Sales Report',          description: 'Revenue trends, customer analytics & performance',    icon: TrendingUp,  accent: '#4f46e5', lightBg: '#eef2ff', tag: 'Revenue'  },
+  { id: 'profit-loss',      name: 'Profit & Loss',         description: 'Net profit, expense breakdowns & margins',            icon: DollarSign,  accent: '#0f766e', lightBg: '#f0fdfa', tag: 'Finance'  },
+  { id: 'balance-sheet',    name: 'Balance Sheet',         description: 'Assets, liabilities & equity position',               icon: FileText,    accent: '#2563eb', lightBg: '#eff6ff', tag: 'Finance'  },
+  { id: 'inventory',        name: 'Inventory Report',      description: 'Stock levels, distribution & valuation',              icon: Package,     accent: '#7c3aed', lightBg: '#f5f3ff', tag: 'Stock'    },
+  { id: 'transactions',     name: 'Transaction History',   description: 'Full ledger with filters & export',                   icon: Receipt,     accent: '#0369a1', lightBg: '#f0f9ff', tag: 'History'  },
+  { id: 'referral',         name: 'Referral Report',       description: 'Referral performance & network earnings',             icon: Users,       accent: '#be185d', lightBg: '#fdf2f8', tag: 'Network'  },
+  { id: 'commission',       name: 'Commission Report',     description: 'Salesperson bonuses & metrics',                       icon: CreditCard,  accent: '#c2410c', lightBg: '#fff7ed', tag: 'Payroll'  },
+  { id: 'expenses',         name: 'Expenses Report',       description: 'Category spending & trend analysis',                  icon: Receipt,     accent: '#374151', lightBg: '#f9fafb', tag: 'Spending' },
+  { id: 'bank-balance',     name: 'Bank Balance',          description: 'Account balances & transaction logs',                 icon: Building2,   accent: '#1d4ed8', lightBg: '#eff6ff', tag: 'Banking'  },
+  // ── NEW ──
+  { id: 'bank-activity',    name: 'Bank Activity Report',  description: 'Full history of all bank & cash transactions, inventory payments, transfers & instalments', icon: Activity, accent: '#7c3aed', lightBg: '#f5f3ff', tag: 'Banking'  },
+  { id: 'salaries',         name: 'Salaries Report',       description: 'Payroll summary & employee payments',                 icon: Users,       accent: '#065f46', lightBg: '#ecfdf5', tag: 'HR'       },
+  { id: 'fixed-bills',      name: 'Fixed Bills',           description: 'Recurring bills, due dates & status',                 icon: FileText,    accent: '#6d28d9', lightBg: '#f5f3ff', tag: 'Expenses' },
+  { id: 'product-transfer', name: 'Product Transfer',      description: 'Inventory changes & audit trail',                     icon: FileText,    accent: '#475569', lightBg: '#f8fafc', tag: 'Audit'    },
+  { id: 'loan-history',     name: 'Loan History',          description: 'Loans, repayments & outstanding balances',            icon: DollarSign,  accent: '#92400e', lightBg: '#fffbeb', tag: 'Loans'    },
 ];
 
 export function ReportsPage() {
@@ -79,6 +86,7 @@ export function ReportsPage() {
       case 'commission':      return <CommissionReport commissions={commissions} />;
       case 'expenses':        return <ExpensesReport />;
       case 'bank-balance':    return <BankBalanceReport />;
+      case 'bank-activity':   return <BankActivityView />;   // ← NEW — no props needed, self-contained
       case 'salaries':        return <SalariesReport />;
       case 'fixed-bills':     return <FixedBillsReport />;
       case 'product-transfer':return <ProductTransferReport transferLogs={[]} />;
@@ -130,10 +138,10 @@ export function ReportsPage() {
   return (
     <div style={{ width: '100%', minHeight: '100%', backgroundColor: '#f8fafc' }}>
 
-      {/* 24px top gap — matches the p-6 padding in Dashboard above the tabs bar */}
+      {/* 24px top gap */}
       <div style={{ height: 24, backgroundColor: '#f8fafc' }} />
 
-      {/* ── Header — white bg, matches app sidebar/topbar theme ── */}
+      {/* ── Header ── */}
       <div style={{
         backgroundColor: '#ffffff',
         borderBottom: '1px solid #e2e8f0',
@@ -141,12 +149,10 @@ export function ReportsPage() {
         position: 'relative',
         overflow: 'hidden',
       }}>
-        {/* Subtle decorative shapes — tone-on-tone, no dark blue */}
         <div style={{ position: 'absolute', top: -30, right: -30, width: 140, height: 140, borderRadius: '50%', backgroundColor: '#f1f5f9', zIndex: 0 }} />
         <div style={{ position: 'absolute', bottom: -50, right: 110, width: 120, height: 120, borderRadius: '50%', backgroundColor: '#f8fafc', zIndex: 0 }} />
 
         <div style={{ position: 'relative', zIndex: 1 }}>
-          {/* Title row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <div style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <BarChart2 size={18} color="#fff" />
@@ -155,7 +161,6 @@ export function ReportsPage() {
           </div>
           <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 20px 0' }}>Select any report below to view live data</p>
 
-          {/* Stat pills */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
             {[
               { label: 'Reports Available', value: accessibleCards.length, icon: FileText },

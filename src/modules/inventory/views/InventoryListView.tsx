@@ -1,17 +1,9 @@
 // Inventory Module - View Layer
 // InventoryListView - Product list with filters, location column, and location-grouped serial modal
-//
-// FIXES APPLIED:
-//   1. Row actions now show ONLY View (Eye) and Edit (Edit2) buttons.
-//      Transfer button removed from the row — users access it from the detail modal
-//      or a dedicated transfer page.
-//   2. View modal footer: shows View-only close button + Edit button that closes
-//      the modal and navigates to edit. Transfer button removed from modal too
-//      (keeping the UI focused on the two requested actions: view & edit).
-//   3. onReceiveProduct button kept for on-order tab (→ Stock) — unchanged.
+// UPDATED: Shows payment mode badge in table and full payment details in view modal
 
 import React from 'react';
-import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2 } from 'lucide-react';
+import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
@@ -67,6 +59,127 @@ function getStatusColor(status: string): string {
   return colors[status] || 'bg-gray-100 text-gray-800';
 }
 
+// ── Payment mode badge component ─────────────────────────────────────────────
+function PaymentModeBadge({ product }: { product: Product }) {
+  const pi = (product as any).paymentInfo;
+  if (!pi || pi.paymentStatus === 'unpaid') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700">
+        Unpaid
+      </span>
+    );
+  }
+  if (pi.installments?.length > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">
+        <CreditCard size={10} /> Mixed
+      </span>
+    );
+  }
+  if (pi.paymentMode === 'bank') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700" title={pi.bankName || ''}>
+        <Building2 size={10} /> Bank
+      </span>
+    );
+  }
+  if (pi.paymentMode === 'cash') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+        <Banknote size={10} /> Cash
+      </span>
+    );
+  }
+  return null;
+}
+
+// ── Payment detail panel inside view modal ───────────────────────────────────
+function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: number) => string }) {
+  const pi = (product as any).paymentInfo;
+  if (!pi) return null;
+
+  const statusColor: Record<string, string> = {
+    paid:    '#16a34a',
+    unpaid:  '#dc2626',
+    partial: '#d97706',
+  };
+
+  return (
+    <div style={{ borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+        <CreditCard size={14} color="#4f46e5" />
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Payment Details</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, backgroundColor: '#fff', border: `1px solid ${statusColor[pi.paymentStatus] || '#e2e8f0'}`, color: statusColor[pi.paymentStatus] || '#374151' }}>
+          {pi.paymentStatus?.charAt(0).toUpperCase() + pi.paymentStatus?.slice(1)}
+        </span>
+      </div>
+
+      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Transaction ID */}
+        {pi.transactionId && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+            <span style={{ color: '#6b7280' }}>Transaction ID</span>
+            <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4338ca' }}>{pi.transactionId}</span>
+          </div>
+        )}
+
+        {/* Total / Paid / Remaining */}
+        {[
+          ['Total Amount',   fmt(pi.totalAmount  || 0)],
+          ['Paid Amount',    fmt(pi.paidAmount   || 0)],
+          ['Remaining',      fmt(Math.max(0, (pi.totalAmount || 0) - (pi.paidAmount || 0)))],
+        ].map(([label, value]) => (
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+            <span style={{ color: '#6b7280' }}>{label}</span>
+            <span style={{ fontWeight: 600, color: label === 'Remaining' && (pi.totalAmount - pi.paidAmount) > 0 ? '#dc2626' : '#111827' }}>{value}</span>
+          </div>
+        ))}
+
+        {/* Payment method */}
+        {pi.paymentStatus !== 'unpaid' && (
+          <div style={{ paddingTop: 8, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+            <span style={{ color: '#6b7280' }}>Payment Method</span>
+            {pi.installments?.length > 0 ? (
+              <span style={{ fontWeight: 700, color: '#7c3aed' }}>Mixed (Instalments)</span>
+            ) : pi.paymentMode === 'cash' ? (
+              <span style={{ fontWeight: 700, color: '#16a34a' }}>💵 Cash in Hand</span>
+            ) : (
+              <span style={{ fontWeight: 700, color: '#2563eb' }}>🏦 {pi.bankName || 'Bank Transfer'}</span>
+            )}
+          </div>
+        )}
+
+        {/* Instalment breakdown */}
+        {pi.installments?.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Instalment Breakdown</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {pi.installments.map((inst: any, idx: number) => (
+                <div key={inst.id || idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 11 }}>
+                  <span style={{ fontWeight: 700, color: '#374151', minWidth: 20 }}>#{idx + 1}</span>
+                  {inst.mode === 'cash' ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#16a34a', fontWeight: 600 }}>
+                      <Banknote size={10} /> Cash
+                    </span>
+                  ) : (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#2563eb', fontWeight: 600 }}>
+                      <Building2 size={10} /> {inst.bankName || 'Bank'}
+                    </span>
+                  )}
+                  <span style={{ flex: 1, color: '#6b7280' }}>{inst.date}</span>
+                  {inst.note && <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>{inst.note}</span>}
+                  <span style={{ fontWeight: 700, color: '#111827', marginLeft: 'auto' }}>{fmt(inst.amount || 0)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function InventoryListView({
   products, categories, uniqueLocations, filters, showFilters, activeFilterCount,
   viewProduct, isLoading, stats,
@@ -84,12 +197,10 @@ export function InventoryListView({
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleBack}
+          <button onClick={handleBack}
             style={{ minWidth: 36, minHeight: 36 }}
             className="flex items-center justify-center rounded-lg border border-gray-300 bg-white shadow-sm hover:bg-gray-100 text-gray-700"
-            title="Back to Inventory"
-          >
+            title="Back to Inventory">
             <ArrowLeft size={18} />
           </button>
           <div>
@@ -137,7 +248,7 @@ export function InventoryListView({
       {/* ── Filters ── */}
       {showFilters && (
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
               <input type="text" value={filters.brandSearch}
@@ -167,7 +278,7 @@ export function InventoryListView({
                 onChange={e => setFilter('statusFilter', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All Statuses</option>
-                {['New', 'In Transit', 'Available', 'Sold', 'Damaged', 'Returned'].map(s => (
+                {['New','Available','In Transit','Damaged','Returned','On-Order'].map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
@@ -181,12 +292,12 @@ export function InventoryListView({
                 {uniqueLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
               </select>
             </div>
-          </div>
-          <div className="flex justify-end mt-4">
-            <button onClick={clearFilters}
-              className="text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 py-1.5 rounded-lg font-medium transition-colors">
-              Clear all filters
-            </button>
+            <div className="flex items-end">
+              <button onClick={clearFilters}
+                className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm">
+                Clear Filters
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -194,109 +305,83 @@ export function InventoryListView({
       {/* ── Table ── */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#4f46e5] mx-auto mb-3" />
-            <p className="text-gray-600">Loading inventory...</p>
+          <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center gap-3 text-gray-400">
+              <Package size={40} className="opacity-40" />
+              <span className="text-sm">Loading inventory...</span>
+            </div>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center gap-3 text-gray-400">
+              <Package size={40} className="opacity-40" />
+              <span className="text-sm">No products found</span>
+            </div>
           </div>
         ) : (
-          <table className="w-full table-fixed">
-            <colgroup>
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '11%' }} />
-              <col style={{ width: '11%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '8%'  }} />
-            </colgroup>
-
+          <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Product', 'Category', 'Location', 'Stock', 'Cost Price', 'Sell Price', 'Status', 'Actions'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {h}
-                  </th>
+                {['Brand', 'Model', 'Category', 'Location', 'Stock', 'Cost', 'Sell Price', 'Status', 'Payment', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-
-            <tbody className="divide-y divide-gray-200">
-              {products.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
-                    <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No products found</p>
-                  </td>
-                </tr>
-              ) : products.map(product => (
+            <tbody className="divide-y divide-gray-100">
+              {products.map(product => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-
+                  <td className="px-4 py-3 font-semibold text-gray-900 text-sm">{product.brandName}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">{product.modelName}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{product.category}</td>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900 truncate">{product.brandName} {product.modelName}</div>
-                    <div className="text-xs text-gray-500">{product.buyType}</div>
+                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                      <MapPin size={12} className="text-indigo-400 flex-shrink-0" />
+                      <span className="truncate max-w-[100px]" title={getDisplayLocation(product)}>
+                        {getDisplayLocation(product)}
+                      </span>
+                    </div>
                   </td>
-
-                  <td className="px-4 py-3 text-sm text-gray-600 truncate">{product.category}</td>
-
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
-                      <MapPin className="w-3 h-3 flex-shrink-0" />
-                      {getDisplayLocation(product)}
-                    </span>
-                  </td>
-
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      product.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      product.stock === 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                     }`}>
                       {product.stock} units
                     </span>
                   </td>
-
                   <td className="px-4 py-3 text-sm text-gray-600">{fmt(product.costPrice)}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{fmt(product.sellPrice)}</td>
-
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
                       {product.status}
                     </span>
                   </td>
 
-                  {/* FIX 1 — Only View and Edit buttons in row actions */}
+                  {/* Payment mode badge */}
+                  <td className="px-4 py-3">
+                    <PaymentModeBadge product={product} />
+                  </td>
+
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      {/* View */}
-                      <button
-                        onClick={() => setViewProduct(product)}
+                      <button onClick={() => setViewProduct(product)}
                         className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                        title="View details"
-                      >
+                        title="View details">
                         <Eye size={16} />
                       </button>
-
-                      {/* Edit */}
-                      <button
-                        onClick={() => onEdit?.(product.id)}
+                      <button onClick={() => onEdit?.(product.id)}
                         className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="Edit product"
-                      >
+                        title="Edit product">
                         <Edit2 size={16} />
                       </button>
-
-                      {/* Move to Stock — only shown for on-order tab */}
                       {onReceiveProduct && (
-                        <button
-                          onClick={() => onReceiveProduct(product.id)}
+                        <button onClick={() => onReceiveProduct(product.id)}
                           className="px-2 py-1 text-black bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold border border-gray-200 whitespace-nowrap"
-                          title="Move to Stock"
-                        >
+                          title="Move to Stock">
                           → Stock
                         </button>
                       )}
                     </div>
                   </td>
-
                 </tr>
               ))}
             </tbody>
@@ -310,25 +395,24 @@ export function InventoryListView({
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-xl font-bold">Product Details</h3>
-              <button
-                onClick={() => setViewProduct(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
-              >
+              <button onClick={() => setViewProduct(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500">
                 ✕
               </button>
             </div>
 
             <div className="p-6 space-y-5">
+              {/* Core fields */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 {[
-                  ['Brand',        viewProduct.brandName],
-                  ['Model',        viewProduct.modelName],
-                  ['Category',     viewProduct.category],
-                  ['Status',       viewProduct.status],
-                  ['Stock',        `${viewProduct.stock} units`],
-                  ['Warranty',     `${viewProduct.warrantyYears} year${viewProduct.warrantyYears !== 1 ? 's' : ''}`],
-                  ['Cost Price',   fmt(viewProduct.costPrice)],
-                  ['Sell Price',   fmt(viewProduct.sellPrice)],
+                  ['Brand',    viewProduct.brandName],
+                  ['Model',    viewProduct.modelName],
+                  ['Category', viewProduct.category],
+                  ['Status',   viewProduct.status],
+                  ['Stock',    `${viewProduct.stock} units`],
+                  ['Warranty', `${viewProduct.warrantyYears} year${viewProduct.warrantyYears !== 1 ? 's' : ''}`],
+                  ['Cost Price', fmt(viewProduct.costPrice)],
+                  ['Sell Price', fmt(viewProduct.sellPrice)],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <p className="text-xs text-gray-500">{label}</p>
@@ -344,7 +428,10 @@ export function InventoryListView({
                 </div>
               </div>
 
-              {/* Serial Numbers grouped by location */}
+              {/* ── Payment Details ── */}
+              <PaymentDetailPanel product={viewProduct} fmt={fmt} />
+
+              {/* Serial Numbers */}
               {viewProduct.serialNumbers.length > 0 && (
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-3">
@@ -366,8 +453,7 @@ export function InventoryListView({
                             </div>
                             <div className="p-3 flex flex-wrap gap-2">
                               {serials.map((serial, idx) => (
-                                <span key={idx}
-                                  className="text-xs font-mono bg-gray-50 border border-gray-200 px-2 py-1 rounded text-gray-700">
+                                <span key={idx} className="text-xs font-mono bg-gray-50 border border-gray-200 px-2 py-1 rounded text-gray-700">
                                   {serial}
                                 </span>
                               ))}
@@ -379,7 +465,6 @@ export function InventoryListView({
                 </div>
               )}
 
-              {/* Description */}
               {viewProduct.description && (
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Description</p>
@@ -388,26 +473,18 @@ export function InventoryListView({
               )}
             </div>
 
-            {/* FIX 2 — Modal footer: Close + Edit only (Transfer removed) */}
             <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">
-              <button
-                onClick={() => setViewProduct(null)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
+              <button onClick={() => setViewProduct(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                 Close
               </button>
-              <button
-                onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
-              >
+              <button onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
                 <Edit2 size={16} /> Edit Product
               </button>
-              {/* Keep Move to Stock for on-order tab */}
               {onReceiveProduct && (
-                <button
-                  onClick={() => { setViewProduct(null); onReceiveProduct(viewProduct.id); }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm"
-                >
+                <button onClick={() => { setViewProduct(null); onReceiveProduct(viewProduct.id); }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm">
                   Move to Stock
                 </button>
               )}

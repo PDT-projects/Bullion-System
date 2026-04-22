@@ -594,4 +594,26 @@ export class BrandModelFirebaseService {
       throw new Error('Failed to save brand and models to Firestore');
     }
   }
+  
+static async generateTransactionId(): Promise<string> {
+  const now      = new Date();
+  const dd       = String(now.getDate()).padStart(2, '0');
+  const mm       = String(now.getMonth() + 1).padStart(2, '0');
+  const yy       = String(now.getFullYear()).slice(-2);
+  const datePart = `${dd}${mm}${yy}`;                         // e.g. "220426"
+ 
+  const counterRef = doc(db, 'counters', `inventory_txn_${datePart}`);
+ 
+  const nextCount = await runTransaction(db, async (txn) => {
+    const snap    = await txn.get(counterRef);
+    const current = snap.exists() ? (snap.data().count as number) : 0;
+    const next    = current + 1;
+    txn.set(counterRef, { count: next, date: datePart }, { merge: true });
+    return next;
+  });
+ 
+  const counter = String(nextCount).padStart(3, '0');          // "001", "002", ...
+  return `TXN-${datePart}-${counter}`;                         // "TXN-220426-001"
+}
+ 
 }

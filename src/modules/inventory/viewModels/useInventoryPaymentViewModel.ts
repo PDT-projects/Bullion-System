@@ -1,6 +1,7 @@
 // Inventory Module - ViewModel Layer
 // useInventoryPaymentViewModel - Final step: payment & save to Firestore
-// Change: reads `location` from URL params and passes it to CreateProductDTO
+// UPDATED: Transaction ID format changed to TXN-DDMMYY-### (e.g. TXN-220426-001)
+//          Activity report now correctly saves inventoryId (TXN ref) for both Cash and Bank payments
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -10,8 +11,22 @@ import {
   InventoryEntryType, CostingInfo, CostingModel, CreateProductDTO,
 } from '../models/types';
 import { InventoryFirebaseService, generateInventoryTransactionId } from '../models/InventoryFirebaseService';
+import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
+import { CashFirebaseService } from '../../banking/models/cashFirebaseService';
+import { Bank } from '../../banking/models/types';
 
 export type PaymentStatusType = 'paid' | 'unpaid' | 'partial';
+export type PaymentMode = 'cash' | 'bank';
+
+export interface InstallmentEntry {
+  id: string;          // uuid-lite: Date.now() + Math.random()
+  mode: PaymentMode;
+  bankId?: string;
+  bankName?: string;
+  amount: number;
+  note?: string;
+  date: string;        // ISO date string
+}
 
 export interface UseInventoryPaymentViewModelReturn {
   formData: Partial<ProductFormData>;
@@ -27,6 +42,22 @@ export interface UseInventoryPaymentViewModelReturn {
   validationErrors: { [key: string]: string };
   isValid: boolean;
   isSaving: boolean;
+
+  // Payment mode
+  paymentMode: PaymentMode;
+  setPaymentMode: (mode: PaymentMode) => void;
+  selectedBankId: string;
+  setSelectedBankId: (id: string) => void;
+  banks: Bank[];
+  isBanksLoading: boolean;
+
+  // Installments (for partial / multi-account)
+  installments: InstallmentEntry[];
+  addInstallment: () => void;
+  removeInstallment: (id: string) => void;
+  updateInstallment: (id: string, patch: Partial<InstallmentEntry>) => void;
+  instalmentTotal: number;
+
   setPaymentStatus: (status: PaymentStatusType) => void;
   setTransactionId: (id: string) => void;
   setIsEditingTransactionId: (v: boolean) => void;
@@ -37,9 +68,36 @@ export interface UseInventoryPaymentViewModelReturn {
   productSummary: {
     brandName: string; modelName: string; category: string;
     stock: number; sellPrice: number; status: string; inventoryType: string;
-    location: string;                                           // ← new
+    location: string;
     totalValueOfBrand?: number; modelCount?: number;
   };
+}
+
+function makeId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Generates a fallback transaction ID in the format TXN-DDMMYY-###
+ * Used when the Firebase call to generateInventoryTransactionId fails.
+ *
+ * Format breakdown:
+ *   TXN  — fixed prefix
+ *   DD   — day of entry (e.g. 22)
+ *   MM   — month of entry (e.g. 04)
+ *   YY   — last 2 digits of year (e.g. 26)
+ *   ###  — 3-digit counter (starts at 001 for fallback; Firebase handles real counter)
+ *
+ * Example: TXN-220426-001
+ */
+function generateFallbackTransactionId(): string {
+  const now = new Date();
+  const dd  = String(now.getDate()).padStart(2, '0');
+  const mm  = String(now.getMonth() + 1).padStart(2, '0');
+  const yy  = String(now.getFullYear()).slice(-2);
+  // Fallback counter — real counter is managed by Firestore in generateInventoryTransactionId
+  const counter = String(Math.floor(Math.random() * 900) + 100); // 100–999 to avoid collisions
+  return `TXN-${dd}${mm}${yy}-${counter}`;
 }
 
 export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelReturn {
@@ -50,7 +108,48 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const [transactionId, setTransactionId]               = useState('');
   const [isEditingTransactionId, setIsEditingTransactionId] = useState(false);
 
-  // ── Parse wizard state from URL ──────────────────────────────────────────────
+  // ── Banks ──────────────────────────────────────────────────────────────────
+  const [banks, setBanks]               = useState<Bank[]>([]);
+  const [isBanksLoading, setIsBanksLoading] = useState(true);
+
+  useEffect(() => {
+    BankFirebaseService.fetchAllBanks()
+      .then(setBanks)
+      .catch(() => {})
+      .finally(() => setIsBanksLoading(false));
+  }, []);
+
+  // ── Payment mode & bank selection ─────────────────────────────────────────
+  const [paymentMode, setPaymentMode]       = useState<PaymentMode>('cash');
+  const [selectedBankId, setSelectedBankId] = useState('');
+
+  // ── Installments ──────────────────────────────────────────────────────────
+  const [installments, setInstallments] = useState<InstallmentEntry[]>([]);
+
+  const addInstallment = useCallback(() => {
+    setInstallments(prev => [...prev, {
+      id: makeId(),
+      mode: 'cash',
+      amount: 0,
+      date: new Date().toISOString().slice(0, 10),
+      note: '',
+    }]);
+  }, []);
+
+  const removeInstallment = useCallback((id: string) => {
+    setInstallments(prev => prev.filter(e => e.id !== id));
+  }, []);
+
+  const updateInstallment = useCallback((id: string, patch: Partial<InstallmentEntry>) => {
+    setInstallments(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e));
+  }, []);
+
+  const instalmentTotal = useMemo(
+    () => installments.reduce((s, e) => s + (e.amount || 0), 0),
+    [installments]
+  );
+
+  // ── Parse wizard state from URL ──────────────────────────────────────────
   const costingOption = (searchParams.get('costing') as CostingOption)      || 'without';
   const inventoryType = (searchParams.get('type')    as InventoryEntryType) || 'in-stock';
   const brandName     = searchParams.get('brandName')    || '';
@@ -63,8 +162,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const description   = searchParams.get('description')  || '';
   const status        = (searchParams.get('status') as ProductStatus) || 'New';
   const isDamaged     = searchParams.get('isDamaged') === 'true';
-  const location      = searchParams.get('location')     || '';  // ← new
-  const costPrice     = Number(searchParams.get('costPrice'))     || 0;  // ← FIX: was never parsed
+  const location      = searchParams.get('location')     || '';
+  const costPrice     = Number(searchParams.get('costPrice'))     || 0;
   const serialNumbers: string[]                = JSON.parse(searchParams.get('serialNumbers') || '[]');
   const serialCities:  { [k: string]: string } = JSON.parse(searchParams.get('serialCities')  || '{}');
   const costingBrandId = searchParams.get('costingBrandId') || '';
@@ -93,11 +192,12 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const formData: Partial<ProductFormData> = {
     costingOption, brandName, modelName, category, sellPrice, buyType,
     warrantyYears, stock, description, status, isDamaged,
-    location,                                                   // ← new
-    serialNumbers, serialCities, costing,
+    location, serialNumbers, serialCities, costing,
   };
 
-  // Auto-generate transaction ID on mount
+  // ── Auto-generate transaction ID on mount ─────────────────────────────────
+  // NOTE: generateInventoryTransactionId() in InventoryFirebaseService MUST
+  // return IDs in the format  TXN-DDMMYY-###  (see companion fix below).
   useEffect(() => {
     const generate = async () => {
       setIsGeneratingId(true);
@@ -105,11 +205,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         const id = await generateInventoryTransactionId();
         setTransactionId(id);
       } catch {
-        const now  = new Date();
-        const dd   = String(now.getDate()).padStart(2, '0');
-        const mm   = String(now.getMonth() + 1).padStart(2, '0');
-        const yy   = String(now.getFullYear()).slice(-2);
-        setTransactionId(`INV-${dd}${mm}${yy}-001`);
+        // Fallback uses the same TXN-DDMMYY-### format
+        setTransactionId(generateFallbackTransactionId());
       } finally {
         setIsGeneratingId(false);
       }
@@ -130,9 +227,9 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
 
   const setPaymentStatus = useCallback((s: PaymentStatusType) => {
     setPaymentStatusState(s);
-    if (s === 'unpaid')       setPaidAmountState(0);
-    else if (s === 'paid')    setPaidAmountState(totalAmount);
-    else                      setPaidAmountState(0);
+    if (s === 'unpaid')    { setPaidAmountState(0); setInstallments([]); }
+    else if (s === 'paid') { setPaidAmountState(totalAmount); setInstallments([]); }
+    else                   { setPaidAmountState(0); }
   }, [totalAmount]);
 
   const setPaidAmount = useCallback((v: number) => setPaidAmountState(v), []);
@@ -144,87 +241,190 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const validateForm = useCallback((): boolean => {
     const errors: { [key: string]: string } = {};
     if (!transactionId.trim()) errors.transactionId = 'Transaction ID is required';
-    if (paymentStatus === 'partial' && paidAmount <= 0)
-      errors.paidAmount = 'Paid amount must be greater than 0 for partial payments';
+    if (paymentStatus !== 'unpaid' && paymentMode === 'bank' && !selectedBankId)
+      errors.bankId = 'Please select a bank account';
+    if (paymentStatus === 'partial') {
+      if (installments.length > 0) {
+        installments.forEach((inst, i) => {
+          if (inst.amount <= 0) errors[`inst_${i}`] = 'Amount must be > 0';
+          if (inst.mode === 'bank' && !inst.bankId) errors[`inst_bank_${i}`] = 'Select a bank';
+        });
+      } else if (paidAmount <= 0) {
+        errors.paidAmount = 'Paid amount must be greater than 0 for partial payments';
+      }
+    }
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [paymentStatus, paidAmount, transactionId]);
+  }, [paymentStatus, paidAmount, transactionId, paymentMode, selectedBankId, installments]);
 
   const isValid = useMemo(() => {
     if (isGeneratingId) return false;
     if (!transactionId.trim()) return false;
-    if (paymentStatus === 'partial') return paidAmount > 0;
+    if (paymentStatus !== 'unpaid' && paymentMode === 'bank' && !selectedBankId) return false;
+    if (paymentStatus === 'partial') {
+      if (installments.length > 0) return installments.every(i => i.amount > 0 && (i.mode === 'cash' || !!i.bankId));
+      return paidAmount > 0;
+    }
     return true;
-  }, [paymentStatus, paidAmount, isGeneratingId, transactionId]);
+  }, [paymentStatus, paidAmount, isGeneratingId, transactionId, paymentMode, selectedBankId, installments]);
 
-  // Save to Firestore
+  // ── Record payment activity ────────────────────────────────────────────────
+  // Each cash/bank entry is saved with:
+  //   - reference  = transactionId  (TXN-DDMMYY-###)  ← links back to inventory record
+  //   - inventoryId = transactionId                    ← explicit FK for activity report lookups
+  //   - description includes brand, model, and TXN ref for human-readable tracing
+  const recordPaymentActivity = useCallback(async (
+    _effectivePaid: number,
+    entries: Array<{
+      mode: PaymentMode;
+      bankId?: string;
+      bankName?: string;
+      amount: number;
+      note?: string;
+      date: string;
+    }>
+  ) => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    for (const entry of entries) {
+      // ── Cash payment ──────────────────────────────────────────────────────
+      if (entry.mode === 'cash') {
+        try {
+          const cashRecord = await CashFirebaseService.getOrCreateCashForLocation(
+            location || 'Head Office - Islamabad'
+          );
+          await CashFirebaseService.addCashTransaction({
+            cashRecordId:  cashRecord.id,
+            date:          entry.date || today,
+            company:       brandName,
+            mainCategory:  'Inventory Purchase',
+            subCategory:   `${modelName || 'Multiple Models'} — ${transactionId}`,
+            amount:        entry.amount,
+            mode:          'Cash',
+            note:          entry.note || `Inventory payment — ${transactionId}`,
+            location:      location || '',
+            // ↓ These two fields link the cash record to the inventory entry
+            reference:     transactionId,
+            inventoryId:   transactionId,
+          });
+        } catch (err) {
+          console.error('Failed to record cash transaction:', err);
+        }
+
+      // ── Bank payment ──────────────────────────────────────────────────────
+      } else if (entry.mode === 'bank' && entry.bankId) {
+        try {
+          await BankFirebaseService.addBankTransaction({
+            bankId:      entry.bankId,
+            bankName:    entry.bankName || '',
+            date:        entry.date || today,
+            type:        'debit',
+            amount:      entry.amount,
+            description: `Inventory Purchase — ${brandName} ${modelName || ''} [${transactionId}]`,
+            // ↓ These two fields link the bank record to the inventory entry
+            reference:   transactionId,
+            inventoryId: transactionId,
+            category:    'Inventory',
+            note:        entry.note || '',
+          });
+        } catch (err) {
+          console.error('Failed to record bank transaction:', err);
+        }
+      }
+    }
+  }, [brandName, modelName, transactionId, location]);
+
+  // ── Build payment entries for saving ──────────────────────────────────────
+  const buildPaymentEntries = useCallback((): Array<{
+    mode: PaymentMode; bankId?: string; bankName?: string;
+    amount: number; note?: string; date: string;
+  }> => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (paymentStatus === 'unpaid') return [];
+
+    if (paymentStatus === 'partial' && installments.length > 0) {
+      return installments.map(inst => ({
+        mode:     inst.mode,
+        bankId:   inst.bankId,
+        bankName: inst.bankName || banks.find(b => b.id === inst.bankId)?.name,
+        amount:   inst.amount,
+        note:     inst.note,
+        date:     inst.date || today,
+      }));
+    }
+
+    const selectedBank = banks.find(b => b.id === selectedBankId);
+    return [{
+      mode:     paymentMode,
+      bankId:   paymentMode === 'bank' ? selectedBankId : undefined,
+      bankName: paymentMode === 'bank' ? selectedBank?.name : undefined,
+      amount:   paymentStatus === 'paid' ? totalAmount : paidAmount,
+      date:     today,
+    }];
+  }, [paymentStatus, paymentMode, selectedBankId, banks, paidAmount, totalAmount, installments]);
+
+  // ── Save to Firestore ──────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!validateForm()) return;
     setIsSaving(true);
 
     try {
-      const isOnOrder = inventoryType === 'on-order';
+      const isOnOrder   = inventoryType === 'on-order';
+      const entries     = buildPaymentEntries();
+      const effectivePaid = entries.reduce((s, e) => s + e.amount, 0);
+
+      const selectedBank = banks.find(b => b.id === selectedBankId);
       const paymentInfo = {
         paymentStatus,
-        transactionId: paymentStatus !== 'unpaid' ? transactionId : undefined,
-        paidAmount:    paymentStatus !== 'unpaid' ? paidAmount    : undefined,
+        transactionId:   paymentStatus !== 'unpaid' ? transactionId : undefined,
+        paidAmount:      effectivePaid || undefined,
         totalAmount,
+        paymentMode:     paymentStatus !== 'unpaid' ? paymentMode     : undefined,
+        bankId:          (paymentMode === 'bank' && paymentStatus !== 'unpaid') ? selectedBankId   : undefined,
+        bankName:        (paymentMode === 'bank' && paymentStatus !== 'unpaid') ? selectedBank?.name : undefined,
+        installments:    installments.length > 0 ? installments : undefined,
       };
 
       if (costingOption === 'with' && selectedModels.length > 0) {
-        // One product doc per model — all share the same location
         for (const sm of selectedModels) {
           const validSerials = (sm.serialNumbers || []).filter((s: string) => s.trim() !== '');
-          // If per-serial cities not filled, seed from the shared location
           const smSerialCities: { [k: string]: string } = { ...(sm.serialCities || {}) };
           if (location) {
-            validSerials.forEach((s: string) => {
-              if (!smSerialCities[s]) smSerialCities[s] = location;
-            });
+            validSerials.forEach((s: string) => { if (!smSerialCities[s]) smSerialCities[s] = location; });
           }
           const dto: CreateProductDTO = {
-            brandName,
-            modelName:     sm.modelName,
-            category,
-            costPrice:     sm.costPrice,  // ← FIX: was missing
-            sellPrice:     sm.salePrice,
-            buyType,
-            warrantyYears,
-            stock:         sm.quantity,
-            location,                                           // ← new
-            serialNumbers: validSerials,
-            serialCities:  smSerialCities,
-            description,
-            status:        isOnOrder ? 'On-Order' : status,
-            isDamaged,
-            costingOption: 'with',
-            costing,
-            receivableStatus:    isOnOrder ? 'Pending'  : undefined,
-            expectedReceiveDate: isOnOrder ? undefined  : undefined,
+            brandName, modelName: sm.modelName, category,
+            costPrice: sm.costPrice, sellPrice: sm.salePrice, buyType, warrantyYears,
+            stock: sm.quantity, location,
+            serialNumbers: validSerials, serialCities: smSerialCities,
+            description, status: isOnOrder ? 'On-Order' : status, isDamaged,
+            costingOption: 'with', costing,
+            receivableStatus:    isOnOrder ? 'Pending' : undefined,
+            expectedReceiveDate: isOnOrder ? undefined : undefined,
           };
           await InventoryFirebaseService.createProduct(dto, paymentInfo);
         }
       } else {
-        // Seed serialCities from location if not already set
         const seededCities: { [k: string]: string } = { ...serialCities };
         if (location) {
-          serialNumbers.forEach(s => {
-            if (!seededCities[s]) seededCities[s] = location;
-          });
+          serialNumbers.forEach(s => { if (!seededCities[s]) seededCities[s] = location; });
         }
         const dto: CreateProductDTO = {
-          brandName, modelName, category, costPrice, sellPrice, buyType, warrantyYears,  // ← FIX: costPrice added
-          stock, location,
-          serialNumbers, serialCities: seededCities,
-          description,
-          status:        isOnOrder ? 'On-Order'  : status,
-          isDamaged,
+          brandName, modelName, category, costPrice, sellPrice, buyType, warrantyYears,
+          stock, location, serialNumbers, serialCities: seededCities,
+          description, status: isOnOrder ? 'On-Order' : status, isDamaged,
           costingOption: costingOption === 'with' ? 'with' : 'without',
           costing:       costingOption === 'with' ? costing : undefined,
-          receivableStatus:    isOnOrder ? 'Pending'  : undefined,
-          expectedReceiveDate: isOnOrder ? undefined  : undefined,
+          receivableStatus:    isOnOrder ? 'Pending' : undefined,
+          expectedReceiveDate: isOnOrder ? undefined : undefined,
         };
         await InventoryFirebaseService.createProduct(dto, paymentInfo);
+      }
+
+      // Record payment in cash / bank activity — links via TXN-DDMMYY-### reference
+      if (entries.length > 0) {
+        await recordPaymentActivity(effectivePaid, entries);
       }
 
       toast.success(isOnOrder
@@ -243,15 +443,16 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     category, sellPrice, buyType, warrantyYears, stock, description, status,
     isDamaged, serialNumbers, serialCities, inventoryType, costing,
     paymentStatus, transactionId, paidAmount, totalAmount, navigate, location,
+    paymentMode, selectedBankId, banks, installments, buildPaymentEntries, recordPaymentActivity,
   ]);
 
   const handleBack = useCallback(() => {
     const params = new URLSearchParams({
       type: inventoryType, costing: costingOption, brandName, modelName,
-      category, costPrice: costPrice.toString(), sellPrice: sellPrice.toString(), buyType,  // ← FIX: costPrice added
+      category, costPrice: costPrice.toString(), sellPrice: sellPrice.toString(), buyType,
       warrantyYears: warrantyYears.toString(), stock: stock.toString(),
       description, status, isDamaged: isDamaged.toString(),
-      location,                                                 // ← new
+      location,
       serialNumbers: JSON.stringify(serialNumbers),
       serialCities:  JSON.stringify(serialCities),
     });
@@ -277,7 +478,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
 
   const productSummary = useMemo(() => ({
     brandName, modelName, category, stock, sellPrice, status, inventoryType,
-    location,                                                   // ← new
+    location,
     totalValueOfBrand: costingOption === 'with' ? costing?.totalValueOfBrand : undefined,
     modelCount:        costingOption === 'with' ? costing?.models.length      : undefined,
   }), [brandName, modelName, category, stock, sellPrice, status, inventoryType, costingOption, costing, location]);
@@ -288,9 +489,11 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     isEditingTransactionId, setIsEditingTransactionId,
     paidAmount, remainingAmount,
     validationErrors, isValid, isSaving,
-    setPaymentStatus,
-    setTransactionId,
-    setPaidAmount,
+    paymentMode, setPaymentMode,
+    selectedBankId, setSelectedBankId,
+    banks, isBanksLoading,
+    installments, addInstallment, removeInstallment, updateInstallment, instalmentTotal,
+    setPaymentStatus, setTransactionId, setPaidAmount,
     handleSubmit, handleBack, formatCurrency, productSummary,
   };
 }

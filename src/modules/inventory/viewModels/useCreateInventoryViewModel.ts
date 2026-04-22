@@ -1,23 +1,13 @@
 // Inventory Module - ViewModel Layer
 // useCreateInventoryViewModel - Multi-step inventory creation & editing wizard
 //
-// FIXES APPLIED:
-//   1. costPrice initialised to 0 (was `undefined`) — stripUndefined in the
-//      Firebase service silently dropped undefined fields before Firestore write.
-//   2. setField sanitises numeric inputs: Number('') → NaN coerced to 0 so
-//      Firestore never receives NaN (which it rejects silently).
-//   3. paidAmount used everywhere (paymentAmount doesn't exist on ProductFormData).
-//   4. handleSubmit now maps ProductFormData → CreateProductDTO/UpdateProductDTO
-//      correctly, so description, costPrice, and all fields are persisted.
-//      Previously, augmentedFormData (a ProductFormData) was passed directly to
-//      InventoryFirebaseService.createProduct which expects a CreateProductDTO —
-//      this caused description and other fields to be silently ignored.
-//   5. paymentInfo is passed as the explicit second argument to createProduct().
-//   6. EDIT MODE: useEffect detects /:id/edit route, fetches the product from
-//      Firestore by ID, and hydrates the form via loadFromExisting(). Previously
-//      there was no fetch — the form was always blank in edit mode.
-//   7. BrandModelSelector pre-population: loadFromExisting sets brandId/modelId
-//      so the selector can show the correct values.
+// CHANGES:
+//   - Transaction ID (TXN-DDMMYY-###) generated on mount via
+//     InventoryFirebaseService.generateTransactionId() — no direct db/firebase
+//     import here; all Firestore access is encapsulated in the service.
+//   - transactionId stored in formData and saved to Firestore via paymentInfo
+//   - ID shown as read-only on Payment step; edit mode preserves original ID
+//   - isGeneratingTxnId returned so View can gate the Next button
 
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -31,6 +21,21 @@ import {
 } from '../models/types';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pure-JS fallback — used only when Firestore is unreachable.
+// Format: TXN-DDMMYY-###  e.g. TXN-220426-743
+// ─────────────────────────────────────────────────────────────────────────────
+function generateFallbackTxnId(): string {
+  const now     = new Date();
+  const dd      = String(now.getDate()).padStart(2, '0');
+  const mm      = String(now.getMonth() + 1).padStart(2, '0');
+  const yy      = String(now.getFullYear()).slice(-2);
+  const counter = String(Math.floor(Math.random() * 900) + 100);
+  return `TXN-${dd}${mm}${yy}-${counter}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface UseCreateInventoryViewModelReturn {
   currentStep: InventoryEntryStep;
   formData: ProductFormData;
@@ -41,6 +46,7 @@ export interface UseCreateInventoryViewModelReturn {
   serialInput: string;
   serialCity: string;
   isFetchingProduct: boolean;
+  isGeneratingTxnId: boolean;
   setField: (field: string, value: any) => void;
   setCurrentStep: (step: InventoryEntryStep) => void;
   setSerialInput: (value: string) => void;
@@ -60,7 +66,6 @@ const EMPTY_FORM: ProductFormData = {
   modelId:       '',
   modelName:     '',
   category:      '',
-  // FIX 1 — MUST be 0, not undefined. stripUndefined drops undefined before Firestore write.
   costPrice:     0,
   sellPrice:     0,
   buyType:       'Import' as const,
@@ -70,6 +75,7 @@ const EMPTY_FORM: ProductFormData = {
   description:   '',
   paymentMethod: undefined,
   paidAmount:    undefined,
+  transactionId: '',
   serialNumbers: [],
   serialCities:  {},
   isDamaged:     false,
@@ -79,23 +85,43 @@ const EMPTY_FORM: ProductFormData = {
 
 export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn {
   const navigate = useNavigate();
-  // FIX 6 — detect /:id/edit route to know we are in edit mode
-  const params = useParams<{ id?: string }>();
+  const params   = useParams<{ id?: string }>();
 
   const [currentStep,       setCurrentStep]       = useState<InventoryEntryStep>('details');
   const [isEditMode,        setIsEditMode]         = useState(false);
   const [editingId,         setEditingId]          = useState<string | null>(null);
   const [isFetchingProduct, setIsFetchingProduct]  = useState(false);
+  const [isGeneratingTxnId, setIsGeneratingTxnId]  = useState(false);
   const [formData,          setFormData]           = useState<ProductFormData>(EMPTY_FORM);
   const [serialInput,       setSerialInput]        = useState('');
   const [serialCity,        setSerialCity]         = useState('');
   const [validation,        setValidation]         = useState<ValidationResult>({ isValid: true, fieldErrors: {} });
   const [isSubmitting,      setIsSubmitting]       = useState(false);
 
-  // FIX 6 — When route contains an id param, fetch that product and pre-fill the form.
+  // ── Generate TXN ID on mount — CREATE mode only ───────────────────────────
+  // InventoryFirebaseService.generateTransactionId() owns the db reference
+  // and the Firestore atomic counter logic. We just call it here.
+  useEffect(() => {
+    if (params?.id) return; // edit mode — keep original ID from Firestore document
+
+    setIsGeneratingTxnId(true);
+    InventoryFirebaseService.generateTransactionId()
+      .then(id => {
+        setFormData(prev => ({ ...prev, transactionId: id }));
+        console.log('✅ TXN ID generated:', id);
+      })
+      .catch(err => {
+        console.error('⚠️ TXN ID generation failed, using fallback:', err);
+        const fallback = generateFallbackTxnId();
+        setFormData(prev => ({ ...prev, transactionId: fallback }));
+      })
+      .finally(() => setIsGeneratingTxnId(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Edit mode: fetch product from Firestore ───────────────────────────────
   useEffect(() => {
     const productId = params?.id;
-    if (!productId) return; // create mode — nothing to fetch
+    if (!productId) return;
 
     setIsEditMode(true);
     setEditingId(productId);
@@ -103,7 +129,6 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
 
     (async () => {
       try {
-        console.log('📂 Fetching product for edit:', productId);
         const product = await InventoryFirebaseService.fetchProductById(productId);
         if (!product) {
           toast.error('Product not found');
@@ -111,14 +136,13 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           return;
         }
 
-        // Map Product → ProductFormData
         const hydrated: ProductFormData = {
           brandId:       product.brandId       || '',
           brandName:     product.brandName     || '',
           modelId:       product.modelId       || '',
           modelName:     product.modelName     || '',
           category:      product.category      || '',
-          costPrice:     product.costPrice     ?? 0,   // FIX 1 — never undefined
+          costPrice:     product.costPrice     ?? 0,
           sellPrice:     product.sellPrice     ?? 0,
           buyType:       product.buyType       || 'Import',
           warrantyYears: product.warrantyYears ?? 0,
@@ -131,7 +155,7 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           status:        product.status        || 'New',
           costingOption: product.costingOption,
           costing:       product.costing,
-          // Payment fields — may not exist on older documents
+          transactionId: product.transactionId || '',   // preserve original TXN ID
           paymentMethod: undefined,
           paidAmount:    undefined,
           currentStep:   'details' as const,
@@ -139,7 +163,7 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
 
         setFormData(hydrated);
         setCurrentStep('details');
-        console.log('✅ Loaded product for editing:', { productId, costPrice: product.costPrice, description: product.description });
+        console.log('✅ Loaded product for editing:', { productId, transactionId: product.transactionId });
       } catch (err) {
         console.error('❌ Failed to fetch product for editing:', err);
         toast.error('Failed to load product for editing');
@@ -150,22 +174,18 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     })();
   }, [params?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // FIX 2 — sanitise numeric inputs before storing in state.
-  // CRITICAL: Do NOT use `Number(value) || 0` — that coerces legitimate 0 to 0
-  // which is fine but more importantly it hides NaN bugs. Use explicit isNaN guard.
+  // ── setField ──────────────────────────────────────────────────────────────
   const setField = useCallback((field: string, value: any) => {
     let sanitised = value;
-    // For ANY numeric field: if NaN slips through, coerce to 0
     if (typeof sanitised === 'number' && isNaN(sanitised)) sanitised = 0;
-    // costPrice: parse from string if needed, guarantee it is a finite number
     if (field === 'costPrice') {
       const parsed = typeof sanitised === 'string' ? parseFloat(sanitised) : Number(sanitised);
       sanitised = isFinite(parsed) ? parsed : 0;
-      console.log(`📍 costPrice set to: ${sanitised} (from raw: ${value})`);
     }
     setFormData(prev => ({ ...prev, [field]: sanitised }));
   }, []);
 
+  // ── Serial numbers ────────────────────────────────────────────────────────
   const addSerialNumber = useCallback(() => {
     if (!serialInput.trim()) return;
     if (formData.serialNumbers.includes(serialInput.trim())) {
@@ -193,19 +213,18 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     });
   }, []);
 
+  // ── Validation ────────────────────────────────────────────────────────────
   const validateCurrentStep = useCallback((): boolean => {
     const fieldErrors: { [key: string]: string } = {};
     const validSerials = formData.serialNumbers.filter(s => s.trim() !== '');
 
     if (currentStep === 'details') {
-      if (!formData.brandName)                              fieldErrors.brandName     = 'Brand is required';
-      if (!formData.modelName)                              fieldErrors.modelName     = 'Model is required';
-      if (!formData.category)                               fieldErrors.category      = 'Category is required';
-      if (!formData.sellPrice || formData.sellPrice <= 0)   fieldErrors.sellPrice     = 'Valid sell price required';
+      if (!formData.brandName)                              fieldErrors.brandName  = 'Brand is required';
+      if (!formData.modelName)                              fieldErrors.modelName  = 'Model is required';
+      if (!formData.category)                               fieldErrors.category   = 'Category is required';
+      if (!formData.sellPrice || formData.sellPrice <= 0)   fieldErrors.sellPrice  = 'Valid sell price required';
       if (formData.costPrice === undefined || formData.costPrice === null || (formData.costPrice as any) === '')
         fieldErrors.costPrice = 'Cost price is required (can be 0)';
-      // In edit mode we allow the existing serials count to differ from stock
-      // (user may not re-enter all serials). Skip this check in edit mode.
       if (!isEditMode && validSerials.length !== formData.stock)
         fieldErrors.serialNumbers = `Provide ${formData.stock} serial number(s)`;
     } else if (currentStep === 'payment') {
@@ -229,34 +248,23 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     if (idx > 0) setCurrentStep(steps[idx - 1]);
   }, [currentStep]);
 
-  // Manual load — used by parent pages that already have a product object.
   const loadFromExisting = useCallback((existingData: ProductFormData, docId: string) => {
     setIsEditMode(true);
     setEditingId(docId);
     setFormData({ ...existingData, costPrice: existingData.costPrice ?? 0 });
     setCurrentStep('details');
-    console.log('📂 loadFromExisting:', { docId, costPrice: existingData.costPrice });
   }, []);
 
-  // ── SUBMIT ───────────────────────────────────────────────────────────────────
+  // ── SUBMIT ────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!validateCurrentStep()) return;
     setIsSubmitting(true);
 
     try {
-      // FIX 4 — Build a proper CreateProductDTO / UpdateProductDTO from ProductFormData.
-      // Previously `augmentedFormData` (a ProductFormData) was passed directly to
-      // InventoryFirebaseService.createProduct which expects CreateProductDTO — causing
-      // fields like `description` and payment info to be silently ignored / lost.
-
-      // CRITICAL: coerce costPrice to a real finite number.
-      // If BrandModelSelector reset it to undefined/NaN, catch it here and warn.
-      const rawCost = formData.costPrice;
+      const rawCost  = formData.costPrice;
       const costPrice: number =
         typeof rawCost === 'number' && isFinite(rawCost) ? rawCost : 0;
-      if (rawCost === undefined || rawCost === null || (typeof rawCost === 'number' && isNaN(rawCost))) {
-        console.warn('⚠️ costPrice was', rawCost, '— coerced to 0 at submit. BrandModelSelector likely reset it.');
-      }
+
       const totalAmount   = costPrice * (formData.stock ?? 0);
       const paidAmount    = formData.paidAmount ?? 0;
       const paymentStatus: 'paid' | 'unpaid' | 'partial' =
@@ -264,84 +272,69 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
         paidAmount > 0            ? 'partial' :
                                     'unpaid';
 
-      console.log('📦 Submitting inventory payload:', {
-        mode:          isEditMode ? 'EDIT' : 'CREATE',
-        docId:         editingId,
-        brandName:     formData.brandName,
-        modelName:     formData.modelName,
-        category:      formData.category,
-        costPrice,
-        sellPrice:     formData.sellPrice,
-        stock:         formData.stock,
-        description:   formData.description,
-        location:      formData.location,
-        serialNumbers: formData.serialNumbers,
-        paymentMethod: formData.paymentMethod,
-        paidAmount:    formData.paidAmount,
-        totalAmount,
-      });
-
       if (isEditMode && editingId) {
-        // ── UPDATE ────────────────────────────────────────────────────────────
-        // Build UpdateProductDTO with ONLY the fields that exist on the type.
-        // This prevents stray ProductFormData-only keys (currentStep, paidAmount,
-        // paymentMethod) from polluting the Firestore document.
+        // ── UPDATE ─────────────────────────────────────────────────────────
         const updateDto: UpdateProductDTO = {
           brandName:     formData.brandName,
           modelName:     formData.modelName,
           category:      formData.category,
-          costPrice,                              // FIX 4 — explicit, guaranteed non-undefined
+          costPrice,
           sellPrice:     formData.sellPrice,
           buyType:       formData.buyType,
           warrantyYears: formData.warrantyYears,
           stock:         formData.stock,
           location:      formData.location,
-          description:   formData.description,   // FIX 4 — was missing before
+          description:   formData.description,
           serialNumbers: formData.serialNumbers,
           serialCities:  formData.serialCities,
           status:        formData.status,
           isDamaged:     formData.isDamaged,
           costingOption: formData.costingOption,
           costing:       formData.costing,
+          transactionId: formData.transactionId || undefined,
         };
 
         await InventoryFirebaseService.updateProduct(editingId, updateDto);
-        toast.success('Inventory item updated successfully!');
+        toast.success(`✅ Inventory updated — ${formData.transactionId || editingId}`);
+
       } else {
-        // ── CREATE ────────────────────────────────────────────────────────────
-        // Build CreateProductDTO explicitly so every field is correctly typed.
+        // ── CREATE ─────────────────────────────────────────────────────────
         const createDto: CreateProductDTO = {
           brandName:     formData.brandName,
           modelName:     formData.modelName,
           category:      formData.category,
-          costPrice,                              // FIX 4 — explicit, guaranteed non-undefined
+          costPrice,
           sellPrice:     formData.sellPrice,
           buyType:       formData.buyType,
           warrantyYears: formData.warrantyYears,
           stock:         formData.stock,
           location:      formData.location,
-          description:   formData.description,   // FIX 4 — was missing before
+          description:   formData.description,
           serialNumbers: formData.serialNumbers,
           serialCities:  formData.serialCities  || {},
           status:        formData.status,
           isDamaged:     formData.isDamaged      ?? false,
           costingOption: formData.costingOption,
           costing:       formData.costing,
+          transactionId: formData.transactionId,   // ← TXN-DDMMYY-### saved on document
         };
 
-        // FIX 5 — pass paymentInfo as the second argument so payment fields
-        // are persisted. Previously this argument was never passed.
         const paymentInfo = formData.paymentMethod
           ? {
               paymentStatus,
-              transactionId: formData.transactionId,
-              paidAmount:    formData.paidAmount,
+              transactionId:  formData.transactionId,  // ← links activity records
+              paidAmount:     formData.paidAmount,
               totalAmount,
+              paymentMode:    formData.paymentMethod === 'Cash' ? 'cash' : 'bank',
             }
-          : undefined;
+          : {
+              paymentStatus:  'unpaid' as const,
+              transactionId:  formData.transactionId,  // ← always saved even if unpaid
+              totalAmount,
+            };
 
         await InventoryFirebaseService.createProduct(createDto, paymentInfo);
-        toast.success('Inventory item created successfully!');
+        toast.success(`✅ Inventory saved — ${formData.transactionId}`);
       }
 
       navigate('/inventory');
@@ -363,6 +356,7 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     isEditMode,
     editingId,
     isFetchingProduct,
+    isGeneratingTxnId,
     serialInput,
     serialCity,
     setField,

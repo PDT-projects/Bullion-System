@@ -65,6 +65,9 @@ import {
   BudgetDeleteWrapper,
 } from './modules/budget';
 
+// ── Bank Activity Report ─────────────────────────────────────────────────────
+import { BankActivityView } from './modules/banking/views/BankActivityView';
+
 import { Sidebar }  from './layouts/Sidebar';
 import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
@@ -204,15 +207,17 @@ function CommissionReportsRoute()     { return <CommissionReportWrapper />; }
 // BANKING ROUTES
 // ============================================================
 
-function BankingDashboardRoute()   { return <BankingDashboardWrapper />; }
-function BankListRoute()           { return <BankListWrapper />; }
-function BankCreateRoute()         { return <BankCreateWrapper />; }
-function BankEditRoute()           { return <BankEditWrapper />; }
-function BankDeleteRoute()         { return <BankDeleteWrapper />; }
-function BankTransferListRoute()   { return <TransferListWrapper />; }
-function BankTransferCreateRoute() { return <TransferCreateWrapper />; }
-function CashListRoute()           { return <CashListWrapper />; }
-function CashCreateRoute()         { return <CashCreateWrapper />; }
+function BankingDashboardRoute()    { return <BankingDashboardWrapper />; }
+function BankListRoute()            { return <BankListWrapper />; }
+function BankCreateRoute()          { return <BankCreateWrapper />; }
+function BankEditRoute()            { return <BankEditWrapper />; }
+function BankDeleteRoute()          { return <BankDeleteWrapper />; }
+function BankTransferListRoute()    { return <TransferListWrapper />; }
+function BankTransferCreateRoute()  { return <TransferCreateWrapper />; }
+function CashListRoute()            { return <CashListWrapper />; }
+function CashCreateRoute()          { return <CashCreateWrapper />; }
+// ── NEW: Bank Activity Report route component ──
+function BankActivityRoute()        { return <BankActivityView />; }
 
 
 // ============================================================
@@ -273,7 +278,7 @@ export const router = createBrowserRouter([
   // ── Public / Auth ─────────────────────────────────────────
   { path: '/',        element: <Navigate to="/dashboard" replace /> },
   { path: '/login',   element: <LoginPage /> },
-  { path: '/signup',  element: <Navigate to="/login" replace /> }, // signup disabled
+  { path: '/signup',  element: <Navigate to="/login" replace /> },
 
   // ── Dashboard ─────────────────────────────────────────────
   {
@@ -364,6 +369,8 @@ export const router = createBrowserRouter([
       { path: 'transfers/new',    element: <ScreenProtectedRoute requiredScreen="Create Bank Transfer"><BankTransferCreateRoute /></ScreenProtectedRoute> },
       { path: 'cash',             element: <ScreenProtectedRoute requiredScreen="Cash List"><CashListRoute /></ScreenProtectedRoute> },
       { path: 'cash/new',         element: <ScreenProtectedRoute requiredScreen="Create Cash Entry"><CashCreateRoute /></ScreenProtectedRoute> },
+      // ── NEW: Bank Activity Report inside banking module ──
+      { path: 'activity',         element: <ScreenProtectedRoute requiredScreen="Bank Activity Report"><BankActivityRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -407,7 +414,7 @@ export const router = createBrowserRouter([
       { path: 'create-new/details',         element: <ScreenProtectedRoute requiredScreen="Inventory Product Details"><InventoryProductDetailsRoute /></ScreenProtectedRoute> },
       { path: 'create-new/payment',         element: <ScreenProtectedRoute requiredScreen="Inventory Payment"><InventoryPaymentRoute /></ScreenProtectedRoute> },
       { path: 'add-existing',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Existing"><InventoryAddExistingRoute /></ScreenProtectedRoute> },
-      { path: ':id/edit',                element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryEditWrapper /></ScreenProtectedRoute> },
+      { path: ':id/edit',                   element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryEditWrapper /></ScreenProtectedRoute> },
     ],
   },
 
@@ -432,6 +439,7 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Budget"><BudgetDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
+
   // ── Assets Management ──────────────────────────────────────
   {
     path: '/assets-management',
@@ -440,6 +448,7 @@ export const router = createBrowserRouter([
       { index: true, element: <ScreenProtectedRoute requiredScreen="Assets Management"><AssetsManagement /></ScreenProtectedRoute> },
     ],
   },
+
   // ── User Management ──────────────────────────────────────
   {
     path: '/user-management',
@@ -447,8 +456,10 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <ScreenProtectedRoute requiredScreen="User Management"><UserManagement /></ScreenProtectedRoute> },
     ],
-  }, 
+  },
+
   // ── Reports ───────────────────────────────────────────────
+  // Main reports hub — card grid
   {
     path: '/reports',
     element: (
@@ -458,5 +469,18 @@ export const router = createBrowserRouter([
         </AppLayout>
       </ProtectedRoute>
     ),
-  }
+  },
+  // ── NEW: Bank Activity accessible from Reports hub ────────
+  {
+    path: '/reports/bank-activity',
+    element: (
+      <ProtectedRoute>
+        <AppLayout activeModule="reports">
+          <ScreenProtectedRoute requiredScreen="Bank Activity Report">
+            <BankActivityView />
+          </ScreenProtectedRoute>
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
 ]);

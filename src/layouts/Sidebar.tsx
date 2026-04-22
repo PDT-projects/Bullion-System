@@ -3,6 +3,7 @@
 //   - "Reports" sidebar link added directly below Dashboard
 //   - Only visible when user has at least one report permission
 //   - Uses hasAnyReportPermission from useUserPermissions
+//   - UPDATED: Added "Bank Activity" link under Banking section
 
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -30,6 +31,7 @@ import {
   UserCheck,
   HardDrive,
   BarChart2,
+  Activity,
 } from 'lucide-react';
 
 import { useAuth } from '../providers/context/AuthContext';
@@ -37,30 +39,31 @@ import { useUserPermissions } from '../modules/user-management/hooks/useUserPerm
 
 // Map each screen name to its permission key (must match EXACT Screen type in userService.ts)
 const SCREEN_PERMISSIONS: Record<string, Screen> = {
-  'dashboard': 'Dashboard',
-  'reports': 'Sales Report',             // Reports link shown if any report permission exists
-  'add-transaction': 'Add Transaction',
-  'pending-payment': 'Pending Payments',
-  'bills': 'Bills List',
-  'salary': 'Salary Dashboard',
-  'banking-overview': 'Banking Dashboard',
-  'bank-accounts': 'Bank Accounts List',
-  'transfers': 'Bank Transfers List',
-  'cash-in-hand': 'Cash List',
-  'budgets': 'Budgets List',
-  'employees': 'Employees List',
+  'dashboard':         'Dashboard',
+  'reports':           'Sales Report',             // Reports link shown if any report permission exists
+  'add-transaction':   'Add Transaction',
+  'pending-payment':   'Pending Payments',
+  'bills':             'Bills List',
+  'salary':            'Salary Dashboard',
+  'banking-overview':  'Banking Dashboard',
+  'bank-accounts':     'Bank Accounts List',
+  'transfers':         'Bank Transfers List',
+  'cash-in-hand':      'Cash List',
+  'bank-activity':     'Bank Activity Report',     // ← NEW
+  'budgets':           'Budgets List',
+  'employees':         'Employees List',
 
-  'inventory-entry': 'Inventory Dashboard',
-  'invoices': 'Invoices List',
-  'all-loans': 'Loans Dashboard',
-  'payable': 'Loans Payable',
-  'receivable': 'Loans Receivable',
-  'commission-overview': 'Commission Slabs',
-  'commission-slabs': 'Commission Slabs',
-  'commission-calculate': 'Commission Calculation',
-  'commission-reports': 'Commission Reports',
-  'user-management': 'User Management',
-  'assets-management': 'Assets Management',
+  'inventory-entry':          'Inventory Dashboard',
+  'invoices':                 'Invoices List',
+  'all-loans':                'Loans Dashboard',
+  'payable':                  'Loans Payable',
+  'receivable':               'Loans Receivable',
+  'commission-overview':      'Commission Slabs',
+  'commission-slabs':         'Commission Slabs',
+  'commission-calculate':     'Commission Calculation',
+  'commission-reports':       'Commission Reports',
+  'user-management':          'User Management',
+  'assets-management':        'Assets Management',
 } as const;
 
 import type { Screen } from '../modules/user-management/models/userService';
@@ -74,7 +77,6 @@ export function Sidebar() {
   const { hasAnyReportPermission, hasPermission } = useUserPermissions();
   const location = useLocation();
 
-  // Check if a menu item id is allowed for current user
   const canSee = (id: string): boolean => {
     if (role === 'super_admin') return true;
     const requiredScreen = SCREEN_PERMISSIONS[id];
@@ -82,7 +84,6 @@ export function Sidebar() {
     return permissions.includes(requiredScreen);
   };
 
-  // Check if a section has at least one visible child
   const sectionHasVisibleChildren = (children: any[]): boolean => {
     return children.some((child) => {
       if (child.children) return sectionHasVisibleChildren(child.children);
@@ -103,8 +104,6 @@ export function Sidebar() {
       icon: LayoutDashboard,
       path: '/dashboard',
     },
-    // ── Reports direct link — shown when user has any report permission ──
-    // Rendered conditionally below, not here in the static array
     {
       id: 'finance',
       name: 'Finance',
@@ -115,10 +114,10 @@ export function Sidebar() {
           name: 'Transaction',
           icon: ArrowLeftRight,
           children: [
-            { id: 'add-transaction', name: 'Add Transaction', icon: PlusCircle, path: '/transactions' },
-            { id: 'pending-payment', name: 'Pending Payment', icon: Clock, path: '/transactions/pending' },
-            { id: 'bills', name: 'Bills', icon: FileTextIcon, path: '/bills' },
-            { id: 'salary', name: 'Salary', icon: DollarSign, path: '/salary' },
+            { id: 'add-transaction', name: 'Add Transaction', icon: PlusCircle,   path: '/transactions' },
+            { id: 'pending-payment', name: 'Pending Payment', icon: Clock,        path: '/transactions/pending' },
+            { id: 'bills',           name: 'Bills',           icon: FileTextIcon, path: '/bills' },
+            { id: 'salary',          name: 'Salary',          icon: DollarSign,   path: '/salary' },
           ],
         },
         {
@@ -126,10 +125,12 @@ export function Sidebar() {
           name: 'Banking',
           icon: Building2,
           children: [
-            { id: 'banking-overview', name: 'Overview', icon: FileText, path: '/banking' },
-            { id: 'bank-accounts', name: 'Bank Accounts', icon: Building2, path: '/banking/banks' },
-            { id: 'transfers', name: 'Bank Transfers', icon: ArrowRightLeft, path: '/banking/transfers' },
-            { id: 'cash-in-hand', name: 'Cash in Hand', icon: Wallet, path: '/banking/cash' },
+            { id: 'banking-overview', name: 'Overview',          icon: FileText,      path: '/banking' },
+            { id: 'bank-accounts',    name: 'Bank Accounts',     icon: Building2,     path: '/banking/banks' },
+            { id: 'transfers',        name: 'Bank Transfers',    icon: ArrowRightLeft, path: '/banking/transfers' },
+            { id: 'cash-in-hand',     name: 'Cash in Hand',      icon: Wallet,        path: '/banking/cash' },
+            // ── NEW: Bank Activity inside Banking section ──
+            { id: 'bank-activity',    name: 'Activity Report',   icon: Activity,      path: '/banking/activity' },
           ],
         },
         { id: 'budgets', name: 'Budgets', icon: Banknote, path: '/budgets' },
@@ -140,9 +141,9 @@ export function Sidebar() {
       name: 'Operations',
       icon: Package,
       children: [
-        { id: 'employees', name: 'Employees', icon: Users, path: '/employees' },
-        { id: 'inventory-entry', name: 'Inventory', icon: Package, path: '/inventory' },
-        { id: 'invoices', name: 'Invoices', icon: FileText, path: '/invoices' },
+        { id: 'employees',       name: 'Employees',         icon: Users,      path: '/employees' },
+        { id: 'inventory-entry', name: 'Inventory',         icon: Package,    path: '/inventory' },
+        { id: 'invoices',        name: 'Invoices',          icon: FileText,   path: '/invoices' },
         { id: 'assets-management', name: 'Assets Management', icon: HardDrive, path: '/assets-management' },
       ],
     },
@@ -151,9 +152,9 @@ export function Sidebar() {
       name: 'Loans',
       icon: HandCoins,
       children: [
-        { id: 'all-loans', name: 'All Loans', icon: FileText, path: '/loans' },
-        { id: 'payable', name: 'Payable', icon: TrendingDown, path: '/loans/payable' },
-        { id: 'receivable', name: 'Receivable', icon: TrendingUp, path: '/loans/receivable' },
+        { id: 'all-loans',  name: 'All Loans',  icon: FileText,    path: '/loans' },
+        { id: 'payable',    name: 'Payable',    icon: TrendingDown, path: '/loans/payable' },
+        { id: 'receivable', name: 'Receivable', icon: TrendingUp,  path: '/loans/receivable' },
       ],
     },
     {
@@ -161,10 +162,10 @@ export function Sidebar() {
       name: 'Commission',
       icon: Percent,
       children: [
-        { id: 'commission-overview', name: 'Overview', icon: FileText, path: '/commission' },
-        { id: 'commission-slabs', name: 'Commission Slabs', icon: Percent, path: '/commission/slabs' },
+        { id: 'commission-overview',  name: 'Overview',             icon: FileText,  path: '/commission' },
+        { id: 'commission-slabs',     name: 'Commission Slabs',     icon: Percent,   path: '/commission/slabs' },
         { id: 'commission-calculate', name: 'Calculate Commission', icon: Calculator, path: '/commission/calculate' },
-        { id: 'commission-reports', name: 'Commission Reports', icon: TrendingUp, path: '/commission/reports' },
+        { id: 'commission-reports',   name: 'Commission Reports',   icon: TrendingUp, path: '/commission/reports' },
       ],
     },
     {
@@ -256,7 +257,7 @@ export function Sidebar() {
       <nav className="flex-1 p-4 overflow-y-auto">
         {/* ── Dashboard ── */}
         {(() => {
-          const dashItem = menuItems[0]; // Dashboard is always first
+          const dashItem = menuItems[0];
           if (!canSee(dashItem.id)) return null;
           return (
             <NavLink
@@ -294,10 +295,8 @@ export function Sidebar() {
           const Icon = item.icon;
           const hasChildren = item.children && item.children.length > 0;
 
-          // Super admin only items
           if (item.superAdminOnly && role !== 'super_admin') return null;
 
-          // Top-level direct link (Dashboard)
           if (!hasChildren && item.path) {
             if (!canSee(item.id)) return null;
             return (
@@ -316,7 +315,6 @@ export function Sidebar() {
             );
           }
 
-          // Section with children — hide if no visible children
           if (hasChildren && !sectionHasVisibleChildren(item.children!)) return null;
 
           return (

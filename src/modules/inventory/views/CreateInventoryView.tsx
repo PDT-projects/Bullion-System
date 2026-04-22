@@ -1,17 +1,17 @@
 // Inventory Module - View Layer
 // CreateInventoryView - Multi-step wizard for creating and editing products
 //
-// FIXES:
-//   - costPrice input: clean onChange with parseFloat, no double-conversion bugs
-//   - Save/Update button: explicit inline styles (dark green bg, white text)
-//     so it is ALWAYS visible regardless of Tailwind purge or CSS specificity
-//   - ALL buttons use explicit inline styles — zero reliance on Tailwind for color
-//   - isFetchingProduct spinner shown during edit-mode fetch
-//   - Location dropdown added (was missing)
-//   - Edit mode banner shows current brand/model
+// CHANGES:
+//   - isGeneratingTxnId prop added — Next button on details step is disabled
+//     while the Firestore counter is still being read (prevents submitting
+//     before the TXN ID is ready)
+//   - Payment step now displays the auto-generated TXN-DDMMYY-### ID as a
+//     read-only badge (no manual input — ID was already generated on mount)
+//   - Confirmation step summary row shows Transaction ID
+//   - All other logic unchanged
 
 import React from 'react';
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertCircle, Loader2, Hash } from 'lucide-react';
 import {
   ProductFormData,
   ValidationResult,
@@ -20,6 +20,7 @@ import {
 } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { BrandModelSelector } from '../components/BrandModelSelector';
+// NOTE: No Firebase imports here — all Firestore logic lives in useCreateInventoryViewModel.ts
 
 interface CreateInventoryViewProps {
   formData: ProductFormData;
@@ -29,6 +30,7 @@ interface CreateInventoryViewProps {
   isEditMode: boolean;
   editingId: string | null;
   isFetchingProduct: boolean;
+  isGeneratingTxnId: boolean;       // NEW — true while Firestore counter is being fetched
   serialInput: string;
   serialCity: string;
   setField: (field: string, value: any) => void;
@@ -51,6 +53,7 @@ export function CreateInventoryView({
   isEditMode,
   editingId,
   isFetchingProduct,
+  isGeneratingTxnId,
   serialInput,
   serialCity,
   setField,
@@ -83,29 +86,11 @@ export function CreateInventoryView({
     );
   }
 
-  // ── Inline style constants for buttons ────────────────────────────────────
-  const btnBack: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '10px 20px', borderRadius: 8, cursor: 'pointer',
-    backgroundColor: '#f3f4f6', color: '#111827',
-    fontWeight: 600, fontSize: 14, border: '1px solid #d1d5db',
-  };
-  const btnNext: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '10px 24px', borderRadius: 8, cursor: 'pointer',
-    backgroundColor: '#4f46e5', color: '#ffffff',
-    fontWeight: 700, fontSize: 14, border: 'none',
-    boxShadow: '0 2px 6px rgba(79,70,229,0.4)',
-  };
-  const btnSave: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '10px 28px', borderRadius: 8,
-    backgroundColor: '#15803d', color: '#ffffff',   // dark green bg, white text — always visible
-    fontWeight: 700, fontSize: 15, border: 'none',
-    boxShadow: '0 2px 8px rgba(21,128,61,0.4)',
-    cursor: isSubmitting ? 'not-allowed' : 'pointer',
-    opacity: isSubmitting ? 0.7 : 1,
-  };
+  const inputCls = (hasError?: boolean) =>
+    `w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+      hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+    }`;
+
   const btnAddSerial: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 6,
     padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
@@ -113,12 +98,6 @@ export function CreateInventoryView({
     fontWeight: 600, fontSize: 14, border: 'none',
     whiteSpace: 'nowrap',
   };
-
-  // ── Input class helpers ───────────────────────────────────────────────────
-  const inputCls = (hasError?: boolean) =>
-    `w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
-      hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
-    }`;
 
   // ── Step 1: Product Details ───────────────────────────────────────────────
   const renderDetailsStep = () => (
@@ -159,10 +138,6 @@ export function CreateInventoryView({
               setField('modelId', modelId);
               setField('modelName', modelName);
               if (typeof sellPrice === 'number' && sellPrice > 0) setField('sellPrice', sellPrice);
-              // CRITICAL FIX: Only apply the model's costPrice if the user hasn't
-              // already typed one. If formData.costPrice is already > 0, the user
-              // entered it manually — do NOT overwrite it with the model default
-              // (which may be 0 or undefined and would wipe the user's value).
               if (typeof costPrice === 'number' && costPrice > 0 && !(formData.costPrice > 0)) {
                 setField('costPrice', costPrice);
               }
@@ -201,7 +176,7 @@ export function CreateInventoryView({
           </select>
         </div>
 
-        {/* ── COST PRICE — critical field ── */}
+        {/* Cost Price */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Cost Price (PKR) *
@@ -225,18 +200,13 @@ export function CreateInventoryView({
             }}
             onBlur={e => {
               const parsed = parseFloat(e.target.value);
-              const final = isNaN(parsed) ? 0 : parsed;
-              setField('costPrice', final);
-              console.log('💰 costPrice confirmed on blur:', final);
+              setField('costPrice', isNaN(parsed) ? 0 : parsed);
             }}
             className={inputCls(!!validation.fieldErrors?.costPrice) + ' font-semibold'}
             placeholder="Enter cost price in PKR"
             min={0}
             step="any"
           />
-          <p className="text-xs text-gray-400 mt-1">
-            Saved as <code className="bg-gray-100 px-1 rounded text-gray-600">costPrice</code> in Firestore
-          </p>
           {validation.fieldErrors?.costPrice && (
             <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.costPrice}</p>
           )}
@@ -381,10 +351,45 @@ export function CreateInventoryView({
   // ── Step 2: Payment ───────────────────────────────────────────────────────
   const renderPaymentStep = () => {
     const totalAmount = (formData.costPrice ?? 0) * (formData.stock || 0);
-    const paid = formData.paidAmount ?? 0;
-    const remaining = Math.max(0, totalAmount - paid);
+    const paid        = formData.paidAmount ?? 0;
+    const remaining   = Math.max(0, totalAmount - paid);
+
     return (
       <div className="space-y-6">
+
+        {/* ── Transaction ID — auto-generated, read-only ── */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Transaction ID
+          </label>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', borderRadius: 8,
+            border: '1px solid #c7d2fe', backgroundColor: '#eef2ff',
+          }}>
+            {isGeneratingTxnId ? (
+              <>
+                <Loader2 size={16} color="#6366f1" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: '#6366f1', fontWeight: 600 }}>Generating transaction ID…</span>
+              </>
+            ) : (
+              <>
+                <Hash size={16} color="#6366f1" style={{ flexShrink: 0 }} />
+                <span style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800, color: '#3730a3', letterSpacing: '0.04em' }}>
+                  {formData.transactionId || '—'}
+                </span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: '#818cf8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Auto-generated
+                </span>
+              </>
+            )}
+          </div>
+          <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+            This ID is saved to Firestore and links to all cash / bank activity records.
+          </p>
+        </div>
+
+        {/* Payment Method */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
           <select
@@ -402,6 +407,8 @@ export function CreateInventoryView({
             <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.paymentMethod}</p>
           )}
         </div>
+
+        {/* Amount Paid */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (PKR)</label>
           <input
@@ -417,6 +424,8 @@ export function CreateInventoryView({
             step="any"
           />
         </div>
+
+        {/* Payment Summary */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-900 mb-3">Payment Summary</h4>
           <div className="space-y-2 text-sm">
@@ -470,19 +479,24 @@ export function CreateInventoryView({
       <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 max-w-md mx-auto text-left">
         <div className="space-y-3 text-sm">
           {([
-            ['Product',     `${formData.brandName} ${formData.modelName}`],
-            ['Category',    formData.category || '—'],
-            ['Location',    formData.location || '—'],
-            ['Status',      formData.status   || '—'],
-            ['Stock',       `${formData.stock} units`],
-            ['Cost Price',  InventoryService.formatCurrency(formData.costPrice ?? 0)],
-            ['Sell Price',  InventoryService.formatCurrency(formData.sellPrice  || 0)],
-            ['Description', formData.description || '—'],
-            ['Payment',     formData.paymentMethod || '—'],
+            ['Transaction ID', formData.transactionId || '—'],
+            ['Product',        `${formData.brandName} ${formData.modelName}`],
+            ['Category',       formData.category || '—'],
+            ['Location',       formData.location || '—'],
+            ['Status',         formData.status   || '—'],
+            ['Stock',          `${formData.stock} units`],
+            ['Cost Price',     InventoryService.formatCurrency(formData.costPrice ?? 0)],
+            ['Sell Price',     InventoryService.formatCurrency(formData.sellPrice  || 0)],
+            ['Description',    formData.description || '—'],
+            ['Payment',        formData.paymentMethod || '—'],
           ] as [string, string][]).map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4">
               <span className="text-gray-500 flex-shrink-0">{label}:</span>
-              <span className="font-semibold text-gray-900 text-right truncate max-w-[55%]">{value}</span>
+              <span className={`font-semibold text-right truncate max-w-[55%] ${
+                label === 'Transaction ID' ? 'font-mono text-indigo-700' : 'text-gray-900'
+              }`}>
+                {value}
+              </span>
             </div>
           ))}
           {formData.paidAmount != null && (
@@ -516,8 +530,16 @@ export function CreateInventoryView({
               {isEditMode ? 'Edit Inventory Item' : 'Create New Inventory'}
             </h2>
             <p className="text-sm text-gray-500">
-              {isEditMode ? 'Update fields below and save changes to Firestore' : 'Fill in the details to add a new product'}
-              {editingId && (
+              {isEditMode
+                ? 'Update fields below and save changes to Firestore'
+                : 'Fill in the details to add a new product'}
+              {/* Show TXN ID in header subtitle once generated */}
+              {!isEditMode && formData.transactionId && !isGeneratingTxnId && (
+                <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-mono">
+                  {formData.transactionId}
+                </span>
+              )}
+              {editingId && isEditMode && (
                 <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-mono">
                   #{editingId.slice(-8)}
                 </span>
@@ -526,7 +548,7 @@ export function CreateInventoryView({
           </div>
         </div>
 
-        {/* Stepper — inline styles for guaranteed visibility */}
+        {/* Stepper */}
         <div style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: 'rgba(255,255,255,0.97)', borderBottom: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', maxWidth: 560, margin: '0 auto', padding: '16px 16px' }}>
             {steps.map((step, index) => {
@@ -567,7 +589,7 @@ export function CreateInventoryView({
           {currentStep === 'payment'      && renderPaymentStep()}
           {currentStep === 'confirmation' && renderConfirmationStep()}
 
-          {/* Navigation — ALL inline styles so colors are guaranteed */}
+          {/* Navigation */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid #e5e7eb' }}>
 
             {/* Back / Cancel */}
@@ -581,28 +603,41 @@ export function CreateInventoryView({
             </button>
 
             {currentStep !== 'confirmation' ? (
-              /* Next button */
+              /* Next — disabled while TXN ID is still being fetched */
               <button
                 type="button"
                 onClick={goToNextStep}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 8, cursor: 'pointer', backgroundColor: '#4f46e5', color: '#ffffff', fontWeight: 700, fontSize: 14, border: 'none', boxShadow: '0 2px 6px rgba(79,70,229,0.35)' }}
+                disabled={isGeneratingTxnId}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 24px', borderRadius: 8,
+                  cursor: isGeneratingTxnId ? 'not-allowed' : 'pointer',
+                  backgroundColor: isGeneratingTxnId ? '#e0e7ff' : '#4f46e5',
+                  color: isGeneratingTxnId ? '#6366f1' : '#ffffff',
+                  fontWeight: 700, fontSize: 14, border: 'none',
+                  boxShadow: isGeneratingTxnId ? 'none' : '0 2px 6px rgba(79,70,229,0.35)',
+                  opacity: isGeneratingTxnId ? 0.7 : 1,
+                }}
               >
-                Next <ArrowRight size={18} />
+                {isGeneratingTxnId
+                  ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Preparing ID…</>
+                  : <>Next <ArrowRight size={18} /></>
+                }
               </button>
             ) : (
-              /* ── SAVE / UPDATE — dark green background, white text ── */
+              /* Save / Update */
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isGeneratingTxnId}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '11px 30px', borderRadius: 8, border: 'none',
-                  backgroundColor: isSubmitting ? '#4ade80' : '#15803d',
+                  backgroundColor: (isSubmitting || isGeneratingTxnId) ? '#4ade80' : '#15803d',
                   color: '#ffffff',
                   fontWeight: 700, fontSize: 15,
-                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                  opacity: isSubmitting ? 0.8 : 1,
+                  cursor: (isSubmitting || isGeneratingTxnId) ? 'not-allowed' : 'pointer',
+                  opacity: (isSubmitting || isGeneratingTxnId) ? 0.8 : 1,
                   boxShadow: '0 2px 10px rgba(21,128,61,0.4)',
                   letterSpacing: '0.01em',
                 }}
