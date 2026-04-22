@@ -72,6 +72,14 @@ export class CashFirebaseService {
     }
   }
 
+  // 🔧 ALIAS for inventory integration (matches BankFirebaseService.addBankTransaction)
+  static async addCashTransaction(txn: Omit<CashTransaction, 'id'>): Promise<void> {
+    console.log('🔥 Saving cash transaction (inventory):', txn);
+    await this.createCashTransaction(txn);
+    console.log('✅ Cash transaction (inventory) saved');
+  }
+
+
   // ==================== CASH IN HAND BALANCE ====================
 
   static async fetchAllCashRecords(): Promise<CashInHandRecord[]> {

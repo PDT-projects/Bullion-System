@@ -9,7 +9,8 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  orderBy
+  orderBy,
+  where
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import { Bank } from './types';
@@ -110,4 +111,47 @@ export class BankFirebaseService {
       await this.updateBank(bank);
     }
   }
+
+  // ==================== BANK TRANSACTIONS ====================
+  
+  static async addBankTransaction(txn: {
+    bankId: string;
+    bankName: string;
+    date: string;
+    type: 'debit' | 'credit';
+    amount: number;
+    description: string;
+    reference?: string;
+    inventoryId?: string;
+    category?: string;
+    note?: string;
+  }): Promise<void> {
+    try {
+      const payload = {
+        ...txn,
+        createdAt: new Date().toISOString(),
+        amount: Math.abs(txn.amount) // Ensure positive
+      };
+      await addDoc(collection(db, 'bank_transactions'), payload);
+      console.log(`✅ Bank transaction saved: ${txn.bankId} ${txn.type} PKR ${txn.amount.toLocaleString()}`);
+    } catch (error) {
+      console.error('❌ Error saving bank transaction:', error);
+      throw new Error('Failed to save bank transaction');
+    }
+  }
+
+  static async fetchBankTransactions(bankId?: string): Promise<any[]> {
+    try {
+      let q = query(collection(db, 'bank_transactions'), orderBy('date', 'desc'));
+      if (bankId) {
+        q = query(q, where('bankId', '==', bankId));
+      }
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (error) {
+      console.error('❌ Error fetching bank transactions:', error);
+      return [];
+    }
+  }
 }
+

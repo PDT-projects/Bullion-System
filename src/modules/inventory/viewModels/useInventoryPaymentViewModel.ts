@@ -294,16 +294,14 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             location || 'Head Office - Islamabad'
           );
           await CashFirebaseService.addCashTransaction({
-            cashRecordId:  cashRecord.id,
             date:          entry.date || today,
             company:       brandName,
-            mainCategory:  'Inventory Purchase',
+            mainCategory:  'Inventory Purchase' as const,
             subCategory:   `${modelName || 'Multiple Models'} — ${transactionId}`,
-            amount:        entry.amount,
+            amount:        -entry.amount,  // Negative for outflow
             mode:          'Cash',
             note:          entry.note || `Inventory payment — ${transactionId}`,
             location:      location || '',
-            // ↓ These two fields link the cash record to the inventory entry
             reference:     transactionId,
             inventoryId:   transactionId,
           });

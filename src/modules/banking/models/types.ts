@@ -22,12 +22,14 @@ export interface CashTransaction {
   id: string;
   date: string;
   company: string;
-  mainCategory: 'Cash Inflow' | 'Cash Outflow';
+  mainCategory: 'Cash Inflow' | 'Cash Outflow' | 'Inventory Purchase';
   subCategory: string;
   amount: number;
   mode: 'Cash';
   note?: string;
   location?: string;
+  reference?: string;
+  inventoryId?: string;
 }
 
 export interface BankStats {
