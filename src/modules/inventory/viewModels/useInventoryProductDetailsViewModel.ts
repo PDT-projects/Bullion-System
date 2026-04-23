@@ -32,7 +32,7 @@ export interface SelectedModel {
 }
 
 export interface UseInventoryProductDetailsViewModelReturn {
-  singleModel: { brandName: string; modelName: string; costPrice: number; sellPrice: number; quantity: number };
+  singleModel: { brandId?: string; modelId?: string; brandName: string; modelName: string; costPrice: number; sellPrice: number; quantity: number };
   setSingleModelField: (field: string, value: string | number) => void;
   formData: ProductFormData;
   costingOption: CostingOption;
@@ -122,8 +122,8 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   }, [costingBrandId, costingOption]);
 
   // Form state
-  const [singleModel, setSingleModel] = useState({
-    brandName: '', modelName: '', costPrice: 0, sellPrice: 0, quantity: 1,
+const [singleModel, setSingleModel] = useState({
+    brandId: '', modelId: '', brandName: '', modelName: '', costPrice: 0, sellPrice: 0, quantity: 1,
   });
   const setSingleModelField = useCallback((field: string, value: string | number) => {
     setSingleModel(prev => ({ ...prev, [field]: value }));

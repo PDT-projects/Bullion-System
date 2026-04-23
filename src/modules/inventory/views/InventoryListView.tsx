@@ -479,7 +479,7 @@ export function InventoryListView({
                 Close
               </button>
               <button onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-gray-900 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
                 <Edit2 size={16} /> Edit Product
               </button>
               {onReceiveProduct && (

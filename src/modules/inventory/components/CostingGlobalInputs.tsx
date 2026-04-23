@@ -2,6 +2,8 @@
 // CostingGlobalInputs - Global input fields for multi-model costing
 
 import React from 'react';
+import { BrandModelSelector } from './BrandModelSelector';
+
 
 interface CostingGlobalInputsProps {
   brandName: string;
@@ -27,11 +29,13 @@ export function CostingGlobalInputs({
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Global Costing Inputs</h3>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
-          <label htmlFor="costingBrandName" className={labelCls}>Brand Name</label>
-          <input id="costingBrandName" type="text" className={inputCls}
-            value={brandName || ''} onChange={e => onBrandNameChange(e.target.value)}
-            placeholder="e.g., Apple, Samsung" />
-          <p className={helpCls}>Brand being costed</p>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Brand & Model *</label>
+            <BrandModelSelector
+              initialBrandId={''}
+              initialModelId={''}
+              onBrandChange={onBrandNameChange}
+              onModelChange={(_, modelName) => onBrandNameChange(modelName)}
+            />
         </div>
         <div>
           <label htmlFor="usdRate" className={labelCls}>USD Rate (PKR)</label>

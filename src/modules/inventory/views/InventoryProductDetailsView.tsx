@@ -4,6 +4,7 @@
 //   - Added optional "Dealer Price (PKR)" field for both with-costing and without-costing paths
 //   - Location dropdown (required) retained for both paths
 //   - Fixed "Next: Payment" button text color to black in without-costing flow
+//   - ⚠️ TEMPORARY: forceReseed button added — remove after brands are fixed
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -14,6 +15,9 @@ import {
   UseInventoryProductDetailsViewModelReturn,
   SelectedModel,
 } from '../viewModels/useInventoryProductDetailsViewModel';
+import { BrandModelSelector } from '../components/BrandModelSelector';
+
+
 
 interface InventoryProductDetailsViewProps extends UseInventoryProductDetailsViewModelReturn {}
 
@@ -27,6 +31,24 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
 }) => {
   // Dealer price local state (optional, not validated)
   const [dealerPrice, setDealerPrice] = useState<number | ''>('');
+
+  // ⚠️ TEMPORARY reseed state — remove after brands are fixed
+  const [reseedStatus, setReseedStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+
+  const handleReseed = async () => {
+    if (!window.confirm(
+      '⚠️ This will DELETE all existing brands & models in Firestore and re-seed all 33 brands.\n\nContinue?'
+    )) return;
+    setReseedStatus('running');
+    try {
+      await forceReseed();
+      setReseedStatus('done');
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      console.error('forceReseed failed:', err);
+      setReseedStatus('error');
+    }
+  };
 
   // With-costing: local selectedModels state owns serial data
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
@@ -245,9 +267,41 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     handleNext(enriched as any);
   };
 
+  // ⚠️ TEMPORARY reseed button — fixed position, visible on all sub-views
+  const ReseedButton = () => {
+    const label = {
+      idle:    '🔧 Fix Brands',
+      running: '⏳ Fixing...',
+      done:    '✅ Done! Reloading...',
+      error:   '❌ Failed — see console',
+    }[reseedStatus];
 
+    const bg = {
+      idle:    '#dc2626',
+      running: '#d97706',
+      done:    '#16a34a',
+      error:   '#7c3aed',
+    }[reseedStatus];
 
-  // WITHOUT COSTING — single model (moved up)
+    return (
+      <button
+        onClick={handleReseed}
+        disabled={reseedStatus === 'running' || reseedStatus === 'done'}
+        style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          padding: '10px 18px', backgroundColor: bg,
+          color: '#fff', border: 'none', borderRadius: 8,
+          fontWeight: 700, fontSize: 13,
+          cursor: reseedStatus === 'idle' ? 'pointer' : 'not-allowed',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
+
+  // WITHOUT COSTING — single model
   if (costingOption === 'without') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>
@@ -276,34 +330,34 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
           <div className="bg-white rounded-lg shadow-sm border p-8 space-y-6">
             {/* Brand / Model / Prices */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Brand Name *</label>
-                <input
-                  type="text"
-                  value={singleModel.brandName}
-                  onChange={e => {
-                    setSingleModelField('brandName', e.target.value);
-                    setBrandName(e.target.value);
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Brand & Model *</label>
+                <BrandModelSelector
+                  initialBrandId={singleModel.brandId}
+                  initialModelId={singleModel.modelId}
+                  onBrandChange={(brandId, brandName) => {
+                    setSingleModelField('brandId', brandId);
+                    setSingleModelField('brandName', brandName);
+                    setBrandName(brandName);
                   }}
-                  className={`${inputCls} ${validationErrors.brandName ? 'border-red-500' : ''}`}
-                />
-                {validationErrors.brandName && (
-                  <p className="text-red-500 text-sm mt-1">{validationErrors.brandName}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Model Name *</label>
-                <input
-                  type="text"
-                  value={singleModel.modelName}
-                  onChange={e => {
-                    setSingleModelField('modelName', e.target.value);
-                    setModelName(e.target.value);
+                  onModelChange={(modelId, modelName, costPrice, sellPrice) => {
+                    setSingleModelField('modelId', modelId);
+                    setSingleModelField('modelName', modelName);
+                    setModelName(modelName);
+                    if (typeof costPrice === 'number' && costPrice > 0) {
+                      setSingleModelField('costPrice', costPrice);
+                      setCostPrice(costPrice);
+                    }
+                    if (typeof sellPrice === 'number' && sellPrice > 0) {
+                      setSingleModelField('sellPrice', sellPrice);
+                      setSellPrice(sellPrice);
+                    }
                   }}
-                  className={`${inputCls} ${validationErrors.modelName ? 'border-red-500' : ''}`}
+                  brandError={validationErrors.brandName}
+                  modelError={validationErrors.modelName}
                 />
-                {validationErrors.modelName && (
-                  <p className="text-red-500 text-sm mt-1">{validationErrors.modelName}</p>
+                {(validationErrors.brandName || validationErrors.modelName) && (
+                  <p className="text-red-500 text-sm mt-1">Please select a brand and model</p>
                 )}
               </div>
               <div>
@@ -313,7 +367,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                   value={singleModel.costPrice || ''}
                   onChange={e => {
                     setSingleModelField('costPrice', Number(e.target.value));
-                    setCostPrice(Number(e.target.value));  // ← FIX: was missing, so formData.costPrice never updated
+                    setCostPrice(Number(e.target.value));
                   }}
                   className={inputCls}
                   min={0}
@@ -458,9 +512,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                         placeholder={`Serial #${i + 1}`}
                       />
                       <select
-                        value={
-                          formData.serialCities[serialInputs[i]] || formData.location || ''
-                        }
+                        value={formData.serialCities[serialInputs[i]] || formData.location || ''}
                         onChange={e => updateSerialCity(i, e.target.value)}
                         className="w-full px-3 py-1 border rounded-lg text-sm"
                       >
@@ -487,7 +539,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               </button>
               <button
                 onClick={() => handleNext()}
-className="px-8 py-3 rounded-lg font-semibold text-gray-900 text-lg shadow-lg flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 hover:text-gray-900 active:bg-indigo-800 active:text-gray-900 transition-all duration-200"
+                className="px-8 py-3 rounded-lg font-semibold text-gray-900 text-lg shadow-lg flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 hover:text-gray-900 active:bg-indigo-800 active:text-gray-900 transition-all duration-200"
               >
                 Next: Payment <ArrowRight size={20} />
               </button>
@@ -708,7 +760,7 @@ className="px-8 py-3 rounded-lg font-semibold text-gray-900 text-lg shadow-lg fl
                 className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-colors ${
                   !isLoadingModels && selectedModels.length > 0
                     ? 'bg-indigo-600 text-gray-900 hover:bg-indigo-700 hover:text-gray-900 active:bg-indigo-800 active:text-gray-900'
-                      : 'bg-gray-200 text-gray-700 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-700 cursor-not-allowed'
                 }`}
               >
                 {isLoadingModels ? (

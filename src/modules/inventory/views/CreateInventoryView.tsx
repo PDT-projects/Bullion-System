@@ -2,16 +2,19 @@
 // CreateInventoryView - Multi-step wizard for creating and editing products
 //
 // CHANGES:
-//   - isGeneratingTxnId prop added — Next button on details step is disabled
-//     while the Firestore counter is still being read (prevents submitting
-//     before the TXN ID is ready)
-//   - Payment step now displays the auto-generated TXN-DDMMYY-### ID as a
-//     read-only badge (no manual input — ID was already generated on mount)
-//   - Confirmation step summary row shows Transaction ID
-//   - All other logic unchanged
+//   - Payment step: Cash/Bank toggle replaces plain text dropdown
+//   - Bank dropdown fetches live bank list from Firestore when Bank is selected
+//   - Cheque option also prompts for bank selection
+//   - bankId + bankName passed through setField so ViewModel saves them
+//   - All other logic (TXN ID, serials, stepper, confirmation) unchanged
 
-import React from 'react';
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertCircle, Loader2, Hash } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
+import {
+  ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertCircle,
+  Loader2, Hash, Banknote, Building2, CreditCard, ChevronDown,
+} from 'lucide-react';
 import {
   ProductFormData,
   ValidationResult,
@@ -20,7 +23,10 @@ import {
 } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { BrandModelSelector } from '../components/BrandModelSelector';
-// NOTE: No Firebase imports here — all Firestore logic lives in useCreateInventoryViewModel.ts
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface BankOption { id: string; name: string; balance: number; }
 
 interface CreateInventoryViewProps {
   formData: ProductFormData;
@@ -30,7 +36,7 @@ interface CreateInventoryViewProps {
   isEditMode: boolean;
   editingId: string | null;
   isFetchingProduct: boolean;
-  isGeneratingTxnId: boolean;       // NEW — true while Firestore counter is being fetched
+  isGeneratingTxnId: boolean;
   serialInput: string;
   serialCity: string;
   setField: (field: string, value: any) => void;
@@ -44,6 +50,17 @@ interface CreateInventoryViewProps {
   handleSubmit: () => void;
   handleCancel: () => void;
 }
+
+// ── Payment method options ────────────────────────────────────────────────────
+
+const PAYMENT_MODES = [
+  { value: 'Cash',          label: 'Cash',          icon: Banknote,  color: '#16a34a', bg: '#f0fdf4', border: '#22c55e', needsBank: false },
+  { value: 'Bank Transfer', label: 'Bank Transfer', icon: Building2, color: '#2563eb', bg: '#eff6ff', border: '#3b82f6', needsBank: true  },
+  { value: 'Cheque',        label: 'Cheque',        icon: CreditCard, color: '#7c3aed', bg: '#f5f3ff', border: '#8b5cf6', needsBank: true  },
+  { value: 'Credit Card',   label: 'Credit Card',   icon: CreditCard, color: '#d97706', bg: '#fffbeb', border: '#f59e0b', needsBank: false },
+];
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export function CreateInventoryView({
   formData,
@@ -66,6 +83,29 @@ export function CreateInventoryView({
   handleSubmit,
   handleCancel,
 }: CreateInventoryViewProps) {
+
+  // ── Banks — fetched once when payment step mounts ─────────────────────────
+  const [banks, setBanks]             = useState<BankOption[]>([]);
+  const [banksLoading, setBanksLoading] = useState(false);
+
+  useEffect(() => {
+    if (currentStep !== 'payment') return;
+    setBanksLoading(true);
+    getDocs(query(collection(db, 'banks'), orderBy('name')))
+      .then(snap => {
+        setBanks(snap.docs.map(d => {
+          const b = d.data() as any;
+          return { id: d.id, name: b.name || '—', balance: Number(b.balance) || 0 };
+        }));
+      })
+      .catch(() => {})
+      .finally(() => setBanksLoading(false));
+  }, [currentStep]);
+
+  const selectedMode = PAYMENT_MODES.find(m => m.value === formData.paymentMethod) || null;
+  const needsBank    = selectedMode?.needsBank ?? false;
+
+  // ── Stepper config ────────────────────────────────────────────────────────
   const steps = [
     { id: 'details',      label: 'Product Details', number: 1 },
     { id: 'payment',      label: 'Payment Info',    number: 2 },
@@ -73,7 +113,19 @@ export function CreateInventoryView({
   ];
   const currentIdx = steps.findIndex(s => s.id === currentStep);
 
-  // Loading spinner while fetching existing product for edit
+  const inputCls = (hasError?: boolean) =>
+    `w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+      hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+    }`;
+
+  const btnAddSerial: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 6,
+    padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
+    backgroundColor: '#4f46e5', color: '#ffffff',
+    fontWeight: 600, fontSize: 14, border: 'none', whiteSpace: 'nowrap',
+  };
+
+  // ── Loading state ─────────────────────────────────────────────────────────
   if (isFetchingProduct) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -86,20 +138,9 @@ export function CreateInventoryView({
     );
   }
 
-  const inputCls = (hasError?: boolean) =>
-    `w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
-      hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
-    }`;
-
-  const btnAddSerial: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 6,
-    padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
-    backgroundColor: '#4f46e5', color: '#ffffff',
-    fontWeight: 600, fontSize: 14, border: 'none',
-    whiteSpace: 'nowrap',
-  };
-
-  // ── Step 1: Product Details ───────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 1 — Product Details
+  // ══════════════════════════════════════════════════════════════════════════
   const renderDetailsStep = () => (
     <div className="space-y-6">
 
@@ -117,7 +158,7 @@ export function CreateInventoryView({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* Brand & Model */}
+        {/* ── Brand & Model ── */}
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Brand & Model *</label>
           {isEditMode && formData.brandName && (
@@ -148,7 +189,7 @@ export function CreateInventoryView({
           )}
         </div>
 
-        {/* Category */}
+        {/* ── Category ── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
           <input
@@ -156,14 +197,14 @@ export function CreateInventoryView({
             value={formData.category || ''}
             onChange={e => setField('category', e.target.value)}
             className={inputCls(!!validation.fieldErrors?.category)}
-            placeholder="e.g. Mobile, Laptop, Tablet"
+            placeholder="e.g. Metal Detector, Accessory"
           />
           {validation.fieldErrors?.category && (
             <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.category}</p>
           )}
         </div>
 
-        {/* Buy Type */}
+        {/* ── Buy Type ── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Buy Type</label>
           <select
@@ -176,7 +217,7 @@ export function CreateInventoryView({
           </select>
         </div>
 
-        {/* Cost Price */}
+        {/* ── Cost Price ── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Cost Price (PKR) *
@@ -191,12 +232,7 @@ export function CreateInventoryView({
             value={formData.costPrice === 0 ? '' : (formData.costPrice ?? '')}
             onChange={e => {
               const raw = e.target.value.trim();
-              if (raw === '') {
-                setField('costPrice', 0);
-              } else {
-                const parsed = parseFloat(raw);
-                setField('costPrice', isNaN(parsed) ? 0 : parsed);
-              }
+              setField('costPrice', raw === '' ? 0 : (parseFloat(raw) || 0));
             }}
             onBlur={e => {
               const parsed = parseFloat(e.target.value);
@@ -212,7 +248,7 @@ export function CreateInventoryView({
           )}
         </div>
 
-        {/* Sell Price */}
+        {/* ── Sell Price ── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price (PKR) *</label>
           <input
@@ -232,7 +268,7 @@ export function CreateInventoryView({
           )}
         </div>
 
-        {/* Warranty */}
+        {/* ── Warranty ── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Warranty (Years)</label>
           <input
@@ -245,7 +281,7 @@ export function CreateInventoryView({
           />
         </div>
 
-        {/* Primary Location */}
+        {/* ── Primary Location ── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Primary Location</label>
           <select
@@ -260,7 +296,7 @@ export function CreateInventoryView({
           </select>
         </div>
 
-        {/* Status */}
+        {/* ── Status ── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
           <select
@@ -274,7 +310,7 @@ export function CreateInventoryView({
           </select>
         </div>
 
-        {/* Description */}
+        {/* ── Description ── */}
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea
@@ -287,7 +323,7 @@ export function CreateInventoryView({
         </div>
       </div>
 
-      {/* Serial Numbers */}
+      {/* ── Serial Numbers ── */}
       <div className="border-t border-gray-200 pt-6">
         <h4 className="text-lg font-semibold text-gray-800 mb-1">Serial Numbers</h4>
         {isEditMode && (
@@ -348,7 +384,9 @@ export function CreateInventoryView({
     </div>
   );
 
-  // ── Step 2: Payment ───────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 2 — Payment Info
+  // ══════════════════════════════════════════════════════════════════════════
   const renderPaymentStep = () => {
     const totalAmount = (formData.costPrice ?? 0) * (formData.stock || 0);
     const paid        = formData.paidAmount ?? 0;
@@ -357,11 +395,9 @@ export function CreateInventoryView({
     return (
       <div className="space-y-6">
 
-        {/* ── Transaction ID — auto-generated, read-only ── */}
+        {/* ── Transaction ID — read-only ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Transaction ID
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Transaction ID</label>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10,
             padding: '10px 14px', borderRadius: 8,
@@ -389,26 +425,105 @@ export function CreateInventoryView({
           </p>
         </div>
 
-        {/* Payment Method */}
+        {/* ── Payment Method — icon toggle cards ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
-          <select
-            value={formData.paymentMethod || ''}
-            onChange={e => setField('paymentMethod', e.target.value || undefined)}
-            className={inputCls(!!validation.fieldErrors?.paymentMethod)}
-          >
-            <option value="">Select payment method</option>
-            <option value="Cash">Cash</option>
-            <option value="Bank Transfer">Bank Transfer</option>
-            <option value="Check">Check</option>
-            <option value="Credit Card">Credit Card</option>
-          </select>
+          <label className="block text-sm font-medium text-gray-700 mb-3">Payment Method *</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            {PAYMENT_MODES.map(mode => {
+              const Icon = mode.icon;
+              const sel  = formData.paymentMethod === mode.value;
+              return (
+                <button
+                  key={mode.value}
+                  type="button"
+                  onClick={() => {
+                    setField('paymentMethod', mode.value);
+                    // Clear bank if switching to a mode that doesn't need one
+                    if (!mode.needsBank) {
+                      setField('bankId', undefined);
+                      setField('bankName', undefined);
+                    }
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                    border: `2px solid ${sel ? mode.border : '#e5e7eb'}`,
+                    backgroundColor: sel ? mode.bg : '#fff',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <Icon size={20} color={sel ? mode.color : '#9ca3af'} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: sel ? mode.color : '#374151' }}>
+                    {mode.label}
+                  </span>
+                  {sel && (
+                    <Check size={14} color={mode.color} style={{ marginLeft: 'auto' }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
           {validation.fieldErrors?.paymentMethod && (
-            <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.paymentMethod}</p>
+            <p className="text-red-500 text-sm mt-2">{validation.fieldErrors.paymentMethod}</p>
           )}
         </div>
 
-        {/* Amount Paid */}
+        {/* ── Bank Selector — shown for Bank Transfer & Cheque ── */}
+        {needsBank && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {formData.paymentMethod === 'Cheque' ? 'Issuing Bank *' : 'Bank Account *'}
+            </label>
+            {banksLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9fafb' }}>
+                <Loader2 size={14} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: 13, color: '#6b7280' }}>Loading bank accounts…</span>
+              </div>
+            ) : banks.length === 0 ? (
+              <div style={{ padding: '10px 14px', border: '1px solid #fde68a', borderRadius: 8, backgroundColor: '#fffbeb', fontSize: 13, color: '#92400e' }}>
+                ⚠ No bank accounts found. Add one in Banking → Bank Accounts first.
+              </div>
+            ) : (
+              <>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    value={formData.bankId || ''}
+                    onChange={e => {
+                      const bank = banks.find(b => b.id === e.target.value);
+                      setField('bankId',   bank?.id   || '');
+                      setField('bankName', bank?.name || '');
+                    }}
+                    style={{
+                      width: '100%', padding: '10px 36px 10px 12px',
+                      border: `1px solid ${validation.fieldErrors?.bankId ? '#ef4444' : '#d1d5db'}`,
+                      borderRadius: 8, fontSize: 14, color: '#111827',
+                      backgroundColor: '#fff', appearance: 'none', outline: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">— Select bank account —</option>
+                    {banks.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}{b.balance !== undefined ? ` — PKR ${b.balance.toLocaleString()}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }} />
+                </div>
+                {/* Selected bank confirmation chip */}
+                {formData.bankName && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', backgroundColor: '#eff6ff', borderRadius: 6, fontSize: 12, color: '#1d4ed8', fontWeight: 600 }}>
+                    <Building2 size={12} /> {formData.bankName}
+                  </div>
+                )}
+              </>
+            )}
+            {validation.fieldErrors?.bankId && (
+              <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.bankId}</p>
+            )}
+          </div>
+        )}
+
+        {/* ── Amount Paid ── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (PKR)</label>
           <input
@@ -419,13 +534,13 @@ export function CreateInventoryView({
               setField('paidAmount', raw === '' ? undefined : (parseFloat(raw) || 0));
             }}
             className={inputCls()}
-            placeholder="Enter amount paid"
+            placeholder="Enter amount paid (leave blank if unpaid)"
             min={0}
             step="any"
           />
         </div>
 
-        {/* Payment Summary */}
+        {/* ── Payment Summary ── */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-900 mb-3">Payment Summary</h4>
           <div className="space-y-2 text-sm">
@@ -456,13 +571,25 @@ export function CreateInventoryView({
                 </div>
               </>
             )}
+            {/* Payment method summary line */}
+            {formData.paymentMethod && (
+              <div style={{ borderTop: '1px solid #bfdbfe', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between' }}>
+                <span className="text-blue-700">Method:</span>
+                <span className="font-semibold text-blue-900">
+                  {formData.paymentMethod}
+                  {formData.bankName ? ` — ${formData.bankName}` : ''}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
     );
   };
 
-  // ── Step 3: Confirmation ──────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 3 — Confirmation
+  // ══════════════════════════════════════════════════════════════════════════
   const renderConfirmationStep = () => (
     <div className="text-center py-8">
       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -488,7 +615,9 @@ export function CreateInventoryView({
             ['Cost Price',     InventoryService.formatCurrency(formData.costPrice ?? 0)],
             ['Sell Price',     InventoryService.formatCurrency(formData.sellPrice  || 0)],
             ['Description',    formData.description || '—'],
-            ['Payment',        formData.paymentMethod || '—'],
+            ['Payment Method', formData.paymentMethod
+              ? `${formData.paymentMethod}${formData.bankName ? ` — ${formData.bankName}` : ''}`
+              : '—'],
           ] as [string, string][]).map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4">
               <span className="text-gray-500 flex-shrink-0">{label}:</span>
@@ -514,7 +643,9 @@ export function CreateInventoryView({
     </div>
   );
 
-  // ── Main render ───────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // MAIN RENDER
+  // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className="p-6">
       <div className="max-w-4xl mx-auto">
@@ -533,7 +664,6 @@ export function CreateInventoryView({
               {isEditMode
                 ? 'Update fields below and save changes to Firestore'
                 : 'Fill in the details to add a new product'}
-              {/* Show TXN ID in header subtitle once generated */}
               {!isEditMode && formData.transactionId && !isGeneratingTxnId && (
                 <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-mono">
                   {formData.transactionId}
@@ -592,7 +722,6 @@ export function CreateInventoryView({
           {/* Navigation */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid #e5e7eb' }}>
 
-            {/* Back / Cancel */}
             <button
               type="button"
               onClick={currentStep === 'details' ? handleCancel : goToPreviousStep}
@@ -603,7 +732,6 @@ export function CreateInventoryView({
             </button>
 
             {currentStep !== 'confirmation' ? (
-              /* Next — disabled while TXN ID is still being fetched */
               <button
                 type="button"
                 onClick={goToNextStep}
@@ -625,7 +753,6 @@ export function CreateInventoryView({
                 }
               </button>
             ) : (
-              /* Save / Update */
               <button
                 type="button"
                 onClick={handleSubmit}
@@ -634,12 +761,10 @@ export function CreateInventoryView({
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '11px 30px', borderRadius: 8, border: 'none',
                   backgroundColor: (isSubmitting || isGeneratingTxnId) ? '#4ade80' : '#15803d',
-                  color: '#ffffff',
-                  fontWeight: 700, fontSize: 15,
+                  color: '#ffffff', fontWeight: 700, fontSize: 15,
                   cursor: (isSubmitting || isGeneratingTxnId) ? 'not-allowed' : 'pointer',
                   opacity: (isSubmitting || isGeneratingTxnId) ? 0.8 : 1,
-                  boxShadow: '0 2px 10px rgba(21,128,61,0.4)',
-                  letterSpacing: '0.01em',
+                  boxShadow: '0 2px 10px rgba(21,128,61,0.4)', letterSpacing: '0.01em',
                 }}
               >
                 {isSubmitting ? (
