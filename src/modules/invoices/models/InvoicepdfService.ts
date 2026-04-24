@@ -290,7 +290,7 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
 
     const srLines  = [String(idx + 1)];
     const pnLines  = doc.splitTextToSize(p.productName || '', C.pn.w - 5) as string[];
-    const detailRaw = p.description?.trim() || '';
+    const detailRaw = (p.productDetail?.trim() || p.description?.trim()) || '';
     const pdLines  = detailRaw ? doc.splitTextToSize(detailRaw, C.pd.w - 5) as string[] : [''];
     const bnLines  = serials.length > 0
       ? doc.splitTextToSize(serials.join('\n'), C.bn.w - 5) as string[]
@@ -402,9 +402,10 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   //    opacity on images, so we rely on the PNG's own transparency.
   // ══════════════════════════════════════════════════════════════════
   if (stampImg) {
-    // Centre the stamp horizontally over the dealer signature line
-    const stampX = L_SIG_X + SIG_W / 2 - STAMP_W / 2;
-    const stampY = y - STAMP_H + 10;
+    // Stamp placed over the RIGHT (Dealer) signature line
+    // Centre the stamp horizontally over R_SIG_X line
+    const stampX = R_SIG_X + SIG_W / 2 - STAMP_W / 2;
+    const stampY = y - STAMP_H + 10;  // overlaps upward over the signature line
     doc.addImage(stampImg.dataUrl, stampImg.format, stampX, stampY, STAMP_W, STAMP_H);
   }
 
