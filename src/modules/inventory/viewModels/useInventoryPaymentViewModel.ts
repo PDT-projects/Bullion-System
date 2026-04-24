@@ -14,6 +14,14 @@ import { InventoryFirebaseService, generateInventoryTransactionId } from '../mod
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { CashFirebaseService } from '../../banking/models/cashFirebaseService';
 import { Bank } from '../../banking/models/types';
+import { createTransactionFromInventory, TxCompany } from '../../transactions/models/TransactionBridgeService';
+
+export const INVENTORY_COMPANIES: { id: string; label: string; value: TxCompany }[] = [
+  { id: 'isb', label: 'Islamabad',  value: 'Pakistan Detector Technologies Pvt. Ltd - Islamabad'  },
+  { id: 'rwp', label: 'Rawalpindi', value: 'Pakistan Detector Technologies Pvt. Ltd - Rawalpindi' },
+  { id: 'lhr', label: 'Lahore',     value: 'Pakistan Detector Technologies Pvt. Ltd - Lahore'     },
+  { id: 'oth', label: 'Other',      value: 'Pakistan Detector Technologies Pvt. Ltd - Other'      },
+];
 
 export type PaymentStatusType = 'paid' | 'unpaid' | 'partial';
 export type PaymentMode = 'cash' | 'bank';
@@ -57,6 +65,10 @@ export interface UseInventoryPaymentViewModelReturn {
   removeInstallment: (id: string) => void;
   updateInstallment: (id: string, patch: Partial<InstallmentEntry>) => void;
   instalmentTotal: number;
+
+  // Branch/company for transaction linking
+  inventoryCompany: TxCompany;
+  setInventoryCompany: (v: TxCompany) => void;
 
   setPaymentStatus: (status: PaymentStatusType) => void;
   setTransactionId: (id: string) => void;
@@ -104,6 +116,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isSaving, setIsSaving]                         = useState(false);
+  const [inventoryCompany, setInventoryCompany]           = useState<TxCompany>(INVENTORY_COMPANIES[0].value);
   const [isGeneratingId, setIsGeneratingId]             = useState(true);
   const [transactionId, setTransactionId]               = useState('');
   const [isEditingTransactionId, setIsEditingTransactionId] = useState(false);
@@ -425,6 +438,26 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         await recordPaymentActivity(effectivePaid, entries);
       }
 
+      // ── Auto-create transaction record (non-blocking) ─────────────────────
+      if (!isOnOrder) {
+        createTransactionFromInventory({
+          transactionId:  transactionId,
+          brandName,
+          modelName:      costingOption === 'with' && selectedModels.length > 0
+                            ? selectedModels.map((m: any) => m.modelName).join(', ')
+                            : modelName,
+          date:           new Date().toISOString().split('T')[0],
+          totalAmount,
+          paidAmount:     effectivePaid,
+          paymentStatus,
+          paymentMode,
+          bankId:         paymentMode === 'bank' ? selectedBankId : undefined,
+          bankName:       paymentMode === 'bank' ? banks.find(b => b.id === selectedBankId)?.name : undefined,
+          installments:   installments.length > 0 ? installments : undefined,
+          company:        inventoryCompany,
+        }).catch(err => console.warn('[TxBridge] Inventory transaction failed (non-blocking):', err));
+      }
+
       toast.success(isOnOrder
         ? `✅ Product saved to Receivable Stock — Transaction: ${transactionId}`
         : `✅ Product added to Inventory — Transaction: ${transactionId}`
@@ -441,7 +474,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     category, sellPrice, buyType, warrantyYears, stock, description, status,
     isDamaged, serialNumbers, serialCities, inventoryType, costing,
     paymentStatus, transactionId, paidAmount, totalAmount, navigate, location,
-    paymentMode, selectedBankId, banks, installments, buildPaymentEntries, recordPaymentActivity,
+    paymentMode, selectedBankId, banks, installments, buildPaymentEntries, recordPaymentActivity, inventoryCompany,
   ]);
 
   const handleBack = useCallback(() => {
@@ -491,6 +524,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     selectedBankId, setSelectedBankId,
     banks, isBanksLoading,
     installments, addInstallment, removeInstallment, updateInstallment, instalmentTotal,
+    inventoryCompany, setInventoryCompany,
     setPaymentStatus, setTransactionId, setPaidAmount,
     handleSubmit, handleBack, formatCurrency, productSummary,
   };

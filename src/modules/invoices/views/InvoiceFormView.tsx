@@ -678,6 +678,8 @@ import {
   Loader2, FileDown, Stamp, MapPin,
 } from 'lucide-react';
 import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
+import { INVOICE_COMPANIES } from '../viewModels/useInvoiceFormViewModel';
+import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; }
@@ -713,6 +715,9 @@ interface Props {
   handleAddCustomCity: (province: string, city: string) => Promise<void>;
   calculateTotal: () => number;
   formatCurrency: (amount: number) => string;
+  // Branch/company for transaction linking
+  invoiceCompany: TxCompany;
+  setInvoiceCompany: (v: TxCompany) => void;
 }
 
 const inp = 'w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm h-8';
@@ -728,6 +733,7 @@ export function InvoiceFormView({
   getAvailableSerialsForProduct,
   handleSave, handleCancel, handleDownloadPdf, handleAddCustomCity,
   calculateTotal, formatCurrency,
+  invoiceCompany, setInvoiceCompany,
 }: Props) {
   const total = calculateTotal();
 
@@ -1108,6 +1114,30 @@ export function InvoiceFormView({
                 <option value="Unpaid">Unpaid</option>
                 <option value="Paid">Paid</option>
               </select>
+            </div>
+
+            {/* Branch / Company — for transaction ledger linking */}
+            <div className="col-span-2">
+              <label className={lbl}>
+                Branch / Company
+                <span className="ml-1 text-gray-400 font-normal">(links this invoice to the transactions ledger)</span>
+              </label>
+              <div className="grid grid-cols-4 gap-1 mt-1">
+                {INVOICE_COMPANIES.map(co => {
+                  const sel = invoiceCompany === co.value;
+                  return (
+                    <button key={co.id} type="button"
+                      onClick={() => setInvoiceCompany(co.value as TxCompany)}
+                      className={`px-2 py-1 rounded border text-xs font-semibold transition-all ${
+                        sel
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-200'
+                      }`}>
+                      {co.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Digital Stamp Toggle — spans 2 cols */}

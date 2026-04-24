@@ -7,9 +7,19 @@
 //   Note (left) + Total (right) on same line  ← bold on both sides
 //   Terms and Conditions with filled-circle (●) bullets
 //   "Thank you for your purchase!" centred at bottom
+//   Signature lines — Dealer left | Client right
+//   UPDATED: Digital stamp (PDT-stamp.png) drawn centred after signatures
+//            when invoice.digitalStamp === true
 
 import jsPDF from 'jspdf';
 import { Invoice } from './types';
+
+// ── Vite static asset imports ─────────────────────────────────────────────────
+// Vite resolves these at build time — guaranteed to work, no fetch needed.
+// Put PDT-stamp.png and PDT-logo.png in src/assets/ folder.
+// If they are in public/ instead, use the fetch fallback below.
+import stampAsset from '../../../assets/PDT-stamp.png?url';
+import logoAsset  from '../../../assets/PDT-logo.png?url';
 
 // ── Page geometry ─────────────────────────────────────────────────────────────
 const PW = 210;
@@ -32,6 +42,23 @@ const st = (d: jsPDF, c: RGB) => d.setTextColor(c[0], c[1], c[2]);
 const fmtAmt  = (n: number) =>
   new Intl.NumberFormat('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
 const fmtDate = (d: string) => d ? new Date(d).toISOString().split('T')[0] : '';
+
+// ── Image loader — converts a URL (Vite asset or public path) to a jsPDF-ready dataURL
+interface ImageData { dataUrl: string; format: 'PNG' | 'JPEG' }
+
+async function loadImage(src: string): Promise<ImageData> {
+  const resp = await fetch(src);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${src}`);
+  const blob = await resp.blob();
+  const format: 'PNG' | 'JPEG' = blob.type.includes('jpeg') || blob.type.includes('jpg') ? 'JPEG' : 'PNG';
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`FileReader failed`));
+    reader.readAsDataURL(blob);
+  });
+  return { dataUrl, format };
+}
 
 // ── Vector logo (green circle with white box + green cross) ──────────────────
 function drawLogo(doc: jsPDF, x: number, y: number, size: number) {
@@ -116,8 +143,28 @@ const TERMS = [
   'The COMPANY will not hold customers responsible for any illegal activities they may engage in, and will also discourage them from engaging in illegal activities.',
 ];
 
-// ── Main builder ──────────────────────────────────────────────────────────────
-function buildPdf(invoice: Invoice): Blob {
+// ── Stamp dimensions ──────────────────────────────────────────────────────────
+// The stamp is placed centred horizontally, right-aligned to the dealer
+// signature side (left half), partially overlapping the signature line so it
+// looks like it was physically stamped on. Adjust STAMP_W / STAMP_H as needed.
+const STAMP_W = 45;   // mm wide
+const STAMP_H = 45;   // mm tall  (keep square for a circular stamp image)
+
+// ── Main builder (async so we can await the stamp image load) ─────────────────
+async function buildPdf(invoice: Invoice): Promise<Blob> {
+  // Load logo + stamp in parallel using Vite-resolved asset URLs
+  // stampAsset and logoAsset are imported at top of file via import x from '...?url'
+  // This guarantees Vite bundles the correct file path — no public folder issues
+  const [logoImg, stampImg] = await Promise.all([
+    loadImage(logoAsset).catch(() => null as ImageData | null),
+    invoice.digitalStamp
+      ? loadImage(stampAsset).catch(err => {
+          console.error('[PDF] Stamp failed to load:', err.message);
+          return null as ImageData | null;
+        })
+      : Promise.resolve(null as ImageData | null),
+  ]);
+
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
   let y = 12;
 
@@ -125,8 +172,9 @@ function buildPdf(invoice: Invoice): Blob {
   // 1. HEADER  —  logo left, company name/address right-of-logo
   // ══════════════════════════════════════════════════════════════════
   const LOGO = 22;
-  // drawLogo(doc, ML, y, LOGO);
-  doc.addImage('/PDT-logo.png', 'PNG', ML, y, LOGO, LOGO);
+  if (logoImg) {
+    doc.addImage(logoImg.dataUrl, logoImg.format, ML, y, LOGO, LOGO);
+  }
 
   // Company name centred on full page width
   doc.setFont('helvetica', 'bold'); doc.setFontSize(15); st(doc, DARK);
@@ -142,7 +190,6 @@ function buildPdf(invoice: Invoice): Blob {
   const pVal   = ' 03111444615';
   const nLabel = 'NTN:';
   const nVal   = ' 52723';
-  // Measure widths and place centred
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8); st(doc, DARK);
   const pLW = doc.getTextWidth(pLabel);
   doc.setFont('helvetica', 'normal');
@@ -151,7 +198,7 @@ function buildPdf(invoice: Invoice): Blob {
   const nLW = doc.getTextWidth(nLabel);
   doc.setFont('helvetica', 'normal');
   const nVW = doc.getTextWidth(nVal);
-  const GAP = 8; // gap between phone block and NTN block
+  const GAP = 8;
   const totalW = pLW + pVW + GAP + nLW + nVW;
   let cx = PW / 2 - totalW / 2;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8); st(doc, DARK);
@@ -178,30 +225,24 @@ function buildPdf(invoice: Invoice): Blob {
   // ══════════════════════════════════════════════════════════════════
   // 3. CUSTOMER block (left) + Inv No / Date (right)
   // ══════════════════════════════════════════════════════════════════
-  // Left column: 0–100 mm   Right column: 100–196 mm
   const LEFT_W  = 100;
-  const RIGHT_X = ML + LEFT_W;   // ~114 mm from page left
-
+  const RIGHT_X = ML + LEFT_W;
   let lY = y;
 
-  // Customer name — bold
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); st(doc, DARK);
   doc.text(invoice.customerName || '', ML, lY); lY += 5.5;
 
-  // City (no label)
   if (invoice.customerCity) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); st(doc, DARK);
     doc.text(invoice.customerCity, ML, lY); lY += 5;
   }
 
-  // CNIC  bold label + normal value
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
   doc.text('CNIC:', ML, lY);
   doc.setFont('helvetica', 'normal');
   doc.text(invoice.customerCNIC || '', ML + 13, lY);
   lY += 5;
 
-  // Mobile  bold label + normal value
   doc.setFont('helvetica', 'bold');
   doc.text('Mobile:', ML, lY);
   doc.setFont('helvetica', 'normal');
@@ -211,7 +252,6 @@ function buildPdf(invoice: Invoice): Blob {
   doc.text(phone, ML + 16, lY);
   lY += 5;
 
-  // Email — only show if a value is present
   if (invoice.customerEmail?.trim()) {
     doc.setFont('helvetica', 'bold');
     doc.text('Email:', ML, lY);
@@ -220,10 +260,8 @@ function buildPdf(invoice: Invoice): Blob {
     lY += 5;
   }
 
-  // Right column — Inv No & Date aligned at RIGHT_X
-  // Start at same vertical position as CNIC row for clean alignment
-  const rY = y + 5.5 + (invoice.customerCity ? 5 : 0);
-  const VAL_X = RIGHT_X + 18;   // value starts after label
+  const rY    = y + 5.5 + (invoice.customerCity ? 5 : 0);
+  const VAL_X = RIGHT_X + 18;
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
   doc.text('Inv No:', RIGHT_X, rY);
@@ -240,8 +278,6 @@ function buildPdf(invoice: Invoice): Blob {
   // ══════════════════════════════════════════════════════════════════
   // 4. PRODUCTS TABLE
   // ══════════════════════════════════════════════════════════════════
-
-  // Header
   tCell(doc, C.sr.x,  y, C.sr.w,  ROW_H, ['Sr.No'],          { bold: true, align: 'center' });
   tCell(doc, C.pn.x,  y, C.pn.w,  ROW_H, ['Product Name'],   { bold: true });
   tCell(doc, C.pd.x,  y, C.pd.w,  ROW_H, ['Product Detail'], { bold: true });
@@ -254,7 +290,6 @@ function buildPdf(invoice: Invoice): Blob {
 
     const srLines  = [String(idx + 1)];
     const pnLines  = doc.splitTextToSize(p.productName || '', C.pn.w - 5) as string[];
-    // Product Detail = exchangeWarrantyNote if it looks like warranty info, else description
     const detailRaw = p.description?.trim() || '';
     const pdLines  = detailRaw ? doc.splitTextToSize(detailRaw, C.pd.w - 5) as string[] : [''];
     const bnLines  = serials.length > 0
@@ -308,12 +343,12 @@ function buildPdf(invoice: Invoice): Blob {
   doc.text('Terms and Conditions', ML, y);
   y += 8;
 
-  const BX   = ML + 3;    // bullet centre X
-  const TX   = ML + 8;    // text X
-  const TW   = CW - 8;    // text wrap width
-  const BFS  = 8;         // body font size
-  const BLH  = BFS * 0.42; // line height mm
-  const BR   = 1.1;       // bullet radius
+  const BX   = ML + 3;
+  const TX   = ML + 8;
+  const TW   = CW - 8;
+  const BFS  = 8;
+  const BLH  = BFS * 0.42;
+  const BR   = 1.1;
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(BFS); st(doc, DARK);
 
@@ -322,7 +357,6 @@ function buildPdf(invoice: Invoice): Blob {
     const termH  = lines.length * BLH + (lines.length - 1) * 0.3 + 2;
     y = pb(doc, y, termH + 2);
 
-    // Filled circle bullet — vertically centred on first text line
     sf(doc, DARK); sd(doc, DARK); doc.setLineWidth(0.01);
     doc.ellipse(BX, y - 0.5, BR, BR, 'F');
 
@@ -333,20 +367,24 @@ function buildPdf(invoice: Invoice): Blob {
   y += 10;
 
   // ══════════════════════════════════════════════════════════════════
-  // 7. THANK YOU  (centred, above signatures)
+  // 7. THANK YOU  (centred)
   // ══════════════════════════════════════════════════════════════════
-  y = pb(doc, y, 30);
+  // Reserve enough space: "Thank you" text (12) + signature lines (22)
+  // + optional stamp (STAMP_H + 6 gap) so they all land on same page
+  const stampExtraH = stampImg ? STAMP_H + 8 : 0;
+  y = pb(doc, y, 30 + stampExtraH);
+
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); st(doc, DARK);
   doc.text('Thank you for your purchase!', PW / 2, y, { align: 'center' });
 
   y += 22;
 
   // ══════════════════════════════════════════════════════════════════
-  // 8. SIGNATURE LINES  —  Dealer left | Client right, same Y
+  // 8. SIGNATURE LINES  —  Dealer left | Client right
   // ══════════════════════════════════════════════════════════════════
-  const SIG_W     = 65;                    // line length
-  const L_SIG_X   = ML;                   // dealer line start
-  const R_SIG_X   = PW - MR - SIG_W;      // client line start (flush to right margin)
+  const SIG_W   = 65;
+  const L_SIG_X = ML;
+  const R_SIG_X = PW - MR - SIG_W;
 
   sd(doc, DARK); doc.setLineWidth(0.4);
   doc.line(L_SIG_X, y, L_SIG_X + SIG_W, y);
@@ -355,6 +393,20 @@ function buildPdf(invoice: Invoice): Blob {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
   doc.text('Dealer Signature', L_SIG_X + SIG_W / 2, y + 5, { align: 'center' });
   doc.text('Client Signature', R_SIG_X + SIG_W / 2, y + 5, { align: 'center' });
+
+  // ══════════════════════════════════════════════════════════════════
+  // 9. DIGITAL STAMP  —  only when invoice.digitalStamp === true
+  //    Placed centred over the Dealer Signature line so it looks
+  //    physically stamped. Rendered at 40% opacity using a clipping
+  //    trick: draw the image then restore — jsPDF doesn't support
+  //    opacity on images, so we rely on the PNG's own transparency.
+  // ══════════════════════════════════════════════════════════════════
+  if (stampImg) {
+    // Centre the stamp horizontally over the dealer signature line
+    const stampX = L_SIG_X + SIG_W / 2 - STAMP_W / 2;
+    const stampY = y - STAMP_H + 10;
+    doc.addImage(stampImg.dataUrl, stampImg.format, stampX, stampY, STAMP_W, STAMP_H);
+  }
 
   return doc.output('blob');
 }
@@ -365,7 +417,7 @@ export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
 }
 
 export async function downloadInvoicePdf(invoice: Invoice): Promise<void> {
-  const blob = buildPdf(invoice);
+  const blob = await buildPdf(invoice);
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;

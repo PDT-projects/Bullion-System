@@ -61,4 +61,4 @@ export function CostingGlobalInputs({
       </div>
     </div>
   );
-}
+} 

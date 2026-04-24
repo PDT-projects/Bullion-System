@@ -383,6 +383,17 @@ export function TransactionListView({
                               Pending
                             </span>
                           )}
+                          {/* Source badge — shows origin of auto-created transactions */}
+                          {(t as any).linkedType === 'invoice' && (
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                              Invoice
+                            </span>
+                          )}
+                          {(t as any).linkedType === 'inventory' && (
+                            <span className="text-[10px] font-bold text-violet-600 bg-violet-100 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                              Inventory
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -556,6 +567,18 @@ export function TransactionListView({
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-mono rounded-full tracking-wide">
                     {viewTransaction.transactionId || '—'}
+                    {(viewTransaction as any).linkedType && (
+                      <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                        (viewTransaction as any).linkedType === 'invoice'
+                          ? 'bg-blue-100 text-blue-700'
+                          : (viewTransaction as any).linkedType === 'inventory'
+                          ? 'bg-violet-100 text-violet-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {(viewTransaction as any).linkedType}
+                        {(viewTransaction as any).linkedId ? ` — ${(viewTransaction as any).linkedId}` : ''}
+                      </span>
+                    )}
                   </span>
                   <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-full">
                     {viewTransaction.mainCategory}

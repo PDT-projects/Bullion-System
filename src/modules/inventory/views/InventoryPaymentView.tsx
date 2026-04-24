@@ -7,7 +7,8 @@ import {
   CreditCard, CheckCircle, X, AlertCircle, ArrowLeft, Save,
   Edit2, Check, Loader2, MapPin, Banknote, Building2, Plus, Trash2,
 } from 'lucide-react';
-import { UseInventoryPaymentViewModelReturn, PaymentMode } from '../viewModels/useInventoryPaymentViewModel';
+import { UseInventoryPaymentViewModelReturn, PaymentMode, INVENTORY_COMPANIES } from '../viewModels/useInventoryPaymentViewModel';
+import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 
 interface InventoryPaymentViewProps extends UseInventoryPaymentViewModelReturn {}
 
@@ -121,6 +122,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   paymentMode, setPaymentMode, selectedBankId, setSelectedBankId, banks, isBanksLoading,
   installments, addInstallment, removeInstallment, updateInstallment, instalmentTotal,
   setPaymentStatus, setTransactionId, setIsEditingTransactionId,
+  inventoryCompany, setInventoryCompany,
   setPaidAmount, handleSubmit, handleBack, formatCurrency, productSummary,
 }) => {
   const steps = costingOption === 'with'
@@ -163,6 +165,33 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* ── Branch / Company ─────────────────────────────────────────────── */}
+          <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
+              Branch / Company *
+              <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#6b7280' }}>
+                (used to link this inventory to the transactions ledger)
+              </span>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {INVENTORY_COMPANIES.map(co => {
+                const sel = inventoryCompany === co.value;
+                return (
+                  <button key={co.id} onClick={() => setInventoryCompany(co.value as TxCompany)}
+                    style={{
+                      padding: '10px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                      border: `2px solid ${sel ? '#4f46e5' : '#e2e8f0'}`,
+                      backgroundColor: sel ? '#eef2ff' : '#fff', transition: 'all 0.15s',
+                    }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: sel ? '#4338ca' : '#374151' }}>
+                      {co.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* ── Transaction ID ──────────────────────────────────────────────── */}
           <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>

@@ -37,6 +37,8 @@ export function InvoiceFormWrapper() {
       handleAddCustomCity={vm.handleAddCustomCity}
       calculateTotal={vm.calculateTotal}
       formatCurrency={vm.formatCurrency}
+      invoiceCompany={vm.invoiceCompany}
+      setInvoiceCompany={vm.setInvoiceCompany}
     />
   );
 }
