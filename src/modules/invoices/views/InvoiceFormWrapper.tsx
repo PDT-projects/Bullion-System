@@ -39,6 +39,8 @@ export function InvoiceFormWrapper() {
       formatCurrency={vm.formatCurrency}
       invoiceCompany={vm.invoiceCompany}
       setInvoiceCompany={vm.setInvoiceCompany}
+      branches={vm.branches}
+      handleAddBranch={vm.handleAddBranch}
     />
   );
 }

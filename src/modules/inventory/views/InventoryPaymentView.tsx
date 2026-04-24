@@ -7,7 +7,7 @@ import {
   CreditCard, CheckCircle, X, AlertCircle, ArrowLeft, Save,
   Edit2, Check, Loader2, MapPin, Banknote, Building2, Plus, Trash2,
 } from 'lucide-react';
-import { UseInventoryPaymentViewModelReturn, PaymentMode, INVENTORY_COMPANIES } from '../viewModels/useInventoryPaymentViewModel';
+import { UseInventoryPaymentViewModelReturn, PaymentMode, makeInventoryBranchValue, branchFromInventoryValue, DEFAULT_INVENTORY_BRANCHES } from '../viewModels/useInventoryPaymentViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 
 interface InventoryPaymentViewProps extends UseInventoryPaymentViewModelReturn {}
@@ -115,6 +115,76 @@ function BankSelector({
   );
 }
 
+// ── Dynamic branch selector with Add New ─────────────────────────────────────
+function InventoryBranchSelector({
+  branches, inventoryCompany, setInventoryCompany, handleAddInventoryBranch,
+}: {
+  branches: string[];
+  inventoryCompany: TxCompany;
+  setInventoryCompany: (v: TxCompany) => void;
+  handleAddInventoryBranch: (name: string) => Promise<void>;
+}) {
+  const [addingNew,   setAddingNew]   = React.useState(false);
+  const [newBranch,   setNewBranch]   = React.useState('');
+  const [saving,      setSaving]      = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => { if (addingNew) inputRef.current?.focus(); }, [addingNew]);
+
+  const save = async () => {
+    if (!newBranch.trim()) return;
+    setSaving(true);
+    await handleAddInventoryBranch(newBranch.trim());
+    setNewBranch(''); setAddingNew(false); setSaving(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      {branches.map(branch => {
+        const val = makeInventoryBranchValue(branch);
+        const sel = inventoryCompany === val;
+        return (
+          <button key={branch} onClick={() => setInventoryCompany(val)}
+            style={{
+              padding: '10px 18px', borderRadius: 8, cursor: 'pointer',
+              border: `2px solid ${sel ? '#4f46e5' : '#e2e8f0'}`,
+              backgroundColor: sel ? '#eef2ff' : '#fff', transition: 'all 0.15s',
+            }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: sel ? '#4338ca' : '#374151' }}>
+              {branch}
+            </span>
+          </button>
+        );
+      })}
+      {/* Add New */}
+      {addingNew ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input ref={inputRef} type="text" value={newBranch}
+            onChange={e => setNewBranch(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setAddingNew(false); }}
+            style={{ padding: '8px 12px', border: '2px solid #6366f1', borderRadius: 8, fontSize: 13, outline: 'none', width: 160 }}
+            placeholder="Branch name…" />
+          <button onClick={save} disabled={saving || !newBranch.trim()}
+            style={{ padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            {saving ? '…' : 'Save'}
+          </button>
+          <button onClick={() => setAddingNew(false)}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, color: '#374151' }}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button onClick={() => setAddingNew(true)}
+          style={{
+            padding: '10px 18px', borderRadius: 8, cursor: 'pointer',
+            border: '2px dashed #c7d2fe', backgroundColor: '#fff', transition: 'all 0.15s',
+          }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#6366f1' }}>➕ Add New</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   costingOption, inventoryType, totalAmount,
   paymentStatus, transactionId, isGeneratingId, isEditingTransactionId,
@@ -123,6 +193,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   installments, addInstallment, removeInstallment, updateInstallment, instalmentTotal,
   setPaymentStatus, setTransactionId, setIsEditingTransactionId,
   inventoryCompany, setInventoryCompany,
+  inventoryBranches, handleAddInventoryBranch,
   setPaidAmount, handleSubmit, handleBack, formatCurrency, productSummary,
 }) => {
   const steps = costingOption === 'with'
@@ -174,23 +245,12 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                 (used to link this inventory to the transactions ledger)
               </span>
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-              {INVENTORY_COMPANIES.map(co => {
-                const sel = inventoryCompany === co.value;
-                return (
-                  <button key={co.id} onClick={() => setInventoryCompany(co.value as TxCompany)}
-                    style={{
-                      padding: '10px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                      border: `2px solid ${sel ? '#4f46e5' : '#e2e8f0'}`,
-                      backgroundColor: sel ? '#eef2ff' : '#fff', transition: 'all 0.15s',
-                    }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: sel ? '#4338ca' : '#374151' }}>
-                      {co.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <InventoryBranchSelector
+              branches={inventoryBranches}
+              inventoryCompany={inventoryCompany}
+              setInventoryCompany={setInventoryCompany}
+              handleAddInventoryBranch={handleAddInventoryBranch}
+            />
           </div>
 
           {/* ── Transaction ID ──────────────────────────────────────────────── */}

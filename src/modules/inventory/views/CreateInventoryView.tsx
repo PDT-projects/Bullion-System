@@ -9,7 +9,7 @@
 //   - All other logic (TXN ID, serials, stepper, confirmation) unchanged
 
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import {
   ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertCircle,
@@ -61,6 +61,99 @@ const PAYMENT_MODES = [
 ];
 
 // ── Main component ────────────────────────────────────────────────────────────
+
+// ── Default inventory locations ──────────────────────────────────────────────
+const DEFAULT_INVENTORY_LOCATIONS = [
+  'Head Office - Islamabad',
+  'Branch - Karachi',
+  'Branch - Lahore',
+];
+
+// ── LocationSelector — dynamic, persisted to Firestore ───────────────────────
+function LocationSelector({
+  value, onChange,
+}: { value: string; onChange: (v: string) => void }) {
+  const [locations,    setLocations]    = React.useState<string[]>(DEFAULT_INVENTORY_LOCATIONS);
+  const [addingNew,    setAddingNew]    = React.useState(false);
+  const [newLocation,  setNewLocation]  = React.useState('');
+  const [saving,       setSaving]       = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Load saved custom locations from Firestore on mount
+  React.useEffect(() => {
+    getDoc(doc(db, 'appConfig', 'inventoryLocations'))
+      .then(snap => {
+        if (snap.exists()) {
+          const saved = snap.data().list as string[] || [];
+          setLocations([...new Set([...DEFAULT_INVENTORY_LOCATIONS, ...saved])].sort());
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  React.useEffect(() => { if (addingNew) inputRef.current?.focus(); }, [addingNew]);
+
+  const saveNewLocation = async () => {
+    const trimmed = newLocation.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    const updated = [...new Set([...locations, trimmed])].sort();
+    setLocations(updated);
+    onChange(trimmed);
+    try {
+      await setDoc(doc(db, 'appConfig', 'inventoryLocations'), { list: updated }, { merge: true });
+    } catch (err) {
+      console.error('[Location] Save failed:', err);
+    }
+    setNewLocation('');
+    setAddingNew(false);
+    setSaving(false);
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Primary Location</label>
+      {addingNew ? (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={newLocation}
+            onChange={e => setNewLocation(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveNewLocation(); if (e.key === 'Escape') setAddingNew(false); }}
+            className="flex-1 px-3 py-2 border-2 border-indigo-400 rounded-lg text-sm outline-none"
+            placeholder="e.g. Branch - Faisalabad"
+          />
+          <button type="button" onClick={saveNewLocation} disabled={saving || !newLocation.trim()}
+            className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+            {saving ? '…' : 'Save'}
+          </button>
+          <button type="button" onClick={() => setAddingNew(false)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-600">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+          >
+            <option value="">Select location</option>
+            {locations.map(loc => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+          <button type="button" onClick={() => setAddingNew(true)}
+            className="px-3 py-2 border border-dashed border-indigo-400 rounded-lg text-sm font-semibold text-indigo-600 hover:bg-indigo-50 whitespace-nowrap">
+            + Add New
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function CreateInventoryView({
   formData,
@@ -283,17 +376,10 @@ export function CreateInventoryView({
 
         {/* ── Primary Location ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Primary Location</label>
-          <select
+          <LocationSelector
             value={formData.location || ''}
-            onChange={e => setField('location', e.target.value)}
-            className={inputCls()}
-          >
-            <option value="">Select location</option>
-            {INVENTORY_LOCATIONS.map(loc => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
+            onChange={loc => setField('location', loc)}
+          />
         </div>
 
         {/* ── Status ── */}

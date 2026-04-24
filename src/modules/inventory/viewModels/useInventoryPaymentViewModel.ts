@@ -12,16 +12,20 @@ import {
 } from '../models/types';
 import { InventoryFirebaseService, generateInventoryTransactionId } from '../models/InventoryFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
 import { CashFirebaseService } from '../../banking/models/cashFirebaseService';
 import { Bank } from '../../banking/models/types';
 import { createTransactionFromInventory, TxCompany } from '../../transactions/models/TransactionBridgeService';
 
-export const INVENTORY_COMPANIES: { id: string; label: string; value: TxCompany }[] = [
-  { id: 'isb', label: 'Islamabad',  value: 'Pakistan Detector Technologies Pvt. Ltd - Islamabad'  },
-  { id: 'rwp', label: 'Rawalpindi', value: 'Pakistan Detector Technologies Pvt. Ltd - Rawalpindi' },
-  { id: 'lhr', label: 'Lahore',     value: 'Pakistan Detector Technologies Pvt. Ltd - Lahore'     },
-  { id: 'oth', label: 'Other',      value: 'Pakistan Detector Technologies Pvt. Ltd - Other'      },
-];
+export const DEFAULT_INVENTORY_BRANCHES = ['Islamabad', 'Karachi', 'Lahore'];
+const COMPANY_PREFIX = 'Pakistan Detector Technologies Pvt. Ltd - ';
+export function makeInventoryBranchValue(branch: string): TxCompany {
+  return `${COMPANY_PREFIX}${branch}` as TxCompany;
+}
+export function branchFromInventoryValue(value: string): string {
+  return value.replace(COMPANY_PREFIX, '');
+}
 
 export type PaymentStatusType = 'paid' | 'unpaid' | 'partial';
 export type PaymentMode = 'cash' | 'bank';
@@ -69,6 +73,8 @@ export interface UseInventoryPaymentViewModelReturn {
   // Branch/company for transaction linking
   inventoryCompany: TxCompany;
   setInventoryCompany: (v: TxCompany) => void;
+  inventoryBranches: string[];
+  handleAddInventoryBranch: (name: string) => Promise<void>;
 
   setPaymentStatus: (status: PaymentStatusType) => void;
   setTransactionId: (id: string) => void;
@@ -116,7 +122,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isSaving, setIsSaving]                         = useState(false);
-  const [inventoryCompany, setInventoryCompany]           = useState<TxCompany>(INVENTORY_COMPANIES[0].value);
+  const [inventoryCompany, setInventoryCompany]           = useState<TxCompany>(makeInventoryBranchValue(DEFAULT_INVENTORY_BRANCHES[0]));
+  const [inventoryBranches, setInventoryBranches]         = useState<string[]>(DEFAULT_INVENTORY_BRANCHES);
   const [isGeneratingId, setIsGeneratingId]             = useState(true);
   const [transactionId, setTransactionId]               = useState('');
   const [isEditingTransactionId, setIsEditingTransactionId] = useState(false);
@@ -130,6 +137,15 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       .then(setBanks)
       .catch(() => {})
       .finally(() => setIsBanksLoading(false));
+    // Load saved custom branches
+    getDoc(doc(db, 'appConfig', 'branches'))
+      .then(snap => {
+        if (snap.exists()) {
+          const saved = snap.data().list as string[] || [];
+          setInventoryBranches([...new Set([...DEFAULT_INVENTORY_BRANCHES, ...saved])].sort());
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // ── Payment mode & bank selection ─────────────────────────────────────────
@@ -514,6 +530,19 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     modelCount:        costingOption === 'with' ? costing?.models.length      : undefined,
   }), [brandName, modelName, category, stock, sellPrice, status, inventoryType, costingOption, costing, location]);
 
+  const handleAddInventoryBranch = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const updated = [...new Set([...inventoryBranches, trimmed])].sort();
+    setInventoryBranches(updated);
+    setInventoryCompany(makeInventoryBranchValue(trimmed));
+    try {
+      await setDoc(doc(db, 'appConfig', 'branches'), { list: updated }, { merge: true });
+    } catch (err) {
+      console.error('[Branch] Save failed:', err);
+    }
+  }, [inventoryBranches]);
+
   return {
     formData, costingOption, inventoryType, totalAmount,
     paymentStatus, transactionId, isGeneratingId,
@@ -525,6 +554,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     banks, isBanksLoading,
     installments, addInstallment, removeInstallment, updateInstallment, instalmentTotal,
     inventoryCompany, setInventoryCompany,
+    inventoryBranches, handleAddInventoryBranch,
     setPaymentStatus, setTransactionId, setPaidAmount,
     handleSubmit, handleBack, formatCurrency, productSummary,
   };

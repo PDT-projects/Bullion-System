@@ -178,7 +178,9 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
 
   // Company name centred on full page width
   doc.setFont('helvetica', 'bold'); doc.setFontSize(15); st(doc, DARK);
-  doc.text('Pakistan Detector Technologies Pvt. Ltd - Islamabad', PW / 2, y + 7, { align: 'center' });
+  // Use dynamic branch from invoice — fallback to Islamabad
+  const branchName = (invoice as any).branch || 'Islamabad';
+  doc.text(`Pakistan Detector Technologies Pvt. Ltd - ${branchName}`, PW / 2, y + 7, { align: 'center' });
 
   // Address centred
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); st(doc, GRAY);

@@ -33,13 +33,16 @@ import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/Commissionautoservice';
 import { createTransactionFromInvoice, TxCompany } from '../../transactions/models/TransactionBridgeService';
 
-// Branch/office options — must match TransactionBridgeService.TxCompany
-export const INVOICE_COMPANIES: { id: string; label: string; value: TxCompany }[] = [
-  { id: 'isb', label: 'Islamabad',  value: 'Pakistan Detector Technologies Pvt. Ltd - Islamabad'  },
-  { id: 'rwp', label: 'Rawalpindi', value: 'Pakistan Detector Technologies Pvt. Ltd - Rawalpindi' },
-  { id: 'lhr', label: 'Lahore',     value: 'Pakistan Detector Technologies Pvt. Ltd - Lahore'     },
-  { id: 'oth', label: 'Other',      value: 'Pakistan Detector Technologies Pvt. Ltd - Other'      },
-];
+// Default branches — always available even before Firestore loads
+export const DEFAULT_BRANCHES = ['Islamabad', 'Karachi', 'Lahore'];
+const COMPANY_PREFIX = 'Pakistan Detector Technologies Pvt. Ltd - ';
+
+export function makeBranchValue(branch: string): TxCompany {
+  return `${COMPANY_PREFIX}${branch}` as TxCompany;
+}
+export function branchFromValue(value: string): string {
+  return value.replace(COMPANY_PREFIX, '');
+}
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; }
@@ -78,6 +81,8 @@ export interface UseInvoiceFormViewModelReturn {
   // Branch/company for transaction linking
   invoiceCompany: TxCompany;
   setInvoiceCompany: (v: TxCompany) => void;
+  branches: string[];
+  handleAddBranch: (name: string) => Promise<void>;
 }
 
 // ── Sequential invoice number generator ───────────────────────────────────────
@@ -160,7 +165,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [pdfGenerating,    setPdfGenerating]    = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [customCities,     setCustomCities]     = useState<Record<string, string[]>>({});
-  const [invoiceCompany,   setInvoiceCompany]   = useState<TxCompany>(INVOICE_COMPANIES[0].value);
+  const [invoiceCompany,   setInvoiceCompany]   = useState<TxCompany>(makeBranchValue(DEFAULT_BRANCHES[0]));
+  const [branches,         setBranches]         = useState<string[]>(DEFAULT_BRANCHES);
 
   const provinceCitiesMerged = useMemo(
     () => mergeCities(baseCities, customCities),
@@ -218,6 +224,15 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           !id ? generateSequentialInvoiceNumber().catch(() => 'INV-DRAFT') : Promise.resolve(''),
         ]);
 
+        // Load branches from Firestore
+        try {
+          const branchSnap = await getDoc(doc(db, 'appConfig', 'branches'));
+          if (branchSnap.exists()) {
+            const saved = branchSnap.data().list as string[] || DEFAULT_BRANCHES;
+            setBranches([...new Set([...DEFAULT_BRANCHES, ...saved])].sort());
+          }
+        } catch { /* use defaults */ }
+
         setCustomCities(customCitiesData);
         setAllInvoices(invoices);
         setActiveEmployees((employees as any[]).filter((e: any) => e.status === 'active'));
@@ -267,6 +282,22 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const setFormData = useCallback((data: Partial<Invoice>) => {
     setFormDataState(prev => ({ ...prev, ...data }));
   }, []);
+
+  // ── Custom branch — add + persist to Firestore ──────────────────────────────
+  const handleAddBranch = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const updated = [...new Set([...branches, trimmed])].sort();
+    setBranches(updated);
+    setInvoiceCompany(makeBranchValue(trimmed));
+    try {
+      await setDoc(doc(db, 'appConfig', 'branches'), { list: updated }, { merge: true });
+      toast.success(`Branch "${trimmed}" saved`);
+    } catch (err: any) {
+      console.error('[Branch] Firestore save failed:', err?.message);
+      toast.error('Branch added locally but could not save to database');
+    }
+  }, [branches]);
 
   // ── Custom city — add + persist immediately ───────────────────────────────
   const handleAddCustomCity = useCallback(async (province: string, city: string) => {
@@ -422,6 +453,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         paidAmount:             formData.paymentStatus === 'Full' ? total : formData.paidAmount,
         remainingAmount:        formData.paymentStatus === 'Full' ? 0 : formData.remainingAmount,
         digitalStamp:           formData.digitalStamp,
+        branch:                 branchFromValue(invoiceCompany),  // used in PDF header
       };
       await downloadInvoicePdf(previewInvoice);
     } catch (err) {
@@ -495,6 +527,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         collectionMethod:       formData.collectionMethod,
         deductionCharges:       formData.deductionCharges || 0,
         digitalStamp:           formData.digitalStamp,
+        branch:                 branchFromValue(invoiceCompany),  // used in PDF header
       };
 
       let savedId: string;
@@ -581,7 +614,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     } finally {
       setIsSaving(false);
     }
-  }, [formData, selectedProducts, total, isEditing, editingInvoice, allInvoices, navigate, generateAndSavePdf, toCustomerInvoice, invoiceCompany]);
+  }, [formData, selectedProducts, total, isEditing, editingInvoice, allInvoices, navigate, generateAndSavePdf, toCustomerInvoice, invoiceCompany, branches]);
 
   const handleCancel = useCallback(() => navigate('/invoices'), [navigate]);
 
@@ -601,5 +634,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     calculateTotal: () => total,
     formatCurrency,
     invoiceCompany, setInvoiceCompany,
+    branches, handleAddBranch,
   };
 }
