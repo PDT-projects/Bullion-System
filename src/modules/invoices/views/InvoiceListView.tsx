@@ -108,7 +108,7 @@ export function InvoiceListView({
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              {['Invoice #', 'Date', 'Customer', 'Products', 'Amount', 'Status', 'Actions'].map(h => (
+              {['Invoice #', 'Date', 'Customer', 'Products', 'Amount', 'Payment', 'Status', 'Actions'].map(h => (
                 <th key={h} className="px-4 py-3 text-left text-sm font-medium text-gray-700">{h}</th>
               ))}
             </tr>
@@ -116,7 +116,7 @@ export function InvoiceListView({
           <tbody className="divide-y divide-gray-200">
             {filteredInvoices.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                   <FileText className="mx-auto mb-3 text-gray-300" size={48} />
                   <p className="font-medium">No invoices found</p>
                   <p className="text-sm">Create your first invoice to get started</p>
@@ -132,6 +132,37 @@ export function InvoiceListView({
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">{invoice.products.length} item(s)</td>
                 <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(invoice.totalAmount)}</td>
+                {/* Payment details */}
+                <td className="px-4 py-3">
+                  {invoice.paymentMode === 'Online' || invoice.paymentMode === 'Cash' ? (
+                    <div className="flex flex-col gap-0.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold w-fit ${
+                        invoice.paymentMode === 'Cash'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-blue-50 text-blue-700 border border-blue-200'
+                      }`}>
+                        {invoice.paymentMode === 'Cash' ? '💵' : '🏦'} {invoice.paymentMode === 'Online' ? 'Bank' : 'Cash'}
+                      </span>
+                      {invoice.paymentMode === 'Online' && invoice.bankName && (
+                        <span className="text-xs text-gray-500 truncate max-w-[140px]" title={invoice.bankName}>
+                          {invoice.bankName}
+                        </span>
+                      )}
+                      {invoice.paymentMode === 'Online' && invoice.bankAccountNumber && (
+                        <span style={{fontSize:'9px'}} className="font-mono text-gray-400">
+                          {invoice.bankAccountNumber}
+                        </span>
+                      )}
+                      {invoice.paymentStatus === 'Partial' && (
+                        <span className="text-xs text-orange-600 font-medium">
+                          Partial · {formatCurrency(invoice.paidAmount || 0)} paid
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                     invoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
