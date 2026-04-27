@@ -325,10 +325,9 @@ export function TransactionListView({
 
       {/* Transaction Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="px-5 py-3 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900 mt-2 mb-1">
-            All Transactions ({filteredTransactions.length})
-          </h3>
+        <div className="px-6 py-5 border-b border-gray-200 bg-gray-50/60">
+          <h3 className="text-sm font-bold text-gray-900 tracking-tight">All Transactions</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{filteredTransactions.length} record{filteredTransactions.length !== 1 ? 's' : ''} found</p>
         </div>
 
         <div className="overflow-x-auto">
@@ -368,31 +367,28 @@ export function TransactionListView({
 
                       {/* TXN ID */}
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-xs font-mono ${isRejected ? 'text-red-400 line-through' : 'text-indigo-600'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-mono font-medium ${isRejected ? 'text-red-400 line-through' : 'text-indigo-500'}`}>
                             {t.transactionId || '—'}
                           </span>
                           {isRejected && (
-                            <span className="text-[10px] font-bold text-red-500 bg-red-100 px-1 py-0.5 rounded uppercase tracking-wide">
+                            <span style={{fontSize:'9px'}} className="font-bold text-red-600 bg-red-50 border border-red-300 px-1.5 py-px rounded uppercase tracking-widest">
                               Rejected
                             </span>
                           )}
                           {isPendingApproval && (
-                            <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded uppercase tracking-wide">
+                            <span style={{fontSize:'9px'}} className="font-bold text-amber-600 bg-amber-50 border border-amber-300 px-1.5 py-px rounded uppercase tracking-widest">
                               Pending
                             </span>
                           )}
-                          {/* Source badge — shows origin of auto-created transactions */}
                           {(t as any).linkedType === 'invoice' && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-blue-600">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              invoice
+                            <span style={{fontSize:'9px'}} className="font-bold text-sky-600 bg-sky-50 border border-sky-300 px-1.5 py-px rounded uppercase tracking-widest">
+                              Invoice
                             </span>
                           )}
                           {(t as any).linkedType === 'inventory' && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-pink-600">
-                              <span className="w-1.5 h-1.5 rounded-full bg-pink-500" />
-                              inventory
+                            <span style={{fontSize:'9px'}} className="font-bold text-violet-600 bg-violet-50 border border-violet-300 px-1.5 py-px rounded uppercase tracking-widest">
+                              Inventory
                             </span>
                           )}
                         </div>
@@ -651,8 +647,12 @@ export function TransactionListView({
                     </span>
                   )}
                   {viewTransaction.linkedType && viewTransaction.linkedType !== 'manual' && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 capitalize">
-                      🔗 Linked: {viewTransaction.linkedType}
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold tracking-wide border uppercase ${
+                      viewTransaction.linkedType === 'invoice'
+                        ? 'bg-blue-50 text-blue-600 border-blue-200'
+                        : 'bg-violet-50 text-violet-600 border-violet-200'
+                    }`}>
+                      {viewTransaction.linkedType === 'invoice' ? '🧾' : '📦'} {viewTransaction.linkedType}
                     </span>
                   )}
                 </div>
