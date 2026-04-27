@@ -38,7 +38,7 @@ export interface Invoice {
   clientDealBy?: string;
   referralBy?: string;
   createdBy?: string;
-  paymentMode?: 'Cash' | 'Online';
+  paymentMode?: 'Cash' | 'Online' | 'Cheque';
   bankId?: string;
   bankName?: string;
   bankAccountNumber?: string;
@@ -151,6 +151,7 @@ export interface ProvinceCities {
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
+import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 
 // Canonical branch cities — normalise any casing/spacing variant to these
 const ALLOWED_CITIES = ['Islamabad', 'Karachi', 'Lahore'] as const;
@@ -180,6 +181,8 @@ interface ViewModelProps {
   // Dropdown options built from live data
   availableCities: string[];
   availableSalespersons: string[];
+  // id → display name map for salespersons
+  salespersonMap: Record<string, string>;
   // Actions
   onViewInvoice: (invoice: Invoice) => void;
   onCloseView: () => void;
@@ -204,6 +207,7 @@ export function useInvoiceListViewModel(): ViewModelProps {
   });
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [salespersonMap, setSalespersonMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function fetchInvoices() {
@@ -218,6 +222,22 @@ export function useInvoiceListViewModel(): ViewModelProps {
       }
     }
     fetchInvoices();
+  }, []);
+
+  useEffect(() => {
+    async function fetchEmployees() {
+      try {
+        const employees = await EmployeeFirebaseService.fetchAllEmployees();
+        const map: Record<string, string> = {};
+        employees.forEach(emp => {
+          if (emp.id) map[emp.id] = emp.name;
+        });
+        setSalespersonMap(map);
+      } catch (error) {
+        console.error('Failed to fetch employees for salesperson map:', error);
+      }
+    }
+    fetchEmployees();
   }, []);
 
   // ── Dropdown options ──────────────────────────────────────────────────
@@ -348,6 +368,7 @@ export function useInvoiceListViewModel(): ViewModelProps {
     onClearFilters,
     availableCities,
     availableSalespersons,
+    salespersonMap,
     onViewInvoice,
     onCloseView,
     onEditInvoice,
