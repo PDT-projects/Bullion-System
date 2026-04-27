@@ -166,6 +166,13 @@ export interface AppNotification {
   expiresAt?: string;
 }
 
+// ── Company / Branch (user-managed, stored in Firestore /companies) ───────────
+export interface Company {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 export const COMPANIES = [

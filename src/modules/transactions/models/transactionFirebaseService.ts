@@ -13,6 +13,7 @@ const COLLECTION       = 'transactions';
 const COUNTER_COL      = 'transactionCounters';
 const NOTIF_COLLECTION = 'appNotifications';
 const CATEGORIES_COL   = 'dynamicCategories';
+const COMPANIES_COL    = 'companies';
 
 // ── Deep strip of undefined values ───────────────────────────────────────────
 function deepStripUndefined(value: any): any {
@@ -421,5 +422,31 @@ export class TransactionFirebaseService {
   /** Delete a dynamic category */
   static async deleteDynamicCategory(id: string): Promise<void> {
     await deleteDoc(doc(db, CATEGORIES_COL, id));
+  }
+
+  // ── Companies / Branches ──────────────────────────────────────────────────
+
+  /** Fetch all companies/branches from Firestore */
+  static async fetchCompanies(): Promise<{ id: string; name: string; createdAt: string }[]> {
+    try {
+      const snap = await getDocs(collection(db, COMPANIES_COL));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as { id: string; name: string; createdAt: string }));
+    } catch (error) {
+      console.error('❌ Error fetching companies:', error);
+      return [];
+    }
+  }
+
+  /** Add a new company/branch */
+  static async addCompany(name: string): Promise<{ id: string; name: string; createdAt: string }> {
+    const data = { name: name.trim(), createdAt: new Date().toISOString() };
+    const ref = await addDoc(collection(db, COMPANIES_COL), deepStripUndefined(data));
+    console.log('✅ Company added:', ref.id);
+    return { ...data, id: ref.id };
+  }
+
+  /** Delete a company/branch */
+  static async deleteCompany(id: string): Promise<void> {
+    await deleteDoc(doc(db, COMPANIES_COL, id));
   }
 }

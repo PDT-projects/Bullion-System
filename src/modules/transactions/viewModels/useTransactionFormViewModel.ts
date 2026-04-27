@@ -8,7 +8,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES, DynamicCategory, PLMainCategory, BSMainCategory } from '../models/types';
+import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES, DynamicCategory, PLMainCategory, BSMainCategory, Company } from '../models/types';
 import { formatCurrency } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
@@ -82,6 +82,9 @@ export interface UseTransactionFormViewModelReturn {
   onAddBSMainCategory: (name: string) => Promise<string | null>;
   onAddBSSubCategory: (parentCategory: string, name: string) => Promise<string | null>;
   onDeleteBSCategory: (id: string) => Promise<void>;
+  // Companies / Branches
+  companies: Company[];
+  onAddCompany: (name: string) => Promise<string | null>;
 }
 
 const emptyItem = (type: string): TransactionItem => ({
@@ -157,6 +160,10 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [plSubCategory,        setPlSubCategory]        = useState('');
   const [bsMainCategory,       setBsMainCategoryState]  = useState<BSMainCategory | ''>('');
   const [bsSubCategory,        setBsSubCategory]        = useState('');
+  // Companies / Branches — merged from static seed + Firestore
+  const [companies, setCompanies] = useState<Company[]>(
+    COMPANIES.map(c => ({ ...c, createdAt: 'static' }))
+  );
 
   // ── Load banks + existing transaction (edit mode) ──────────────────────
   useEffect(() => {
@@ -171,6 +178,18 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
         setDynamicSubCategories(dynCats.filter(d => d.type === 'subCategory' || d.type === 'mainCategory'));
         setDynamicPLCategories(dynCats.filter(d => d.type === 'plMainCategory' || d.type === 'plSubCategory'));
         setDynamicBSCategories(dynCats.filter(d => d.type === 'bsMainCategory' || d.type === 'bsSubCategory'));
+
+        // Load companies from Firestore and merge with static seed
+        const firestoreCompanies = await TransactionFirebaseService.fetchCompanies().catch(() => []);
+        setCompanies(prev => {
+          const merged = [...prev];
+          firestoreCompanies.forEach(fc => {
+            if (!merged.find(m => m.id === fc.id)) {
+              merged.push(fc);
+            }
+          });
+          return merged;
+        });
 
         if (id) {
           const tx = await TransactionFirebaseService.fetchTransactionById(id);
@@ -699,6 +718,19 @@ const getSuggestedClassification = (
     }
   }, []);
 
+  /** Add a new company/branch to Firestore */
+  const onAddCompany = useCallback(async (name: string): Promise<string | null> => {
+    try {
+      const created = await TransactionFirebaseService.addCompany(name);
+      setCompanies(prev => [...prev, created]);
+      toast.success(`Company "${name}" saved`);
+      return created.id;
+    } catch {
+      toast.error('Failed to save company');
+      return null;
+    }
+  }, []);
+
   const formatDateDisplay = useCallback((d: string) =>
     d ? new Date(d).toLocaleDateString('en-PK', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -726,5 +758,6 @@ const getSuggestedClassification = (
     dynamicSubCategories, onAddSubCategory, onDeleteSubCategory,
     dynamicPLCategories, onAddPLMainCategory, onAddPLSubCategory, onDeletePLCategory,
     dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
+    companies, onAddCompany,
   };
 }

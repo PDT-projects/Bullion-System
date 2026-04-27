@@ -6,7 +6,7 @@ import {
   Upload, Calculator, User, Users, CheckCircle, AlertCircle, Repeat, Loader2,
   Hash, Edit2, Check, X, CreditCard, Lock, BarChart2,
 } from 'lucide-react';
-import { COMPANIES, SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory } from '../models/types';
+import { SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory } from '../models/types';
 import { UseTransactionFormViewModelReturn } from '../viewModels/useTransactionFormViewModel';
 
 interface Props extends UseTransactionFormViewModelReturn {}
@@ -31,6 +31,7 @@ export function TransactionFormView({
   dynamicPLCategories, onAddPLMainCategory, onAddPLSubCategory, onDeletePLCategory,
   dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
   bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
+  companies, onAddCompany,
 }: Props) {
   const [saveAttempted,    setSaveAttempted]    = useState(false);
   const [addingSubCatFor,  setAddingSubCatFor]  = useState<string | null>(null);
@@ -50,6 +51,10 @@ export function TransactionFormView({
   const [addingBSSub,      setAddingBSSub]      = useState(false);
   const [newBSSubName,     setNewBSSubName]     = useState('');
   const [savingBSSub,      setSavingBSSub]      = useState(false);
+  // Company inline-add state
+  const [addingCompany,    setAddingCompany]    = useState(false);
+  const [newCompanyName,   setNewCompanyName]   = useState('');
+  const [savingCompany,    setSavingCompany]    = useState(false);
 
   if (isLoading) {
     return (
@@ -105,6 +110,16 @@ export function TransactionFormView({
     setNewBSMainName('');
     setAddingBSMain(false);
     setSavingBSMain(false);
+  };
+
+  const handleAddCompany = async () => {
+    if (!newCompanyName.trim()) return;
+    setSavingCompany(true);
+    const added = await onAddCompany(newCompanyName.trim());
+    if (added) setOffice(added);
+    setNewCompanyName('');
+    setAddingCompany(false);
+    setSavingCompany(false);
   };
 
   const handleAddBSSub = async () => {
@@ -191,9 +206,46 @@ export function TransactionFormView({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={lbl}>Office/Branch *</label>
-              <select value={office} onChange={e => setOffice(e.target.value)} className={inp}>
-                {COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              {addingCompany ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={newCompanyName}
+                    onChange={e => setNewCompanyName(e.target.value)}
+                    placeholder="New company name..."
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { handleAddCompany(); }
+                      if (e.key === 'Escape') { setAddingCompany(false); setNewCompanyName(''); }
+                    }}
+                    className="flex-1 px-3 py-2 border border-indigo-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  />
+                  <button type="button" disabled={savingCompany || !newCompanyName.trim()}
+                    onClick={handleAddCompany}
+                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    {savingCompany ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  </button>
+                  <button type="button"
+                    onClick={() => { setAddingCompany(false); setNewCompanyName(''); }}
+                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select value={office} onChange={e => setOffice(e.target.value)} className={`flex-1 ${inp}`}>
+                    {companies.map((c: {id: string; name: string}) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    title="Add new company"
+                    onClick={() => { setAddingCompany(true); setNewCompanyName(''); }}
+                    className="p-2 text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors shrink-0"
+                  >
+                    <Plus size={15} />
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <label className={lbl}>

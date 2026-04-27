@@ -157,7 +157,6 @@ export function TransactionListView({
         ))}
       </div>
 
-      {/* Pending-approval notice banner — shown only when there are unapproved transactions */}
       {stats.pendingApprovalCount > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
           <ShieldAlert size={18} className="shrink-0 text-amber-500" />
@@ -385,13 +384,15 @@ export function TransactionListView({
                           )}
                           {/* Source badge — shows origin of auto-created transactions */}
                           {(t as any).linkedType === 'invoice' && (
-                            <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase tracking-wide">
-                              Invoice
+                            <span className="inline-flex items-center gap-1 text-[10px] text-blue-600">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              invoice
                             </span>
                           )}
                           {(t as any).linkedType === 'inventory' && (
-                            <span className="text-[10px] font-bold text-violet-600 bg-violet-100 px-1.5 py-0.5 rounded uppercase tracking-wide">
-                              Inventory
+                            <span className="inline-flex items-center gap-1 text-[10px] text-pink-600">
+                              <span className="w-1.5 h-1.5 rounded-full bg-pink-500" />
+                              inventory
                             </span>
                           )}
                         </div>
@@ -567,19 +568,25 @@ export function TransactionListView({
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-mono rounded-full tracking-wide">
                     {viewTransaction.transactionId || '—'}
-                    {(viewTransaction as any).linkedType && (
-                      <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                        (viewTransaction as any).linkedType === 'invoice'
-                          ? 'bg-blue-100 text-blue-700'
-                          : (viewTransaction as any).linkedType === 'inventory'
-                          ? 'bg-violet-100 text-violet-700'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {(viewTransaction as any).linkedType}
-                        {(viewTransaction as any).linkedId ? ` — ${(viewTransaction as any).linkedId}` : ''}
-                      </span>
-                    )}
                   </span>
+                  {(viewTransaction as any).linkedType && (
+                    <span className={`inline-flex items-center gap-1 text-[10px] ${
+                      (viewTransaction as any).linkedType === 'invoice'
+                        ? 'text-blue-600'
+                        : (viewTransaction as any).linkedType === 'inventory'
+                        ? 'text-pink-600'
+                        : 'text-gray-500'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        (viewTransaction as any).linkedType === 'invoice'
+                          ? 'bg-blue-500'
+                          : (viewTransaction as any).linkedType === 'inventory'
+                          ? 'bg-pink-500'
+                          : 'bg-gray-400'
+                      }`} />
+                      {(viewTransaction as any).linkedType}
+                    </span>
+                  )}
                   <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-full">
                     {viewTransaction.mainCategory}
                   </span>
