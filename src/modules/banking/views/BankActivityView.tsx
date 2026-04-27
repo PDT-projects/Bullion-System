@@ -80,10 +80,10 @@ export function BankActivityView() {
   ].filter(Boolean).length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', backgroundColor: '#f8fafc' }}>
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 24px' }}>
+      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 24px', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => navigate(-1)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
@@ -116,7 +116,7 @@ export function BankActivityView() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ flex: 1, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* ── Stats ──────────────────────────────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
@@ -215,11 +215,12 @@ export function BankActivityView() {
               <span style={{ fontSize: 13 }}>No activity found</span>
             </div>
           ) : (
+            <div style={{ overflowY: 'auto', maxHeight: '60vh' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f8fafc' }}>
                   {['Date', 'Type', 'Description', 'Reference', 'Mode / Bank', 'Amount', ''].map(h => (
-                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0' }}>
+                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, backgroundColor: '#f8fafc', zIndex: 1 }}>
                       {h}
                     </th>
                   ))}
@@ -297,6 +298,7 @@ export function BankActivityView() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 
