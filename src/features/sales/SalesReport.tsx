@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Invoice, Product } from '../../App';
 import {
   Calendar, MapPin, User, Filter, Download, FileSpreadsheet,
@@ -8,6 +8,7 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { EmployeeFirebaseService } from '../../modules/employee/models/employeeFirebaseService';
 
 type SalesReportProps = {
   invoices: Invoice[];
@@ -59,13 +60,31 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
   const [showVisualization, setShowVisualization] = useState(false);
   const [viewInvoice, setViewInvoice]             = useState<Invoice | null>(null);
 
+  // ── Fetch employees once to resolve salesperson UIDs → names ─────────
+  const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    EmployeeFirebaseService.fetchAllEmployees()
+      .then(list => setEmployees(list.map((e: any) => ({ id: e.id, name: e.name }))))
+      .catch(() => {});
+  }, []);
+
+  // Resolves a salesperson UID to a readable name using the employees list
+  const resolveName = (raw: string | undefined): string => {
+    if (!raw) return 'N/A';
+    const emp = employees.find(e => e.id === raw);
+    return emp ? emp.name : raw;
+  };
+
   const deliveryStatuses = ['Self-collect', 'LCS', 'Daewoo', 'Delivered'];
 
   const salespersons = useMemo(() => {
     const s = new Set<string>();
-    invoices.forEach(inv => { if (inv.salesperson) s.add(inv.salesperson.trim()); });
+    invoices.forEach(inv => {
+      const name = resolveName(inv.salesperson);
+      if (name && name !== 'N/A') s.add(name);
+    });
     return Array.from(s).sort();
-  }, [invoices]);
+  }, [invoices, employees]);
 
   // ── ONE row per invoice — branch derived from priority logic ─────────
   const salesData = useMemo(() => {
@@ -104,7 +123,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
         remainingAmount:       invoice.remainingAmount || 0,
         bankName:              invoice.bankName || '',
         bankAccountNumber:     invoice.bankAccountNumber || '',
-        salesperson:           invoice.salesperson || 'N/A',
+        salesperson:           resolveName(invoice.salesperson),
         salespersonLocation:   invoice.salespersonLocation || '',
         productLocation:       invoice.productLocation || '',
         clientDealBy:          invoice.clientDealBy || '',
@@ -112,7 +131,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
         createdBy:             invoice.createdBy || '',
       };
     });
-  }, [invoices]);
+  }, [invoices, employees]);
 
   // ── Branch summary — how many invoices per branch (for the branch cards) ─
   const branchSummary = useMemo(() => {

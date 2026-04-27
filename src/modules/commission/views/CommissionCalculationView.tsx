@@ -469,6 +469,11 @@ export function CommissionCalculationView({
                   <option key={city} value={city}>{city}</option>
                 ))}
               </select>
+              {selectedCity === 'Islamabad' && (
+                <p className="mt-1.5 text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+                  ⭐ <strong>Uzair Naseem</strong> will have his commission calculated on pooled sales: Islamabad + Karachi + Lahore combined.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -524,9 +529,39 @@ export function CommissionCalculationView({
           </div>
           <div className="divide-y divide-gray-100">
             {invoiceBreakdowns.map((breakdown) => (
-              <div key={breakdown.salespersonId}>
+              <div key={breakdown.salespersonId} className={breakdown.isPooled ? 'bg-indigo-50/30' : ''}>
+
+                {/* ── Pooled commission banner (Uzair Naseem only) ── */}
+                {breakdown.isPooled && breakdown.pooledCitySales && (
+                  <div className="mx-5 mt-4 mb-2 bg-white border-2 border-indigo-300 rounded-xl overflow-hidden shadow-sm">
+                    {/* Banner header row */}
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600">
+                      <span className="text-white text-sm font-bold">⭐ Pooled Commission</span>
+                      <span className="text-indigo-200 text-xs font-medium">
+                        — Islamabad + Karachi + Lahore combined for slab matching
+                      </span>
+                    </div>
+                    {/* City breakdown cards */}
+                    <div className="grid grid-cols-3 divide-x divide-indigo-100 bg-white">
+                      {breakdown.pooledCitySales.map(p => (
+                        <div key={p.city} className="px-4 py-3">
+                          <p className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest mb-1">{p.city}</p>
+                          <p className="text-base font-bold text-gray-900">{formatCurrency(p.amount)}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{p.invoiceCount} invoice{p.invoiceCount !== 1 ? 's' : ''}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Combined total footer */}
+                    <div className="flex items-center justify-between px-4 py-2 bg-indigo-50 border-t border-indigo-200">
+                      <span className="text-xs font-semibold text-indigo-700">Combined Total (slab lookup basis)</span>
+                      <span className="text-sm font-black text-indigo-700">{formatCurrency(breakdown.totalSales)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Salesperson toggle row ── */}
                 <button
-                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors text-left"
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-white/60 transition-colors text-left"
                   onClick={() => toggleBreakdown(breakdown.salespersonId)}
                 >
                   <div className="flex items-center gap-3">
@@ -538,22 +573,26 @@ export function CommissionCalculationView({
                       <p className="text-sm font-semibold text-gray-900">{breakdown.salespersonName}</p>
                       <p className="text-xs text-gray-500">
                         {breakdown.invoiceCount} invoice{breakdown.invoiceCount !== 1 ? 's' : ''}
+                        {breakdown.isPooled && (
+                          <span className="ml-1.5 inline-flex items-center gap-1 text-indigo-600 font-semibold">
+                            · pooled: all 3 cities
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    {/* Progress bar toward slab */}
                     <div className="flex items-center gap-3 mb-1">
                       <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-[#4f46e5] to-purple-500 rounded-full"
+                          className={`h-full rounded-full ${breakdown.isPooled ? 'bg-gradient-to-r from-indigo-500 to-purple-600' : 'bg-gradient-to-r from-[#4f46e5] to-purple-500'}`}
                           style={{ width: `${breakdown.slabProgressPercent}%` }}
                         />
                       </div>
                       <span className="text-xs text-gray-500">{breakdown.slabProgressPercent}%</span>
                     </div>
                     <p className="text-sm font-bold text-gray-900">{formatCurrency(breakdown.totalSales)}</p>
-                    <p className="text-xs text-gray-500">total sales</p>
+                    <p className="text-xs text-gray-500">{breakdown.isPooled ? 'combined sales' : 'total sales'}</p>
                   </div>
                 </button>
 
@@ -702,7 +741,17 @@ export function CommissionCalculationView({
                       {commissionData.map((commission) => (
                         <tr key={commission.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                            {getEmployeeName(commission.salesperson)}
+                            <div>
+                              {getEmployeeName(commission.salesperson)}
+                              {commission.city?.includes('Pooled') && (
+                                <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">
+                                  ⭐ Pooled
+                                </span>
+                              )}
+                              {(commission as any).notes && (
+                                <p className="text-xs text-gray-400 mt-0.5 font-normal">{(commission as any).notes}</p>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
