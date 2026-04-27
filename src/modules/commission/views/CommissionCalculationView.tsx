@@ -8,7 +8,7 @@
 import {
   Calculator, X, Maximize2, Minimize2, Check,
   AlertCircle, Edit2, Save, XCircle, FileText,
-  Info, ChevronDown, ChevronRight, Receipt,
+  Info, ChevronDown, ChevronRight, Receipt, Search,
   TrendingUp, Clock, CheckCircle, RefreshCw,
   Zap, History, BarChart2,
 } from 'lucide-react';
@@ -89,6 +89,7 @@ export function CommissionCalculationView({
 }: CommissionCalculationViewProps) {
 
   const [activeTab, setActiveTab] = useState<'live' | 'history'>('live');
+  const [citySearch, setCitySearch] = useState('');
 
   const getEmployeeName = (id: string) =>
     employees.find(e => e.id === id)?.name || id;
@@ -96,17 +97,25 @@ export function CommissionCalculationView({
   const toggleBreakdown = (id: string) =>
     setExpandedSalesperson(expandedSalesperson === id ? null : id);
 
+  // Filter live commissions by city search
+  const filteredLiveCommissions = citySearch.trim()
+    ? liveCommissions.filter(c =>
+        c.city?.toLowerCase().includes(citySearch.trim().toLowerCase()) ||
+        c.salespersonName?.toLowerCase().includes(citySearch.trim().toLowerCase())
+      )
+    : liveCommissions;
+
   // Group live commissions by month for history view
   const byMonth: Record<string, Commission[]> = {};
-  liveCommissions.forEach((c) => {
+  filteredLiveCommissions.forEach((c) => {
     if (!byMonth[c.month]) byMonth[c.month] = [];
     byMonth[c.month].push(c);
   });
   const sortedMonths = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
 
-  const pendingCount    = liveCommissions.filter(c => c.status === 'Calculated').length;
-  const confirmedCount  = liveCommissions.filter(c => c.status === 'Confirmed').length;
-  const totalCommission = liveCommissions.reduce(
+  const pendingCount    = filteredLiveCommissions.filter(c => c.status === 'Calculated').length;
+  const confirmedCount  = filteredLiveCommissions.filter(c => c.status === 'Confirmed').length;
+  const totalCommission = filteredLiveCommissions.reduce(
     (s, c) => s + (c.overriddenCommissionAmount ?? c.calculatedCommissionAmount), 0
   );
 
@@ -194,14 +203,35 @@ export function CommissionCalculationView({
               History by Month
             </button>
           </div>
-          <button
-            onClick={refreshLiveCommissions}
-            disabled={liveCommissionsLoading}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors mb-2"
-          >
-            <RefreshCw size={14} className={liveCommissionsLoading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2 mb-2">
+            {/* City / salesperson search */}
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Filter by city or salesperson…"
+                value={citySearch}
+                onChange={e => setCitySearch(e.target.value)}
+                className="pl-8 pr-8 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] w-56"
+              />
+              {citySearch && (
+                <button
+                  onClick={() => setCitySearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={refreshLiveCommissions}
+              disabled={liveCommissionsLoading}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <RefreshCw size={14} className={liveCommissionsLoading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* ── LIVE TAB ── */}
@@ -212,12 +242,14 @@ export function CommissionCalculationView({
                 <RefreshCw size={20} className="animate-spin" />
                 Loading commissions...
               </div>
-            ) : liveCommissions.length === 0 ? (
+            ) : filteredLiveCommissions.length === 0 ? (
               <div className="text-center py-12">
                 <Zap size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500 font-medium">No commissions yet</p>
+                <p className="text-gray-500 font-medium">
+                  {citySearch ? `No commissions found for "${citySearch}"` : 'No commissions yet'}
+                </p>
                 <p className="text-sm text-gray-400 mt-1">
-                  Commissions appear here automatically when paid invoices are saved.
+                  {citySearch ? 'Try a different city or salesperson name' : 'Commissions appear here automatically when paid invoices are saved.'}
                 </p>
               </div>
             ) : (
@@ -252,7 +284,7 @@ export function CommissionCalculationView({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-orange-100 bg-white">
-                          {liveCommissions
+                          {filteredLiveCommissions
                             .filter(c => c.status === 'Calculated')
                             .map((c) => (
                               <tr key={c.id} className="hover:bg-orange-50 transition-colors">
@@ -310,7 +342,7 @@ export function CommissionCalculationView({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-green-100 bg-white">
-                          {liveCommissions
+                          {filteredLiveCommissions
                             .filter(c => c.status !== 'Calculated')
                             .map((c) => (
                               <tr key={c.id} className="hover:bg-green-50 transition-colors">

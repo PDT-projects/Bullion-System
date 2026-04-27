@@ -580,7 +580,9 @@ export function useCommissionCalculationViewModel(
             (linkedCount > 0 ? ` Linked to ${linkedCount} salary record(s).` : ' Ready for salary forms.')
           );
 
-          resetState();
+          // ✅ Keep results visible — do NOT resetState() here.
+          // User can see what was calculated and saved.
+          // They can manually cancel/clear using the Cancel button.
           await refreshLiveCommissions();
           onCommissionsSaved();
           return true;
