@@ -1,5 +1,4 @@
-// Invoice Module - Model Layer
-// Data interfaces and types
+// Invoice Module - ViewModel Layer
 
 export interface InvoiceProduct {
   id: string;
@@ -146,14 +145,23 @@ export interface ProvinceCities {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// VIEW MODEL - useInvoiceListViewModel
+// VIEW MODEL
 // ──────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
 
-// Props type matching InvoiceListView (inline to avoid circular imports)
+// Canonical branch cities — normalise any casing/spacing variant to these
+const ALLOWED_CITIES = ['Islamabad', 'Karachi', 'Lahore'] as const;
+
+function normalizeCity(raw: string): string {
+  if (!raw) return '';
+  const key = raw.trim().toLowerCase();
+  const match = ALLOWED_CITIES.find(c => c.toLowerCase() === key);
+  return match ?? raw.trim();
+}
+
 interface ViewModelProps {
   invoices: Invoice[];
   filteredInvoices: Invoice[];
@@ -161,25 +169,34 @@ interface ViewModelProps {
   filters: InvoiceFilters;
   viewingInvoice: Invoice | null;
   isLoading: boolean;
+  // Filter handlers — all six are now wired
   onSearch: (searchTerm: string) => void;
   onStatusFilter: (status: 'all' | 'Paid' | 'Unpaid') => void;
+  onCityFilter: (city: string) => void;
+  onSalespersonFilter: (sp: string) => void;
+  onDateFromFilter: (date: string) => void;
+  onDateToFilter: (date: string) => void;
+  onClearFilters: () => void;
+  // Dropdown options built from live data
+  availableCities: string[];
+  availableSalespersons: string[];
+  // Actions
   onViewInvoice: (invoice: Invoice) => void;
   onCloseView: () => void;
   onEditInvoice: (id: string) => void;
   onCreateInvoice: () => void;
+  // Formatters
   formatCurrency: (amount: number) => string;
   formatDate: (dateString: string) => string;
-
 }
 
 export function useInvoiceListViewModel(): ViewModelProps {
   const navigate = useNavigate();
 
-  // State
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filters, setFilters] = useState<InvoiceFilters>({
     searchTerm: '',
-    statusFilter: 'all' as const,
+    statusFilter: 'all',
     dateFrom: '',
     dateTo: '',
     cityFilter: '',
@@ -188,7 +205,6 @@ export function useInvoiceListViewModel(): ViewModelProps {
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch invoices
   useEffect(() => {
     async function fetchInvoices() {
       try {
@@ -204,83 +220,118 @@ export function useInvoiceListViewModel(): ViewModelProps {
     fetchInvoices();
   }, []);
 
-  // Computed filtered invoices
+  // ── Dropdown options ──────────────────────────────────────────────────
+  const availableCities = useMemo(() => {
+    // Always include the 3 canonical branch cities; add any extra cities found in data
+    const s = new Set<string>(ALLOWED_CITIES);
+    invoices.forEach(inv => {
+      const c = normalizeCity(inv.customerCity);
+      if (c) s.add(c);
+    });
+    return Array.from(s).sort();
+  }, [invoices]);
+
+  const availableSalespersons = useMemo(() => {
+    const s = new Set<string>();
+    invoices.forEach(inv => { if (inv.salesperson) s.add(inv.salesperson.trim()); });
+    return Array.from(s).sort();
+  }, [invoices]);
+
+  // ── Filtered invoices — ALL six filters active ────────────────────────
   const filteredInvoices = useMemo(() => {
     let result = [...invoices];
 
-    // Search filter
+    // 1. Free-text search across multiple fields
     if (filters.searchTerm.trim()) {
       const term = filters.searchTerm.toLowerCase();
-      result = result.filter(invoice =>
-        invoice.invoiceNumber.toLowerCase().includes(term) ||
-        invoice.customerName.toLowerCase().includes(term) ||
-        invoice.customerPhone.includes(term) ||
-        invoice.customerPhone2?.includes(term)
+      result = result.filter(inv =>
+        inv.invoiceNumber.toLowerCase().includes(term) ||
+        inv.customerName.toLowerCase().includes(term) ||
+        inv.customerPhone.includes(term) ||
+        (inv.customerPhone2 ?? '').includes(term) ||
+        (inv.salesperson ?? '').toLowerCase().includes(term) ||
+        (inv.customerCity ?? '').toLowerCase().includes(term)
       );
     }
 
-    // Status filter
+    // 2. Paid / Unpaid
     if (filters.statusFilter !== 'all') {
-      result = result.filter(invoice => invoice.status === filters.statusFilter);
+      result = result.filter(inv => inv.status === filters.statusFilter);
+    }
+
+    // 3. Date from (inclusive)
+    if (filters.dateFrom) {
+      result = result.filter(inv => inv.date >= filters.dateFrom);
+    }
+
+    // 4. Date to (inclusive)
+    if (filters.dateTo) {
+      result = result.filter(inv => inv.date <= filters.dateTo);
+    }
+
+    // 5. City — normalise both sides so any casing variant matches correctly
+    if (filters.cityFilter) {
+      const target = normalizeCity(filters.cityFilter).toLowerCase();
+      result = result.filter(inv =>
+        normalizeCity(inv.customerCity).toLowerCase() === target
+      );
+    }
+
+    // 6. Salesperson
+    if (filters.salespersonFilter) {
+      result = result.filter(inv =>
+        (inv.salesperson ?? '').trim() === filters.salespersonFilter
+      );
     }
 
     return result;
-  }, [invoices, filters.searchTerm, filters.statusFilter]);
+  }, [invoices, filters]);
 
-  // Computed stats
+  // ── Stats (from all invoices, not filtered) ───────────────────────────
   const stats: InvoiceStats = useMemo(() => {
     const totalCount = invoices.length;
     const paidCount = invoices.filter(i => i.status === 'Paid').length;
     const unpaidCount = invoices.filter(i => i.status === 'Unpaid').length;
-    const totalAmount = invoices.reduce((sum, i) => sum + i.totalAmount, 0);
-    const totalDeductionCharges = invoices.reduce((sum, i) => sum + i.deductionCharges, 0);
+    const totalAmount = invoices.reduce((s, i) => s + i.totalAmount, 0);
+    const totalDeductionCharges = invoices.reduce((s, i) => s + (i.deductionCharges || 0), 0);
     const netAmount = totalAmount - totalDeductionCharges;
-
     return { totalCount, paidCount, unpaidCount, totalAmount, totalDeductionCharges, netAmount };
   }, [invoices]);
 
-  // Handlers
-  const onSearch = useCallback((searchTerm: string) => {
-    setFilters(prev => ({ ...prev, searchTerm }));
-  }, []);
+  // ── Handlers ──────────────────────────────────────────────────────────
+  const onSearch = useCallback((searchTerm: string) =>
+    setFilters(prev => ({ ...prev, searchTerm })), []);
 
-  const onStatusFilter = useCallback((status: 'all' | 'Paid' | 'Unpaid') => {
-    setFilters(prev => ({ ...prev, statusFilter: status }));
-  }, []);
+  const onStatusFilter = useCallback((statusFilter: 'all' | 'Paid' | 'Unpaid') =>
+    setFilters(prev => ({ ...prev, statusFilter })), []);
 
-  const onViewInvoice = useCallback((invoice: Invoice) => {
-    setViewingInvoice(invoice);
-  }, []);
+  const onCityFilter = useCallback((cityFilter: string) =>
+    setFilters(prev => ({ ...prev, cityFilter })), []);
 
-  const onCloseView = useCallback(() => {
-    setViewingInvoice(null);
-  }, []);
+  const onSalespersonFilter = useCallback((salespersonFilter: string) =>
+    setFilters(prev => ({ ...prev, salespersonFilter })), []);
 
-  const onEditInvoice = useCallback((id: string) => {
-    navigate(`/invoices/${id}/edit`);
-  }, [navigate]);
+  const onDateFromFilter = useCallback((dateFrom: string) =>
+    setFilters(prev => ({ ...prev, dateFrom })), []);
 
-  const onCreateInvoice = useCallback(() => {
-    navigate('/invoices/new');
-  }, [navigate]);
+  const onDateToFilter = useCallback((dateTo: string) =>
+    setFilters(prev => ({ ...prev, dateTo })), []);
 
-  // Formatters
-  const formatCurrency = useCallback((amount: number) => {
-    return new Intl.NumberFormat('en-PK', {
-      style: 'currency',
-      currency: 'PKR',
-    }).format(amount);
-  }, []);
+  const onClearFilters = useCallback(() =>
+    setFilters({ searchTerm: '', statusFilter: 'all', dateFrom: '', dateTo: '', cityFilter: '', salespersonFilter: '' }),
+  []);
 
-  const formatDate = useCallback((dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  }, []);
+  const onViewInvoice = useCallback((invoice: Invoice) => setViewingInvoice(invoice), []);
+  const onCloseView = useCallback(() => setViewingInvoice(null), []);
+  const onEditInvoice = useCallback((id: string) => navigate(`/invoices/${id}/edit`), [navigate]);
+  const onCreateInvoice = useCallback(() => navigate('/invoices/new'), [navigate]);
 
-  // Return props for InvoiceListView
+  const formatCurrency = useCallback((amount: number) =>
+    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR' }).format(amount), []);
+
+  const formatDate = useCallback((dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }), []);
+
   return {
     invoices,
     filteredInvoices,
@@ -290,6 +341,13 @@ export function useInvoiceListViewModel(): ViewModelProps {
     isLoading,
     onSearch,
     onStatusFilter,
+    onCityFilter,
+    onSalespersonFilter,
+    onDateFromFilter,
+    onDateToFilter,
+    onClearFilters,
+    availableCities,
+    availableSalespersons,
     onViewInvoice,
     onCloseView,
     onEditInvoice,
@@ -297,6 +355,4 @@ export function useInvoiceListViewModel(): ViewModelProps {
     formatCurrency,
     formatDate,
   };
-
 }
-

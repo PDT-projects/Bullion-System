@@ -1,9 +1,9 @@
 // Invoice Module - List View
-// Change: added PDF download button in Actions column (generates PDF on-click via jsPDF)
 
 import React, { useState } from 'react';
 import {
-  FileText, Plus, Search, Eye, Edit, Trash2, X, Loader2, FileDown,
+  FileText, Plus, Search, Eye, Edit, X, Loader2, FileDown,
+  Filter, XCircle, Truck, CreditCard, Hash,
 } from 'lucide-react';
 import { Invoice, InvoiceStats, InvoiceFilters } from '../models/types';
 import { downloadInvoicePdf } from '../models/invoicePdfService';
@@ -15,23 +15,69 @@ interface Props {
   filters: InvoiceFilters;
   viewingInvoice: Invoice | null;
   isLoading: boolean;
+  // Filter handlers
   onSearch: (searchTerm: string) => void;
   onStatusFilter: (status: 'all' | 'Paid' | 'Unpaid') => void;
+  onCityFilter: (city: string) => void;
+  onSalespersonFilter: (sp: string) => void;
+  onDateFromFilter: (date: string) => void;
+  onDateToFilter: (date: string) => void;
+  onClearFilters: () => void;
+  // Dropdown options
+  availableCities: string[];
+  availableSalespersons: string[];
+  // id → display name map (e.g. { "cg68fp4Na9...": "Ali Hassan" })
+  salespersonMap?: Record<string, string>;
+  // Actions
   onViewInvoice: (invoice: Invoice) => void;
   onCloseView: () => void;
   onEditInvoice: (id: string) => void;
   onCreateInvoice: () => void;
   formatCurrency: (amount: number) => string;
   formatDate: (dateString: string) => string;
+}
 
+// Delivery status badge colours
+function deliveryBadge(status: string) {
+  const map: Record<string, string> = {
+    'Delivered':     'bg-green-100 text-green-800',
+    'Self-collect':  'bg-blue-100 text-blue-800',
+    'LCS':           'bg-yellow-100 text-yellow-800',
+    'Daewoo':        'bg-purple-100 text-purple-800',
+  };
+  return map[status] ?? 'bg-gray-100 text-gray-700';
+}
+
+function receivedBadge(status: string) {
+  const map: Record<string, string> = {
+    'Received':   'bg-green-100 text-green-800',
+    'In Process': 'bg-yellow-100 text-yellow-800',
+    'Pending':    'bg-gray-100 text-gray-600',
+  };
+  return map[status] ?? 'bg-gray-100 text-gray-600';
 }
 
 export function InvoiceListView({
   invoices, filteredInvoices, stats, filters, viewingInvoice, isLoading,
-  onSearch, onStatusFilter, onViewInvoice, onCloseView, onEditInvoice, onCreateInvoice,
+  onSearch, onStatusFilter, onCityFilter, onSalespersonFilter,
+  onDateFromFilter, onDateToFilter, onClearFilters,
+  availableCities, availableSalespersons,
+  salespersonMap = {},
+  onViewInvoice, onCloseView, onEditInvoice, onCreateInvoice,
   formatCurrency, formatDate,
 }: Props) {
-  // Track which invoice IDs are currently generating a PDF
+
+  // Resolve salesperson ID → display name
+  // If salespersonMap has the key, use it. If the value looks like a Firestore ID (>20 chars, no spaces), shorten it.
+  const spName = (idOrName: string | undefined): string => {
+    if (!idOrName) return '—';
+    if (salespersonMap[idOrName]) return salespersonMap[idOrName];
+    // Looks like a raw Firestore ID — show truncated until map is provided
+    const looksLikeId = idOrName.length > 15 && !/\s/.test(idOrName);
+    if (looksLikeId) return idOrName.slice(0, 8) + '…';
+    return idOrName;
+  };
+
   const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
 
   const handleDownloadPdf = async (invoice: Invoice) => {
@@ -42,13 +88,14 @@ export function InvoiceListView({
     } catch (err) {
       console.error('PDF generation failed:', err);
     } finally {
-      setGeneratingPdf(prev => {
-        const next = new Set(prev);
-        next.delete(invoice.id);
-        return next;
-      });
+      setGeneratingPdf(prev => { const n = new Set(prev); n.delete(invoice.id); return n; });
     }
   };
+
+  const hasActiveFilters =
+    filters.searchTerm || filters.statusFilter !== 'all' ||
+    filters.dateFrom || filters.dateTo ||
+    filters.cityFilter || filters.salespersonFilter;
 
   if (isLoading) {
     return (
@@ -59,234 +106,467 @@ export function InvoiceListView({
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
+    <div className="p-6 space-y-5">
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Invoices</h2>
-          <p className="text-gray-600">Manage sales invoices and track payments</p>
+          <p className="text-gray-500 text-sm mt-0.5">
+            {filteredInvoices.length} of {invoices.length} invoices shown
+          </p>
         </div>
         <button onClick={onCreateInvoice}
-          className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors">
-          <Plus size={20} /> Create Invoice
+          className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium">
+          <Plus size={18} /> Create Invoice
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Invoices', value: stats.totalCount,  color: 'text-gray-900' },
-          { label: 'Paid',           value: stats.paidCount,   color: 'text-green-600' },
-          { label: 'Unpaid',         value: stats.unpaidCount, color: 'text-red-600' },
-          { label: 'Total Amount',   value: formatCurrency(stats.totalAmount), color: 'text-gray-900' },
+          { label: 'Total Invoices', value: stats.totalCount,                       color: 'text-gray-900' },
+          { label: 'Paid',           value: stats.paidCount,                        color: 'text-green-600' },
+          { label: 'Unpaid',         value: stats.unpaidCount,                      color: 'text-red-600'   },
+          { label: 'Total Amount',   value: formatCurrency(stats.totalAmount),      color: 'text-gray-900'  },
         ].map(s => (
-          <div key={s.label} className="bg-white p-4 rounded-lg border border-gray-200">
-            <p className="text-sm text-gray-600">{s.label}</p>
-            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+          <div key={s.label} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-lg border border-gray-200">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <input type="text" placeholder="Search by invoice number, customer name, or phone..."
-            value={filters.searchTerm} onChange={e => onSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+      {/* ── Filter Bar ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Filter size={15} className="text-indigo-500" />
+          <span className="text-sm font-semibold text-gray-700">Filters</span>
+          {hasActiveFilters && (
+            <button onClick={onClearFilters}
+              className="ml-auto flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium">
+              <XCircle size={13} /> Clear all
+            </button>
+          )}
         </div>
-        <select value={filters.statusFilter} onChange={e => onStatusFilter(e.target.value as any)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
-          <option value="all">All Status</option>
-          <option value="Paid">Paid</option>
-          <option value="Unpaid">Unpaid</option>
-        </select>
+
+        {/* Row 1: Search + Status */}
+        <div className="flex flex-wrap gap-3">
+          <div className="flex-1 min-w-[220px] relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+            <input type="text"
+              placeholder="Search invoice, customer, phone, city…"
+              value={filters.searchTerm} onChange={e => onSearch(e.target.value)}
+              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+          </div>
+          <select value={filters.statusFilter} onChange={e => onStatusFilter(e.target.value as any)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] bg-white">
+            <option value="all">All Status</option>
+            <option value="Paid">Paid</option>
+            <option value="Unpaid">Unpaid</option>
+          </select>
+        </div>
+
+        {/* Row 2: City + Salesperson + Date range */}
+        <div className="flex flex-wrap gap-3">
+          {/* City / Branch */}
+          <select value={filters.cityFilter} onChange={e => onCityFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] bg-white">
+            <option value="">📍 All Cities</option>
+            {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          {/* Salesperson */}
+          <select value={filters.salespersonFilter} onChange={e => onSalespersonFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] bg-white">
+            <option value="">👤 All Salespersons</option>
+            {availableSalespersons.map(sp => <option key={sp} value={sp}>{spName(sp) || sp}</option>)}
+          </select>
+
+          {/* Date From */}
+          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#4f46e5]">
+            <span className="text-xs text-gray-400 font-medium whitespace-nowrap shrink-0">From</span>
+            <input type="date" value={filters.dateFrom} onChange={e => onDateFromFilter(e.target.value)}
+              className="text-sm outline-none bg-transparent w-36" />
+          </div>
+
+          {/* Date To */}
+          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#4f46e5]">
+            <span className="text-xs text-gray-400 font-medium whitespace-nowrap shrink-0">To</span>
+            <input type="date" value={filters.dateTo} onChange={e => onDateToFilter(e.target.value)}
+              className="text-sm outline-none bg-transparent w-36" />
+          </div>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              {['Invoice #', 'Date', 'Customer', 'Products', 'Amount', 'Payment', 'Status', 'Actions'].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-sm font-medium text-gray-700">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredInvoices.length === 0 ? (
+      {/* ── Table ── */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
-                  <FileText className="mx-auto mb-3 text-gray-300" size={48} />
-                  <p className="font-medium">No invoices found</p>
-                  <p className="text-sm">Create your first invoice to get started</p>
-                </td>
+                {[
+                  'Invoice #', 'Date', 'Customer', 'Branch / City',
+                  'Salesperson', 'Products', 'Amount', 'Delivery',
+                  'Payment', 'Status', 'Actions',
+                ].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                ))}
               </tr>
-            ) : filteredInvoices.map(invoice => (
-              <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-medium text-[#4f46e5]">{invoice.invoiceNumber}</td>
-                <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.date)}</td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-gray-900">{invoice.customerName}</p>
-                  <p className="text-sm text-gray-500">{invoice.customerPhone}</p>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-600">{invoice.products.length} item(s)</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(invoice.totalAmount)}</td>
-                {/* Payment details */}
-                <td className="px-4 py-3">
-                  {invoice.paymentMode === 'Online' || invoice.paymentMode === 'Cash' ? (
-                    <div className="flex flex-col gap-0.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold w-fit ${
-                        invoice.paymentMode === 'Cash'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-blue-50 text-blue-700 border border-blue-200'
-                      }`}>
-                        {invoice.paymentMode === 'Cash' ? '💵' : '🏦'} {invoice.paymentMode === 'Online' ? 'Bank' : 'Cash'}
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredInvoices.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="px-4 py-14 text-center text-gray-400">
+                    <FileText className="mx-auto mb-3 text-gray-300" size={44} />
+                    <p className="font-medium text-gray-500">No invoices found</p>
+                    <p className="text-xs mt-1">
+                      {hasActiveFilters ? 'Try adjusting your filters' : 'Create your first invoice to get started'}
+                    </p>
+                  </td>
+                </tr>
+              ) : filteredInvoices.map(invoice => (
+                <tr key={invoice.id} className="hover:bg-indigo-50/30 transition-colors">
+
+                  {/* Invoice # */}
+                  <td className="px-4 py-3 font-semibold text-[#4f46e5] whitespace-nowrap">
+                    {invoice.invoiceNumber}
+                  </td>
+
+                  {/* Date */}
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                    {formatDate(invoice.date)}
+                  </td>
+
+                  {/* Customer */}
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{invoice.customerName}</p>
+                    <p className="text-xs text-gray-400">{invoice.customerPhone}</p>
+                    {invoice.customerPhone2 && (
+                      <p className="text-xs text-gray-400">{invoice.customerPhone2}</p>
+                    )}
+                  </td>
+
+                  {/* Branch / City */}
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-800 text-sm">{invoice.customerCity || '—'}</p>
+                    {invoice.salespersonLocation && (
+                      <p className="text-xs text-gray-400 mt-0.5">{invoice.salespersonLocation}</p>
+                    )}
+                    {invoice.productLocation && (
+                      <p className="text-xs text-indigo-500 mt-0.5">Stock: {invoice.productLocation}</p>
+                    )}
+                  </td>
+
+                  {/* Salesperson */}
+                  <td className="px-4 py-3">
+                    {invoice.salesperson ? (
+                      <div>
+                        <p className="font-medium text-gray-800 text-sm">{spName(invoice.salesperson)}</p>
+                        {invoice.clientDealBy && (
+                          <p className="text-xs text-gray-400 mt-0.5">Deal: {spName(invoice.clientDealBy)}</p>
+                        )}
+                        {invoice.referralBy && (
+                          <p className="text-xs text-gray-400">Ref: {invoice.referralBy}</p>
+                        )}
+                      </div>
+                    ) : <span className="text-gray-300 text-sm">—</span>}
+                  </td>
+
+                  {/* Products */}
+                  <td className="px-4 py-3 text-gray-600">
+                    {invoice.products.length} item(s)
+                  </td>
+
+                  {/* Amount */}
+                  <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
+                    {formatCurrency(invoice.totalAmount)}
+                    {(invoice.deductionCharges || 0) > 0 && (
+                      <p className="text-xs text-red-500 font-normal">
+                        −{formatCurrency(invoice.deductionCharges)} deduction
+                      </p>
+                    )}
+                  </td>
+
+                  {/* Delivery */}
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${deliveryBadge(invoice.deliveryStatus)}`}>
+                      {invoice.deliveryStatus}
+                    </span>
+                    {invoice.deliveryReceivedStatus && (
+                      <span className={`block mt-1 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${receivedBadge(invoice.deliveryReceivedStatus)}`}>
+                        {invoice.deliveryReceivedStatus}
                       </span>
-                      {invoice.paymentMode === 'Online' && invoice.bankName && (
-                        <span className="text-xs text-gray-500 truncate max-w-[140px]" title={invoice.bankName}>
-                          {invoice.bankName}
+                    )}
+                  </td>
+
+                  {/* Payment */}
+                  <td className="px-4 py-3">
+                    {invoice.paymentMode ? (
+                      <div className="space-y-0.5">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          invoice.paymentMode === 'Cash'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-blue-50 text-blue-700 border border-blue-200'
+                        }`}>
+                          {invoice.paymentMode === 'Cash' ? '💵 Cash' : '🏦 Bank'}
                         </span>
-                      )}
-                      {invoice.paymentMode === 'Online' && invoice.bankAccountNumber && (
-                        <span style={{fontSize:'9px'}} className="font-mono text-gray-400">
-                          {invoice.bankAccountNumber}
-                        </span>
-                      )}
-                      {invoice.paymentStatus === 'Partial' && (
-                        <span className="text-xs text-orange-600 font-medium">
-                          Partial · {formatCurrency(invoice.paidAmount || 0)} paid
-                        </span>
-                      )}
+                        {invoice.paymentMode === 'Online' && invoice.bankName && (
+                          <p className="text-xs text-gray-400 truncate max-w-[120px]">{invoice.bankName}</p>
+                        )}
+                        {invoice.paymentStatus === 'Partial' && (
+                          <p className="text-xs text-orange-600 font-medium">
+                            Partial · {formatCurrency(invoice.paidAmount || 0)} paid
+                          </p>
+                        )}
+                      </div>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
+
+                  {/* Status */}
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      invoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {invoice.status}
+                    </span>
+                  </td>
+
+                  {/* Actions */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => onViewInvoice(invoice)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View">
+                        <Eye size={15} />
+                      </button>
+                      <button onClick={() => onEditInvoice(invoice.id)}
+                        className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Edit">
+                        <Edit size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPdf(invoice)}
+                        disabled={generatingPdf.has(invoice.id)}
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-40"
+                        title="Download PDF">
+                        {generatingPdf.has(invoice.id)
+                          ? <Loader2 size={15} className="animate-spin" />
+                          : <FileDown size={15} />}
+                      </button>
                     </div>
-                  ) : (
-                    <span className="text-xs text-gray-400">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    invoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {invoice.status}
-                  </span>
-                </td>
-                {/* ── Actions (View, Edit, PDF, Delete) ── */}
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => onViewInvoice(invoice)}
-                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View">
-                      <Eye size={16} />
-                    </button>
-                    <button onClick={() => onEditInvoice(invoice.id)}
-                      className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Edit">
-                      <Edit size={16} />
-                    </button>
-                    {/* PDF download — generates fresh via jsPDF */}
-                    <button
-                      onClick={() => handleDownloadPdf(invoice)}
-                      disabled={generatingPdf.has(invoice.id)}
-                      className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-40 transition-colors"
-                      title="Download PDF"
-                    >
-                      {generatingPdf.has(invoice.id)
-                        ? <Loader2 size={16} className="animate-spin" />
-                        : <FileDown size={16} />
-                      }
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* View Modal */}
+      {/* ── View Modal ── */}
       {viewingInvoice && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50 rounded-t-xl">
               <div>
-                <h3 className="text-xl font-bold">Invoice Details</h3>
+                <h3 className="text-lg font-bold text-gray-900">Invoice Details</h3>
                 <p className="text-xs text-gray-400 font-mono mt-0.5">{viewingInvoice.invoiceNumber}</p>
               </div>
               <div className="flex items-center gap-2">
-                {/* PDF download from modal */}
                 <button
                   onClick={() => handleDownloadPdf(viewingInvoice)}
                   disabled={generatingPdf.has(viewingInvoice.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-medium hover:bg-indigo-100 disabled:opacity-40 transition-colors"
-                  title="Download PDF"
-                >
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-medium hover:bg-indigo-100 disabled:opacity-40">
                   {generatingPdf.has(viewingInvoice.id)
-                    ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
-                    : <><FileDown size={15} /> Download PDF</>
-                  }
+                    ? <><Loader2 size={13} className="animate-spin" /> Generating…</>
+                    : <><FileDown size={14} /> Download PDF</>}
                 </button>
-                <button onClick={onCloseView} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><X size={24} /></button>
+                <button onClick={onCloseView} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg">
+                  <X size={20} />
+                </button>
               </div>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-sm text-gray-600">Invoice Number</p><p className="font-medium">{viewingInvoice.invoiceNumber}</p></div>
-                <div><p className="text-sm text-gray-600">Date</p><p className="font-medium">{formatDate(viewingInvoice.date)}</p></div>
-                <div>
-                  <p className="text-sm text-gray-600">Customer</p>
-                  <p className="font-medium">{viewingInvoice.customerName}</p>
-                  <p className="text-sm text-gray-500">{viewingInvoice.customerPhone}</p>
+
+            <div className="p-5 space-y-5">
+
+              {/* ── Customer & Invoice Info ── */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Customer & Invoice</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><p className="text-gray-500">Invoice #</p><p className="font-medium">{viewingInvoice.invoiceNumber}</p></div>
+                  <div><p className="text-gray-500">Date</p><p className="font-medium">{formatDate(viewingInvoice.date)}</p></div>
+                  <div>
+                    <p className="text-gray-500">Customer</p>
+                    <p className="font-medium">{viewingInvoice.customerName}</p>
+                    <p className="text-xs text-gray-400">{viewingInvoice.customerPhone}</p>
+                    {viewingInvoice.customerPhone2 && <p className="text-xs text-gray-400">{viewingInvoice.customerPhone2}</p>}
+                  </div>
+                  <div><p className="text-gray-500">CNIC</p><p className="font-medium font-mono text-xs">{viewingInvoice.customerCNIC}</p></div>
+                  <div>
+                    <p className="text-gray-500">Location</p>
+                    <p className="font-medium">{viewingInvoice.customerCity}{viewingInvoice.customerProvince ? `, ${viewingInvoice.customerProvince}` : ''}</p>
+                    {viewingInvoice.customerAddress && <p className="text-xs text-gray-400 mt-0.5">{viewingInvoice.customerAddress}</p>}
+                  </div>
+                  {viewingInvoice.warrantyLocation && (
+                    <div><p className="text-gray-500">Warranty Location</p><p className="font-medium">{viewingInvoice.warrantyLocation}</p></div>
+                  )}
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600">Status</p>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    viewingInvoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>{viewingInvoice.status}</span>
-                </div>
-                {viewingInvoice.salesperson && <div><p className="text-sm text-gray-600">Salesperson</p><p className="font-medium">{viewingInvoice.salesperson}</p></div>}
-                {viewingInvoice.customerCity && <div><p className="text-sm text-gray-600">City</p><p className="font-medium">{viewingInvoice.customerCity}</p></div>}
               </div>
-              <div className="border-t pt-4">
-                <p className="font-medium mb-3">Products</p>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50"><tr>
-                    <th className="px-3 py-2 text-left">Product</th>
-                    <th className="px-3 py-2 text-left">Qty</th>
-                    <th className="px-3 py-2 text-left">Serials</th>
-                    <th className="px-3 py-2 text-right">Total</th>
-                  </tr></thead>
-                  <tbody>{viewingInvoice.products.map((p, i) => (
-                    <tr key={i} className="border-b">
-                      <td className="px-3 py-2">{p.productName}</td>
-                      <td className="px-3 py-2">{p.quantity}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-1">
-                          {(p.serialNumbers || []).map(s => (
-                            <span key={s} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-mono">{s}</span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(p.total)}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-              <div className="border-t pt-4 space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span>{formatCurrency(viewingInvoice.totalAmount)}</span>
+
+              {/* ── Branch / Sales Info ── */}
+              {(viewingInvoice.salesperson || viewingInvoice.salespersonLocation || viewingInvoice.clientDealBy || viewingInvoice.referralBy || viewingInvoice.createdBy || viewingInvoice.productLocation) && (
+                <div className="bg-indigo-50 rounded-lg p-4">
+                  <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Building2 size={12} /> Branch & Sales Info
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {viewingInvoice.salesperson && (
+                      <div><p className="text-gray-500">Salesperson</p><p className="font-medium">{spName(viewingInvoice.salesperson)}</p></div>
+                    )}
+                    {viewingInvoice.salespersonLocation && (
+                      <div><p className="text-gray-500">Branch / Location</p><p className="font-medium">{viewingInvoice.salespersonLocation}</p></div>
+                    )}
+                    {viewingInvoice.clientDealBy && (
+                      <div><p className="text-gray-500">Client Deal By</p><p className="font-medium">{spName(viewingInvoice.clientDealBy)}</p></div>
+                    )}
+                    {viewingInvoice.referralBy && (
+                      <div><p className="text-gray-500">Referral By</p><p className="font-medium">{viewingInvoice.referralBy}</p></div>
+                    )}
+                    {viewingInvoice.createdBy && (
+                      <div><p className="text-gray-500">Created By</p><p className="font-medium">{spName(viewingInvoice.createdBy)}</p></div>
+                    )}
+                    {viewingInvoice.productLocation && (
+                      <div><p className="text-gray-500">Product / Stock Location</p><p className="font-medium">{viewingInvoice.productLocation}</p></div>
+                    )}
+                  </div>
                 </div>
-                {viewingInvoice.deductionCharges > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Deduction Charges</span>
-                    <span className="text-red-600">−{formatCurrency(viewingInvoice.deductionCharges)}</span>
+              )}
+
+              {/* ── Products ── */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Products</p>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Product</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Qty</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Serials</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewingInvoice.products.map((p, i) => (
+                        <tr key={i} className="border-b border-gray-100 last:border-0">
+                          <td className="px-3 py-2.5">
+                            <p className="font-medium text-gray-900">{p.productName}</p>
+                            {p.brandName && <p className="text-xs text-gray-400">{p.brandName} · {p.modelName}</p>}
+                            {p.category && <p className="text-xs text-gray-400">{p.category}</p>}
+                          </td>
+                          <td className="px-3 py-2.5 text-gray-700">{p.quantity} × {formatCurrency(p.price)}</td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex flex-wrap gap-1">
+                              {(p.serialNumbers || []).map(s => (
+                                <span key={s} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-mono">{s}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(p.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── Delivery ── */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-500 mb-1">Delivery Status</p>
+                  <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${deliveryBadge(viewingInvoice.deliveryStatus)}`}>
+                    {viewingInvoice.deliveryStatus}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-gray-500 mb-1">Received Status</p>
+                  <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${receivedBadge(viewingInvoice.deliveryReceivedStatus)}`}>
+                    {viewingInvoice.deliveryReceivedStatus}
+                  </span>
+                </div>
+                {viewingInvoice.collectionMethod && (
+                  <div>
+                    <p className="text-gray-500 mb-1">Collection Method</p>
+                    <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
+                      {viewingInvoice.collectionMethod}
+                    </span>
                   </div>
                 )}
-                <div className="flex justify-between items-center pt-2 border-t">
-                  <p className="text-lg font-bold">Net Total</p>
-                  <p className="text-2xl font-bold text-[#4f46e5]">
-                    {formatCurrency(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
-                  </p>
+              </div>
+
+              {/* ── Payment ── */}
+              <div className="bg-green-50 rounded-lg p-4">
+                <p className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <CreditCard size={12} /> Payment Details
+                </p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">Pay Status</p>
+                    <span className={`inline-flex mt-0.5 px-2 py-0.5 rounded-full text-xs font-bold ${
+                      viewingInvoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>{viewingInvoice.status}</span>
+                  </div>
+                  {viewingInvoice.paymentMode && (
+                    <div><p className="text-gray-500">Mode</p><p className="font-medium">{viewingInvoice.paymentMode}</p></div>
+                  )}
+                  {viewingInvoice.paymentStatus && (
+                    <div><p className="text-gray-500">Full / Partial</p><p className="font-medium">{viewingInvoice.paymentStatus}</p></div>
+                  )}
+                  {viewingInvoice.paymentStatus === 'Partial' && (
+                    <>
+                      <div><p className="text-gray-500">Paid Amount</p><p className="font-medium text-green-700">{formatCurrency(viewingInvoice.paidAmount || 0)}</p></div>
+                      <div><p className="text-gray-500">Remaining</p><p className="font-medium text-red-600">{formatCurrency(viewingInvoice.remainingAmount || 0)}</p></div>
+                    </>
+                  )}
+                  {viewingInvoice.paymentMode === 'Online' && viewingInvoice.bankName && (
+                    <>
+                      <div><p className="text-gray-500">Bank</p><p className="font-medium">{viewingInvoice.bankName}</p></div>
+                      {viewingInvoice.bankAccountNumber && (
+                        <div><p className="text-gray-500">Account #</p><p className="font-mono text-xs">{viewingInvoice.bankAccountNumber}</p></div>
+                      )}
+                    </>
+                  )}
+                  {viewingInvoice.paidBy && <div><p className="text-gray-500">Paid By</p><p className="font-medium">{viewingInvoice.paidBy}</p></div>}
+                  {viewingInvoice.paidTo && <div><p className="text-gray-500">Paid To</p><p className="font-medium">{viewingInvoice.paidTo}</p></div>}
                 </div>
               </div>
+
+              {/* ── Totals ── */}
+              <div className="border border-gray-200 rounded-lg p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Subtotal</span>
+                  <span className="font-medium">{formatCurrency(viewingInvoice.totalAmount)}</span>
+                </div>
+                {(viewingInvoice.deductionCharges || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Deduction Charges</span>
+                    <span className="text-red-600 font-medium">−{formatCurrency(viewingInvoice.deductionCharges)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-1">
+                  <span className="text-base font-bold text-gray-900">Net Total</span>
+                  <span className="text-2xl font-bold text-[#4f46e5]">
+                    {formatCurrency(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
+                  </span>
+                </div>
+              </div>
+
+              {viewingInvoice.exchangeWarrantyNote && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm">
+                  <p className="text-xs font-semibold text-yellow-700 mb-1">Exchange / Warranty Note</p>
+                  <p className="text-gray-700">{viewingInvoice.exchangeWarrantyNote}</p>
+                </div>
+              )}
+
             </div>
           </div>
         </div>
