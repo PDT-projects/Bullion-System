@@ -253,9 +253,15 @@ export function useInvoiceListViewModel(): ViewModelProps {
 
   const availableSalespersons = useMemo(() => {
     const s = new Set<string>();
-    invoices.forEach(inv => { if (inv.salesperson) s.add(inv.salesperson.trim()); });
+    invoices.forEach(inv => {
+      if (!inv.salesperson) return;
+      // Resolve UID → name; if not found yet, skip (will re-run when salespersonMap loads)
+      const name = salespersonMap[inv.salesperson] || inv.salesperson;
+      // Only add if it looks like a real name (not a raw UID)
+      if (name && !/^[A-Za-z0-9]{20,}$/.test(name)) s.add(name);
+    });
     return Array.from(s).sort();
-  }, [invoices]);
+  }, [invoices, salespersonMap]);
 
   // ── Filtered invoices — ALL six filters active ────────────────────────
   const filteredInvoices = useMemo(() => {
@@ -297,11 +303,12 @@ export function useInvoiceListViewModel(): ViewModelProps {
       );
     }
 
-    // 6. Salesperson
+    // 6. Salesperson — compare resolved name on both sides
     if (filters.salespersonFilter) {
-      result = result.filter(inv =>
-        (inv.salesperson ?? '').trim() === filters.salespersonFilter
-      );
+      result = result.filter(inv => {
+        const name = salespersonMap[inv.salesperson ?? ''] || inv.salesperson || '';
+        return name === filters.salespersonFilter;
+      });
     }
 
     return result;

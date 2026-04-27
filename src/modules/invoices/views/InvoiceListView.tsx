@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import {
   FileText, Plus, Search, Eye, Edit, X, Loader2, FileDown,
-  Filter, XCircle, Truck, CreditCard, Hash,
+  Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin,
 } from 'lucide-react';
 import { Invoice, InvoiceStats, InvoiceFilters } from '../models/types';
 import { downloadInvoicePdf } from '../models/invoicePdfService';

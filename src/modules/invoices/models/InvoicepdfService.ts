@@ -292,7 +292,12 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
 
     const srLines  = [String(idx + 1)];
     const pnLines  = doc.splitTextToSize(p.productName || '', C.pn.w - 5) as string[];
-    const detailRaw = (p.productDetail?.trim() || p.description?.trim()) || '';
+    // Build detail: prefer description, then compose from brand/model/category
+    const detailRaw = (
+      p.description?.trim() ||
+      (p as any).productDetail?.trim() ||
+      [p.brandName, p.modelName, p.category].filter(Boolean).join(' · ')
+    ) || '';
     const pdLines  = detailRaw ? doc.splitTextToSize(detailRaw, C.pd.w - 5) as string[] : [''];
     const bnLines  = serials.length > 0
       ? doc.splitTextToSize(serials.join('\n'), C.bn.w - 5) as string[]
