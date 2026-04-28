@@ -595,7 +595,49 @@ export class BrandModelFirebaseService {
     }
   }
   
-static async generateTransactionId(): Promise<string> {
+  /**
+   * Fetch models for a given brand name.
+   * Looks up the brand by name first, then queries brandModels by brandId.
+   * Returns [] gracefully if brand not found — no crash.
+   */
+  static async fetchModelsByBrandName(
+    brandName: string
+  ): Promise<Array<{ id: string; modelName: string; costPrice?: number; sellPrice?: number }>> {
+    try {
+      if (!brandName.trim()) return [];
+
+      // 1. Find brand document by name
+      const bq    = query(collection(db, BRANDS_COLLECTION), where('name', '==', brandName.trim()));
+      const bSnap = await getDocs(bq);
+      if (bSnap.empty) return [];
+
+      const brandId = bSnap.docs[0].id;
+
+      // 2. Fetch all models for that brandId from the flat brandModels collection
+      const mq    = query(collection(db, MODELS_COLLECTION), where('brandId', '==', brandId));
+      const mSnap = await getDocs(mq);
+
+      const models: Array<{ id: string; modelName: string; costPrice?: number; sellPrice?: number }> = [];
+      mSnap.forEach(d => {
+        const data = d.data() as any;
+        models.push({
+          id:        d.id,
+          modelName: data.name || '',
+          costPrice: data.costPrice ?? undefined,
+          sellPrice: data.sellPrice ?? undefined,
+        });
+      });
+
+      models.sort((a, b) => a.modelName.localeCompare(b.modelName));
+      console.log(`✅ fetchModelsByBrandName: ${models.length} models for "${brandName}"`);
+      return models;
+    } catch (error) {
+      console.error(`❌ fetchModelsByBrandName error for "${brandName}":`, error);
+      return []; // fail gracefully — don't crash the page
+    }
+  }
+
+  static async generateTransactionId(): Promise<string> {
   const now      = new Date();
   const dd       = String(now.getDate()).padStart(2, '0');
   const mm       = String(now.getMonth() + 1).padStart(2, '0');

@@ -1,5 +1,7 @@
 // Inventory Module - ViewModel Layer
 // useInventoryCostingOptionViewModel - Step 2: Choose costing option
+// UPDATED: "without costing" now routes to the multi-model entry page
+//          instead of jumping straight to single-product details.
 
 import { useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -25,9 +27,11 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
   const selectOptionAndContinue = useCallback((option: CostingOption) => {
     setSelectedOption(option);
     if (option === 'with') {
+      // With costing → costing details (USD rate, customs, freight per model)
       navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${option}`);
     } else {
-      navigate(`/inventory/create-new/details?type=${inventoryType}&costing=${option}`);
+      // Without costing → multi-model entry (brand + multiple models at once)
+      navigate(`/inventory/create-new/multi-models?type=${inventoryType}&costing=${option}`);
     }
   }, [navigate, inventoryType]);
 
@@ -36,11 +40,15 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
     if (selectedOption === 'with') {
       navigate(`/inventory/create-new/costing-details?type=${inventoryType}&costing=${selectedOption}`);
     } else {
-      navigate(`/inventory/create-new/details?type=${inventoryType}&costing=${selectedOption}`);
+      navigate(`/inventory/create-new/multi-models?type=${inventoryType}&costing=${selectedOption}`);
     }
   }, [navigate, selectedOption, inventoryType]);
 
   const handleBack = useCallback(() => navigate('/inventory/create-new'), [navigate]);
 
-  return { selectedOption, selectOption, selectOptionAndContinue, handleContinue, handleBack, canContinue: selectedOption !== null };
+  return {
+    selectedOption, selectOption, selectOptionAndContinue,
+    handleContinue, handleBack,
+    canContinue: selectedOption !== null,
+  };
 }

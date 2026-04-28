@@ -1,17 +1,26 @@
 // Inventory Module - View Layer
 // InventoryPaymentView - Last Step: Payment information
-// UPDATED: Payment mode (Cash/Bank), bank dropdown, multi-installment support
+// UPDATED:
+//   - Shows multi-model breakdown table when isMultiModel=true
+//   - Pending payment section shows remaining balance clearly
+//   - Partial payments tracked per installment
 
 import React, { useState } from 'react';
 import {
   CreditCard, CheckCircle, X, AlertCircle, ArrowLeft, Save,
   Edit2, Check, Loader2, MapPin, Banknote, Building2, Plus, Trash2,
+  Package, Clock,
 } from 'lucide-react';
-import { UseInventoryPaymentViewModelReturn, PaymentMode, makeInventoryBranchValue, branchFromInventoryValue, DEFAULT_INVENTORY_BRANCHES } from '../viewModels/useInventoryPaymentViewModel';
+import {
+  UseInventoryPaymentViewModelReturn, PaymentMode,
+  makeInventoryBranchValue, branchFromInventoryValue, DEFAULT_INVENTORY_BRANCHES,
+  MultiModelPaymentEntry,
+} from '../viewModels/useInventoryPaymentViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 
 interface InventoryPaymentViewProps extends UseInventoryPaymentViewModelReturn {}
 
+// ── Stepper ────────────────────────────────────────────────────────────────────
 const Stepper = ({ steps, current }: { steps: { number: number; label: string }[]; current: number }) => (
   <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 32px' }}>
     <div style={{ display: 'flex', alignItems: 'center', maxWidth: 700, margin: '0 auto' }}>
@@ -23,8 +32,9 @@ const Stepper = ({ steps, current }: { steps: { number: number; label: string }[
           <React.Fragment key={step.number}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
               <div style={{
-                width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 700, fontSize: 13, flexShrink: 0,
+                width: 34, height: 34, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 13,
                 backgroundColor: done || active ? '#4f46e5' : '#e5e7eb',
                 color: done || active ? '#fff' : '#9ca3af',
                 boxShadow: active ? '0 0 0 4px rgba(79,70,229,0.18)' : 'none',
@@ -35,9 +45,7 @@ const Stepper = ({ steps, current }: { steps: { number: number; label: string }[
                 {step.label}
               </span>
             </div>
-            {!last && (
-              <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 6px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb', transition: 'background-color 0.3s' }} />
-            )}
+            {!last && <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 6px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb' }} />}
           </React.Fragment>
         );
       })}
@@ -45,26 +53,25 @@ const Stepper = ({ steps, current }: { steps: { number: number; label: string }[
   </div>
 );
 
-const inp = {
+const inp: React.CSSProperties = {
   width: '100%', padding: '10px 14px', border: '1px solid #d1d5db',
   borderRadius: 8, fontSize: 13, outline: 'none',
   boxSizing: 'border-box' as const, color: '#111827', backgroundColor: '#fff',
 };
 
-// ── Payment Mode Selector ─────────────────────────────────────────────────────
+// ── Payment Mode Toggle ───────────────────────────────────────────────────────
 function PaymentModeToggle({
   mode, onChange, disabled,
 }: { mode: PaymentMode; onChange: (m: PaymentMode) => void; disabled?: boolean }) {
   return (
     <div style={{ display: 'flex', gap: 10 }}>
       {([
-        { value: 'cash' as const,  label: 'Cash',        Icon: Banknote,  color: '#16a34a', bg: '#f0fdf4', border: '#22c55e' },
-        { value: 'bank' as const,  label: 'Bank Transfer', Icon: Building2, color: '#2563eb', bg: '#eff6ff', border: '#3b82f6' },
+        { value: 'cash' as const,  label: 'Cash',          Icon: Banknote,  color: '#16a34a', bg: '#f0fdf4', border: '#22c55e' },
+        { value: 'bank' as const,  label: 'Bank Transfer',  Icon: Building2, color: '#2563eb', bg: '#eff6ff', border: '#3b82f6' },
       ]).map(({ value, label, Icon, color, bg, border }) => {
         const sel = mode === value;
         return (
-          <button key={value} onClick={() => !disabled && onChange(value)}
-            disabled={disabled}
+          <button key={value} onClick={() => !disabled && onChange(value)} disabled={disabled}
             style={{
               flex: 1, padding: '12px 10px', borderRadius: 10, cursor: disabled ? 'not-allowed' : 'pointer',
               textAlign: 'center', border: `2px solid ${sel ? border : '#e2e8f0'}`,
@@ -81,10 +88,8 @@ function PaymentModeToggle({
   );
 }
 
-// ── Bank Selector Dropdown ────────────────────────────────────────────────────
-function BankSelector({
-  banks, value, onChange, error, isBanksLoading,
-}: {
+// ── Bank Selector ─────────────────────────────────────────────────────────────
+function BankSelector({ banks, value, onChange, error, isBanksLoading }: {
   banks: Array<{ id: string; name: string; balance: number }>;
   value: string; onChange: (id: string) => void;
   error?: string; isBanksLoading?: boolean;
@@ -115,18 +120,16 @@ function BankSelector({
   );
 }
 
-// ── Dynamic branch selector with Add New ─────────────────────────────────────
-function InventoryBranchSelector({
-  branches, inventoryCompany, setInventoryCompany, handleAddInventoryBranch,
-}: {
+// ── Branch Selector ───────────────────────────────────────────────────────────
+function InventoryBranchSelector({ branches, inventoryCompany, setInventoryCompany, handleAddInventoryBranch }: {
   branches: string[];
   inventoryCompany: TxCompany;
   setInventoryCompany: (v: TxCompany) => void;
   handleAddInventoryBranch: (name: string) => Promise<void>;
 }) {
-  const [addingNew,   setAddingNew]   = React.useState(false);
-  const [newBranch,   setNewBranch]   = React.useState('');
-  const [saving,      setSaving]      = React.useState(false);
+  const [addingNew, setAddingNew] = React.useState(false);
+  const [newBranch, setNewBranch] = React.useState('');
+  const [saving,    setSaving]    = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => { if (addingNew) inputRef.current?.focus(); }, [addingNew]);
 
@@ -149,13 +152,10 @@ function InventoryBranchSelector({
               border: `2px solid ${sel ? '#4f46e5' : '#e2e8f0'}`,
               backgroundColor: sel ? '#eef2ff' : '#fff', transition: 'all 0.15s',
             }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: sel ? '#4338ca' : '#374151' }}>
-              {branch}
-            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: sel ? '#4338ca' : '#374151' }}>{branch}</span>
           </button>
         );
       })}
-      {/* Add New */}
       {addingNew ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input ref={inputRef} type="text" value={newBranch}
@@ -174,10 +174,7 @@ function InventoryBranchSelector({
         </div>
       ) : (
         <button onClick={() => setAddingNew(true)}
-          style={{
-            padding: '10px 18px', borderRadius: 8, cursor: 'pointer',
-            border: '2px dashed #c7d2fe', backgroundColor: '#fff', transition: 'all 0.15s',
-          }}>
+          style={{ padding: '10px 18px', borderRadius: 8, cursor: 'pointer', border: '2px dashed #c7d2fe', backgroundColor: '#fff', transition: 'all 0.15s' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#6366f1' }}>➕ Add New</span>
         </button>
       )}
@@ -185,6 +182,107 @@ function InventoryBranchSelector({
   );
 }
 
+// ── Multi-model summary table ─────────────────────────────────────────────────
+function MultiModelSummaryTable({
+  entries, formatCurrency,
+}: { entries: MultiModelPaymentEntry[]; formatCurrency: (n: number) => string }) {
+  const totalUnits = entries.reduce((s, e) => s + e.quantity, 0);
+  const totalCost  = entries.reduce((s, e) => s + e.costPrice * e.quantity, 0);
+
+  return (
+    <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <Package size={16} color="#4f46e5" />
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
+          Shipment Breakdown — {entries.length} Model{entries.length > 1 ? 's' : ''}
+        </span>
+        <span style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 99, backgroundColor: '#eef2ff', color: '#4f46e5', fontSize: 12, fontWeight: 700 }}>
+          {totalUnits} total units
+        </span>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f8fafc' }}>
+              {['#', 'Model', 'Qty', 'Cost Price', 'Sell Price', 'Location', 'Row Total'].map(h => (
+                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <td style={{ padding: '10px 12px', color: '#9ca3af', fontWeight: 700 }}>{i + 1}</td>
+                <td style={{ padding: '10px 12px', fontWeight: 600, color: '#111827' }}>{e.modelName}</td>
+                <td style={{ padding: '10px 12px', color: '#374151', textAlign: 'center' }}>
+                  <span style={{ padding: '2px 8px', borderRadius: 99, backgroundColor: '#f1f5f9', fontWeight: 700 }}>{e.quantity}</span>
+                </td>
+                <td style={{ padding: '10px 12px', color: '#374151' }}>{formatCurrency(e.costPrice)}</td>
+                <td style={{ padding: '10px 12px', color: '#16a34a', fontWeight: 600 }}>{formatCurrency(e.salePrice)}</td>
+                <td style={{ padding: '10px 12px', color: '#6366f1', fontSize: 12 }}>{e.location || '—'}</td>
+                <td style={{ padding: '10px 12px', fontWeight: 700, color: '#111827' }}>{formatCurrency(e.costPrice * e.quantity)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ backgroundColor: '#1e1b4b' }}>
+              <td colSpan={2} style={{ padding: '12px 12px', color: '#a5b4fc', fontWeight: 700, fontSize: 12 }}>TOTAL</td>
+              <td style={{ padding: '12px 12px', color: '#fff', fontWeight: 800, textAlign: 'center' }}>{totalUnits}</td>
+              <td colSpan={3} />
+              <td style={{ padding: '12px 12px', color: '#a5f3fc', fontWeight: 900, fontSize: 15 }}>{formatCurrency(totalCost)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Pending Payment Banner ─────────────────────────────────────────────────────
+function PendingPaymentBanner({
+  totalAmount, paidAmount, paymentStatus, formatCurrency,
+}: { totalAmount: number; paidAmount: number; paymentStatus: string; formatCurrency: (n: number) => string }) {
+  if (paymentStatus === 'paid') return null;
+  const remaining = Math.max(0, totalAmount - paidAmount);
+
+  return (
+    <div style={{
+      backgroundColor: paymentStatus === 'unpaid' ? '#fef2f2' : '#fffbeb',
+      border: `1px solid ${paymentStatus === 'unpaid' ? '#fecaca' : '#fde68a'}`,
+      borderRadius: 12, padding: '16px 20px',
+      display: 'flex', alignItems: 'flex-start', gap: 14,
+    }}>
+      <Clock size={22} color={paymentStatus === 'unpaid' ? '#dc2626' : '#d97706'} style={{ flexShrink: 0, marginTop: 2 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: paymentStatus === 'unpaid' ? '#991b1b' : '#92400e', marginBottom: 4 }}>
+          {paymentStatus === 'unpaid' ? 'Full amount will be recorded as pending' : 'Remaining balance will be tracked as pending'}
+        </div>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 8 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Amount</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#374151', marginTop: 2 }}>{formatCurrency(totalAmount)}</div>
+          </div>
+          {paymentStatus === 'partial' && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Paid Now</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#16a34a', marginTop: 2 }}>{formatCurrency(paidAmount)}</div>
+            </div>
+          )}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending Balance</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: paymentStatus === 'unpaid' ? '#dc2626' : '#d97706', marginTop: 2 }}>{formatCurrency(remaining)}</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
+          This will be saved under <strong>Pending Inventory Payments</strong> and can be settled from the payments module.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main View ──────────────────────────────────────────────────────────────────
 export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   costingOption, inventoryType, totalAmount,
   paymentStatus, transactionId, isGeneratingId, isEditingTransactionId,
@@ -195,6 +293,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   inventoryCompany, setInventoryCompany,
   inventoryBranches, handleAddInventoryBranch,
   setPaidAmount, handleSubmit, handleBack, formatCurrency, productSummary,
+  multiModelEntries, isMultiModel,
 }) => {
   const steps = costingOption === 'with'
     ? [
@@ -203,13 +302,17 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
       ]
     : [
         { number: 1, label: 'Type' }, { number: 2, label: 'Costing' },
-        { number: 3, label: 'Details' }, { number: 4, label: 'Payment' },
+        { number: 3, label: 'Models' }, { number: 4, label: 'Payment' },
       ];
   const currentStep = steps.length;
 
-  // Show payment details section only when status is not 'unpaid'
   const showPaymentDetails = paymentStatus !== 'unpaid';
   const showInstallments   = paymentStatus === 'partial';
+
+  // Effective paid amount (from installments or field)
+  const effectivePaid = installments.length > 0
+    ? installments.reduce((s, e) => s + e.amount, 0)
+    : (paymentStatus === 'paid' ? totalAmount : paidAmount);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>
@@ -226,7 +329,11 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Payment Information</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>Complete payment details to finalize inventory creation</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>
+              {isMultiModel
+                ? `${multiModelEntries.length} models — ${formatCurrency(totalAmount)} total shipment`
+                : 'Complete payment details to finalize inventory creation'}
+            </div>
           </div>
         </div>
       </div>
@@ -235,14 +342,19 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* ── Branch / Company ─────────────────────────────────────────────── */}
+          {/* Multi-model breakdown table */}
+          {isMultiModel && (
+            <MultiModelSummaryTable entries={multiModelEntries} formatCurrency={formatCurrency} />
+          )}
+
+          {/* Branch / Company */}
           <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
               Branch / Company *
               <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#6b7280' }}>
-                (used to link this inventory to the transactions ledger)
+                (links this inventory to the transactions ledger)
               </span>
             </label>
             <InventoryBranchSelector
@@ -253,7 +365,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             />
           </div>
 
-          {/* ── Transaction ID ──────────────────────────────────────────────── */}
+          {/* Transaction ID */}
           <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>Transaction ID</label>
             {isGeneratingId ? (
@@ -266,7 +378,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                 <input type="text" value={transactionId}
                   onChange={e => setTransactionId(e.target.value.toUpperCase())} autoFocus
                   style={{ ...inp, flex: 1, border: `1px solid ${validationErrors.transactionId ? '#ef4444' : '#6366f1'}`, fontFamily: 'monospace', fontWeight: 600 }}
-                  placeholder="e.g. INV-150326-001" />
+                  placeholder="e.g. TXN-280426-001" />
                 <button onClick={() => setIsEditingTransactionId(false)} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#22c55e', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                   <Check size={16} />
                 </button>
@@ -286,17 +398,16 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
               </div>
             )}
             {validationErrors.transactionId && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 5 }}>{validationErrors.transactionId}</p>}
-            <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>Auto-generated in format INV-DDMMYY-NNN. Click the pencil icon to customise.</p>
           </div>
 
-          {/* ── Payment Status ──────────────────────────────────────────────── */}
+          {/* Payment Status */}
           <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 14 }}>Payment Status *</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               {([
-                { value: 'paid',    icon: CheckCircle, label: 'Paid',    desc: 'Full payment received', activeColor: '#16a34a', activeBg: '#f0fdf4', activeBorder: '#22c55e' },
-                { value: 'unpaid',  icon: X,           label: 'Unpaid',  desc: 'No payment yet',        activeColor: '#dc2626', activeBg: '#fef2f2', activeBorder: '#f87171' },
-                { value: 'partial', icon: AlertCircle, label: 'Partial', desc: 'Partial / installments', activeColor: '#d97706', activeBg: '#fffbeb', activeBorder: '#fbbf24' },
+                { value: 'paid',    icon: CheckCircle, label: 'Paid',    desc: 'Full payment received',    activeColor: '#16a34a', activeBg: '#f0fdf4', activeBorder: '#22c55e' },
+                { value: 'unpaid',  icon: X,           label: 'Unpaid',  desc: 'No payment yet',           activeColor: '#dc2626', activeBg: '#fef2f2', activeBorder: '#f87171' },
+                { value: 'partial', icon: AlertCircle, label: 'Partial', desc: 'Partial / installments',   activeColor: '#d97706', activeBg: '#fffbeb', activeBorder: '#fbbf24' },
               ] as const).map(({ value, icon: Icon, label, desc, activeColor, activeBg, activeBorder }) => {
                 const sel = paymentStatus === value;
                 return (
@@ -316,31 +427,36 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             </div>
           </div>
 
-          {/* ── Payment Mode (shown when NOT unpaid) ─────────────────────────── */}
+          {/* Pending payment banner */}
+          <PendingPaymentBanner
+            totalAmount={totalAmount}
+            paidAmount={effectivePaid}
+            paymentStatus={paymentStatus}
+            formatCurrency={formatCurrency}
+          />
+
+          {/* Payment Method (not unpaid) */}
           {showPaymentDetails && (
             <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 14 }}>
                 Payment Method *
               </label>
-
-              {/* Only show global mode selector for paid / single partial (no installments) */}
               {(paymentStatus === 'paid' || (paymentStatus === 'partial' && installments.length === 0)) && (
                 <>
                   <PaymentModeToggle mode={paymentMode} onChange={setPaymentMode} />
                   {paymentMode === 'bank' && (
-                    <BankSelector
-                      banks={banks} value={selectedBankId} onChange={setSelectedBankId}
-                      error={validationErrors.bankId} isBanksLoading={isBanksLoading}
-                    />
+                    <BankSelector banks={banks} value={selectedBankId} onChange={setSelectedBankId}
+                      error={validationErrors.bankId} isBanksLoading={isBanksLoading} />
                   )}
                 </>
               )}
-
-              {/* Partial paid amount (when no installments) */}
               {paymentStatus === 'partial' && installments.length === 0 && (
                 <div style={{ marginTop: 14 }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                    Paid Amount *
+                    Paid Amount (PKR) *
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#6b7280' }}>
+                      out of {formatCurrency(totalAmount)}
+                    </span>
                   </label>
                   <input type="number" min="0" step="0.01" value={paidAmount || ''}
                     onChange={e => setPaidAmount(Number(e.target.value))}
@@ -352,15 +468,13 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             </div>
           )}
 
-          {/* ── Installments (Partial) ────────────────────────────────────────── */}
+          {/* Installments */}
           {showInstallments && (
             <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Installments / Multi-Account Payments</div>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                    Add multiple payments across different accounts or dates
-                  </div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Split payment across accounts or dates</div>
                 </div>
                 <button onClick={addInstallment}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
@@ -370,47 +484,35 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
 
               {installments.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '20px 0', color: '#9ca3af', fontSize: 12 }}>
-                  No installments added. Click "Add Entry" to split the payment, or leave empty to enter a single amount above.
+                  Click "Add Entry" to add payment installments, or enter a single amount above.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {installments.map((inst, idx) => (
                     <div key={inst.id} style={{ borderRadius: 10, border: '1px solid #e2e8f0', padding: '14px 16px', backgroundColor: '#fafafa' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
-                          Payment #{idx + 1}
-                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Payment #{idx + 1}</span>
                         <button onClick={() => removeInstallment(inst.id)}
                           style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 6, border: '1px solid #fca5a5', backgroundColor: '#fef2f2', cursor: 'pointer', color: '#dc2626', fontSize: 11 }}>
                           <Trash2 size={12} /> Remove
                         </button>
                       </div>
-
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                        {/* Mode */}
                         <div>
                           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Mode</label>
-                          <PaymentModeToggle
-                            mode={inst.mode}
-                            onChange={m => updateInstallment(inst.id, {
-                              mode: m, bankId: undefined, bankName: undefined,
-                            })}
-                          />
+                          <PaymentModeToggle mode={inst.mode}
+                            onChange={m => updateInstallment(inst.id, { mode: m, bankId: undefined, bankName: undefined })} />
                         </div>
-                        {/* Amount */}
                         <div>
                           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Amount (PKR) *</label>
                           <input type="number" min="0" value={inst.amount || ''}
                             onChange={e => updateInstallment(inst.id, { amount: Number(e.target.value) })}
-                            style={{ ...inp }}
-                            placeholder="0.00" />
+                            style={{ ...inp }} placeholder="0.00" />
                           {validationErrors[`inst_${idx}`] && (
                             <p style={{ color: '#ef4444', fontSize: 10, marginTop: 3 }}>{validationErrors[`inst_${idx}`]}</p>
                           )}
                         </div>
                       </div>
-
-                      {/* Bank selector if bank mode */}
                       {inst.mode === 'bank' && (
                         <div style={{ marginTop: 10 }}>
                           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Bank Account *</label>
@@ -426,14 +528,10 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                           )}
                         </div>
                       )}
-
-                      {/* Date + Note */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                         <div>
                           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Date</label>
-                          <input type="date" value={inst.date}
-                            onChange={e => updateInstallment(inst.id, { date: e.target.value })}
-                            style={{ ...inp }} />
+                          <input type="date" value={inst.date} onChange={e => updateInstallment(inst.id, { date: e.target.value })} style={{ ...inp }} />
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Note (optional)</label>
@@ -444,41 +542,38 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                       </div>
                     </div>
                   ))}
-
-                  {/* Instalment total */}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px dashed #e2e8f0', marginTop: 4 }}>
                     <span style={{ fontSize: 12, color: '#6b7280' }}>Instalment Total:</span>
                     <span style={{ fontSize: 14, fontWeight: 800, color: instalmentTotal > totalAmount ? '#dc2626' : '#16a34a' }}>
-                      {new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(instalmentTotal)}
+                      {formatCurrency(instalmentTotal)}
                     </span>
-                    {instalmentTotal > totalAmount && (
-                      <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>⚠ Exceeds total</span>
-                    )}
+                    {instalmentTotal > totalAmount && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>⚠ Exceeds total</span>}
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* ── Summaries (side by side) ──────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Summaries */}
+          <div style={{ display: 'grid', gridTemplateColumns: isMultiModel ? '1fr' : '1fr 1fr', gap: 16 }}>
 
             {/* Payment summary */}
             <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14 }}>Payment Summary</div>
-              {[
-                { label: 'Total Amount', value: formatCurrency(totalAmount),     color: '#111827' },
-                { label: 'Paid Amount',  value: formatCurrency(installments.length > 0 ? (installments.reduce((s,e)=>s+e.amount,0)) : (paidAmount || 0)), color: '#111827' },
-                { label: 'Remaining',    value: formatCurrency(installments.length > 0 ? Math.max(0, totalAmount - installments.reduce((s,e)=>s+e.amount,0)) : remainingAmount), color: '#dc2626', border: true },
-              ].map(({ label, value, color, border }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: border ? '10px 0 0 0' : '5px 0', borderTop: border ? '1px solid #f1f5f9' : 'none', marginTop: border ? 8 : 0 }}>
-                  <span style={{ fontSize: 12, color: '#6b7280' }}>{label}:</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color }}>{value}</span>
-                </div>
-              ))}
-              {/* Payment method badge */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[
+                  { label: 'Total Shipment Amount', value: formatCurrency(totalAmount), color: '#111827', bold: true },
+                  { label: 'Amount Paid',           value: formatCurrency(effectivePaid), color: '#16a34a', bold: false },
+                  { label: 'Pending Balance',       value: formatCurrency(Math.max(0, totalAmount - effectivePaid)), color: Math.max(0, totalAmount - effectivePaid) > 0 ? '#dc2626' : '#9ca3af', bold: true, border: true },
+                ].map(({ label, value, color, bold, border }) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: border ? '10px 0 0 0' : '3px 0', borderTop: border ? '2px solid #f1f5f9' : 'none', marginTop: border ? 4 : 0 }}>
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>{label}:</span>
+                    <span style={{ fontSize: bold ? 15 : 13, fontWeight: bold ? 800 : 600, color }}>{value}</span>
+                  </div>
+                ))}
+              </div>
               {showPaymentDetails && (
-                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
                   <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Method: </span>
                   {installments.length > 0 ? (
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed' }}>
@@ -495,36 +590,38 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
               )}
             </div>
 
-            {/* Product summary */}
-            <div style={{ backgroundColor: '#eef2ff', borderRadius: 12, border: '1px solid #c7d2fe', padding: '20px 24px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#3730a3', marginBottom: 14 }}>Product Summary</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 8px' }}>
-                {[
-                  ['Brand',    productSummary.brandName],
-                  ['Model',    productSummary.modelName],
-                  ['Category', productSummary.category],
-                  ['Stock',    `${productSummary.stock} units`],
-                  ['Sell Price', formatCurrency(productSummary.sellPrice)],
-                  ['Status',   productSummary.status],
-                  ['Costing',  costingOption === 'with' ? 'With Costing' : 'Without Costing'],
-                  ['Type',     inventoryType === 'in-stock' ? 'In-Stock' : 'On-Order'],
-                ].map(([l, v]) => (
-                  <div key={l}>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</span>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1e1b4b', marginTop: 2 }}>{v}</div>
-                  </div>
-                ))}
-              </div>
-              {productSummary.location && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid #c7d2fe' }}>
-                  <MapPin size={13} color="#6366f1" />
-                  <span style={{ fontSize: 12, color: '#4338ca', fontWeight: 700 }}>{productSummary.location}</span>
+            {/* Product summary (single-model only) */}
+            {!isMultiModel && (
+              <div style={{ backgroundColor: '#eef2ff', borderRadius: 12, border: '1px solid #c7d2fe', padding: '20px 24px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#3730a3', marginBottom: 14 }}>Product Summary</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 8px' }}>
+                  {[
+                    ['Brand',    productSummary.brandName],
+                    ['Model',    productSummary.modelName],
+                    ['Category', productSummary.category],
+                    ['Stock',    `${productSummary.stock} units`],
+                    ['Sell Price', formatCurrency(productSummary.sellPrice)],
+                    ['Status',   productSummary.status],
+                    ['Costing',  costingOption === 'with' ? 'With Costing' : 'Without Costing'],
+                    ['Type',     inventoryType === 'in-stock' ? 'In-Stock' : 'On-Order'],
+                  ].map(([l, v]) => (
+                    <div key={l}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</span>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#1e1b4b', marginTop: 2 }}>{v}</div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
+                {productSummary.location && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid #c7d2fe' }}>
+                    <MapPin size={13} color="#6366f1" />
+                    <span style={{ fontSize: 12, color: '#4338ca', fontWeight: 700 }}>{productSummary.location}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* ── Actions ──────────────────────────────────────────────────────── */}
+          {/* Actions */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 }}>
             <button onClick={handleBack}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
@@ -533,18 +630,18 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             <button onClick={handleSubmit}
               disabled={!isValid || isSaving || isGeneratingId}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '11px 28px', borderRadius: 8, border: 'none',
+                display: 'flex', alignItems: 'center', gap: 8, padding: '12px 30px', borderRadius: 9, border: 'none',
                 backgroundColor: !isValid ? '#e5e7eb' : '#4f46e5',
                 color: !isValid ? '#9ca3af' : '#fff',
-                fontWeight: 700, fontSize: 14,
+                fontWeight: 800, fontSize: 14,
                 cursor: (!isValid || isSaving || isGeneratingId) ? 'not-allowed' : 'pointer',
-                boxShadow: isValid ? '0 2px 10px rgba(79,70,229,0.35)' : 'none',
+                boxShadow: isValid ? '0 2px 12px rgba(79,70,229,0.4)' : 'none',
                 opacity: isSaving || isGeneratingId ? 0.8 : 1, transition: 'all 0.2s',
               }}>
               {isGeneratingId
-                ? <><Loader2 size={16} className="animate-spin" /> Preparing...</>
+                ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Preparing...</>
                 : isSaving
-                ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
+                ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Saving...</>
                 : <><Save size={16} /> Submit Inventory</>
               }
             </button>

@@ -1,7 +1,11 @@
 // Inventory Module - ViewModel Layer
 // useInventoryPaymentViewModel - Final step: payment & save to Firestore
-// UPDATED: Transaction ID format changed to TXN-DDMMYY-### (e.g. TXN-220426-001)
-//          Activity report now correctly saves inventoryId (TXN ref) for both Cash and Bank payments
+// UPDATED:
+//   - Reads `multiModels` from URL (without-costing path) as a single shipment
+//   - Aggregates all models as one stock entry sharing one transaction ID
+//   - Partial payments saved as pending payment record in Firestore
+//   - Payment is also recorded as a cash/bank transaction (outflow)
+//   - Transaction ID format: TXN-DDMMYY-###
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -12,7 +16,7 @@ import {
 } from '../models/types';
 import { InventoryFirebaseService, generateInventoryTransactionId } from '../models/InventoryFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import { CashFirebaseService } from '../../banking/models/cashFirebaseService';
 import { Bank } from '../../banking/models/types';
@@ -31,13 +35,28 @@ export type PaymentStatusType = 'paid' | 'unpaid' | 'partial';
 export type PaymentMode = 'cash' | 'bank';
 
 export interface InstallmentEntry {
-  id: string;          // uuid-lite: Date.now() + Math.random()
+  id: string;
   mode: PaymentMode;
   bankId?: string;
   bankName?: string;
   amount: number;
   note?: string;
-  date: string;        // ISO date string
+  date: string;
+}
+
+// ── Multi-model entry shape (from multi-model page URL params) ────────────────
+export interface MultiModelPaymentEntry {
+  modelName: string;
+  costPrice: number;
+  salePrice: number;
+  quantity: number;
+  category: string;
+  status: string;
+  location: string;
+  dealerPrice?: number;
+  description?: string;
+  serialNumbers: string[];
+  serialCities: { [k: string]: string };
 }
 
 export interface UseInventoryPaymentViewModelReturn {
@@ -55,7 +74,6 @@ export interface UseInventoryPaymentViewModelReturn {
   isValid: boolean;
   isSaving: boolean;
 
-  // Payment mode
   paymentMode: PaymentMode;
   setPaymentMode: (mode: PaymentMode) => void;
   selectedBankId: string;
@@ -63,14 +81,12 @@ export interface UseInventoryPaymentViewModelReturn {
   banks: Bank[];
   isBanksLoading: boolean;
 
-  // Installments (for partial / multi-account)
   installments: InstallmentEntry[];
   addInstallment: () => void;
   removeInstallment: (id: string) => void;
   updateInstallment: (id: string, patch: Partial<InstallmentEntry>) => void;
   instalmentTotal: number;
 
-  // Branch/company for transaction linking
   inventoryCompany: TxCompany;
   setInventoryCompany: (v: TxCompany) => void;
   inventoryBranches: string[];
@@ -83,52 +99,69 @@ export interface UseInventoryPaymentViewModelReturn {
   handleSubmit: () => void;
   handleBack: () => void;
   formatCurrency: (amount: number) => string;
+
+  // Extended summary for multi-model display
   productSummary: {
     brandName: string; modelName: string; category: string;
     stock: number; sellPrice: number; status: string; inventoryType: string;
     location: string;
     totalValueOfBrand?: number; modelCount?: number;
   };
+  // Multi-model entries (for the summary table)
+  multiModelEntries: MultiModelPaymentEntry[];
+  isMultiModel: boolean;
 }
 
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/**
- * Generates a fallback transaction ID in the format TXN-DDMMYY-###
- * Used when the Firebase call to generateInventoryTransactionId fails.
- *
- * Format breakdown:
- *   TXN  — fixed prefix
- *   DD   — day of entry (e.g. 22)
- *   MM   — month of entry (e.g. 04)
- *   YY   — last 2 digits of year (e.g. 26)
- *   ###  — 3-digit counter (starts at 001 for fallback; Firebase handles real counter)
- *
- * Example: TXN-220426-001
- */
 function generateFallbackTransactionId(): string {
   const now = new Date();
   const dd  = String(now.getDate()).padStart(2, '0');
   const mm  = String(now.getMonth() + 1).padStart(2, '0');
   const yy  = String(now.getFullYear()).slice(-2);
-  // Fallback counter — real counter is managed by Firestore in generateInventoryTransactionId
-  const counter = String(Math.floor(Math.random() * 900) + 100); // 100–999 to avoid collisions
+  const counter = String(Math.floor(Math.random() * 900) + 100);
   return `TXN-${dd}${mm}${yy}-${counter}`;
+}
+
+// ── Save pending payment to Firestore ─────────────────────────────────────────
+async function savePendingPayment(params: {
+  transactionId: string;
+  brandName: string;
+  modelNames: string;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  paymentStatus: PaymentStatusType;
+  inventoryType: InventoryEntryType;
+}) {
+  if (params.paymentStatus === 'paid') return; // no pending record needed
+
+  await addDoc(collection(db, 'pendingInventoryPayments'), {
+    transactionId:   params.transactionId,
+    brandName:       params.brandName,
+    modelNames:      params.modelNames,
+    totalAmount:     params.totalAmount,
+    paidAmount:      params.paidAmount,
+    remainingAmount: params.remainingAmount,
+    paymentStatus:   params.paymentStatus,
+    inventoryType:   params.inventoryType,
+    createdAt:       serverTimestamp(),
+    status:          'pending', // 'pending' | 'settled'
+  });
 }
 
 export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelReturn {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [isSaving, setIsSaving]                         = useState(false);
-  const [inventoryCompany, setInventoryCompany]           = useState<TxCompany>(makeInventoryBranchValue(DEFAULT_INVENTORY_BRANCHES[0]));
-  const [inventoryBranches, setInventoryBranches]         = useState<string[]>(DEFAULT_INVENTORY_BRANCHES);
-  const [isGeneratingId, setIsGeneratingId]             = useState(true);
-  const [transactionId, setTransactionId]               = useState('');
+  const [isSaving, setIsSaving]                       = useState(false);
+  const [inventoryCompany, setInventoryCompany]         = useState<TxCompany>(makeInventoryBranchValue(DEFAULT_INVENTORY_BRANCHES[0]));
+  const [inventoryBranches, setInventoryBranches]       = useState<string[]>(DEFAULT_INVENTORY_BRANCHES);
+  const [isGeneratingId, setIsGeneratingId]           = useState(true);
+  const [transactionId, setTransactionId]             = useState('');
   const [isEditingTransactionId, setIsEditingTransactionId] = useState(false);
 
-  // ── Banks ──────────────────────────────────────────────────────────────────
   const [banks, setBanks]               = useState<Bank[]>([]);
   const [isBanksLoading, setIsBanksLoading] = useState(true);
 
@@ -137,7 +170,6 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       .then(setBanks)
       .catch(() => {})
       .finally(() => setIsBanksLoading(false));
-    // Load saved custom branches
     getDoc(doc(db, 'appConfig', 'branches'))
       .then(snap => {
         if (snap.exists()) {
@@ -148,20 +180,14 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       .catch(() => {});
   }, []);
 
-  // ── Payment mode & bank selection ─────────────────────────────────────────
   const [paymentMode, setPaymentMode]       = useState<PaymentMode>('cash');
   const [selectedBankId, setSelectedBankId] = useState('');
-
-  // ── Installments ──────────────────────────────────────────────────────────
-  const [installments, setInstallments] = useState<InstallmentEntry[]>([]);
+  const [installments, setInstallments]     = useState<InstallmentEntry[]>([]);
 
   const addInstallment = useCallback(() => {
     setInstallments(prev => [...prev, {
-      id: makeId(),
-      mode: 'cash',
-      amount: 0,
-      date: new Date().toISOString().slice(0, 10),
-      note: '',
+      id: makeId(), mode: 'cash', amount: 0,
+      date: new Date().toISOString().slice(0, 10), note: '',
     }]);
   }, []);
 
@@ -178,24 +204,37 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     [installments]
   );
 
-  // ── Parse wizard state from URL ──────────────────────────────────────────
-  const costingOption = (searchParams.get('costing') as CostingOption)      || 'without';
-  const inventoryType = (searchParams.get('type')    as InventoryEntryType) || 'in-stock';
-  const brandName     = searchParams.get('brandName')    || '';
-  const modelName     = searchParams.get('modelName')    || '';
-  const category      = searchParams.get('category')     || '';
-  const sellPrice     = Number(searchParams.get('sellPrice'))     || 0;
-  const buyType       = (searchParams.get('buyType') as BuyType)  || 'Import';
-  const warrantyYears = Number(searchParams.get('warrantyYears')) || 0;
-  const stock         = Number(searchParams.get('stock'))         || 0;
-  const description   = searchParams.get('description')  || '';
-  const status        = (searchParams.get('status') as ProductStatus) || 'New';
-  const isDamaged     = searchParams.get('isDamaged') === 'true';
-  const location      = searchParams.get('location')     || '';
-  const costPrice     = Number(searchParams.get('costPrice'))     || 0;
+  // ── Parse URL params ────────────────────────────────────────────────────────
+  const costingOption   = (searchParams.get('costing') as CostingOption)      || 'without';
+  const inventoryType   = (searchParams.get('type')    as InventoryEntryType) || 'in-stock';
+  const brandName       = searchParams.get('brandName')    || '';
+  const modelName       = searchParams.get('modelName')    || '';
+  const category        = searchParams.get('category')     || '';
+  const sellPrice       = Number(searchParams.get('sellPrice'))     || 0;
+  const buyType         = (searchParams.get('buyType') as BuyType)  || 'Import';
+  const warrantyYears   = Number(searchParams.get('warrantyYears')) || 0;
+  const stock           = Number(searchParams.get('stock'))         || 0;
+  const description     = searchParams.get('description')  || '';
+  const status          = (searchParams.get('status') as ProductStatus) || 'New';
+  const isDamaged       = searchParams.get('isDamaged') === 'true';
+  const location        = searchParams.get('location')     || '';
+  const costPrice       = Number(searchParams.get('costPrice'))     || 0;
   const serialNumbers: string[]                = JSON.parse(searchParams.get('serialNumbers') || '[]');
   const serialCities:  { [k: string]: string } = JSON.parse(searchParams.get('serialCities')  || '{}');
   const costingBrandId = searchParams.get('costingBrandId') || '';
+
+  // ── Multi-model entries (without-costing path) ────────────────────────────
+  const multiModelEntries: MultiModelPaymentEntry[] = useMemo(
+    () => JSON.parse(searchParams.get('multiModels') || '[]'),
+    [searchParams]
+  );
+  const isMultiModel = multiModelEntries.length > 0;
+
+  // ── With-costing selected models ──────────────────────────────────────────
+  const selectedModels: Array<{
+    modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number;
+    serialNumbers?: string[]; serialCities?: { [k: string]: string };
+  }> = JSON.parse(searchParams.get('selectedModels') || '[]');
 
   let costing: CostingInfo | undefined;
   if (costingOption === 'with') {
@@ -213,20 +252,13 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     };
   }
 
-  const selectedModels: Array<{
-    modelId: string; modelName: string; costPrice: number; salePrice: number; quantity: number;
-    serialNumbers?: string[]; serialCities?: { [k: string]: string };
-  }> = JSON.parse(searchParams.get('selectedModels') || '[]');
-
   const formData: Partial<ProductFormData> = {
     costingOption, brandName, modelName, category, sellPrice, buyType,
     warrantyYears, stock, description, status, isDamaged,
     location, serialNumbers, serialCities, costing,
   };
 
-  // ── Auto-generate transaction ID on mount ─────────────────────────────────
-  // NOTE: generateInventoryTransactionId() in InventoryFirebaseService MUST
-  // return IDs in the format  TXN-DDMMYY-###  (see companion fix below).
+  // ── Generate transaction ID ────────────────────────────────────────────────
   useEffect(() => {
     const generate = async () => {
       setIsGeneratingId(true);
@@ -234,7 +266,6 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         const id = await generateInventoryTransactionId();
         setTransactionId(id);
       } catch {
-        // Fallback uses the same TXN-DDMMYY-### format
         setTransactionId(generateFallbackTransactionId());
       } finally {
         setIsGeneratingId(false);
@@ -247,12 +278,18 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const [paidAmount, setPaidAmountState]       = useState(0);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
+  // ── Total amount: multiModel path uses grandTotalCost; with costing uses costing.totalValueOfBrand ─
   const totalAmount = useMemo(() => {
+    if (isMultiModel) {
+      const fromParam = Number(searchParams.get('grandTotalCost')) || 0;
+      if (fromParam > 0) return fromParam;
+      return multiModelEntries.reduce((s, e) => s + e.costPrice * e.quantity, 0);
+    }
     if (costingOption === 'with' && costing?.totalValueOfBrand) return costing.totalValueOfBrand;
     return sellPrice * stock;
-  }, [costingOption, costing?.totalValueOfBrand, sellPrice, stock]);
+  }, [isMultiModel, costingOption, costing?.totalValueOfBrand, sellPrice, stock, multiModelEntries, searchParams]);
 
-  const remainingAmount = useMemo(() => totalAmount - paidAmount, [totalAmount, paidAmount]);
+  const remainingAmount = useMemo(() => Math.max(0, totalAmount - paidAmount), [totalAmount, paidAmount]);
 
   const setPaymentStatus = useCallback((s: PaymentStatusType) => {
     setPaymentStatusState(s);
@@ -298,25 +335,18 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   }, [paymentStatus, paidAmount, isGeneratingId, transactionId, paymentMode, selectedBankId, installments]);
 
   // ── Record payment activity ────────────────────────────────────────────────
-  // Each cash/bank entry is saved with:
-  //   - reference  = transactionId  (TXN-DDMMYY-###)  ← links back to inventory record
-  //   - inventoryId = transactionId                    ← explicit FK for activity report lookups
-  //   - description includes brand, model, and TXN ref for human-readable tracing
+  const modelDisplayName = isMultiModel
+    ? multiModelEntries.map(e => e.modelName).join(', ')
+    : (costingOption === 'with' && selectedModels.length > 0
+        ? selectedModels.map(m => m.modelName).join(', ')
+        : modelName);
+
   const recordPaymentActivity = useCallback(async (
     _effectivePaid: number,
-    entries: Array<{
-      mode: PaymentMode;
-      bankId?: string;
-      bankName?: string;
-      amount: number;
-      note?: string;
-      date: string;
-    }>
+    entries: Array<{ mode: PaymentMode; bankId?: string; bankName?: string; amount: number; note?: string; date: string; }>
   ) => {
     const today = new Date().toISOString().slice(0, 10);
-
     for (const entry of entries) {
-      // ── Cash payment ──────────────────────────────────────────────────────
       if (entry.mode === 'cash') {
         try {
           const cashRecord = await CashFirebaseService.getOrCreateCashForLocation(
@@ -326,8 +356,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             date:          entry.date || today,
             company:       brandName,
             mainCategory:  'Inventory Purchase' as const,
-            subCategory:   `${modelName || 'Multiple Models'} — ${transactionId}`,
-            amount:        -entry.amount,  // Negative for outflow
+            subCategory:   `${modelDisplayName} — ${transactionId}`,
+            amount:        -entry.amount,
             mode:          'Cash',
             note:          entry.note || `Inventory payment — ${transactionId}`,
             location:      location || '',
@@ -337,8 +367,6 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         } catch (err) {
           console.error('Failed to record cash transaction:', err);
         }
-
-      // ── Bank payment ──────────────────────────────────────────────────────
       } else if (entry.mode === 'bank' && entry.bankId) {
         try {
           await BankFirebaseService.addBankTransaction({
@@ -347,8 +375,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             date:        entry.date || today,
             type:        'debit',
             amount:      entry.amount,
-            description: `Inventory Purchase — ${brandName} ${modelName || ''} [${transactionId}]`,
-            // ↓ These two fields link the bank record to the inventory entry
+            description: `Inventory Purchase — ${brandName} ${modelDisplayName} [${transactionId}]`,
             reference:   transactionId,
             inventoryId: transactionId,
             category:    'Inventory',
@@ -359,17 +386,14 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         }
       }
     }
-  }, [brandName, modelName, transactionId, location]);
+  }, [brandName, modelDisplayName, transactionId, location]);
 
-  // ── Build payment entries for saving ──────────────────────────────────────
   const buildPaymentEntries = useCallback((): Array<{
     mode: PaymentMode; bankId?: string; bankName?: string;
     amount: number; note?: string; date: string;
   }> => {
     const today = new Date().toISOString().slice(0, 10);
-
     if (paymentStatus === 'unpaid') return [];
-
     if (paymentStatus === 'partial' && installments.length > 0) {
       return installments.map(inst => ({
         mode:     inst.mode,
@@ -380,7 +404,6 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         date:     inst.date || today,
       }));
     }
-
     const selectedBank = banks.find(b => b.id === selectedBankId);
     return [{
       mode:     paymentMode,
@@ -397,12 +420,11 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     setIsSaving(true);
 
     try {
-      const isOnOrder   = inventoryType === 'on-order';
-      const entries     = buildPaymentEntries();
+      const isOnOrder     = inventoryType === 'on-order';
+      const entries       = buildPaymentEntries();
       const effectivePaid = entries.reduce((s, e) => s + e.amount, 0);
-
-      const selectedBank = banks.find(b => b.id === selectedBankId);
-      const paymentInfo = {
+      const selectedBank  = banks.find(b => b.id === selectedBankId);
+      const paymentInfo   = {
         paymentStatus,
         transactionId:   paymentStatus !== 'unpaid' ? transactionId : undefined,
         paidAmount:      effectivePaid || undefined,
@@ -413,7 +435,41 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         installments:    installments.length > 0 ? installments : undefined,
       };
 
-      if (costingOption === 'with' && selectedModels.length > 0) {
+      // ── MULTI-MODEL PATH (without costing — multiple models at once) ────────
+      if (isMultiModel) {
+        for (const me of multiModelEntries) {
+          const validSerials = (me.serialNumbers || []).filter((s: string) => s.trim() !== '');
+          const smCities: { [k: string]: string } = { ...(me.serialCities || {}) };
+          if (me.location) {
+            validSerials.forEach((s: string) => { if (!smCities[s]) smCities[s] = me.location; });
+          }
+          const dto: CreateProductDTO = {
+            brandName,
+            modelName:    me.modelName,
+            category:     me.category,
+            costPrice:    me.costPrice,
+            sellPrice:    me.salePrice,
+            buyType:      'Import',
+            warrantyYears: 0,
+            stock:        me.quantity,
+            location:     me.location,
+            serialNumbers: validSerials,
+            serialCities:  smCities,
+            description:   me.description || '',
+            status:        isOnOrder ? 'On-Order' : (me.status as ProductStatus) || 'New',
+            isDamaged:     false,
+            costingOption: 'without',
+            costing:       undefined,
+            receivableStatus:    isOnOrder ? 'Pending' : undefined,
+            expectedReceiveDate: undefined,
+            // Store dealer price in custom field if supported
+            ...(me.dealerPrice ? { dealerPrice: me.dealerPrice } : {}),
+          };
+          await InventoryFirebaseService.createProduct(dto, paymentInfo);
+        }
+      }
+      // ── WITH COSTING PATH ────────────────────────────────────────────────────
+      else if (costingOption === 'with' && selectedModels.length > 0) {
         for (const sm of selectedModels) {
           const validSerials = (sm.serialNumbers || []).filter((s: string) => s.trim() !== '');
           const smSerialCities: { [k: string]: string } = { ...(sm.serialCities || {}) };
@@ -428,11 +484,13 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             description, status: isOnOrder ? 'On-Order' : status, isDamaged,
             costingOption: 'with', costing,
             receivableStatus:    isOnOrder ? 'Pending' : undefined,
-            expectedReceiveDate: isOnOrder ? undefined : undefined,
+            expectedReceiveDate: undefined,
           };
           await InventoryFirebaseService.createProduct(dto, paymentInfo);
         }
-      } else {
+      }
+      // ── SINGLE PRODUCT PATH ──────────────────────────────────────────────────
+      else {
         const seededCities: { [k: string]: string } = { ...serialCities };
         if (location) {
           serialNumbers.forEach(s => { if (!seededCities[s]) seededCities[s] = location; });
@@ -444,41 +502,63 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
           costingOption: costingOption === 'with' ? 'with' : 'without',
           costing:       costingOption === 'with' ? costing : undefined,
           receivableStatus:    isOnOrder ? 'Pending' : undefined,
-          expectedReceiveDate: isOnOrder ? undefined : undefined,
+          expectedReceiveDate: undefined,
         };
         await InventoryFirebaseService.createProduct(dto, paymentInfo);
       }
 
-      // Record payment in cash / bank activity — links via TXN-DDMMYY-### reference
+      // ── Record payment transactions ────────────────────────────────────────
       if (entries.length > 0) {
         await recordPaymentActivity(effectivePaid, entries);
       }
 
-      // ── Auto-create transaction record (non-blocking) ─────────────────────
+      // ── Save pending payment record if partial/unpaid ─────────────────────
+      if (paymentStatus !== 'paid') {
+        await savePendingPayment({
+          transactionId,
+          brandName,
+          modelNames: isMultiModel
+            ? multiModelEntries.map(e => e.modelName).join(', ')
+            : (costingOption === 'with' && selectedModels.length > 0
+                ? selectedModels.map(m => m.modelName).join(', ')
+                : modelName),
+          totalAmount,
+          paidAmount:      effectivePaid,
+          remainingAmount: Math.max(0, totalAmount - effectivePaid),
+          paymentStatus,
+          inventoryType,
+        });
+      }
+
+      // ── Create transaction record (non-blocking) ──────────────────────────
       if (!isOnOrder) {
         createTransactionFromInventory({
-          transactionId:  transactionId,
+          transactionId,
           brandName,
-          modelName:      costingOption === 'with' && selectedModels.length > 0
-                            ? selectedModels.map((m: any) => m.modelName).join(', ')
-                            : modelName,
-          date:           new Date().toISOString().split('T')[0],
+          modelName: modelDisplayName,
+          date:      new Date().toISOString().split('T')[0],
           totalAmount,
-          paidAmount:     effectivePaid,
+          paidAmount:   effectivePaid,
           paymentStatus,
           paymentMode,
-          bankId:         paymentMode === 'bank' ? selectedBankId : undefined,
-          bankName:       paymentMode === 'bank' ? banks.find(b => b.id === selectedBankId)?.name : undefined,
-          installments:   installments.length > 0 ? installments : undefined,
-          company:        inventoryCompany,
+          bankId:   paymentMode === 'bank' ? selectedBankId : undefined,
+          bankName: paymentMode === 'bank' ? banks.find(b => b.id === selectedBankId)?.name : undefined,
+          installments: installments.length > 0 ? installments : undefined,
+          company: inventoryCompany,
         }).catch(err => console.warn('[TxBridge] Inventory transaction failed (non-blocking):', err));
       }
 
-      toast.success(isOnOrder
-        ? `✅ Product saved to Receivable Stock — Transaction: ${transactionId}`
-        : `✅ Product added to Inventory — Transaction: ${transactionId}`
-      );
+      const successMsg = isOnOrder
+        ? `✅ Saved to Receivable Stock — ${transactionId}`
+        : paymentStatus === 'partial'
+          ? `✅ Inventory added — ${formatCurrency(totalAmount - effectivePaid)} pending — ${transactionId}`
+          : paymentStatus === 'unpaid'
+            ? `✅ Inventory added (unpaid) — ${transactionId}`
+            : `✅ Inventory added — ${transactionId}`;
+
+      toast.success(successMsg);
       navigate(isOnOrder ? '/inventory/receivable' : '/inventory/view');
+
     } catch (error) {
       console.error('Error saving product:', error);
       toast.error('Failed to save product. Please try again.');
@@ -486,14 +566,25 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       setIsSaving(false);
     }
   }, [
-    validateForm, costingOption, selectedModels, brandName, modelName,
-    category, sellPrice, buyType, warrantyYears, stock, description, status,
-    isDamaged, serialNumbers, serialCities, inventoryType, costing,
+    validateForm, isMultiModel, multiModelEntries, costingOption, selectedModels,
+    brandName, modelName, category, sellPrice, buyType, warrantyYears, stock,
+    description, status, isDamaged, serialNumbers, serialCities, inventoryType, costing,
     paymentStatus, transactionId, paidAmount, totalAmount, navigate, location,
-    paymentMode, selectedBankId, banks, installments, buildPaymentEntries, recordPaymentActivity, inventoryCompany,
+    paymentMode, selectedBankId, banks, installments, buildPaymentEntries,
+    recordPaymentActivity, inventoryCompany, modelDisplayName, formatCurrency, costingBrandId,
   ]);
 
   const handleBack = useCallback(() => {
+    if (isMultiModel) {
+      // Back to multi-model page
+      const params = new URLSearchParams({
+        type:    inventoryType,
+        costing: 'without',
+        brandName,
+      });
+      navigate(`/inventory/create-new/multi-models?${params.toString()}`);
+      return;
+    }
     const params = new URLSearchParams({
       type: inventoryType, costing: costingOption, brandName, modelName,
       category, costPrice: costPrice.toString(), sellPrice: sellPrice.toString(), buyType,
@@ -518,17 +609,37 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     params.set('selectedModels', JSON.stringify(selectedModels));
     navigate(`/inventory/create-new/details?${params.toString()}`);
   }, [
-    navigate, inventoryType, costingOption, brandName, modelName, category, sellPrice,
-    buyType, warrantyYears, stock, description, status, isDamaged, location,
-    serialNumbers, serialCities, costing, selectedModels, costingBrandId,
+    navigate, isMultiModel, inventoryType, costingOption, brandName, modelName,
+    category, sellPrice, buyType, warrantyYears, stock, description, status,
+    isDamaged, location, serialNumbers, serialCities, costing, selectedModels, costingBrandId, costPrice,
   ]);
 
-  const productSummary = useMemo(() => ({
-    brandName, modelName, category, stock, sellPrice, status, inventoryType,
-    location,
-    totalValueOfBrand: costingOption === 'with' ? costing?.totalValueOfBrand : undefined,
-    modelCount:        costingOption === 'with' ? costing?.models.length      : undefined,
-  }), [brandName, modelName, category, stock, sellPrice, status, inventoryType, costingOption, costing, location]);
+  // ── Product summary ────────────────────────────────────────────────────────
+  const productSummary = useMemo(() => {
+    if (isMultiModel) {
+      const totalUnits = multiModelEntries.reduce((s, e) => s + e.quantity, 0);
+      const avgSell    = multiModelEntries.length
+        ? multiModelEntries.reduce((s, e) => s + e.salePrice, 0) / multiModelEntries.length
+        : 0;
+      return {
+        brandName,
+        modelName: `${multiModelEntries.length} models`,
+        category:  multiModelEntries[0]?.category || '',
+        stock:     totalUnits,
+        sellPrice: avgSell,
+        status:    multiModelEntries[0]?.status || 'New',
+        inventoryType,
+        location:  multiModelEntries[0]?.location || '',
+        modelCount: multiModelEntries.length,
+      };
+    }
+    return {
+      brandName, modelName, category, stock, sellPrice, status, inventoryType,
+      location,
+      totalValueOfBrand: costingOption === 'with' ? costing?.totalValueOfBrand : undefined,
+      modelCount:        costingOption === 'with' ? costing?.models.length      : undefined,
+    };
+  }, [brandName, modelName, category, stock, sellPrice, status, inventoryType, costingOption, costing, location, isMultiModel, multiModelEntries]);
 
   const handleAddInventoryBranch = useCallback(async (name: string) => {
     const trimmed = name.trim();
@@ -557,5 +668,6 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     inventoryBranches, handleAddInventoryBranch,
     setPaymentStatus, setTransactionId, setPaidAmount,
     handleSubmit, handleBack, formatCurrency, productSummary,
+    multiModelEntries, isMultiModel,
   };
 }

@@ -40,6 +40,7 @@ import {
   ProductTransferWrapper,
   ProductTransferCreateWrapper,
   InventoryEditWrapper,
+  InventoryMultiModelWrapper,
 } from './modules/inventory';
 
 import {
@@ -252,6 +253,7 @@ function InventoryReceivableRoute()     { return <InventoryListWrapper inventory
 function InventoryTypeSelectionRoute()  { return <InventoryTypeSelectionWrapper />; }
 function InventoryCostingOptionRoute()  { return <InventoryCostingOptionWrapper />; }
 function InventoryCostingDetailsRoute() { return <InventoryCostingDetailsWrapper />; }
+function InventoryMultiModelRoute()     { return <InventoryMultiModelWrapper />; }
 function InventoryProductDetailsRoute() { return <InventoryProductDetailsWrapper />; }
 function InventoryPaymentRoute()        { return <InventoryPaymentWrapper />; }
 function InventoryAddExistingRoute()    { return <InventoryAddExistingWrapper />; }
@@ -411,6 +413,7 @@ export const router = createBrowserRouter([
       { path: 'create-new',                 element: <ScreenProtectedRoute requiredScreen="Inventory Type Selection"><InventoryTypeSelectionRoute /></ScreenProtectedRoute> },
       { path: 'create-new/costing',         element: <ScreenProtectedRoute requiredScreen="Inventory Costing Option"><InventoryCostingOptionRoute /></ScreenProtectedRoute> },
       { path: 'create-new/costing-details', element: <ScreenProtectedRoute requiredScreen="Inventory Costing Details"><InventoryCostingDetailsRoute /></ScreenProtectedRoute> },
+      { path: 'create-new/multi-models',    element: <ScreenProtectedRoute requiredScreen="Inventory Multi Models"><InventoryMultiModelRoute /></ScreenProtectedRoute> },
       { path: 'create-new/details',         element: <ScreenProtectedRoute requiredScreen="Inventory Product Details"><InventoryProductDetailsRoute /></ScreenProtectedRoute> },
       { path: 'create-new/payment',         element: <ScreenProtectedRoute requiredScreen="Inventory Payment"><InventoryPaymentRoute /></ScreenProtectedRoute> },
       { path: 'add-existing',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Existing"><InventoryAddExistingRoute /></ScreenProtectedRoute> },

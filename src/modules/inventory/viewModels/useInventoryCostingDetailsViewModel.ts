@@ -1,6 +1,7 @@
 // Inventory Module - ViewModel Layer
 // useInventoryCostingDetailsViewModel - Step 3: Multi-model costing inputs
-// Saves brand + models to Firestore on Next so dropdown is pre-populated.
+// UPDATED: Fetches brand's existing models from Firestore for dropdown in CostingTable.
+//          Saves brand + models to Firestore on Next so dropdown is pre-populated.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -13,6 +14,23 @@ import {
   calculateModelCosts,
 } from '../models/costingCalculator';
 import { BrandModelFirebaseService } from '../models/InventoryFirebaseService';
+
+// ── Known brand list (same as shown in the Brand dropdown UI) ─────────────────
+export const KNOWN_BRANDS = [
+  'AKAAS DETECTORS', 'Andralian', 'Black Dog Xtreme', 'Bounty Hunter VLF',
+  'China', 'DHFHJ', 'Detector', 'Detek', 'EKibi', 'Fisher', 'GEO',
+  'GROGROUND', 'GOLD XTRA', 'GTR TURKEY', 'Garrett', 'Gold Star',
+  'Gold Stinger X5', 'Hira Dedector', 'JOKER', 'Lorenz', 'Minelab',
+  'Multimax', 'Nokta', 'Nokta Makro', 'OKM', 'OKM EXP 6000 PROFESSIONAL PLUS',
+  'PMX', 'Practice', 'Quest', 'Reaper 2', 'Super Wand', 'Teknetics',
+  'WHITES', 'X5 ID Maxx', 'XP', 'yrVHc70ojKVFNl9wkLYb',
+];
+
+export interface BrandModelOption {
+  id: string;
+  modelName: string;
+  costPrice?: number;
+}
 
 export interface UseInventoryCostingDetailsViewModelReturn {
   costingInfo: CostingInfo | undefined;
@@ -38,6 +56,9 @@ export interface UseInventoryCostingDetailsViewModelReturn {
     consignmentValue: number;
     totalValueOfBrand: number;
   };
+  // NEW: models available for the selected brand
+  brandModelOptions: BrandModelOption[];
+  brandModelOptionsLoading: boolean;
 }
 
 export function useInventoryCostingDetailsViewModel(): UseInventoryCostingDetailsViewModelReturn {
@@ -53,17 +74,43 @@ export function useInventoryCostingDetailsViewModel(): UseInventoryCostingDetail
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // ── Fetch existing models when brand name changes ────────────────────────────
+  const [brandModelOptions, setBrandModelOptions] = useState<BrandModelOption[]>([]);
+  const [brandModelOptionsLoading, setBrandModelOptionsLoading] = useState(false);
+
+  useEffect(() => {
+    const brandName = costingInfo?.brandName?.trim();
+    if (!brandName) {
+      setBrandModelOptions([]);
+      return;
+    }
+    let cancelled = false;
+    setBrandModelOptionsLoading(true);
+    BrandModelFirebaseService.fetchModelsByBrandName(brandName)
+      .then(models => {
+        if (!cancelled) setBrandModelOptions(models);
+      })
+      .catch(() => {
+        if (!cancelled) setBrandModelOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setBrandModelOptionsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [costingInfo?.brandName]);
+
+  // ── Recalculate when global fields change ────────────────────────────────────
   useEffect(() => {
     if (costingOption === 'with' && costingInfo && costingInfo.models.length > 0) {
       const { models, usdRate, totalCustomsValue, totalFreightValue } = costingInfo;
       const result = recalculateAllModels(models, usdRate, totalCustomsValue, totalFreightValue);
       setCostingInfo(prev => prev ? {
         ...prev,
-        models:           result.models,
-        totalUnitCostUSD: result.summary.totalUnitCostUSD,
-        shipmentTotalUSD: result.summary.shipmentTotalUSD,
-        consignmentValue: result.summary.consignmentValue,
-        totalValueOfBrand:result.summary.totalValueOfBrand,
+        models:            result.models,
+        totalUnitCostUSD:  result.summary.totalUnitCostUSD,
+        shipmentTotalUSD:  result.summary.shipmentTotalUSD,
+        consignmentValue:  result.summary.consignmentValue,
+        totalValueOfBrand: result.summary.totalValueOfBrand,
       } : undefined);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,14 +128,21 @@ export function useInventoryCostingDetailsViewModel(): UseInventoryCostingDetail
   const updateModelField = useCallback((modelId: string, field: keyof CostingModel, value: string | number) => {
     setCostingInfo(prev => {
       if (!prev) return prev;
-      const tot = prev.models.reduce((s, m) => s + m.unitCostUSD, 0);
+      const tot  = prev.models.reduce((s, m) => s + m.unitCostUSD, 0);
       const ship = prev.models.reduce((s, m) => s + m.units * m.unitCostUSD, 0);
       const updated = prev.models.map(m => {
         if (m.id !== modelId) return m;
         return calculateModelCosts({ ...m, [field]: value }, tot, ship, prev.usdRate, prev.totalCustomsValue, prev.totalFreightValue);
       });
       const result = recalculateAllModels(updated, prev.usdRate, prev.totalCustomsValue, prev.totalFreightValue);
-      return { ...prev, models: result.models, totalUnitCostUSD: result.summary.totalUnitCostUSD, shipmentTotalUSD: result.summary.shipmentTotalUSD, consignmentValue: result.summary.consignmentValue, totalValueOfBrand: result.summary.totalValueOfBrand };
+      return {
+        ...prev,
+        models:            result.models,
+        totalUnitCostUSD:  result.summary.totalUnitCostUSD,
+        shipmentTotalUSD:  result.summary.shipmentTotalUSD,
+        consignmentValue:  result.summary.consignmentValue,
+        totalValueOfBrand: result.summary.totalValueOfBrand,
+      };
     });
   }, []);
 
@@ -98,7 +152,14 @@ export function useInventoryCostingDetailsViewModel(): UseInventoryCostingDetail
       const updated = prev.models.filter(m => m.id !== modelId);
       if (updated.length > 0) {
         const result = recalculateAllModels(updated, prev.usdRate, prev.totalCustomsValue, prev.totalFreightValue);
-        return { ...prev, models: result.models, totalUnitCostUSD: result.summary.totalUnitCostUSD, shipmentTotalUSD: result.summary.shipmentTotalUSD, consignmentValue: result.summary.consignmentValue, totalValueOfBrand: result.summary.totalValueOfBrand };
+        return {
+          ...prev,
+          models:            result.models,
+          totalUnitCostUSD:  result.summary.totalUnitCostUSD,
+          shipmentTotalUSD:  result.summary.shipmentTotalUSD,
+          consignmentValue:  result.summary.consignmentValue,
+          totalValueOfBrand: result.summary.totalValueOfBrand,
+        };
       }
       return { ...prev, models: [], totalUnitCostUSD: 0, shipmentTotalUSD: 0, consignmentValue: 0, totalValueOfBrand: 0 };
     });
@@ -181,5 +242,7 @@ export function useInventoryCostingDetailsViewModel(): UseInventoryCostingDetail
     handleNext, handleBack,
     showCostingFields: costingOption === 'with',
     costingSummary,
+    brandModelOptions,
+    brandModelOptionsLoading,
   };
 }
