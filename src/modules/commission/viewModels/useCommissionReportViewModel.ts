@@ -74,7 +74,23 @@ export function useCommissionReportViewModel(): UseCommissionReportViewModelRetu
     try {
       setIsLoading(true);
       const data = await CommissionFirebaseService.fetchAllCommissions();
-      setCommissions(data);
+
+      // Deduplicate: keep only the latest record per salesperson+month+city.
+      // Duplicates accumulate when the same city/month is recalculated and
+      // each run saves a new Firestore document instead of updating the old one.
+      const latestByKey = new Map<string, Commission>();
+      data.forEach((c) => {
+        const key = `${c.salesperson}__${c.month}__${(c.city ?? '').trim().toLowerCase()}`;
+        const existing = latestByKey.get(key);
+        if (
+          !existing ||
+          new Date(c.calculatedAt).getTime() > new Date(existing.calculatedAt).getTime()
+        ) {
+          latestByKey.set(key, c);
+        }
+      });
+
+      setCommissions(Array.from(latestByKey.values()));
     } catch (error) {
       console.error('Error loading commissions:', error);
       toast.error('Failed to load commission records');

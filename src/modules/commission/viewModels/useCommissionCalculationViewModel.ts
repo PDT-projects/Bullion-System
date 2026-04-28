@@ -121,7 +121,9 @@ function calculateCommissionsFromInvoices(
     const isUzair = employee.name?.trim().toLowerCase() === UZAIR_NAME_MATCH;
 
     // ── UZAIR SPECIAL LOGIC ──────────────────────────────────────────────
-    if (isUzair) {
+    // Only apply pooled logic when searching Islamabad — his home city.
+    // For any other city search he is treated as a normal salesperson.
+    if (isUzair && normalizeCity(city) === normalizeCity(UZAIR_SLAB_CITY)) {
       // Collect invoices from the pooled cities (ALL paid, correct month, those cities, any salesperson)
       const pooledCityData: { city: string; amount: number; invoiceCount: number }[] = [];
       let pooledInvoices: InvoiceReference[] = [...spInvoices]; // start with Uzair's own in selected city
@@ -295,9 +297,14 @@ function calculateCommissionsFromInvoices(
     });
   });
 
-  // ── Edge case: Uzair is not in the selected city but has pooled sales ────
-  // If Uzair wasn't found in the standard grouping, still compute his pooled commission.
-  if (uzairEmployee && !Object.keys(grouped).includes(uzairEmployee.id)) {
+  // ── Edge case: Uzair is not in the selected city's invoices ─────────────
+  // Only runs when city = Islamabad. For Karachi/Lahore searches Uzair is
+  // handled as a normal salesperson (or simply has no invoices there).
+  if (
+    uzairEmployee &&
+    normalizeCity(city) === normalizeCity(UZAIR_SLAB_CITY) &&
+    !Object.keys(grouped).includes(uzairEmployee.id)
+  ) {
     const pooledCityData: { city: string; amount: number; invoiceCount: number }[] = [];
     let pooledInvoices: InvoiceReference[] = [];
 
@@ -524,6 +531,25 @@ export function useCommissionCalculationViewModel(
         setCalculationErrors(result.errors);
         setSummary(result.summary);
         setInvoiceBreakdowns(result.breakdowns);
+
+        // Always clean up stale records for salespersons whose slab didn't match
+        // this runs BEFORE the early-return so it executes even when zero commissions
+        // are saved (e.g. Uzair has no slab covering his current sales range).
+        {
+          const savedSalespersonIds = new Set(result.commissions.map(c => c.salesperson));
+          const staleCleanups = result.breakdowns
+            .filter(b => !savedSalespersonIds.has(b.salespersonId))
+            .map(b =>
+              CommissionFirebaseService.deleteExistingCommissions(
+                b.salespersonId,
+                selectedMonth,
+                b.isPooled
+                  ? `Pooled: ${selectedCity} + Karachi + Lahore`
+                  : selectedCity
+              )
+            );
+          await Promise.allSettled(staleCleanups);
+        }
 
         if (result.commissions.length === 0) {
           toast.error('No commissions to save');

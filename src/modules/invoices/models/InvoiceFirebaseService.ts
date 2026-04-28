@@ -4,7 +4,7 @@
 
 import {
   collection, getDocs, getDoc, addDoc, updateDoc,
-  deleteDoc, doc,
+  deleteDoc, doc, onSnapshot, query, orderBy,
 } from 'firebase/firestore';
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
@@ -95,6 +95,28 @@ export class InvoiceFirebaseService {
   }
 
   // ── Fetch all invoices ───────────────────────────────────────────────────
+  // -- Real-time listener: calls onData on every Firestore change.
+  // Returns an unsubscribe function to stop listening.
+  static subscribeToInvoices(
+    onData:  (invoices: Invoice[]) => void,
+    onError: (error: Error) => void
+  ): () => void {
+    const q = query(collection(db, COLLECTION), orderBy('date', 'desc'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const invoices = snapshot.docs.map(docToInvoice);
+        console.log(`[onSnapshot] ${invoices.length} invoices`);
+        onData(invoices);
+      },
+      (error) => {
+        console.error('[onSnapshot] Invoice listener error:', error);
+        onError(error);
+      }
+    );
+    return unsubscribe;
+  }
+
   static async fetchAllInvoices(): Promise<Invoice[]> {
     try {
       const snapshot = await getDocs(collection(db, COLLECTION));

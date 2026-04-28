@@ -1,4 +1,4 @@
- import {
+import {
   collection,
   getDocs,
   getDoc,
@@ -7,7 +7,9 @@
   deleteDoc,
   doc,
   query,
-  orderBy
+  orderBy,
+  where,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import { getAuth } from 'firebase/auth';
@@ -120,16 +122,53 @@ export class CommissionFirebaseService {
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Commission));
   }
 
+  // Upsert: for each commission, delete ALL existing records with the same
+  // salesperson + month + city before saving the new one.
+  // This prevents stale/duplicate records accumulating in Firestore.
   static async saveCommissions(commissions: Omit<Commission, 'id'>[]): Promise<Commission[]> {
     const saved: Commission[] = [];
 
     for (const commission of commissions) {
+      // 1. Delete any existing records for this salesperson+month+city
+      await CommissionFirebaseService.deleteExistingCommissions(
+        commission.salesperson,
+        commission.month,
+        commission.city
+      );
+
+      // 2. Save the new record
       const payload = stripUndefined(commission);
       const docRef = await addDoc(collection(db, COMMISSIONS_COLLECTION), payload);
       saved.push({ id: docRef.id, ...payload } as Commission);
     }
 
     return saved;
+  }
+
+  // Delete all Firestore commission docs for a given salesperson+month+city.
+  // Called before saving a new calculation AND when no slab matched
+  // (so a previously saved record doesn't linger as stale data).
+  static async deleteExistingCommissions(
+    salesperson: string,
+    month: string,
+    city: string
+  ): Promise<void> {
+    const q = query(
+      collection(db, COMMISSIONS_COLLECTION),
+      where('salesperson', '==', salesperson),
+      where('month', '==', month),
+      where('city', '==', city)
+    );
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return;
+
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    console.log(
+      `[CommissionFirebase] Deleted ${snapshot.size} stale record(s) for ` +
+      `${salesperson} / ${month} / ${city}`
+    );
   }
 
   static async updateCommission(id: string, data: Partial<Omit<Commission, 'id'>>) {

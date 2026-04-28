@@ -73,9 +73,6 @@ export function CommissionReportView({
     window.URL.revokeObjectURL(url);
   };
 
-  const totalInvoicesInReport = filteredCommissions.reduce(
-    (sum, c) => sum + (c.invoiceCount ?? 0), 0
-  );
 
   return (
     <div className="p-6 space-y-6">
@@ -127,21 +124,13 @@ export function CommissionReportView({
       )}
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-4">
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total Commissions</span>
             <FileText className="h-4 w-4 text-gray-400" />
           </div>
           <div className="text-2xl font-bold text-gray-900">{stats.totalCommissions}</div>
-        </div>
-        <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Total Invoices</span>
-            <Receipt className="h-4 w-4 text-blue-500" />
-          </div>
-          <div className="text-2xl font-bold text-blue-600">{totalInvoicesInReport}</div>
-          <p className="text-xs text-gray-500">across filtered records</p>
         </div>
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">

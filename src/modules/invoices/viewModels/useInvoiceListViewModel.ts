@@ -209,19 +209,22 @@ export function useInvoiceListViewModel(): ViewModelProps {
   const [isLoading, setIsLoading] = useState(true);
   const [salespersonMap, setSalespersonMap] = useState<Record<string, string>>({});
 
+  // Real-time listener: any Firestore change (add/update/delete) instantly
+  // reflects in the UI without needing a manual refresh.
   useEffect(() => {
-    async function fetchInvoices() {
-      try {
-        setIsLoading(true);
-        const data = await InvoiceFirebaseService.fetchAllInvoices();
+    setIsLoading(true);
+    const unsubscribe = InvoiceFirebaseService.subscribeToInvoices(
+      (data) => {
         setInvoices(data);
-      } catch (error) {
-        console.error('Failed to fetch invoices:', error);
-      } finally {
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error('Invoice listener error:', error);
         setIsLoading(false);
       }
-    }
-    fetchInvoices();
+    );
+    // Cleanup: unsubscribe when component unmounts
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {

@@ -1,18 +1,19 @@
 // Commission Calculation View - Presentational Component
 // UPDATED:
-//   - Live Commissions panel shows all auto-calculated records from invoice saves
-//   - Each live record shows salesperson, city, month, invoices, sales, commission, status
-//   - History section groups records by month for a full timeline view
-//   - Confirm button on live records to quickly confirm individual records
+//   - Removed the "Live Auto-Calculated" dashboard section (tabs, live/history panels,
+//     pending/confirmed tables, and the summary cards tied to live data).
+//   - The page now starts directly with the search-based Manual Calculation form.
+//   - After clicking "Calculate Commission" the invoice breakdown and results modal
+//     appear exactly as before — confirm/save flow is unchanged.
+//   - Commission Reports are populated from the same Firestore saves, so they remain
+//     fully intact.
 
 import {
   Calculator, X, Maximize2, Minimize2, Check,
   AlertCircle, Edit2, Save, XCircle, FileText,
-  Info, ChevronDown, ChevronRight, Receipt, Search,
-  TrendingUp, Clock, CheckCircle, RefreshCw,
-  Zap, History, BarChart2,
+  ChevronDown, ChevronRight, Receipt, Search,
+  CheckCircle, RefreshCw, MapPin,
 } from 'lucide-react';
-import { useState } from 'react';
 import type { Commission, InvoiceReference } from '../models/types';
 import type { SalespersonInvoiceBreakdown } from '../viewModels/useCommissionCalculationViewModel';
 
@@ -38,7 +39,8 @@ interface CommissionCalculationViewProps {
   isEditing:               string | null;
   editValues:              { percentage: number; amount: number };
   setEditValues:           (values: { percentage: number; amount: number }) => void;
-  // Live auto-calculated commissions from invoice saves
+  // These props are kept in the interface for ViewModel compatibility but are
+  // no longer rendered in the UI:
   liveCommissions:         Commission[];
   liveCommissionsLoading:  boolean;
   refreshLiveCommissions:  () => void;
@@ -67,7 +69,6 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full ${cls}`}>
       {status === 'Confirmed' && <CheckCircle size={10} />}
-      {status === 'Calculated' && <Clock size={10} />}
       {status}
     </span>
   );
@@ -80,7 +81,6 @@ export function CommissionCalculationView({
   invoiceBreakdowns, expandedSalesperson, setExpandedSalesperson,
   showModal, setShowModal, isFullScreen, setIsFullScreen,
   isCalculating, isEditing, editValues, setEditValues,
-  liveCommissions, liveCommissionsLoading, refreshLiveCommissions,
   calculateCommission, confirmSingleCommission, confirmAllCommissions,
   startEdit, saveEdit, cancelEdit,
   handleModalConfirm, handleModalCancel,
@@ -88,36 +88,11 @@ export function CommissionCalculationView({
   totalInvoices = 0, paidInvoices = 0,
 }: CommissionCalculationViewProps) {
 
-  const [activeTab, setActiveTab] = useState<'live' | 'history'>('live');
-  const [citySearch, setCitySearch] = useState('');
-
   const getEmployeeName = (id: string) =>
     employees.find(e => e.id === id)?.name || id;
 
   const toggleBreakdown = (id: string) =>
     setExpandedSalesperson(expandedSalesperson === id ? null : id);
-
-  // Filter live commissions by city search
-  const filteredLiveCommissions = citySearch.trim()
-    ? liveCommissions.filter(c =>
-        c.city?.toLowerCase().includes(citySearch.trim().toLowerCase()) ||
-        c.salespersonName?.toLowerCase().includes(citySearch.trim().toLowerCase())
-      )
-    : liveCommissions;
-
-  // Group live commissions by month for history view
-  const byMonth: Record<string, Commission[]> = {};
-  filteredLiveCommissions.forEach((c) => {
-    if (!byMonth[c.month]) byMonth[c.month] = [];
-    byMonth[c.month].push(c);
-  });
-  const sortedMonths = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
-
-  const pendingCount    = filteredLiveCommissions.filter(c => c.status === 'Calculated').length;
-  const confirmedCount  = filteredLiveCommissions.filter(c => c.status === 'Confirmed').length;
-  const totalCommission = filteredLiveCommissions.reduce(
-    (s, c) => s + (c.overriddenCommissionAmount ?? c.calculatedCommissionAmount), 0
-  );
 
   return (
     <div className="p-6 space-y-6">
@@ -126,12 +101,13 @@ export function CommissionCalculationView({
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">Commission Calculation</h1>
         <p className="text-gray-600 mt-1">
-          Commissions are auto-calculated from paid invoices. Review, adjust and confirm below.
+          Select a city and month, then click <strong>Calculate Commission</strong> to compute commissions
+          from paid invoices according to the active slabs.
         </p>
       </div>
 
-      {/* ── Summary cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* ── Summary cards (invoice counts) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 rounded-lg"><FileText size={18} className="text-blue-600" /></div>
@@ -150,339 +126,17 @@ export function CommissionCalculationView({
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-50 rounded-lg"><Clock size={18} className="text-orange-500" /></div>
-            <div>
-              <p className="text-xs text-gray-500">Pending Confirmation</p>
-              <p className="text-2xl font-bold text-orange-500">{pendingCount}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-50 rounded-lg"><TrendingUp size={18} className="text-purple-600" /></div>
-            <div>
-              <p className="text-xs text-gray-500">Total Commission</p>
-              <p className="text-xl font-bold text-purple-600">{formatCurrency(totalCommission)}</p>
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* ── Live / History tabs + Manual Calculate ── */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {/* Tab bar */}
-        <div className="flex items-center justify-between px-6 pt-4 border-b border-gray-200">
-          <div className="flex gap-1">
-            <button
-              onClick={() => setActiveTab('live')}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
-                activeTab === 'live'
-                  ? 'border-[#4f46e5] text-[#4f46e5]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Zap size={15} />
-              Live Auto-Calculated
-              {pendingCount > 0 && (
-                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-orange-500 text-white rounded-full">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
-                activeTab === 'history'
-                  ? 'border-[#4f46e5] text-[#4f46e5]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <History size={15} />
-              History by Month
-            </button>
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            {/* City / salesperson search */}
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Filter by city or salesperson…"
-                value={citySearch}
-                onChange={e => setCitySearch(e.target.value)}
-                className="pl-8 pr-8 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] w-56"
-              />
-              {citySearch && (
-                <button
-                  onClick={() => setCitySearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-            <button
-              onClick={refreshLiveCommissions}
-              disabled={liveCommissionsLoading}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <RefreshCw size={14} className={liveCommissionsLoading ? 'animate-spin' : ''} />
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {/* ── LIVE TAB ── */}
-        {activeTab === 'live' && (
-          <div className="p-6">
-            {liveCommissionsLoading ? (
-              <div className="flex items-center justify-center py-12 gap-3 text-gray-500">
-                <RefreshCw size={20} className="animate-spin" />
-                Loading commissions...
-              </div>
-            ) : filteredLiveCommissions.length === 0 ? (
-              <div className="text-center py-12">
-                <Zap size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500 font-medium">
-                  {citySearch ? `No commissions found for "${citySearch}"` : 'No commissions yet'}
-                </p>
-                <p className="text-sm text-gray-400 mt-1">
-                  {citySearch ? 'Try a different city or salesperson name' : 'Commissions appear here automatically when paid invoices are saved.'}
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Pending section */}
-                {pendingCount > 0 && (
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-orange-700 flex items-center gap-2">
-                        <Clock size={15} />
-                        Pending Confirmation ({pendingCount})
-                      </h3>
-                      <button
-                        onClick={confirmAllCommissions}
-                        className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        <Check size={13} /> Confirm All Pending
-                      </button>
-                    </div>
-                    <div className="overflow-x-auto rounded-lg border border-orange-200">
-                      <table className="w-full text-sm">
-                        <thead className="bg-orange-50 border-b border-orange-200">
-                          <tr>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-orange-800 uppercase">Salesperson</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-orange-800 uppercase">City</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-orange-800 uppercase">Month</th>
-                            <th className="px-4 py-2.5 text-center text-xs font-semibold text-orange-800 uppercase">Invoices</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-semibold text-orange-800 uppercase">Total Sales</th>
-                            <th className="px-4 py-2.5 text-center text-xs font-semibold text-orange-800 uppercase">Rate</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-semibold text-orange-800 uppercase">Commission</th>
-                            <th className="px-4 py-2.5 text-center text-xs font-semibold text-orange-800 uppercase">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-orange-100 bg-white">
-                          {filteredLiveCommissions
-                            .filter(c => c.status === 'Calculated')
-                            .map((c) => (
-                              <tr key={c.id} className="hover:bg-orange-50 transition-colors">
-                                <td className="px-4 py-3 font-medium text-gray-900">{c.salespersonName}</td>
-                                <td className="px-4 py-3 text-gray-700">{c.city}</td>
-                                <td className="px-4 py-3 text-gray-700">{formatMonth(c.month)}</td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                    <Receipt size={10} />{c.invoiceCount}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-right font-medium text-gray-900">
-                                  {formatCurrency(c.totalSales)}
-                                </td>
-                                <td className="px-4 py-3 text-center text-gray-700">
-                                  {c.overriddenCommissionPercentage ?? c.commissionPercentage}%
-                                </td>
-                                <td className="px-4 py-3 text-right font-bold text-orange-700">
-                                  {formatCurrency(c.overriddenCommissionAmount ?? c.calculatedCommissionAmount)}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <button
-                                    onClick={() => confirmSingleCommission(c.id)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                                  >
-                                    <Check size={11} /> Confirm
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Confirmed / Adjusted section */}
-                {confirmedCount > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-green-700 flex items-center gap-2 mb-3">
-                      <CheckCircle size={15} />
-                      Confirmed ({confirmedCount})
-                    </h3>
-                    <div className="overflow-x-auto rounded-lg border border-green-200">
-                      <table className="w-full text-sm">
-                        <thead className="bg-green-50 border-b border-green-200">
-                          <tr>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-green-800 uppercase">Salesperson</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-green-800 uppercase">City</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-green-800 uppercase">Month</th>
-                            <th className="px-4 py-2.5 text-center text-xs font-semibold text-green-800 uppercase">Invoices</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-semibold text-green-800 uppercase">Sales</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-semibold text-green-800 uppercase">Commission</th>
-                            <th className="px-4 py-2.5 text-center text-xs font-semibold text-green-800 uppercase">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-green-100 bg-white">
-                          {filteredLiveCommissions
-                            .filter(c => c.status !== 'Calculated')
-                            .map((c) => (
-                              <tr key={c.id} className="hover:bg-green-50 transition-colors">
-                                <td className="px-4 py-3 font-medium text-gray-900">{c.salespersonName}</td>
-                                <td className="px-4 py-3 text-gray-700">{c.city}</td>
-                                <td className="px-4 py-3 text-gray-700">{formatMonth(c.month)}</td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                    <Receipt size={10} />{c.invoiceCount}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-right font-medium text-gray-900">
-                                  {formatCurrency(c.totalSales)}
-                                </td>
-                                <td className="px-4 py-3 text-right font-bold text-green-700">
-                                  {formatCurrency(c.overriddenCommissionAmount ?? c.calculatedCommissionAmount)}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <StatusBadge status={c.status} />
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ── HISTORY TAB ── */}
-        {activeTab === 'history' && (
-          <div className="p-6">
-            {liveCommissionsLoading ? (
-              <div className="flex items-center justify-center py-12 gap-3 text-gray-500">
-                <RefreshCw size={20} className="animate-spin" /> Loading history...
-              </div>
-            ) : sortedMonths.length === 0 ? (
-              <div className="text-center py-12">
-                <History size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500">No commission history yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {sortedMonths.map((month) => {
-                  const records    = byMonth[month];
-                  const monthTotal = records.reduce(
-                    (s, c) => s + (c.overriddenCommissionAmount ?? c.calculatedCommissionAmount), 0
-                  );
-                  const pending    = records.filter(c => c.status === 'Calculated').length;
-                  return (
-                    <div key={month} className="border border-gray-200 rounded-lg overflow-hidden">
-                      {/* Month header */}
-                      <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-200">
-                        <div className="flex items-center gap-3">
-                          <BarChart2 size={16} className="text-[#4f46e5]" />
-                          <span className="font-semibold text-gray-800">{formatMonth(month)}</span>
-                          {pending > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold rounded-full bg-orange-100 text-orange-700">
-                              {pending} pending
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-sm font-bold text-[#4f46e5]">
-                          {formatCurrency(monthTotal)} total
-                        </span>
-                      </div>
-
-                      {/* Records table */}
-                      <table className="w-full text-sm">
-                        <thead className="bg-white border-b border-gray-100">
-                          <tr>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Salesperson</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">City</th>
-                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Invoices</th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Sales</th>
-                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Slab</th>
-                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Rate</th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Commission</th>
-                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 bg-white">
-                          {records.map((c) => (
-                            <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="px-4 py-3 font-medium text-gray-900">{c.salespersonName}</td>
-                              <td className="px-4 py-3 text-gray-700">{c.city}</td>
-                              <td className="px-4 py-3 text-center">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                  <Receipt size={10} />{c.invoiceCount}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(c.totalSales)}</td>
-                              <td className="px-4 py-3 text-center text-xs text-gray-500">
-                                {formatCurrency(c.appliedSlabFrom)} – {formatCurrency(c.appliedSlabTo)}
-                              </td>
-                              <td className="px-4 py-3 text-center text-gray-700">
-                                {c.overriddenCommissionPercentage ?? c.commissionPercentage}%
-                              </td>
-                              <td className="px-4 py-3 text-right font-bold text-gray-900">
-                                {formatCurrency(c.overriddenCommissionAmount ?? c.calculatedCommissionAmount)}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <StatusBadge status={c.status} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-gray-50 border-t border-gray-200">
-                          <tr>
-                            <td colSpan={6} className="px-4 py-2 text-xs font-semibold text-gray-600">
-                              {records.length} record{records.length !== 1 ? 's' : ''}
-                            </td>
-                            <td className="px-4 py-2 text-right text-sm font-bold text-[#4f46e5]">
-                              {formatCurrency(monthTotal)}
-                            </td>
-                            <td />
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Manual Calculation Form ── */}
+      {/* ── Calculation Form ── */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
             <Calculator size={18} className="text-[#4f46e5]" />
-            Manual Calculation
+            Calculate Commission
           </h3>
           <p className="text-sm text-gray-500 mt-0.5">
-            Recalculate commission for a specific city and month — useful for corrections or overrides.
+            Select a city and month to calculate commissions from paid invoices against the configured slabs.
           </p>
         </div>
         <div className="p-6 space-y-4">
@@ -501,11 +155,6 @@ export function CommissionCalculationView({
                   <option key={city} value={city}>{city}</option>
                 ))}
               </select>
-              {selectedCity === 'Islamabad' && (
-                <p className="mt-1.5 text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
-                  ⭐ <strong>Uzair Naseem</strong> will have his commission calculated on pooled sales: Islamabad + Karachi + Lahore combined.
-                </p>
-              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -539,25 +188,34 @@ export function CommissionCalculationView({
               disabled={isCalculating || !selectedCity || !selectedMonth}
               className="flex items-center gap-2 bg-[#4f46e5] text-white px-6 py-2.5 rounded-lg hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Calculator size={18} />
-              {isCalculating ? 'Calculating...' : 'Calculate Commission'}
+              {isCalculating
+                ? <><RefreshCw size={18} className="animate-spin" /> Calculating...</>
+                : <><Search size={18} /> Calculate Commission</>
+              }
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Invoice Breakdown Panel (shown after manual calculation) ── */}
+      {/* ── Invoice Breakdown Panel (shown after calculation, before modal) ── */}
       {invoiceBreakdowns.length > 0 && !showModal && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Receipt size={18} className="text-[#4f46e5]" />
-              <h3 className="text-lg font-medium text-gray-900">Invoice Breakdown by Salesperson</h3>
+              <div className="p-1.5 bg-[#4f46e5]/10 rounded-lg">
+                <Receipt size={16} className="text-[#4f46e5]" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Invoice Breakdown by Salesperson</h3>
             </div>
-            <span className="text-sm text-gray-500">
-              {invoiceBreakdowns.reduce((s, b) => s + b.invoiceCount, 0)} paid invoices ·{' '}
-              {invoiceBreakdowns.length} salespeople
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-200">
+                <Receipt size={10} />
+                {invoiceBreakdowns.reduce((s, b) => s + b.invoiceCount, 0)} invoices
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 text-xs font-semibold rounded-full border border-purple-200">
+                {invoiceBreakdowns.length} salesperson{invoiceBreakdowns.length !== 1 ? 's' : ''}
+              </span>
+            </div>
           </div>
           <div className="divide-y divide-gray-100">
             {invoiceBreakdowns.map((breakdown) => (
@@ -566,14 +224,12 @@ export function CommissionCalculationView({
                 {/* ── Pooled commission banner (Uzair Naseem only) ── */}
                 {breakdown.isPooled && breakdown.pooledCitySales && (
                   <div className="mx-5 mt-4 mb-2 bg-white border-2 border-indigo-300 rounded-xl overflow-hidden shadow-sm">
-                    {/* Banner header row */}
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600">
                       <span className="text-white text-sm font-bold">⭐ Pooled Commission</span>
                       <span className="text-indigo-200 text-xs font-medium">
                         — Islamabad + Karachi + Lahore combined for slab matching
                       </span>
                     </div>
-                    {/* City breakdown cards */}
                     <div className="grid grid-cols-3 divide-x divide-indigo-100 bg-white">
                       {breakdown.pooledCitySales.map(p => (
                         <div key={p.city} className="px-4 py-3">
@@ -583,7 +239,6 @@ export function CommissionCalculationView({
                         </div>
                       ))}
                     </div>
-                    {/* Combined total footer */}
                     <div className="flex items-center justify-between px-4 py-2 bg-indigo-50 border-t border-indigo-200">
                       <span className="text-xs font-semibold text-indigo-700">Combined Total (slab lookup basis)</span>
                       <span className="text-sm font-black text-indigo-700">{formatCurrency(breakdown.totalSales)}</span>
@@ -592,41 +247,87 @@ export function CommissionCalculationView({
                 )}
 
                 {/* ── Salesperson toggle row ── */}
-                <button
-                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-white/60 transition-colors text-left"
-                  onClick={() => toggleBreakdown(breakdown.salespersonId)}
-                >
-                  <div className="flex items-center gap-3">
-                    {expandedSalesperson === breakdown.salespersonId
-                      ? <ChevronDown size={16} className="text-gray-400" />
-                      : <ChevronRight size={16} className="text-gray-400" />
-                    }
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{breakdown.salespersonName}</p>
-                      <p className="text-xs text-gray-500">
-                        {breakdown.invoiceCount} invoice{breakdown.invoiceCount !== 1 ? 's' : ''}
-                        {breakdown.isPooled && (
-                          <span className="ml-1.5 inline-flex items-center gap-1 text-indigo-600 font-semibold">
-                            · pooled: all 3 cities
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center gap-3 mb-1">
-                      <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${breakdown.isPooled ? 'bg-gradient-to-r from-indigo-500 to-purple-600' : 'bg-gradient-to-r from-[#4f46e5] to-purple-500'}`}
-                          style={{ width: `${breakdown.slabProgressPercent}%` }}
-                        />
+                {(() => {
+                  const comm = commissionData.find(c => c.salesperson === breakdown.salespersonId);
+                  const commAmount = comm ? (comm.overriddenCommissionAmount ?? comm.calculatedCommissionAmount) : null;
+                  const commRate   = comm ? (comm.overriddenCommissionPercentage ?? comm.commissionPercentage) : null;
+                  const slabLabel  = comm ? `${formatCurrency(comm.appliedSlabFrom)} – ${formatCurrency(comm.appliedSlabTo)}` : null;
+                  const isExpanded = expandedSalesperson === breakdown.salespersonId;
+
+                  return (
+                    <button
+                      className="w-full flex items-center justify-between px-6 py-5 hover:bg-gray-50/70 transition-colors text-left"
+                      onClick={() => toggleBreakdown(breakdown.salespersonId)}
+                    >
+                      {/* Left: chevron + name + meta */}
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors ${isExpanded ? 'bg-[#4f46e5] text-white' : 'bg-gray-100 text-gray-500'}`}>
+                          {isExpanded
+                            ? <ChevronDown size={14} />
+                            : <ChevronRight size={14} />
+                          }
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-bold text-gray-900">{breakdown.salespersonName}</p>
+                            {breakdown.isPooled && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                ⭐ POOLED
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {breakdown.invoiceCount} invoice{breakdown.invoiceCount !== 1 ? 's' : ''}
+                            {breakdown.isPooled ? ' · Islamabad + Karachi + Lahore combined' : ''}
+                          </p>
+                          {slabLabel && commRate !== null && (
+                            <p className="text-xs text-indigo-600 mt-0.5 font-medium">
+                              Slab: {slabLabel} @ {commRate}%
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-xs text-gray-500">{breakdown.slabProgressPercent}%</span>
-                    </div>
-                    <p className="text-sm font-bold text-gray-900">{formatCurrency(breakdown.totalSales)}</p>
-                    <p className="text-xs text-gray-500">{breakdown.isPooled ? 'combined sales' : 'total sales'}</p>
-                  </div>
-                </button>
+
+                      {/* Right: stats chips */}
+                      <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                        {/* Progress + sales */}
+                        <div className="text-right">
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">
+                            {breakdown.isPooled ? 'Combined Sales' : 'Total Sales'}
+                          </p>
+                          <p className="text-sm font-bold text-gray-800">{formatCurrency(breakdown.totalSales)}</p>
+                          <div className="flex items-center gap-1.5 mt-1.5 justify-end">
+                            <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${breakdown.isPooled ? 'bg-indigo-500' : 'bg-[#4f46e5]'}`}
+                                style={{ width: `${breakdown.slabProgressPercent}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-gray-400">{breakdown.slabProgressPercent}%</span>
+                          </div>
+                        </div>
+
+                        <div className="w-px h-10 bg-gray-200" />
+
+                        {/* Commission chip */}
+                        {commAmount !== null ? (
+                          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-right min-w-[120px]">
+                            <p className="text-[10px] text-green-600 uppercase tracking-wide font-semibold">Commission</p>
+                            <p className="text-base font-black text-green-700 mt-0.5">{formatCurrency(commAmount)}</p>
+                          </div>
+                        ) : (
+                          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-right min-w-[120px]">
+                            <p className="text-[10px] text-red-500 uppercase tracking-wide font-semibold">Commission</p>
+                            <div className="flex items-center gap-1 mt-0.5 justify-end">
+                              <AlertCircle size={11} className="text-red-400" />
+                              <p className="text-xs text-red-500 font-medium">No slab matched</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })()}
 
                 {expandedSalesperson === breakdown.salespersonId && (
                   <div className="px-6 pb-4">
@@ -636,6 +337,9 @@ export function CommissionCalculationView({
                           <tr>
                             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Invoice ID</th>
                             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                            {breakdown.isPooled && (
+                              <th className="px-4 py-2 text-left text-xs font-medium text-indigo-500 uppercase">City</th>
+                            )}
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
                             <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                           </tr>
@@ -649,6 +353,19 @@ export function CommissionCalculationView({
                                   year: 'numeric', month: 'short', day: 'numeric',
                                 })}
                               </td>
+                              {breakdown.isPooled && (
+                                <td className="px-4 py-2">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full ${
+                                    (inv as any).customerCity === 'Karachi'   ? 'bg-orange-100 text-orange-700' :
+                                    (inv as any).customerCity === 'Lahore'    ? 'bg-purple-100 text-purple-700' :
+                                    (inv as any).customerCity === 'Islamabad' ? 'bg-blue-100 text-blue-700'    :
+                                    'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    <MapPin size={9} />
+                                    {(inv as any).customerCity || 'Unknown'}
+                                  </span>
+                                </td>
+                              )}
                               <td className="px-4 py-2 text-right font-medium text-gray-900">
                                 {formatCurrency(inv.totalAmount)}
                               </td>
@@ -662,7 +379,7 @@ export function CommissionCalculationView({
                         </tbody>
                         <tfoot className="bg-gray-50 border-t border-gray-200">
                           <tr>
-                            <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-gray-700">
+                            <td colSpan={breakdown.isPooled ? 3 : 2} className="px-4 py-2 text-xs font-semibold text-gray-700">
                               Total ({breakdown.invoiceCount} invoices)
                             </td>
                             <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
