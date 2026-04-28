@@ -161,8 +161,8 @@ function EmployeeDeleteRoute() { return <EmployeeDeleteWrapper />; }
 
 function LoanDashboardRoute()        { return <LoanDashboardWrapper />; }
 function LoanListRoute()             { return <LoanListWrapper />; }
-function LoanPayableListRoute()      { return <LoanListWrapper />; }
-function LoanReceivableListRoute()   { return <LoanListWrapper />; }
+function LoanPayableListRoute()      { return <LoanListWrapper defaultType="Payable" />; }
+function LoanReceivableListRoute()   { return <LoanListWrapper defaultType="Receivable" />; }
 function LoanCreateRoute()           { return <LoanFormWrapper />; }
 function LoanCreatePayableRoute()    { return <LoanFormWrapper defaultType="Payable" />; }
 function LoanCreateReceivableRoute() { return <LoanFormWrapper defaultType="Receivable" />; }
