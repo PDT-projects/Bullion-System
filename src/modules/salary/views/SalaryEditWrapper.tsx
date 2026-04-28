@@ -18,6 +18,10 @@ export function SalaryEditWrapper() {
 
   const vm = useSalaryFormViewModel({ mode: 'edit', type: 'regular', employees });
 
+  // Derive commission props that SalaryFormView expects from commissionResult
+  const confirmedCommissionAmount = vm.commissionResult?.commissionAmount ?? 0;
+  const commissionSource = vm.commissionResult?.salaryMonth ?? '';
+
   return (
     <SalaryFormView
       formData={vm.formData}
@@ -38,11 +42,17 @@ export function SalaryEditWrapper() {
       regularAlreadyPaidAmount={vm.regularAlreadyPaidAmount}
       remainingSalaryToPay={vm.remainingSalaryToPay}
       isEffectivelyAdvance={vm.isEffectivelyAdvance}
-      // Commission auto-fill props (edit mode will have isCommissionAutoFilled=false
+      // Commission auto-fill props (edit mode: isCommissionAutoFilled=false,
       // so the badge won't show — existing data is preserved as-is)
-      confirmedCommissionAmount={vm.confirmedCommissionAmount}
+      confirmedCommissionAmount={confirmedCommissionAmount}
       isCommissionAutoFilled={vm.isCommissionAutoFilled}
-      commissionSource={vm.commissionSource}
+      commissionSource={commissionSource}
+      // Loan deduction props (loan section hidden in edit mode via showLoanSection
+      // but still passed so the net amount summary line renders correctly)
+      employeeLoan={vm.employeeLoan}
+      loanDeduction={vm.loanDeduction}
+      isLoanLoading={vm.isLoanLoading}
+      setLoanDeduction={vm.setLoanDeduction}
       onFieldChange={vm.onFieldChange}
       onTransactionChange={vm.onTransactionChange}
       onSubmit={vm.onSubmit}

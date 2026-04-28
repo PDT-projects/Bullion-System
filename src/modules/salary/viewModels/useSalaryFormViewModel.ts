@@ -4,6 +4,11 @@
 // KEY FIX: calculateAutoCommission now receives BOTH employeeId AND employeeName.
 //   - employeeName is used to match invoices (invoices store name, not ID)
 //   - employeeId   is used to match commission slabs (slabs store ID)
+//
+// LOAN DEDUCTION FEATURE:
+//   - On employee select, fetches any active Receivable loans linked to that employee
+//   - Exposes `employeeLoan`, `loanDeduction`, `setLoanDeduction`
+//   - On submit, calls LoanFirebaseService.makePayment() to reduce loan balance
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -15,6 +20,8 @@ import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { TransactionFirebaseService } from '../../transactions/models/transactionFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { CommissionFirebaseService } from '../../commission/models/Commissionfirebaseservice';
+import { LoanFirebaseService } from '../../loans/models/Loanfirebaseservice';
+import type { Loan } from '../../loans/models/types';
 import {
   calculateAutoCommission,
   formatCommissionSummary,
@@ -62,6 +69,12 @@ export interface UseSalaryFormViewModelReturn {
   isCommissionLoading: boolean;
   commissionSummary: string;
   commissionBreakdown: CommissionCityBreakdown[];
+  // ── Loan deduction ──────────────────────────────────────────────────────
+  employeeLoan: Loan | null;
+  loanDeduction: number;
+  isLoanLoading: boolean;
+  setLoanDeduction: (amount: number) => void;
+  // ────────────────────────────────────────────────────────────────────────
   onFieldChange: (field: string, value: any) => void;
   onTransactionChange: (index: number, field: keyof SalaryTransaction, value: any) => void;
   onSubmit: () => void;
@@ -98,6 +111,12 @@ export function useSalaryFormViewModel({
   const [isCommissionAutoFilled, setIsCommissionAutoFilled] = useState(false);
   const [isCommissionLoading,    setIsCommissionLoading]    = useState(false);
   const commissionManuallyEdited = useRef(false);
+
+  // ── Loan state ────────────────────────────────────────────────────────────
+  const [employeeLoan,      setEmployeeLoan]      = useState<Loan | null>(null);
+  const [loanDeduction,     setLoanDeductionState] = useState(0);
+  const [isLoanLoading,     setIsLoanLoading]      = useState(false);
+  // ──────────────────────────────────────────────────────────────────────────
 
   const isEditMode       = mode === 'edit';
   const submitButtonText = isEditMode ? 'Update Salary' : 'Save Salary';
@@ -198,9 +217,58 @@ export function useSalaryFormViewModel({
     [formData, calculatedNetAmount, transactionsList]
   );
 
+  // ── Fetch employee's active Receivable loan when employee changes ─────────
+  // Only for regular salary in create mode (edit keeps existing deductions as-is).
+  useEffect(() => {
+    if (type !== 'regular' || isEditMode || !formData.employeeId) {
+      setEmployeeLoan(null);
+      setLoanDeductionState(0);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoanLoading(true);
+
+    const fetchLoan = async () => {
+      try {
+        const allLoans = await LoanFirebaseService.fetchAllLoans();
+        if (cancelled) return;
+
+        // Find a Partial Receivable loan (company gave money to employee) for this employee
+        const activeLoan = allLoans.find(
+          (l) =>
+            l.type === 'Receivable' &&
+            l.status === 'Partial' &&
+            l.remaining > 0 &&
+            l.employeeId === formData.employeeId
+        ) || null;
+
+        setEmployeeLoan(activeLoan);
+        // Reset deduction amount and deductions field when employee changes
+        setLoanDeductionState(0);
+        setFormData(prev => ({ ...prev, deductions: 0 }));
+      } catch (err) {
+        console.error('[LoanFetch] Error fetching employee loans:', err);
+        setEmployeeLoan(null);
+      } finally {
+        if (!cancelled) setIsLoanLoading(false);
+      }
+    };
+
+    fetchLoan();
+    return () => { cancelled = true; };
+  }, [formData.employeeId, type, isEditMode]);
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ── Expose setLoanDeduction — clamps to remaining balance, syncs deductions
+  const setLoanDeduction = useCallback((amount: number) => {
+    const clamped = Math.max(0, Math.min(amount, employeeLoan?.remaining ?? amount));
+    setLoanDeductionState(clamped);
+    setFormData(prev => ({ ...prev, deductions: clamped }));
+  }, [employeeLoan]);
+  // ──────────────────────────────────────────────────────────────────────────
+
   // ── AUTO-COMMISSION CALCULATION ───────────────────────────────────────────
-  // Runs when employee or month changes (create mode, regular only).
-  // Uses BOTH employeeId (for slab matching) and employeeName (for invoice matching).
   useEffect(() => {
     if (isEditMode) return;
     if (type !== 'regular') return;
@@ -211,7 +279,6 @@ export function useSalaryFormViewModel({
     }
     if (commissionManuallyEdited.current) return;
 
-    // Need the employee name to match invoices
     const employeeName = selectedEmployee?.name;
     if (!employeeName) {
       console.warn('[CommissionAuto] Employee name not found for ID:', formData.employeeId);
@@ -223,10 +290,6 @@ export function useSalaryFormViewModel({
 
     const run = async () => {
       try {
-        console.log(
-          `[CommissionAuto] Fetching invoices + slabs for "${employeeName}" (${formData.employeeId}) / ${salaryMonth}`
-        );
-
         const [invoices, slabs] = await Promise.all([
           InvoiceFirebaseService.fetchAllInvoices(),
           CommissionFirebaseService.fetchAllSlabs(),
@@ -234,17 +297,13 @@ export function useSalaryFormViewModel({
 
         if (cancelled) return;
 
-        console.log(`[CommissionAuto] Fetched ${invoices.length} invoices, ${slabs.length} slabs`);
-
         const result = calculateAutoCommission(
-          formData.employeeId,  // used to match slabs
-          employeeName,         // used to match invoices
+          formData.employeeId,
+          employeeName,
           salaryMonth,
           invoices,
           slabs
         );
-
-        console.log('[CommissionAuto] Result:', result);
 
         setCommissionResult(result);
 
@@ -358,7 +417,6 @@ export function useSalaryFormViewModel({
             if (value === 'Cheque') { updated.bankId = ''; updated.bankName = ''; }
           }
           if (field === 'salaryMonth') {
-            // Reset manual flag → re-calculate for new month
             commissionManuallyEdited.current = false;
             setIsCommissionAutoFilled(false);
             setCommissionResult(null);
@@ -384,6 +442,14 @@ export function useSalaryFormViewModel({
     );
     if (!v.isValid) {
       toast.error(v.error || 'Please fill in all required fields');
+      return;
+    }
+
+    // Validate loan deduction is within remaining balance
+    if (loanDeduction > 0 && employeeLoan && loanDeduction > employeeLoan.remaining) {
+      toast.error(
+        `Loan deduction (${loanDeduction.toLocaleString()}) cannot exceed remaining loan balance (${employeeLoan.remaining.toLocaleString()})`
+      );
       return;
     }
 
@@ -469,6 +535,31 @@ export function useSalaryFormViewModel({
           );
         }
 
+        // ── Record loan repayment if a deduction was applied ─────────────
+        if (loanDeduction > 0 && employeeLoan) {
+          try {
+            await LoanFirebaseService.makePayment(
+              {
+                loanId: employeeLoan.id,
+                amount: loanDeduction,
+                mode:   'Cash', // Salary deduction is treated as a cash settlement
+                date:   formData.date,
+              },
+              employeeLoan
+            );
+            console.log(
+              `✅ Loan repayment of ${loanDeduction} recorded for loan ${employeeLoan.id}`
+            );
+          } catch (loanErr) {
+            // Salary is already saved; warn but don't fail
+            console.error('❌ Failed to update loan balance after salary save:', loanErr);
+            toast.warning(
+              'Salary saved successfully, but the loan balance could not be updated automatically. Please update the loan manually.'
+            );
+          }
+        }
+        // ────────────────────────────────────────────────────────────────
+
         toast.success('Salary payment recorded successfully');
       }
 
@@ -483,6 +574,7 @@ export function useSalaryFormViewModel({
     formData, transactionsList, calculatedNetAmount, isEditMode, id,
     employees, banks, navigate, type, regularAlreadyPaid,
     selectedEmployee, salaryMonth, effectiveSubCategory,
+    loanDeduction, employeeLoan,
   ]);
 
   const handleCancel = useCallback(
@@ -523,6 +615,10 @@ export function useSalaryFormViewModel({
     isCommissionLoading,
     commissionSummary,
     commissionBreakdown:    commissionResult?.breakdown ?? [],
+    employeeLoan,
+    loanDeduction,
+    isLoanLoading,
+    setLoanDeduction,
     onFieldChange:          setField,
     onTransactionChange:    setTransactionField,
     onSubmit:               handleSubmit,

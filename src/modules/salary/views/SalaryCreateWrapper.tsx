@@ -22,6 +22,10 @@ export function SalaryCreateWrapper({ type }: SalaryCreateWrapperProps) {
 
   const vm = useSalaryFormViewModel({ mode: 'create', type, employees });
 
+  // Derive commission props that SalaryFormView expects from commissionResult
+  const confirmedCommissionAmount = vm.commissionResult?.commissionAmount ?? 0;
+  const commissionSource = vm.commissionResult?.salaryMonth ?? '';
+
   return (
     <SalaryFormView
       formData={vm.formData}
@@ -42,10 +46,15 @@ export function SalaryCreateWrapper({ type }: SalaryCreateWrapperProps) {
       regularAlreadyPaidAmount={vm.regularAlreadyPaidAmount}
       remainingSalaryToPay={vm.remainingSalaryToPay}
       isEffectivelyAdvance={vm.isEffectivelyAdvance}
-      // NEW: commission auto-fill props
-      confirmedCommissionAmount={vm.confirmedCommissionAmount}
+      // Commission auto-fill props
+      confirmedCommissionAmount={confirmedCommissionAmount}
       isCommissionAutoFilled={vm.isCommissionAutoFilled}
-      commissionSource={vm.commissionSource}
+      commissionSource={commissionSource}
+      // Loan deduction props
+      employeeLoan={vm.employeeLoan}
+      loanDeduction={vm.loanDeduction}
+      isLoanLoading={vm.isLoanLoading}
+      setLoanDeduction={vm.setLoanDeduction}
       onFieldChange={vm.onFieldChange}
       onTransactionChange={vm.onTransactionChange}
       onSubmit={vm.onSubmit}

@@ -2,9 +2,14 @@
 // SalaryFormView - Form for create/edit salary
 // UPDATED: Shows commission auto-fill badge when a Confirmed commission record
 //          is found for the selected employee + salary month.
+// UPDATED: Shows employee's active Receivable loan (if any) and allows entering
+//          a deduction amount that reduces both the salary net amount and the
+//          loan's remaining balance on save.
 
-import { User, Calculator, Wallet, Building2, CreditCard, AlertCircle, CheckCircle, Info, ArrowLeft, Lock, TrendingUp, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { User, Calculator, Wallet, Building2, CreditCard, AlertCircle, CheckCircle, Info, ArrowLeft, Lock, TrendingUp, Sparkles, Landmark, ChevronRight } from 'lucide-react';
 import { SalaryService } from '../models/salaryService';
+import type { Loan } from '../../loans/models/types';
 
 interface SalaryTransaction {
   id: string;
@@ -52,10 +57,15 @@ interface SalaryFormViewProps {
   regularAlreadyPaidAmount: number;
   remainingSalaryToPay: number;
   isEffectivelyAdvance: boolean;
-  // NEW: commission auto-fill props
+  // Commission auto-fill props
   confirmedCommissionAmount?: number;
   isCommissionAutoFilled?: boolean;
   commissionSource?: string;
+  // Loan deduction props
+  employeeLoan?: Loan | null;
+  loanDeduction?: number;
+  isLoanLoading?: boolean;
+  setLoanDeduction?: (amount: number) => void;
   onFieldChange: (field: string, value: any) => void;
   onTransactionChange: (index: number, field: keyof SalaryTransaction, value: any) => void;
   onSubmit: () => void;
@@ -83,9 +93,20 @@ export function SalaryFormView({
   confirmedCommissionAmount = 0,
   isCommissionAutoFilled = false,
   commissionSource = '',
+  employeeLoan = null,
+  loanDeduction = 0,
+  isLoanLoading = false,
+  setLoanDeduction,
   onFieldChange, onTransactionChange, onSubmit, onCancel,
 }: SalaryFormViewProps) {
-  const fmt         = SalaryService.formatCurrency;
+  const fmt = SalaryService.formatCurrency;
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+
+  const handleSubmitClick = () => {
+    setHasSubmitted(true);
+    onSubmit();
+  };
+
   const transaction = transactions[0] || {
     id: '', amount: 0, paidBy: '', transactionBy: '',
     mode: 'Cash' as const, bankId: '', bankName: '',
@@ -95,6 +116,12 @@ export function SalaryFormView({
   };
   const isRegular    = formData.subCategory === 'Employee salary';
   const selectedBank = banks.find(b => b.id === transaction.bankId);
+
+  // Derived loan display values
+  const loanAfterDeduction = employeeLoan
+    ? Math.max(0, employeeLoan.remaining - loanDeduction)
+    : 0;
+  const showLoanSection = isRegular && !isEditMode && (isLoanLoading || employeeLoan);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -169,7 +196,7 @@ export function SalaryFormView({
           </div>
         )}
 
-        {/* ── NEW Banner: Commission auto-filled from confirmed commission record ── */}
+        {/* ── Banner: Commission auto-filled ── */}
         {isRegular && isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode && (
           <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
             <div className="p-1.5 bg-green-100 rounded-lg flex-shrink-0">
@@ -208,8 +235,132 @@ export function SalaryFormView({
           </div>
         )}
 
-        {errorMessage && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        {/* ── LOAN DEDUCTION BANNER ─────────────────────────────────────────── */}
+        {showLoanSection && (
+          <div className="mb-4 rounded-lg border overflow-hidden">
+            {isLoanLoading ? (
+              <div className="p-4 bg-gray-50 border-gray-200 flex items-center gap-3">
+                <div className="w-4 h-4 border-2 border-[#4f46e5] border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                <p className="text-sm text-gray-500">Checking for active loans...</p>
+              </div>
+            ) : employeeLoan ? (
+              <div className="bg-amber-50 border-amber-200">
+                {/* Header row */}
+                <div className="flex items-start gap-3 p-4 border-b border-amber-200">
+                  <div className="p-1.5 bg-amber-100 rounded-lg flex-shrink-0 mt-0.5">
+                    <Landmark className="w-4 h-4 text-amber-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-amber-800 font-semibold">
+                        Active Loan — {employeeLoan.entityName || selectedEmployee?.name}
+                      </p>
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-200 text-amber-800">
+                        Receivable
+                      </span>
+                    </div>
+                    <p className="text-amber-700 text-sm mt-0.5">
+                      This employee has an outstanding company loan. You can deduct a repayment from this month's salary — the loan balance will be updated automatically.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Loan stats */}
+                <div className="grid grid-cols-3 gap-3 p-4 border-b border-amber-200">
+                  <div className="bg-white rounded-lg p-3 border border-amber-100 text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Original Loan</p>
+                    <p className="text-sm font-bold text-gray-800">{fmt(employeeLoan.loanAmount)}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-amber-100 text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Already Repaid</p>
+                    <p className="text-sm font-bold text-green-600">{fmt(employeeLoan.paid)}</p>
+                  </div>
+                  <div className="bg-amber-100 rounded-lg p-3 border border-amber-200 text-center">
+                    <p className="text-xs text-amber-700 mb-0.5">Remaining Balance</p>
+                    <p className="text-sm font-bold text-amber-800">{fmt(employeeLoan.remaining)}</p>
+                  </div>
+                </div>
+
+                {/* Deduction input */}
+                <div className="p-4">
+                  <label className="block text-sm font-medium text-amber-800 mb-2">
+                    Loan Repayment Deduction this Month
+                    <span className="ml-1 text-xs font-normal text-amber-600">
+                      (max {fmt(employeeLoan.remaining)})
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-1 rounded-lg border border-amber-300 overflow-hidden focus-within:ring-2 focus-within:ring-amber-400">
+                      <span className="flex items-center px-3 bg-amber-50 border-r border-amber-300 text-amber-700 text-sm font-medium whitespace-nowrap select-none">
+                        PKR
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={employeeLoan.remaining}
+                        value={loanDeduction || ''}
+                        onChange={(e) => setLoanDeduction?.(parseFloat(e.target.value) || 0)}
+                        className="flex-1 px-3 py-2 bg-white focus:outline-none text-sm"
+                        placeholder="Enter deduction amount"
+                      />
+                    </div>
+                    {/* Quick-fill buttons */}
+                    <div className="flex gap-1.5">
+                      {[25, 50, 100].map((pct) => {
+                        const amt = Math.round((employeeLoan.remaining * pct) / 100);
+                        return (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setLoanDeduction?.(amt)}
+                            className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-700 bg-white hover:bg-amber-100 transition-colors whitespace-nowrap"
+                          >
+                            {pct}%
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setLoanDeduction?.(employeeLoan.remaining)}
+                        className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-amber-400 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors whitespace-nowrap"
+                      >
+                        Full
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Live preview of loan balance after deduction */}
+                  {loanDeduction > 0 && (
+                    <div className="mt-3 flex items-center gap-2 text-sm bg-white border border-amber-200 rounded-lg px-3 py-2.5">
+                      <span className="text-gray-500">Loan after deduction:</span>
+                      <span className="font-bold text-amber-800">{fmt(employeeLoan.remaining)}</span>
+                      <ChevronRight size={14} className="text-gray-400" />
+                      <span className={`font-bold ${loanAfterDeduction === 0 ? 'text-green-600' : 'text-amber-700'}`}>
+                        {fmt(loanAfterDeduction)}
+                      </span>
+                      {loanAfterDeduction === 0 && (
+                        <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">
+                          <CheckCircle size={9} /> Fully cleared!
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {loanDeduction === 0 && (
+                    <p className="mt-2 text-xs text-amber-600">
+                      Enter 0 or leave blank to skip loan deduction for this month.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+        {/* ──────────────────────────────────────────────────────────────────── */}
+
+        {hasSubmitted && errorMessage && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
             <p className="text-red-600 font-medium">{errorMessage}</p>
           </div>
         )}
@@ -340,13 +491,15 @@ export function SalaryFormView({
                     <span className="ml-1 text-xs font-normal text-[#4f46e5]">(remaining after advance)</span>
                   )}
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">PKR</span>
+                <div className="flex rounded-lg border overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5] border-gray-300">
+                  <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
+                    PKR
+                  </span>
                   <input
                     type="number"
                     value={formData.baseSalary}
                     onChange={(e) => onFieldChange('baseSalary', parseFloat(e.target.value) || 0)}
-                    className={`w-full pl-12 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${fieldErrors.baseSalary ? inpErr : 'border-gray-300'}`}
+                    className={`flex-1 px-3 py-2 bg-white focus:outline-none text-sm ${fieldErrors.baseSalary ? 'border border-red-500 rounded-r-lg' : ''}`}
                     placeholder="0"
                   />
                 </div>
@@ -357,7 +510,6 @@ export function SalaryFormView({
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
                     Commission
-                    {/* ── Auto-fill badge ── */}
                     {isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 border border-green-200">
                         <Sparkles size={9} />
@@ -365,21 +517,26 @@ export function SalaryFormView({
                       </span>
                     )}
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">PKR</span>
+                  <div className={`flex rounded-lg border overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5] ${
+                    isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode
+                      ? 'border-green-400'
+                      : 'border-gray-300'
+                  }`}>
+                    <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
+                      PKR
+                    </span>
                     <input
                       type="number"
                       value={formData.commission}
                       onChange={(e) => onFieldChange('commission', parseFloat(e.target.value) || 0)}
-                      className={`w-full pl-12 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${
+                      className={`flex-1 px-3 py-2 focus:outline-none text-sm ${
                         isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode
-                          ? 'border-green-400 bg-green-50/50'
-                          : 'border-gray-300'
+                          ? 'bg-green-50/50'
+                          : 'bg-white'
                       }`}
                       placeholder="0"
                     />
                   </div>
-                  {/* Source hint below the field */}
                   {isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode && (
                     <p className="mt-1 text-xs text-green-600 flex items-center gap-1">
                       <TrendingUp size={10} />
@@ -392,20 +549,34 @@ export function SalaryFormView({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Deductions
-                  {isRegular && advancePaidThisMonth > 0 && (
+                  {/* Show loan deduction hint if active */}
+                  {isRegular && loanDeduction > 0 && !isEditMode ? (
+                    <span className="ml-1 text-xs text-amber-600 font-normal">
+                      (loan: {fmt(loanDeduction)}{advancePaidThisMonth > 0 ? ` + advance: ${fmt(advancePaidThisMonth)}` : ''})
+                    </span>
+                  ) : isRegular && advancePaidThisMonth > 0 ? (
                     <span className="ml-1 text-xs text-orange-600 font-normal">(advance: {fmt(advancePaidThisMonth)})</span>
-                  )}
+                  ) : null}
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">PKR</span>
+                <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5]">
+                  <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
+                    PKR
+                  </span>
                   <input
                     type="number"
                     value={formData.deductions}
                     onChange={(e) => onFieldChange('deductions', parseFloat(e.target.value) || 0)}
-                    className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                    className="flex-1 px-3 py-2 bg-white focus:outline-none text-sm"
                     placeholder="0"
                   />
                 </div>
+                {/* Remind user the loan deduction is already included */}
+                {isRegular && loanDeduction > 0 && !isEditMode && (
+                  <p className="mt-1 text-xs text-amber-600 flex items-center gap-1">
+                    <Landmark size={10} />
+                    Includes {fmt(loanDeduction)} loan repayment
+                  </p>
+                )}
               </div>
 
               {/* Date — locked to today */}
@@ -572,13 +743,15 @@ export function SalaryFormView({
               {transaction.paymentStatus === 'Partial' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Remaining Amount</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">PKR</span>
+                  <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5]">
+                    <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
+                      PKR
+                    </span>
                     <input
                       type="number"
                       value={transaction.remainingAmount}
                       onChange={(e) => onTransactionChange(0, 'remainingAmount', parseFloat(e.target.value) || 0)}
-                      className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                      className="flex-1 px-3 py-2 bg-white focus:outline-none text-sm"
                       placeholder="0"
                     />
                   </div>
@@ -621,6 +794,11 @@ export function SalaryFormView({
               {formData.deductions > 0 && (
                 <span className="flex items-center gap-1 text-red-600">
                   <span>−</span> Deductions: {fmt(formData.deductions)}
+                  {isRegular && loanDeduction > 0 && !isEditMode && (
+                    <span className="text-xs text-amber-600 ml-1">
+                      (incl. {fmt(loanDeduction)} loan repayment)
+                    </span>
+                  )}
                 </span>
               )}
             </div>
@@ -628,6 +806,14 @@ export function SalaryFormView({
               <div className="mt-3 pt-3 border-t border-[#4f46e5]/20 text-xs text-[#4f46e5]">
                 ℹ️ Advance already paid this month: {fmt(advancePaidThisMonth)} · 
                 Paying remaining: {fmt(remainingSalaryToPay)}
+              </div>
+            )}
+            {/* Loan repayment summary line */}
+            {isRegular && loanDeduction > 0 && employeeLoan && !isEditMode && (
+              <div className="mt-2 pt-2 border-t border-[#4f46e5]/20 text-xs text-amber-700 flex items-center gap-1.5">
+                <Landmark size={11} />
+                Loan repayment of {fmt(loanDeduction)} will be deducted — loan balance:
+                {' '}{fmt(employeeLoan.remaining)} → {fmt(loanAfterDeduction)}
               </div>
             )}
           </div>
@@ -641,7 +827,7 @@ export function SalaryFormView({
               Cancel
             </button>
             <button
-              type="button" onClick={onSubmit}
+              type="button" onClick={handleSubmitClick}
               disabled={isLoading || (regularAlreadyPaid && !isEditMode)}
               className="px-6 py-2.5 text-sm font-medium text-white bg-[#4f46e5] border border-[#4f46e5] rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors"
             >
