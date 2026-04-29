@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { Product } from '../App';
-import { Package, MapPin, Calendar, Filter, Download, BarChart3, Eye, X, Hash, DollarSign, FileText, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
+import { Package, MapPin, Calendar, Filter, Download, BarChart3, Eye, X, Hash, DollarSign, FileText, TrendingUp, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -10,58 +10,187 @@ type InventoryReportProps = {
 
 const CITIES = ['Karachi', 'Islamabad', 'Lahore'];
 
+// ── Multi-select dropdown component ──────────────────────────────────────────
+function MultiSelect({
+  label,
+  options,
+  selected,
+  onChange,
+  placeholder = 'All',
+  disabled = false,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (val: string[]) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggle = (val: string) => {
+    if (selected.includes(val)) {
+      onChange(selected.filter(v => v !== val));
+    } else {
+      onChange([...selected, val]);
+    }
+  };
+
+  const displayText =
+    selected.length === 0
+      ? placeholder
+      : selected.length === 1
+      ? selected[0]
+      : `${selected.length} selected`;
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen(o => !o)}
+        className={`w-full border rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between gap-2 transition-colors
+          ${disabled ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300 hover:border-indigo-400 cursor-pointer'}
+          ${open ? 'border-indigo-500 ring-1 ring-indigo-300' : ''}`}
+      >
+        <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-900 font-medium'}>
+          {displayText}
+        </span>
+        <ChevronDown size={14} className={`text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Selected pills */}
+      {selected.length > 1 && (
+        <div className="flex flex-wrap gap-1 mt-1">
+          {selected.map(v => (
+            <span
+              key={v}
+              className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full"
+            >
+              {v}
+              <button onClick={() => toggle(v)} className="hover:text-indigo-900">
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {options.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-gray-400">No options available</p>
+          ) : (
+            <>
+              <button
+                onClick={() => onChange([])}
+                className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+              >
+                Clear all
+              </button>
+              {options.map(opt => (
+                <label
+                  key={opt}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(opt)}
+                    onChange={() => toggle(opt)}
+                    className="accent-indigo-600 w-4 h-4 rounded"
+                  />
+                  <span className="text-gray-800">{opt}</span>
+                </label>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export function InventoryReport({ products }: InventoryReportProps) {
-  const [selectedCity, setSelectedCity] = useState<string>('');
-  const [selectedBrand, setSelectedBrand] = useState<string>('');
+  // filters
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [showVisualization, setShowVisualization] = useState(false);
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
 
-  // Get unique brands and categories
+  // ── Derived filter options ──────────────────────────────────────────────────
   const brands = useMemo(() => {
-    const brandSet = new Set<string>();
-    products.forEach(p => brandSet.add(p.brandName));
-    return Array.from(brandSet).sort();
+    const s = new Set<string>();
+    products.forEach(p => s.add(p.brandName));
+    return Array.from(s).sort();
   }, [products]);
+
+  // Models filtered to only those belonging to currently selected brands
+  const availableModels = useMemo(() => {
+    const s = new Set<string>();
+    products.forEach(p => {
+      if (selectedBrands.length === 0 || selectedBrands.includes(p.brandName)) {
+        s.add(p.modelName);
+      }
+    });
+    return Array.from(s).sort();
+  }, [products, selectedBrands]);
+
+  // When brands change, drop any model selections that are no longer valid
+  useEffect(() => {
+    setSelectedModels(prev => prev.filter(m => availableModels.includes(m)));
+  }, [availableModels]);
 
   const categories = useMemo(() => {
-    const catSet = new Set<string>();
-    products.forEach(p => catSet.add(p.category));
-    return Array.from(catSet).sort();
+    const s = new Set<string>();
+    products.forEach(p => s.add(p.category));
+    return Array.from(s).sort();
   }, [products]);
 
-  // Calculate city-wise inventory with status breakdown
+  // ── Date-filtered base products ────────────────────────────────────────────
+  const dateFilteredProducts = useMemo(() => {
+    if (!startDate && !endDate) return products;
+    return products.filter(p => {
+      const created = p.createdAt ? new Date(p.createdAt) : null;
+      if (!created) return true;
+      if (startDate && created < new Date(startDate)) return false;
+      if (endDate && created > new Date(endDate + 'T23:59:59')) return false;
+      return true;
+    });
+  }, [products, startDate, endDate]);
+
+  // ── City-wise inventory ────────────────────────────────────────────────────
   const cityInventory = useMemo(() => {
-    const inventory = CITIES.map(city => {
-      const cityProducts = products.map(product => {
+    const citiesToShow = selectedCities.length > 0 ? selectedCities : CITIES;
+
+    return citiesToShow.map(city => {
+      const cityProducts = dateFilteredProducts.map(product => {
         const serialStatus = product.serialStatus || {};
 
-        // Serial numbers physically in this city and not in transit
         const serialsInCity = product.serialNumbers.filter(serial => {
           const status = serialStatus[serial] || 'Available';
           return product.serialCities[serial] === city && status !== 'In Transit';
         });
 
-        const availableInCity = serialsInCity.filter(serial => {
-          const status = serialStatus[serial] || 'Available';
-          return status === 'Available';
-        });
+        const availableInCity = serialsInCity.filter(s => (serialStatus[s] || 'Available') === 'Available');
+        const returnedInCity = serialsInCity.filter(s => serialStatus[s] === 'Returned');
+        const damagedInCity = serialsInCity.filter(s => serialStatus[s] === 'Damaged');
+        const inTransitForProduct = product.serialNumbers.filter(s => serialStatus[s] === 'In Transit');
 
-        const returnedInCity = serialsInCity.filter(serial => {
-          const status = serialStatus[serial];
-          return status === 'Returned';
-        });
-
-        const damagedInCity = serialsInCity.filter(serial => {
-          const status = serialStatus[serial];
-          return status === 'Damaged';
-        });
-
-        const inTransitForProduct = product.serialNumbers.filter(serial => {
-          const status = serialStatus[serial];
-          return status === 'In Transit';
-        });
-        
         return {
           ...product,
           cityStock: serialsInCity.length,
@@ -72,136 +201,97 @@ export function InventoryReport({ products }: InventoryReportProps) {
           cityInTransit: inTransitForProduct.length,
         };
       }).filter(p => {
-        // Apply filters
-        if (selectedBrand && p.brandName !== selectedBrand) return false;
+        if (selectedBrands.length > 0 && !selectedBrands.includes(p.brandName)) return false;
+        if (selectedModels.length > 0 && !selectedModels.includes(p.modelName)) return false;
         if (selectedCategory && p.category !== selectedCategory) return false;
-        // Only show products with stock in this city
         return p.cityStock > 0;
       });
 
-      const totalStock = cityProducts.reduce((sum, p) => sum + p.cityStock, 0);
-      const totalValue = cityProducts.reduce((sum, p) => sum + (p.cityStock * p.costPrice), 0);
-      const totalInTransit = cityProducts.reduce((sum, p) => sum + p.cityInTransit, 0);
+      const totalStock = cityProducts.reduce((s, p) => s + p.cityStock, 0);
+      const totalValue = cityProducts.reduce((s, p) => s + p.cityStock * p.costPrice, 0);
+      const totalInTransit = cityProducts.reduce((s, p) => s + p.cityInTransit, 0);
 
-      return {
-        city,
-        products: cityProducts,
-        totalStock,
-        totalValue,
-        totalInTransit,
-      };
+      return { city, products: cityProducts, totalStock, totalValue, totalInTransit };
     });
+  }, [dateFilteredProducts, selectedCities, selectedBrands, selectedModels, selectedCategory]);
 
-    // Apply city filter
-    if (selectedCity) {
-      return inventory.filter(inv => inv.city === selectedCity);
-    }
-    return inventory;
-  }, [products, selectedCity, selectedBrand, selectedCategory]);
-
-  // Calculate overall totals
+  // ── Overall totals ─────────────────────────────────────────────────────────
   const overallTotals = useMemo(() => {
-    return cityInventory.reduce((acc, inv) => ({
-      totalStock: acc.totalStock + inv.totalStock,
-      totalValue: acc.totalValue + inv.totalValue,
-      totalProducts: acc.totalProducts + inv.products.length,
-      totalInTransit: acc.totalInTransit + inv.totalInTransit,
-    }), { totalStock: 0, totalValue: 0, totalProducts: 0, totalInTransit: 0 });
+    return cityInventory.reduce(
+      (acc, inv) => ({
+        totalStock: acc.totalStock + inv.totalStock,
+        totalValue: acc.totalValue + inv.totalValue,
+        totalProducts: acc.totalProducts + inv.products.length,
+        totalInTransit: acc.totalInTransit + inv.totalInTransit,
+      }),
+      { totalStock: 0, totalValue: 0, totalProducts: 0, totalInTransit: 0 }
+    );
   }, [cityInventory]);
 
-  // Prepare visualization data
+  // ── Visualization data ─────────────────────────────────────────────────────
   const visualizationData = useMemo(() => {
-    // Stock by city
-    const stockByCity = cityInventory.map(inv => ({
-      city: inv.city,
-      stock: inv.totalStock,
-      value: inv.totalValue
-    }));
+    const stockByCity = cityInventory.map(inv => ({ city: inv.city, stock: inv.totalStock, value: inv.totalValue }));
 
-    // Stock by brand
-    const stockByBrand = products.reduce((acc, product) => {
-      const brand = product.brandName;
-      const totalStock = product.serialNumbers.length;
-      if (!acc[brand]) acc[brand] = 0;
-      acc[brand] += totalStock;
+    const stockByBrand = dateFilteredProducts.reduce((acc, p) => {
+      acc[p.brandName] = (acc[p.brandName] || 0) + p.serialNumbers.length;
       return acc;
     }, {} as Record<string, number>);
-    const brandStockData = Object.entries(stockByBrand)
-      .map(([brand, stock]) => ({ brand, stock }))
-      .sort((a, b) => b.stock - a.stock);
+    const brandStockData = Object.entries(stockByBrand).map(([brand, stock]) => ({ brand, stock })).sort((a, b) => b.stock - a.stock);
 
-    // Stock by category
-    const stockByCategory = products.reduce((acc, product) => {
-      const category = product.category;
-      const totalStock = product.serialNumbers.length;
-      if (!acc[category]) acc[category] = 0;
-      acc[category] += totalStock;
+    const stockByCategory = dateFilteredProducts.reduce((acc, p) => {
+      acc[p.category] = (acc[p.category] || 0) + p.serialNumbers.length;
       return acc;
     }, {} as Record<string, number>);
-    const categoryStockData = Object.entries(stockByCategory)
-      .map(([category, stock]) => ({ category, stock }))
-      .sort((a, b) => b.stock - a.stock);
+    const categoryStockData = Object.entries(stockByCategory).map(([category, stock]) => ({ category, stock })).sort((a, b) => b.stock - a.stock);
 
-    // Top products by stock
-    const topProducts = products
-      .map(product => ({
-        product: `${product.brandName} ${product.modelName}`,
-        stock: product.serialNumbers.length,
-        value: product.serialNumbers.length * product.costPrice
-      }))
+    const topProducts = dateFilteredProducts
+      .map(p => ({ product: `${p.brandName} ${p.modelName}`, stock: p.serialNumbers.length, value: p.serialNumbers.length * p.costPrice }))
       .sort((a, b) => b.stock - a.stock)
       .slice(0, 10);
 
-    // Inventory status distribution
-    const statusCounts = products.reduce((acc, product) => {
-      const serialStatus = product.serialStatus || {};
-      product.serialNumbers.forEach(serial => {
-        const status = serialStatus[serial] || 'Available';
-        if (!acc[status]) acc[status] = 0;
-        acc[status] += 1;
-      });
+    const statusCounts = dateFilteredProducts.reduce((acc, p) => {
+      const ss = p.serialStatus || {};
+      p.serialNumbers.forEach(s => { const st = ss[s] || 'Available'; acc[st] = (acc[st] || 0) + 1; });
       return acc;
     }, {} as Record<string, number>);
-    const statusData = Object.entries(statusCounts)
-      .map(([status, count]) => ({ status, count }));
+    const statusData = Object.entries(statusCounts).map(([status, count]) => ({ status, count }));
 
-    return {
-      stockByCity,
-      brandStockData,
-      categoryStockData,
-      topProducts,
-      statusData
-    };
-  }, [cityInventory, products]);
+    return { stockByCity, brandStockData, categoryStockData, topProducts, statusData };
+  }, [cityInventory, dateFilteredProducts]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-PK', {
-      style: 'currency',
-      currency: 'PKR',
-      minimumFractionDigits: 0
-    }).format(amount);
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
+
+  const hasActiveFilters =
+    selectedCities.length > 0 ||
+    selectedBrands.length > 0 ||
+    selectedModels.length > 0 ||
+    selectedCategory !== '' ||
+    startDate !== '' ||
+    endDate !== '';
+
+  const clearFilters = () => {
+    setSelectedCities([]);
+    setSelectedBrands([]);
+    setSelectedModels([]);
+    setSelectedCategory('');
+    setStartDate('');
+    setEndDate('');
   };
 
   const handleExportCSV = () => {
     const headers = ['City', 'Brand', 'Model', 'Category', 'Stock', 'Cost Price', 'Sell Price', 'Total Value', 'Serial Numbers'];
     const rows: string[] = [];
-
     cityInventory.forEach(inv => {
       inv.products.forEach(product => {
         rows.push([
-          inv.city,
-          product.brandName,
-          product.modelName,
-          product.category,
-          product.cityStock.toString(),
-          product.costPrice.toString(),
-          product.sellPrice.toString(),
-          (product.cityStock * product.costPrice).toString(),
-          product.citySerials.join('; ')
+          inv.city, product.brandName, product.modelName, product.category,
+          product.cityStock.toString(), product.costPrice.toString(), product.sellPrice.toString(),
+          (product.cityStock * product.costPrice).toString(), product.citySerials.join('; ')
         ].join(','));
       });
     });
-
     const csvContent = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -212,12 +302,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
     toast.success('Report exported successfully');
   };
 
-  const clearFilters = () => {
-    setSelectedCity('');
-    setSelectedBrand('');
-    setSelectedCategory('');
-  };
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="p-6">
       {/* Header */}
@@ -241,35 +326,27 @@ export function InventoryReport({ products }: InventoryReportProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Package size={20} className="text-blue-600" />
-            </div>
+            <div className="p-2 bg-blue-100 rounded-lg"><Package size={20} className="text-blue-600" /></div>
             <p className="text-sm font-semibold text-gray-700">Total Available/Returned</p>
           </div>
           <p className="text-3xl font-bold text-[#4f46e5]">{overallTotals.totalStock} units</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <BarChart3 size={20} className="text-green-600" />
-            </div>
+            <div className="p-2 bg-green-100 rounded-lg"><BarChart3 size={20} className="text-green-600" /></div>
             <p className="text-sm font-semibold text-gray-700">Total Value</p>
           </div>
           <p className="text-3xl font-bold text-[#10b981]">{formatCurrency(overallTotals.totalValue)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <MapPin size={20} className="text-purple-600" />
-            </div>
+            <div className="p-2 bg-purple-100 rounded-lg"><MapPin size={20} className="text-purple-600" /></div>
             <p className="text-sm font-semibold text-gray-700">Cities / In Transit</p>
           </div>
           <p className="text-2xl font-bold text-gray-900">
-            {selectedCity ? 1 : CITIES.length} cities
+            {selectedCities.length > 0 ? selectedCities.length : CITIES.length} cities
           </p>
-          <p className="text-sm text-gray-500 mt-2">
-            In Transit: {overallTotals.totalInTransit} units
-          </p>
+          <p className="text-sm text-gray-500 mt-2">In Transit: {overallTotals.totalInTransit} units</p>
         </div>
       </div>
 
@@ -277,74 +354,58 @@ export function InventoryReport({ products }: InventoryReportProps) {
       {showVisualization && (
         <div className="bg-white rounded-xl border border-gray-200 p-8 mb-8 shadow-sm">
           <div className="flex items-center gap-3 mb-8">
-            <div className="p-3 bg-purple-100 rounded-xl">
-              <BarChart3 size={24} className="text-purple-600" />
-            </div>
+            <div className="p-3 bg-purple-100 rounded-xl"><BarChart3 size={24} className="text-purple-600" /></div>
             <h3 className="text-2xl font-bold text-gray-900">Inventory Analytics</h3>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Stock Distribution by City */}
             <div>
               <h4 className="text-md font-medium text-gray-900 mb-4">Stock Distribution by City</h4>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={visualizationData.stockByCity}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="city" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} units`, 'Stock']} />
+                  <XAxis dataKey="city" /><YAxis />
+                  <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} units`, 'Stock']} />
                   <Bar dataKey="stock" fill="#3b82f6" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-
-            {/* Inventory Value by City */}
             <div>
               <h4 className="text-md font-medium text-gray-900 mb-4">Inventory Value by City</h4>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={visualizationData.stockByCity}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="city" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`${formatCurrency(Number(value))}`, 'Value']} />
+                  <XAxis dataKey="city" /><YAxis />
+                  <Tooltip formatter={(v) => [`${formatCurrency(Number(v))}`, 'Value']} />
                   <Bar dataKey="value" fill="#10b981" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Stock by Brand */}
             <div>
               <h4 className="text-md font-medium text-gray-900 mb-4">Stock by Brand</h4>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={visualizationData.brandStockData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="brand" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} units`, 'Stock']} />
+                  <XAxis dataKey="brand" /><YAxis />
+                  <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} units`, 'Stock']} />
                   <Bar dataKey="stock" fill="#f59e0b" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-
-            {/* Stock by Category */}
             <div>
               <h4 className="text-md font-medium text-gray-900 mb-4">Stock by Category</h4>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={visualizationData.categoryStockData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="category" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} units`, 'Stock']} />
+                  <XAxis dataKey="category" /><YAxis />
+                  <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} units`, 'Stock']} />
                   <Bar dataKey="stock" fill="#8b5cf6" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top 10 Products by Stock */}
             <div>
               <h4 className="text-md font-medium text-gray-900 mb-4">Top 10 Products by Stock</h4>
               <ResponsiveContainer width="100%" height={300}>
@@ -352,26 +413,17 @@ export function InventoryReport({ products }: InventoryReportProps) {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
                   <YAxis dataKey="product" type="category" width={100} />
-                  <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} units`, 'Stock']} />
+                  <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} units`, 'Stock']} />
                   <Bar dataKey="stock" fill="#ef4444" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-
-            {/* Inventory Status Distribution */}
             <div>
               <h4 className="text-md font-medium text-gray-900 mb-4">Inventory Status Distribution</h4>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
-                  <Pie
-                    data={visualizationData.statusData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="count"
-                  >
-                    {visualizationData.statusData.map((entry, index) => (
+                  <Pie data={visualizationData.statusData} cx="50%" cy="50%" outerRadius={80} dataKey="count">
+                    {visualizationData.statusData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
                     ))}
                   </Pie>
@@ -383,60 +435,136 @@ export function InventoryReport({ products }: InventoryReportProps) {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter size={18} className="text-gray-600" />
-          <h3 className="font-semibold text-gray-900">Filters</h3>
+      {/* ── Filters ── */}
+      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Filter size={18} className="text-gray-600" />
+            <h3 className="font-semibold text-gray-900">Filters</h3>
+            {hasActiveFilters && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                Active
+              </span>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+            >
+              <X size={12} /> Clear all filters
+            </button>
+          )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        {/* Row 1: Date range */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pb-4 border-b border-gray-100">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-            <select
-              value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">All Cities</option>
-              {CITIES.map(city => (
-                <option key={city} value={city}>{city}</option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+              <Calendar size={14} className="text-gray-500" /> Start Date
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={e => setStartDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400"
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-            <select
-              value={selectedBrand}
-              onChange={(e) => setSelectedBrand(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">All Brands</option>
-              {brands.map(brand => (
-                <option key={brand} value={brand}>{brand}</option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+              <Calendar size={14} className="text-gray-500" /> End Date
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={e => setEndDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400"
+            />
           </div>
+        </div>
+
+        {/* Row 2: Location, Brand, Model, Category */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MultiSelect
+            label="Location"
+            options={CITIES}
+            selected={selectedCities}
+            onChange={setSelectedCities}
+            placeholder="All Locations"
+          />
+          <MultiSelect
+            label="Brand"
+            options={brands}
+            selected={selectedBrands}
+            onChange={setSelectedBrands}
+            placeholder="All Brands"
+          />
+          <MultiSelect
+            label={`Model${selectedBrands.length > 0 ? ` (${selectedBrands.join(', ')})` : ''}`}
+            options={availableModels}
+            selected={selectedModels}
+            onChange={setSelectedModels}
+            placeholder="All Models"
+            disabled={availableModels.length === 0}
+          />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
             <select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              onChange={e => setSelectedCategory(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400"
             >
               <option value="">All Categories</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
+              {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
             </select>
           </div>
         </div>
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={clearFilters}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Clear Filters
-          </button>
+
+        {/* Active filter summary */}
+        {hasActiveFilters && (
+          <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+            {startDate && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
+                From: {startDate}
+                <button onClick={() => setStartDate('')}><X size={10} /></button>
+              </span>
+            )}
+            {endDate && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
+                To: {endDate}
+                <button onClick={() => setEndDate('')}><X size={10} /></button>
+              </span>
+            )}
+            {selectedCities.map(c => (
+              <span key={c} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full">
+                📍 {c}
+                <button onClick={() => setSelectedCities(selectedCities.filter(v => v !== c))}><X size={10} /></button>
+              </span>
+            ))}
+            {selectedBrands.map(b => (
+              <span key={b} className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 text-xs rounded-full">
+                {b}
+                <button onClick={() => setSelectedBrands(selectedBrands.filter(v => v !== b))}><X size={10} /></button>
+              </span>
+            ))}
+            {selectedModels.map(m => (
+              <span key={m} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full">
+                {m}
+                <button onClick={() => setSelectedModels(selectedModels.filter(v => v !== m))}><X size={10} /></button>
+              </span>
+            ))}
+            {selectedCategory && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full">
+                {selectedCategory}
+                <button onClick={() => setSelectedCategory('')}><X size={10} /></button>
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end mt-4">
           <button
             onClick={handleExportCSV}
             className="px-4 py-2 text-sm font-medium text-white bg-[#10b981] rounded-lg hover:bg-[#059669] flex items-center gap-2"
@@ -451,13 +579,10 @@ export function InventoryReport({ products }: InventoryReportProps) {
       <div className="space-y-8">
         {cityInventory.map(inv => (
           <div key={inv.city} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-            {/* City Header */}
             <div className="bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-white/20 rounded-xl">
-                    <MapPin size={28} className="text-white" />
-                  </div>
+                  <div className="p-3 bg-white/20 rounded-xl"><MapPin size={28} className="text-white" /></div>
                   <div>
                     <h3 className="text-2xl font-bold text-white">{inv.city}</h3>
                     <p className="text-base text-white/90 mt-1">
@@ -472,7 +597,6 @@ export function InventoryReport({ products }: InventoryReportProps) {
               </div>
             </div>
 
-            {/* Products Table */}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -501,45 +625,30 @@ export function InventoryReport({ products }: InventoryReportProps) {
                         onClick={() => setViewProduct(product)}
                       >
                         <td className="px-6 py-4">
-                          <div>
-                            <p className="font-medium text-gray-900">{product.brandName}</p>
-                            <p className="text-sm text-gray-600">{product.modelName}</p>
-                          </div>
+                          <p className="font-medium text-gray-900">{product.brandName}</p>
+                          <p className="text-sm text-gray-600">{product.modelName}</p>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {product.category}
-                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.category}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                              <Package size={12} />
-                              {product.cityStock} units
+                              <Package size={12} />{product.cityStock} units
                             </span>
                             <span className="text-[11px] text-gray-500">
                               Available: {product.cityAvailable} • Returned: {product.cityReturned} • Damaged: {product.cityDamaged} • In Transit: {product.cityInTransit}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {formatCurrency(product.costPrice)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                          {formatCurrency(product.sellPrice)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-[#4f46e5]">
-                          {formatCurrency(product.cityStock * product.costPrice)}
-                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{formatCurrency(product.costPrice)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">{formatCurrency(product.sellPrice)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-[#4f46e5]">{formatCurrency(product.cityStock * product.costPrice)}</td>
                         <td className="px-6 py-4 text-sm text-gray-600 flex items-center justify-between">
                           <div className="max-w-xs">
                             {product.citySerials.slice(0, 3).map(serial => (
-                              <span key={serial} className="inline-block mr-2 mb-1 px-2 py-0.5 bg-gray-100 rounded text-xs font-mono">
-                                {serial}
-                              </span>
+                              <span key={serial} className="inline-block mr-2 mb-1 px-2 py-0.5 bg-gray-100 rounded text-xs font-mono">{serial}</span>
                             ))}
                             {product.citySerials.length > 3 && (
-                              <span className="text-xs text-gray-500">
-                                +{product.citySerials.length - 3} more
-                              </span>
+                              <span className="text-xs text-gray-500">+{product.citySerials.length - 3} more</span>
                             )}
                           </div>
                           <Eye size={16} className="text-gray-400 ml-2" />
@@ -551,16 +660,10 @@ export function InventoryReport({ products }: InventoryReportProps) {
                 {inv.products.length > 0 && (
                   <tfoot className="bg-gray-100 border-t-2 border-gray-300">
                     <tr>
-                      <td colSpan={2} className="px-6 py-3 text-sm font-bold text-gray-900">
-                        {inv.city} Total
-                      </td>
-                      <td className="px-6 py-3 text-sm font-bold text-[#4f46e5]">
-                        {inv.totalStock} units
-                      </td>
+                      <td colSpan={2} className="px-6 py-3 text-sm font-bold text-gray-900">{inv.city} Total</td>
+                      <td className="px-6 py-3 text-sm font-bold text-[#4f46e5]">{inv.totalStock} units</td>
                       <td colSpan={2}></td>
-                      <td className="px-6 py-3 text-sm font-bold text-[#4f46e5]">
-                        {formatCurrency(inv.totalValue)}
-                      </td>
+                      <td className="px-6 py-3 text-sm font-bold text-[#4f46e5]">{formatCurrency(inv.totalValue)}</td>
                       <td></td>
                     </tr>
                   </tfoot>
@@ -603,7 +706,6 @@ export function InventoryReport({ products }: InventoryReportProps) {
               </button>
             </div>
             <div className="p-6 space-y-6">
-              {/* Product Header */}
               <div className="bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] text-white rounded-lg p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -617,7 +719,6 @@ export function InventoryReport({ products }: InventoryReportProps) {
                 </div>
               </div>
 
-              {/* Product Information */}
               <div className="grid grid-cols-2 gap-6">
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <h5 className="font-semibold text-gray-900 mb-3">Pricing Information</h5>
@@ -633,11 +734,11 @@ export function InventoryReport({ products }: InventoryReportProps) {
                     <div className="flex justify-between border-t pt-2">
                       <span className="text-gray-600">Profit Margin:</span>
                       <span className={`font-semibold ${viewProduct.sellPrice > viewProduct.costPrice ? 'text-green-600' : 'text-red-600'}`}>
-                        {viewProduct.costPrice > 0 ? (((viewProduct.sellPrice - viewProduct.costPrice) / viewProduct.costPrice) * 100).toFixed(1) : 0}%</span>
+                        {viewProduct.costPrice > 0 ? (((viewProduct.sellPrice - viewProduct.costPrice) / viewProduct.costPrice) * 100).toFixed(1) : 0}%
+                      </span>
                     </div>
                   </div>
                 </div>
-
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <h5 className="font-semibold text-gray-900 mb-3">Stock Information</h5>
                   <div className="space-y-2">
@@ -653,7 +754,6 @@ export function InventoryReport({ products }: InventoryReportProps) {
                 </div>
               </div>
 
-              {/* Serial Numbers by City */}
               <div className="bg-white border border-gray-200 rounded-lg p-4">
                 <h5 className="font-semibold text-gray-900 mb-4">Serial Numbers by City</h5>
                 <div className="space-y-4">
@@ -662,91 +762,43 @@ export function InventoryReport({ products }: InventoryReportProps) {
                       const status = (viewProduct.serialStatus || {})[serial] || 'Available';
                       return viewProduct.serialCities[serial] === city && status !== 'In Transit';
                     });
-
-                    const available = citySerials.filter(serial => {
-                      const status = (viewProduct.serialStatus || {})[serial] || 'Available';
-                      return status === 'Available';
-                    });
-
-                    const returned = citySerials.filter(serial => {
-                      const status = (viewProduct.serialStatus || {})[serial];
-                      return status === 'Returned';
-                    });
-
-                    const damaged = citySerials.filter(serial => {
-                      const status = (viewProduct.serialStatus || {})[serial];
-                      return status === 'Damaged';
-                    });
-
-                    const inTransit = viewProduct.serialNumbers.filter(serial => {
-                      const status = (viewProduct.serialStatus || {})[serial];
-                      return status === 'In Transit';
-                    });
-
+                    const available = citySerials.filter(s => ((viewProduct.serialStatus || {})[s] || 'Available') === 'Available');
+                    const returned = citySerials.filter(s => (viewProduct.serialStatus || {})[s] === 'Returned');
+                    const damaged = citySerials.filter(s => (viewProduct.serialStatus || {})[s] === 'Damaged');
+                    const inTransit = viewProduct.serialNumbers.filter(s => (viewProduct.serialStatus || {})[s] === 'In Transit');
                     if (citySerials.length === 0 && inTransit.length === 0) return null;
-
                     return (
                       <div key={city} className="border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h6 className="font-medium text-gray-900 flex items-center gap-2">
-                            <MapPin size={16} className="text-gray-500" />
-                            {city}
+                            <MapPin size={16} className="text-gray-500" />{city}
                           </h6>
-                          <span className="text-sm text-gray-600">
-                            {citySerials.length} units in city
-                          </span>
+                          <span className="text-sm text-gray-600">{citySerials.length} units in city</span>
                         </div>
-
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500">Available</p>
-                            <p className="text-lg font-semibold text-green-600">{available.length}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500">Returned</p>
-                            <p className="text-lg font-semibold text-blue-600">{returned.length}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500">Damaged</p>
-                            <p className="text-lg font-semibold text-red-600">{damaged.length}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-gray-500">In Transit</p>
-                            <p className="text-lg font-semibold text-orange-600">{inTransit.length}</p>
-                          </div>
+                          <div className="text-center"><p className="text-xs text-gray-500">Available</p><p className="text-lg font-semibold text-green-600">{available.length}</p></div>
+                          <div className="text-center"><p className="text-xs text-gray-500">Returned</p><p className="text-lg font-semibold text-blue-600">{returned.length}</p></div>
+                          <div className="text-center"><p className="text-xs text-gray-500">Damaged</p><p className="text-lg font-semibold text-red-600">{damaged.length}</p></div>
+                          <div className="text-center"><p className="text-xs text-gray-500">In Transit</p><p className="text-lg font-semibold text-orange-600">{inTransit.length}</p></div>
                         </div>
-
                         {citySerials.length > 0 && (
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-2">Serial Numbers:</p>
                             <div className="flex flex-wrap gap-2">
                               {citySerials.map(serial => {
                                 const status = (viewProduct.serialStatus || {})[serial] || 'Available';
-                                const statusColor = {
-                                  'Available': 'bg-green-100 text-green-800',
-                                  'Returned': 'bg-blue-100 text-blue-800',
-                                  'Damaged': 'bg-red-100 text-red-800',
-                                  'In Transit': 'bg-orange-100 text-orange-800'
-                                }[status] || 'bg-gray-100 text-gray-800';
-
-                                return (
-                                  <span key={serial} className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${statusColor}`}>
-                                    {serial}
-                                  </span>
-                                );
+                                const statusColor = { 'Available': 'bg-green-100 text-green-800', 'Returned': 'bg-blue-100 text-blue-800', 'Damaged': 'bg-red-100 text-red-800', 'In Transit': 'bg-orange-100 text-orange-800' }[status] || 'bg-gray-100 text-gray-800';
+                                return <span key={serial} className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${statusColor}`}>{serial}</span>;
                               })}
                             </div>
                           </div>
                         )}
-
                         {inTransit.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-gray-200">
                             <p className="text-sm font-medium text-orange-700 mb-2">In Transit Serial Numbers:</p>
                             <div className="flex flex-wrap gap-2">
                               {inTransit.map(serial => (
-                                <span key={serial} className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
-                                  {serial}
-                                </span>
+                                <span key={serial} className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">{serial}</span>
                               ))}
                             </div>
                           </div>
@@ -757,7 +809,6 @@ export function InventoryReport({ products }: InventoryReportProps) {
                 </div>
               </div>
 
-              {/* Additional Product Details */}
               {viewProduct.description && (
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <h5 className="font-semibold text-gray-900 mb-2">Description</h5>
