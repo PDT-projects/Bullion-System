@@ -8,10 +8,10 @@
 // bsMainCategory / bsSubCategory fields saved on each transaction.
 // Priority: manual classification (saved from form) → shown in dedicated section.
 
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { resolveBSBucket } from '../../modules/transactions/models/transactionsService';
 import type { Transaction } from '../../modules/transactions/models/types';
-import { ArrowLeft, Tag, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Tag, ChevronDown, ChevronUp, Filter, X, Calendar, MapPin } from 'lucide-react';
 
 // Remove local type - use imported Transaction type
 type Bank      = { id: string; name: string; balance: number; accountNumber: string; };
@@ -51,6 +51,84 @@ const SubTotal = ({ label, value, colorClass = 'bg-blue-50' }: { label: string; 
 export function BalanceSheetReport({ transactions, banks, loans, products, bills = [], onBack }: BalanceSheetReportProps) {
   const [showBSClassified, setShowBSClassified] = useState(true);
   const [expandedSubs,     setExpandedSubs]     = useState<Set<string>>(new Set());
+
+  const today    = new Date().toISOString().split('T')[0];
+  const thisYear = new Date().getFullYear();
+  const getTransactionLocation = (t: any): string => {
+    const c = t.company || '';
+    if (c.includes('Karachi'))   return 'Karachi';
+    if (c.includes('Islamabad')) return 'Islamabad';
+    if (c.includes('Lahore'))    return 'Lahore';
+    return '';
+  };
+  const LOCATIONS = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach(t => { const l = getTransactionLocation(t); if (l) s.add(l); });
+    return ['Karachi','Islamabad','Lahore'].filter(l => s.has(l));
+  }, [transactions]);
+
+  // ── Filter state ────────────────────────────────────────────────────────────
+  type FilterMode = 'alltime' | 'yearly' | 'monthly' | 'custom';
+  const [filterMode,        setFilterMode]        = useState<FilterMode>('alltime');
+  const [selectedYears,     setSelectedYears]     = useState<number[]>([]);
+  const [selectedMonths,    setSelectedMonths]    = useState<string[]>([]);
+  const [customFrom,        setCustomFrom]        = useState('');
+  const [customTo,          setCustomTo]          = useState('');
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+
+
+  const availableYears = useMemo(() => {
+    const s = new Set<number>();
+    transactions.forEach(t => {
+      const y = parseInt((t.date || '').slice(0, 4));
+      if (y > 2000 && y <= thisYear + 1) s.add(y);
+    });
+    return Array.from(s).sort((a, b) => b - a);
+  }, [transactions]);
+
+  const availableMonths = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach(t => { const ym = (t.date || '').slice(0, 7); if (ym) s.add(ym); });
+    return Array.from(s).sort((a, b) => b.localeCompare(a));
+  }, [transactions]);
+
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split('-');
+    return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
+
+  const toggleYear     = (y: number) => setSelectedYears(p => p.includes(y) ? p.filter(v => v !== y) : [...p, y]);
+  const toggleMonth    = (m: string) => setSelectedMonths(p => p.includes(m) ? p.filter(v => v !== m) : [...p, m]);
+  const toggleLocation = (l: string) => setSelectedLocations(p => p.includes(l) ? p.filter(v => v !== l) : [...p, l]);
+  const hasActiveFilter = filterMode !== 'alltime' || selectedLocations.length > 0;
+
+  const resetFilters = () => {
+    setFilterMode('alltime'); setSelectedYears([]); setSelectedMonths([]);
+    setCustomFrom(''); setCustomTo(''); setSelectedLocations([]);
+  };
+
+  const modeBtnStyle = (mode: FilterMode): React.CSSProperties => ({
+    padding: '6px 14px',
+    fontSize: '12px',
+    fontWeight: 600,
+    borderRadius: '8px',
+    border: '1px solid',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    background: filterMode === mode ? '#4f46e5' : '#ffffff',
+    color: filterMode === mode ? '#ffffff' : '#4b5563',
+    borderColor: filterMode === mode ? '#4f46e5' : '#d1d5db',
+    boxShadow: filterMode === mode ? '0 1px 3px rgba(79,70,229,0.3)' : 'none',
+  });
+
+  const activePeriodLabel = () => {
+    if (filterMode === 'alltime') return 'All Time';
+    if (filterMode === 'yearly'  && selectedYears.length > 0)  return selectedYears.sort().join(', ');
+    if (filterMode === 'monthly' && selectedMonths.length > 0) return `${selectedMonths.length} month(s)`;
+    if (filterMode === 'custom'  && (customFrom || customTo))  return `${customFrom || '—'} → ${customTo || '—'}`;
+    return 'All Time';
+  };
+
   const toggleSub = (key: string) =>
     setExpandedSubs(prev => {
       const next = new Set(prev);
@@ -58,13 +136,37 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       return next;
     });
 
-  // Only approved / not_required transactions affect balance sheet figures
-  const liquid = useMemo(
-    () => transactions.filter(
-      t => t.approvalStatus === 'approved' || t.approvalStatus === 'not_required' || !t.approvalStatus
-    ),
-    [transactions]
-  );
+  // ── Filtered transactions (approval + date + location) ─────────────────────
+  const liquid = useMemo(() => {
+    return transactions.filter(t => {
+      const approved = t.approvalStatus === 'approved' || t.approvalStatus === 'not_required' || !t.approvalStatus;
+      if (!approved) return false;
+
+      const d = (t.date || '').slice(0, 10);
+
+      // Date filter
+      if (d) {
+        if (filterMode === 'monthly' && selectedMonths.length > 0) {
+          if (!selectedMonths.some(ym => d.startsWith(ym))) return false;
+        } else if (filterMode === 'yearly' && selectedYears.length > 0) {
+          if (!selectedYears.includes(parseInt(d.slice(0, 4)))) return false;
+        } else if (filterMode === 'custom') {
+          const from = customFrom || '2000-01-01';
+          const to   = customTo   || '2099-12-31';
+          if (d < from || d > to) return false;
+        }
+      }
+
+      // Location filter
+      if (selectedLocations.length > 0) {
+        if (!selectedLocations.includes(getTransactionLocation(t))) return false;
+      }
+
+      return true;
+    });
+  }, [transactions, filterMode, selectedMonths, selectedYears, customFrom, customTo, selectedLocations]);
+
+
 
   // ── FULL BS Classification (manual + auto) ─────────────────────────────────
   const classifiedBS = useMemo(() => {
@@ -194,7 +296,10 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Balance Sheet</h1>
           <p className="text-gray-500 mt-1 text-sm">
-            Computed from live Firestore data · as of today
+            Computed from live data · {activePeriodLabel()}
+            {selectedLocations.length > 0 && (
+              <span className="ml-2 text-purple-600 font-medium">· {selectedLocations.join(', ')}</span>
+            )}
             {bsClassifiedCount > 0 && (
               <span className="ml-2 inline-flex items-center gap-1 text-indigo-600">
                 <Tag size={12} /> {bsClassifiedCount} manually classified
@@ -202,13 +307,150 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             )}
           </p>
         </div>
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
+        <button onClick={onBack}
+          className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
           <ArrowLeft size={16} /> Back to Reports Hub
         </button>
       </div>
+
+      {/* ── Filter Panel ── */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-indigo-600" />
+            <h2 className="font-semibold text-gray-900">Filters</h2>
+            {hasActiveFilter && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Active</span>
+            )}
+          </div>
+          {hasActiveFilter && (
+            <button onClick={resetFilters} className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
+              <X size={12} /> Reset all
+            </button>
+          )}
+        </div>
+
+        {/* ── Location filter ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin size={13} className="text-purple-500" />
+            <span className="text-xs font-semibold text-gray-700">Location / Branch</span>
+            {selectedLocations.length > 0 && (
+              <button onClick={() => setSelectedLocations([])} className="text-xs text-red-400 hover:text-red-600 ml-auto">Clear</button>
+            )}
+          </div>
+          <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+            <button onClick={() => setSelectedLocations([])} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',background:selectedLocations.length===0?'#4f46e5':'#ffffff',color:selectedLocations.length===0?'#ffffff':'#374151',borderColor:selectedLocations.length===0?'#4f46e5':'#d1d5db'}}>
+              All Locations
+            </button>
+            {LOCATIONS.map(loc => (
+              <button key={loc} onClick={() => toggleLocation(loc)} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',background:selectedLocations.includes(loc)?'#4f46e5':'#ffffff',color:selectedLocations.includes(loc)?'#ffffff':'#374151',borderColor:selectedLocations.includes(loc)?'#4f46e5':'#d1d5db'}}>
+                <MapPin size={11} style={{color:'inherit'}} />
+                <span>{loc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100" />
+
+        {/* ── Period filter ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Calendar size={13} className="text-indigo-500" />
+            <span className="text-xs font-semibold text-gray-700">Period</span>
+          </div>
+          <div className="flex gap-2 flex-wrap mb-3">
+            <button style={modeBtnStyle('alltime')} onClick={() => setFilterMode('alltime')}>All Time</button>
+            <button style={modeBtnStyle('yearly')}  onClick={() => setFilterMode('yearly')}>By Year</button>
+            <button style={modeBtnStyle('monthly')} onClick={() => setFilterMode('monthly')}>By Month</button>
+            <button style={modeBtnStyle('custom')}  onClick={() => setFilterMode('custom')}>Custom Range</button>
+          </div>
+
+          {filterMode === 'yearly' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500">Select one or more years</span>
+                {selectedYears.length > 0 && <button onClick={() => setSelectedYears([])} className="text-xs text-red-400 hover:text-red-600">Clear</button>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableYears.map(y => (
+                  <button key={y} onClick={() => toggleYear(y)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      selectedYears.includes(y) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+                    }`}>{y}</button>
+                ))}
+                {availableYears.length === 0 && <p className="text-xs text-gray-400 italic">No data available</p>}
+              </div>
+              {selectedYears.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {[...selectedYears].sort().map(y => (
+                    <span key={y} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">
+                      {y}<button onClick={() => toggleYear(y)}><X size={9} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {filterMode === 'monthly' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500">Select one or more months</span>
+                {selectedMonths.length > 0 && <button onClick={() => setSelectedMonths([])} className="text-xs text-red-400 hover:text-red-600">Clear</button>}
+              </div>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
+                {availableMonths.map(ym => (
+                  <button key={ym} onClick={() => toggleMonth(ym)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      selectedMonths.includes(ym) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+                    }`}>{monthLabel(ym)}</button>
+                ))}
+                {availableMonths.length === 0 && <p className="text-xs text-gray-400 italic">No data available</p>}
+              </div>
+              {selectedMonths.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {[...selectedMonths].sort().map(ym => (
+                    <span key={ym} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">
+                      {monthLabel(ym)}<button onClick={() => toggleMonth(ym)}><X size={9} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {filterMode === 'custom' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">From</label>
+                <input type="date" value={customFrom} max={customTo || undefined} onChange={e => setCustomFrom(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">To</label>
+                <input type="date" value={customTo} min={customFrom || undefined} onChange={e => setCustomTo(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Active filter summary */}
+        <div className="pt-3 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500">
+          <Calendar size={11} className="text-indigo-400 flex-shrink-0" />
+          <span>
+            Period: <strong className="text-gray-700">{activePeriodLabel()}</strong>
+            {selectedLocations.length > 0 && (
+              <> · Location: <strong className="text-purple-600">{selectedLocations.join(', ')}</strong></>
+            )}
+            {' '}· <strong className="text-gray-700">{liquid.length}</strong> transactions
+          </span>
+        </div>
+      </div>
+
+
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* ── ASSETS ── */}

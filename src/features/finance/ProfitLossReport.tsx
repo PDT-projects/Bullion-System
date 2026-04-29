@@ -10,10 +10,10 @@
 // Only approved / not_required transactions affect P&L figures.
 // pending_approval and rejected are excluded entirely.
 
-import { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   ArrowLeft, FileSpreadsheet, FileText,
-  Calendar, ChevronDown, ChevronUp, Tag,
+  Calendar, ChevronDown, ChevronUp, Tag, Filter, X, MapPin,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -53,56 +53,77 @@ type Transaction = {
   amount: number;
   mode?: string;
   company?: string;
-  // Manual P&L classification — saved from transaction form to Firestore
+  location?: string;
+  branch?: string;
+  city?: string;
   plMainCategory?: string;
   plSubCategory?: string;
-  // Approval — pending/rejected have zero financial impact
   approvalStatus?: string;
 };
 
+// Minimal Invoice shape — only fields used by P&L
+type Invoice = {
+  id: string;
+  date: string;
+  totalAmount: number;
+  deductionCharges?: number;
+  status: 'Paid' | 'Unpaid';
+  salesperson?: string;
+  salespersonLocation?: string;  // primary location field from Firestore
+  branchOffice?: string;
+  customerCity?: string;
+};
+
 type ProfitLossReportProps = {
-  transactions: Transaction[];   // live Firestore data from parent
+  transactions: Transaction[];   // Finance cash-flow transactions
+  invoices?: Invoice[];          // Sales invoices (source of Revenue)
   onBack: () => void;
 };
 
-// ─── P&L bucket resolver ──────────────────────────────────────────────────────
+// ─── P&L bucket resolver (outflows only — Revenue comes from Invoices) ────────
 
 type PLBucket = { plMain: string; plSub: string } | null;
 
 function resolvePLBucket(t: Transaction): PLBucket {
-  // Priority 1 — manual override from form (saved to Firestore)
+  // Priority 1 — manual override saved from the transaction form
   if (t.plMainCategory && t.plSubCategory) {
     return { plMain: t.plMainCategory, plSub: t.plSubCategory };
   }
 
-  // Priority 2 — auto-classify by subCategory
-  const sub = t.subCategory || '';
+  // Cash Inflow transactions are NOT counted as P&L revenue here.
+  // Revenue is derived exclusively from Invoices (see invoiceRevenue below).
+  // Cash inflows are shown in the "Cash Collections" informational section only.
+  if (t.mainCategory === 'Cash Inflow') return null;
 
-  if (t.mainCategory === 'Cash Inflow') {
-    if (INFLOW_LOAN_CATS.includes(sub))    return null;
-    if (INFLOW_PRODUCT_SALE.includes(sub)) return { plMain: 'Revenue', plSub: 'Product Sales' };
-    if (INFLOW_SERVICE.includes(sub))      return { plMain: 'Revenue', plSub: 'Service / Invoice Sales' };
-    if (INFLOW_OTHER.includes(sub))        return { plMain: 'Revenue', plSub: 'Other Income' };
-    return                                        { plMain: 'Revenue', plSub: 'Other Income' };
-  }
+  // Loan mainCategory → financing only
+  if (t.mainCategory === 'Loan') return null;
 
+  // ── Cash Outflow classification ───────────────────────────────────────────
   if (t.mainCategory === 'Cash Outflow') {
-    if (OUTFLOW_PERSONAL.includes(sub))    return null;
-    if (OUTFLOW_LOAN.includes(sub))        return null;
-    if (OUTFLOW_COGS.includes(sub))        return { plMain: 'Cost of Goods Sold (COGS)', plSub: 'Purchase & Inventory' };
-    if (OUTFLOW_SALARY.includes(sub))      return { plMain: 'Operating Expenses', plSub: 'Salaries & Wages' };
-    if (OUTFLOW_COMMISSION.includes(sub))  return { plMain: 'Operating Expenses', plSub: 'Salaries & Wages' };
-    if (OUTFLOW_RENT.includes(sub))        return { plMain: 'Operating Expenses', plSub: 'Rent' };
-    if (OUTFLOW_UTILITIES.includes(sub))   return { plMain: 'Operating Expenses', plSub: 'Utilities' };
-    if (OUTFLOW_MARKETING.includes(sub))   return { plMain: 'Operating Expenses', plSub: 'Marketing' };
-    if (OUTFLOW_LOGISTICS.includes(sub))   return { plMain: 'Operating Expenses', plSub: 'Miscellaneous' };
-    if (OUTFLOW_OFFICE.includes(sub))      return { plMain: 'Operating Expenses', plSub: 'Miscellaneous' };
-    if (OUTFLOW_REPAIRS.includes(sub))     return { plMain: 'Operating Expenses', plSub: 'Miscellaneous' };
-    if (OUTFLOW_PAYMENTS.includes(sub))    return { plMain: 'Operating Expenses', plSub: 'Miscellaneous' };
-    return                                        { plMain: 'Operating Expenses', plSub: 'Miscellaneous' };
+    const sub = t.subCategory || '';
+
+    // Non-P&L outflows (balance sheet / financing)
+    if (OUTFLOW_PERSONAL.includes(sub)) return null;
+    if (OUTFLOW_LOAN.includes(sub))     return null;
+    if (OUTFLOW_PAYMENTS.includes(sub)) return null;   // inter-company settlements
+
+    // COGS
+    if (OUTFLOW_COGS.includes(sub))       return { plMain: 'Cost of Goods Sold (COGS)', plSub: 'Purchase & Inventory' };
+
+    // Operating Expenses — each gets its own sub-category for clear reporting
+    if (OUTFLOW_SALARY.includes(sub))     return { plMain: 'Operating Expenses', plSub: 'Salaries & Wages' };
+    if (OUTFLOW_COMMISSION.includes(sub)) return { plMain: 'Operating Expenses', plSub: 'Commissions' };
+    if (OUTFLOW_RENT.includes(sub))       return { plMain: 'Operating Expenses', plSub: 'Rent' };
+    if (OUTFLOW_UTILITIES.includes(sub))  return { plMain: 'Operating Expenses', plSub: 'Utilities' };
+    if (OUTFLOW_MARKETING.includes(sub))  return { plMain: 'Operating Expenses', plSub: 'Marketing' };
+    if (OUTFLOW_LOGISTICS.includes(sub))  return { plMain: 'Operating Expenses', plSub: 'Logistics' };
+    if (OUTFLOW_OFFICE.includes(sub))     return { plMain: 'Operating Expenses', plSub: 'Office Expenses' };
+    if (OUTFLOW_REPAIRS.includes(sub))    return { plMain: 'Operating Expenses', plSub: 'Repairs & Medical' };
+
+    // Unknown outflow sub-categories → excluded, not silently inflating expenses
+    return null;
   }
 
-  // Loan mainCategory → financing, excluded from P&L
   return null;
 }
 
@@ -132,33 +153,167 @@ function SectionTotal({ label, value, colorClass }: { label: string; value: numb
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps) {
+export function ProfitLossReport({ transactions, invoices = [], onBack }: ProfitLossReportProps) {
   const reportRef = useRef<HTMLDivElement>(null);
 
-  const today      = new Date().toISOString().split('T')[0];
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString().split('T')[0];
-  const yearStart  = `${new Date().getFullYear()}-01-01`;
+  const today    = new Date().toISOString().split('T')[0];
+  const thisYear = new Date().getFullYear();
 
-  // Default: All Time — shows every Firestore record immediately
-  const [dateFrom,    setDateFrom]    = useState('2000-01-01');
-  const [dateTo,      setDateTo]      = useState(today);
+  // ── Filter state ──────────────────────────────────────────────────────────
+  type FilterMode = 'alltime' | 'yearly' | 'monthly' | 'custom';
+  const [filterMode,      setFilterMode]      = useState<FilterMode>('alltime');
+  const [selectedYears,   setSelectedYears]   = useState<number[]>([]);
+  const [selectedMonths,  setSelectedMonths]  = useState<string[]>([]);
+  const [customFrom,      setCustomFrom]      = useState('');
+  const [customTo,        setCustomTo]        = useState('');
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [showMonthly, setShowMonthly] = useState(false);
   const [showManual,  setShowManual]  = useState(false);
 
-  // ── Step 1: filter by date + approval status ───────────────────────────────
+  const getTransactionLocation = (t: Transaction): string => {
+    const loc = t.location || t.branch || t.city || '';
+    if (loc.includes('Karachi'))   return 'Karachi';
+    if (loc.includes('Islamabad')) return 'Islamabad';
+    if (loc.includes('Lahore'))    return 'Lahore';
+    const c = t.company || '';
+    if (c.includes('Karachi'))   return 'Karachi';
+    if (c.includes('Islamabad')) return 'Islamabad';
+    if (c.includes('Lahore'))    return 'Lahore';
+    return '';
+  };
+
+  // Invoice location: check branchOffice → salesperson location → customerCity
+  const getInvoiceLocation = (inv: Invoice): string => {
+    const b = inv.branchOffice || inv.salespersonLocation || inv.salesperson || inv.customerCity || '';
+    if (b.includes('Karachi'))   return 'Karachi';
+    if (b.includes('Islamabad')) return 'Islamabad';
+    if (b.includes('Lahore'))    return 'Lahore';
+    return '';
+  };
+  const LOCATIONS = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach(t => { const l = getTransactionLocation(t); if (l) s.add(l); });
+    invoices.forEach(inv => { const l = getInvoiceLocation(inv); if (l) s.add(l); });
+    return ['Karachi','Islamabad','Lahore'].filter(l => s.has(l));
+  }, [transactions, invoices]);
+  // Derive available years and months from transaction data
+  const availableYears = useMemo(() => {
+    const s = new Set<number>();
+    transactions.forEach(t => {
+      const y = parseInt((t.date || '').slice(0, 4));
+      if (y > 2000 && y <= thisYear + 1) s.add(y);
+    });
+    return Array.from(s).sort((a, b) => b - a);
+  }, [transactions]);
+
+  const availableMonths = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach(t => { const ym = (t.date || '').slice(0, 7); if (ym) s.add(ym); });
+    return Array.from(s).sort((a, b) => b.localeCompare(a));
+  }, [transactions]);
+
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split('-');
+    return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
+
+  // Derived dateFrom / dateTo from filter mode
+  const { dateFrom, dateTo } = useMemo(() => {
+    if (filterMode === 'alltime') return { dateFrom: '2000-01-01', dateTo: today };
+    if (filterMode === 'custom')  return { dateFrom: customFrom || '2000-01-01', dateTo: customTo || today };
+    if (filterMode === 'yearly' && selectedYears.length > 0) {
+      const minY = Math.min(...selectedYears);
+      const maxY = Math.max(...selectedYears);
+      return { dateFrom: `${minY}-01-01`, dateTo: `${maxY}-12-31` };
+    }
+    if (filterMode === 'monthly' && selectedMonths.length > 0) {
+      const sorted = [...selectedMonths].sort();
+      const [lastY, lastM] = sorted[sorted.length - 1].split('-').map(Number);
+      const lastDay = new Date(lastY, lastM, 0).getDate();
+      return { dateFrom: `${sorted[0]}-01`, dateTo: `${sorted[sorted.length - 1]}-${String(lastDay).padStart(2, '0')}` };
+    }
+    return { dateFrom: '2000-01-01', dateTo: today };
+  }, [filterMode, selectedYears, selectedMonths, customFrom, customTo, today]);
+
+  const hasActiveDateFilter = filterMode !== 'alltime';
+  const hasActiveFilter = hasActiveDateFilter || selectedLocations.length > 0;
+
+  const resetFilters = () => {
+    setFilterMode('alltime');
+    setSelectedYears([]);
+    setSelectedMonths([]);
+    setCustomFrom('');
+    setCustomTo('');
+    setSelectedLocations([]);
+  };
+
+  const toggleYear     = (y: number) => setSelectedYears(p => p.includes(y) ? p.filter(v => v !== y) : [...p, y]);
+  const toggleMonth    = (m: string) => setSelectedMonths(p => p.includes(m) ? p.filter(v => v !== m) : [...p, m]);
+  const toggleLocation = (l: string) => setSelectedLocations(p => p.includes(l) ? p.filter(v => v !== l) : [...p, l]);
+
+  const modeBtnStyle = (mode: FilterMode): React.CSSProperties => ({
+    padding: '6px 14px', fontSize: '12px', fontWeight: 600, borderRadius: '8px',
+    border: '1px solid', cursor: 'pointer', transition: 'all 0.15s',
+    background: filterMode === mode ? '#4f46e5' : '#ffffff',
+    color: filterMode === mode ? '#ffffff' : '#4b5563',
+    borderColor: filterMode === mode ? '#4f46e5' : '#d1d5db',
+    boxShadow: filterMode === mode ? '0 1px 3px rgba(79,70,229,0.3)' : 'none',
+  });
+
+  // ── Step 1: filter by date + location + approval status ───────────────────
   const filtered = useMemo(() => {
     const from = dateFrom || '2000-01-01';
     const to   = dateTo   || '2099-12-31';
     return transactions.filter(t => {
-      // Normalise to YYYY-MM-DD regardless of Firestore format
       const d = (t.date || '').slice(0, 10);
-      if (!d || d < from || d > to)                  return false;
-      if (t.approvalStatus === 'pending_approval')   return false;
-      if (t.approvalStatus === 'rejected')           return false;
+      if (!d) return false;
+
+      // Date filtering
+      if (filterMode === 'monthly' && selectedMonths.length > 0) {
+        if (!selectedMonths.some(ym => d.startsWith(ym))) return false;
+      } else if (filterMode === 'yearly' && selectedYears.length > 0) {
+        if (!selectedYears.includes(parseInt(d.slice(0, 4)))) return false;
+      } else {
+        if (d < from || d > to) return false;
+      }
+
+      // Location filtering
+      if (selectedLocations.length > 0) {
+        const loc = getTransactionLocation(t);
+        if (!selectedLocations.includes(loc)) return false;
+      }
+
+      if (t.approvalStatus === 'pending_approval') return false;
+      if (t.approvalStatus === 'rejected')         return false;
       return true;
     });
-  }, [transactions, dateFrom, dateTo]);
+  }, [transactions, dateFrom, dateTo, filterMode, selectedMonths, selectedYears, selectedLocations]);
+
+  // ── Filter invoices by the same date + location criteria ──────────────────
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter(inv => {
+      const d = (inv.date || '').slice(0, 10);
+      if (!d) return false;
+
+      // Date filtering (same logic as transactions)
+      if (filterMode === 'monthly' && selectedMonths.length > 0) {
+        if (!selectedMonths.some(ym => d.startsWith(ym))) return false;
+      } else if (filterMode === 'yearly' && selectedYears.length > 0) {
+        if (!selectedYears.includes(parseInt(d.slice(0, 4)))) return false;
+      } else {
+        const from = dateFrom || '2000-01-01';
+        const to   = dateTo   || '2099-12-31';
+        if (d < from || d > to) return false;
+      }
+
+      // Location filtering
+      if (selectedLocations.length > 0) {
+        if (!selectedLocations.includes(getInvoiceLocation(inv))) return false;
+      }
+
+      return true;
+    });
+  }, [invoices, dateFrom, dateTo, filterMode, selectedMonths, selectedYears, selectedLocations]);
 
   // ── Step 2: build bucket map plMain → plSub → total ───────────────────────
   const buckets = useMemo(() => {
@@ -191,25 +346,41 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
   };
 
   // ── Step 4: P&L figures ────────────────────────────────────────────────────
-  const totalRevenue  = sectionTotal('Revenue');
+
+  // Revenue = sum of invoice totalAmount (the actual sales value, not cash collected)
+  // Broken down by Paid vs Unpaid for visibility
+  const invoiceRevenuePaid   = filteredInvoices.filter(i => i.status === 'Paid')
+    .reduce((s, i) => s + i.totalAmount, 0);
+  const invoiceRevenueUnpaid = filteredInvoices.filter(i => i.status === 'Unpaid')
+    .reduce((s, i) => s + i.totalAmount, 0);
+  const totalDeductionCharges = filteredInvoices
+    .reduce((s, i) => s + (i.deductionCharges || 0), 0);
+  const totalRevenue = invoiceRevenuePaid + invoiceRevenueUnpaid;
+
+  // COGS and OpEx come from approved outflow transactions
   const totalCOGS     = sectionTotal('Cost of Goods Sold (COGS)');
   const grossProfit   = totalRevenue - totalCOGS;
   const totalExpenses = sectionTotal('Operating Expenses');
   const netProfit     = grossProfit - totalExpenses;
   const isProfit      = netProfit >= 0;
 
+  // Cash collections from transactions (informational — not counted in Revenue)
+  const cashCollected = filtered
+    .filter(t => t.mainCategory === 'Cash Inflow' && !INFLOW_LOAN_CATS.includes(t.subCategory || ''))
+    .reduce((s, t) => s + (t.amount || 0), 0);
+
   // ── Financing / excluded items (informational only) ────────────────────────
   const financing = useMemo(() => {
-    let loanIn = 0, loanOut = 0, personal = 0, otherLoan = 0;
+    let loanIn = 0, loanOut = 0, personal = 0, payments = 0;
     for (const t of filtered) {
-      if (resolvePLBucket(t)) continue;
       const sub = t.subCategory || '';
-      if (INFLOW_LOAN_CATS.includes(sub))  loanIn    += t.amount || 0;
-      if (OUTFLOW_LOAN.includes(sub))      loanOut   += t.amount || 0;
-      if (OUTFLOW_PERSONAL.includes(sub))  personal  += t.amount || 0;
-      if (t.mainCategory === 'Loan')       otherLoan += t.amount || 0;
+      if (t.mainCategory === 'Loan')       loanIn   += t.amount || 0;
+      if (INFLOW_LOAN_CATS.includes(sub))  loanIn   += t.amount || 0;
+      if (OUTFLOW_LOAN.includes(sub))      loanOut  += t.amount || 0;
+      if (OUTFLOW_PERSONAL.includes(sub))  personal += t.amount || 0;
+      if (OUTFLOW_PAYMENTS.includes(sub))  payments += t.amount || 0;
     }
-    return { loanIn, loanOut, personal, otherLoan };
+    return { loanIn, loanOut, personal, payments };
   }, [filtered]);
 
   // ── Manually classified transactions ──────────────────────────────────────
@@ -221,21 +392,31 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
   // ── Monthly breakdown ──────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
     const map = new Map<string, { revenue: number; cogs: number; expenses: number }>();
+
+    // Revenue from invoices by month
+    for (const inv of filteredInvoices) {
+      const key = new Date((inv.date || '').slice(0, 10) + 'T00:00:00')
+        .toLocaleDateString('en-PK', { year: 'numeric', month: 'short' });
+      if (!map.has(key)) map.set(key, { revenue: 0, cogs: 0, expenses: 0 });
+      map.get(key)!.revenue += inv.totalAmount;
+    }
+
+    // COGS + OpEx from transactions by month
     for (const t of filtered) {
+      const b = resolvePLBucket(t);
+      if (!b) continue;
       const key = new Date((t.date || '').slice(0, 10) + 'T00:00:00')
         .toLocaleDateString('en-PK', { year: 'numeric', month: 'short' });
       if (!map.has(key)) map.set(key, { revenue: 0, cogs: 0, expenses: 0 });
       const e = map.get(key)!;
-      const b = resolvePLBucket(t);
-      if (!b) continue;
-      if (b.plMain === 'Revenue')                        e.revenue  += t.amount || 0;
-      else if (b.plMain === 'Cost of Goods Sold (COGS)') e.cogs     += t.amount || 0;
-      else if (b.plMain === 'Operating Expenses')        e.expenses += t.amount || 0;
+      if (b.plMain === 'Cost of Goods Sold (COGS)') e.cogs     += t.amount || 0;
+      else if (b.plMain === 'Operating Expenses')   e.expenses += t.amount || 0;
     }
+
     return Array.from(map.entries())
       .map(([month, v]) => ({ month, ...v, netProfit: v.revenue - v.cogs - v.expenses }))
       .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
-  }, [filtered]);
+  }, [filtered, filteredInvoices]);
 
   // ── CSV export ─────────────────────────────────────────────────────────────
   const handleExportCSV = () => {
@@ -243,9 +424,11 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
       ['Profit & Loss Report', `${dateFrom} to ${dateTo}`],
       ['Generated', new Date().toLocaleString('en-PK')],
       [],
-      ['REVENUE'],
+      ['REVENUE (from Invoices)'],
     ];
-    sectionRows('Revenue').forEach(([s, v]) => rows.push(['', s, v]));
+    if (invoiceRevenuePaid > 0)   rows.push(['', `Product Sales (Paid, ${filteredInvoices.filter(i=>i.status==='Paid').length} invoices)`, invoiceRevenuePaid]);
+    if (invoiceRevenueUnpaid > 0) rows.push(['', `Product Sales (Unpaid, ${filteredInvoices.filter(i=>i.status==='Unpaid').length} invoices)`, invoiceRevenueUnpaid]);
+    if (totalDeductionCharges > 0) rows.push(['', 'Deduction Charges', -totalDeductionCharges]);
     rows.push(['', 'Total Revenue', totalRevenue], []);
     rows.push(['COST OF GOODS SOLD (COGS)']);
     sectionRows('Cost of Goods Sold (COGS)').forEach(([s, v]) => rows.push(['', s, v]));
@@ -280,21 +463,19 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
     pdf.save(`profit-loss-${dateFrom}-${dateTo}.pdf`);
   };
 
-  // ── Quick-filter button helpers ────────────────────────────────────────────
-  const quickBtnClass = (from: string, to: string) =>
-    `px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
-      dateFrom === from && dateTo === to
-        ? 'bg-indigo-600 text-white border-indigo-600'
-        : 'text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100'
-    }`;
-
-  const revenueRows  = sectionRows('Revenue');
   const cogsRows     = sectionRows('Cost of Goods Sold (COGS)');
   const expenseRows  = sectionRows('Operating Expenses');
 
-  // Custom (dynamically-added) P&L main categories — everything outside the 3 known ones
   const knownMains   = new Set(['Revenue', 'Cost of Goods Sold (COGS)', 'Operating Expenses']);
   const customMains  = Array.from(buckets.keys()).filter(k => !knownMains.has(k));
+
+  const activePeriodLabel = () => {
+    if (filterMode === 'alltime') return 'All Time';
+    if (filterMode === 'yearly'  && selectedYears.length > 0)  return selectedYears.sort().join(', ');
+    if (filterMode === 'monthly' && selectedMonths.length > 0) return `${selectedMonths.length} month(s)`;
+    if (filterMode === 'custom'  && (customFrom || customTo))  return `${customFrom || '—'} → ${customTo || '—'}`;
+    return 'All Time';
+  };
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -305,7 +486,10 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Profit & Loss Report</h1>
           <p className="text-gray-500 mt-1 text-sm">
-            {filtered.length} approved transactions · {dateFrom} → {dateTo}
+            {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''} · {filtered.length} transactions · {activePeriodLabel()}
+            {selectedLocations.length > 0 && (
+              <span className="ml-2 text-purple-600 font-medium">· {selectedLocations.join(', ')}</span>
+            )}
             {manualTxns.length > 0 && (
               <span className="ml-2 inline-flex items-center gap-1 text-indigo-600">
                 <Tag size={12} /> {manualTxns.length} manually classified
@@ -329,45 +513,144 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
         </div>
       </div>
 
-      {/* ── Date range picker ── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Calendar size={16} className="text-indigo-600" />
-          <h2 className="font-semibold text-gray-900">Date Range</h2>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-            />
+      {/* ── Filter Panel ── */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-indigo-600" />
+            <h2 className="font-semibold text-gray-900">Filters</h2>
+            {hasActiveFilter && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Active</span>
+            )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-            />
+          {hasActiveFilter && (
+            <button onClick={resetFilters} className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
+              <X size={12} /> Reset all
+            </button>
+          )}
+        </div>
+
+        {/* ── Location filter ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin size={13} className="text-purple-500" />
+            <span className="text-xs font-semibold text-gray-700">Location / Branch</span>
+            {selectedLocations.length > 0 && (
+              <button onClick={() => setSelectedLocations([])} className="text-xs text-red-400 hover:text-red-600 ml-auto">Clear</button>
+            )}
+          </div>
+          <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+            <button onClick={() => setSelectedLocations([])} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',background:selectedLocations.length===0?'#4f46e5':'#ffffff',color:selectedLocations.length===0?'#ffffff':'#374151',borderColor:selectedLocations.length===0?'#4f46e5':'#d1d5db'}}>
+              All Locations
+            </button>
+            {LOCATIONS.map(loc => (
+              <button key={loc} onClick={() => toggleLocation(loc)} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',background:selectedLocations.includes(loc)?'#4f46e5':'#ffffff',color:selectedLocations.includes(loc)?'#ffffff':'#374151',borderColor:selectedLocations.includes(loc)?'#4f46e5':'#d1d5db'}}>
+                <MapPin size={11} style={{color:'inherit'}} />
+                <span>{loc}</span>
+              </button>
+            ))}
           </div>
         </div>
-        <div className="flex gap-2 mt-3 flex-wrap">
-          <button className={quickBtnClass(monthStart, today)}
-            onClick={() => { setDateFrom(monthStart); setDateTo(today); }}>
-            This Month
-          </button>
-          <button className={quickBtnClass(yearStart, today)}
-            onClick={() => { setDateFrom(yearStart); setDateTo(today); }}>
-            This Year
-          </button>
-          <button className={quickBtnClass('2000-01-01', today)}
-            onClick={() => { setDateFrom('2000-01-01'); setDateTo(today); }}>
-            All Time
-          </button>
+
+        {/* ── Divider ── */}
+        <div className="border-t border-gray-100" />
+
+        {/* ── Period filter ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Calendar size={13} className="text-indigo-500" />
+            <span className="text-xs font-semibold text-gray-700">Period</span>
+          </div>
+          <div className="flex gap-2 flex-wrap mb-3">
+            <button style={modeBtnStyle('alltime')} onClick={() => setFilterMode('alltime')}>All Time</button>
+            <button style={modeBtnStyle('yearly')}  onClick={() => setFilterMode('yearly')}>By Year</button>
+            <button style={modeBtnStyle('monthly')} onClick={() => setFilterMode('monthly')}>By Month</button>
+            <button style={modeBtnStyle('custom')}  onClick={() => setFilterMode('custom')}>Custom Range</button>
+          </div>
+
+          {/* Yearly picker */}
+          {filterMode === 'yearly' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500">Select one or more years</span>
+                {selectedYears.length > 0 && <button onClick={() => setSelectedYears([])} className="text-xs text-red-400 hover:text-red-600">Clear</button>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableYears.map(y => (
+                  <button key={y} onClick={() => toggleYear(y)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      selectedYears.includes(y) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+                    }`}>{y}</button>
+                ))}
+                {availableYears.length === 0 && <p className="text-xs text-gray-400 italic">No data available</p>}
+              </div>
+              {selectedYears.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {[...selectedYears].sort().map(y => (
+                    <span key={y} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">
+                      {y}<button onClick={() => toggleYear(y)}><X size={9} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Monthly picker */}
+          {filterMode === 'monthly' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500">Select one or more months</span>
+                {selectedMonths.length > 0 && <button onClick={() => setSelectedMonths([])} className="text-xs text-red-400 hover:text-red-600">Clear</button>}
+              </div>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
+                {availableMonths.map(ym => (
+                  <button key={ym} onClick={() => toggleMonth(ym)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      selectedMonths.includes(ym) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+                    }`}>{monthLabel(ym)}</button>
+                ))}
+                {availableMonths.length === 0 && <p className="text-xs text-gray-400 italic">No data available</p>}
+              </div>
+              {selectedMonths.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {[...selectedMonths].sort().map(ym => (
+                    <span key={ym} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">
+                      {monthLabel(ym)}<button onClick={() => toggleMonth(ym)}><X size={9} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Custom range */}
+          {filterMode === 'custom' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">From</label>
+                <input type="date" value={customFrom} max={customTo || undefined} onChange={e => setCustomFrom(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">To</label>
+                <input type="date" value={customTo} min={customFrom || undefined} onChange={e => setCustomTo(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Active filter summary line ── */}
+        <div className="pt-3 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500">
+          <Calendar size={11} className="text-indigo-400 flex-shrink-0" />
+          <span>
+            Period: <strong className="text-gray-700">{activePeriodLabel()}</strong>
+            {selectedLocations.length > 0 && (
+              <> · Location: <strong className="text-purple-600">{selectedLocations.join(', ')}</strong></>
+            )}
+            {' '}· <strong className="text-gray-700">{filtered.length}</strong> transactions
+          </span>
         </div>
       </div>
 
@@ -394,21 +677,56 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
       {/* ── Full P&L Statement ── */}
       <div ref={reportRef} className="space-y-5">
 
-        {/* Revenue */}
+        {/* Revenue — from Invoices */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-            Revenue{' '}
-            <span className="text-sm font-normal text-gray-400">
-              ({filtered.filter(t => resolvePLBucket(t)?.plMain === 'Revenue').length} transactions)
+            Revenue
+            <span className="text-sm font-normal text-gray-400 ml-2">
+              ({filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''})
             </span>
           </h2>
-          {revenueRows.length === 0
-            ? <p className="text-sm text-gray-400 py-2">No revenue in this period.</p>
-            : <div className="space-y-1">
-                {revenueRows.map(([sub, val]) => <Row key={sub} label={sub} value={val} />)}
-              </div>
-          }
+          {filteredInvoices.length === 0 ? (
+            <p className="text-sm text-gray-400 py-2">No invoices in this period.</p>
+          ) : (
+            <div className="space-y-1">
+              {invoiceRevenuePaid > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-gray-700 flex items-center gap-2">
+                    Product Sales
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                      {filteredInvoices.filter(i => i.status === 'Paid').length} paid
+                    </span>
+                  </span>
+                  <span className="font-medium text-gray-900">{fmt(invoiceRevenuePaid)}</span>
+                </div>
+              )}
+              {invoiceRevenueUnpaid > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-gray-700 flex items-center gap-2">
+                    Product Sales (Unpaid / Outstanding)
+                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                      {filteredInvoices.filter(i => i.status === 'Unpaid').length} unpaid
+                    </span>
+                  </span>
+                  <span className="font-medium text-gray-900">{fmt(invoiceRevenueUnpaid)}</span>
+                </div>
+              )}
+              {totalDeductionCharges > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-gray-500 italic text-sm">Deduction Charges (courier/collection)</span>
+                  <span className="font-medium text-red-500">− {fmt(totalDeductionCharges)}</span>
+                </div>
+              )}
+            </div>
+          )}
           <SectionTotal label="Total Revenue" value={totalRevenue} colorClass="bg-green-50" />
+          {/* Cash actually collected from customers (informational) */}
+          {cashCollected > 0 && (
+            <div className="mt-3 pt-3 border-t border-dashed border-gray-200 flex justify-between items-center text-xs text-gray-500">
+              <span>Cash collected from customers (actual receipts recorded in Finance)</span>
+              <span className="font-semibold text-gray-700">{fmt(cashCollected)}</span>
+            </div>
+          )}
         </div>
 
         {/* COGS */}
@@ -497,20 +815,20 @@ export function ProfitLossReport({ transactions, onBack }: ProfitLossReportProps
         </div>
 
         {/* Financing & Non-Business (informational) */}
-        {(financing.loanIn > 0 || financing.loanOut > 0 || financing.personal > 0 || financing.otherLoan > 0) && (
+        {(financing.loanIn > 0 || financing.loanOut > 0 || financing.personal > 0 || financing.payments > 0) && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-1 pb-2 border-b border-gray-200">
-              Financing & Non-Business{' '}
+              Financing & Non-Operating Items{' '}
               <span className="text-xs font-normal text-gray-400">(excluded from P&L)</span>
             </h2>
             <p className="text-xs text-gray-400 mb-3">
-              Recorded but do not affect operational profit.
+              Recorded in Finance but do not affect operational profit/loss.
             </p>
             <div className="space-y-1">
-              {financing.loanIn    > 0 && <Row label="Loans Received (inflow)"          value={financing.loanIn}    highlight />}
-              {financing.otherLoan > 0 && <Row label="Other Loan Transactions"           value={financing.otherLoan} highlight />}
-              {financing.loanOut   > 0 && <Row label="Loans Paid Out"                   value={financing.loanOut}   highlight />}
-              {financing.personal  > 0 && <Row label="Personal / Non-Business Expenses" value={financing.personal}  highlight />}
+              {financing.loanIn   > 0 && <Row label="Loans Received"                   value={financing.loanIn}   highlight />}
+              {financing.loanOut  > 0 && <Row label="Loans Paid Out"                   value={financing.loanOut}  highlight />}
+              {financing.payments > 0 && <Row label="Inter-company / Person Payments"  value={financing.payments} highlight />}
+              {financing.personal > 0 && <Row label="Personal / Non-Business Expenses" value={financing.personal} highlight />}
             </div>
           </div>
         )}

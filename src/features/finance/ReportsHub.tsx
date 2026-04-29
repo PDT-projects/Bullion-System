@@ -88,7 +88,7 @@ function renderReport(
   const { transactions, banks, loans, invoices, commissions, products } = props;
   switch (id) {
     case 'sales':           return <SalesReport invoices={invoices} products={products} />;
-    case 'profit-loss':     return <ProfitLossReport transactions={transactions} onBack={onBack} />;
+    case 'profit-loss':     return <ProfitLossReport transactions={transactions} invoices={invoices} onBack={onBack} />;
     case 'balance-sheet':   return <BalanceSheetReport transactions={transactions} banks={banks} loans={loans} products={products} onBack={onBack} />;
     case 'inventory':       return <InventoryReport products={products} />;
     case 'transactions':    return <TransactionHistoryReport transactions={transactions} />;
