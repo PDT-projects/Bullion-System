@@ -1,292 +1,453 @@
 // Banking Module - Bank Activity Report View
-// BankActivityView - Shows all financial transactions across banks, cash, and inventory
-
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  ArrowLeft, RefreshCw, Search, Filter, X, Banknote, Building2,
+  RefreshCw, Search, Filter, X, Banknote, Building2,
   ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Package, TrendingUp,
-  TrendingDown, Activity, ChevronDown, ChevronUp,
+  TrendingDown, Activity, ChevronDown, ChevronUp, Calendar, FileText,
+  DollarSign, Loader2,
 } from 'lucide-react';
 import { useBankActivityViewModel, ActivityEntry, ActivityType } from '../viewModels/useBankActivityViewModel';
-import { useNavigate } from 'react-router-dom';
 
-// ── Type badge ────────────────────────────────────────────────────────────────
-function TypeBadge({ type }: { type: ActivityType }) {
-  const cfg: Record<ActivityType, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
-    bank_debit:    { label: 'Bank Debit',    color: '#dc2626', bg: '#fef2f2', Icon: ArrowUpCircle },
-    bank_credit:   { label: 'Bank Credit',   color: '#16a34a', bg: '#f0fdf4', Icon: ArrowDownCircle },
-    bank_transfer: { label: 'Transfer',      color: '#7c3aed', bg: '#f5f3ff', Icon: ArrowLeftRight },
-    cash_in:       { label: 'Cash In',       color: '#16a34a', bg: '#f0fdf4', Icon: TrendingUp },
-    cash_out:      { label: 'Cash Out',      color: '#d97706', bg: '#fffbeb', Icon: TrendingDown },
-    inventory:     { label: 'Inventory',     color: '#0891b2', bg: '#ecfeff', Icon: Package },
-  };
-  const { label, color, bg, Icon } = cfg[type] || cfg.bank_debit;
+// ── Multi-Select Dropdown ──────────────────────────────────────────────────────
+function MultiSelectDropdown({
+  options, selected, onChange, placeholder, labelFn,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+  placeholder: string;
+  labelFn?: (v: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const toggle = (opt: string) =>
+    onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt]);
+
+  const label =
+    selected.length === 0 ? placeholder :
+    selected.length === 1 ? (labelFn ? labelFn(selected[0]) : selected[0]) :
+    `${selected.length} selected`;
+
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '3px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700,
-      color, backgroundColor: bg,
-    }}>
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between text-sm focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+      >
+        <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-900'}>{label}</span>
+        <ChevronDown size={15} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
+            <button type="button" onClick={() => onChange([...options])} className="text-xs text-[#4f46e5] font-medium hover:underline">Select all</button>
+            <button type="button" onClick={() => onChange([])} className="text-xs text-gray-500 hover:underline">Clear</button>
+          </div>
+          <div className="overflow-y-auto">
+            {options.map(opt => (
+              <label key={opt} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm">
+                <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} className="accent-[#4f46e5] w-4 h-4 rounded" />
+                <span className="text-gray-800">{labelFn ? labelFn(opt) : opt}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pill ───────────────────────────────────────────────────────────────────────
+function Pill({ label, onRemove, colorClass = 'bg-[#4f46e5]/10 text-[#4f46e5]' }: {
+  label: string; onRemove: () => void; colorClass?: string;
+}) {
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${colorClass}`}>
+      {label}
+      <button type="button" onClick={onRemove} className="hover:opacity-70"><X size={11} /></button>
+    </span>
+  );
+}
+
+// ── Type Badge ─────────────────────────────────────────────────────────────────
+function TypeBadge({ type }: { type: ActivityType }) {
+  const cfg: Record<ActivityType, { label: string; cls: string; Icon: React.ElementType }> = {
+    bank_debit:    { label: 'Bank Debit',  cls: 'bg-red-50 text-red-700',    Icon: ArrowUpCircle   },
+    bank_credit:   { label: 'Bank Credit', cls: 'bg-green-50 text-green-700', Icon: ArrowDownCircle },
+    bank_transfer: { label: 'Transfer',    cls: 'bg-purple-50 text-purple-700', Icon: ArrowLeftRight },
+    cash_in:       { label: 'Cash In',     cls: 'bg-emerald-50 text-emerald-700', Icon: TrendingUp  },
+    cash_out:      { label: 'Cash Out',    cls: 'bg-amber-50 text-amber-700',  Icon: TrendingDown   },
+    inventory:     { label: 'Inventory',   cls: 'bg-cyan-50 text-cyan-700',    Icon: Package        },
+  };
+  const { label, cls, Icon } = cfg[type] ?? cfg.bank_debit;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${cls}`}>
       <Icon size={10} /> {label}
     </span>
   );
 }
 
-// ── Mode badge ────────────────────────────────────────────────────────────────
+// ── Mode Badge ─────────────────────────────────────────────────────────────────
 function ModeBadge({ mode, bankName }: { mode: 'Bank' | 'Cash'; bankName?: string }) {
   return mode === 'Bank' ? (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600, color: '#2563eb' }} title={bankName}>
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600" title={bankName}>
       <Building2 size={11} /> {bankName || 'Bank'}
     </span>
   ) : (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600, color: '#16a34a' }}>
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
       <Banknote size={11} /> Cash
     </span>
   );
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
+// ── Stat Card ──────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, color, Icon }: {
   label: string; value: string; sub?: string; color: string; Icon: React.ElementType;
 }) {
   return (
-    <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={14} color={color} />
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}18` }}>
+          <Icon size={16} color={color} />
         </div>
-        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</span>
       </div>
-      <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: '#9ca3af' }}>{sub}</div>}
+      <div className="text-xl font-bold" style={{ color }}>{value}</div>
+      {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
     </div>
   );
 }
 
+// ── Main View ──────────────────────────────────────────────────────────────────
 export function BankActivityView() {
-  const navigate = useNavigate();
   const {
     filteredEntries, banks, uniqueCategories,
     stats, isLoading, error, filters,
     setFilter, clearFilters, refreshData, formatCurrency, formatDate,
   } = useBankActivityViewModel();
 
-  const [showFilters, setShowFilters] = useState(false);
-  const [expandedId, setExpandedId]   = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [allTime, setAllTime]       = useState(false);
 
-  const activeFilterCount = [
-    filters.searchTerm, filters.bankId, filters.mode !== 'all' ? filters.mode : '',
-    filters.category, filters.dateFrom, filters.dateTo,
-  ].filter(Boolean).length;
+  // Multi-select local state (view-level; we translate to viewmodel's single-value filters)
+  const [selectedBanks,      setSelectedBanks]      = useState<string[]>([]);
+  const [selectedModes,      setSelectedModes]      = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  // Sync multi-selects → viewmodel filters (single values → pass '' when multiple/none selected, 
+  // actual filtering for multi is done via the wrapper below)
+  // We filter via filteredEntries override when multi selections exist
+  const bankOptions     = banks.map(b => b.id);
+  const bankLabelFn     = (id: string) => banks.find(b => b.id === id)?.name ?? id;
+  const modeOptions     = ['Bank', 'Cash'];
+  const categoryOptions = uniqueCategories;
+
+  // Apply multi-select on top of viewmodel filteredEntries
+  const displayEntries = filteredEntries.filter(e => {
+    if (selectedBanks.length      > 0 && !selectedBanks.includes(e.bankId ?? ''))    return false;
+    if (selectedModes.length      > 0 && !selectedModes.includes(e.mode))             return false;
+    if (selectedCategories.length > 0 && !selectedCategories.includes(e.category ?? '')) return false;
+    if (allTime) return true; // date already cleared in viewmodel
+    return true;
+  });
+
+  // Sync allTime → viewmodel date filters
+  useEffect(() => {
+    if (allTime) {
+      setFilter('dateFrom', '');
+      setFilter('dateTo', '');
+    }
+  }, [allTime]);
+
+  const hasActiveFilters =
+    filters.searchTerm || selectedBanks.length > 0 || selectedModes.length > 0 ||
+    selectedCategories.length > 0 || filters.dateFrom || filters.dateTo || allTime;
+
+  const handleClearAll = () => {
+    clearFilters();
+    setSelectedBanks([]);
+    setSelectedModes([]);
+    setSelectedCategories([]);
+    setAllTime(false);
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', backgroundColor: '#f8fafc' }}>
+    <div className="p-8 max-w-[1400px] mx-auto">
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 24px', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => navigate(-1)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
-            <ArrowLeft size={16} /> Back
-          </button>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Activity size={18} color="#fff" />
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-[#4f46e5] rounded-lg flex items-center justify-center">
+            <Activity size={20} className="text-white" />
           </div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Bank Activity Report</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>
-              All transactions — banks, cash, inventory payments, transfers
-            </div>
-          </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button onClick={() => setShowFilters(p => !p)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
-                border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                backgroundColor: showFilters ? '#4f46e5' : '#fff',
-                color: showFilters ? '#fff' : '#374151',
-              }}>
-              <Filter size={14} /> Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
-            </button>
-            <button onClick={() => refreshData()}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151' }}>
-              <RefreshCw size={14} /> Refresh
-            </button>
+            <h1 className="text-2xl font-bold text-gray-900">Bank Activity Report</h1>
+            <p className="text-sm text-gray-600">All transactions — banks, cash, inventory payments, transfers</p>
           </div>
         </div>
+        <button
+          onClick={() => refreshData()}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#10b981] bg-[#10b981]/10 border border-[#10b981]/20 rounded-lg hover:bg-[#10b981]/20 transition-colors"
+        >
+          <RefreshCw size={14} /> Refresh
+        </button>
       </div>
 
-      <div style={{ flex: 1, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* ── Stats ───────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        <StatCard label="Bank Debits"  value={formatCurrency(stats.totalBankDebits)}  color="#dc2626" Icon={ArrowUpCircle}  sub={`Net flow: ${formatCurrency(stats.netBankFlow)}`} />
+        <StatCard label="Bank Credits" value={formatCurrency(stats.totalBankCredits)} color="#16a34a" Icon={ArrowDownCircle} />
+        <StatCard label="Cash Out"     value={formatCurrency(stats.totalCashOut)}      color="#d97706" Icon={TrendingDown}   sub={`Cash In: ${formatCurrency(stats.totalCashIn)}`} />
+      </div>
 
-        {/* ── Stats ──────────────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          <StatCard label="Bank Debits"   value={formatCurrency(stats.totalBankDebits)}  color="#dc2626" Icon={ArrowUpCircle} sub={`Net: ${formatCurrency(stats.netBankFlow)}`} />
-          <StatCard label="Bank Credits"  value={formatCurrency(stats.totalBankCredits)} color="#16a34a" Icon={ArrowDownCircle} />
-          <StatCard label="Cash Out"      value={formatCurrency(stats.totalCashOut)}      color="#d97706" Icon={TrendingDown} sub={`Cash In: ${formatCurrency(stats.totalCashIn)}`} />
+      {/* ── Filters ─────────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Filter size={18} className="text-[#4f46e5]" />
+          <h2 className="font-semibold text-gray-900">Filters</h2>
+          {hasActiveFilters && (
+            <button onClick={handleClearAll} className="ml-auto text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1">
+              <X size={13} /> Clear all
+            </button>
+          )}
         </div>
 
-        {/* ── Filters ────────────────────────────────────────────────────────── */}
-        {showFilters && (
-          <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 
-              {/* Search */}
-              <div style={{ position: 'relative' }}>
-                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                <input type="text" value={filters.searchTerm}
-                  onChange={e => setFilter('searchTerm', e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px 9px 30px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
-                  placeholder="Search description, bank, ref…" />
-              </div>
-
-              {/* Bank */}
-              <select value={filters.bankId} onChange={e => setFilter('bankId', e.target.value)}
-                style={{ padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, outline: 'none' }}>
-                <option value="">All Banks</option>
-                {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-
-              {/* Mode */}
-              <select value={filters.mode} onChange={e => setFilter('mode', e.target.value as any)}
-                style={{ padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, outline: 'none' }}>
-                <option value="all">All Modes</option>
-                <option value="Bank">Bank</option>
-                <option value="Cash">Cash</option>
-              </select>
+          {/* Search */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+              <Search size={13} /> Search
+            </label>
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={filters.searchTerm}
+                onChange={e => setFilter('searchTerm', e.target.value)}
+                placeholder="Description, bank, ref…"
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+              />
             </div>
+          </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {/* Category */}
-              <select value={filters.category} onChange={e => setFilter('category', e.target.value)}
-                style={{ padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, outline: 'none' }}>
-                <option value="">All Categories</option>
-                {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+          {/* Bank multi-select */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+              <Building2 size={13} /> Bank
+            </label>
+            <MultiSelectDropdown
+              options={bankOptions}
+              selected={selectedBanks}
+              onChange={setSelectedBanks}
+              placeholder="All Banks"
+              labelFn={bankLabelFn}
+            />
+          </div>
 
-              {/* Date from */}
-              <div>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>Date From</label>
-                <input type="date" value={filters.dateFrom}
-                  onChange={e => setFilter('dateFrom', e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
-              </div>
+          {/* Mode multi-select */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+              <Banknote size={13} /> Mode
+            </label>
+            <MultiSelectDropdown
+              options={modeOptions}
+              selected={selectedModes}
+              onChange={setSelectedModes}
+              placeholder="All Modes"
+            />
+          </div>
 
-              {/* Date to */}
-              <div>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>Date To</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input type="date" value={filters.dateTo}
-                    onChange={e => setFilter('dateTo', e.target.value)}
-                    style={{ flex: 1, padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
-                  {activeFilterCount > 0 && (
-                    <button onClick={clearFilters}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '9px 12px', border: '1px solid #fca5a5', backgroundColor: '#fef2f2', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#dc2626', whiteSpace: 'nowrap' }}>
-                      <X size={12} /> Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+          {/* Category multi-select */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+              <FileText size={13} /> Category
+            </label>
+            <MultiSelectDropdown
+              options={categoryOptions}
+              selected={selectedCategories}
+              onChange={setSelectedCategories}
+              placeholder="All Categories"
+            />
+          </div>
+
+          {/* Date From */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+              <Calendar size={13} /> Date From
+            </label>
+            <input
+              type="date"
+              value={filters.dateFrom}
+              disabled={allTime}
+              onChange={e => setFilter('dateFrom', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
+            />
+          </div>
+
+          {/* Date To */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+              <Calendar size={13} /> Date To
+            </label>
+            <input
+              type="date"
+              value={filters.dateTo}
+              disabled={allTime}
+              onChange={e => setFilter('dateTo', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
+            />
+            <button
+              type="button"
+              onClick={() => setAllTime(v => !v)}
+              className={`mt-1.5 w-full text-xs font-medium py-1 rounded-md border transition-colors ${
+                allTime
+                  ? 'bg-[#4f46e5] text-white border-[#4f46e5]'
+                  : 'bg-white text-[#4f46e5] border-[#4f46e5] hover:bg-[#4f46e5]/10'
+              }`}
+            >
+              {allTime ? '✓ All Time' : 'Show All Time'}
+            </button>
+          </div>
+        </div>
+
+        {/* Active pills */}
+        {hasActiveFilters && (
+          <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-gray-500">Active:</span>
+            {filters.searchTerm && (
+              <Pill label={`"${filters.searchTerm}"`} onRemove={() => setFilter('searchTerm', '')} colorClass="bg-[#4f46e5]/10 text-[#4f46e5]" />
+            )}
+            {allTime
+              ? <Pill label="All Time" onRemove={() => setAllTime(false)} colorClass="bg-[#4f46e5]/10 text-[#4f46e5]" />
+              : (filters.dateFrom || filters.dateTo) && (
+                <Pill
+                  label={`${filters.dateFrom || '…'} → ${filters.dateTo || '…'}`}
+                  onRemove={() => { setFilter('dateFrom', ''); setFilter('dateTo', ''); }}
+                  colorClass="bg-[#4f46e5]/10 text-[#4f46e5]"
+                />
+              )
+            }
+            {selectedBanks.map(id => (
+              <Pill key={id} label={bankLabelFn(id)} onRemove={() => setSelectedBanks(prev => prev.filter(x => x !== id))} colorClass="bg-blue-50 text-blue-700" />
+            ))}
+            {selectedModes.map(m => (
+              <Pill key={m} label={m} onRemove={() => setSelectedModes(prev => prev.filter(x => x !== m))} colorClass="bg-gray-100 text-gray-700" />
+            ))}
+            {selectedCategories.map(c => (
+              <Pill key={c} label={c} onRemove={() => setSelectedCategories(prev => prev.filter(x => x !== c))} colorClass="bg-[#10b981]/10 text-[#10b981]" />
+            ))}
           </div>
         )}
+      </div>
 
-        {/* ── Table ──────────────────────────────────────────────────────────── */}
-        <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-
-          {/* Table header */}
-          <div style={{ padding: '12px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
-              {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'}
-            </span>
-            <span style={{ fontSize: 11, color: '#9ca3af' }}>Sorted newest first</span>
+      {/* ── Table ───────────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-900">Activity Entries</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {displayEntries.length} {displayEntries.length === 1 ? 'entry' : 'entries'} · Sorted newest first
+            </p>
           </div>
+        </div>
 
-          {isLoading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', color: '#9ca3af', fontSize: 13 }}>
-              Loading activity data…
-            </div>
-          ) : error ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#dc2626', fontSize: 13 }}>
-              {error}
-            </div>
-          ) : filteredEntries.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', color: '#9ca3af', gap: 8 }}>
-              <Activity size={36} style={{ opacity: 0.3 }} />
-              <span style={{ fontSize: 13 }}>No activity found</span>
-            </div>
-          ) : (
-            <div style={{ overflowY: 'auto', maxHeight: '60vh' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f8fafc' }}>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 gap-3">
+            <Loader2 size={26} className="text-[#4f46e5] animate-spin" />
+            <span className="text-gray-500 text-sm">Loading activity data…</span>
+          </div>
+        ) : error ? (
+          <div className="py-12 text-center text-red-600 text-sm">{error}</div>
+        ) : displayEntries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+            <Activity size={40} className="opacity-30" />
+            <p className="text-sm">No activity found. Try adjusting your filters.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
                   {['Date', 'Type', 'Description', 'Reference', 'Mode / Bank', 'Amount', ''].map(h => (
-                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, backgroundColor: '#f8fafc', zIndex: 1 }}>
+                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 sticky top-0 bg-gray-50">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {filteredEntries.map((entry, idx) => {
+              <tbody className="divide-y divide-gray-100">
+                {displayEntries.map((entry, idx) => {
                   const isExpanded = expandedId === entry.id;
                   const isDebit    = ['bank_debit', 'cash_out', 'bank_transfer'].includes(entry.type);
-                  const isEven     = idx % 2 === 0;
 
                   return (
                     <React.Fragment key={entry.id}>
-                      <tr style={{ backgroundColor: isEven ? '#fff' : '#fafafa', cursor: 'pointer' }}
-                        onClick={() => setExpandedId(isExpanded ? null : entry.id)}>
-                        <td style={{ padding: '10px 16px', fontSize: 12, color: '#374151', whiteSpace: 'nowrap' }}>
+                      <tr
+                        className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-[#4f46e5]/5 cursor-pointer transition-colors`}
+                        onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                      >
+                        <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-700">
                           {formatDate(entry.date)}
                         </td>
-                        <td style={{ padding: '10px 16px' }}>
+                        <td className="px-5 py-3 whitespace-nowrap">
                           <TypeBadge type={entry.type} />
                           {entry.isInstalment && (
-                            <span style={{ marginLeft: 4, fontSize: 9, color: '#7c3aed', fontWeight: 700, backgroundColor: '#f5f3ff', padding: '1px 5px', borderRadius: 10 }}>
+                            <span className="ml-1.5 text-[9px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-full">
                               INST #{entry.instalmentIndex}
                             </span>
                           )}
                         </td>
-                        <td style={{ padding: '10px 16px', fontSize: 12, color: '#374151', maxWidth: 220 }}>
-                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.description}>
+                        <td className="px-5 py-3 max-w-[220px]">
+                          <div className="text-sm text-gray-800 truncate" title={entry.description}>
                             {entry.description || '—'}
                           </div>
                           {entry.category && (
-                            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>{entry.category}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">{entry.category}</div>
                           )}
                         </td>
-                        <td style={{ padding: '10px 16px', fontSize: 11, color: '#6366f1', fontFamily: 'monospace', fontWeight: 600 }}>
+                        <td className="px-5 py-3 whitespace-nowrap font-mono text-xs text-[#4f46e5] font-semibold">
                           {entry.reference || '—'}
                         </td>
-                        <td style={{ padding: '10px 16px' }}>
+                        <td className="px-5 py-3 whitespace-nowrap">
                           <ModeBadge mode={entry.mode} bankName={entry.bankName} />
                         </td>
-                        <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, color: isDebit ? '#dc2626' : '#16a34a', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <td className={`px-5 py-3 whitespace-nowrap text-sm font-bold text-right ${isDebit ? 'text-red-600' : 'text-green-600'}`}>
                           {isDebit ? '−' : '+'}{formatCurrency(entry.amount)}
                         </td>
-                        <td style={{ padding: '10px 16px', color: '#9ca3af' }}>
+                        <td className="px-5 py-3 text-gray-400">
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </td>
                       </tr>
 
                       {/* Expanded detail row */}
                       {isExpanded && (
-                        <tr style={{ backgroundColor: '#f5f3ff' }}>
-                          <td colSpan={7} style={{ padding: '12px 20px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 16px', fontSize: 11 }}>
+                        <tr className="bg-purple-50 border-l-4 border-[#4f46e5]">
+                          <td colSpan={7} className="px-6 py-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
                               {[
-                                ['Date',        formatDate(entry.date)],
-                                ['Type',        entry.type.replace('_', ' ').toUpperCase()],
-                                ['Mode',        entry.mode],
-                                ['Bank',        entry.bankName || '—'],
-                                ['Reference',   entry.reference || '—'],
-                                ['Category',    entry.category || '—'],
-                                ['Amount',      formatCurrency(entry.amount)],
-                                ['Note',        entry.note || '—'],
+                                ['Date',      formatDate(entry.date)],
+                                ['Type',      entry.type.replace('_', ' ').toUpperCase()],
+                                ['Mode',      entry.mode],
+                                ['Bank',      entry.bankName || '—'],
+                                ['Reference', entry.reference || '—'],
+                                ['Category',  entry.category || '—'],
+                                ['Amount',    formatCurrency(entry.amount)],
+                                ['Note',      entry.note || '—'],
                               ].map(([k, v]) => (
                                 <div key={k}>
-                                  <span style={{ color: '#7c3aed', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 10 }}>{k}</span>
-                                  <div style={{ color: '#1e1b4b', fontWeight: 600, marginTop: 2 }}>{v}</div>
+                                  <span className="text-[#7c3aed] font-bold uppercase tracking-wide text-[10px]">{k}</span>
+                                  <div className="text-gray-800 font-semibold mt-0.5">{v}</div>
                                 </div>
                               ))}
                             </div>
@@ -298,10 +459,29 @@ export function BankActivityView() {
                 })}
               </tbody>
             </table>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
+        {/* Footer total */}
+        {displayEntries.length > 0 && !isLoading && (
+          <div className="bg-gray-50 border-t-2 border-[#4f46e5] px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <DollarSign size={18} className="text-[#4f46e5]" />
+              <span className="font-semibold text-gray-900">Total Entries</span>
+              <span className="text-sm text-gray-500">{displayEntries.length}</span>
+            </div>
+            <div className="flex items-center gap-6 text-sm">
+              <div className="text-right">
+                <p className="text-xs text-gray-400">Total Debits / Out</p>
+                <p className="font-bold text-red-600">{formatCurrency(stats.totalBankDebits + stats.totalCashOut)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-400">Total Credits / In</p>
+                <p className="font-bold text-green-600">{formatCurrency(stats.totalBankCredits + stats.totalCashIn)}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
