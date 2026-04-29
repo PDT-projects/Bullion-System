@@ -20,28 +20,22 @@ import html2canvas from 'html2canvas';
 
 // ─── SubCategory lookup tables (must match Firestore exactly) ─────────────────
 
-const INFLOW_PRODUCT_SALE = ['Product sale received'];
-const INFLOW_SERVICE      = [
-  'Payment received - Customers',
-  'Payment received - Company',
-  'TCS/DHL/LCS payment received',
-  'Commission received',
-];
-const INFLOW_OTHER        = ['Other'];
-const INFLOW_LOAN_CATS    = ['Loan received - From Employee', 'Loan received - From Company'];
+// Loan inflows — excluded from P&L revenue
+const INFLOW_LOAN_CATS  = ['Loan received - From Employee', 'Loan received - From Company'];
 
-const OUTFLOW_COGS        = ['Purchase'];
-const OUTFLOW_SALARY      = ['Employee salary', 'Advance salary'];
-const OUTFLOW_COMMISSION  = ['Commission paid - Employee', 'Commission paid - Dealer'];
-const OUTFLOW_RENT        = ['Office Rent'];
-const OUTFLOW_UTILITIES   = ['Electricity Bill', 'Gas Bill', 'Water Bill', 'Internet Bill', 'PTCL Bill', 'Cylinder payment'];
-const OUTFLOW_LOGISTICS   = ['Courier', 'Bykea/delivery', 'Parcel received Payment', 'Petrol expense'];
-const OUTFLOW_MARKETING   = ['Marketing/SEO/VPN'];
-const OUTFLOW_OFFICE      = ['Kitchen Expense', 'Grocery Expense', 'Stationery Expense'];
-const OUTFLOW_REPAIRS     = ['Repair payment', 'Medical/hospital bill'];
-const OUTFLOW_PAYMENTS    = ['Payment to company', 'Payment to person'];
-const OUTFLOW_PERSONAL    = ['Personal expense/Non business'];
-const OUTFLOW_LOAN        = ['Loan paid to employee'];
+// COGS: 'Purchase' = manual entry, 'Inventory Purchase' = auto from transactionBridgeService
+const OUTFLOW_COGS      = ['Purchase', 'Inventory Purchase'];
+const OUTFLOW_SALARY    = ['Employee salary', 'Advance salary'];
+const OUTFLOW_COMMISSION= ['Commission paid - Employee', 'Commission paid - Dealer'];
+const OUTFLOW_RENT      = ['Office Rent'];
+const OUTFLOW_UTILITIES = ['Electricity Bill', 'Gas Bill', 'Water Bill', 'Internet Bill', 'PTCL Bill', 'Cylinder payment'];
+const OUTFLOW_LOGISTICS = ['Courier', 'Bykea/delivery', 'Parcel received Payment', 'Petrol expense'];
+const OUTFLOW_MARKETING = ['Marketing/SEO/VPN'];
+const OUTFLOW_OFFICE    = ['Kitchen Expense', 'Grocery Expense', 'Stationery Expense'];
+const OUTFLOW_REPAIRS   = ['Repair payment', 'Medical/hospital bill'];
+const OUTFLOW_PAYMENTS  = ['Payment to company', 'Payment to person'];   // balance sheet only
+const OUTFLOW_PERSONAL  = ['Personal expense/Non business'];              // excluded from P&L
+const OUTFLOW_LOAN      = ['Loan paid to employee'];                      // financing, excluded
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

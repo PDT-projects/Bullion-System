@@ -58,20 +58,40 @@ export function useDashboardData(): DashboardData {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubTransactions = onSnapshot(collection(db, 'transactions'), (snap) => {
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
-      setTransactions(data);
-    }, (err) => setError(`Transactions: ${err.message}`));
+    // Track how many collections have received their first snapshot.
+    // Only clear loading once ALL 6 have arrived.
+    let loaded = 0;
+    const TOTAL = 6;
+    const markLoaded = () => { loaded += 1; if (loaded >= TOTAL) setLoading(false); };
+
+    const unsubTransactions = onSnapshot(
+      collection(db, 'transactions'),
+      (snap) => {
+        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+        setTransactions(data);
+        markLoaded();
+      },
+      (err) => { setError(`Transactions: ${err.message}`); markLoaded(); }
+    );
 
     const unsubs = [
-      onSnapshot(collection(db, 'banks'), (snap) => setBanks(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => {}),
-      onSnapshot(collection(db, 'loans'), (snap) => setLoans(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => {}),
-      onSnapshot(collection(db, 'invoices'), (snap) => setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => {}),
-      onSnapshot(collection(db, 'commissions'), (snap) => setCommissions(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => {}),
-      onSnapshot(collection(db, 'products'), (snap) => setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => {}),
+      onSnapshot(collection(db, 'banks'),
+        (snap) => { setBanks(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
+        () => markLoaded()),
+      onSnapshot(collection(db, 'loans'),
+        (snap) => { setLoans(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
+        () => markLoaded()),
+      onSnapshot(collection(db, 'invoices'),
+        (snap) => { setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
+        () => markLoaded()),
+      onSnapshot(collection(db, 'commissions'),
+        (snap) => { setCommissions(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
+        () => markLoaded()),
+      onSnapshot(collection(db, 'products'),
+        (snap) => { setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
+        () => markLoaded()),
     ];
 
-    setLoading(false);
     return () => {
       unsubTransactions();
       unsubs.forEach(unsub => unsub());
