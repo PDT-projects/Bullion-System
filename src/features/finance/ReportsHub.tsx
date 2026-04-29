@@ -125,13 +125,29 @@ export function ReportsHub(props: ReportsHubProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
           <button
             onClick={() => setSelectedReport(null)}
+            onMouseEnter={e => {
+              const el = e.currentTarget;
+              el.style.backgroundColor = '#4338ca';
+              el.style.boxShadow = '0 4px 12px rgba(79,70,229,0.35)';
+              el.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget;
+              el.style.backgroundColor = '#4f46e5';
+              el.style.boxShadow = '0 2px 6px rgba(79,70,229,0.25)';
+              el.style.transform = 'translateY(0)';
+            }}
             style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px',
-              borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff',
-              cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151',
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              padding: '9px 18px', borderRadius: 9,
+              border: 'none', backgroundColor: '#4f46e5',
+              cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#fff',
+              boxShadow: '0 2px 6px rgba(79,70,229,0.25)',
+              transition: 'all 0.15s ease', letterSpacing: '0.01em',
             }}
           >
-            <ArrowLeft size={15} /> {backLabel}
+            <ArrowLeft size={14} strokeWidth={2.5} />
+            {backLabel}
           </button>
           {card && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

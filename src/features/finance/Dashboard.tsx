@@ -104,7 +104,7 @@ export function Dashboard() {
             invoices={invoices}
             commissions={commissions}
             products={products}
-            backLabel="← Back to Reports Hub"
+            backLabel="Back to Reports Hub"
           />
         );
 
