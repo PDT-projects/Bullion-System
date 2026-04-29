@@ -1,13 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Transaction } from '../../App';
-import { Filter, Calendar, MapPin, FileText, DollarSign, Download, Eye, X } from 'lucide-react';
+import { Filter, Calendar, MapPin, FileText, DollarSign, Download, Eye, X, ChevronDown } from 'lucide-react';
 
 type TransactionHistoryReportProps = {
   transactions: Transaction[];
 };
 
-const companies = [
-  'All Offices',
+const companyOptions = [
   'Pakistan Detectors Technologies: Islamabad/ Head Office',
   'Pakistan Detectors Technologies: Karachi',
   'Pakistan Detectors Technologies: Lahore',
@@ -16,7 +15,6 @@ const companies = [
 
 // All possible categories from Expenses, Bills, Salary, and Other categories
 const allCategories = [
-  'All Categories',
   // Expense categories
   'Office Rent', 'Stationery', 'Office Supplies', 'Furniture',
   'Kitchen Expense', 'Grocery', 'Petrol', 'Courier', 'Delivery', 'Medical', 'Repairs', 'Maintenance',
@@ -30,8 +28,7 @@ const allCategories = [
   'Electricity', 'Internet', 'Utilities'
 ];
 
-const transactionTypes = [
-  'All Types',
+const transactionTypeOptions = [
   'Expenses',
   'Bills',
   'Salary',
@@ -41,16 +38,119 @@ const transactionTypes = [
   'Loans & Advances'
 ];
 
+// Multi-select dropdown component
+function MultiSelectDropdown({
+  options,
+  selected,
+  onChange,
+  placeholder,
+  labelFn
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+  placeholder: string;
+  labelFn?: (value: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleOption = (option: string) => {
+    if (selected.includes(option)) {
+      onChange(selected.filter(s => s !== option));
+    } else {
+      onChange([...selected, option]);
+    }
+  };
+
+  const selectAll = () => onChange([...options]);
+  const clearAll = () => onChange([]);
+
+  const label =
+    selected.length === 0
+      ? placeholder
+      : selected.length === options.length
+      ? placeholder.replace('All ', 'All ')  // keep as-is
+      : selected.length === 1
+      ? (labelFn ? labelFn(selected[0]) : selected[0])
+      : `${selected.length} selected`;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent bg-white text-left flex items-center justify-between text-sm"
+      >
+        <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-900'}>
+          {label}
+        </span>
+        <ChevronDown size={16} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col">
+          {/* Select / Clear all */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-xs text-[#4f46e5] font-medium hover:underline"
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-xs text-gray-500 hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="overflow-y-auto flex-1">
+            {options.map(option => (
+              <label
+                key={option}
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(option)}
+                  onChange={() => toggleOption(option)}
+                  className="accent-[#4f46e5] w-4 h-4 rounded"
+                />
+                <span className="text-gray-800">{labelFn ? labelFn(option) : option}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TransactionHistoryReport({ transactions }: TransactionHistoryReportProps) {
   const today = new Date().toISOString().split('T')[0];
   const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
+  const [allTime, setAllTime] = useState(false);
   const [filters, setFilters] = useState({
     dateFrom: firstDayOfMonth,
     dateTo: today,
-    category: 'All Categories',
-    transactionType: 'All Types',
-    city: 'All Offices'
+    categories: [] as string[],      // empty = all
+    transactionTypes: [] as string[], // empty = all
+    cities: [] as string[]            // empty = all
   });
 
   const [viewTransaction, setViewTransaction] = useState<Transaction | null>(null);
@@ -58,45 +158,36 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
   // Filter and process transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter(transaction => {
-      // Date filter
-      const transactionDate = new Date(transaction.date);
-      const fromDate = new Date(filters.dateFrom);
-      const toDate = new Date(filters.dateTo);
-      
-      if (transactionDate < fromDate || transactionDate > toDate) {
-        return false;
+      // Date filter (skip if All Time)
+      if (!allTime) {
+        const transactionDate = new Date(transaction.date);
+        const fromDate = new Date(filters.dateFrom);
+        const toDate = new Date(filters.dateTo);
+        if (transactionDate < fromDate || transactionDate > toDate) return false;
       }
 
-      // Category filter
-      if (filters.category !== 'All Categories') {
-        if (transaction.subCategory !== filters.category) {
-          return false;
-        }
+      // Multi-category filter (empty selection = show all)
+      if (filters.categories.length > 0) {
+        if (!filters.categories.includes(transaction.subCategory || '')) return false;
       }
 
       // Transaction type filter
-      if (filters.transactionType !== 'All Types') {
-        if (transaction.mainCategory !== filters.transactionType) {
-          return false;
-        }
+      if (filters.transactionTypes.length > 0) {
+        if (!filters.transactionTypes.includes(transaction.mainCategory)) return false;
       }
 
       // City/Office filter
-      if (filters.city !== 'All Offices') {
-        if (transaction.company !== filters.city) {
-          return false;
-        }
+      if (filters.cities.length > 0) {
+        if (!filters.cities.includes(transaction.company)) return false;
       }
 
       return true;
     });
-  }, [transactions, filters]);
+  }, [transactions, filters, allTime]);
 
   // Calculate totals
   const totalAmount = useMemo(() => {
-    return filteredTransactions.reduce((sum, transaction) => {
-      return sum + (transaction.amount || 0);
-    }, 0);
+    return filteredTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
   }, [filteredTransactions]);
 
   // Format currency
@@ -140,7 +231,9 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `transaction-history-${filters.dateFrom}-to-${filters.dateTo}.csv`;
+    a.download = allTime
+      ? `transaction-history-all-time.csv`
+      : `transaction-history-${filters.dateFrom}-to-${filters.dateTo}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -186,8 +279,9 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
             <input
               type="date"
               value={filters.dateFrom}
+              disabled={allTime}
               onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
             />
           </div>
 
@@ -200,26 +294,36 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
             <input
               type="date"
               value={filters.dateTo}
+              disabled={allTime}
               onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
             />
+            {/* All Time toggle lives below dateTo */}
+            <button
+              type="button"
+              onClick={() => setAllTime(v => !v)}
+              className={`mt-1.5 w-full text-xs font-medium py-1 rounded-md border transition-colors ${
+                allTime
+                  ? 'bg-[#4f46e5] text-white border-[#4f46e5]'
+                  : 'bg-white text-[#4f46e5] border-[#4f46e5] hover:bg-[#4f46e5]/10'
+              }`}
+            >
+              {allTime ? '✓ All Time' : 'Show All Time'}
+            </button>
           </div>
 
-          {/* Category */}
+          {/* Category (multi-select) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
               <FileText size={14} />
               Category
             </label>
-            <select
-              value={filters.category}
-              onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
-            >
-              {allCategories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+            <MultiSelectDropdown
+              options={allCategories}
+              selected={filters.categories}
+              onChange={(cats) => setFilters({ ...filters, categories: cats })}
+              placeholder="All Categories"
+            />
           </div>
 
           {/* Transaction Type */}
@@ -228,15 +332,12 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
               <FileText size={14} />
               Transaction Type
             </label>
-            <select
-              value={filters.transactionType}
-              onChange={(e) => setFilters({ ...filters, transactionType: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
-            >
-              {transactionTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
+            <MultiSelectDropdown
+              options={transactionTypeOptions}
+              selected={filters.transactionTypes}
+              onChange={(types) => setFilters({ ...filters, transactionTypes: types })}
+              placeholder="All Types"
+            />
           </div>
 
           {/* City/Office */}
@@ -245,40 +346,47 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
               <MapPin size={14} />
               City/Office
             </label>
-            <select
-              value={filters.city}
-              onChange={(e) => setFilters({ ...filters, city: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
-            >
-              {companies.map(city => (
-                <option key={city} value={city}>{city === 'All Offices' ? city : getCityFromCompany(city)}</option>
-              ))}
-            </select>
+            <MultiSelectDropdown
+              options={companyOptions}
+              selected={filters.cities}
+              onChange={(cities) => setFilters({ ...filters, cities: cities })}
+              placeholder="All Offices"
+              labelFn={getCityFromCompany}
+            />
           </div>
         </div>
 
         {/* Active Filters Summary */}
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
             <span className="font-medium">Active Filters:</span>
             <span className="px-2 py-1 bg-[#4f46e5]/10 text-[#4f46e5] rounded">
-              {filters.dateFrom} to {filters.dateTo}
+              {allTime ? 'All Time' : `${filters.dateFrom} to ${filters.dateTo}`}
             </span>
-            {filters.category !== 'All Categories' && (
-              <span className="px-2 py-1 bg-[#10b981]/10 text-[#10b981] rounded">
-                {filters.category}
+            {filters.categories.length > 0 && filters.categories.map(cat => (
+              <span key={cat} className="px-2 py-1 bg-[#10b981]/10 text-[#10b981] rounded flex items-center gap-1">
+                {cat}
+                <button
+                  type="button"
+                  onClick={() => setFilters({ ...filters, categories: filters.categories.filter(c => c !== cat) })}
+                  className="hover:text-[#059669]"
+                >
+                  <X size={12} />
+                </button>
               </span>
-            )}
-            {filters.transactionType !== 'All Types' && (
-              <span className="px-2 py-1 bg-[#ef4444]/10 text-[#ef4444] rounded">
-                {filters.transactionType}
+            ))}
+            {filters.transactionTypes.length > 0 && filters.transactionTypes.map(type => (
+              <span key={type} className="px-2 py-1 bg-[#ef4444]/10 text-[#ef4444] rounded flex items-center gap-1">
+                {type}
+                <button type="button" onClick={() => setFilters({ ...filters, transactionTypes: filters.transactionTypes.filter(t => t !== type) })} className="hover:text-[#dc2626]"><X size={12} /></button>
               </span>
-            )}
-            {filters.city !== 'All Offices' && (
-              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded">
-                {getCityFromCompany(filters.city)}
+            ))}
+            {filters.cities.length > 0 && filters.cities.map(city => (
+              <span key={city} className="px-2 py-1 bg-gray-100 text-gray-700 rounded flex items-center gap-1">
+                {getCityFromCompany(city)}
+                <button type="button" onClick={() => setFilters({ ...filters, cities: filters.cities.filter(c => c !== city) })} className="hover:text-gray-900"><X size={12} /></button>
               </span>
-            )}
+            ))}
           </div>
         </div>
       </div>
@@ -314,7 +422,7 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
             <div>
               <p className="text-sm text-gray-600 mb-1">Average Amount</p>
               <p className="text-3xl font-bold text-gray-900">
-                {filteredTransactions.length > 0 
+                {filteredTransactions.length > 0
                   ? formatCurrency(totalAmount / filteredTransactions.length)
                   : formatCurrency(0)
                 }
@@ -333,27 +441,13 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Category
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Description
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  City
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Payment Mode
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Amount
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Mode</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -449,7 +543,7 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
               {formatCurrency(filteredTransactions.filter(t => t.mode === 'Cash').reduce((sum, t) => sum + t.amount, 0))}
             </p>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <p className="text-xs text-gray-600 mb-1">Bank Payments</p>
             <p className="text-xl font-bold text-gray-900">
@@ -459,7 +553,7 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
               {formatCurrency(filteredTransactions.filter(t => t.mode === 'Bank').reduce((sum, t) => sum + t.amount, 0))}
             </p>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <p className="text-xs text-gray-600 mb-1">Cheque Payments</p>
             <p className="text-xl font-bold text-gray-900">
@@ -469,7 +563,7 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
               {formatCurrency(filteredTransactions.filter(t => t.mode === 'Cheque').reduce((sum, t) => sum + t.amount, 0))}
             </p>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <p className="text-xs text-gray-600 mb-1">Partial Payments</p>
             <p className="text-xl font-bold text-gray-900">
