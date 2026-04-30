@@ -53,6 +53,7 @@ interface SalaryFormViewProps {
   selectedEmployee: any | null;
   calculatedNetAmount: number;
   advancePaidThisMonth: number;
+  advanceAvailableThisMonth: number;
   regularAlreadyPaid: boolean;
   regularAlreadyPaidAmount: number;
   remainingSalaryToPay: number;
@@ -88,7 +89,7 @@ export function SalaryFormView({
   formData, transactions, isValid, errorMessage, fieldErrors,
   isLoading, isEditMode, pageTitle, submitButtonText,
   employees, banks, selectedEmployee, calculatedNetAmount,
-  advancePaidThisMonth, regularAlreadyPaid, regularAlreadyPaidAmount,
+  advancePaidThisMonth, advanceAvailableThisMonth, regularAlreadyPaid, regularAlreadyPaidAmount,
   remainingSalaryToPay, isEffectivelyAdvance,
   confirmedCommissionAmount = 0,
   isCommissionAutoFilled = false,
@@ -223,14 +224,40 @@ export function SalaryFormView({
         {!isRegular && selectedEmployee && transaction.salaryMonth && (
           <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3">
             <Info className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-orange-800 font-semibold">Advance salary — {transaction.salaryMonth}</p>
-              <p className="text-orange-700 text-sm mt-0.5">
-                Monthly salary: <strong>{fmt(selectedEmployee.salary || 0)}</strong>
-                {advancePaidThisMonth > 0 && (
-                  <> · Advance already given this month: <strong>{fmt(advancePaidThisMonth)}</strong></>
-                )}
+            <div className="flex-1">
+              <p className="text-orange-800 font-semibold">
+                Advance salary — {transaction.salaryMonth}
               </p>
+              <div className="mt-2 grid grid-cols-3 gap-3 text-sm">
+                <div className="bg-white rounded-lg p-2.5 border border-orange-100 text-center">
+                  <p className="text-xs text-gray-500 mb-0.5">Full Monthly Salary</p>
+                  <p className="font-bold text-gray-900">{fmt(selectedEmployee.salary || 0)}</p>
+                </div>
+                <div className="bg-white rounded-lg p-2.5 border border-orange-100 text-center">
+                  <p className="text-xs text-gray-500 mb-0.5">Advance Paid So Far</p>
+                  <p className="font-bold text-orange-600">
+                    {advancePaidThisMonth > 0 ? `− ${fmt(advancePaidThisMonth)}` : fmt(0)}
+                  </p>
+                </div>
+                <div className={`rounded-lg p-2.5 border text-center ${advanceAvailableThisMonth <= 0 ? 'bg-red-50 border-red-200' : 'bg-orange-100 border-orange-200'}`}>
+                  <p className={`text-xs mb-0.5 ${advanceAvailableThisMonth <= 0 ? 'text-red-600' : 'text-orange-700'}`}>
+                    Available to Advance
+                  </p>
+                  <p className={`font-bold text-base ${advanceAvailableThisMonth <= 0 ? 'text-red-700' : 'text-orange-800'}`}>
+                    {fmt(advanceAvailableThisMonth)}
+                  </p>
+                </div>
+              </div>
+              {advanceAvailableThisMonth <= 0 && (
+                <p className="text-red-600 text-xs mt-2 font-medium">
+                  ⚠️ Full salary has already been advanced for this month.
+                </p>
+              )}
+              {advancePaidThisMonth > 0 && advanceAvailableThisMonth > 0 && (
+                <p className="text-orange-600 text-xs mt-2">
+                  Maximum advance remaining this month: {fmt(advanceAvailableThisMonth)}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -742,18 +769,34 @@ export function SalaryFormView({
 
               {transaction.paymentStatus === 'Partial' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Remaining Amount</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount Being Paid Now
+                    <span className="ml-1 text-xs font-normal text-gray-400">(enter how much is paid today)</span>
+                  </label>
                   <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5]">
                     <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
                       PKR
                     </span>
                     <input
                       type="number"
-                      value={transaction.remainingAmount}
-                      onChange={(e) => onTransactionChange(0, 'remainingAmount', parseFloat(e.target.value) || 0)}
+                      min={0}
+                      max={calculatedNetAmount}
+                      value={transaction.amount || ''}
+                      onChange={(e) => onTransactionChange(0, 'amount', parseFloat(e.target.value) || 0)}
                       className="flex-1 px-3 py-2 bg-white focus:outline-none text-sm"
                       placeholder="0"
                     />
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-sm bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                    <span className="text-gray-500">Net:</span>
+                    <span className="font-medium">{fmt(calculatedNetAmount)}</span>
+                    <span className="text-gray-400">−</span>
+                    <span className="text-gray-500">Paid:</span>
+                    <span className="font-medium text-green-700">{fmt(transaction.amount || 0)}</span>
+                    <span className="text-gray-400">=</span>
+                    <span className="font-bold text-orange-600">
+                      Remaining: {fmt(Math.max(0, calculatedNetAmount - (transaction.amount || 0)))}
+                    </span>
                   </div>
                 </div>
               )}

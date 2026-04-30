@@ -60,6 +60,7 @@ export interface UseSalaryFormViewModelReturn {
   selectedEmployee: any | null;
   calculatedNetAmount: number;
   advancePaidThisMonth: number;
+  advanceAvailableThisMonth: number;
   regularAlreadyPaid: boolean;
   regularAlreadyPaidAmount: number;
   remainingSalaryToPay: number;
@@ -155,7 +156,11 @@ export function useSalaryFormViewModel({
         s.subCategory === 'Advance salary' &&
         (!isEditMode || s.id !== id)
       )
-      .reduce((sum, s) => sum + (s.netAmount || s.amount || 0), 0);
+      .reduce((sum, s) => {
+        const net       = s.netAmount || s.amount || 0;
+        const remaining = s.remainingAmount || 0;
+        return sum + Math.max(0, net - remaining);
+      }, 0);
   }, [allSalaries, formData.employeeId, salaryMonth, isEditMode, id]);
 
   const regularPaidRecords = useMemo(() => {
@@ -173,6 +178,15 @@ export function useSalaryFormViewModel({
     [regularPaidRecords]
   );
 
+  // How much more advance is available = full salary minus advance already paid minus regular already paid
+  // Declared AFTER regularAlreadyPaidAmount to avoid TDZ errors
+  const advanceAvailableThisMonth = useMemo(() => {
+    if (!selectedEmployee || !salaryMonth) return 0;
+    const fullSalary  = selectedEmployee.salary || 0;
+    const totalUsed   = advancePaidThisMonth + regularAlreadyPaidAmount;
+    return Math.max(0, fullSalary - totalUsed);
+  }, [selectedEmployee, salaryMonth, advancePaidThisMonth, regularAlreadyPaidAmount]);
+
   const regularAlreadyPaid = useMemo(() => {
     if (type !== 'regular') return false;
     if (!selectedEmployee) return false;
@@ -181,10 +195,11 @@ export function useSalaryFormViewModel({
 
   const remainingSalaryToPay = useMemo(() => {
     if (!selectedEmployee || !salaryMonth) return 0;
-    const fullSalary = selectedEmployee.salary || 0;
-    if (advancePaidThisMonth <= 0) return 0;
-    return Math.max(0, fullSalary - advancePaidThisMonth);
-  }, [selectedEmployee, advancePaidThisMonth]);
+    const fullSalary       = selectedEmployee.salary || 0;
+    const totalAlreadyPaid = advancePaidThisMonth + regularAlreadyPaidAmount;
+    if (totalAlreadyPaid <= 0) return 0;
+    return Math.max(0, fullSalary - totalAlreadyPaid);
+  }, [selectedEmployee, advancePaidThisMonth, regularAlreadyPaidAmount]);
 
   const isEffectivelyAdvance = useMemo(() => {
     if (type !== 'regular' || isEditMode || !salaryMonth) return false;
@@ -392,6 +407,20 @@ export function useSalaryFormViewModel({
       prev.map((t, i) => i === 0 ? { ...t, amount: calculatedNetAmount } : t)
     );
   }, [calculatedNetAmount]);
+
+  // Auto-calc remainingAmount: Partial = netAmount - amountPaid; Full = 0
+  useEffect(() => {
+    setTransactionsList(prev =>
+      prev.map((t, i) => {
+        if (i !== 0) return t;
+        if (t.paymentStatus === 'Partial') {
+          return { ...t, remainingAmount: Math.max(0, calculatedNetAmount - (t.amount || 0)) };
+        }
+        return { ...t, remainingAmount: 0 };
+      })
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calculatedNetAmount, transactionsList[0]?.paymentStatus, transactionsList[0]?.amount]);
 
   const setField = useCallback((field: string, value: any) => {
     if (field === 'commission') {
@@ -606,6 +635,7 @@ export function useSalaryFormViewModel({
     selectedEmployee,
     calculatedNetAmount,
     advancePaidThisMonth,
+    advanceAvailableThisMonth,
     regularAlreadyPaid,
     regularAlreadyPaidAmount,
     remainingSalaryToPay,

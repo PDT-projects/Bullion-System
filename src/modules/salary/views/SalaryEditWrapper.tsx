@@ -38,6 +38,7 @@ export function SalaryEditWrapper() {
       selectedEmployee={vm.selectedEmployee}
       calculatedNetAmount={vm.calculatedNetAmount}
       advancePaidThisMonth={vm.advancePaidThisMonth}
+      advanceAvailableThisMonth={vm.advanceAvailableThisMonth}
       regularAlreadyPaid={vm.regularAlreadyPaid}
       regularAlreadyPaidAmount={vm.regularAlreadyPaidAmount}
       remainingSalaryToPay={vm.remainingSalaryToPay}
