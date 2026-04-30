@@ -532,26 +532,18 @@ export function InvoiceFormView({
               />
             </div>
 
-            {/* Digital Stamp Toggle — spans 2 cols */}
-            <div className="col-span-2">
-              <label className={lbl}>Digital Stamp</label>
-              <button
-                type="button"
-                onClick={() => setFormData({ digitalStamp: !formData.digitalStamp })}
-                className={`w-full flex items-center justify-between px-3 h-8 rounded-md border-2 transition-all ${
-                  formData.digitalStamp ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-200'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Stamp size={13} className={formData.digitalStamp ? 'text-indigo-600' : 'text-gray-400'} />
-                  <span className={`text-xs font-medium ${formData.digitalStamp ? 'text-indigo-800' : 'text-gray-600'}`}>
-                    {formData.digitalStamp ? 'Stamped — verification seal enabled' : 'Add verification seal to PDF'}
-                  </span>
-                </div>
-                <div className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${formData.digitalStamp ? 'bg-indigo-600' : 'bg-gray-300'}`}>
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${formData.digitalStamp ? 'translate-x-4' : 'translate-x-0'}`} />
-                </div>
-              </button>
+            {/* Digital Stamp Checkbox */}
+            <div className="col-span-2 flex items-end">
+              <label className="flex items-center gap-2 cursor-pointer select-none h-8">
+                <input
+                  type="checkbox"
+                  checked={!!formData.digitalStamp}
+                  onChange={() => setFormData({ digitalStamp: !formData.digitalStamp })}
+                  className="w-4 h-4 rounded border-gray-300 text-[#4f46e5] focus:ring-[#4f46e5] cursor-pointer"
+                />
+                <Stamp size={13} className="text-gray-500" />
+                <span className="text-xs font-medium text-gray-700">Add Digital Stamp to PDF</span>
+              </label>
             </div>
           </div>
 

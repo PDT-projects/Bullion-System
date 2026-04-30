@@ -19,7 +19,7 @@ import { Invoice } from './types';
 // Put PDT-stamp.png and PDT-logo.png in src/assets/ folder.
 // If they are in public/ instead, use the fetch fallback below.
 import stampAsset from '../../../assets/PDT-stamp.png?url';
-import logoAsset  from '../../../assets/PDT-logo.png?url';
+const logoAsset = '/PDT-logo.png';
 
 // ── Page geometry ─────────────────────────────────────────────────────────────
 const PW = 210;
@@ -147,8 +147,8 @@ const TERMS = [
 // The stamp is placed centred horizontally, right-aligned to the dealer
 // signature side (left half), partially overlapping the signature line so it
 // looks like it was physically stamped on. Adjust STAMP_W / STAMP_H as needed.
-const STAMP_W = 45;   // mm wide
-const STAMP_H = 45;   // mm tall  (keep square for a circular stamp image)
+const STAMP_W = 60;   // mm wide
+const STAMP_H = 30;   // mm tall
 
 // ── Main builder (async so we can await the stamp image load) ─────────────────
 async function buildPdf(invoice: Invoice): Promise<Blob> {
@@ -371,50 +371,38 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     y += termH;
   }
 
+  y += 8;
+
+  // ══════════════════════════════════════════════════════════════════
+  // 7. THANK YOU — flows right after T&C
+  // ══════════════════════════════════════════════════════════════════
+  y = pb(doc, y, 60);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); st(doc, DARK);
+  doc.text('Thank you for your purchase!', PW / 2, y, { align: 'center' });
   y += 10;
 
   // ══════════════════════════════════════════════════════════════════
-  // 7. THANK YOU  (centred)
+  // 8. DIGITAL STAMP — below "Thank you", left-aligned, no line overlap
   // ══════════════════════════════════════════════════════════════════
-  // Reserve enough space: "Thank you" text (12) + signature lines (22)
-  // + optional stamp (STAMP_H + 6 gap) so they all land on same page
-  const stampExtraH = stampImg ? STAMP_H + 8 : 0;
-  y = pb(doc, y, 30 + stampExtraH);
-
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); st(doc, DARK);
-  doc.text('Thank you for your purchase!', PW / 2, y, { align: 'center' });
-
-  y += 22;
+  if (stampImg) {
+    doc.addImage(stampImg.dataUrl, stampImg.format, ML, y, STAMP_W, STAMP_H);
+  }
 
   // ══════════════════════════════════════════════════════════════════
-  // 8. SIGNATURE LINES  —  Dealer left | Client right
+  // 9. SIGNATURE LINES — pinned near page bottom, space above to sign
   // ══════════════════════════════════════════════════════════════════
   const SIG_W   = 65;
   const L_SIG_X = ML;
   const R_SIG_X = PW - MR - SIG_W;
+  const SIG_LINE_Y = PH - 28;
 
   sd(doc, DARK); doc.setLineWidth(0.4);
-  doc.line(L_SIG_X, y, L_SIG_X + SIG_W, y);
-  doc.line(R_SIG_X, y, R_SIG_X + SIG_W, y);
+  doc.line(L_SIG_X, SIG_LINE_Y, L_SIG_X + SIG_W, SIG_LINE_Y);
+  doc.line(R_SIG_X, SIG_LINE_Y, R_SIG_X + SIG_W, SIG_LINE_Y);
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, DARK);
-  doc.text('Dealer Signature', L_SIG_X + SIG_W / 2, y + 5, { align: 'center' });
-  doc.text('Client Signature', R_SIG_X + SIG_W / 2, y + 5, { align: 'center' });
-
-  // ══════════════════════════════════════════════════════════════════
-  // 9. DIGITAL STAMP  —  only when invoice.digitalStamp === true
-  //    Placed centred over the Dealer Signature line so it looks
-  //    physically stamped. Rendered at 40% opacity using a clipping
-  //    trick: draw the image then restore — jsPDF doesn't support
-  //    opacity on images, so we rely on the PNG's own transparency.
-  // ══════════════════════════════════════════════════════════════════
-  if (stampImg) {
-    // Stamp placed over the RIGHT (Dealer) signature line
-    // Centre the stamp horizontally over R_SIG_X line
-    const stampX = R_SIG_X + SIG_W / 2 - STAMP_W / 2;
-    const stampY = y - STAMP_H + 10;  // overlaps upward over the signature line
-    doc.addImage(stampImg.dataUrl, stampImg.format, stampX, stampY, STAMP_W, STAMP_H);
-  }
+  doc.text('Dealer Signature', L_SIG_X + SIG_W / 2, SIG_LINE_Y + 5, { align: 'center' });
+  doc.text('Client Signature', R_SIG_X + SIG_W / 2, SIG_LINE_Y + 5, { align: 'center' });
 
   return doc.output('blob');
 }
