@@ -16,7 +16,6 @@ import {
   Calendar, ChevronDown, ChevronUp, Tag, Filter, X, MapPin,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 // ─── SubCategory lookup tables (must match Firestore exactly) ─────────────────
 
@@ -447,13 +446,281 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
   };
 
   // ── PDF export ─────────────────────────────────────────────────────────────
-  const handleExportPDF = async () => {
-    const el = reportRef.current;
-    if (!el) return;
-    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
-    const pdf    = new jsPDF('p', 'mm', 'a4');
-    const w = 210;
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, w, (canvas.height * w) / canvas.width);
+  const handleExportPDF = () => {
+    const pdf  = new jsPDF('p', 'mm', 'a4');
+    const PW   = 210;   // page width  (A4)
+    const PH   = 297;   // page height (A4)
+    const ML   = 14;    // margin left
+    const MR   = 14;    // margin right
+    const CW   = PW - ML - MR;  // content width
+    let   y    = 0;
+
+    // ── colours ──────────────────────────────────────────────────────────────
+    const C = {
+      indigo:     [79,  70,  229] as [number,number,number],
+      green:      [22,  163, 74]  as [number,number,number],
+      red:        [220, 38,  38]  as [number,number,number],
+      orange:     [234, 88,  12]  as [number,number,number],
+      gray9:      [17,  24,  39]  as [number,number,number],
+      gray6:      [75,  85,  99]  as [number,number,number],
+      gray2:      [229, 231, 235] as [number,number,number],
+      grayBg:     [249, 250, 251] as [number,number,number],
+      white:      [255, 255, 255] as [number,number,number],
+      indigoBg:   [238, 242, 255] as [number,number,number],
+      greenBg:    [240, 253, 244] as [number,number,number],
+      redBg:      [254, 242, 242] as [number,number,number],
+    };
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+    const money = (n: number) =>
+      new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n);
+
+    const checkPage = (needed = 10) => {
+      if (y + needed > PH - 12) { pdf.addPage(); y = 18; }
+    };
+
+    const drawLine = (color = C.gray2) => {
+      pdf.setDrawColor(...color);
+      pdf.setLineWidth(0.3);
+      pdf.line(ML, y, PW - MR, y);
+      y += 3;
+    };
+
+    const row = (
+      label: string,
+      value: string,
+      labelColor = C.gray6,
+      valueColor = C.gray9,
+      bold = false,
+    ) => {
+      checkPage(8);
+      pdf.setFontSize(9);
+      pdf.setTextColor(...labelColor);
+      pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+      pdf.text(label, ML + 4, y);
+      pdf.setTextColor(...valueColor);
+      pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+      pdf.text(value, PW - MR - 4, y, { align: 'right' });
+      y += 6;
+    };
+
+    const sectionHeader = (title: string, bgColor: [number,number,number]) => {
+      checkPage(14);
+      pdf.setFillColor(...bgColor);
+      pdf.roundedRect(ML, y - 1, CW, 10, 2, 2, 'F');
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(...C.gray9);
+      pdf.text(title, ML + 4, y + 6);
+      y += 13;
+    };
+
+    const totalRow = (label: string, value: string, bgColor: [number,number,number], valueColor = C.gray9) => {
+      checkPage(12);
+      pdf.setFillColor(...bgColor);
+      pdf.roundedRect(ML, y - 1, CW, 10, 2, 2, 'F');
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(...C.gray9);
+      pdf.text(label, ML + 4, y + 6);
+      pdf.setTextColor(...valueColor);
+      pdf.text(value, PW - MR - 4, y + 6, { align: 'right' });
+      y += 14;
+    };
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PAGE 1 — HEADER
+    // ════════════════════════════════════════════════════════════════════════
+    y = 18;
+
+    // Title bar
+    pdf.setFillColor(...C.indigo);
+    pdf.rect(0, 0, PW, 14, 'F');
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...C.white);
+    pdf.text('Profit & Loss Report', ML, 9.5);
+
+    // Company / period sub-line
+    const periodStr = filterMode === 'alltime' ? 'All Time'
+      : filterMode === 'yearly'  && selectedYears.length  ? selectedYears.sort().join(', ')
+      : filterMode === 'monthly' && selectedMonths.length ? `${selectedMonths.length} month(s)`
+      : filterMode === 'custom'  ? `${customFrom || '—'} → ${customTo || '—'}`
+      : 'All Time';
+
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(
+      `Period: ${periodStr}   |   Generated: ${new Date().toLocaleDateString('en-PK', { dateStyle: 'medium' })}`,
+      PW - MR, 9.5, { align: 'right' }
+    );
+
+    // Location tag
+    if (selectedLocations.length > 0) {
+      pdf.setFontSize(7.5);
+      pdf.text(`Locations: ${selectedLocations.join(', ')}`, PW - MR, 13, { align: 'right' });
+    }
+
+    y = 22;
+
+    // ── Summary KPI row ───────────────────────────────────────────────────
+    const kpis = [
+      { label: 'Total Revenue', value: money(totalRevenue),  color: C.greenBg,  text: C.green  },
+      { label: 'Total COGS',    value: money(totalCOGS),     color: C.grayBg,   text: C.orange },
+      { label: 'Gross Profit',  value: money(grossProfit),   color: C.indigoBg, text: C.indigo },
+      { label: 'Net ' + (isProfit ? 'Profit' : 'Loss'), value: money(netProfit), color: isProfit ? C.indigoBg : C.redBg, text: isProfit ? C.indigo : C.red },
+    ];
+    const kW = CW / kpis.length - 2;
+    kpis.forEach((k, i) => {
+      const x = ML + i * (kW + 2.67);
+      pdf.setFillColor(...k.color);
+      pdf.roundedRect(x, y, kW, 18, 2, 2, 'F');
+      pdf.setFontSize(7);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(...C.gray6);
+      pdf.text(k.label, x + kW / 2, y + 5.5, { align: 'center' });
+      pdf.setFontSize(9.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(...k.text);
+      pdf.text(k.value, x + kW / 2, y + 13, { align: 'center' });
+    });
+    y += 23;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // REVENUE
+    // ════════════════════════════════════════════════════════════════════════
+    sectionHeader('Revenue (from Invoices)', C.greenBg);
+
+    const paidCount   = filteredInvoices.filter(i => i.status === 'Paid').length;
+    const unpaidCount = filteredInvoices.filter(i => i.status === 'Unpaid').length;
+    if (invoiceRevenuePaid   > 0) row(`Product Sales — Paid (${paidCount} invoices)`,   money(invoiceRevenuePaid),   C.gray6, C.green);
+    if (invoiceRevenueUnpaid > 0) row(`Product Sales — Unpaid (${unpaidCount} invoices)`, money(invoiceRevenueUnpaid), C.gray6, C.orange);
+    if (totalDeductionCharges > 0) row('Deduction Charges',  '-' + money(totalDeductionCharges), C.gray6, C.red);
+    drawLine(C.gray2);
+    totalRow('Total Revenue', money(totalRevenue), C.greenBg, C.green);
+
+    // ════════════════════════════════════════════════════════════════════════
+    // COGS
+    // ════════════════════════════════════════════════════════════════════════
+    if (totalCOGS > 0 || cogsRows.length > 0) {
+      sectionHeader('Cost of Goods Sold (COGS)', C.grayBg);
+      cogsRows.forEach(([sub, val]) => row(sub, money(val)));
+      if (cogsRows.length === 0) {
+        checkPage(8);
+        pdf.setFontSize(8.5); pdf.setTextColor(...C.gray6);
+        pdf.setFont('helvetica', 'italic');
+        pdf.text('No COGS transactions in this period.', ML + 4, y); y += 7;
+      }
+      drawLine(C.gray2);
+      totalRow('Total COGS', money(totalCOGS), C.grayBg, C.orange);
+    }
+
+    // ── Gross Profit ──────────────────────────────────────────────────────
+    totalRow('Gross Profit', money(grossProfit), C.indigoBg, C.indigo);
+
+    // ════════════════════════════════════════════════════════════════════════
+    // OPERATING EXPENSES
+    // ════════════════════════════════════════════════════════════════════════
+    sectionHeader('Operating Expenses', [254, 243, 199]);
+    if (expenseRows.length > 0) {
+      expenseRows.forEach(([sub, val]) => row(sub, money(val)));
+    } else {
+      checkPage(8);
+      pdf.setFontSize(8.5); pdf.setFont('helvetica', 'italic'); pdf.setTextColor(...C.gray6);
+      pdf.text('No operating expenses in this period.', ML + 4, y); y += 7;
+    }
+    drawLine(C.gray2);
+    totalRow('Total Expenses', money(totalExpenses), [254, 243, 199], C.red);
+
+    // ════════════════════════════════════════════════════════════════════════
+    // NET PROFIT / LOSS
+    // ════════════════════════════════════════════════════════════════════════
+    checkPage(20);
+    const netBg: [number,number,number] = isProfit ? [219, 234, 254] : [254, 226, 226];
+    const netFg: [number,number,number] = isProfit ? C.indigo : C.red;
+    pdf.setFillColor(...netBg);
+    pdf.roundedRect(ML, y - 1, CW, 14, 3, 3, 'F');
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...C.gray9);
+    pdf.text(`Net ${isProfit ? 'Profit' : 'Loss'}`, ML + 5, y + 9);
+    pdf.setTextColor(...netFg);
+    pdf.setFontSize(13);
+    pdf.text(money(netProfit), PW - MR - 5, y + 9, { align: 'right' });
+    y += 18;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // MONTHLY BREAKDOWN (new page if needed)
+    // ════════════════════════════════════════════════════════════════════════
+    if (monthlyData.length > 0) {
+      checkPage(40);
+      sectionHeader('Monthly Breakdown', C.grayBg);
+
+      // Table header
+      pdf.setFillColor(...C.indigo);
+      pdf.rect(ML, y - 1, CW, 8, 'F');
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(...C.white);
+      const cols = [ML + 4, ML + 40, ML + 80, ML + 120, ML + 158];
+      ['Month', 'Revenue', 'COGS', 'Expenses', 'Net Profit'].forEach((h, i) =>
+        pdf.text(h, cols[i], y + 5)
+      );
+      y += 10;
+
+      monthlyData.forEach((m, idx) => {
+        checkPage(8);
+        if (idx % 2 === 0) {
+          pdf.setFillColor(...C.grayBg);
+          pdf.rect(ML, y - 1, CW, 7, 'F');
+        }
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(...C.gray9);
+        pdf.text(m.month,          cols[0], y + 4.5);
+        pdf.setTextColor(...C.green);
+        pdf.text(money(m.revenue), cols[1], y + 4.5);
+        pdf.setTextColor(...C.orange);
+        pdf.text(money(m.cogs),    cols[2], y + 4.5);
+        pdf.setTextColor(...C.red);
+        pdf.text(money(m.expenses),cols[3], y + 4.5);
+        const netC: [number,number,number] = m.netProfit >= 0 ? C.indigo : C.red;
+        pdf.setTextColor(...netC);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(money(m.netProfit), cols[4], y + 4.5);
+        y += 7;
+      });
+
+      // Totals row
+      checkPage(10);
+      pdf.setFillColor(...C.indigo);
+      pdf.rect(ML, y - 1, CW, 8, 'F');
+      pdf.setFontSize(8.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(...C.white);
+      pdf.text('Total', cols[0], y + 5);
+      pdf.text(money(totalRevenue),  cols[1], y + 5);
+      pdf.text(money(totalCOGS),     cols[2], y + 5);
+      pdf.text(money(totalExpenses), cols[3], y + 5);
+      pdf.text(money(netProfit),     cols[4], y + 5);
+      y += 12;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // FOOTER on every page
+    // ════════════════════════════════════════════════════════════════════════
+    const totalPages = (pdf as any).internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p);
+      pdf.setFillColor(...C.grayBg);
+      pdf.rect(0, PH - 10, PW, 10, 'F');
+      pdf.setFontSize(7);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(...C.gray6);
+      pdf.text('Pakistan Detector Technologies — Confidential', ML, PH - 4);
+      pdf.text(`Page ${p} of ${totalPages}`, PW - MR, PH - 4, { align: 'right' });
+    }
+
     pdf.save(`profit-loss-${dateFrom}-${dateTo}.pdf`);
   };
 
