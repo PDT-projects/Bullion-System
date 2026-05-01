@@ -4,6 +4,8 @@
 // 2. Filter logic for PartiallyPaid, Uncleared, PendingReceivable, and Rejected
 // 3. pending_approval transactions are blocked from payment actions (not yet approved)
 // 4. Rejected transactions are shown in 'Rejected' tab for record-keeping only
+// 5. FIX: Fully paid AND fully cleared transactions are automatically removed from
+//    the Pending Payments screen and will only appear in the Transaction List.
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -61,6 +63,31 @@ export interface UsePendingPaymentsViewModelReturn {
   getPaymentStatusColor:    (t: Transaction) => string;
 }
 
+/**
+ * A transaction should leave Pending Payments when there is nothing left to pay.
+ * "Nothing left to pay" means remainingAmount === 0.
+ *
+ * We intentionally do NOT require isFullyCleared here because:
+ * - Cash payments set remainingAmount to 0 but never set isFullyCleared on the tx
+ * - Cheque payments also leave remainingAmount = 0 but await manual bank clearance
+ *
+ * The "Uncleared Cheques" tab is the right place to chase those — not this list.
+ * A cheque main-tx (no partial payments, mode === 'Cheque') is an exception:
+ * it stays until explicitly marked cleared via "Mark Cleared" button, because
+ * its amount never gets split into partialPayments — the whole tx IS the cheque.
+ */
+function isSettled(t: Transaction): boolean {
+  const { remainingAmount } = getTransactionTotals(t);
+
+  // Main cheque transaction (no partial payments) — stays until manually cleared
+  if (t.mode === 'Cheque' && (t.partialPayments || []).length === 0) {
+    return !!t.isFullyCleared;
+  }
+
+  // All other cases: leave as soon as remaining balance hits zero
+  return remainingAmount <= 0;
+}
+
 export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn {
   const [allTransactions,       setAllTransactions]       = useState<Transaction[]>([]);
   const [banks,                 setBanks]                 = useState<BankInfo[]>([]);
@@ -82,8 +109,6 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
           TransactionFirebaseService.fetchAllTransactions(),
           BankFirebaseService.fetchAllBanks().catch(() => []),
         ]);
-        // Store ALL transactions; filtering happens in useMemo below.
-        // We need pending (payment), pending_approval, and rejected all accessible.
         setAllTransactions(txList);
         setBanks(bankList as BankInfo[]);
       } catch {
@@ -95,13 +120,22 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
     load();
   }, []);
 
-  // Derive the "transactions" view: show payment-pending + pending_approval + rejected
+  // Derive the "transactions" view:
+  // - Include payment-pending, pending_approval, and rejected
+  // - EXCLUDE any transaction that is now fully settled (paid + cleared)
+  //   so it drops off this screen automatically and lives only in Transaction List
   const transactions = useMemo(() => {
-    return allTransactions.filter(t =>
-      isPending(t) ||
-      t.approvalStatus === 'pending_approval' ||
-      t.approvalStatus === 'rejected'
-    );
+    return allTransactions.filter(t => {
+      // Always show approval-queue and rejected tabs regardless of settlement
+      if (t.approvalStatus === 'pending_approval' || t.approvalStatus === 'rejected') {
+        return true;
+      }
+      // For payment-pending transactions: only show if NOT yet fully settled
+      if (isPending(t) && !isSettled(t)) {
+        return true;
+      }
+      return false;
+    });
   }, [allTransactions]);
 
   const filteredTransactions = useMemo(() => {
@@ -109,7 +143,7 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
       if (filterStatus === 'All') {
         // 'All' shows only payment-pending (approved/not_required with remaining balance)
         // and NOT the approval/rejected queue — those have their own dedicated tabs
-        return isPending(t);
+        return isPending(t) && !isSettled(t);
       }
 
       if (filterStatus === 'PendingApproval') {
@@ -137,7 +171,7 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
   }, [transactions, filterStatus]);
 
   const summaryStats = useMemo(() => {
-    const paymentPending = allTransactions.filter(isPending);
+    const paymentPending = allTransactions.filter(t => isPending(t) && !isSettled(t));
     const receivable     = paymentPending.filter(t => t.mainCategory === 'Cash Inflow');
     const payable        = paymentPending.filter(t => t.mainCategory !== 'Cash Inflow');
 
@@ -208,6 +242,7 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
         chequeNumber: paymentData.method === 'Cheque' ? paymentData.chequeNumber : undefined,
         chequeDate:   paymentData.method === 'Cheque' ? paymentData.chequeDate   : undefined,
         chequeBank:   paymentData.method === 'Cheque' ? paymentData.chequeBank   : undefined,
+        // Bank payments are immediately cleared; Cash/Cheque start as uncleared
         isCleared:    paymentData.method === 'Bank',
       };
 
@@ -229,17 +264,31 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
         const payments  = [...(t.partialPayments || []), newPayment];
         const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
         const remaining = Math.max(0, t.amount - totalPaid);
+        // isFullyCleared = no remaining balance AND every payment is cleared
+        const fullyCleared = remaining <= 0 && payments.every(p => p.isCleared);
         return {
           ...t,
           partialPayments: payments,
           totalPaid,
           remainingAmount: remaining,
-          isFullyCleared:  remaining <= 0 && payments.every(p => p.isCleared),
+          isFullyCleared:  fullyCleared,
           paymentStatus:   remaining <= 0 ? 'Full' : 'Partial',
         };
       }));
 
-      toast.success(`Payment of ${formatCurrency(paymentData.amount)} recorded`);
+      const isFullPayment = paymentData.amount >= remainingAmount;
+      const isBankPayment = paymentData.method === 'Bank';
+
+      if (isFullPayment && isBankPayment) {
+        // Bank payment of the full remaining amount → immediately settled → leaves screen
+        toast.success(`Payment of ${formatCurrency(paymentData.amount)} recorded — transaction fully cleared and moved to Transaction List`);
+      } else if (isFullPayment) {
+        // Full payment via Cash/Cheque → fully paid but cheque still needs manual clearance
+        toast.success(`Payment of ${formatCurrency(paymentData.amount)} recorded — mark as cleared when ${paymentData.method === 'Cheque' ? 'cheque clears' : 'cash is received'}`);
+      } else {
+        toast.success(`Partial payment of ${formatCurrency(paymentData.amount)} recorded`);
+      }
+
       setPaymentModal(false);
       setSelectedTransactionId(null);
       setPaymentDataState({ amount: 0, bankId: '', method: 'Cash' });
@@ -260,8 +309,31 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
           p.id === paymentId ? { ...p, isCleared: true } : p
         );
         const remaining = Math.max(0, t.amount - payments.reduce((s, p) => s + p.amount, 0));
-        return { ...t, partialPayments: payments, isFullyCleared: remaining <= 0 && payments.every(p => p.isCleared) };
+        // After clearing this payment, check if the whole transaction is now settled
+        const fullyCleared = remaining <= 0 && payments.every(p => p.isCleared);
+        return {
+          ...t,
+          partialPayments: payments,
+          isFullyCleared:  fullyCleared,
+          paymentStatus:   remaining <= 0 ? 'Full' : t.paymentStatus,
+        };
       }));
+
+      // Close the view modal if the transaction just became fully settled
+      setViewTransaction(prev => {
+        if (!prev || prev.id !== transactionId) return prev;
+        const updated = prev.partialPayments?.map(p =>
+          p.id === paymentId ? { ...p, isCleared: true } : p
+        ) ?? [];
+        const remaining = Math.max(0, prev.amount - updated.reduce((s, p) => s + p.amount, 0));
+        const fullyCleared = remaining <= 0 && updated.every(p => p.isCleared);
+        if (fullyCleared) {
+          toast.success('Payment cleared — transaction fully settled and moved to Transaction List');
+          return null; // close modal
+        }
+        return { ...prev, partialPayments: updated, isFullyCleared: fullyCleared };
+      });
+
       toast.success('Payment marked as cleared');
     } catch {
       toast.error('Failed to mark payment as cleared');
@@ -283,9 +355,14 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
     try {
       await TransactionFirebaseService.markTransactionCleared(transactionId);
       setAllTransactions(prev => prev.map(t =>
-        t.id !== transactionId ? t : { ...t, isFullyCleared: true, paymentStatus: 'Full' }
+        t.id !== transactionId ? t : {
+          ...t,
+          isFullyCleared: true,
+          paymentStatus:  'Full',
+        }
       ));
-      toast.success('Cheque marked as cleared');
+      // The transaction will now satisfy isSettled() and disappear from this screen
+      toast.success('Cheque marked as cleared — transaction moved to Transaction List');
     } catch {
       toast.error('Failed to clear cheque');
     }

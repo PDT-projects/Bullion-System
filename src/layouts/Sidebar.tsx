@@ -114,7 +114,7 @@ export function Sidebar() {
           name: 'Transaction',
           icon: ArrowLeftRight,
           children: [
-            { id: 'add-transaction', name: 'Add Transaction', icon: PlusCircle,   path: '/transactions' },
+            { id: 'add-transaction', name: 'Transaction', icon: PlusCircle,   path: '/transactions' },
             { id: 'pending-payment', name: 'Pending Payment', icon: Clock,        path: '/transactions/pending' },
             { id: 'bills',           name: 'Bills',           icon: FileTextIcon, path: '/bills' },
             { id: 'salary',          name: 'Salary',          icon: DollarSign,   path: '/salary' },

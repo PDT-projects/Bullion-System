@@ -10,25 +10,28 @@ export const getTransactionTotals = (t: Transaction) => {
 };
 
 export const isPending = (t: Transaction): boolean => {
-  // Transactions awaiting or rejected from approval are NEVER shown as payment-pending.
-  // They have no liquidity impact until approved.
+  // Transactions awaiting or rejected from approval are NEVER payment-pending.
   if (t.approvalStatus === 'pending_approval') return false;
   if (t.approvalStatus === 'rejected')         return false;
 
-  // Check cheque conditions FIRST — before trusting isFullyCleared flag.
-  const isChequeTx = t.mode === 'Cheque' && !t.isFullyCleared;
-
-  // Any partial payment via Cheque or Cash that hasn't been manually confirmed is pending.
-  const hasUnclearedPartial = (t.partialPayments || []).some(
-    p => !p.isCleared && (p.method === 'Cheque' || p.method === 'Cash')
-  );
-
-  if (isChequeTx || hasUnclearedPartial) return true;
-  if (t.isFullyCleared) return false;
+  // Fast-exit: Firestore already flagged it as fully cleared/paid.
+  if (t.isFullyCleared)           return false;
   if (t.paymentStatus === 'Full') return false;
 
+  // ── Source-of-truth: remaining balance ───────────────────────────────────
+  // remainingAmount is persisted by addPartialPayment so it is always up to date.
+  // If nothing is left to pay, the transaction is NOT pending — regardless of
+  // isCleared flags on individual payments.
+  //
+  // WHY THIS MATTERS: Cash payments are saved with isCleared: false because they
+  // haven't been manually "bank-confirmed", but the money is already paid/received.
+  // The old logic checked hasUnclearedPartial BEFORE remainingAmount, which trapped
+  // every Cash-paid transaction as Pending forever even at Rs 0 remaining.
   const { remainingAmount } = getTransactionTotals(t);
-  return remainingAmount > 0;
+  if (remainingAmount <= 0) return false;
+
+  // Still has an outstanding balance — it IS pending.
+  return true;
 };
 
 // FIX: When filtering by 'Loan', match both mainCategory === 'Loan'
@@ -65,7 +68,6 @@ export const filterTransactions = (transactions: Transaction[], filters: Transac
       if (filters.paymentStatus === 'Pending' && !isPending(t)) return false;
       if (filters.paymentStatus === 'Full' && isPending(t)) return false;
     }
-    // Approval status filter
     if (filters.approvalStatus) {
       if (t.approvalStatus !== filters.approvalStatus) return false;
     }
@@ -78,7 +80,6 @@ export const filterTransactions = (transactions: Transaction[], filters: Transac
  * and must not inflate inflow/outflow/balance figures.
  */
 export const calculateStats = (transactions: Transaction[]): TransactionStats => {
-  // Only count transactions that have cleared the approval gate
   const liquid = transactions.filter(
     t => t.approvalStatus === 'approved' || t.approvalStatus === 'not_required' || !t.approvalStatus
   );
@@ -89,7 +90,7 @@ export const calculateStats = (transactions: Transaction[]): TransactionStats =>
   return {
     totalInflow, totalOutflow,
     netBalance:            totalInflow - totalOutflow,
-    transactionCount:      transactions.length,   // total count includes all for display
+    transactionCount:      transactions.length,
     pendingCount:          pending.length,
     totalPending:          pending.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
     pendingApprovalCount:  transactions.filter(t => t.approvalStatus === 'pending_approval').length,
@@ -146,56 +147,39 @@ export const downloadCSV = (csv: string, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-// ── Balance Sheet Bucket Resolver (NEW) ───────────────────────────────────────
-// Mirrors resolvePLBucket() pattern for BalanceSheetReport integration
-// Priority: manual bs* → auto-classify subCategory → null (excluded)
+// ── Balance Sheet Bucket Resolver ─────────────────────────────────────────────
 export const resolveBSBucket = (t: Transaction): { bsMain: string; bsSub: string } | null => {
-  // Priority 1: manual override from form (saved to Firestore)
   if (t.bsMainCategory && t.bsSubCategory) {
-  return { bsMain: t.bsMainCategory!, bsSub: t.bsSubCategory! };
+    return { bsMain: t.bsMainCategory!, bsSub: t.bsSubCategory! };
   }
 
-  // Priority 2: auto-classify by mainCategory + subCategory
   const sub = t.subCategory || '';
 
-  // ASSETS: Cash inflow → Cash & Equivalents
   if (t.mainCategory === 'Cash Inflow' && !LOAN_SUB_CATEGORIES.has(sub)) {
     return { bsMain: 'Assets', bsSub: 'Cash & Cash Equivalents' };
   }
-
-  // ASSETS: Inventory purchases
   if (sub === 'Purchase') {
     return { bsMain: 'Assets', bsSub: 'Inventory' };
   }
-
-  // ASSETS: Loans receivable (inflow side)
   if (LOAN_SUB_CATEGORIES.has(sub) && t.mainCategory === 'Cash Inflow') {
     return { bsMain: 'Assets', bsSub: 'Accounts Receivable' };
   }
-
-  // LIABILITIES: Cash outflow payables
   if (t.mainCategory === 'Cash Outflow') {
     const payableSubs = [
-      'Payment to company', 'Payment to person', 'Purchase', 
+      'Payment to company', 'Payment to person', 'Purchase',
       'Office Rent', 'Electricity Bill', 'Gas Bill'
     ];
     if (payableSubs.includes(sub)) {
       return { bsMain: 'Liabilities & Equity', bsSub: 'Accounts Payable' };
     }
   }
-
-  // LIABILITIES: Loans payable (outflow side)
   if (LOAN_SUB_CATEGORIES.has(sub) && t.mainCategory === 'Cash Outflow') {
     return { bsMain: 'Liabilities & Equity', bsSub: 'Short-term Loans' };
   }
-
-  // Operating expenses → typically Accrued Expenses (liability until paid)
   const opExSubs = ['Employee salary', 'Office Rent', 'Utilities'];
   if (t.mainCategory === 'Cash Outflow' && opExSubs.some(s => sub.includes(s))) {
     return { bsMain: 'Liabilities & Equity', bsSub: 'Accrued Expenses' };
   }
 
-  // Default: null → handled by heuristics (cash calc, external data)
   return null;
 };
-
