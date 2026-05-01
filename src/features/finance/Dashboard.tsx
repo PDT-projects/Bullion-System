@@ -6,6 +6,9 @@
 //
 // UPDATED: Reports tab now delegates entirely to <ReportsHub>.
 // To add/edit/remove any report, edit ReportsHub.tsx only.
+//
+// UPDATED: Inflow, Outflow, and Cash Balance cards now show the current month label
+// since stats are filtered to the current calendar month only.
 
 import { useState, useEffect } from 'react';
 import { useUserPermissions } from '../../modules/user-management/hooks/useUserPermissions';
@@ -50,6 +53,12 @@ export function Dashboard() {
     stats, monthlyChartData,
   } = useDashboardData();
 
+  // ── Current month label for stat cards ────────────────────────────────────
+  const currentMonthLabel = new Date().toLocaleDateString('en-PK', {
+    month: 'long',
+    year: 'numeric',
+  });
+
   // ── Wait for permissions to resolve ────────────────────────────────────────
   if (permissionsLoading || activeTab === null) {
     return (
@@ -86,8 +95,8 @@ export function Dashboard() {
 
   // ── Tabs config ─────────────────────────────────────────────────────────────
   const tabs = [
-    ...(canViewOverview      ? [{ id: 'overview', label: 'Overview', icon: Activity  }] : []),
-    ...(hasAnyReportPermission ? [{ id: 'reports',  label: 'Reports',  icon: FileText }] : []),
+    ...(canViewOverview        ? [{ id: 'overview', label: 'Overview', icon: Activity  }] : []),
+    ...(hasAnyReportPermission ? [{ id: 'reports',  label: 'Reports',  icon: FileText  }] : []),
   ];
 
   // ── Render content by tab ───────────────────────────────────────────────────
@@ -124,24 +133,28 @@ export function Dashboard() {
 
             {/* ── Balance Cards ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+
+              {/* Total Inflow */}
               <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Total Inflow</span>
                   <TrendingUp className="text-[#10b981]" size={20} />
                 </div>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.cashInflow)}</p>
-                <p className="text-xs text-gray-500 mt-1">All cash inflow transactions</p>
+                <p className="text-xs text-gray-500 mt-1">{currentMonthLabel}</p>
               </div>
 
+              {/* Total Outflow */}
               <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Total Outflow</span>
                   <TrendingDown className="text-[#ef4444]" size={20} />
                 </div>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.cashOutflow)}</p>
-                <p className="text-xs text-gray-500 mt-1">Incl. salary & bills</p>
+                <p className="text-xs text-gray-500 mt-1">{currentMonthLabel}</p>
               </div>
 
+              {/* Cash Balance */}
               <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Cash Balance</span>
@@ -150,9 +163,10 @@ export function Dashboard() {
                 <p className={`text-2xl font-bold ${stats.cashBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                   {formatCurrency(stats.cashBalance)}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Inflow − Outflow</p>
+                <p className="text-xs text-gray-500 mt-1">Inflow − Outflow · {currentMonthLabel}</p>
               </div>
 
+              {/* Bank Balance */}
               <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Bank Balance</span>
@@ -162,6 +176,7 @@ export function Dashboard() {
                 <p className="text-xs text-gray-500 mt-1">{banks.length} account{banks.length !== 1 ? 's' : ''}</p>
               </div>
 
+              {/* Overall Balance */}
               <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Overall Balance</span>
@@ -170,6 +185,7 @@ export function Dashboard() {
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.overallBalance)}</p>
                 <p className="text-xs text-gray-500 mt-1">Cash + Banks</p>
               </div>
+
             </div>
 
             {/* ── Secondary Stats Row ── */}
