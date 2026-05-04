@@ -38,50 +38,28 @@ export function Login({ onLoginSuccess }: LoginProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
-
     setIsLoading(true);
     setErrors({});
-
     try {
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
-
-      // Check Firestore for user document
       const userDoc = await getDoc(doc(db, 'users', user.uid));
-
       if (!userDoc.exists()) {
         await signOut(auth);
         setErrors({ general: 'Access denied. You are not authorized to use this system.' });
         setIsLoading(false);
         return;
       }
-
       const userData = userDoc.data();
-
-      // ✅ Handle both 'superAdmin' (camelCase) and 'super_admin' (snake_case) stored in Firestore
       const rawRole = userData.role as string;
       const role: 'super_admin' | 'user' =
         rawRole === 'super_admin' || rawRole === 'superAdmin' ? 'super_admin' : 'user';
-
       const permissions: string[] = userData.permissions || [];
       const branch: string = userData.branch || '';
-
-      // ✅ Save to localStorage immediately before redirect
-      localStorage.setItem('userInfo', JSON.stringify({
-        uid: user.uid,
-        email: user.email,
-        role,        // always stored as 'super_admin' or 'user'
-        permissions,
-        branch,
-      }));
-
+      localStorage.setItem('userInfo', JSON.stringify({ uid: user.uid, email: user.email, role, permissions, branch }));
       toast.success('Login successful!');
       onLoginSuccess(user, role, permissions, branch);
-
-      // ✅ super_admin always goes to dashboard; regular users go to dashboard too,
-      //    and ProtectedRoute will redirect them if they lack permission.
       navigate('/dashboard');
-
     } catch (error: any) {
       console.error('Firebase auth error:', error.code, error.message);
       let errorMessage = 'Login failed. Please try again.';
@@ -117,84 +95,134 @@ export function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f0f2f5] via-[#e8ecf1] to-[#f8fafc] p-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: 'linear-gradient(135deg, #e8edf2 0%, #dde3ea 100%)' }}
+    >
       <div className="w-full max-w-md">
 
-        {/* Logo & Title */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full shadow-lg mb-4">
-            <img src="/PDT-logo.png" alt="Logo" className="w-12 h-12 object-contain" />
+        {/* Logo & branding */}
+        <div className="text-center mb-7">
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl mb-4"
+            style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}
+          >
+            <img src="/bullionlogo.png" alt="Logo" className="w-10 h-10 object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Pakistan Detectors Technologies</h1>
-          <p className="text-gray-600">Cash Flow Management System</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Bullion Electronics</h1>
+          <p className="text-gray-500 text-sm tracking-wide">Cash Flow Management System</p>
         </div>
 
-        <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
-          <CardHeader className="text-center pb-6">
-            <CardTitle className="text-2xl font-bold text-[#4f46e5] mb-2">Welcome Back</CardTitle>
-            <CardDescription className="text-gray-600">Sign in to your account</CardDescription>
-          </CardHeader>
-          <CardContent className="px-8 pb-8">
+        {/* Card */}
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)',
+            border: '1px solid #e2e8f0',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Top accent stripe — dark slate */}
+          <div style={{ height: '4px', background: 'linear-gradient(90deg, #1e293b, #334155, #475569)' }} />
 
+          <div style={{ padding: '32px 36px 36px' }}>
+
+            {/* Header */}
+            <div style={{ marginBottom: '28px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#0f172a', margin: '0 0 6px' }}>
+                Welcome Back
+              </h2>
+              <p style={{ fontSize: '14px', color: '#94a3b8', margin: 0 }}>
+                Sign in to continue to your account
+              </p>
+            </div>
+
+            {/* Error banner */}
             {errors.general && (
-              <div className="mb-5 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm font-medium px-4 py-3 rounded-lg">
-                <span className="mt-0.5">⚠</span>
+              <div
+                style={{
+                  marginBottom: '20px',
+                  display: 'flex', alignItems: 'flex-start', gap: '8px',
+                  background: '#fef2f2', border: '1px solid #fecaca',
+                  color: '#dc2626', fontSize: '13px', fontWeight: 500,
+                  padding: '11px 14px', borderRadius: '8px',
+                }}
+              >
+                <span style={{ marginTop: '1px' }}>⚠</span>
                 <span>{errors.general}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit}>
 
               {/* Email */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">Email Address</label>
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>
+                  Email Address
+                </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  style={{
-                    height: '48px',
-                    width: '100%',
-                    border: `2px solid ${errors.email ? '#f87171' : '#e5e7eb'}`,
-                    borderRadius: '8px',
-                    padding: '0 16px',
-                    fontSize: '14px',
-                    outline: 'none',
-                    backgroundColor: 'white',
-                    boxSizing: 'border-box',
-                  }}
-                  placeholder="Enter your email"
+                  placeholder="you@example.com"
                   disabled={isLoading}
+                  style={{
+                    height: '46px', width: '100%', boxSizing: 'border-box',
+                    border: `1.5px solid ${errors.email ? '#fca5a5' : '#e2e8f0'}`,
+                    borderRadius: '9px', padding: '0 14px',
+                    fontSize: '14px', outline: 'none',
+                    background: '#f8fafc', color: '#0f172a',
+                    transition: 'border-color 0.15s, box-shadow 0.15s',
+                    fontFamily: 'inherit',
+                  }}
+                  onFocus={e => {
+                    e.target.style.borderColor = '#334155';
+                    e.target.style.background = '#fff';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(51,65,85,0.1)';
+                  }}
+                  onBlur={e => {
+                    e.target.style.borderColor = errors.email ? '#fca5a5' : '#e2e8f0';
+                    e.target.style.background = '#f8fafc';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
                 {errors.email && (
-                  <p className="text-sm text-red-600 flex items-center gap-1">
-                    <span>⚠</span> {errors.email}
-                  </p>
+                  <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#ef4444' }}>⚠ {errors.email}</p>
                 )}
               </div>
 
               {/* Password */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">Password</label>
-                <div style={{ position: 'relative', width: '100%' }}>
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>
+                  Password
+                </label>
+                <div style={{ position: 'relative' }}>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
-                    style={{
-                      height: '48px',
-                      width: '100%',
-                      border: `2px solid ${errors.password ? '#f87171' : '#e5e7eb'}`,
-                      borderRadius: '8px',
-                      paddingLeft: '16px',
-                      paddingRight: '48px',
-                      fontSize: '14px',
-                      outline: 'none',
-                      backgroundColor: 'white',
-                      boxSizing: 'border-box',
-                    }}
                     placeholder="Enter your password"
                     disabled={isLoading}
+                    style={{
+                      height: '46px', width: '100%', boxSizing: 'border-box',
+                      border: `1.5px solid ${errors.password ? '#fca5a5' : '#e2e8f0'}`,
+                      borderRadius: '9px', paddingLeft: '14px', paddingRight: '46px',
+                      fontSize: '14px', outline: 'none',
+                      background: '#f8fafc', color: '#0f172a',
+                      transition: 'border-color 0.15s, box-shadow 0.15s',
+                      fontFamily: 'inherit',
+                    }}
+                    onFocus={e => {
+                      e.target.style.borderColor = '#334155';
+                      e.target.style.background = '#fff';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(51,65,85,0.1)';
+                    }}
+                    onBlur={e => {
+                      e.target.style.borderColor = errors.password ? '#fca5a5' : '#e2e8f0';
+                      e.target.style.background = '#f8fafc';
+                      e.target.style.boxShadow = 'none';
+                    }}
                   />
                   <button
                     type="button"
@@ -202,53 +230,72 @@ export function Login({ onLoginSuccess }: LoginProps) {
                     disabled={isLoading}
                     tabIndex={-1}
                     style={{
-                      position: 'absolute',
-                      right: '12px',
-                      top: '50%',
+                      position: 'absolute', right: '13px', top: '50%',
                       transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      color: '#9ca3af',
-                      zIndex: 10,
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      padding: 0, display: 'flex', alignItems: 'center',
+                      color: '#94a3b8', zIndex: 10,
                     }}
                   >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
                 </div>
                 {errors.password && (
-                  <p className="text-sm text-red-600 flex items-center gap-1">
-                    <span>⚠</span> {errors.password}
-                  </p>
+                  <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#ef4444' }}>⚠ {errors.password}</p>
                 )}
               </div>
 
-              {/* Submit */}
-              <Button
+              {/* Sign In button */}
+              <button
                 type="submit"
-                className="w-full h-12 bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] text-white font-semibold rounded-lg shadow-lg hover:scale-[1.02] transition-all"
                 disabled={isLoading}
+                style={{
+                  width: '100%', height: '48px',
+                  background: isLoading ? '#94a3b8' : 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                  color: '#ffffff',
+                  border: 'none', borderRadius: '9px',
+                  fontSize: '15px', fontWeight: 700,
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: isLoading ? 'none' : '0 4px 14px rgba(30,41,59,0.35)',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
+                  letterSpacing: '0.2px',
+                }}
+                onMouseEnter={e => {
+                  if (!isLoading) {
+                    (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
+                    (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 20px rgba(30,41,59,0.45)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+                  if (!isLoading) (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 14px rgba(30,41,59,0.35)';
+                }}
               >
                 {isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <span style={{
+                      width: '16px', height: '16px',
+                      border: '2px solid rgba(255,255,255,0.3)',
+                      borderTopColor: '#ffffff',
+                      borderRadius: '50%',
+                      display: 'inline-block',
+                      animation: 'spin 0.75s linear infinite',
+                    }} />
                     Signing in...
-                  </div>
+                  </span>
                 ) : 'Sign In'}
-              </Button>
+              </button>
 
             </form>
 
-            <div className="mt-8 text-center text-sm text-gray-500">
-              <p>© Pakistan Detectors Technologies. All rights reserved.</p>
-            </div>
-          </CardContent>
-        </Card>
-
+            <p style={{ textAlign: 'center', fontSize: '12px', color: '#cbd5e1', marginTop: '24px', marginBottom: 0 }}>
+              © Bullion Electronics. All rights reserved.
+            </p>
+          </div>
+        </div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

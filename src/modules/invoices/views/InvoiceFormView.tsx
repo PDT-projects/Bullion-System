@@ -236,12 +236,24 @@ export function InvoiceFormView({
             </div>
             <div>
               <label className={lbl}>Date</label>
-              <input
-                type="date"
-                value={formData.date || ''}
-                onChange={e => setFormData({ date: e.target.value })}
-                className={inp}
-              />
+              {isEditing ? (
+                /* Edit mode — allow date correction */
+                <input
+                  type="date"
+                  value={formData.date || ''}
+                  onChange={e => setFormData({ date: e.target.value })}
+                  className={inp}
+                />
+              ) : (
+                /* Create mode — locked to today, not editable */
+                <div
+                  className={`${inp} flex items-center gap-1.5 bg-gray-50 text-gray-600 cursor-not-allowed select-none`}
+                  title="Date is automatically set to today and cannot be changed"
+                >
+                  <span className="text-xs">🔒</span>
+                  <span>{formData.date || new Date().toISOString().split('T')[0]}</span>
+                </div>
+              )}
             </div>
             <div className="relative">
               <label className={lbl}>Customer Name *</label>

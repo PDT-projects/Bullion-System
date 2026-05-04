@@ -1,25 +1,23 @@
+
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from 'firebase/auth';
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from 'firebase/auth';
-
-
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyCsK63gcLaAKTBGmUUWNGbbyJm7tJNGTSI",
-  authDomain: "erp-system-e0e74.firebaseapp.com",
-  projectId: "erp-system-e0e74",
-  storageBucket: "erp-system-e0e74.firebasestorage.app",
-  messagingSenderId: "580944226067",
-  appId: "1:580944226067:web:b25eb124dcde229c829ce6",
-  measurementId: "G-KEMS5LRB7T"
+  apiKey: "AIzaSyBEy9gC_CpC1lDMf_MHnEdbtlL4gu5CRq4",
+  authDomain: "bullion-electronics.firebaseapp.com",
+  projectId: "bullion-electronics",
+  storageBucket: "bullion-electronics.firebasestorage.app",
+  messagingSenderId: "584578282236",
+  appId: "1:584578282236:web:dbffde515fc363f7249d79",
+  measurementId: "G-1QS2YRW6WG"
 };
-
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

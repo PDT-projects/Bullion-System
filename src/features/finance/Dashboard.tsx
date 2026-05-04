@@ -63,7 +63,7 @@ export function Dashboard() {
   if (permissionsLoading || activeTab === null) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <Loader2 size={40} className="animate-spin text-[#4f46e5]" />
+        <Loader2 size={40} className="animate-spin text-[#334155]" />
         <p className="text-gray-500 text-lg">Loading...</p>
       </div>
     );
@@ -72,7 +72,7 @@ export function Dashboard() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <Loader2 size={40} className="animate-spin text-[#4f46e5]" />
+        <Loader2 size={40} className="animate-spin text-[#334155]" />
         <p className="text-gray-500 text-lg">Loading dashboard data...</p>
       </div>
     );
@@ -85,7 +85,7 @@ export function Dashboard() {
         <p className="text-red-600 text-lg">{error}</p>
         <button
           onClick={refresh}
-          className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca]"
+          className="flex items-center gap-2 px-4 py-2 bg-[#334155] text-white rounded-lg hover:bg-[#1e293b]"
         >
           <RefreshCw size={16} /> Retry
         </button>
@@ -125,7 +125,7 @@ export function Dashboard() {
             <div className="flex justify-end mb-2">
               <button
                 onClick={refresh}
-                className="flex items-center gap-2 text-sm text-gray-500 hover:text-[#4f46e5] transition-colors"
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-[#334155] transition-colors"
               >
                 <RefreshCw size={14} /> Refresh
               </button>
@@ -158,7 +158,7 @@ export function Dashboard() {
               <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Cash Balance</span>
-                  <Wallet className="text-[#4f46e5]" size={20} />
+                  <Wallet className="text-[#334155]" size={20} />
                 </div>
                 <p className={`text-2xl font-bold ${stats.cashBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                   {formatCurrency(stats.cashBalance)}
@@ -170,20 +170,20 @@ export function Dashboard() {
               <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Bank Balance</span>
-                  <Building2 className="text-[#4f46e5]" size={20} />
+                  <Building2 className="text-[#334155]" size={20} />
                 </div>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalBankBalance)}</p>
                 <p className="text-xs text-gray-500 mt-1">{banks.length} account{banks.length !== 1 ? 's' : ''}</p>
               </div>
 
               {/* Overall Balance */}
-              <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
+              <div className="rounded-lg p-5 shadow-sm" style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', border: 'none' }}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Overall Balance</span>
-                  <DollarSign className="text-[#4f46e5]" size={20} />
+                  <span className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.75)' }}>Overall Balance</span>
+                  <DollarSign size={20} style={{ color: 'rgba(255,255,255,0.85)' }} />
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.overallBalance)}</p>
-                <p className="text-xs text-gray-500 mt-1">Cash + Banks</p>
+                <p className="text-2xl font-bold text-white">{formatCurrency(stats.overallBalance)}</p>
+                <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.55)' }}>Cash + Banks</p>
               </div>
 
             </div>
@@ -229,7 +229,7 @@ export function Dashboard() {
                       <Legend />
                       <Line type="monotone" dataKey="inflow"  stroke="#10b981" strokeWidth={2} name="Inflow"  dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="outflow" stroke="#ef4444" strokeWidth={2} name="Outflow" dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="net"     stroke="#4f46e5" strokeWidth={2} name="Net"     dot={{ r: 3 }} strokeDasharray="4 2" />
+                      <Line type="monotone" dataKey="net"     stroke="#334155" strokeWidth={2} name="Net"     dot={{ r: 3 }} strokeDasharray="4 2" />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
@@ -352,7 +352,7 @@ export function Dashboard() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'text-[#4f46e5] border-b-2 border-[#4f46e5] bg-[#4f46e5]/5'
+                    ? 'text-[#334155] border-b-2 border-[#334155]'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >

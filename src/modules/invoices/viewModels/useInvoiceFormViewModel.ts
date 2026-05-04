@@ -208,6 +208,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           employees,
           bankList,
           invoiceNumber,
+          branchSnap,
         ] = await Promise.all([
           loadCustomCities(),
           InventoryFirebaseService.fetchAllProducts().catch(err => {
@@ -222,16 +223,15 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           BankFirebaseService.fetchAllBanks().catch(() => []),
           // Generate invoice number in parallel only for new invoices
           !id ? generateSequentialInvoiceNumber().catch(() => 'INV-DRAFT') : Promise.resolve(''),
+          // Branches fetched in parallel — no longer a sequential bottleneck
+          getDoc(doc(db, 'appConfig', 'branches')).catch(() => null),
         ]);
 
-        // Load branches from Firestore
-        try {
-          const branchSnap = await getDoc(doc(db, 'appConfig', 'branches'));
-          if (branchSnap.exists()) {
-            const saved = branchSnap.data().list as string[] || DEFAULT_BRANCHES;
-            setBranches([...new Set([...DEFAULT_BRANCHES, ...saved])].sort());
-          }
-        } catch { /* use defaults */ }
+        // Apply branches immediately — already loaded above
+        if (branchSnap && branchSnap.exists()) {
+          const saved = (branchSnap.data().list as string[]) || DEFAULT_BRANCHES;
+          setBranches([...new Set([...DEFAULT_BRANCHES, ...saved])].sort());
+        }
 
         setCustomCities(customCitiesData);
         setAllInvoices(invoices);
@@ -279,9 +279,17 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
   const isEditing = !!editingInvoice;
 
+  // Today's date in YYYY-MM-DD, computed once at mount and never changed
+  const TODAY = useMemo(() => new Date().toISOString().split('T')[0], []);
+
   const setFormData = useCallback((data: Partial<Invoice>) => {
-    setFormDataState(prev => ({ ...prev, ...data }));
-  }, []);
+    setFormDataState(prev => ({
+      ...prev,
+      ...data,
+      // For new invoices the date is always locked to today — silently drop any override
+      ...(!isEditing ? { date: TODAY } : {}),
+    }));
+  }, [isEditing, TODAY]);
 
   // ── Custom branch — add + persist to Firestore ──────────────────────────────
   const handleAddBranch = useCallback(async (name: string) => {

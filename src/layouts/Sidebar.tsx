@@ -187,7 +187,7 @@ export function Sidebar() {
         to={nestedChild.path || '#'}
         className={({ isActive }) =>
           `w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
-            isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-600 hover:bg-gray-100'
+            isActive ? 'bg-[#334155] text-white' : 'text-gray-600 hover:bg-gray-100'
           }`
         }
       >
@@ -237,7 +237,7 @@ export function Sidebar() {
           to={child.path || '#'}
           className={({ isActive }) =>
             `w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
-              isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-600 hover:bg-gray-100'
+              isActive ? 'bg-[#334155] text-white' : 'text-gray-600 hover:bg-gray-100'
             }`
           }
         >
@@ -251,7 +251,7 @@ export function Sidebar() {
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
       <div className="p-6 border-b border-gray-200">
-        <h1 className="font-bold text-xl text-[#4f46e5]">Pakistan Detector Technologies</h1>
+        <h1 className="font-bold text-xl text-[#334155]">Bullion Electronics</h1>
       </div>
 
       <nav className="flex-1 p-4 overflow-y-auto">
@@ -265,7 +265,7 @@ export function Sidebar() {
               to={dashItem.path!}
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${
-                  isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-700 hover:bg-gray-100'
+                  isActive ? 'bg-[#334155] text-white' : 'text-gray-700 hover:bg-gray-100'
                 }`
               }
             >
@@ -281,7 +281,7 @@ export function Sidebar() {
             to="/reports"
             className={({ isActive }) =>
               `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${
-                isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-700 hover:bg-gray-100'
+                isActive ? 'bg-[#334155] text-white' : 'text-gray-700 hover:bg-gray-100'
               }`
             }
           >
@@ -305,7 +305,7 @@ export function Sidebar() {
                 to={item.path}
                 className={({ isActive }) =>
                   `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${
-                    isActive ? 'bg-[#4f46e5] text-white' : 'text-gray-700 hover:bg-gray-100'
+                    isActive ? 'bg-[#334155] text-white' : 'text-gray-700 hover:bg-gray-100'
                   }`
                 }
               >
