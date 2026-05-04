@@ -185,10 +185,10 @@ export function Sidebar() {
       <NavLink
         key={nestedChild.id}
         to={nestedChild.path || '#'}
-        className={({ isActive }) =>
-          `w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
-            isActive ? 'bg-[#334155] text-white' : 'text-gray-600 hover:bg-gray-100'
-          }`
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-sm font-medium"
+        style={({ isActive }) => isActive
+          ? { background: '#0f172a', color: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }
+          : { color: '#6b7280' }
         }
       >
         {nestedChild.icon && <nestedChild.icon size={14} />}
@@ -206,22 +206,22 @@ export function Sidebar() {
         if (!sectionHasVisibleChildren(child.children)) return null;
 
         return (
-          <div key={child.id} className="mb-1">
+          <div key={child.id} className="mb-0.5">
             <button
               onClick={() => toggleSection(child.id)}
-              className="w-full flex items-center justify-between px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
+              className="w-full flex items-center justify-between px-3 py-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800 rounded-lg text-sm transition-all"
             >
-              <div className="flex items-center gap-3">
-                {ChildIcon && <ChildIcon size={16} />}
-                <span>{child.name}</span>
+              <div className="flex items-center gap-2.5">
+                {ChildIcon && <ChildIcon size={15} />}
+                <span className="font-medium">{child.name}</span>
               </div>
               {expandedSections.includes(child.id)
-                ? <ChevronDown size={14} />
-                : <ChevronRight size={14} />}
+                ? <ChevronDown size={13} className="text-gray-400" />
+                : <ChevronRight size={13} className="text-gray-400" />}
             </button>
 
             {expandedSections.includes(child.id) && (
-              <div className="ml-4 mt-1 space-y-1">
+              <div className="ml-2 mt-0.5 space-y-0.5 border-l-2 border-gray-100 pl-3">
                 {renderNestedChildren(child.children)}
               </div>
             )}
@@ -235,13 +235,13 @@ export function Sidebar() {
         <NavLink
           key={child.id}
           to={child.path || '#'}
-          className={({ isActive }) =>
-            `w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
-              isActive ? 'bg-[#334155] text-white' : 'text-gray-600 hover:bg-gray-100'
-            }`
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-sm font-medium"
+          style={({ isActive }) => isActive
+            ? { background: '#0f172a', color: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }
+            : { color: '#6b7280' }
           }
         >
-          {ChildIcon && <ChildIcon size={16} />}
+          {ChildIcon && <ChildIcon size={15} />}
           <span>{child.name}</span>
         </NavLink>
       );
@@ -249,12 +249,12 @@ export function Sidebar() {
   };
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
-      <div className="p-6 border-b border-gray-200">
-        <h1 className="font-bold text-xl text-[#334155]">Bullion Electronics</h1>
+    <div className="w-64 bg-white border-r border-gray-100 flex flex-col h-full">
+      <div className="p-6 border-b border-gray-100">
+        <h1 className="font-bold text-xl text-slate-800 tracking-tight">Bullion Electronics</h1>
       </div>
 
-      <nav className="flex-1 p-4 overflow-y-auto">
+      <nav className="flex-1 p-3 overflow-y-auto">
         {/* ── Dashboard ── */}
         {(() => {
           const dashItem = menuItems[0];
@@ -263,14 +263,15 @@ export function Sidebar() {
             <NavLink
               key={dashItem.id}
               to={dashItem.path!}
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${
-                  isActive ? 'bg-[#334155] text-white' : 'text-gray-700 hover:bg-gray-100'
-                }`
+              end
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all mb-0.5 font-semibold text-sm"
+              style={({ isActive }) => isActive
+                ? { background: '#0f172a', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }
+                : { color: '#374151' }
               }
             >
-              <dashItem.icon size={18} />
-              <span className="font-medium text-sm">{dashItem.name}</span>
+              <dashItem.icon size={17} />
+              <span>{dashItem.name}</span>
             </NavLink>
           );
         })()}
@@ -279,16 +280,19 @@ export function Sidebar() {
         {(role === 'super_admin' || hasAnyReportPermission) && (
           <NavLink
             to="/reports"
-            className={({ isActive }) =>
-              `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${
-                isActive ? 'bg-[#334155] text-white' : 'text-gray-700 hover:bg-gray-100'
-              }`
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all mb-0.5 font-semibold text-sm"
+            style={({ isActive }) => isActive
+              ? { background: '#0f172a', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }
+              : { color: '#374151' }
             }
           >
-            <BarChart2 size={18} />
-            <span className="font-medium text-sm">Reports</span>
+            <BarChart2 size={17} />
+            <span>Reports</span>
           </NavLink>
         )}
+
+        {/* ── Divider ── */}
+        <div className="my-2 mx-1 border-t border-gray-100" />
 
         {/* ── Rest of menu items (skip Dashboard which is index 0) ── */}
         {menuItems.slice(1).map((item) => {
@@ -303,14 +307,14 @@ export function Sidebar() {
               <NavLink
                 key={item.id}
                 to={item.path}
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${
-                    isActive ? 'bg-[#334155] text-white' : 'text-gray-700 hover:bg-gray-100'
-                  }`
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all mb-0.5 font-semibold text-sm"
+                style={({ isActive }) => isActive
+                  ? { background: '#0f172a', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }
+                  : { color: '#374151' }
                 }
               >
-                {Icon && <Icon size={18} />}
-                <span className="font-medium text-sm">{item.name}</span>
+                {Icon && <Icon size={17} />}
+                <span>{item.name}</span>
               </NavLink>
             );
           }
@@ -318,22 +322,22 @@ export function Sidebar() {
           if (hasChildren && !sectionHasVisibleChildren(item.children!)) return null;
 
           return (
-            <div key={item.id} className="mb-1">
+            <div key={item.id} className="mb-0.5">
               <button
                 onClick={() => toggleSection(item.id)}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-gray-700 hover:bg-gray-100 rounded-lg"
+                className="w-full flex items-center justify-between px-3 py-2.5 text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-xl transition-all"
               >
                 <div className="flex items-center gap-3">
-                  {Icon && <Icon size={18} />}
-                  <span className="font-medium text-sm">{item.name}</span>
+                  {Icon && <Icon size={17} />}
+                  <span className="font-semibold text-sm">{item.name}</span>
                 </div>
                 {expandedSections.includes(item.id)
-                  ? <ChevronDown size={16} />
-                  : <ChevronRight size={16} />}
+                  ? <ChevronDown size={14} className="text-gray-400" />
+                  : <ChevronRight size={14} className="text-gray-400" />}
               </button>
 
               {expandedSections.includes(item.id) && (
-                <div className="ml-4 mt-1 space-y-1">
+                <div className="mt-0.5 space-y-0.5 border-l-2 border-gray-100 pl-3 ml-[22px]">
                   {renderChildren(item.children!)}
                 </div>
               )}
