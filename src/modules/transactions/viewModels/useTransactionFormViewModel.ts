@@ -15,6 +15,34 @@ import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 
 interface BankInfo { id: string; name: string; balance: number; }
 
+// ── Currency support ─────────────────────────────────────────────────────────
+export type SupportedCurrency = 'PKR' | 'AED' | 'CAD' | 'SAR';
+
+export interface CurrencyOption {
+  code: SupportedCurrency;
+  name: string;
+  symbol: string;
+  flag: string;
+}
+
+export const SUPPORTED_CURRENCIES: CurrencyOption[] = [
+  { code: 'PKR', name: 'Pakistani Rupee',   symbol: '₨',  flag: '🇵🇰' },
+  { code: 'AED', name: 'UAE Dirham',         symbol: 'د.إ', flag: '🇦🇪' },
+  { code: 'CAD', name: 'Canadian Dollar',    symbol: 'C$', flag: '🇨🇦' },
+  { code: 'SAR', name: 'Saudi Riyal',        symbol: '﷼',  flag: '🇸🇦' },
+];
+
+export function formatCurrencyWithCode(amount: number, currency: SupportedCurrency): string {
+  const opt = SUPPORTED_CURRENCIES.find(c => c.code === currency);
+  const sym = opt?.symbol ?? currency;
+  const formatted = new Intl.NumberFormat('en-PK', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+  return `${sym} ${formatted}`;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface UseTransactionFormViewModelReturn {
   office: string;
   date: string;
@@ -85,6 +113,10 @@ export interface UseTransactionFormViewModelReturn {
   // Companies / Branches
   companies: Company[];
   onAddCompany: (name: string) => Promise<string | null>;
+  // Currency
+  currency: SupportedCurrency;
+  setCurrency: (c: SupportedCurrency) => void;
+  currencyOptions: CurrencyOption[];
 }
 
 const emptyItem = (type: string): TransactionItem => ({
@@ -151,6 +183,9 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [chequeDate,   setChequeDate]   = useState('');
   const [chequeBank,   setChequeBank]   = useState('');
 
+  // Currency state — default to PKR
+  const [currency, setCurrency] = useState<SupportedCurrency>('PKR');
+
   const [enableMultiple,       setEnableMultiple]       = useState(false);
   const [transactionItems,     setTransactionItems]     = useState<TransactionItem[]>([emptyItem('Cash Inflow')]);
   const [dynamicSubCategories, setDynamicSubCategories] = useState<DynamicCategory[]>([]);
@@ -210,6 +245,10 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             if (tx.plSubCategory)  setPlSubCategory(tx.plSubCategory);
             if (tx.bsMainCategory) setBsMainCategoryState(tx.bsMainCategory);
             if (tx.bsSubCategory)  setBsSubCategory(tx.bsSubCategory);
+            // Restore saved currency if present
+            if ((tx as any).currency && SUPPORTED_CURRENCIES.find(c => c.code === (tx as any).currency)) {
+              setCurrency((tx as any).currency as SupportedCurrency);
+            }
             setTransactionItems([{
               id:              tx.id,
               mainCategory:    tx.mainCategory    || '',
@@ -355,7 +394,7 @@ const getSuggestedClassification = (
     setTransactionItems(p => p.filter(i => i.id !== itemId)),
   []);
 
-  // ── Computed totals ─────────────────────────────────────────────────────
+  // ── Computed totals ─────────────────────────────────────────────────────────
   const totals = useMemo(() => ({
     totalAmount:    transactionItems.reduce((s, i) => s + (i.amount || 0), 0),
     totalPaid:      transactionItems.reduce((s, i) => s + (i.amountPaid || 0), 0),
@@ -373,7 +412,13 @@ const getSuggestedClassification = (
       : currentBankBalance - totals.totalAmount;
   }, [currentBankBalance, totals.totalAmount, transactionType, paymentMode, selectedBank]);
 
-  // ── Validation ──────────────────────────────────────────────────────────
+  // ── Currency-aware formatter ────────────────────────────────────────────────
+  const formatCurrencyLocal = useCallback(
+    (n: number) => formatCurrencyWithCode(n, currency),
+    [currency]
+  );
+
+  // ── Validation ──────────────────────────────────────────────────────────────
   const validate = useCallback(() => {
     const errors: string[] = [];
     if (!office) errors.push('Select an office/branch');
@@ -398,174 +443,130 @@ const getSuggestedClassification = (
   }, [office, date, transactionItems, paymentMode, selectedBank, chequeNumber, transactionType, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory]);
 
   const updateBankBalance = useCallback(async (bankId: string, amount: number, isInflow: boolean) => {
-    try {
-      const bank = banks.find(b => b.id === bankId);
-      if (!bank) return;
-      const newBalance = isInflow ? bank.balance + amount : bank.balance - amount;
-      await BankFirebaseService.updateBankBalance(bankId, newBalance);
-      setBanks(prev => prev.map(b => b.id === bankId ? { ...b, balance: newBalance } : b));
-    } catch (err) {
-      console.error('Failed to update bank balance:', err);
-      toast.error('Transaction saved but bank balance update failed — please refresh Banking');
-    }
+    if (!bankId) return;
+    const bank = banks.find(b => b.id === bankId);
+    if (!bank) return;
+    const newBalance = isInflow ? bank.balance + amount : bank.balance - amount;
+    await BankFirebaseService.updateBankBalance(bankId, newBalance);
+    setBanks(prev => prev.map(b => b.id === bankId ? { ...b, balance: newBalance } : b));
   }, [banks]);
 
-  // ── Save ────────────────────────────────────────────────────────────────
+  // ── Save ────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     const errors = validate();
-    if (errors.length > 0) { errors.forEach(e => toast.error(e)); return; }
-
+    if (errors.length > 0) {
+      toast.error(errors[0]);
+      return;
+    }
     setIsSaving(true);
     try {
-      const selectedBankInfo = banks.find(b => b.id === selectedBank);
-      const now  = new Date();
-      const time = now.toTimeString().split(' ')[0];
-
-      const chequeFields = paymentMode === 'Cheque'
-        ? {
-            chequeNumber: chequeNumber || undefined,
-            chequeDate:   chequeDate   || undefined,
-            chequeBank:   chequeBank   || undefined,
-          }
-        : {};
+      const isInflow = transactionType === 'Cash Inflow';
+      let firstTxId  = '';
+      let needsApprovalFirst = false;
 
       if (editingTx) {
-        // ── Edit existing — no approval change ────────────────────────────
+        // ── Edit mode ─────────────────────────────────────────────────────
         const item = transactionItems[0];
-        const effectivePaid   = transactionType === 'Cash Inflow'
-          ? item.amount
-          : (item.amountPaid > 0 ? item.amountPaid : item.amount);
-        const effectiveRemain = Math.max(0, item.amount - effectivePaid);
-
-        await TransactionFirebaseService.updateTransaction(editingTx.id, {
-          date, time,
-          company:         COMPANIES.find(o => o.id === office)?.name || COMPANIES[0].name,
+        const updatedData: Partial<Transaction> = {
           mainCategory:    transactionType,
           subCategory:     item.subCategory,
-          detailCategory:  item.detailCategory || undefined,
+          detailCategory:  item.detailCategory,
           amount:          item.amount,
+          amountPaid:      item.amountPaid,
+          remainingAmount: item.remainingAmount,
+          paymentStatus:   item.paymentStatus,
+          paidBy:          item.paidBy,
+          paidTo:          item.paidTo,
+          note:            item.note,
           mode:            paymentMode,
-          bankId:          paymentMode === 'Bank' ? selectedBank    : undefined,
-          bankName:        paymentMode === 'Bank' ? selectedBankInfo?.name : undefined,
-          ...chequeFields,
-          amountPaid:      effectivePaid,
-          remainingAmount: effectiveRemain,
-          paymentStatus:   effectiveRemain <= 0 ? 'Full' : 'Partial',
-          paidBy:          item.paidBy || undefined,
-          paidTo:          item.paidTo || undefined,
-          note:            item.note   || '',
-          plMainCategory:  plMainCategory || undefined,
-          plSubCategory:   plSubCategory  || undefined,
-          bsMainCategory:  bsMainCategory || undefined,
-          bsSubCategory:   bsSubCategory  || undefined,
-        });
-        toast.success('Transaction updated successfully');
+          bankId:          paymentMode === 'Bank' ? selectedBank : undefined,
+          chequeNumber:    paymentMode === 'Cheque' ? chequeNumber : undefined,
+          chequeDate:      paymentMode === 'Cheque' ? chequeDate   : undefined,
+          chequeBank:      paymentMode === 'Cheque' ? chequeBank   : undefined,
+          plMainCategory,  plSubCategory,
+          bsMainCategory,  bsSubCategory,
+          currency,
+        };
+        await TransactionFirebaseService.updateTransaction(editingTx.id, updatedData);
+        firstTxId = editingTx.transactionId || editingTx.id;
 
-      } else {
-        // ── New transaction ───────────────────────────────────────────────
-        const isCustomId = transactionId && !transactionId.includes('###');
-        const firstTxId  = isCustomId
-          ? transactionId
-          : await TransactionFirebaseService.generateTransactionId();
-
-        const alreadyExists = await TransactionFirebaseService.transactionIdExists(firstTxId);
-        if (alreadyExists) {
-          setDuplicateIdError(firstTxId);
-          setIsSaving(false);
-          return;
+        if (paymentMode === 'Bank') {
+          await updateBankBalance(selectedBank, item.amount, isInflow);
         }
-
+      } else {
+        // ── Create mode ───────────────────────────────────────────────────
         for (const [idx, item] of transactionItems.entries()) {
-          const txId = idx === 0
-            ? firstTxId
-            : await TransactionFirebaseService.generateTransactionId();
+          const needs = requiresApproval(transactionType, item.subCategory);
+          if (idx === 0) needsApprovalFirst = needs;
 
-          const needsApproval = requiresApproval(transactionType, item.subCategory);
-          const approvalToken = needsApproval ? generateToken() : undefined;
+          // Resolve sequential ID
+          let resolvedId = transactionId;
+          if (resolvedId.includes('###')) {
+            resolvedId = await TransactionFirebaseService.getNextTransactionId(resolvedId);
+          }
+          if (idx > 0) {
+            resolvedId = await TransactionFirebaseService.getNextTransactionId(
+              `TXN-${String(new Date().getDate()).padStart(2,'0')}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getFullYear()).slice(-2)}-###`
+            );
+          }
 
-          // ── KEY FIX: pending_approval transactions store ZERO financial impact ──
-          // amountPaid, totalPaid, remainingAmount, isFullyCleared, and paymentStatus
-          // are all kept neutral until the Cloud Function fires after admin approval.
-          // This ensures no liquidity change occurs before approval.
-          const financialFields = needsApproval
-            ? {
-                // Record the intended amount only; no money has moved yet
-                amountPaid:      0,
-                remainingAmount: item.amount,   // full amount is "still outstanding"
-                paymentStatus:   'Partial' as const,  // not 'Full' — not cleared
-                totalPaid:       0,
-                isFullyCleared:  false,
-              }
-            : (() => {
-                // blank (0) amountPaid = fully paid; only partial when explicitly set < amount
-                const isExplicitPartial = item.amountPaid > 0 && item.amountPaid < item.amount;
-                const effectivePaid   = isExplicitPartial ? item.amountPaid : item.amount;
-                const effectiveRemain = isExplicitPartial ? item.amount - item.amountPaid : 0;
-                return {
-                  amountPaid:      effectivePaid,
-                  remainingAmount: effectiveRemain,
-                  paymentStatus:   (isExplicitPartial ? 'Partial' : 'Full') as 'Full' | 'Partial',
-                  totalPaid:       effectivePaid,
-                  // Cheque payments stay pending until manually cleared
-                  isFullyCleared:  !isExplicitPartial && paymentMode !== 'Cheque',
-                };
-              })();
+          // Check for duplicate
+          const exists = await TransactionFirebaseService.transactionIdExists(resolvedId);
+          if (exists) {
+            setDuplicateIdError(resolvedId);
+            setIsSaving(false);
+            return;
+          }
+
+          const token          = generateToken();
+          const approvalStatus = needs ? 'pending_approval' : 'not_required';
+          const officeObj      = companies.find(c => c.id === office);
+          const companyName    = officeObj ? officeObj.name : office;
 
           const txData: Omit<Transaction, 'id'> = {
-            transactionId:   txId,
-            date, time,
-            company:         COMPANIES.find(o => o.id === office)?.name || COMPANIES[0].name,
+            transactionId:   resolvedId,
+            date,
+            time:            new Date().toTimeString().slice(0, 5),
             mainCategory:    transactionType,
             subCategory:     item.subCategory,
-            detailCategory:  item.detailCategory || undefined,
+            detailCategory:  item.detailCategory,
             amount:          item.amount,
+            amountPaid:      item.amountPaid || item.amount,
+            remainingAmount: item.remainingAmount,
+            paymentStatus:   item.paymentStatus,
+            paidBy:          item.paidBy,
+            paidTo:          item.paidTo,
+            note:            item.note,
             mode:            paymentMode,
-            bankId:          paymentMode === 'Bank' ? selectedBank          : undefined,
-            bankName:        paymentMode === 'Bank' ? selectedBankInfo?.name : undefined,
-            ...chequeFields,
-            ...financialFields,
-            paidBy:          item.paidBy  || undefined,
-            paidTo:          item.paidTo  || undefined,
-            note:            item.note    || '',
-            partialPayments: [],
-            linkedType:      'manual',
-            // ── P&L classification ─────────────────────────────────────────
+            bankId:          paymentMode === 'Bank'    ? selectedBank  : undefined,
+            chequeNumber:    paymentMode === 'Cheque'  ? chequeNumber  : undefined,
+            chequeDate:      paymentMode === 'Cheque'  ? chequeDate    : undefined,
+            chequeBank:      paymentMode === 'Cheque'  ? chequeBank    : undefined,
+            company:         companyName,
+            approvalStatus,
+            approvalToken:   token,
             plMainCategory:  plMainCategory || undefined,
             plSubCategory:   plSubCategory  || undefined,
-            // ── Balance Sheet classification ───────────────────────────────
             bsMainCategory:  bsMainCategory || undefined,
             bsSubCategory:   bsSubCategory  || undefined,
-            // ── Approval ──────────────────────────────────────────────────
-            approvalStatus:  needsApproval ? 'pending_approval' : 'not_required',
-            approvalToken,
-          };
+            currency,
+          } as any;
 
-          const created = await TransactionFirebaseService.createTransaction(txData);
+          await TransactionFirebaseService.addTransaction(txData);
+          if (idx === 0) firstTxId = resolvedId;
 
-          // ── Bank balance update: ONLY for transactions that don't need approval ──
-          // For pending_approval transactions, the Cloud Function updates the bank
-          // balance AFTER admin approves. Rejection = zero financial impact, no rollback.
-          if (!needsApproval && paymentMode === 'Bank' && selectedBank) {
-            const isInflow = transactionType === 'Cash Inflow';
+          if (paymentMode === 'Bank' && selectedBank) {
             await updateBankBalance(selectedBank, item.amount, isInflow);
           }
-
-          // ── In-app notification ──────────────────────────────────────────
-          if (needsApproval) {
-            await TransactionFirebaseService.createNotification({
-              type:           'transaction_pending_approval',
-              title:          '⏳ Awaiting Approval',
-              message:        `${txId} (${transactionType} — ${formatCurrency(item.amount)}) is waiting for admin approval.`,
-              transactionId:  created.id,
-              transactionRef: txId,
-              isRead:         false,
-              createdAt:      new Date().toISOString(),
-            });
-          }
         }
+      }
 
-        // ── Success toast ────────────────────────────────────────────────
-        const needsApprovalFirst = requiresApproval(transactionType, transactionItems[0].subCategory);
+      if (editingTx) {
+        toast.success('Transaction updated successfully', {
+          description: `ID: ${firstTxId}`,
+          duration:    4000,
+        });
+      } else {
         if (needsApprovalFirst) {
           toast.success('Transaction saved — waiting for admin approval', {
             description: `ID: ${firstTxId}`,
@@ -591,6 +592,7 @@ const getSuggestedClassification = (
     transactionType, paymentMode, selectedBank, banks,
     navigate, transactionId, chequeNumber, chequeDate, chequeBank,
     updateBankBalance, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory,
+    currency, companies,
   ]);
 
   const handleCancel = useCallback(() => navigate('/transactions'), [navigate]);
@@ -751,7 +753,9 @@ const getSuggestedClassification = (
     banks, isLoading, isSaving, isEditing: !!editingTx,
     setOffice, setDate, setTransactionType, setPaymentMode, setSelectedBank,
     setEnableMultiple, updateItem, addItem, removeItem,
-    handleSave, handleCancel, formatCurrency, formatDateDisplay,
+    handleSave, handleCancel,
+    formatCurrency: formatCurrencyLocal,
+    formatDateDisplay,
     duplicateIdError, setDuplicateIdError,
     plMainCategory, plSubCategory, setPlMainCategory, setPlSubCategory,
     bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
@@ -759,5 +763,6 @@ const getSuggestedClassification = (
     dynamicPLCategories, onAddPLMainCategory, onAddPLSubCategory, onDeletePLCategory,
     dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
     companies, onAddCompany,
+    currency, setCurrency, currencyOptions: SUPPORTED_CURRENCIES,
   };
 }
