@@ -3,10 +3,11 @@ import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/firebase';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Eye, EyeOff } from 'lucide-react';
+import {
+  Eye, EyeOff, ArrowRight, Loader2,
+  BarChart2, ShieldCheck, GitBranch, Activity, Zap
+} from 'lucide-react';
 
 interface LoginProps {
   onLoginSuccess: (user: any, role: 'super_admin' | 'user', permissions?: string[], branch?: string) => void;
@@ -61,26 +62,20 @@ export function Login({ onLoginSuccess }: LoginProps) {
       onLoginSuccess(user, role, permissions, branch);
       navigate('/dashboard');
     } catch (error: any) {
-      console.error('Firebase auth error:', error.code, error.message);
       let errorMessage = 'Login failed. Please try again.';
       switch (error.code) {
         case 'auth/invalid-credential':
         case 'auth/user-not-found':
         case 'auth/wrong-password':
-          errorMessage = 'Incorrect email or password. Please check your credentials.';
-          break;
+          errorMessage = 'Incorrect email or password. Please check your credentials.'; break;
         case 'auth/invalid-email':
-          errorMessage = 'Please enter a valid email address.';
-          break;
+          errorMessage = 'Please enter a valid email address.'; break;
         case 'auth/user-disabled':
-          errorMessage = 'This account has been disabled. Contact your administrator.';
-          break;
+          errorMessage = 'This account has been disabled. Contact your administrator.'; break;
         case 'auth/too-many-requests':
-          errorMessage = 'Too many failed attempts. Please try again later.';
-          break;
+          errorMessage = 'Too many failed attempts. Please try again later.'; break;
         case 'auth/network-request-failed':
-          errorMessage = 'Network error. Please check your internet connection.';
-          break;
+          errorMessage = 'Network error. Please check your internet connection.'; break;
       }
       setErrors({ general: errorMessage });
       toast.error(errorMessage);
@@ -94,208 +89,437 @@ export function Login({ onLoginSuccess }: LoginProps) {
     setErrors(prev => ({ ...prev, [field]: undefined, general: undefined }));
   };
 
-  return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #e8edf2 0%, #dde3ea 100%)' }}
-    >
-      <div className="w-full max-w-md">
+  const features = [
+    { icon: <BarChart2 size={16} />,  label: 'Real-time cash flow monitoring' },
+    { icon: <GitBranch size={16} />,  label: 'Multi-branch management' },
+    { icon: <ShieldCheck size={16} />, label: 'Role-based access control' },
+    { icon: <Activity size={16} />,   label: 'Comprehensive audit trail' },
+  ];
 
-        {/* Logo & branding */}
-        <div className="text-center mb-7">
-          <div
-            className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl mb-4"
-            style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}
-          >
-            <img src="/bullionlogo.png" alt="Logo" className="w-10 h-10 object-contain" />
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        .be-login {
+          min-height: 100vh;
+          display: flex;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          background: #f0f2f5;
+        }
+
+        /* ── LEFT PANEL ── */
+        .be-left {
+          width: 400px;
+          flex-shrink: 0;
+          background: #1a1f2e;
+          display: flex;
+          flex-direction: column;
+          padding: 48px 40px;
+          position: relative;
+          overflow: hidden;
+        }
+        /* dot-grid texture */
+        .be-left::before {
+          content: '';
+          position: absolute; inset: 0;
+          background-image: radial-gradient(circle, rgba(255,255,255,0.045) 1px, transparent 1px);
+          background-size: 24px 24px;
+          pointer-events: none;
+        }
+        /* teal glow bottom-left */
+        .be-left::after {
+          content: '';
+          position: absolute;
+          bottom: -100px; left: -80px;
+          width: 380px; height: 380px;
+          background: radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%);
+          pointer-events: none;
+        }
+
+        /* Brand */
+        .be-brand {
+          display: flex; align-items: center; gap: 13px;
+          margin-bottom: 60px;
+          position: relative; z-index: 1;
+        }
+        .be-brand-icon {
+          width: 44px; height: 44px;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 4px 16px rgba(16,185,129,0.38);
+          color: #fff;
+          flex-shrink: 0;
+        }
+        .be-brand-name {
+          font-size: 15px; font-weight: 800;
+          color: #fff; letter-spacing: -0.02em; line-height: 1.2;
+        }
+        .be-brand-sub {
+          font-size: 11px; color: rgba(255,255,255,0.35);
+          font-weight: 400; margin-top: 3px;
+          letter-spacing: 0.05em; text-transform: uppercase;
+        }
+
+        /* Hero */
+        .be-hero { position: relative; z-index: 1; flex: 1; }
+        .be-hero h2 {
+          font-size: 27px; font-weight: 800;
+          color: #fff; line-height: 1.22;
+          letter-spacing: -0.03em; margin-bottom: 14px;
+        }
+        .be-hero h2 em { font-style: normal; color: #10b981; }
+        .be-hero p {
+          font-size: 13px; color: rgba(255,255,255,0.4);
+          line-height: 1.75; font-weight: 400;
+          max-width: 290px; margin-bottom: 40px;
+        }
+
+        /* Feature list */
+        .be-features { display: flex; flex-direction: column; gap: 10px; }
+        .be-feature {
+          display: flex; align-items: center; gap: 12px;
+          padding: 13px 16px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 11px;
+          transition: background 0.2s;
+        }
+        .be-feature:hover { background: rgba(255,255,255,0.08); }
+        .be-feature-icon {
+          width: 32px; height: 32px;
+          border-radius: 8px;
+          background: rgba(16,185,129,0.15);
+          color: #10b981;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
+        .be-feature span {
+          font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 400;
+        }
+
+        .be-left-footer {
+          position: relative; z-index: 1;
+          margin-top: 44px;
+          font-size: 11px; color: rgba(255,255,255,0.18);
+        }
+
+        /* ── RIGHT PANEL ── */
+        .be-right {
+          flex: 1;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          padding: 40px 24px;
+          background: #f0f2f5;
+          position: relative;
+        }
+        .be-right::before {
+          content: '';
+          position: absolute; inset: 0;
+          background-image:
+            linear-gradient(rgba(0,0,0,0.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,0,0,0.025) 1px, transparent 1px);
+          background-size: 40px 40px;
+          pointer-events: none;
+        }
+
+        /* Card */
+        .be-card {
+          position: relative; z-index: 1;
+          width: 100%; max-width: 400px;
+          background: #fff;
+          border-radius: 16px;
+          padding: 40px 36px 36px;
+          box-shadow:
+            0 1px 3px rgba(0,0,0,0.06),
+            0 8px 32px rgba(0,0,0,0.09),
+            0 0 0 1px rgba(0,0,0,0.04);
+          animation: slideUp 0.4s cubic-bezier(0.22,1,0.36,1) both;
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Teal-to-navy accent bar on top of card */
+        .be-accent {
+          position: absolute;
+          top: 0; left: 0; right: 0; height: 4px;
+          background: linear-gradient(90deg, #10b981 0%, #1a1f2e 100%);
+          border-radius: 16px 16px 0 0;
+        }
+
+        /* Mobile-only brand (left panel hidden on small screens) */
+        .be-card-brand {
+          display: none;
+          align-items: center; gap: 11px;
+          margin-bottom: 28px; padding-bottom: 20px;
+          border-bottom: 1px solid #f1f3f5;
+        }
+        @media (max-width: 767px) {
+          .be-left { display: none; }
+          .be-card-brand { display: flex; }
+        }
+        .be-card-brand-icon {
+          width: 36px; height: 36px; border-radius: 9px;
+          background: linear-gradient(135deg, #10b981, #059669);
+          display: flex; align-items: center; justify-content: center;
+          color: #fff;
+        }
+        .be-card-brand-name { font-size: 14px; font-weight: 700; color: #1a1f2e; }
+
+        /* Heading */
+        .be-heading { margin-bottom: 28px; }
+        .be-heading h1 {
+          font-size: 22px; font-weight: 800;
+          color: #1a1f2e; letter-spacing: -0.03em; margin-bottom: 5px;
+        }
+        .be-heading p { font-size: 13px; color: #8b95a1; font-weight: 400; }
+
+        /* Error */
+        .be-error {
+          display: flex; align-items: flex-start; gap: 9px;
+          background: #fff5f5; border: 1px solid #fecaca;
+          border-left: 3px solid #ef4444;
+          border-radius: 8px; padding: 11px 14px; margin-bottom: 20px;
+        }
+        .be-error-ico { color: #ef4444; flex-shrink: 0; margin-top: 1px; }
+        .be-error span { font-size: 13px; color: #b91c1c; line-height: 1.5; }
+
+        /* Fields */
+        .be-field { margin-bottom: 18px; }
+        .be-label {
+          display: block; font-size: 12px; font-weight: 600;
+          color: #374151; margin-bottom: 7px; letter-spacing: 0.01em;
+        }
+        .be-wrap { position: relative; }
+        .be-input {
+          width: 100%; height: 44px;
+          border: 1.5px solid #e5e7eb; border-radius: 9px;
+          padding: 0 14px; font-size: 13.5px; color: #111827;
+          background: #fafafa; outline: none;
+          transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+          font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 400;
+        }
+        .be-input::placeholder { color: #c0c7d0; }
+        .be-input:focus {
+          border-color: #10b981; background: #fff;
+          box-shadow: 0 0 0 3px rgba(16,185,129,0.12);
+        }
+        .be-input.err {
+          border-color: #fca5a5; background: #fff;
+          box-shadow: 0 0 0 3px rgba(239,68,68,0.08);
+        }
+        .be-input.pr { padding-right: 44px; }
+        .be-eye {
+          position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+          background: none; border: none; cursor: pointer; padding: 4px;
+          color: #9ca3af; display: flex; align-items: center;
+          transition: color 0.15s;
+        }
+        .be-eye:hover { color: #374151; }
+        .be-field-err {
+          display: flex; align-items: center; gap: 5px;
+          font-size: 12px; color: #ef4444; margin-top: 5px; font-weight: 500;
+        }
+
+        /* Submit */
+        .be-btn {
+          width: 100%; height: 44px;
+          background: #1a1f2e; border: none; border-radius: 9px;
+          color: #fff; font-size: 14px; font-weight: 700;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          cursor: pointer;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          margin-top: 24px;
+          transition: background 0.18s, transform 0.12s, box-shadow 0.18s;
+          letter-spacing: -0.01em;
+          position: relative; overflow: hidden;
+        }
+        .be-btn::before {
+          content: '';
+          position: absolute; left: 0; top: 0;
+          width: 4px; height: 100%;
+          background: #10b981;
+          transition: width 0.25s ease;
+        }
+        .be-btn:hover:not(:disabled)::before { width: 7px; }
+        .be-btn:hover:not(:disabled) {
+          background: #0f1420;
+          box-shadow: 0 4px 18px rgba(26,31,46,0.22);
+          transform: translateY(-1px);
+        }
+        .be-btn:active:not(:disabled) { transform: translateY(0); }
+        .be-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .be-spin { animation: spin 0.75s linear infinite; }
+
+        /* Divider & secure badge */
+        .be-divider {
+          display: flex; align-items: center; gap: 10px; margin-top: 22px;
+        }
+        .be-div-line { flex: 1; height: 1px; background: #f1f3f5; }
+        .be-div-txt {
+          font-size: 11px; color: #c0c7d0;
+          font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase;
+        }
+        .be-secure {
+          display: flex; align-items: center; justify-content: center;
+          gap: 7px; margin-top: 16px;
+        }
+        .be-secure span { font-size: 11px; color: #b0b8c4; font-weight: 400; }
+        .be-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #10b981; box-shadow: 0 0 6px rgba(16,185,129,0.55);
+          animation: blink 2s ease-in-out infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+        .be-footer {
+          position: relative; z-index: 1;
+          margin-top: 28px;
+          font-size: 11px; color: #b0b8c4; text-align: center;
+        }
+      `}</style>
+
+      <div className="be-login">
+
+        {/* ── LEFT PANEL ── */}
+        <div className="be-left">
+          <div className="be-brand">
+            <div className="be-brand-icon">
+              <BarChart2 size={22} />
+            </div>
+            <div>
+              <div className="be-brand-name">Bullion Electronics</div>
+              <div className="be-brand-sub">Cash Flow Management</div>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Bullion Electronics</h1>
-          <p className="text-gray-500 text-sm tracking-wide">Cash Flow Management System</p>
+
+          <div className="be-hero">
+            <h2>Smarter finance,<br /><em>better decisions.</em></h2>
+            <p>A unified platform to manage cash flow, branches, transactions and reporting — built for your team.</p>
+
+            <div className="be-features">
+              {features.map((f) => (
+                <div className="be-feature" key={f.label}>
+                  <div className="be-feature-icon">{f.icon}</div>
+                  <span>{f.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="be-left-footer">© 2026 Bullion Electronics. All rights reserved.</div>
         </div>
 
-        {/* Card */}
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid #e2e8f0',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Top accent stripe — dark slate */}
-          <div style={{ height: '4px', background: 'linear-gradient(90deg, #1e293b, #334155, #475569)' }} />
+        {/* ── RIGHT PANEL ── */}
+        <div className="be-right">
+          <div className="be-card">
+            <div className="be-accent" />
 
-          <div style={{ padding: '32px 36px 36px' }}>
-
-            {/* Header */}
-            <div style={{ marginBottom: '28px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#0f172a', margin: '0 0 6px' }}>
-                Welcome Back
-              </h2>
-              <p style={{ fontSize: '14px', color: '#94a3b8', margin: 0 }}>
-                Sign in to continue to your account
-              </p>
+            {/* Mobile brand */}
+            <div className="be-card-brand">
+              <div className="be-card-brand-icon">
+                <BarChart2 size={18} />
+              </div>
+              <div className="be-card-brand-name">Bullion Electronics</div>
             </div>
 
-            {/* Error banner */}
+            <div className="be-heading">
+              <h1>Welcome back</h1>
+              <p>Sign in to continue to your account</p>
+            </div>
+
             {errors.general && (
-              <div
-                style={{
-                  marginBottom: '20px',
-                  display: 'flex', alignItems: 'flex-start', gap: '8px',
-                  background: '#fef2f2', border: '1px solid #fecaca',
-                  color: '#dc2626', fontSize: '13px', fontWeight: 500,
-                  padding: '11px 14px', borderRadius: '8px',
-                }}
-              >
-                <span style={{ marginTop: '1px' }}>⚠</span>
+              <div className="be-error">
+                <svg className="be-error-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
                 <span>{errors.general}</span>
               </div>
             )}
 
             <form onSubmit={handleSubmit}>
-
-              {/* Email */}
-              <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  placeholder="you@example.com"
-                  disabled={isLoading}
-                  style={{
-                    height: '46px', width: '100%', boxSizing: 'border-box',
-                    border: `1.5px solid ${errors.email ? '#fca5a5' : '#e2e8f0'}`,
-                    borderRadius: '9px', padding: '0 14px',
-                    fontSize: '14px', outline: 'none',
-                    background: '#f8fafc', color: '#0f172a',
-                    transition: 'border-color 0.15s, box-shadow 0.15s',
-                    fontFamily: 'inherit',
-                  }}
-                  onFocus={e => {
-                    e.target.style.borderColor = '#334155';
-                    e.target.style.background = '#fff';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(51,65,85,0.1)';
-                  }}
-                  onBlur={e => {
-                    e.target.style.borderColor = errors.email ? '#fca5a5' : '#e2e8f0';
-                    e.target.style.background = '#f8fafc';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
+              <div className="be-field">
+                <label className="be-label">Email Address</label>
+                <div className="be-wrap">
+                  <input
+                    type="email"
+                    className={`be-input${errors.email ? ' err' : ''}`}
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    placeholder="you@example.com"
+                    disabled={isLoading}
+                    autoComplete="email"
+                  />
+                </div>
                 {errors.email && (
-                  <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#ef4444' }}>⚠ {errors.email}</p>
+                  <div className="be-field-err">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {errors.email}
+                  </div>
                 )}
               </div>
 
-              {/* Password */}
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>
-                  Password
-                </label>
-                <div style={{ position: 'relative' }}>
+              <div className="be-field">
+                <label className="be-label">Password</label>
+                <div className="be-wrap">
                   <input
                     type={showPassword ? 'text' : 'password'}
+                    className={`be-input pr${errors.password ? ' err' : ''}`}
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
                     placeholder="Enter your password"
                     disabled={isLoading}
-                    style={{
-                      height: '46px', width: '100%', boxSizing: 'border-box',
-                      border: `1.5px solid ${errors.password ? '#fca5a5' : '#e2e8f0'}`,
-                      borderRadius: '9px', paddingLeft: '14px', paddingRight: '46px',
-                      fontSize: '14px', outline: 'none',
-                      background: '#f8fafc', color: '#0f172a',
-                      transition: 'border-color 0.15s, box-shadow 0.15s',
-                      fontFamily: 'inherit',
-                    }}
-                    onFocus={e => {
-                      e.target.style.borderColor = '#334155';
-                      e.target.style.background = '#fff';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(51,65,85,0.1)';
-                    }}
-                    onBlur={e => {
-                      e.target.style.borderColor = errors.password ? '#fca5a5' : '#e2e8f0';
-                      e.target.style.background = '#f8fafc';
-                      e.target.style.boxShadow = 'none';
-                    }}
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(prev => !prev)}
+                    className="be-eye"
+                    onClick={() => setShowPassword(p => !p)}
                     disabled={isLoading}
                     tabIndex={-1}
-                    style={{
-                      position: 'absolute', right: '13px', top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      padding: 0, display: 'flex', alignItems: 'center',
-                      color: '#94a3b8', zIndex: 10,
-                    }}
                   >
-                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
                 {errors.password && (
-                  <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#ef4444' }}>⚠ {errors.password}</p>
+                  <div className="be-field-err">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {errors.password}
+                  </div>
                 )}
               </div>
 
-              {/* Sign In button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                style={{
-                  width: '100%', height: '48px',
-                  background: isLoading ? '#94a3b8' : 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-                  color: '#ffffff',
-                  border: 'none', borderRadius: '9px',
-                  fontSize: '15px', fontWeight: 700,
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  boxShadow: isLoading ? 'none' : '0 4px 14px rgba(30,41,59,0.35)',
-                  transition: 'all 0.15s',
-                  fontFamily: 'inherit',
-                  letterSpacing: '0.2px',
-                }}
-                onMouseEnter={e => {
-                  if (!isLoading) {
-                    (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 20px rgba(30,41,59,0.45)';
-                  }
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-                  if (!isLoading) (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 14px rgba(30,41,59,0.35)';
-                }}
-              >
-                {isLoading ? (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <span style={{
-                      width: '16px', height: '16px',
-                      border: '2px solid rgba(255,255,255,0.3)',
-                      borderTopColor: '#ffffff',
-                      borderRadius: '50%',
-                      display: 'inline-block',
-                      animation: 'spin 0.75s linear infinite',
-                    }} />
-                    Signing in...
-                  </span>
-                ) : 'Sign In'}
+              <button type="submit" className="be-btn" disabled={isLoading}>
+                {isLoading
+                  ? <><Loader2 size={15} className="be-spin" /> Signing in…</>
+                  : <>Sign In <ArrowRight size={15} /></>
+                }
               </button>
-
             </form>
 
-            <p style={{ textAlign: 'center', fontSize: '12px', color: '#cbd5e1', marginTop: '24px', marginBottom: 0 }}>
-              © Bullion Electronics. All rights reserved.
-            </p>
+            <div className="be-divider">
+              <div className="be-div-line" />
+              <span className="be-div-txt">Secure Access</span>
+              <div className="be-div-line" />
+            </div>
+
+            <div className="be-secure">
+              <div className="be-dot" />
+              <span>256-bit encrypted · Live connection</span>
+            </div>
           </div>
+
+          <div className="be-footer">© 2026 Bullion Electronics. All rights reserved.</div>
         </div>
+
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
+    </>
   );
 }
