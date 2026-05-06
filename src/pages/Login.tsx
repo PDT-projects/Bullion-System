@@ -402,7 +402,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
           <div className="be-hero">
             <h2>Smarter finance,<br /><em>better decisions.</em></h2>
-            <p>A unified platform to manage cash flow, branches, transactions and reporting — built for your team.</p>
+            <p>A unified platform to manage cash flow, branches, transactions and reporting - built for your team.</p>
 
             <div className="be-features">
               {features.map((f) => (
@@ -512,7 +512,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
             <div className="be-secure">
               <div className="be-dot" />
-              <span>256-bit encrypted · Live connection</span>
+              <span>  Live connection</span>
             </div>
           </div>
 
