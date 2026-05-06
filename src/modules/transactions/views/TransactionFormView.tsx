@@ -4,41 +4,15 @@ import React, { useState } from 'react';
 import {
   ArrowLeft, Plus, Trash2, Building2, Wallet, TrendingUp, TrendingDown,
   Upload, Calculator, User, Users, CheckCircle, AlertCircle, Repeat, Loader2,
-  Hash, Edit2, Check, X, CreditCard, Lock, BarChart2, Globe,
+  Hash, Edit2, Check, X, CreditCard, Lock, BarChart2,
 } from 'lucide-react';
 import { SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory } from '../models/types';
-import { UseTransactionFormViewModelReturn, SUPPORTED_CURRENCIES, SupportedCurrency } from '../viewModels/useTransactionFormViewModel';
+import { UseTransactionFormViewModelReturn } from '../viewModels/useTransactionFormViewModel';
 
 interface Props extends UseTransactionFormViewModelReturn {}
 
-// ── shared style tokens ───────────────────────────────────────────────────────
-const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm bg-white transition-colors';
+const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm';
 const lbl = 'block text-sm font-medium text-gray-700 mb-1';
-
-// ── Currency selector component ───────────────────────────────────────────────
-function CurrencySelector({
-  currency, setCurrency,
-}: { currency: SupportedCurrency; setCurrency: (c: SupportedCurrency) => void }) {
-  const current = SUPPORTED_CURRENCIES.find(c => c.code === currency)!;
-  return (
-    <div className="relative">
-      <div className="flex items-center gap-1.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-        <Globe size={13} className="text-gray-400" />
-      </div>
-      <select
-        value={currency}
-        onChange={e => setCurrency(e.target.value as SupportedCurrency)}
-        className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white font-medium text-gray-700 cursor-pointer appearance-none min-w-[130px] transition-colors hover:border-gray-400"
-      >
-        {SUPPORTED_CURRENCIES.map(c => (
-          <option key={c.code} value={c.code}>
-            {c.flag} {c.code} ({c.symbol})
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
 
 export function TransactionFormView({
   office, date, transactionType, paymentMode, selectedBank,
@@ -58,7 +32,6 @@ export function TransactionFormView({
   dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
   bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
   companies, onAddCompany,
-  currency, setCurrency, currencyOptions,
 }: Props) {
   const [saveAttempted,    setSaveAttempted]    = useState(false);
   const [addingSubCatFor,  setAddingSubCatFor]  = useState<string | null>(null);
@@ -86,18 +59,17 @@ export function TransactionFormView({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-10 h-10 animate-spin text-gray-500" />
+        <Loader2 className="w-10 h-10 animate-spin text-slate-700" />
       </div>
     );
   }
 
-  const selectedBankData   = banks.find(b => b.id === selectedBank);
-  const isPreviewId        = transactionId?.includes('###');
-  const isInflow           = transactionType === 'Cash Inflow';
-  const selectedCurrencyOpt = currencyOptions.find(c => c.code === currency)!;
+  const selectedBankData = banks.find(b => b.id === selectedBank);
+  const isPreviewId = transactionId?.includes('###');
+  const isInflow = transactionType === 'Cash Inflow';
 
   // Classification is required — at least one of P&L or BS must be fully set
-  const hasClassification  = (plMainCategory && plSubCategory) || (bsMainCategory && bsSubCategory);
+  const hasClassification = (plMainCategory && plSubCategory) || (bsMainCategory && bsSubCategory);
   const classificationError = saveAttempted && !hasClassification;
 
   const handleAddSubCat = async (itemId: string) => {
@@ -161,80 +133,59 @@ export function TransactionFormView({
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto" style={{background:'#f8fafc', minHeight:'100%'}}>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleCancel}
-            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-              {isEditing ? 'Edit Transaction' : 'Add Transaction'}
-            </h2>
-            <p className="text-gray-400 text-xs sm:text-sm mt-0.5">Record a financial transaction</p>
-          </div>
-        </div>
-
-        {/* Currency selector — top-right on desktop, below header on mobile */}
-        <div className="flex items-center gap-2 self-start sm:self-center">
-          <span className="text-xs text-gray-500 font-medium whitespace-nowrap">Currency:</span>
-          <CurrencySelector currency={currency} setCurrency={setCurrency} />
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={handleCancel} style={{padding:'8px', borderRadius:'10px', border:'1px solid #e5e7eb', background:'white', color:'#6b7280', cursor:'pointer', display:'flex', alignItems:'center', transition:'all 0.15s'}}
+          onMouseEnter={e => (e.currentTarget.style.borderColor='#d1d5db')}
+          onMouseLeave={e => (e.currentTarget.style.borderColor='#e5e7eb')}>
+          <ArrowLeft size={20} />
+        </button>
+        <div>
+          <h2 style={{fontSize:'22px', fontWeight:700, color:'#111827', margin:0}}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</h2>
+          <p style={{fontSize:'13px', color:'#9ca3af', margin:'2px 0 0 0'}}>Record a financial transaction</p>
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
 
-        {/* ── Transaction ID ──────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <Hash className="w-4 h-4 text-gray-500" /> Transaction ID
+        {/* Transaction ID */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Hash className="w-5 h-5 text-slate-800" /> Transaction ID
           </h3>
           {isGeneratingId ? (
             <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+              <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
               <span className="text-sm text-gray-500">Preparing ID...</span>
             </div>
           ) : isEditingId ? (
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={transactionId}
+              <input type="text" value={transactionId}
                 onChange={e => setTransactionId(e.target.value.toUpperCase())}
-                autoFocus
-                placeholder="e.g. TXN-160326-005"
-                className="flex-1 px-4 py-2.5 border border-gray-400 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              />
+                autoFocus placeholder="e.g. TXN-160326-005"
+                className="flex-1 px-4 py-2.5 border border-slate-400 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-slate-200" />
               <button type="button" onClick={() => setIsEditingId(false)}
-                className="p-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                <Check size={16} />
-              </button>
+                style={{padding:"10px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}><Check size={16} /></button>
               <button type="button" onClick={() => setIsEditingId(false)}
-                className="p-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-                <X size={16} />
-              </button>
+                style={{padding:"10px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}><X size={16} /></button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
               <div className={`flex-1 flex items-center justify-between px-4 py-2.5 rounded-lg border ${
-                isPreviewId ? 'bg-gray-50 border-gray-200' : 'bg-gray-50 border-gray-300'
+                isPreviewId ? 'bg-gray-50 border-gray-200' : 'bg-slate-50 border-slate-300'
               }`}>
-                <span className={`font-mono text-sm font-bold tracking-widest ${
-                  isPreviewId ? 'text-gray-400' : 'text-gray-700'
-                }`}>
+                <span className={`font-mono text-sm font-bold tracking-widest ${isPreviewId ? 'text-gray-400' : 'text-slate-900'}`}>
                   {transactionId || '—'}
                 </span>
-                <span className={`text-xs ml-2 ${isPreviewId ? 'text-gray-400' : 'text-gray-500'}`}>
+                <span className={`text-xs ml-2 ${isPreviewId ? 'text-gray-400' : 'text-slate-500'}`}>
                   {isPreviewId ? 'assigned on save' : 'auto-generated'}
                 </span>
               </div>
               {!isEditing && (
                 <button type="button" onClick={() => setIsEditingId(true)}
-                  className="p-2.5 bg-white border border-gray-300 text-gray-500 rounded-lg hover:border-gray-400 hover:text-gray-700 transition-colors">
+                  style={{padding:"10px", background:"white", border:"1px solid #d1d5db", color:"#6b7280", borderRadius:"8px", cursor:"pointer"}}>
                   <Edit2 size={16} />
                 </button>
               )}
@@ -249,105 +200,97 @@ export function TransactionFormView({
           </p>
         </div>
 
-        {/* ── General Information ─────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-gray-500" /> General Information
+        {/* General Information */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-slate-800" /> General Information
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Office */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={lbl}>Office / Branch *</label>
+              <label className={lbl}>Office/Branch *</label>
               {addingCompany ? (
                 <div className="flex items-center gap-2">
                   <input
-                    type="text" autoFocus value={newCompanyName}
+                    type="text"
+                    autoFocus
+                    value={newCompanyName}
                     onChange={e => setNewCompanyName(e.target.value)}
                     placeholder="New company name..."
                     onKeyDown={e => {
-                      if (e.key === 'Enter')  handleAddCompany();
+                      if (e.key === 'Enter') { handleAddCompany(); }
                       if (e.key === 'Escape') { setAddingCompany(false); setNewCompanyName(''); }
                     }}
-                    className="flex-1 px-3 py-2 border border-gray-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                    className="flex-1 px-3 py-2 border border-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
                   />
                   <button type="button" disabled={savingCompany || !newCompanyName.trim()}
                     onClick={handleAddCompany}
-                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    style={{padding:"8px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}>
                     {savingCompany ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                   </button>
                   <button type="button"
                     onClick={() => { setAddingCompany(false); setNewCompanyName(''); }}
-                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                    style={{padding:"8px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}>
                     <X size={15} />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <select value={office} onChange={e => setOffice(e.target.value)} className={`flex-1 ${inp}`}>
-                    {companies.map((c: { id: string; name: string }) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
+                    {companies.map((c: {id: string; name: string}) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
-                  <button type="button" title="Add new company"
+                  <button
+                    type="button"
+                    title="Add new company"
                     onClick={() => { setAddingCompany(true); setNewCompanyName(''); }}
-                    className="p-2 text-gray-600 border border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors shrink-0">
+                    style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}
+                  >
                     <Plus size={15} />
                   </button>
                 </div>
               )}
             </div>
-
-            {/* Date */}
             <div>
               <label className={lbl}>
                 Date <span className="text-xs font-normal text-gray-400 ml-1">(auto)</span>
               </label>
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg min-h-[38px]">
-                <Lock size={13} className="text-gray-400 shrink-0" />
-                <span className="text-sm text-gray-600 truncate">{formatDateDisplay(date)}</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">Set automatically — cannot be changed</p>
+                  <Lock size={13} className="text-gray-400 shrink-0" />
+                  <span className="text-sm text-gray-600">{formatDateDisplay(date)}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Date is set automatically and cannot be changed</p>
             </div>
           </div>
         </div>
 
-        {/* ── Transaction Type ────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-gray-500" /> Transaction Type
+        {/* Transaction Type */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-slate-800" /> Transaction Type
           </h3>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {(['Cash Inflow', 'Cash Outflow', 'Loan'] as const).map(type => (
               <button key={type} type="button" onClick={() => setTransactionType(type)}
-                className={`p-3 sm:p-4 border-2 rounded-xl text-center transition-all ${
-                  transactionType === type
-                    ? 'border-gray-700 bg-gray-700 text-white shadow-md'
-                    : 'border-gray-200 hover:border-gray-400 text-gray-600 hover:bg-gray-50'
-                }`}>
-                <div className="flex justify-center mb-1.5 sm:mb-2">
-                  {type === 'Cash Inflow'  && <TrendingUp  className={`w-5 h-5 sm:w-6 sm:h-6 ${transactionType === type ? 'text-green-300' : 'text-green-500'}`} />}
-                  {type === 'Cash Outflow' && <TrendingDown className={`w-5 h-5 sm:w-6 sm:h-6 ${transactionType === type ? 'text-red-300'   : 'text-red-500'}`} />}
-                  {type === 'Loan'         && <Wallet       className={`w-5 h-5 sm:w-6 sm:h-6 ${transactionType === type ? 'text-blue-300'  : 'text-blue-500'}`} />}
+                style={{padding:'16px', border: transactionType === type ? '2px solid #1e293b' : '2px solid #e5e7eb', borderRadius:'12px', textAlign:'center', background: transactionType === type ? '#f8fafc' : 'white', cursor:'pointer', transition:'all 0.15s', width:'100%'}}>
+                <div className="flex justify-center mb-2">
+                  {type === 'Cash Inflow'  && <TrendingUp  className="w-6 h-6 text-slate-700" />}
+                  {type === 'Cash Outflow' && <TrendingDown className="w-6 h-6 text-red-500" />}
+                  {type === 'Loan'         && <Wallet       className="w-6 h-6 text-blue-500" />}
                 </div>
-                <span className="font-medium text-xs sm:text-sm leading-tight block">{type}</span>
+                <span className="font-medium text-sm">{type}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── Payment Method ──────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <Calculator className="w-4 h-4 text-gray-500" /> Payment Method
+        {/* Payment Method */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Calculator className="w-5 h-5 text-slate-800" /> Payment Method
           </h3>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+          <div className="grid grid-cols-3 gap-3 mb-4">
             {(['Cash', 'Bank', 'Cheque'] as const).map(mode => (
               <button key={mode} type="button" onClick={() => setPaymentMode(mode)}
-                className={`p-3 border-2 rounded-xl text-center font-medium text-sm transition-all ${
-                  paymentMode === mode
-                    ? 'border-gray-700 bg-gray-700 text-white'
-                    : 'border-gray-200 hover:border-gray-400 text-gray-600 hover:bg-gray-50'
-                }`}>
+                style={{padding:'12px', border: paymentMode === mode ? '2px solid #1e293b' : '2px solid #e5e7eb', borderRadius:'12px', textAlign:'center', fontWeight:500, fontSize:'14px', background: paymentMode === mode ? '#f8fafc' : 'white', color: paymentMode === mode ? '#1e293b' : '#374151', cursor:'pointer', transition:'all 0.15s', width:'100%'}}>
                 {mode}
               </button>
             ))}
@@ -380,7 +323,7 @@ export function TransactionFormView({
                 <CreditCard size={16} className="text-purple-600" />
                 <span className="text-sm font-medium text-gray-700">Cheque Details</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className={lbl}>Cheque Number *</label>
                   <input type="text" value={chequeNumber}
@@ -390,12 +333,16 @@ export function TransactionFormView({
                 </div>
                 <div>
                   <label className={lbl}>Cheque Date <span className="text-gray-400 font-normal">(optional)</span></label>
-                  <input type="date" value={chequeDate} onChange={e => setChequeDate(e.target.value)} className={inp} />
+                  <input type="date" value={chequeDate}
+                    onChange={e => setChequeDate(e.target.value)}
+                    className={inp} />
                 </div>
                 <div>
                   <label className={lbl}>Bank on Cheque <span className="text-gray-400 font-normal">(optional)</span></label>
-                  <input type="text" value={chequeBank} onChange={e => setChequeBank(e.target.value)}
-                    placeholder="e.g. HBL, MCB..." className={inp} />
+                  <input type="text" value={chequeBank}
+                    onChange={e => setChequeBank(e.target.value)}
+                    placeholder="e.g. HBL, MCB..."
+                    className={inp} />
                 </div>
               </div>
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-700">
@@ -405,95 +352,88 @@ export function TransactionFormView({
           )}
 
           {paymentMode === 'Bank' && selectedBank && (
-            <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Balance After Transaction</h4>
-              <div className="flex justify-between text-sm py-1">
+            <div style={{marginTop:"16px", background:"#f8fafc", border:"1px solid #bbf7d0", borderRadius:"10px", padding:"16px"}}>
+              <h4 className="text-sm font-semibold text-gray-800 mb-2">Balance After Transaction</h4>
+              <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Current Balance:</span>
-                <span className="font-medium text-gray-800">{formatCurrency(currentBankBalance)}</span>
+                <span className="font-medium">{formatCurrency(currentBankBalance)}</span>
               </div>
-              <div className="flex justify-between text-sm py-1">
+              <div className="flex justify-between text-sm">
                 <span className="text-gray-500">{isInflow ? '+ Inflow:' : '− Deducting:'}</span>
-                <span className={`font-medium ${isInflow ? 'text-green-600' : 'text-red-600'}`}>
+                <span className={`font-medium ${isInflow ? 'text-slate-800' : 'text-red-600'}`}>
                   {formatCurrency(isInflow ? totalAmount : totalPaid)}
                 </span>
               </div>
-              <div className="flex justify-between text-sm font-bold border-t border-gray-200 pt-2 mt-1">
-                <span className="text-gray-700">Balance After:</span>
-                <span className={remainingBalanceAfter < 0 ? 'text-red-600' : 'text-gray-800'}>
+              <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2">
+                <span>Balance After:</span>
+                <span className={remainingBalanceAfter < 0 ? 'text-red-600' : 'text-slate-800'}>
                   {formatCurrency(remainingBalanceAfter)}
                 </span>
               </div>
               {remainingBalanceAfter < 0 && (
-                <p className="text-xs text-red-600 mt-1.5">⚠️ This transaction will overdraw the account</p>
+                <p className="text-xs text-red-600 mt-1">⚠️ This transaction will overdraw the account</p>
               )}
             </div>
           )}
         </div>
 
-        {/* ── Multiple toggle ─────────────────────────────────────────────── */}
+        {/* Multiple toggle */}
         <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <Repeat className="w-4 h-4 text-gray-500" />
+            <Repeat className="w-5 h-5 text-slate-800" />
             <div>
-              <p className="font-medium text-gray-800 text-sm">Enable multiple transactions</p>
+              <p className="font-medium text-gray-900 text-sm">Enable multiple transactions</p>
               <p className="text-xs text-gray-400">Batch process multiple items at once</p>
             </div>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" checked={enableMultiple}
-              onChange={e => setEnableMultiple(e.target.checked)} className="sr-only peer" />
-            <div className="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-gray-400/30 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-4 after:transition-all peer-checked:bg-gray-700"></div>
+            <input type="checkbox" checked={enableMultiple} onChange={e => setEnableMultiple(e.target.checked)} className="sr-only peer" />
+            <div className="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-slate-500/30 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-4 after:transition-all peer-checked:bg-slate-800"></div>
           </label>
         </div>
 
-        {/* ── Transaction Items ───────────────────────────────────────────── */}
+        {/* Transaction Items */}
         {transactionItems.map((item, index) => (
-          <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
-            {/* Item header */}
+          <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
-                  <span className="text-xs font-bold text-gray-600">{index + 1}</span>
-                </div>
-                <h3 className="font-semibold text-gray-800 text-sm">Transaction #{index + 1}</h3>
-              </div>
+              <h3 className="font-semibold text-gray-900">Transaction #{index + 1}</h3>
               {enableMultiple && transactionItems.length > 1 && (
-                <button type="button" onClick={() => removeItem(item.id)}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                  <Trash2 size={15} />
+                <button type="button" onClick={() => removeItem(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                  <Trash2 size={16} />
                 </button>
               )}
             </div>
 
             {/* Category */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className={lbl}>Main Category</label>
-                <input type="text" value={transactionType} readOnly
-                  className={`${inp} bg-gray-50 text-gray-500 cursor-not-allowed`} />
+                <input type="text" value={transactionType} readOnly className={`${inp} bg-gray-50 text-gray-500`} />
               </div>
               <div>
                 <label className={lbl}>Sub Category *</label>
                 {addingSubCatFor === item.id ? (
                   <div className="flex items-center gap-2">
                     <input
-                      type="text" autoFocus value={newSubCatName}
+                      type="text"
+                      autoFocus
+                      value={newSubCatName}
                       onChange={e => setNewSubCatName(e.target.value)}
                       placeholder="New sub-category name..."
                       onKeyDown={e => {
-                        if (e.key === 'Enter')  handleAddSubCat(item.id);
+                        if (e.key === 'Enter') { handleAddSubCat(item.id); }
                         if (e.key === 'Escape') { setAddingSubCatFor(null); setNewSubCatName(''); }
                       }}
-                      className="flex-1 px-3 py-2 border border-gray-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                      className="flex-1 px-3 py-2 border border-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
                     />
                     <button type="button" disabled={savingSubCat || !newSubCatName.trim()}
                       onClick={() => handleAddSubCat(item.id)}
-                      className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                      style={{padding:"8px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}>
                       {savingSubCat ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                     </button>
                     <button type="button"
                       onClick={() => { setAddingSubCatFor(null); setNewSubCatName(''); }}
-                      className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                      style={{padding:"8px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}>
                       <X size={15} />
                     </button>
                   </div>
@@ -502,7 +442,8 @@ export function TransactionFormView({
                     <select
                       value={item.subCategory}
                       onChange={e => updateItem(item.id, 'subCategory', e.target.value)}
-                      className={`flex-1 ${inp} ${saveAttempted && !item.subCategory ? 'border-red-400 ring-1 ring-red-300' : ''}`}>
+                      className={`flex-1 ${inp} ${saveAttempted && !item.subCategory ? 'border-red-400 ring-1 ring-red-300' : ''}`}
+                    >
                       <option value="">Select sub category</option>
                       {(SUB_CATEGORIES[transactionType] || []).map(s => (
                         <option key={s} value={s}>{s}</option>
@@ -514,64 +455,49 @@ export function TransactionFormView({
                         ))
                       }
                     </select>
-                    <button type="button" title="Add new sub-category"
+                    <button
+                      type="button"
+                      title="Add new sub-category"
                       onClick={() => { setAddingSubCatFor(item.id); setNewSubCatName(''); }}
-                      className="p-2 text-gray-600 border border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors shrink-0">
+                      style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}
+                    >
                       <Plus size={15} />
                     </button>
                   </div>
                 )}
               </div>
-              <div className="sm:col-span-2">
+              <div className="col-span-2">
                 <label className={lbl}>Detail Category <span className="text-gray-400 font-normal">(optional)</span></label>
-                <input type="text" value={item.detailCategory}
-                  onChange={e => updateItem(item.id, 'detailCategory', e.target.value)}
+                <input type="text" value={item.detailCategory} onChange={e => updateItem(item.id, 'detailCategory', e.target.value)}
                   placeholder="Additional detail..." className={inp} />
               </div>
             </div>
 
             {/* Amounts */}
-            <div className="border-t border-gray-100 pt-4 mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-gray-700 text-sm">Amount Details</h4>
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-2 py-1">
-                  <span>{selectedCurrencyOpt.flag}</span>
-                  <span className="font-medium">{selectedCurrencyOpt.code}</span>
-                  <span className="text-gray-400">({selectedCurrencyOpt.symbol})</span>
-                </div>
-              </div>
+            <div className="border-t pt-4 mb-4">
+              <h4 className="font-medium text-gray-800 text-sm mb-3">Amount Details</h4>
               {isInflow ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className={lbl}>Total Amount *</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium pointer-events-none">
-                        {selectedCurrencyOpt.symbol}
-                      </span>
-                      <input type="number" min="0" value={item.amount || ''}
-                        onChange={e => updateItem(item.id, 'amount', Number(e.target.value))}
-                        placeholder="0"
-                        className={`${inp} pl-7 ${saveAttempted && (!item.amount || item.amount <= 0) ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
-                    </div>
+                    <input type="number" min="0" value={item.amount || ''}
+                      onChange={e => updateItem(item.id, 'amount', Number(e.target.value))}
+                      placeholder="0"
+                      className={`${inp} ${saveAttempted && (!item.amount || item.amount <= 0) ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
                   </div>
                   <div>
                     <label className={lbl}>Amount Received <span className="text-gray-400 font-normal">(blank = full)</span></label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium pointer-events-none">
-                        {selectedCurrencyOpt.symbol}
-                      </span>
-                      <input type="number" min="0" value={item.amountPaid || ''}
-                        onChange={e => updateItem(item.id, 'amountPaid', Number(e.target.value))}
-                        placeholder="Leave blank if fully received"
-                        className={`${inp} pl-7`} />
-                    </div>
+                    <input type="number" min="0" value={item.amountPaid || ''}
+                      onChange={e => updateItem(item.id, 'amountPaid', Number(e.target.value))}
+                      placeholder="Leave blank if fully received"
+                      className={inp} />
                     <p className="text-xs text-gray-400 mt-1">e.g. installment, partial receipt</p>
                   </div>
                   <div>
                     <label className={lbl}>Status</label>
                     <div className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${
                       item.paymentStatus === 'Full'
-                        ? 'bg-green-50 border-green-200 text-green-700'
+                        ? 'bg-slate-50 border-slate-300 text-slate-800'
                         : 'bg-yellow-50 border-yellow-200 text-yellow-700'
                     }`}>
                       {item.paymentStatus === 'Full' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
@@ -580,36 +506,25 @@ export function TransactionFormView({
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className={lbl}>Total Amount *</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium pointer-events-none">
-                        {selectedCurrencyOpt.symbol}
-                      </span>
-                      <input type="number" min="0" value={item.amount || ''}
-                        onChange={e => updateItem(item.id, 'amount', Number(e.target.value))}
-                        placeholder="0"
-                        className={`${inp} pl-7 ${saveAttempted && (!item.amount || item.amount <= 0) ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
-                    </div>
+                    <input type="number" min="0" value={item.amount || ''}
+                      onChange={e => updateItem(item.id, 'amount', Number(e.target.value))}
+                      placeholder="0"
+                      className={`${inp} ${saveAttempted && (!item.amount || item.amount <= 0) ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
                   </div>
                   <div>
                     <label className={lbl}>Amount Paid <span className="text-gray-400 font-normal">(blank = full)</span></label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium pointer-events-none">
-                        {selectedCurrencyOpt.symbol}
-                      </span>
-                      <input type="number" min="0" value={item.amountPaid || ''}
-                        onChange={e => updateItem(item.id, 'amountPaid', Number(e.target.value))}
-                        placeholder="0 = full payment"
-                        className={`${inp} pl-7`} />
-                    </div>
+                    <input type="number" min="0" value={item.amountPaid || ''}
+                      onChange={e => updateItem(item.id, 'amountPaid', Number(e.target.value))}
+                      placeholder="0 = full payment" className={inp} />
                   </div>
                   <div>
                     <label className={lbl}>Payment Status</label>
                     <div className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${
                       item.paymentStatus === 'Full'
-                        ? 'bg-green-50 border-green-200 text-green-700'
+                        ? 'bg-slate-50 border-slate-300 text-slate-800'
                         : 'bg-yellow-50 border-yellow-200 text-yellow-700'
                     }`}>
                       {item.paymentStatus === 'Full' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
@@ -628,31 +543,29 @@ export function TransactionFormView({
             </div>
 
             {/* Parties */}
-            <div className="border-t border-gray-100 pt-4 mb-4">
-              <h4 className="font-medium text-gray-700 text-sm mb-3 flex items-center gap-1.5">
-                <Users size={13} className="text-gray-400" /> Parties Involved
+            <div className="border-t pt-4 mb-4">
+              <h4 className="font-medium text-gray-800 text-sm mb-3 flex items-center gap-1.5">
+                <Users size={14} /> Parties Involved
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={lbl}>Paid By <span className="text-gray-400 font-normal">(optional)</span></label>
-                  <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-400 focus-within:border-gray-400 bg-white overflow-hidden">
+                  <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-slate-500 focus-within:border-slate-700 bg-white overflow-hidden">
                     <span className="flex items-center justify-center pl-3 pr-2 text-gray-400 shrink-0">
                       <User size={14} />
                     </span>
-                    <input type="text" value={item.paidBy}
-                      onChange={e => updateItem(item.id, 'paidBy', e.target.value)}
+                    <input type="text" value={item.paidBy} onChange={e => updateItem(item.id, 'paidBy', e.target.value)}
                       placeholder="Who paid"
                       className="flex-1 py-2 pr-3 text-sm bg-transparent outline-none placeholder-gray-400" />
                   </div>
                 </div>
                 <div>
                   <label className={lbl}>Paid To <span className="text-gray-400 font-normal">(optional)</span></label>
-                  <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-400 focus-within:border-gray-400 bg-white overflow-hidden">
+                  <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-slate-500 focus-within:border-slate-700 bg-white overflow-hidden">
                     <span className="flex items-center justify-center pl-3 pr-2 text-gray-400 shrink-0">
                       <User size={14} />
                     </span>
-                    <input type="text" value={item.paidTo}
-                      onChange={e => updateItem(item.id, 'paidTo', e.target.value)}
+                    <input type="text" value={item.paidTo} onChange={e => updateItem(item.id, 'paidTo', e.target.value)}
                       placeholder="Who received"
                       className="flex-1 py-2 pr-3 text-sm bg-transparent outline-none placeholder-gray-400" />
                   </div>
@@ -661,24 +574,22 @@ export function TransactionFormView({
             </div>
 
             {/* Note */}
-            <div className="border-t border-gray-100 pt-4 mb-4">
+            <div className="border-t pt-4 mb-4">
               <label className={lbl}>Note / Description <span className="text-gray-400 font-normal">(optional)</span></label>
               <textarea value={item.note} onChange={e => updateItem(item.id, 'note', e.target.value)}
                 rows={2} placeholder="Add details..." className={`${inp} resize-none`} />
             </div>
 
             {/* Receipt */}
-            <div className="border-t border-gray-100 pt-4">
+            <div className="border-t pt-4">
               <label className={lbl}>Receipt / Image <span className="text-gray-400 font-normal">(optional)</span></label>
-              <label className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-500 hover:bg-gray-50 transition-colors w-fit">
-                <Upload size={15} className="text-gray-400" />
+              <label style={{display:"flex", alignItems:"center", gap:"8px", padding:"8px 16px", border:"2px dashed #d1d5db", borderRadius:"8px", cursor:"pointer"}}>
+                <Upload size={16} className="text-gray-400" />
                 <span className="text-sm text-gray-500">Upload Image</span>
-                <input type="file" accept="image/*"
-                  onChange={e => updateItem(item.id, 'receipt', e.target.files?.[0] || null)}
-                  className="hidden" />
+                <input type="file" accept="image/*" onChange={e => updateItem(item.id, 'receipt', e.target.files?.[0] || null)} className="hidden" />
               </label>
               {item.receipt && (
-                <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+                <p className="text-xs text-slate-800 mt-1 flex items-center gap-1">
                   <CheckCircle size={12} /> {(item.receipt as File).name}
                 </p>
               )}
@@ -689,18 +600,20 @@ export function TransactionFormView({
         {/* Add Another */}
         {enableMultiple && (
           <button type="button" onClick={addItem}
-            className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm font-medium">
+            style={{width:"100%", padding:"12px", border:"2px dashed #d1d5db", borderRadius:"12px", background:"white", color:"#6b7280", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", fontSize:"14px", fontWeight:500}}>
             <Plus size={16} /> Add Another Transaction
           </button>
         )}
 
-        {/* ── Profit & Loss Classification ────────────────────────────────── */}
-        <div className={`bg-white rounded-xl border p-4 sm:p-5 shadow-sm transition-colors ${
-          classificationError && !plMainCategory ? 'border-red-400 ring-1 ring-red-300' : 'border-gray-200'
+        {/* Profit & Loss Classification */}
+        <div className={`bg-white rounded-xl border p-5 shadow-sm transition-colors ${
+          classificationError && !plMainCategory
+            ? 'border-red-400 ring-1 ring-red-300'
+            : 'border-gray-200'
         }`}>
-          <h3 className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2 flex-wrap">
-            <BarChart2 className="w-4 h-4 text-gray-500" /> Profit &amp; Loss Classification
-            <span className="ml-1 text-xs font-normal text-orange-500">
+          <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-slate-800" /> Profit &amp; Loss Classification
+            <span className="ml-1 text-xs font-normal text-orange-500 font-medium">
               {classificationError && !plMainCategory ? '* required (or fill Balance Sheet below)' : '(at least one required)'}
             </span>
           </h3>
@@ -708,89 +621,90 @@ export function TransactionFormView({
             Tag this transaction to a P&amp;L category so it flows into Revenue, COGS, or Operating Expenses automatically.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            {/* P&L Main Category */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+            {/* ── P&L Main Category ── */}
             <div>
               <label className={lbl}>P&amp;L Category</label>
               {addingPLMain ? (
                 <div className="flex items-center gap-2">
-                  <input type="text" autoFocus value={newPLMainName}
+                  <input
+                    type="text" autoFocus value={newPLMainName}
                     onChange={e => setNewPLMainName(e.target.value)}
                     placeholder="e.g. Other Income"
-                    onKeyDown={e => {
-                      if (e.key === 'Enter')  handleAddPLMain();
-                      if (e.key === 'Escape') { setAddingPLMain(false); setNewPLMainName(''); }
-                    }}
-                    className="flex-1 px-3 py-2 border border-gray-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddPLMain(); if (e.key === 'Escape') { setAddingPLMain(false); setNewPLMainName(''); } }}
+                    className="flex-1 px-3 py-2 border border-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
                   />
                   <button type="button" disabled={savingPLMain || !newPLMainName.trim()} onClick={handleAddPLMain}
-                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    style={{padding:"8px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}>
                     {savingPLMain ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                   </button>
                   <button type="button" onClick={() => { setAddingPLMain(false); setNewPLMainName(''); }}
-                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><X size={15} /></button>
+                    style={{padding:"8px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}><X size={15} /></button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <select value={plMainCategory} onChange={e => setPlMainCategory(e.target.value as any)}
                     className={`flex-1 ${inp}`}>
                     <option value="">— Not classified —</option>
+                    {/* Built-in P&L main categories */}
                     {(Object.keys(PL_CATEGORIES) as PLMainCategory[]).map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
+                    {/* User-added P&L main categories */}
                     {dynamicPLCategories.filter(d => d.type === 'plMainCategory').map(d => (
                       <option key={d.id} value={d.name}>✦ {d.name}</option>
                     ))}
                   </select>
                   <button type="button" title="Add new P&L category"
                     onClick={() => { setAddingPLMain(true); setNewPLMainName(''); }}
-                    className="p-2 text-gray-600 border border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors shrink-0">
+                    style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}>
                     <Plus size={15} />
                   </button>
                 </div>
               )}
             </div>
 
-            {/* P&L Sub Category */}
+            {/* ── P&L Sub Category ── */}
             <div>
               <label className={lbl}>P&amp;L Sub Category</label>
               {addingPLSub ? (
                 <div className="flex items-center gap-2">
-                  <input type="text" autoFocus value={newPLSubName}
+                  <input
+                    type="text" autoFocus value={newPLSubName}
                     onChange={e => setNewPLSubName(e.target.value)}
                     placeholder={plMainCategory ? `Sub-category under ${plMainCategory}` : 'Select main category first'}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter')  handleAddPLSub();
-                      if (e.key === 'Escape') { setAddingPLSub(false); setNewPLSubName(''); }
-                    }}
-                    className="flex-1 px-3 py-2 border border-gray-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddPLSub(); if (e.key === 'Escape') { setAddingPLSub(false); setNewPLSubName(''); } }}
+                    className="flex-1 px-3 py-2 border border-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
                   />
                   <button type="button" disabled={savingPLSub || !newPLSubName.trim() || !plMainCategory} onClick={handleAddPLSub}
-                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    style={{padding:"8px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}>
                     {savingPLSub ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                   </button>
                   <button type="button" onClick={() => { setAddingPLSub(false); setNewPLSubName(''); }}
-                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><X size={15} /></button>
+                    style={{padding:"8px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}><X size={15} /></button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <select value={plSubCategory} onChange={e => setPlSubCategory(e.target.value)}
                     disabled={!plMainCategory}
                     className={`flex-1 ${inp} ${!plMainCategory ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}`}>
-                    <option value="">— Select sub-category —</option>
+                    <option value="">— Select sub category —</option>
+                    {/* Built-in sub-categories for selected main */}
                     {plMainCategory && (PL_CATEGORIES[plMainCategory as PLMainCategory] || []).map(sub => (
                       <option key={sub} value={sub}>{sub}</option>
                     ))}
+                    {/* User-added sub-categories for selected main */}
                     {plMainCategory && dynamicPLCategories
                       .filter(d => d.type === 'plSubCategory' && d.parentCategory === plMainCategory)
                       .map(d => (
                         <option key={d.id} value={d.name}>✦ {d.name}</option>
                       ))}
                   </select>
-                  <button type="button" title="Add new sub-category"
+                  <button type="button" title="Add new P&L sub-category"
                     disabled={!plMainCategory}
                     onClick={() => { setAddingPLSub(true); setNewPLSubName(''); }}
-                    className="p-2 text-gray-600 border border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+                    style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}>
                     <Plus size={15} />
                   </button>
                 </div>
@@ -801,29 +715,66 @@ export function TransactionFormView({
             </div>
           </div>
 
-          {/* P&L live preview */}
-          {plMainCategory && plSubCategory && (
-            <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm">
-              <p className="font-semibold text-blue-800 mb-1">
-                📊 {plMainCategory}
+          {/* P&L live preview card */}
+          {plMainCategory && (
+            <div className={`rounded-xl border p-4 text-sm ${
+              plMainCategory === 'Revenue'
+                ? 'bg-slate-50 border-slate-300'
+                : plMainCategory === 'Cost of Goods Sold (COGS)'
+                ? 'bg-orange-50 border-orange-200'
+                : 'bg-purple-50 border-purple-200'
+            }`}>
+              <p className={`font-semibold mb-2 ${
+                plMainCategory === 'Revenue' ? 'text-slate-900'
+                : plMainCategory === 'Cost of Goods Sold (COGS)' ? 'text-orange-800'
+                : 'text-purple-800'
+              }`}>
+                {plMainCategory === 'Revenue' && '📈 Revenue'}
+                {plMainCategory === 'Cost of Goods Sold (COGS)' && '📦 Cost of Goods Sold (COGS)'}
+                {plMainCategory === 'Operating Expenses' && '🏢 Operating Expenses'}
+                {/* User-added main categories */}
+                {!['Revenue','Cost of Goods Sold (COGS)','Operating Expenses'].includes(plMainCategory) && `✦ ${plMainCategory}`}
               </p>
-              <div className="text-xs text-blue-700 space-y-0.5">
-                {plMainCategory === 'Revenue' && <p>• Income earned through business operations</p>}
-                {plMainCategory === 'Cost of Goods Sold (COGS)' && <p>• Direct cost of producing goods/services</p>}
-                {plMainCategory === 'Operating Expenses' && <p>• Day-to-day running costs of the business</p>}
-                {plSubCategory && <p className="mt-1 font-medium">Line item: {plSubCategory}</p>}
+              <div className={`text-xs space-y-1 ${
+                plMainCategory === 'Revenue' ? 'text-slate-800'
+                : plMainCategory === 'Cost of Goods Sold (COGS)' ? 'text-orange-700'
+                : 'text-purple-700'
+              }`}>
+                {plMainCategory === 'Revenue' && <><p>• Adds to <strong>Total Revenue</strong></p><p>• Gross Profit = Revenue − COGS</p></>}
+                {plMainCategory === 'Cost of Goods Sold (COGS)' && <><p>• Deducted from Revenue → <strong>Gross Profit</strong></p><p>• Gross Profit = Revenue − COGS</p></>}
+                {plMainCategory === 'Operating Expenses' && <><p>• Added to <strong>Total Operating Expenses</strong></p><p>• Net Profit = Gross Profit − Total OpEx</p></>}
+                {!['Revenue','Cost of Goods Sold (COGS)','Operating Expenses'].includes(plMainCategory) && <p>• Custom P&amp;L category — tracked separately in reports</p>}
+                {plSubCategory && <p className="mt-1 font-medium">Sub: {plSubCategory}</p>}
+              </div>
+
+              {/* P&L waterfall mini-diagram */}
+              <div className="mt-3 pt-3 border-t border-white/60 grid grid-cols-3 gap-2 text-center text-xs font-medium">
+                <div className={`rounded-lg py-1.5 px-2 ${plMainCategory === 'Revenue' ? 'bg-slate-200/70 ring-2 ring-slate-400' : 'bg-white/70'}`}>
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Revenue</p>
+                  <p className="text-slate-800">Sales</p>
+                </div>
+                <div className={`rounded-lg py-1.5 px-2 ${plMainCategory === 'Cost of Goods Sold (COGS)' ? 'bg-orange-200/70 ring-2 ring-orange-400' : 'bg-white/70'}`}>
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Gross Profit</p>
+                  <p className="text-blue-700">Rev − COGS</p>
+                </div>
+                <div className={`rounded-lg py-1.5 px-2 ${plMainCategory === 'Operating Expenses' ? 'bg-purple-200/70 ring-2 ring-purple-400' : 'bg-white/70'}`}>
+                  <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Net Profit</p>
+                  <p className="text-slate-800">GP − OpEx</p>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Balance Sheet Classification ─────────────────────────────────── */}
-        <div className={`bg-white rounded-xl border p-4 sm:p-5 shadow-sm transition-colors ${
-          classificationError && !bsMainCategory ? 'border-red-400 ring-1 ring-red-300' : 'border-gray-200'
+        {/* Balance Sheet Classification */}
+        <div className={`bg-white rounded-xl border p-5 shadow-sm transition-colors ${
+          classificationError && !bsMainCategory
+            ? 'border-red-400 ring-1 ring-red-300'
+            : 'border-gray-200'
         }`}>
-          <h3 className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2 flex-wrap">
-            <BarChart2 className="w-4 h-4 text-emerald-600" /> Balance Sheet Classification
-            <span className="ml-1 text-xs font-normal text-orange-500">
+          <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-slate-800" /> Balance Sheet Classification
+            <span className="ml-1 text-xs font-normal text-orange-500 font-medium">
               {classificationError && !bsMainCategory ? '* required (or fill P&L above)' : '(at least one required)'}
             </span>
           </h3>
@@ -831,27 +782,29 @@ export function TransactionFormView({
             Tag this transaction as an <strong>Asset</strong> or a <strong>Liability / Equity</strong> item so it appears correctly on the Balance Sheet.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            {/* BS Main Category */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+            {/* ── BS Main Category ── */}
             <div>
               <label className={lbl}>Balance Sheet Side</label>
               {addingBSMain ? (
                 <div className="flex items-center gap-2">
-                  <input type="text" autoFocus value={newBSMainName}
+                  <input
+                    type="text" autoFocus value={newBSMainName}
                     onChange={e => setNewBSMainName(e.target.value)}
                     placeholder="e.g. Other Assets"
                     onKeyDown={e => {
                       if (e.key === 'Enter')  handleAddBSMain();
                       if (e.key === 'Escape') { setAddingBSMain(false); setNewBSMainName(''); }
                     }}
-                    className="flex-1 px-3 py-2 border border-emerald-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                    className="flex-1 px-3 py-2 border border-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
                   />
                   <button type="button" disabled={savingBSMain || !newBSMainName.trim()} onClick={handleAddBSMain}
-                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    style={{padding:"8px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}>
                     {savingBSMain ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                   </button>
                   <button type="button" onClick={() => { setAddingBSMain(false); setNewBSMainName(''); }}
-                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><X size={15} /></button>
+                    style={{padding:"8px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}><X size={15} /></button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -867,33 +820,34 @@ export function TransactionFormView({
                   </select>
                   <button type="button" title="Add new Balance Sheet category"
                     onClick={() => { setAddingBSMain(true); setNewBSMainName(''); }}
-                    className="p-2 text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shrink-0">
+                    style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}>
                     <Plus size={15} />
                   </button>
                 </div>
               )}
             </div>
 
-            {/* BS Sub Category */}
+            {/* ── BS Sub Category ── */}
             <div>
               <label className={lbl}>Balance Sheet Line Item</label>
               {addingBSSub ? (
                 <div className="flex items-center gap-2">
-                  <input type="text" autoFocus value={newBSSubName}
+                  <input
+                    type="text" autoFocus value={newBSSubName}
                     onChange={e => setNewBSSubName(e.target.value)}
                     placeholder={bsMainCategory ? `Line item under ${bsMainCategory}` : 'Select side first'}
                     onKeyDown={e => {
                       if (e.key === 'Enter')  handleAddBSSub();
                       if (e.key === 'Escape') { setAddingBSSub(false); setNewBSSubName(''); }
                     }}
-                    className="flex-1 px-3 py-2 border border-emerald-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                    className="flex-1 px-3 py-2 border border-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
                   />
                   <button type="button" disabled={savingBSSub || !newBSSubName.trim() || !bsMainCategory} onClick={handleAddBSSub}
-                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                    style={{padding:"8px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}>
                     {savingBSSub ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                   </button>
                   <button type="button" onClick={() => { setAddingBSSub(false); setNewBSSubName(''); }}
-                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><X size={15} /></button>
+                    style={{padding:"8px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}><X size={15} /></button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -913,7 +867,7 @@ export function TransactionFormView({
                   <button type="button" title="Add new line item"
                     disabled={!bsMainCategory}
                     onClick={() => { setAddingBSSub(true); setNewBSSubName(''); }}
-                    className="p-2 text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+                    style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}>
                     <Plus size={15} />
                   </button>
                 </div>
@@ -927,13 +881,21 @@ export function TransactionFormView({
           {/* BS live preview */}
           {bsMainCategory && (
             <div className={`rounded-xl border p-4 text-sm ${
-              bsMainCategory === 'Assets' ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
+              bsMainCategory === 'Assets'
+                ? 'bg-slate-50 border-slate-300'
+                : 'bg-rose-50 border-rose-200'
             }`}>
-              <p className={`font-semibold mb-2 ${bsMainCategory === 'Assets' ? 'text-emerald-800' : 'text-rose-800'}`}>
+              {/* Header */}
+              <p className={`font-semibold mb-2 ${
+                bsMainCategory === 'Assets' ? 'text-slate-900' : 'text-rose-800'
+              }`}>
                 {bsMainCategory === 'Assets' ? '🏦 Assets' : '📋 Liabilities & Equity'}
-                {!['Assets', 'Liabilities & Equity'].includes(bsMainCategory) && ` ✦ ${bsMainCategory}`}
+                {!['Assets','Liabilities & Equity'].includes(bsMainCategory) && `✦ ${bsMainCategory}`}
               </p>
-              <div className={`text-xs space-y-1 mb-3 ${bsMainCategory === 'Assets' ? 'text-emerald-700' : 'text-rose-700'}`}>
+
+              <div className={`text-xs space-y-1 mb-3 ${
+                bsMainCategory === 'Assets' ? 'text-slate-800' : 'text-rose-700'
+              }`}>
                 {bsMainCategory === 'Assets' && (
                   <><p>• Recorded on the <strong>left side</strong> of the Balance Sheet</p>
                   <p>• Represents what the business <strong>owns</strong></p></>
@@ -942,7 +904,7 @@ export function TransactionFormView({
                   <><p>• Recorded on the <strong>right side</strong> of the Balance Sheet</p>
                   <p>• Represents what the business <strong>owes or is funded by</strong></p></>
                 )}
-                {!['Assets', 'Liabilities & Equity'].includes(bsMainCategory) && (
+                {!['Assets','Liabilities & Equity'].includes(bsMainCategory) && (
                   <p>• Custom Balance Sheet category — tracked separately in reports</p>
                 )}
                 {bsSubCategory && <p className="mt-1 font-medium">Line item: {bsSubCategory}</p>}
@@ -952,7 +914,7 @@ export function TransactionFormView({
               <div className="mt-2 pt-3 border-t border-white/60">
                 <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-2 text-center font-medium">Accounting Equation</p>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
-                  <div className={`rounded-lg py-2 px-1 ${bsMainCategory === 'Assets' ? 'bg-emerald-200/80 ring-2 ring-emerald-500 text-emerald-900' : 'bg-white/70 text-emerald-700'}`}>
+                  <div className={`rounded-lg py-2 px-1 ${bsMainCategory === 'Assets' ? 'bg-slate-200 ring-2 ring-slate-500 text-slate-900' : 'bg-white/70 text-slate-800'}`}>
                     <p className="text-[10px] font-normal text-gray-400 mb-0.5">LEFT</p>
                     Assets
                   </div>
@@ -967,44 +929,39 @@ export function TransactionFormView({
           )}
         </div>
 
-        {/* ── Summary bar ─────────────────────────────────────────────────── */}
-        <div className="bg-gray-800 text-white rounded-xl p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm text-gray-200">Summary</h3>
-            <span className="text-xs bg-white/10 rounded-md px-2 py-0.5 font-medium">
-              {selectedCurrencyOpt.flag} {selectedCurrencyOpt.code}
-            </span>
-          </div>
+        {/* Grand Total */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="font-semibold text-gray-900 mb-4">Summary</h3>
           {isInflow ? (
             <div className="grid grid-cols-2 gap-4 text-center">
-              <div>
-                <p className="text-white/60 text-xs mb-1">Total Inflow Amount</p>
-                <p className="text-xl sm:text-2xl font-bold text-green-300">{formatCurrency(totalAmount)}</p>
+              <div style={{background:'#f8fafc', border:'1px solid #99f6e4', borderRadius:'12px', padding:'16px'}}>
+                <p style={{color:'#1e293b', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Total Inflow Amount</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#0f172a'}}>{formatCurrency(totalAmount)}</p>
               </div>
-              <div className="border-l border-white/20">
-                <p className="text-white/60 text-xs mb-1">Items</p>
-                <p className="text-xl sm:text-2xl font-bold">{transactionItems.length}</p>
+              <div style={{background:'#f9fafb', border:'1px solid #f3f4f6', borderRadius:'12px', padding:'16px'}}>
+                <p style={{color:'#6b7280', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Items</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#111827'}}>{transactionItems.length}</p>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="text-white/60 text-xs mb-1">Total Amount</p>
-                <p className="text-lg sm:text-2xl font-bold">{formatCurrency(totalAmount)}</p>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div style={{background:'#f9fafb', border:'1px solid #f3f4f6', borderRadius:'12px', padding:'16px'}}>
+                <p style={{color:'#6b7280', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Total Amount</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#111827'}}>{formatCurrency(totalAmount)}</p>
               </div>
-              <div className="border-x border-white/20">
-                <p className="text-white/60 text-xs mb-1">Total Paid</p>
-                <p className="text-lg sm:text-2xl font-bold text-green-300">{formatCurrency(totalPaid)}</p>
+              <div style={{background:'#f8fafc', border:'1px solid #99f6e4', borderRadius:'12px', padding:'16px'}}>
+                <p style={{color:'#1e293b', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Total Paid</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#0f172a'}}>{formatCurrency(totalPaid)}</p>
               </div>
-              <div>
-                <p className="text-white/60 text-xs mb-1">Remaining</p>
-                <p className="text-lg sm:text-2xl font-bold text-yellow-300">{formatCurrency(totalRemaining)}</p>
+              <div style={{background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'12px', padding:'16px'}}>
+                <p style={{color:'#d97706', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Total Remaining</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#b45309'}}>{formatCurrency(totalRemaining)}</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Validation errors ───────────────────────────────────────────── */}
+        {/* Validation errors */}
         {saveAttempted && !isSaving && (
           (() => {
             const errs: string[] = [];
@@ -1022,71 +979,64 @@ export function TransactionFormView({
             if (errs.length === 0) return null;
             return (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 space-y-1">
-                <p className="font-semibold mb-2 flex items-center gap-2">
-                  <AlertCircle size={16} /> Please fix the following:
-                </p>
+                <p className="font-semibold mb-2 flex items-center gap-2"><AlertCircle size={16} /> Please fix the following:</p>
                 {errs.map((e, i) => <p key={i}>• {e}</p>)}
               </div>
             );
           })()
         )}
 
-        {/* ── Actions ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pb-10 pt-2">
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 pb-10 pt-2">
           <button type="button" onClick={handleCancel}
-            className="px-5 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm order-2 sm:order-1">
+            style={{padding:'10px 20px', borderRadius:'8px', border:'1px solid #e5e7eb', background:'white', color:'#374151', fontWeight:500, fontSize:'14px', cursor:'pointer', transition:'all 0.15s'}}>
             Cancel
           </button>
           <button type="button"
             onClick={() => { setSaveAttempted(true); handleSave(); }}
             disabled={isSaving}
-            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors font-semibold text-sm order-1 sm:order-2">
+            style={{display:'flex', alignItems:'center', gap:'6px', padding:'10px 24px', borderRadius:'8px', border:'none', background: isSaving ? '#94a3b8' : '#1e293b', color:'white', fontWeight:600, fontSize:'14px', cursor: isSaving ? 'not-allowed' : 'pointer', opacity: isSaving ? 0.7 : 1, transition:'all 0.15s'}}>
             {isSaving
               ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
-              : <><Plus size={16} /> {isEditing
-                  ? 'Save Changes'
-                  : `Save ${transactionItems.length > 1 ? transactionItems.length + ' Transactions' : 'Transaction'}`}
-                </>
+              : <><Plus size={16} /> {isEditing ? 'Save Changes' : `Save ${transactionItems.length > 1 ? transactionItems.length + ' Transactions' : 'Transaction'}`}</>
             }
           </button>
         </div>
 
       </div>
 
-      {/* ── Duplicate ID Modal ──────────────────────────────────────────────── */}
+      {/* Duplicate ID Modal */}
       {duplicateIdError && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="bg-red-600 px-5 sm:px-6 py-5 flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-full shrink-0">
-                <AlertCircle className="w-6 h-6 text-white" />
-              </div>
+            <div className="bg-red-600 px-6 py-5 flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-full"><AlertCircle className="w-6 h-6 text-white" /></div>
               <div>
                 <h3 className="text-lg font-bold text-white">Duplicate Transaction ID</h3>
                 <p className="text-red-100 text-sm">This ID is already in use</p>
               </div>
             </div>
-            <div className="px-5 sm:px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4">
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
                 <p className="text-xs text-red-400 font-medium uppercase tracking-wide mb-1">Conflicting ID</p>
-                <p className="font-mono text-xl font-bold text-red-700 tracking-widest break-all">{duplicateIdError}</p>
+                <p className="font-mono text-xl font-bold text-red-700 tracking-widest">{duplicateIdError}</p>
               </div>
               <p className="text-sm text-gray-600">A transaction with this ID already exists. Choose an option below.</p>
               <div className="text-sm text-gray-500 space-y-1.5">
                 <div className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                  <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
                   <p>Click <strong>"Use New ID"</strong> — system auto-assigns a fresh unique ID</p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                  <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
                   <p>Click <strong>"Edit ID"</strong> — manually enter a different custom ID</p>
                 </div>
               </div>
             </div>
-            <div className="px-5 sm:px-6 pb-6 flex gap-3">
+            <div className="px-6 pb-6 flex gap-3">
               <button type="button"
                 onClick={() => { setDuplicateIdError(''); setIsEditingId(true); setTransactionId(''); }}
-                className="flex-1 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:border-gray-500 hover:text-gray-800 transition-colors">
+                style={{flex:1, padding:"10px", border:"2px solid #d1d5db", borderRadius:"12px", background:"white", color:"#374151", fontWeight:500, cursor:"pointer"}}>
                 ✏️ Edit ID
               </button>
               <button type="button"
@@ -1099,7 +1049,7 @@ export function TransactionFormView({
                   setTransactionId(`TXN-${dd}${mm}${yy}-###`);
                   setIsEditingId(false);
                 }}
-                className="flex-1 py-2.5 bg-gray-800 text-white rounded-xl font-semibold hover:bg-gray-900 transition-colors">
+                style={{flex:1, padding:"10px", background:"#1e293b", color:"white", border:"none", borderRadius:"12px", fontWeight:600, cursor:"pointer"}}>
                 🔄 Use New ID
               </button>
             </div>
