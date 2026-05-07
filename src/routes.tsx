@@ -50,6 +50,9 @@ import {
   InvoiceReportWrapper,
 } from './modules/invoices';
 
+// ── Against the Invoice — standalone module ──────────────────────────────────
+import { AgainstInvoiceWrapper } from './modules/against-the-invoice';
+
 import {
   TransactionListWrapper,
   TransactionCreateWrapper,
@@ -74,8 +77,7 @@ import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
 import { UserManagement } from './modules/user-management';
 import { AssetsManagement } from './modules/assets-management';
-import { mockData } from './mockData';
-const initialData = mockData;
+
 
 
 // ============================================================
@@ -217,7 +219,7 @@ function BankTransferListRoute()    { return <TransferListWrapper />; }
 function BankTransferCreateRoute()  { return <TransferCreateWrapper />; }
 function CashListRoute()            { return <CashListWrapper />; }
 function CashCreateRoute()          { return <CashCreateWrapper />; }
-// ── NEW: Bank Activity Report route component ──
+// ── Bank Activity Report route component ──
 function BankActivityRoute()        { return <BankActivityView />; }
 
 
@@ -241,6 +243,13 @@ function InvoiceFormRoute()   { return <InvoiceFormWrapper />; }
 function InvoiceEditRoute()   { return <InvoiceFormWrapper />; }
 function InvoiceDeleteRoute() { return <InvoiceDeleteWrapper />; }
 function InvoiceReportRoute() { return <InvoiceReportWrapper />; }
+
+
+// ============================================================
+// AGAINST THE INVOICE ROUTES
+// ============================================================
+
+function AgainstInvoiceRoute() { return <AgainstInvoiceWrapper />; }
 
 
 // ============================================================
@@ -371,7 +380,7 @@ export const router = createBrowserRouter([
       { path: 'transfers/new',    element: <ScreenProtectedRoute requiredScreen="Create Bank Transfer"><BankTransferCreateRoute /></ScreenProtectedRoute> },
       { path: 'cash',             element: <ScreenProtectedRoute requiredScreen="Cash List"><CashListRoute /></ScreenProtectedRoute> },
       { path: 'cash/new',         element: <ScreenProtectedRoute requiredScreen="Create Cash Entry"><CashCreateRoute /></ScreenProtectedRoute> },
-      // ── NEW: Bank Activity Report inside banking module ──
+      // ── Bank Activity Report inside banking module ──
       { path: 'activity',         element: <ScreenProtectedRoute requiredScreen="Bank Activity Report"><BankActivityRoute /></ScreenProtectedRoute> },
     ],
   },
@@ -400,6 +409,20 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Invoice"><InvoiceDeleteRoute /></ScreenProtectedRoute> },
       { path: 'reports',    element: <ScreenProtectedRoute requiredScreen="Invoice Reports"><InvoiceReportRoute /></ScreenProtectedRoute> },
     ],
+  },
+
+  // ── Against the Invoice (standalone module) ───────────────
+  {
+    path: '/against-the-invoice',
+    element: (
+      <ProtectedRoute>
+        <AppLayout activeModule="against-the-invoice">
+          <ScreenProtectedRoute requiredScreen="Invoices List">
+            <AgainstInvoiceRoute />
+          </ScreenProtectedRoute>
+        </AppLayout>
+      </ProtectedRoute>
+    ),
   },
 
   // ── Inventory ─────────────────────────────────────────────
@@ -462,7 +485,6 @@ export const router = createBrowserRouter([
   },
 
   // ── Reports ───────────────────────────────────────────────
-  // Main reports hub — card grid
   {
     path: '/reports',
     element: (
@@ -473,7 +495,7 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
-  // ── NEW: Bank Activity accessible from Reports hub ────────
+  // ── Bank Activity accessible from Reports hub ────────
   {
     path: '/reports/bank-activity',
     element: (

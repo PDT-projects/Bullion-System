@@ -4,6 +4,7 @@
 //   - Only visible when user has at least one report permission
 //   - Uses hasAnyReportPermission from useUserPermissions
 //   - UPDATED: Added "Bank Activity" link under Banking section
+//   - UPDATED: Added "Against Invoice" link under Finance > Transaction section
 
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -32,6 +33,7 @@ import {
   HardDrive,
   BarChart2,
   Activity,
+  Receipt,
 } from 'lucide-react';
 
 import { useAuth } from '../providers/context/AuthContext';
@@ -39,19 +41,20 @@ import { useUserPermissions } from '../modules/user-management/hooks/useUserPerm
 
 // Map each screen name to its permission key (must match EXACT Screen type in userService.ts)
 const SCREEN_PERMISSIONS: Record<string, Screen> = {
-  'dashboard':         'Dashboard',
-  'reports':           'Sales Report',             // Reports link shown if any report permission exists
-  'add-transaction':   'Add Transaction',
-  'pending-payment':   'Pending Payments',
-  'bills':             'Bills List',
-  'salary':            'Salary Dashboard',
-  'banking-overview':  'Banking Dashboard',
-  'bank-accounts':     'Bank Accounts List',
-  'transfers':         'Bank Transfers List',
-  'cash-in-hand':      'Cash List',
-  'bank-activity':     'Bank Activity Report',     // ← NEW
-  'budgets':           'Budgets List',
-  'employees':         'Employees List',
+  'dashboard':              'Dashboard',
+  'reports':                'Sales Report',
+  'add-transaction':        'Add Transaction',
+  'pending-payment':        'Pending Payments',
+  'bills':                  'Bills List',
+  'salary':                 'Salary Dashboard',
+  'banking-overview':       'Banking Dashboard',
+  'bank-accounts':          'Bank Accounts List',
+  'transfers':              'Bank Transfers List',
+  'cash-in-hand':           'Cash List',
+  'bank-activity':          'Bank Activity Report',
+  'against-the-invoice':    'Invoices List',         // ← NEW: reuses invoice permission
+  'budgets':                'Budgets List',
+  'employees':              'Employees List',
 
   'inventory-entry':          'Inventory Dashboard',
   'invoices':                 'Invoices List',
@@ -114,10 +117,12 @@ export function Sidebar() {
           name: 'Transaction',
           icon: ArrowLeftRight,
           children: [
-            { id: 'add-transaction', name: ' Transaction', icon: PlusCircle,   path: '/transactions' },
-            { id: 'pending-payment', name: ' Pending Payment', icon: Clock,        path: '/transactions/pending' },
-            { id: 'bills',           name: ' Bills',           icon: FileTextIcon, path: '/bills' },
-            { id: 'salary',          name: ' Salary',          icon: DollarSign,   path: '/salary' },
+            { id: 'add-transaction',     name: ' Transaction',      icon: PlusCircle,   path: '/transactions' },
+            { id: 'pending-payment',     name: ' Pending Payment',  icon: Clock,        path: '/transactions/pending' },
+            { id: 'bills',               name: ' Bills',            icon: FileTextIcon, path: '/bills' },
+            { id: 'salary',              name: ' Salary',           icon: DollarSign,   path: '/salary' },
+            // ── NEW: Against the Invoice ──
+            { id: 'against-the-invoice', name: ' Against Invoice',  icon: Receipt,      path: '/against-the-invoice' },
           ],
         },
         {
@@ -125,12 +130,12 @@ export function Sidebar() {
           name: 'Banking',
           icon: Building2,
           children: [
-            { id: 'banking-overview', name: 'Overview',          icon: FileText,      path: '/banking' },
-            { id: 'bank-accounts',    name: 'Bank Accounts',     icon: Building2,     path: '/banking/banks' },
+            { id: 'banking-overview', name: 'Overview',          icon: FileText,       path: '/banking' },
+            { id: 'bank-accounts',    name: 'Bank Accounts',     icon: Building2,      path: '/banking/banks' },
             { id: 'transfers',        name: 'Bank Transfers',    icon: ArrowRightLeft, path: '/banking/transfers' },
-            { id: 'cash-in-hand',     name: 'Cash in Hand',      icon: Wallet,        path: '/banking/cash' },
-            // ── NEW: Bank Activity inside Banking section ──
-            { id: 'bank-activity',    name: 'Activity Report',   icon: Activity,      path: '/banking/activity' },
+            { id: 'cash-in-hand',     name: 'Cash in Hand',      icon: Wallet,         path: '/banking/cash' },
+            // ── Bank Activity inside Banking section ──
+            { id: 'bank-activity',    name: 'Activity Report',   icon: Activity,       path: '/banking/activity' },
           ],
         },
         { id: 'budgets', name: 'Budgets', icon: Banknote, path: '/budgets' },
@@ -141,10 +146,10 @@ export function Sidebar() {
       name: 'Operations',
       icon: Package,
       children: [
-        { id: 'employees',       name: 'Employees',         icon: Users,      path: '/employees' },
-        { id: 'inventory-entry', name: 'Inventory',         icon: Package,    path: '/inventory' },
-        { id: 'invoices',        name: 'Invoices',          icon: FileText,   path: '/invoices' },
-        { id: 'assets-management', name: 'Assets Management', icon: HardDrive, path: '/assets-management' },
+        { id: 'employees',         name: 'Employees',          icon: Users,      path: '/employees' },
+        { id: 'inventory-entry',   name: 'Inventory',          icon: Package,    path: '/inventory' },
+        { id: 'invoices',          name: 'Invoices',           icon: FileText,   path: '/invoices' },
+        { id: 'assets-management', name: 'Assets Management',  icon: HardDrive,  path: '/assets-management' },
       ],
     },
     {
@@ -152,9 +157,9 @@ export function Sidebar() {
       name: 'Loans',
       icon: HandCoins,
       children: [
-        { id: 'all-loans',  name: 'All Loans',  icon: FileText,    path: '/loans' },
+        { id: 'all-loans',  name: 'All Loans',  icon: FileText,     path: '/loans' },
         { id: 'payable',    name: 'Payable',    icon: TrendingDown, path: '/loans/payable' },
-        { id: 'receivable', name: 'Receivable', icon: TrendingUp,  path: '/loans/receivable' },
+        { id: 'receivable', name: 'Receivable', icon: TrendingUp,   path: '/loans/receivable' },
       ],
     },
     {
@@ -162,8 +167,8 @@ export function Sidebar() {
       name: 'Commission',
       icon: Percent,
       children: [
-        { id: 'commission-overview',  name: 'Overview',             icon: FileText,  path: '/commission' },
-        { id: 'commission-slabs',     name: 'Commission Slabs',     icon: Percent,   path: '/commission/slabs' },
+        { id: 'commission-overview',  name: 'Overview',             icon: FileText,   path: '/commission' },
+        { id: 'commission-slabs',     name: 'Commission Slabs',     icon: Percent,    path: '/commission/slabs' },
         { id: 'commission-calculate', name: 'Calculate Commission', icon: Calculator, path: '/commission/calculate' },
         { id: 'commission-reports',   name: 'Commission Reports',   icon: TrendingUp, path: '/commission/reports' },
       ],
@@ -185,7 +190,7 @@ export function Sidebar() {
       <NavLink
         key={nestedChild.id}
         to={nestedChild.path || '#'}
-className="w-full flex items-center gap-4 px-3 py-2 rounded-lg transition-all text-sm font-medium"
+        className="w-full flex items-center gap-4 px-3 py-2 rounded-lg transition-all text-sm font-medium"
         style={({ isActive }) => isActive
           ? { background: '#0f172a', color: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }
           : { color: '#6b7280' }
@@ -235,7 +240,7 @@ className="w-full flex items-center gap-4 px-3 py-2 rounded-lg transition-all te
         <NavLink
           key={child.id}
           to={child.path || '#'}
-        className="w-full flex items-center gap-4 px-3 py-2 rounded-lg transition-all text-sm font-medium"
+          className="w-full flex items-center gap-4 px-3 py-2 rounded-lg transition-all text-sm font-medium"
           style={({ isActive }) => isActive
             ? { background: '#0f172a', color: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }
             : { color: '#6b7280' }

@@ -35,3 +35,6 @@ export { InvoiceListWrapper }   from './views/InvoiceListWrapper';
 export { InvoiceFormWrapper }   from './views/InvoiceFormWrapper';
 export { InvoiceDeleteWrapper } from './views/InvoiceDeleteWrapper';
 export { InvoiceReportWrapper } from './views/InvoiceReportWrapper';
+
+// ── Against the Invoice ───────────────────────────────────────
+export { AgainstInvoiceWrapper } from '../against-the-invoice/index';
