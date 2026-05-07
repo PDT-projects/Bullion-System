@@ -147,18 +147,18 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                 <div style={{
                   width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontWeight: 700, fontSize: 13, flexShrink: 0,
-                  backgroundColor: done || active ? '#4f46e5' : '#e5e7eb',
+                  backgroundColor: done || active ? '#0f172a' : '#e5e7eb',
                   color: done || active ? '#fff' : '#9ca3af',
-                  boxShadow: active ? '0 0 0 4px rgba(79,70,229,0.18)' : 'none',
+                  boxShadow: active ? '0 0 0 4px rgba(15,23,42,0.12)' : 'none',
                 }}>
                   {done ? '✓' : step.n}
                 </div>
-                <span style={{ marginTop: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: done || active ? '#4f46e5' : '#94a3b8', whiteSpace: 'nowrap' as const }}>
+                <span style={{ marginTop: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: done || active ? '#0f172a' : '#94a3b8', whiteSpace: 'nowrap' as const }}>
                   {step.l}
                 </span>
               </div>
               {!last && (
-                <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 8px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb' }} />
+                <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 8px', marginBottom: 20, backgroundColor: done ? '#0f172a' : '#e5e7eb' }} />
               )}
             </React.Fragment>
           );
@@ -561,7 +561,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
           <button onClick={handleBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
             <ArrowLeft size={16} /> Back
           </button>
-          <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Package size={17} color="#fff" />
           </div>
           <div>

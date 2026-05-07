@@ -153,7 +153,7 @@ export function BrandModelSelector({
   if (isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9fafb' }}>
-        <Loader2 size={16} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
+        <Loader2 size={16} color="#334155" style={{ animation: 'spin 1s linear infinite' }} />
         <span style={{ fontSize: 13, color: '#6b7280' }}>Loading brands…</span>
       </div>
     );
@@ -177,7 +177,7 @@ export function BrandModelSelector({
               value={newBrandName}
               onChange={e => setNewBrandName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleSaveNewBrand(); if (e.key === 'Escape') setAddingBrand(false); }}
-              style={{ flex: 1, padding: '10px 12px', border: '2px solid #6366f1', borderRadius: 8, fontSize: 14, outline: 'none' }}
+              style={{ flex: 1, padding: '10px 12px', border: '2px solid #334155', borderRadius: 8, fontSize: 14, outline: 'none' }}
               placeholder="Enter new brand name…"
             />
             <button
@@ -186,7 +186,7 @@ export function BrandModelSelector({
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '8px 14px', borderRadius: 8, border: 'none',
-                backgroundColor: isSavingBrand ? '#a5b4fc' : '#4f46e5',
+                backgroundColor: isSavingBrand ? '#94a3b8' : '#0f172a',
                 color: '#fff', cursor: isSavingBrand ? 'not-allowed' : 'pointer',
                 fontSize: 13, fontWeight: 600,
               }}
@@ -238,7 +238,7 @@ export function BrandModelSelector({
                 value={newModelName}
                 onChange={e => setNewModelName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleSaveNewModel(); if (e.key === 'Escape') setAddingModel(false); }}
-                style={{ flex: 1, padding: '10px 12px', border: '2px solid #6366f1', borderRadius: 8, fontSize: 14, outline: 'none' }}
+                style={{ flex: 1, padding: '10px 12px', border: '2px solid #334155', borderRadius: 8, fontSize: 14, outline: 'none' }}
                 placeholder={`New model for ${selectedBrand?.name}…`}
               />
               <button
@@ -247,7 +247,7 @@ export function BrandModelSelector({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 5,
                   padding: '8px 14px', borderRadius: 8, border: 'none',
-                  backgroundColor: isSavingModel ? '#a5b4fc' : '#4f46e5',
+                  backgroundColor: isSavingModel ? '#94a3b8' : '#0f172a',
                   color: '#fff', cursor: isSavingModel ? 'not-allowed' : 'pointer',
                   fontSize: 13, fontWeight: 600,
                 }}
@@ -287,10 +287,10 @@ export function BrandModelSelector({
             const m = modelList.find(m => m.id === selectedModelId);
             if (!m) return null;
             return (
-              <div style={{ marginTop: 6, padding: '6px 10px', backgroundColor: '#eef2ff', borderRadius: 6, fontSize: 12, color: '#4338ca', fontWeight: 600 }}>
+              <div style={{ marginTop: 6, padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: 6, fontSize: 12, color: '#1e293b', fontWeight: 600 }}>
                 ✓ {selectedBrand?.name} — {m.name}
                 {(m.costPrice || m.sellPrice) && (
-                  <span style={{ marginLeft: 8, fontWeight: 400, color: '#6366f1' }}>
+                  <span style={{ marginLeft: 8, fontWeight: 400, color: '#334155' }}>
                     {m.costPrice ? `Cost: PKR ${m.costPrice.toLocaleString()}` : ''}
                     {m.costPrice && m.sellPrice ? ' · ' : ''}
                     {m.sellPrice ? `Sell: PKR ${m.sellPrice.toLocaleString()}` : ''}

@@ -67,7 +67,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
         </div>
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#4f46e5] text-white rounded-lg font-semibold hover:bg-[#4338ca] active:bg-[#3730a3] transition-colors shadow-sm"
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#0f172a] text-white rounded-lg font-semibold hover:bg-[#1e293b] active:bg-[#1e293b] transition-colors shadow-sm"
         >
           <Plus size={18} /> New Transfer
         </button>

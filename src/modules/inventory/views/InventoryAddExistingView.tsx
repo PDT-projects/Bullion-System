@@ -34,7 +34,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
         <div style={{ textAlign: 'center' }}>
-          <Loader2 size={36} color="#6366f1" style={{ animation: 'spin 1s linear infinite', marginBottom: 12 }} />
+          <Loader2 size={36} color="#334155" style={{ animation: 'spin 1s linear infinite', marginBottom: 12 }} />
           <p style={{ fontSize: 13, color: '#6b7280' }}>Loading products...</p>
         </div>
       </div>
@@ -101,8 +101,8 @@ export const InventoryAddExistingView: React.FC<Props> = ({
               Object.entries(grouped).map(([brand, prods]) => (
                 <div key={brand}>
                   <div style={{ padding: '8px 16px', backgroundColor: '#f8fafc', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Package size={12} color="#6366f1" />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{brand}</span>
+                    <Package size={12} color="#334155" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{brand}</span>
                   </div>
                   {prods.map(product => {
                     const sel = selectedProduct?.id === product.id;
@@ -113,15 +113,15 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                         style={{
                           width: '100%', textAlign: 'left', padding: '10px 16px', cursor: 'pointer', border: 'none',
                           borderBottom: '1px solid #f8fafc',
-                          backgroundColor: sel ? '#eef2ff' : '#fff',
-                          borderLeft: sel ? '3px solid #4f46e5' : '3px solid transparent',
+                          backgroundColor: sel ? '#f1f5f9' : '#fff',
+                          borderLeft: sel ? '3px solid #0f172a' : '3px solid transparent',
                           transition: 'all 0.15s',
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 600, color: sel ? '#3730a3' : '#111827' }}>{product.modelName}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: sel ? '#1e293b' : '#111827' }}>{product.modelName}</div>
                         <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
                           <span style={{ fontSize: 11, color: '#6b7280' }}>Stock: {product.stock}</span>
-                          {product.location && <span style={{ fontSize: 11, color: '#6366f1' }}>📍 {product.location}</span>}
+                          {product.location && <span style={{ fontSize: 11, color: '#334155' }}>📍 {product.location}</span>}
                           <span style={{ fontSize: 11, color: '#9ca3af' }}>{formatCurrency(product.sellPrice)}</span>
                         </div>
                       </button>
@@ -144,9 +144,9 @@ export const InventoryAddExistingView: React.FC<Props> = ({
             <div style={{ maxWidth: 560, margin: '0 auto' }}>
 
               {/* Banner */}
-              <div style={{ backgroundColor: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#3730a3' }}>{entry.brandName} — {entry.modelName}</div>
-                <div style={{ fontSize: 11, color: '#6366f1', marginTop: 2 }}>Current stock: {entry.currentStock} units</div>
+              <div style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{entry.brandName} — {entry.modelName}</div>
+                <div style={{ fontSize: 11, color: '#334155', marginTop: 2 }}>Current stock: {entry.currentStock} units</div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -173,7 +173,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                 {entry.addQty > 0 && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                      <Hash size={14} color="#6366f1" />
+                      <Hash size={14} color="#334155" />
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Serial Numbers ({entry.addQty} required)</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 260, overflowY: 'auto' }}>

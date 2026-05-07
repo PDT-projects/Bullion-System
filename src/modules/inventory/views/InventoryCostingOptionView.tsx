@@ -27,18 +27,18 @@ const Stepper = ({ current }: { current: number }) => (
               <div style={{
                 width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 700, fontSize: 13, flexShrink: 0,
-                backgroundColor: done || active ? '#4f46e5' : '#e5e7eb',
+                backgroundColor: done || active ? '#0f172a' : '#e5e7eb',
                 color: done || active ? '#fff' : '#9ca3af',
-                boxShadow: active ? '0 0 0 4px rgba(79,70,229,0.18)' : 'none',
+                boxShadow: active ? '0 0 0 4px rgba(15,23,42,0.12)' : 'none',
               }}>
                 {done ? <Check size={14} strokeWidth={3} /> : step.number}
               </div>
-              <span style={{ marginTop: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: done || active ? '#4f46e5' : '#94a3b8', whiteSpace: 'nowrap' }}>
+              <span style={{ marginTop: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: done || active ? '#0f172a' : '#94a3b8', whiteSpace: 'nowrap' }}>
                 {step.label}
               </span>
             </div>
             {!last && (
-              <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 8px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb', transition: 'background-color 0.3s' }} />
+              <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 8px', marginBottom: 20, backgroundColor: done ? '#0f172a' : '#e5e7eb', transition: 'background-color 0.3s' }} />
             )}
           </React.Fragment>
         );
@@ -58,7 +58,7 @@ export const InventoryCostingOptionView: React.FC<InventoryCostingOptionViewProp
         <button onClick={handleBack} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0 }}>
           <ArrowLeft size={17} />
         </button>
-        <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Calculator size={17} color="#fff" />
         </div>
         <div>
@@ -78,10 +78,10 @@ export const InventoryCostingOptionView: React.FC<InventoryCostingOptionViewProp
         {[
           {
             opt: 'with' as const,
-            icon: Calculator, iconColor: '#4f46e5', activeBorder: '#6366f1', activeBg: '#eef2ff', activeIconBg: '#e0e7ff', activeGlow: 'rgba(99,102,241,0.15)',
-            activeCheck: '#4f46e5', title: 'With Costing', sub: 'Detailed breakdown',
+            icon: Calculator, iconColor: '#0f172a', activeBorder: '#334155', activeBg: '#f1f5f9', activeIconBg: '#e2e8f0', activeGlow: 'rgba(15,23,42,0.08)',
+            activeCheck: '#0f172a', title: 'With Costing', sub: 'Detailed breakdown',
             desc: 'Include detailed cost breakdown with USD rate, customs, freight expenses, and full payment tracking per shipment.',
-            badge: '● Full Tracking', badgeBg: '#e0e7ff', badgeColor: '#4338ca',
+            badge: '● Full Tracking', badgeBg: '#e2e8f0', badgeColor: '#1e293b',
           },
           {
             opt: 'without' as const,

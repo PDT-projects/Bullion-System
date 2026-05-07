@@ -33,17 +33,17 @@ const Stepper = ({ current }: { current: number }) => (
                 width: 34, height: 34, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 700, fontSize: 13,
-                backgroundColor: done || active ? '#4f46e5' : '#e5e7eb',
+                backgroundColor: done || active ? '#0f172a' : '#e5e7eb',
                 color: done || active ? '#fff' : '#9ca3af',
-                boxShadow: active ? '0 0 0 4px rgba(79,70,229,0.18)' : 'none',
+                boxShadow: active ? '0 0 0 4px rgba(15,23,42,0.12)' : 'none',
               }}>
                 {done ? <Check size={14} strokeWidth={3} /> : step.n}
               </div>
-              <span style={{ marginTop: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: done || active ? '#4f46e5' : '#94a3b8', whiteSpace: 'nowrap' }}>
+              <span style={{ marginTop: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: done || active ? '#0f172a' : '#94a3b8', whiteSpace: 'nowrap' }}>
                 {step.label}
               </span>
             </div>
-            {!last && <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 8px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb' }} />}
+            {!last && <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 8px', marginBottom: 20, backgroundColor: done ? '#0f172a' : '#e5e7eb' }} />}
           </React.Fragment>
         );
       })}
@@ -79,7 +79,7 @@ function SerialPanel({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Hash size={14} color="#6366f1" />
+          <Hash size={14} color="#334155" />
           <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
             Serial Numbers — {filled}/{entry.stockQty} entered
           </span>
@@ -149,9 +149,9 @@ function ModelCard({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{
-            width: 28, height: 28, borderRadius: 8, backgroundColor: '#eef2ff',
+            width: 28, height: 28, borderRadius: 8, backgroundColor: '#f1f5f9',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 800, color: '#4f46e5',
+            fontSize: 12, fontWeight: 800, color: '#0f172a',
           }}>
             {index + 1}
           </div>
@@ -272,9 +272,9 @@ function ModelCard({
             {STATUSES.map(s => (
               <button key={s} onClick={() => updateEntry(e.id, { status: s })}
                 style={{
-                  flex: 1, padding: '8px 6px', borderRadius: 7, border: `2px solid ${e.status === s ? '#4f46e5' : '#e2e8f0'}`,
-                  backgroundColor: e.status === s ? '#eef2ff' : '#fff', cursor: 'pointer',
-                  fontSize: 11, fontWeight: 700, color: e.status === s ? '#4f46e5' : '#6b7280',
+                  flex: 1, padding: '8px 6px', borderRadius: 7, border: `2px solid ${e.status === s ? '#0f172a' : '#e2e8f0'}`,
+                  backgroundColor: e.status === s ? '#f1f5f9' : '#fff', cursor: 'pointer',
+                  fontSize: 11, fontWeight: 700, color: e.status === s ? '#0f172a' : '#6b7280',
                   transition: 'all 0.15s',
                 }}>
                 {s}
@@ -383,10 +383,10 @@ export const InventoryMultiModelView: React.FC<Props> = ({
           {/* Brand selector */}
           <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <Package size={16} color="#4f46e5" />
+              <Package size={16} color="#0f172a" />
               <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Brand *</span>
               {selectedBrandName && (
-                <span style={{ padding: '3px 10px', borderRadius: 99, backgroundColor: '#eef2ff', color: '#4f46e5', fontSize: 12, fontWeight: 700 }}>
+                <span style={{ padding: '3px 10px', borderRadius: 99, backgroundColor: '#f1f5f9', color: '#0f172a', fontSize: 12, fontWeight: 700 }}>
                   {selectedBrandName}
                 </span>
               )}
@@ -408,9 +408,9 @@ export const InventoryMultiModelView: React.FC<Props> = ({
                   onChange={e => setNewBrandName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') applyNewBrand(); if (e.key === 'Escape') setAddingBrand(false); }}
                   placeholder="Type new brand name…"
-                  style={{ ...inp, flex: 1, border: '2px solid #6366f1' }}
+                  style={{ ...inp, flex: 1, border: '2px solid #334155' }}
                 />
-                <button onClick={applyNewBrand} style={{ padding: '9px 16px', borderRadius: 8, backgroundColor: '#4f46e5', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>Use</button>
+                <button onClick={applyNewBrand} style={{ padding: '9px 16px', borderRadius: 8, backgroundColor: '#0f172a', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>Use</button>
                 <button onClick={() => setAddingBrand(false)} style={{ padding: '9px 14px', borderRadius: 8, backgroundColor: '#fff', color: '#374151', border: '1px solid #d1d5db', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
               </div>
             ) : (
@@ -433,7 +433,7 @@ export const InventoryMultiModelView: React.FC<Props> = ({
                   </select>
                 )}
                 <button onClick={() => setAddingBrand(true)}
-                  style={{ padding: '9px 14px', borderRadius: 8, border: '1px dashed #6366f1', backgroundColor: '#f5f3ff', color: '#4f46e5', cursor: 'pointer', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap' }}>
+                  style={{ padding: '9px 14px', borderRadius: 8, border: '1px dashed #334155', backgroundColor: '#f5f3ff', color: '#0f172a', cursor: 'pointer', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap' }}>
                   <Plus size={14} style={{ display: 'inline', marginRight: 4 }} />
                   Add new brand…
                 </button>
@@ -463,8 +463,8 @@ export const InventoryMultiModelView: React.FC<Props> = ({
             onClick={addEntry}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '14px', borderRadius: 12, border: '2px dashed #c7d2fe',
-              backgroundColor: '#f5f3ff', cursor: 'pointer', color: '#4f46e5',
+              padding: '14px', borderRadius: 12, border: '2px dashed #cbd5e1',
+              backgroundColor: '#f5f3ff', cursor: 'pointer', color: '#0f172a',
               fontWeight: 700, fontSize: 13, transition: 'all 0.2s',
             }}
           >
@@ -472,17 +472,17 @@ export const InventoryMultiModelView: React.FC<Props> = ({
           </button>
 
           {/* Grand total summary */}
-          <div style={{ backgroundColor: '#1e1b4b', borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 32 }}>
+          <div style={{ backgroundColor: '#0f172a', borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 32 }}>
             <div>
-              <div style={{ fontSize: 11, color: '#a5b4fc', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Models</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Models</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginTop: 2 }}>{entries.length}</div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: '#a5b4fc', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Units</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Units</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginTop: 2 }}>{grandTotalUnits}</div>
             </div>
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: '#a5b4fc', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grand Total Cost</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grand Total Cost</div>
               <div style={{ fontSize: 26, fontWeight: 900, color: '#a5f3fc', marginTop: 2 }}>{formatCurrency(grandTotalCost)}</div>
             </div>
           </div>
@@ -499,9 +499,9 @@ export const InventoryMultiModelView: React.FC<Props> = ({
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '11px 26px',
                 borderRadius: 9, border: 'none', cursor: isSaving ? 'not-allowed' : 'pointer',
-                backgroundColor: isSaving ? '#c7d2fe' : '#4f46e5',
+                backgroundColor: isSaving ? '#cbd5e1' : '#0f172a',
                 color: '#fff', fontWeight: 800, fontSize: 14,
-                boxShadow: isSaving ? 'none' : '0 2px 10px rgba(79,70,229,0.35)',
+                boxShadow: isSaving ? 'none' : '0 2px 10px rgba(15,23,42,0.25)',
                 opacity: isSaving ? 0.7 : 1, transition: 'all 0.2s',
               }}
             >

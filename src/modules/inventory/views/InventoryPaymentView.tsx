@@ -35,17 +35,17 @@ const Stepper = ({ steps, current }: { steps: { number: number; label: string }[
                 width: 34, height: 34, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 700, fontSize: 13,
-                backgroundColor: done || active ? '#4f46e5' : '#e5e7eb',
+                backgroundColor: done || active ? '#0f172a' : '#e5e7eb',
                 color: done || active ? '#fff' : '#9ca3af',
-                boxShadow: active ? '0 0 0 4px rgba(79,70,229,0.18)' : 'none',
+                boxShadow: active ? '0 0 0 4px rgba(15,23,42,0.12)' : 'none',
               }}>
                 {done ? <Check size={14} strokeWidth={3} /> : step.number}
               </div>
-              <span style={{ marginTop: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: done || active ? '#4f46e5' : '#94a3b8', whiteSpace: 'nowrap' }}>
+              <span style={{ marginTop: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: done || active ? '#0f172a' : '#94a3b8', whiteSpace: 'nowrap' }}>
                 {step.label}
               </span>
             </div>
-            {!last && <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 6px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb' }} />}
+            {!last && <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 6px', marginBottom: 20, backgroundColor: done ? '#0f172a' : '#e5e7eb' }} />}
           </React.Fragment>
         );
       })}
@@ -67,7 +67,7 @@ function PaymentModeToggle({
     <div style={{ display: 'flex', gap: 10 }}>
       {([
         { value: 'cash' as const,  label: 'Cash',          Icon: Banknote,  color: '#16a34a', bg: '#f0fdf4', border: '#22c55e' },
-        { value: 'bank' as const,  label: 'Bank Transfer',  Icon: Building2, color: '#2563eb', bg: '#eff6ff', border: '#3b82f6' },
+        { value: 'bank' as const,  label: 'Bank Transfer',  Icon: Building2, color: '#0f172a', bg: '#f1f5f9', border: '#334155' },
       ]).map(({ value, label, Icon, color, bg, border }) => {
         const sel = mode === value;
         return (
@@ -101,7 +101,7 @@ function BankSelector({ banks, value, onChange, error, isBanksLoading }: {
       </label>
       {isBanksLoading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-          <Loader2 size={14} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
+          <Loader2 size={14} color="#334155" style={{ animation: 'spin 1s linear infinite' }} />
           <span style={{ fontSize: 12, color: '#6b7280' }}>Loading bank accounts…</span>
         </div>
       ) : (
@@ -149,10 +149,10 @@ function InventoryBranchSelector({ branches, inventoryCompany, setInventoryCompa
           <button key={branch} onClick={() => setInventoryCompany(val)}
             style={{
               padding: '10px 18px', borderRadius: 8, cursor: 'pointer',
-              border: `2px solid ${sel ? '#4f46e5' : '#e2e8f0'}`,
-              backgroundColor: sel ? '#eef2ff' : '#fff', transition: 'all 0.15s',
+              border: `2px solid ${sel ? '#0f172a' : '#e2e8f0'}`,
+              backgroundColor: sel ? '#f1f5f9' : '#fff', transition: 'all 0.15s',
             }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: sel ? '#4338ca' : '#374151' }}>{branch}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: sel ? '#1e293b' : '#374151' }}>{branch}</span>
           </button>
         );
       })}
@@ -161,10 +161,10 @@ function InventoryBranchSelector({ branches, inventoryCompany, setInventoryCompa
           <input ref={inputRef} type="text" value={newBranch}
             onChange={e => setNewBranch(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setAddingNew(false); }}
-            style={{ padding: '8px 12px', border: '2px solid #6366f1', borderRadius: 8, fontSize: 13, outline: 'none', width: 160 }}
+            style={{ padding: '8px 12px', border: '2px solid #334155', borderRadius: 8, fontSize: 13, outline: 'none', width: 160 }}
             placeholder="Branch name…" />
           <button onClick={save} disabled={saving || !newBranch.trim()}
-            style={{ padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            style={{ padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#0f172a', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
             {saving ? '…' : 'Save'}
           </button>
           <button onClick={() => setAddingNew(false)}
@@ -174,8 +174,8 @@ function InventoryBranchSelector({ branches, inventoryCompany, setInventoryCompa
         </div>
       ) : (
         <button onClick={() => setAddingNew(true)}
-          style={{ padding: '10px 18px', borderRadius: 8, cursor: 'pointer', border: '2px dashed #c7d2fe', backgroundColor: '#fff', transition: 'all 0.15s' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#6366f1' }}>➕ Add New</span>
+          style={{ padding: '10px 18px', borderRadius: 8, cursor: 'pointer', border: '2px dashed #cbd5e1', backgroundColor: '#fff', transition: 'all 0.15s' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>➕ Add New</span>
         </button>
       )}
     </div>
@@ -192,11 +192,11 @@ function MultiModelSummaryTable({
   return (
     <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <Package size={16} color="#4f46e5" />
+        <Package size={16} color="#0f172a" />
         <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
           Shipment Breakdown — {entries.length} Model{entries.length > 1 ? 's' : ''}
         </span>
-        <span style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 99, backgroundColor: '#eef2ff', color: '#4f46e5', fontSize: 12, fontWeight: 700 }}>
+        <span style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 99, backgroundColor: '#f1f5f9', color: '#0f172a', fontSize: 12, fontWeight: 700 }}>
           {totalUnits} total units
         </span>
       </div>
@@ -220,14 +220,14 @@ function MultiModelSummaryTable({
                 </td>
                 <td style={{ padding: '10px 12px', color: '#374151' }}>{formatCurrency(e.costPrice)}</td>
                 <td style={{ padding: '10px 12px', color: '#16a34a', fontWeight: 600 }}>{formatCurrency(e.salePrice)}</td>
-                <td style={{ padding: '10px 12px', color: '#6366f1', fontSize: 12 }}>{e.location || '—'}</td>
+                <td style={{ padding: '10px 12px', color: '#334155', fontSize: 12 }}>{e.location || '—'}</td>
                 <td style={{ padding: '10px 12px', fontWeight: 700, color: '#111827' }}>{formatCurrency(e.costPrice * e.quantity)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr style={{ backgroundColor: '#1e1b4b' }}>
-              <td colSpan={2} style={{ padding: '12px 12px', color: '#a5b4fc', fontWeight: 700, fontSize: 12 }}>TOTAL</td>
+            <tr style={{ backgroundColor: '#0f172a' }}>
+              <td colSpan={2} style={{ padding: '12px 12px', color: '#94a3b8', fontWeight: 700, fontSize: 12 }}>TOTAL</td>
               <td style={{ padding: '12px 12px', color: '#fff', fontWeight: 800, textAlign: 'center' }}>{totalUnits}</td>
               <td colSpan={3} />
               <td style={{ padding: '12px 12px', color: '#a5f3fc', fontWeight: 900, fontSize: 15 }}>{formatCurrency(totalCost)}</td>
@@ -324,7 +324,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
             <ArrowLeft size={16} /> Back
           </button>
-          <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <CreditCard size={17} color="#fff" />
           </div>
           <div>
@@ -370,14 +370,14 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>Transaction ID</label>
             {isGeneratingId ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                <Loader2 size={16} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
+                <Loader2 size={16} color="#334155" style={{ animation: 'spin 1s linear infinite' }} />
                 <span style={{ fontSize: 13, color: '#6b7280' }}>Generating transaction ID...</span>
               </div>
             ) : isEditingTransactionId ? (
               <div style={{ display: 'flex', gap: 8 }}>
                 <input type="text" value={transactionId}
                   onChange={e => setTransactionId(e.target.value.toUpperCase())} autoFocus
-                  style={{ ...inp, flex: 1, border: `1px solid ${validationErrors.transactionId ? '#ef4444' : '#6366f1'}`, fontFamily: 'monospace', fontWeight: 600 }}
+                  style={{ ...inp, flex: 1, border: `1px solid ${validationErrors.transactionId ? '#ef4444' : '#334155'}`, fontFamily: 'monospace', fontWeight: 600 }}
                   placeholder="e.g. TXN-280426-001" />
                 <button onClick={() => setIsEditingTransactionId(false)} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#22c55e', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                   <Check size={16} />
@@ -388,8 +388,8 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
               </div>
             ) : (
               <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8 }}>
-                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: '#4338ca', letterSpacing: '0.05em' }}>{transactionId}</span>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: '#1e293b', letterSpacing: '0.05em' }}>{transactionId}</span>
                   <span style={{ fontSize: 10, color: '#818cf8', fontWeight: 600 }}>AUTO-GENERATED</span>
                 </div>
                 <button onClick={() => setIsEditingTransactionId(true)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#6b7280' }}>
@@ -477,7 +477,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                   <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Split payment across accounts or dates</div>
                 </div>
                 <button onClick={addInstallment}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: 'none', backgroundColor: '#0f172a', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                   <Plus size={14} /> Add Entry
                 </button>
               </div>
@@ -582,7 +582,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                   ) : paymentMode === 'cash' ? (
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a' }}>💵 Cash</span>
                   ) : (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>
                       🏦 {banks.find(b => b.id === selectedBankId)?.name || 'Bank Transfer'}
                     </span>
                   )}
@@ -592,8 +592,8 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
 
             {/* Product summary (single-model only) */}
             {!isMultiModel && (
-              <div style={{ backgroundColor: '#eef2ff', borderRadius: 12, border: '1px solid #c7d2fe', padding: '20px 24px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#3730a3', marginBottom: 14 }}>Product Summary</div>
+              <div style={{ backgroundColor: '#f1f5f9', borderRadius: 12, border: '1px solid #cbd5e1', padding: '20px 24px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 14 }}>Product Summary</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 8px' }}>
                   {[
                     ['Brand',    productSummary.brandName],
@@ -606,15 +606,15 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                     ['Type',     inventoryType === 'in-stock' ? 'In-Stock' : 'On-Order'],
                   ].map(([l, v]) => (
                     <div key={l}>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</span>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#1e1b4b', marginTop: 2 }}>{v}</div>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</span>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{v}</div>
                     </div>
                   ))}
                 </div>
                 {productSummary.location && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid #c7d2fe' }}>
-                    <MapPin size={13} color="#6366f1" />
-                    <span style={{ fontSize: 12, color: '#4338ca', fontWeight: 700 }}>{productSummary.location}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid #cbd5e1' }}>
+                    <MapPin size={13} color="#334155" />
+                    <span style={{ fontSize: 12, color: '#1e293b', fontWeight: 700 }}>{productSummary.location}</span>
                   </div>
                 )}
               </div>
@@ -631,11 +631,11 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
               disabled={!isValid || isSaving || isGeneratingId}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '12px 30px', borderRadius: 9, border: 'none',
-                backgroundColor: !isValid ? '#e5e7eb' : '#4f46e5',
+                backgroundColor: !isValid ? '#e5e7eb' : '#0f172a',
                 color: !isValid ? '#9ca3af' : '#fff',
                 fontWeight: 800, fontSize: 14,
                 cursor: (!isValid || isSaving || isGeneratingId) ? 'not-allowed' : 'pointer',
-                boxShadow: isValid ? '0 2px 12px rgba(79,70,229,0.4)' : 'none',
+                boxShadow: isValid ? '0 2px 12px rgba(15,23,42,0.25)' : 'none',
                 opacity: isSaving || isGeneratingId ? 0.8 : 1, transition: 'all 0.2s',
               }}>
               {isGeneratingId

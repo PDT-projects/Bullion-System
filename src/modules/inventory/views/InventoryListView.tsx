@@ -108,7 +108,7 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
     <div style={{ borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-        <CreditCard size={14} color="#4f46e5" />
+        <CreditCard size={14} color="#0f172a" />
         <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Payment Details</span>
         <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, backgroundColor: '#fff', border: `1px solid ${statusColor[pi.paymentStatus] || '#e2e8f0'}`, color: statusColor[pi.paymentStatus] || '#374151' }}>
           {pi.paymentStatus?.charAt(0).toUpperCase() + pi.paymentStatus?.slice(1)}
@@ -120,7 +120,7 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
         {pi.transactionId && (
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: '#6b7280' }}>Transaction ID</span>
-            <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4338ca' }}>{pi.transactionId}</span>
+            <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1e293b' }}>{pi.transactionId}</span>
           </div>
         )}
 
@@ -145,7 +145,7 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
             ) : pi.paymentMode === 'cash' ? (
               <span style={{ fontWeight: 700, color: '#16a34a' }}>💵 Cash in Hand</span>
             ) : (
-              <span style={{ fontWeight: 700, color: '#2563eb' }}>🏦 {pi.bankName || 'Bank Transfer'}</span>
+              <span style={{ fontWeight: 700, color: '#0f172a' }}>🏦 {pi.bankName || 'Bank Transfer'}</span>
             )}
           </div>
         )}
@@ -163,7 +163,7 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
                       <Banknote size={10} /> Cash
                     </span>
                   ) : (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#2563eb', fontWeight: 600 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#0f172a', fontWeight: 600 }}>
                       <Building2 size={10} /> {inst.bankName || 'Bank'}
                     </span>
                   )}
@@ -224,7 +224,7 @@ export function InventoryListView({
             <Plus size={20} /> Add Stock
           </button>
           <button onClick={onAddNew}
-            className="flex items-center gap-2 bg-gradient-to-r from-[#4f46e5] to-[#6366f1] text-white px-4 py-2 rounded-lg font-medium hover:from-[#4338ca] hover:to-[#4f46e5] transition-all shadow-md">
+            className="flex items-center gap-2 bg-gradient-to-r from-[#0f172a] to-[#334155] text-white px-4 py-2 rounded-lg font-medium hover:from-[#1e293b] hover:to-[#0f172a] transition-all shadow-md">
             <Plus size={20} /> New Product
           </button>
         </div>

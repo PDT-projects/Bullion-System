@@ -32,18 +32,18 @@ const Stepper = ({ current }: { current: number }) => (
               <div style={{
                 width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 700, fontSize: 13, flexShrink: 0,
-                backgroundColor: done || active ? '#4f46e5' : '#e5e7eb',
+                backgroundColor: done || active ? '#0f172a' : '#e5e7eb',
                 color: done || active ? '#fff' : '#9ca3af',
-                boxShadow: active ? '0 0 0 4px rgba(79,70,229,0.18)' : 'none',
+                boxShadow: active ? '0 0 0 4px rgba(15,23,42,0.12)' : 'none',
               }}>
                 {done ? <Check size={14} strokeWidth={3} /> : step.number}
               </div>
-              <span style={{ marginTop: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: done || active ? '#4f46e5' : '#94a3b8', whiteSpace: 'nowrap' }}>
+              <span style={{ marginTop: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: done || active ? '#0f172a' : '#94a3b8', whiteSpace: 'nowrap' }}>
                 {step.label}
               </span>
             </div>
             {!last && (
-              <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 6px', marginBottom: 20, backgroundColor: done ? '#4f46e5' : '#e5e7eb', transition: 'background-color 0.3s' }} />
+              <div style={{ flex: 1, height: 2, borderRadius: 99, margin: '0 6px', marginBottom: 20, backgroundColor: done ? '#0f172a' : '#e5e7eb', transition: 'background-color 0.3s' }} />
             )}
           </React.Fragment>
         );
@@ -144,10 +144,10 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
               disabled={isSaving || !isValid}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 8, border: 'none',
-                backgroundColor: isSaving || !isValid ? '#e5e7eb' : '#4f46e5',
+                backgroundColor: isSaving || !isValid ? '#e5e7eb' : '#0f172a',
                 color: isSaving || !isValid ? '#9ca3af' : '#fff',
                 fontWeight: 700, fontSize: 13, cursor: isSaving || !isValid ? 'not-allowed' : 'pointer',
-                boxShadow: isValid ? '0 2px 8px rgba(79,70,229,0.3)' : 'none',
+                boxShadow: isValid ? '0 2px 8px rgba(15,23,42,0.20)' : 'none',
               }}
             >
               {isSaving

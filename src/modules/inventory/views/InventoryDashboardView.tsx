@@ -20,7 +20,7 @@ export function InventoryDashboardView({
       title: 'Add New Inventory',
       description: 'Create a new product entry with optional costing information',
       icon: Plus,
-      iconColor: '#2563eb', iconBg: '#eff6ff', borderColor: '#bfdbfe', hoverBorder: '#3b82f6', hoverBg: '#eff6ff',
+      iconColor: '#0f172a', iconBg: '#f1f5f9', borderColor: '#cbd5e1', hoverBorder: '#334155', hoverBg: '#f1f5f9',
       onClick: onAddNewInventory,
     },
     {
@@ -41,7 +41,7 @@ export function InventoryDashboardView({
       title: 'View Inventory',
       description: 'Browse and manage all existing inventory items',
       icon: Boxes,
-      iconColor: '#7c3aed', iconBg: '#f5f3ff', borderColor: '#ddd6fe', hoverBorder: '#8b5cf6', hoverBg: '#f5f3ff',
+      iconColor: '#7c3aed', iconBg: '#f5f3ff', borderColor: '#e2e8f0', hoverBorder: '#8b5cf6', hoverBg: '#f5f3ff',
       onClick: onViewInventory,
     },
     {
@@ -58,7 +58,7 @@ export function InventoryDashboardView({
 
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-        <div style={{ width: 42, height: 42, borderRadius: 10, backgroundColor: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ width: 42, height: 42, borderRadius: 10, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Package size={22} color="#fff" />
         </div>
         <div>
