@@ -42,7 +42,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
     if (status === 'Received' || status === 'Completed')
       return `${base} bg-green-100 text-green-700`;
     if (status === 'In Transit')
-      return `${base} bg-blue-100 text-blue-700`;
+      return `${base} bg-slate-100 text-[#1e293b]`;
     if (status === 'Pending')
       return `${base} bg-amber-100 text-amber-700`;
     return `${base} bg-gray-100 text-gray-600`;
@@ -67,7 +67,15 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
         </div>
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#0f172a] text-white rounded-lg font-semibold hover:bg-[#1e293b] active:bg-[#1e293b] transition-colors shadow-sm"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '9px 18px', borderRadius: 8, border: 'none',
+            backgroundColor: '#0f172a', color: '#fff',
+            fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(15,23,42,0.3)', transition: 'background 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#1e293b'; }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0f172a'; }}
         >
           <Plus size={18} /> New Transfer
         </button>
@@ -78,7 +86,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
         {[
           { label: 'Total',      value: stats.totalTransfers,     color: 'bg-gray-50 border-gray-200',   text: 'text-gray-800' },
           { label: 'Pending',    value: stats.pendingTransfers,   color: 'bg-amber-50 border-amber-200', text: 'text-amber-700' },
-          { label: 'In Transit', value: stats.inTransitTransfers, color: 'bg-blue-50 border-blue-200',   text: 'text-blue-700' },
+          { label: 'In Transit', value: stats.inTransitTransfers, color: 'bg-blue-50 border-blue-200',   text: 'text-[#1e293b]' },
           { label: 'Received',   value: stats.receivedTransfers,  color: 'bg-green-50 border-green-200', text: 'text-green-700' },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-4 ${s.color}`}>
@@ -128,7 +136,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
 
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <Package className="w-4 h-4 text-slate-400 shrink-0" />
                         <span className="text-sm font-semibold text-gray-900">{t.productName}</span>
                       </div>
                     </td>
@@ -152,7 +160,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1 max-w-[180px]">
                         {(t.serialNumbers || []).slice(0, 2).map(s => (
-                          <span key={s} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-mono">
+                          <span key={s} className="px-1.5 py-0.5 bg-slate-50 text-[#1e293b] rounded text-xs font-mono">
                             {s}
                           </span>
                         ))}
@@ -180,7 +188,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                         {/* View details */}
                         <button
                           onClick={() => onView(t)}
-                          className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"
+                          className="p-2 text-[#334155] hover:bg-slate-50 rounded-lg transition-colors"
                           title="View details"
                         >
                           <Eye size={16} />
@@ -233,8 +241,8 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 rounded-lg">
-                  <ArrowRightLeft size={18} className="text-indigo-600" />
+                <div className="p-2 bg-slate-50 rounded-lg">
+                  <ArrowRightLeft size={18} className="text-[#0f172a]" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Transfer Details</h3>
@@ -262,8 +270,8 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
 
               {/* Product */}
               <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
-                <div className="p-2.5 bg-indigo-100 rounded-lg">
-                  <Package size={20} className="text-indigo-600" />
+                <div className="p-2.5 bg-slate-100 rounded-lg">
+                  <Package size={20} className="text-[#0f172a]" />
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Product</p>
@@ -322,7 +330,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                     {viewTransfer.serialNumbers.map(s => (
                       <span
                         key={s}
-                        className="px-2 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg text-xs font-mono"
+                        className="px-2 py-1 bg-slate-50 text-[#1e293b] border border-slate-200 rounded-lg text-xs font-mono"
                       >
                         {s}
                       </span>

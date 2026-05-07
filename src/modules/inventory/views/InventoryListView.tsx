@@ -48,12 +48,12 @@ function getDisplayLocation(product: Product): string {
 
 function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
-    'New':        'bg-blue-100 text-blue-800',
+    'New':        'bg-slate-100 text-[#1e293b]',
     'In Transit': 'bg-yellow-100 text-yellow-800',
     'Available':  'bg-green-100 text-green-800',
     'Sold':       'bg-gray-100 text-gray-800',
     'Damaged':    'bg-red-100 text-red-800',
-    'Returned':   'bg-purple-100 text-purple-800',
+    'Returned':   'bg-slate-100 text-[#1e293b]',
     'On-Order':   'bg-orange-100 text-orange-800',
   };
   return colors[status] || 'bg-gray-100 text-gray-800';
@@ -71,14 +71,14 @@ function PaymentModeBadge({ product }: { product: Product }) {
   }
   if (pi.installments?.length > 0) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-[#334155]">
         <CreditCard size={10} /> Mixed
       </span>
     );
   }
   if (pi.paymentMode === 'bank') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700" title={pi.bankName || ''}>
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-[#1e293b]" title={pi.bankName || ''}>
         <Building2 size={10} /> Bank
       </span>
     );
@@ -211,21 +211,50 @@ export function InventoryListView({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button onClick={toggleFilters}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all shadow-sm ${
-              showFilters ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}>
-            <Filter size={20} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={toggleFilters}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
+              cursor: 'pointer', border: 'none', transition: 'all 0.15s',
+              backgroundColor: showFilters ? '#0f172a' : '#f1f5f9',
+              color: showFilters ? '#fff' : '#374151',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+            }}
+            onMouseEnter={e => { if (!showFilters) e.currentTarget.style.backgroundColor = '#e2e8f0'; }}
+            onMouseLeave={e => { if (!showFilters) e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
+          >
+            <Filter size={16} />
             Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
           </button>
-          <button onClick={onAddToExisting}
-            className="flex items-center gap-2 bg-gray-100 text-black px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-all shadow-sm border border-gray-200">
-            <Plus size={20} /> Add Stock
+          <button
+            onClick={onAddToExisting}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
+              cursor: 'pointer', backgroundColor: '#f1f5f9', color: '#374151',
+              border: '1px solid #e2e8f0', transition: 'all 0.15s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#e2e8f0'; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
+          >
+            <Plus size={16} /> Add Stock
           </button>
-          <button onClick={onAddNew}
-            className="flex items-center gap-2 bg-gradient-to-r from-[#0f172a] to-[#334155] text-white px-4 py-2 rounded-lg font-medium hover:from-[#1e293b] hover:to-[#0f172a] transition-all shadow-md">
-            <Plus size={20} /> New Product
+          <button
+            onClick={onAddNew}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
+              cursor: 'pointer', backgroundColor: '#0f172a', color: '#fff',
+              border: 'none', transition: 'all 0.15s',
+              boxShadow: '0 2px 8px rgba(15,23,42,0.3)',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#1e293b'; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0f172a'; }}
+          >
+            <Plus size={16} /> New Product
           </button>
         </div>
       </div>
@@ -233,10 +262,10 @@ export function InventoryListView({
       {/* ── Stats ── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Products', value: stats.totalProducts, color: 'text-blue-600' },
+          { label: 'Total Products', value: stats.totalProducts, color: 'text-[#0f172a]' },
           { label: 'Total Stock',    value: stats.totalStock,    color: 'text-green-600' },
           { label: 'In Transit',     value: stats.inTransit,     color: 'text-yellow-600' },
-          { label: 'Available',      value: stats.available,     color: 'text-purple-600' },
+          { label: 'Available',      value: stats.available,     color: 'text-[#334155]' },
         ].map(s => (
           <div key={s.label} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
@@ -335,7 +364,7 @@ export function InventoryListView({
                   <td className="px-4 py-3 text-sm text-gray-600">{product.category}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                      <MapPin size={12} className="text-indigo-400 flex-shrink-0" />
+                      <MapPin size={12} className="text-slate-400 flex-shrink-0" />
                       <span className="truncate max-w-[100px]" title={getDisplayLocation(product)}>
                         {getDisplayLocation(product)}
                       </span>
@@ -364,7 +393,7 @@ export function InventoryListView({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => setViewProduct(product)}
-                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        className="p-1.5 text-gray-500 hover:text-[#0f172a] hover:bg-slate-50 rounded-lg transition-colors"
                         title="View details">
                         <Eye size={16} />
                       </button>
@@ -420,10 +449,10 @@ export function InventoryListView({
                   </div>
                 ))}
                 <div className="col-span-2 flex items-center gap-2 pt-2 border-t border-gray-100">
-                  <MapPin className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                  <MapPin className="w-4 h-4 text-[#334155] flex-shrink-0" />
                   <div>
                     <p className="text-xs text-gray-500">Primary Location</p>
-                    <p className="font-semibold text-indigo-700">{getDisplayLocation(viewProduct)}</p>
+                    <p className="font-semibold text-[#1e293b]">{getDisplayLocation(viewProduct)}</p>
                   </div>
                 </div>
               </div>
@@ -444,10 +473,10 @@ export function InventoryListView({
                         .sort(([a], [b]) => a.localeCompare(b))
                         .map(([city, serials]) => (
                           <div key={city} className="rounded-lg border border-gray-200 overflow-hidden">
-                            <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border-b border-indigo-100">
-                              <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-                              <span className="text-xs font-semibold text-indigo-700">{city}</span>
-                              <span className="ml-auto text-xs text-indigo-400">
+                            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
+                              <MapPin className="w-3.5 h-3.5 text-[#334155]" />
+                              <span className="text-xs font-semibold text-[#1e293b]">{city}</span>
+                              <span className="ml-auto text-xs text-slate-400">
                                 {serials.length} unit{serials.length !== 1 ? 's' : ''}
                               </span>
                             </div>
@@ -479,7 +508,7 @@ export function InventoryListView({
                 Close
               </button>
               <button onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-gray-900 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
+                className="flex items-center gap-2 px-4 py-2 bg-[#0f172a] text-gray-900 rounded-lg font-semibold hover:bg-[#1e293b] transition-colors shadow-sm">
                 <Edit2 size={16} /> Edit Product
               </button>
               {onReceiveProduct && (
