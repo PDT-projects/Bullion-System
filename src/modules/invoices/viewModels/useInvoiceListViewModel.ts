@@ -47,6 +47,10 @@ export interface Invoice {
   remainingAmount?: number;
   collectionMethod?: 'Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others';
   deductionCharges: number;
+  cargoAmount?: number;
+  customsAmount?: number;
+  agentDetails?: string;
+  agentAmount?: number;
   digitalStamp?: boolean;
   imageUrl?: string;
   paidBy?: string;
@@ -154,7 +158,7 @@ import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
 import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 
 // Canonical branch cities — normalise any casing/spacing variant to these
-const ALLOWED_CITIES = ['Islamabad', 'Karachi', 'Lahore'] as const;
+const ALLOWED_CITIES = ['Saudia', 'Chad'] as const;
 
 function normalizeCity(raw: string): string {
   if (!raw) return '';

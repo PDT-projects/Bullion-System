@@ -23,7 +23,7 @@ import {
   updateProductPrice, updateSerialNumber, getAvailableSerials,
   validateInvoice, calculateTotal,
   provinceCities as baseCities, salespersonLocations, deliveryStatuses,
-  collectionMethods, formatCurrency,
+  collectionMethods, formatCurrency, InvoiceCurrency,
 } from '../models/invoiceService';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
 import { generateInvoicePdf, downloadInvoicePdf } from '../models/invoicePdfService';
@@ -34,7 +34,7 @@ import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/Co
 import { createTransactionFromInvoice, TxCompany } from '../../transactions/models/TransactionBridgeService';
 
 // Default branches — always available even before Firestore loads
-export const DEFAULT_BRANCHES = ['Islamabad', 'Karachi', 'Lahore'];
+export const DEFAULT_BRANCHES = ['Saudia', 'Chad'];
 const COMPANY_PREFIX = 'Pakistan Detector Technologies Pvt. Ltd - ';
 
 export function makeBranchValue(branch: string): TxCompany {
@@ -83,6 +83,12 @@ export interface UseInvoiceFormViewModelReturn {
   setInvoiceCompany: (v: TxCompany) => void;
   branches: string[];
   handleAddBranch: (name: string) => Promise<void>;
+  // Salesperson locations (dynamic with Add New)
+  salespersonLocationsList: string[];
+  handleAddSalespersonLocation: (name: string) => Promise<void>;
+  // Multi-currency
+  selectedCurrencies: InvoiceCurrency[];
+  toggleCurrency: (c: InvoiceCurrency) => void;
 }
 
 // ── Sequential invoice number generator ───────────────────────────────────────
@@ -167,6 +173,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [customCities,     setCustomCities]     = useState<Record<string, string[]>>({});
   const [invoiceCompany,   setInvoiceCompany]   = useState<TxCompany>(makeBranchValue(DEFAULT_BRANCHES[0]));
   const [branches,         setBranches]         = useState<string[]>(DEFAULT_BRANCHES);
+  const [salespersonLocationsList, setSalespersonLocationsList] = useState<string[]>(salespersonLocations);
+  const [selectedCurrencies, setSelectedCurrencies] = useState<InvoiceCurrency[]>(['PKR']);
 
   const provinceCitiesMerged = useMemo(
     () => mergeCities(baseCities, customCities),
@@ -184,6 +192,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     paymentMode: 'Cash', paymentStatus: 'Full', paidAmount: 0,
     remainingAmount: 0, collectionMethod: 'Self Collection',
     deductionCharges: 0,
+    cargoAmount: 0, customsAmount: 0, agentDetails: '', agentAmount: 0,
     bankId: '', bankName: '', bankAccountNumber: '',
     chequeNumber: '', chequeBank: '', chequeDate: '',
     digitalStamp: false,
@@ -209,6 +218,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           bankList,
           invoiceNumber,
           branchSnap,
+          spLocSnap,
         ] = await Promise.all([
           loadCustomCities(),
           InventoryFirebaseService.fetchAllProducts().catch(err => {
@@ -225,12 +235,20 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           !id ? generateSequentialInvoiceNumber().catch(() => 'INV-DRAFT') : Promise.resolve(''),
           // Branches fetched in parallel — no longer a sequential bottleneck
           getDoc(doc(db, 'appConfig', 'branches')).catch(() => null),
+          // Salesperson locations
+          getDoc(doc(db, 'appConfig', 'salespersonLocations')).catch(() => null),
         ]);
 
         // Apply branches immediately — already loaded above
         if (branchSnap && branchSnap.exists()) {
           const saved = (branchSnap.data().list as string[]) || DEFAULT_BRANCHES;
           setBranches([...new Set([...DEFAULT_BRANCHES, ...saved])].sort());
+        }
+
+        // Apply salesperson locations
+        if (spLocSnap && spLocSnap.exists()) {
+          const saved = (spLocSnap.data().list as string[]) || salespersonLocations;
+          setSalespersonLocationsList([...new Set([...salespersonLocations, ...saved])].sort());
         }
 
         setCustomCities(customCitiesData);
@@ -307,7 +325,27 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     }
   }, [branches]);
 
-  // ── Custom city — add + persist immediately ───────────────────────────────
+  // ── Custom salesperson location — add + persist to Firestore ────────────────
+  const handleAddSalespersonLocation = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const updated = [...new Set([...salespersonLocationsList, trimmed])].sort();
+    setSalespersonLocationsList(updated);
+    try {
+      await setDoc(doc(db, 'appConfig', 'salespersonLocations'), { list: updated }, { merge: true });
+      toast.success(`Location "${trimmed}" saved`);
+    } catch (err: any) {
+      console.error('[SalespersonLocation] Firestore save failed:', err?.message);
+      toast.error('Location added locally but could not save to database');
+    }
+  }, [salespersonLocationsList]);
+
+  // ── Multi-currency toggle ────────────────────────────────────────────────────
+  const toggleCurrency = useCallback((c: InvoiceCurrency) => {
+    setSelectedCurrencies(prev =>
+      prev.includes(c) ? (prev.length > 1 ? prev.filter(x => x !== c) : prev) : [...prev, c]
+    );
+  }, []);
   const handleAddCustomCity = useCallback(async (province: string, city: string) => {
     const trimmed = city.trim();
     if (!trimmed || !province) return;
@@ -534,6 +572,10 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         remainingAmount:        formData.paymentStatus === 'Full' ? 0    : formData.remainingAmount,
         collectionMethod:       formData.collectionMethod,
         deductionCharges:       formData.deductionCharges || 0,
+        cargoAmount:            formData.cargoAmount      || 0,
+        customsAmount:          formData.customsAmount    || 0,
+        agentDetails:           formData.agentDetails     || '',
+        agentAmount:            formData.agentAmount      || 0,
         digitalStamp:           formData.digitalStamp,
         branch:                 branchFromValue(invoiceCompany),  // used in PDF header
       };
@@ -630,7 +672,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     formData, selectedProducts, customerSuggestions, showSuggestions,
     isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
     provinceCities: provinceCitiesMerged,
-    salespersonLocations,
+    salespersonLocations: salespersonLocationsList,
     deliveryStatuses: deliveryStatuses as string[],
     collectionMethods: collectionMethods as string[],
     availableProducts: allProducts, activeEmployees, banks,
@@ -643,5 +685,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     formatCurrency,
     invoiceCompany, setInvoiceCompany,
     branches, handleAddBranch,
+    salespersonLocationsList,
+    handleAddSalespersonLocation,
+    selectedCurrencies, toggleCurrency,
   };
 }

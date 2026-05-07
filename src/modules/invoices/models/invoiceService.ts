@@ -19,7 +19,16 @@ export const provinceCities: ProvinceCities = {
   'Azad Kashmir': ['Muzaffarabad', 'Mirpur', 'Rawalakot', 'Kotli', 'Bhimber'],
 };
 
-export const salespersonLocations = ['Islamabad', 'Karachi', 'Lahore', 'Rawalpindi', 'Faisalabad', 'Multan'];
+export const salespersonLocations = ['Saudia', 'Chad'];
+
+// Supported invoice currencies
+export type InvoiceCurrency = 'PKR' | 'CAD' | 'SAR' | 'AED';
+export const INVOICE_CURRENCIES: { code: InvoiceCurrency; label: string; symbol: string }[] = [
+  { code: 'PKR', label: 'Pakistani Rupee', symbol: '₨' },
+  { code: 'CAD', label: 'Canadian Dollar', symbol: 'CA$' },
+  { code: 'SAR', label: 'Saudi Riyal',     symbol: 'SAR' },
+  { code: 'AED', label: 'UAE Dirham',      symbol: 'AED' },
+];
 
 export const deliveryStatuses: ('Self-collect' | 'LCS' | 'Daewoo' | 'Self-delivered')[] = [
   'Self-collect', 'LCS', 'Daewoo', 'Self-delivered',

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
   Plus, Trash2, X, Hash, Truck, User, CreditCard,
-  Loader2, FileDown, Stamp, MapPin,
+  Loader2, FileDown, Stamp, MapPin, Package, Globe,
 } from 'lucide-react';
 import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
 import { makeBranchValue, branchFromValue } from '../viewModels/useInvoiceFormViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
+import { InvoiceCurrency, INVOICE_CURRENCIES } from '../models/invoiceService';
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; }
@@ -46,9 +47,21 @@ interface Props {
   setInvoiceCompany: (v: TxCompany) => void;
   branches: string[];
   handleAddBranch: (name: string) => Promise<void>;
+  // Salesperson locations with Add New
+  salespersonLocationsList?: string[];
+  handleAddSalespersonLocation?: (name: string) => Promise<void>;
+  // Multi-currency
+  selectedCurrencies?: InvoiceCurrency[];
+  toggleCurrency?: (c: InvoiceCurrency) => void;
 }
 
-const inp = 'w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm h-8';
+// Charcoal theme tokens
+const CHARCOAL      = '#374151'; // gray-700
+const CHARCOAL_DARK = '#1f2937'; // gray-800
+const CHARCOAL_LIGHT = '#f3f4f6'; // gray-100
+const CHARCOAL_RING  = 'focus:ring-gray-600';
+
+const inp = `w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 ${CHARCOAL_RING} text-sm h-8`;
 const lbl = 'block text-xs font-medium text-gray-700 mb-0.5';
 
 // ── Branch / Company selector with Add New ───────────────────────────────────
@@ -88,8 +101,8 @@ function BranchSelector({
               onClick={() => setInvoiceCompany(val)}
               className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                 sel
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-300 hover:bg-indigo-50'
+                  ? 'border-gray-700 bg-gray-700 text-white shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-500 hover:bg-gray-50'
               }`}>
               {branch}
             </button>
@@ -102,10 +115,10 @@ function BranchSelector({
             <input ref={inputRef} type="text" value={newBranch}
               onChange={e => setNewBranch(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setAddingBranch(false); }}
-              className="px-2 py-1 border-2 border-indigo-400 rounded-lg text-xs outline-none w-28"
+              className="px-2 py-1 border-2 border-gray-600 rounded-lg text-xs outline-none w-28"
               placeholder="Branch name…" />
             <button type="button" onClick={save} disabled={saving || !newBranch.trim()}
-              className="px-2 py-1 bg-indigo-600 text-white rounded text-xs font-semibold disabled:opacity-50">
+              className="px-2 py-1 bg-gray-700 text-white rounded text-xs font-semibold disabled:opacity-50">
               {saving ? '…' : 'Save'}
             </button>
             <button type="button" onClick={() => setAddingBranch(false)}
@@ -115,7 +128,7 @@ function BranchSelector({
           </div>
         ) : (
           <button type="button" onClick={() => setAddingBranch(true)}
-            className="px-3 py-1.5 rounded-lg border border-dashed border-indigo-300 text-xs font-semibold text-indigo-500 hover:bg-indigo-50 transition-all">
+            className="px-3 py-1.5 rounded-lg border border-dashed border-gray-400 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-all">
             ➕ Add New
           </button>
         )}
@@ -140,11 +153,17 @@ export function InvoiceFormView({
   calculateTotal, formatCurrency,
   invoiceCompany, setInvoiceCompany,
   branches, handleAddBranch,
+  salespersonLocationsList = salespersonLocations ?? [],
+  handleAddSalespersonLocation = async () => {},
+  selectedCurrencies = ['PKR'],
+  toggleCurrency = () => {},
 }: Props) {
   const total = calculateTotal();
 
   const [addingCity, setAddingCity] = useState(false);
   const [newCityName, setNewCityName] = useState('');
+  const [addingSpLoc, setAddingSpLoc] = useState(false);
+  const [newSpLoc, setNewSpLoc] = useState('');
 
   const handleSaveNewCity = async () => {
     if (!newCityName.trim() || !formData.customerProvince) return;
@@ -156,7 +175,7 @@ export function InvoiceFormView({
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 bg-white flex items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+        <Loader2 className="w-10 h-10 animate-spin text-gray-600" />
       </div>
     );
   }
@@ -175,7 +194,7 @@ export function InvoiceFormView({
         </h3>
         <div className="flex items-center gap-2">
           {pdfGenerating && (
-            <div className="flex items-center gap-2 text-xs text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
+            <div className="flex items-center gap-2 text-xs text-gray-700 bg-gray-100 px-3 py-1 rounded-lg">
               <Loader2 size={12} className="animate-spin" />
               Saving PDF to cloud…
             </div>
@@ -183,7 +202,7 @@ export function InvoiceFormView({
           <button
             onClick={handleDownloadPdf}
             disabled={isDownloadingPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-300 text-indigo-700 bg-white rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors text-xs font-medium shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-400 text-gray-700 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-xs font-medium shadow-sm"
           >
             {isDownloadingPdf
               ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
@@ -215,7 +234,7 @@ export function InvoiceFormView({
                 const fixedPart    = suffix.length > 3 ? suffix.slice(0, suffix.length - 3) : ''; // "25"
                 const editablePart = suffix.slice(-3);                                             // "189"
                 return (
-                  <div className="flex items-center h-8 border border-gray-300 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5] bg-white">
+                  <div className="flex items-center h-8 border border-gray-300 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-gray-600 bg-white">
                     <span className="px-2 text-sm text-gray-500 bg-gray-50 whitespace-nowrap border-r border-gray-200 select-none h-full flex items-center">
                       {prefix}{fixedPart}
                     </span>
@@ -345,7 +364,7 @@ export function InvoiceFormView({
                   />
                   <button
                     onClick={handleSaveNewCity}
-                    className="px-2 py-1 bg-indigo-600 text-white rounded-md text-xs hover:bg-indigo-700 transition-colors"
+                    className="px-2 py-1 bg-gray-700 text-white rounded-md text-xs hover:bg-gray-800 transition-colors"
                   >Save</button>
                   <button
                     onClick={() => { setAddingCity(false); setNewCityName(''); }}
@@ -369,7 +388,7 @@ export function InvoiceFormView({
                     <button
                       onClick={() => setAddingCity(true)}
                       title="Add new city"
-                      className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-indigo-400 text-indigo-600 rounded-md text-xs hover:bg-indigo-50 transition-colors whitespace-nowrap"
+                      className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-400 text-gray-600 rounded-md text-xs hover:bg-gray-50 transition-colors whitespace-nowrap"
                     >
                       <Plus size={11} /> Add
                     </button>
@@ -408,7 +427,7 @@ export function InvoiceFormView({
             <h4 className="font-semibold text-gray-900 text-sm">Products</h4>
             <button
               onClick={addProduct}
-              className="flex items-center gap-1 text-xs bg-[#4f46e5] text-white px-2.5 py-1.5 rounded-lg hover:bg-[#4338ca] transition-colors"
+              className="flex items-center gap-1 text-xs bg-gray-700 text-white px-2.5 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
             >
               <Plus size={14} /> Add Product
             </button>
@@ -449,7 +468,7 @@ export function InvoiceFormView({
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-0.5">
-                          Qty * {product.productId && <span className="text-indigo-500 font-normal">(max {maxQty})</span>}
+                          Qty * {product.productId && <span className="text-gray-500 font-normal">(max {maxQty})</span>}
                         </label>
                         <input type="number" min="1" max={maxQty || undefined} value={product.quantity}
                           onChange={e => {
@@ -466,8 +485,8 @@ export function InvoiceFormView({
 
                     {product.productId && (
                       <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
-                        {product.brandName   && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-medium">{product.brandName}</span>}
-                        {product.modelName   && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-medium">{product.modelName}</span>}
+                        {product.brandName   && <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full font-medium">{product.brandName}</span>}
+                        {product.modelName   && <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full font-medium">{product.modelName}</span>}
                         {product.category    && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{product.category}</span>}
                         {product.description && <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full truncate max-w-xs">{product.description}</span>}
                       </div>
@@ -476,7 +495,7 @@ export function InvoiceFormView({
                     {product.productId && product.quantity > 0 && (
                       <div className="border-t pt-2">
                         <div className="flex items-center gap-1.5 mb-1.5">
-                          <Hash size={12} className="text-[#4f46e5]" />
+                          <Hash size={12} className="text-gray-700" />
                           <span className="text-xs font-semibold text-gray-700">Serial Numbers ({product.quantity} required)</span>
                           {serials.length === 0 && ownSelected.length === 0 && (
                             <span className="ml-2 text-xs text-red-500">No available serials</span>
@@ -516,7 +535,7 @@ export function InvoiceFormView({
         {/* ── Delivery & Information ── */}
         <div className="border-b pb-2">
           <div className="flex items-center gap-2 mb-1.5">
-            <Truck size={14} className="text-[#4f46e5]" />
+            <Truck size={14} className="text-gray-700" />
             <h4 className="font-semibold text-gray-900 text-sm">Delivery & Information</h4>
           </div>
           <div className="grid grid-cols-4 gap-2">
@@ -551,7 +570,7 @@ export function InvoiceFormView({
                   type="checkbox"
                   checked={!!formData.digitalStamp}
                   onChange={() => setFormData({ digitalStamp: !formData.digitalStamp })}
-                  className="w-4 h-4 rounded border-gray-300 text-[#4f46e5] focus:ring-[#4f46e5] cursor-pointer"
+                  className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-600 cursor-pointer"
                 />
                 <Stamp size={13} className="text-gray-500" />
                 <span className="text-xs font-medium text-gray-700">Add Digital Stamp to PDF</span>
@@ -569,12 +588,44 @@ export function InvoiceFormView({
               className={`${inp} resize-none h-auto`}
             />
           </div>
+
+          {/* ── Multi-currency selector ── */}
+          <div className="mt-2">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Globe size={12} className="text-gray-600" />
+              <label className="text-xs font-medium text-gray-700">Invoice Currencies (shown on PDF)</label>
+              <span className="text-xs text-gray-400">— select all that apply</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {INVOICE_CURRENCIES.map(c => {
+                const active = selectedCurrencies.includes(c.code);
+                return (
+                  <button key={c.code} type="button" onClick={() => toggleCurrency(c.code)}
+                    className={`px-3 py-1 rounded-lg border text-xs font-semibold transition-all ${
+                      active
+                        ? 'border-gray-700 bg-gray-700 text-white shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-500 hover:bg-gray-50'
+                    }`}>
+                    {c.symbol} {c.code}
+                    {active && selectedCurrencies.length > 1 && c.code !== selectedCurrencies[0] && (
+                      <span className="ml-1 opacity-70 text-[10px]">✓</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedCurrencies.length > 1 && (
+              <p className="mt-1 text-xs text-gray-500">
+                Primary: <strong>{selectedCurrencies[0]}</strong> · Also shown: {selectedCurrencies.slice(1).join(', ')}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* ── Sales Details (internal) ── */}
         <div className="border-b pb-2 bg-blue-50 p-2 rounded-xl">
           <div className="flex items-center gap-2 mb-1.5">
-            <User size={13} className="text-[#4f46e5]" />
+            <User size={13} className="text-gray-700" />
             <h4 className="font-semibold text-gray-900 text-sm">Sales Details</h4>
             <span className="text-xs text-gray-400 ml-auto">Internal — not shown on invoice</span>
           </div>
@@ -586,13 +637,57 @@ export function InvoiceFormView({
                 {activeEmployees.map(e => <option key={e.id} value={e.id}>{e.name} — {e.position}</option>)}
               </select>
             </div>
+
+            {/* Salesperson Location with Add New */}
             <div>
               <label className={lbl}>Salesperson Location</label>
-              <select value={formData.salespersonLocation || ''} onChange={e => setFormData({ salespersonLocation: e.target.value })} className={inp}>
-                <option value="">Select location</option>
-                {salespersonLocations.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
+              {addingSpLoc ? (
+                <div className="flex gap-1">
+                  <input
+                    type="text" value={newSpLoc}
+                    onChange={e => setNewSpLoc(e.target.value)}
+                    onKeyDown={async e => {
+                      if (e.key === 'Enter' && newSpLoc.trim()) {
+                        await handleAddSalespersonLocation(newSpLoc.trim());
+                        setFormData({ salespersonLocation: newSpLoc.trim() });
+                        setNewSpLoc(''); setAddingSpLoc(false);
+                      }
+                      if (e.key === 'Escape') { setAddingSpLoc(false); setNewSpLoc(''); }
+                    }}
+                    placeholder="New location" autoFocus
+                    className={`${inp} flex-1`}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (newSpLoc.trim()) {
+                        await handleAddSalespersonLocation(newSpLoc.trim());
+                        setFormData({ salespersonLocation: newSpLoc.trim() });
+                        setNewSpLoc(''); setAddingSpLoc(false);
+                      }
+                    }}
+                    className="px-2 py-1 bg-gray-700 text-white rounded-md text-xs hover:bg-gray-800 transition-colors"
+                  >Save</button>
+                  <button onClick={() => { setAddingSpLoc(false); setNewSpLoc(''); }}
+                    className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs hover:bg-gray-200 transition-colors">
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-1">
+                  <select value={formData.salespersonLocation || ''}
+                    onChange={e => setFormData({ salespersonLocation: e.target.value })}
+                    className={`${inp} flex-1`}>
+                    <option value="">Select location</option>
+                    {salespersonLocationsList.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  <button onClick={() => setAddingSpLoc(true)} title="Add new location"
+                    className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-400 text-gray-600 rounded-md text-xs hover:bg-gray-50 transition-colors whitespace-nowrap">
+                    <Plus size={11} /> Add
+                  </button>
+                </div>
+              )}
             </div>
+
             <div>
               <label className={lbl}>Referral To</label>
               <input type="text" value={formData.clientDealBy || ''} onChange={e => setFormData({ clientDealBy: e.target.value })} className={inp} />
@@ -605,6 +700,48 @@ export function InvoiceFormView({
               <label className={lbl}>Created By</label>
               <input type="text" value={formData.createdBy || ''} onChange={e => setFormData({ createdBy: e.target.value })} className={inp} />
             </div>
+          </div>
+
+          {/* ── Import Charges — Cargo / Customs / Agent ── */}
+          <div className="mt-2 pt-2 border-t border-blue-200">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Package size={12} className="text-gray-600" />
+              <span className="text-xs font-semibold text-gray-700">Import Charges</span>
+              <span className="text-xs text-gray-400">(deducted from commission alongside delivery deductions)</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <label className={lbl}>Cargo Amount</label>
+                <input type="number" min="0" value={formData.cargoAmount ?? 0}
+                  onChange={e => setFormData({ cargoAmount: Number(e.target.value) })}
+                  className={inp} placeholder="0" />
+              </div>
+              <div>
+                <label className={lbl}>Customs Amount</label>
+                <input type="number" min="0" value={formData.customsAmount ?? 0}
+                  onChange={e => setFormData({ customsAmount: Number(e.target.value) })}
+                  className={inp} placeholder="0" />
+              </div>
+              <div>
+                <label className={lbl}>Agent Amount</label>
+                <input type="number" min="0" value={formData.agentAmount ?? 0}
+                  onChange={e => setFormData({ agentAmount: Number(e.target.value) })}
+                  className={inp} placeholder="0" />
+              </div>
+              <div>
+                <label className={lbl}>Agent Details</label>
+                <input type="text" value={formData.agentDetails || ''}
+                  onChange={e => setFormData({ agentDetails: e.target.value })}
+                  className={inp} placeholder="Agent name / reference" />
+              </div>
+            </div>
+            {((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0)) > 0 && (
+              <p className="mt-1 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1">
+                Total import charges: <strong>
+                  {formatCurrency((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0))}
+                </strong> — will be deducted from commission
+              </p>
+            )}
           </div>
         </div>
 
@@ -728,17 +865,25 @@ export function InvoiceFormView({
         </div>
 
         {/* ── Total & Save ── */}
-        <div className="bg-indigo-50 rounded-xl p-3">
+        <div className="bg-gray-50 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <div className="space-y-0.5">
               <div className="flex items-center gap-4">
                 <span className="text-sm font-semibold text-gray-900">Total Amount:</span>
-                <span className="text-xl font-bold text-[#4f46e5]">{formatCurrency(total)}</span>
+                <span className="text-xl font-bold text-gray-700">{formatCurrency(total)}</span>
               </div>
               {(formData.deductionCharges || 0) > 0 && (
                 <div className="flex items-center gap-4 text-xs">
-                  <span className="text-gray-500">Deduction Charges:</span>
+                  <span className="text-gray-500">Delivery Deduction:</span>
                   <span className="text-red-600 font-medium">− {formatCurrency(formData.deductionCharges || 0)}</span>
+                </div>
+              )}
+              {((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0)) > 0 && (
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="text-gray-500">Import Charges (cargo+customs+agent):</span>
+                  <span className="text-orange-600 font-medium">
+                    − {formatCurrency((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0))}
+                  </span>
                 </div>
               )}
             </div>
@@ -746,7 +891,7 @@ export function InvoiceFormView({
               <button
                 onClick={handleDownloadPdf}
                 disabled={isDownloadingPdf}
-                className="flex items-center gap-1.5 px-3 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors text-xs font-medium"
+                className="flex items-center gap-1.5 px-3 py-2 border border-gray-400 text-gray-700 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-xs font-medium"
               >
                 {isDownloadingPdf
                   ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
@@ -759,7 +904,7 @@ export function InvoiceFormView({
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-5 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors font-semibold text-sm"
+                className="flex items-center gap-1.5 px-5 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors font-semibold text-sm"
               >
                 {isSaving
                   ? <><Loader2 size={16} className="animate-spin" /> Saving…</>
@@ -769,7 +914,7 @@ export function InvoiceFormView({
             </div>
           </div>
           {pdfGenerating && (
-            <p className="text-xs text-indigo-500 text-right flex items-center justify-end gap-1.5">
+            <p className="text-xs text-gray-600 text-right flex items-center justify-end gap-1.5">
               <Loader2 size={10} className="animate-spin" />
               PDF uploading to cloud storage…
             </p>

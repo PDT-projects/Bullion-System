@@ -58,6 +58,10 @@ function docToInvoice(d: any): Invoice {
     remainingAmount:        data.remainingAmount,
     collectionMethod:       data.collectionMethod,
     deductionCharges:       data.deductionCharges       || 0,
+    cargoAmount:            data.cargoAmount             || 0,
+    customsAmount:          data.customsAmount           || 0,
+    agentDetails:           data.agentDetails            || '',
+    agentAmount:            data.agentAmount             || 0,
     digitalStamp:           data.digitalStamp,
     imageUrl:               data.imageUrl,
     pdfUrl:                 data.pdfUrl,              // ← new

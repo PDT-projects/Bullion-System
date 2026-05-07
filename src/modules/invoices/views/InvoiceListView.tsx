@@ -100,7 +100,7 @@ export function InvoiceListView({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+        <Loader2 className="w-10 h-10 animate-spin text-gray-600" />
       </div>
     );
   }
@@ -117,7 +117,7 @@ export function InvoiceListView({
           </p>
         </div>
         <button onClick={onCreateInvoice}
-          className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium">
+          className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 active:scale-95 transition-all font-semibold shadow-md border border-gray-700">
           <Plus size={18} /> Create Invoice
         </button>
       </div>
@@ -140,7 +140,7 @@ export function InvoiceListView({
       {/* ── Filter Bar ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
         <div className="flex items-center gap-2 mb-1">
-          <Filter size={15} className="text-indigo-500" />
+          <Filter size={15} className="text-gray-600" />
           <span className="text-sm font-semibold text-gray-700">Filters</span>
           {hasActiveFilters && (
             <button onClick={onClearFilters}
@@ -157,10 +157,10 @@ export function InvoiceListView({
             <input type="text"
               placeholder="Search invoice, customer, phone, city…"
               value={filters.searchTerm} onChange={e => onSearch(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600" />
           </div>
           <select value={filters.statusFilter} onChange={e => onStatusFilter(e.target.value as any)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] bg-white">
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white">
             <option value="all">All Status</option>
             <option value="Paid">Paid</option>
             <option value="Unpaid">Unpaid</option>
@@ -171,27 +171,27 @@ export function InvoiceListView({
         <div className="flex flex-wrap gap-3">
           {/* City / Branch */}
           <select value={filters.cityFilter} onChange={e => onCityFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] bg-white">
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white">
             <option value="">📍 All Cities</option>
             {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
           {/* Salesperson */}
           <select value={filters.salespersonFilter} onChange={e => onSalespersonFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] bg-white">
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white">
             <option value="">👤 All Salespersons</option>
             {availableSalespersons.map(sp => <option key={sp} value={sp}>{spName(sp) || sp}</option>)}
           </select>
 
           {/* Date From */}
-          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#4f46e5]">
+          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-gray-600">
             <span className="text-xs text-gray-400 font-medium whitespace-nowrap shrink-0">From</span>
             <input type="date" value={filters.dateFrom} onChange={e => onDateFromFilter(e.target.value)}
               className="text-sm outline-none bg-transparent w-36" />
           </div>
 
           {/* Date To */}
-          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#4f46e5]">
+          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-gray-600">
             <span className="text-xs text-gray-400 font-medium whitespace-nowrap shrink-0">To</span>
             <input type="date" value={filters.dateTo} onChange={e => onDateToFilter(e.target.value)}
               className="text-sm outline-none bg-transparent w-36" />
@@ -226,10 +226,10 @@ export function InvoiceListView({
                   </td>
                 </tr>
               ) : filteredInvoices.map(invoice => (
-                <tr key={invoice.id} className="hover:bg-indigo-50/30 transition-colors">
+                <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
 
                   {/* Invoice # */}
-                  <td className="px-4 py-3 font-semibold text-[#4f46e5] whitespace-nowrap">
+                  <td className="px-4 py-3 font-semibold text-gray-800 font-semibold whitespace-nowrap">
                     {invoice.invoiceNumber}
                   </td>
 
@@ -254,7 +254,7 @@ export function InvoiceListView({
                       <p className="text-xs text-gray-400 mt-0.5">{invoice.salespersonLocation}</p>
                     )}
                     {invoice.productLocation && (
-                      <p className="text-xs text-indigo-500 mt-0.5">Stock: {invoice.productLocation}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">Stock: {invoice.productLocation}</p>
                     )}
                   </td>
 
@@ -346,7 +346,7 @@ export function InvoiceListView({
                       <button
                         onClick={() => handleDownloadPdf(invoice)}
                         disabled={generatingPdf.has(invoice.id)}
-                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-40"
+                        className="p-1.5 text-gray-700 hover:bg-gray-50 rounded disabled:opacity-40"
                         title="Download PDF">
                         {generatingPdf.has(invoice.id)
                           ? <Loader2 size={15} className="animate-spin" />
@@ -376,7 +376,7 @@ export function InvoiceListView({
                 <button
                   onClick={() => handleDownloadPdf(viewingInvoice)}
                   disabled={generatingPdf.has(viewingInvoice.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-medium hover:bg-indigo-100 disabled:opacity-40">
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-40">
                   {generatingPdf.has(viewingInvoice.id)
                     ? <><Loader2 size={13} className="animate-spin" /> Generating…</>
                     : <><FileDown size={14} /> Download PDF</>}
@@ -415,8 +415,8 @@ export function InvoiceListView({
 
               {/* ── Branch / Sales Info ── */}
               {(viewingInvoice.salesperson || viewingInvoice.salespersonLocation || viewingInvoice.clientDealBy || viewingInvoice.referralBy || viewingInvoice.createdBy || viewingInvoice.productLocation) && (
-                <div className="bg-indigo-50 rounded-lg p-4">
-                  <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 flex items-center gap-1">
                     <Building2 size={12} /> Branch & Sales Info
                   </p>
                   <div className="grid grid-cols-2 gap-3 text-sm">
@@ -467,7 +467,7 @@ export function InvoiceListView({
                           <td className="px-3 py-2.5">
                             <div className="flex flex-wrap gap-1">
                               {(p.serialNumbers || []).map(s => (
-                                <span key={s} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-mono">{s}</span>
+                                <span key={s} className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-mono">{s}</span>
                               ))}
                             </div>
                           </td>
@@ -554,7 +554,7 @@ export function InvoiceListView({
                 )}
                 <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-1">
                   <span className="text-base font-bold text-gray-900">Net Total</span>
-                  <span className="text-2xl font-bold text-[#4f46e5]">
+                  <span className="text-2xl font-bold text-gray-800">
                     {formatCurrency(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
                   </span>
                 </div>
