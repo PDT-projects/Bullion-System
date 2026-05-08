@@ -207,7 +207,7 @@ function EntryDetailModal({ entry, onClose }: { entry: AgainstInvoiceEntry; onCl
           ].map(({ label, value, mono }) => (
             <div key={label}>
               <div style={{ fontSize: '10px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', marginTop: '2px', fontFamily: mono ? 'monospace' : undefined, fontSize: mono ? '11px' : '13px' as any }}>{value}</div>
+              <div style={{ fontSize: mono ? '11px' : '13px', fontWeight: 600, color: '#111827', marginTop: '2px', fontFamily: mono ? 'monospace' : undefined }}>{value}</div>
             </div>
           ))}
         </div>
@@ -242,6 +242,7 @@ export function AgainstInvoiceDashboard() {
     s.customerName.toLowerCase().includes(balanceFilter.toLowerCase())
   );
 
+  // ── Create form view ───────────────────────────────────────────────────────
   if (vm.activeView === 'create') {
     return (
       <ATICreateForm
@@ -249,6 +250,7 @@ export function AgainstInvoiceDashboard() {
         isSubmitting={vm.isSubmitting}
         onSubmit={vm.handleSubmit}
         onCancel={() => vm.setActiveView('list')}
+        onSearchInvoices={vm.searchInvoices}   // ← NEW prop wired here
       />
     );
   }
@@ -280,20 +282,14 @@ export function AgainstInvoiceDashboard() {
             </div>
           </div>
 
-          {/* NEW PAYMENT BUTTON — solid blue, always visible */}
           <button
             onClick={() => vm.setActiveView('create')}
             style={{
               display: 'flex', alignItems: 'center', gap: '7px',
               padding: '10px 18px',
-              background: '#0f172a',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '9px',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(15,23,42,0.35)',
+              background: '#0f172a', color: '#fff', border: 'none',
+              borderRadius: '9px', fontSize: '13px', fontWeight: 700,
+              cursor: 'pointer', boxShadow: '0 2px 8px rgba(15,23,42,0.35)',
               transition: 'background 0.15s',
             }}
             onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
@@ -306,10 +302,10 @@ export function AgainstInvoiceDashboard() {
 
         {/* ── Stat Cards ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-          <StatCard icon={Receipt}      label="Total Entries"    value={String(vm.stats.totalEntries)}   iconColor="#334155" iconBg="#f1f5f9" />
-          <StatCard icon={Wallet}       label="Total Paid"       value={fmt(vm.stats.totalAmountPaid)}   iconColor="#22c55e" iconBg="#f0fdf4" />
-          <StatCard icon={TrendingDown} label="Still Remaining"  value={fmt(vm.stats.totalRemaining)}    iconColor="#ef4444" iconBg="#fef2f2" />
-          <StatCard icon={CheckCircle}  label="Settled Invoices" value={String(vm.stats.settledCount)}   iconColor="#22c55e" iconBg="#f0fdf4"
+          <StatCard icon={Receipt}      label="Total Entries"    value={String(vm.stats.totalEntries)}  iconColor="#334155" iconBg="#f1f5f9" />
+          <StatCard icon={Wallet}       label="Total Paid"       value={fmt(vm.stats.totalAmountPaid)}  iconColor="#22c55e" iconBg="#f0fdf4" />
+          <StatCard icon={TrendingDown} label="Still Remaining"  value={fmt(vm.stats.totalRemaining)}   iconColor="#ef4444" iconBg="#fef2f2" />
+          <StatCard icon={CheckCircle}  label="Settled Invoices" value={String(vm.stats.settledCount)}  iconColor="#22c55e" iconBg="#f0fdf4"
             sub={`${vm.stats.partialCount} partial`} />
         </div>
 

@@ -1,7 +1,6 @@
 // Against the Invoice Module — ViewModel
-// Manages state for the ATI dashboard (list + balance tracker)
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { AgainstInvoiceEntry, ATIFilters, ATIStats, InvoiceBalanceSummary } from '../models/types';
 import { ATIFirebaseService } from '../models/atiFirebaseService';
@@ -18,19 +17,40 @@ const DEFAULT_FILTERS: ATIFilters = {
   dateTo:        '',
 };
 
+function invoiceMatchesQuery(inv: Invoice, s: string): boolean {
+  if (inv.invoiceNumber?.toLowerCase().includes(s)) return true;
+  if (inv.customerName?.toLowerCase().includes(s))  return true;
+  if (inv.customerPhone?.includes(s))               return true;
+  if (inv.customerPhone2?.includes(s))              return true;
+  if (inv.customerCNIC?.includes(s))                return true;
+  if (inv.totalAmount?.toString().includes(s))      return true;
+  if (inv.paidAmount?.toString().includes(s))       return true;
+  if (inv.remainingAmount?.toString().includes(s))  return true;
+  if (inv.status?.toLowerCase().includes(s))        return true;
+  if (inv.paymentStatus?.toLowerCase().includes(s)) return true;
+  if (inv.date?.includes(s))                        return true;
+  if (inv.customerCity?.toLowerCase().includes(s))     return true;
+  if (inv.customerProvince?.toLowerCase().includes(s)) return true;
+  if (inv.salesperson?.toLowerCase().includes(s))   return true;
+  return false;
+}
+
 export function useATIViewModel() {
-  const [entries,         setEntries]         = useState<AgainstInvoiceEntry[]>([]);
-  const [invoices,        setInvoices]        = useState<Invoice[]>([]);
+  const [entries,          setEntries]          = useState<AgainstInvoiceEntry[]>([]);
+  const [invoices,         setInvoices]         = useState<Invoice[]>([]);
   const [balanceSummaries, setBalanceSummaries] = useState<InvoiceBalanceSummary[]>([]);
-  const [filters,         setFiltersState]    = useState<ATIFilters>(DEFAULT_FILTERS);
-  const [isLoading,       setIsLoading]       = useState(true);
-  const [isSubmitting,    setIsSubmitting]    = useState(false);
-  const [activeView,      setActiveView]      = useState<ATIView>('list');
-  const [selectedEntry,   setSelectedEntry]   = useState<AgainstInvoiceEntry | null>(null);
+  const [filters,          setFiltersState]     = useState<ATIFilters>(DEFAULT_FILTERS);
+  const [isLoading,        setIsLoading]        = useState(true);
+  const [isSubmitting,     setIsSubmitting]     = useState(false);
+  const [activeView,       setActiveView]       = useState<ATIView>('list');
+  const [selectedEntry,    setSelectedEntry]    = useState<AgainstInvoiceEntry | null>(null);
+
+  const invoicesCacheReady = useRef(false);
 
   // ── Load data ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setIsLoading(true);
+    invoicesCacheReady.current = false;
     try {
       const [atiData, invoiceData, summaryData] = await Promise.all([
         ATIFirebaseService.fetchAll(),
@@ -40,8 +60,9 @@ export function useATIViewModel() {
       setEntries(atiData);
       setInvoices(invoiceData);
       setBalanceSummaries(summaryData);
-    } catch {
-      toast.error('Failed to load data');
+      invoicesCacheReady.current = true;
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load data');
     } finally {
       setIsLoading(false);
     }
@@ -79,12 +100,31 @@ export function useATIViewModel() {
     partialCount:       balanceSummaries.filter(b => b.status === 'Partial').length,
   }), [entries, balanceSummaries]);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const setFilters = useCallback((f: Partial<ATIFilters>) => {
-    setFiltersState(prev => ({ ...prev, ...f }));
-  }, []);
+  const setFilters    = useCallback((f: Partial<ATIFilters>) => setFiltersState(prev => ({ ...prev, ...f })), []);
+  const resetFilters  = useCallback(() => setFiltersState(DEFAULT_FILTERS), []);
 
-  const resetFilters = useCallback(() => setFiltersState(DEFAULT_FILTERS), []);
+  // ── Invoice search — cache first, Firestore fallback ─────────────────────
+  const searchInvoices = useCallback(async (query: string): Promise<Invoice[]> => {
+    const s = query.toLowerCase().trim();
+
+    const cacheHits = s
+      ? invoices.filter(inv => invoiceMatchesQuery(inv, s))
+      : [...invoices].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+    if (invoicesCacheReady.current && cacheHits.length > 0) {
+      return cacheHits.slice(0, 20);
+    }
+
+    try {
+      const fresh = await InvoiceFirebaseService.fetchAllInvoices();
+      setInvoices(fresh);
+      invoicesCacheReady.current = true;
+      const freshHits = s ? fresh.filter(inv => invoiceMatchesQuery(inv, s)) : fresh.slice(0, 20);
+      return freshHits.slice(0, 20);
+    } catch {
+      return cacheHits.slice(0, 20);
+    }
+  }, [invoices]);
 
   // ── Create entry ──────────────────────────────────────────────────────────
   const handleCreate = useCallback(async (dto: Omit<AgainstInvoiceEntry, 'id'>) => {
@@ -94,11 +134,17 @@ export function useATIViewModel() {
       setEntries(prev => [created, ...prev]);
       toast.success(`Payment of Rs ${dto.amount.toLocaleString()} recorded against ${dto.invoiceNumber}`);
       setActiveView('list');
-      // Reload summaries to keep them fresh
-      const summaryData = await ATIFirebaseService.fetchInvoiceBalanceSummaries();
+      // Refresh summaries and invoice cache so balances are up to date
+      const [summaryData, freshInvoices] = await Promise.all([
+        ATIFirebaseService.fetchInvoiceBalanceSummaries(),
+        InvoiceFirebaseService.fetchAllInvoices(),
+      ]);
       setBalanceSummaries(summaryData);
-    } catch {
-      toast.error('Failed to record payment');
+      setInvoices(freshInvoices);
+    } catch (err: any) {
+      // Show the real error from the transaction — not a generic message
+      console.error('❌ handleCreate failed:', err?.message || err);
+      toast.error(err?.message || 'Failed to record payment');
     } finally {
       setIsSubmitting(false);
     }
@@ -106,15 +152,21 @@ export function useATIViewModel() {
 
   // ── Delete entry ──────────────────────────────────────────────────────────
   const handleDelete = useCallback(async (entry: AgainstInvoiceEntry) => {
-    if (!window.confirm(`Delete this payment of Rs ${entry.amount.toLocaleString()} against ${entry.invoiceNumber}? This will reverse the invoice balance.`)) return;
+    if (!window.confirm(
+      `Delete payment of Rs ${entry.amount.toLocaleString()} against ${entry.invoiceNumber}? This will reverse the invoice balance.`
+    )) return;
     try {
       await ATIFirebaseService.deleteEntry(entry.id, entry);
       setEntries(prev => prev.filter(e => e.id !== entry.id));
-      const summaryData = await ATIFirebaseService.fetchInvoiceBalanceSummaries();
+      const [summaryData, freshInvoices] = await Promise.all([
+        ATIFirebaseService.fetchInvoiceBalanceSummaries(),
+        InvoiceFirebaseService.fetchAllInvoices(),
+      ]);
       setBalanceSummaries(summaryData);
-      toast.success('Payment entry deleted and invoice balance reversed');
-    } catch {
-      toast.error('Failed to delete entry');
+      setInvoices(freshInvoices);
+      toast.success('Payment deleted and invoice balance reversed');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete entry');
     }
   }, []);
 
@@ -122,6 +174,7 @@ export function useATIViewModel() {
     entries,
     filteredEntries,
     invoices,
+    availableInvoices: invoices,
     balanceSummaries,
     stats,
     filters,
@@ -134,7 +187,9 @@ export function useATIViewModel() {
     setActiveView,
     setSelectedEntry,
     handleCreate,
+    handleSubmit: handleCreate,
     handleDelete,
+    searchInvoices,
     refresh: loadData,
   };
 }
