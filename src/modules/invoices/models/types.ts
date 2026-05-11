@@ -1,6 +1,5 @@
-// Invoice Module - Model Layer
-// Data interfaces and types
-// Changes: added chequeNumber, chequeBank, chequeDate fields for cheque payments
+// Invoice Module - Model Layer (UPDATED)
+// Added liquidity linkage fields
 
 export interface InvoiceProduct {
   id: string;
@@ -59,6 +58,19 @@ export interface Invoice {
   paidBy?: string;
   paidTo?: string;
   productLocation?: string;
+  
+  // ────────────────────────────────────────────────────────────────────
+  // ✨ NEW: Liquidity Linkage Fields
+  // When an invoice is created with a Bank/Cash payment, these fields
+  // track where the original payment was received from. When ATI entries
+  // are created, they deduct from this original liquidity pool.
+  // ────────────────────────────────────────────────────────────────────
+  originalLiquiditySource?: 'bank' | 'cash';     // Where initial payment came from
+  originalLiquidityDocId?: string;                // Bank doc id or cashInHand doc id
+  originalLiquidityAmount?: number;               // Original amount received
+  remainingLiquidityAmount?: number;              // Amount still available for ATI deduction
+  originalBankTxnId?: string;                     // Reference to bank_transactions record
+  
   createdAt?: string;
   updatedAt?: string;
 }

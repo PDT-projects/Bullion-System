@@ -1,5 +1,9 @@
 // Against the Invoice Module — Types
-// Links a Transaction to an Invoice so payments can be tracked per invoice
+//
+// KEY DESIGN: ATI tracking is INDEPENDENT of invoice paidAmount/remainingAmount.
+// Invoice paidAmount = what YOU paid to supplier for goods (purchase cost).
+// atiPaidAmount      = what customers have PAID YOU against this invoice (collections).
+// These are stored as separate fields on the Invoice document so both can coexist.
 
 export type ATIStatus = 'Active' | 'Settled' | 'Partial';
 export type ATIPaymentMode = 'Cash' | 'Bank' | 'Cheque';
@@ -33,6 +37,25 @@ export interface AgainstInvoiceEntry {
   totalPaidAfter:    number;  // total paid after this entry
   remainingAfter:    number;  // invoice balance remaining after this entry
   status:            ATIStatus;
+
+  // ────────────────────────────────────────────────────────────────────────
+  // ✨ ENHANCED: Original Invoice Liquidity Linkage
+  // When this ATI entry was created, which liquidity pool was debited?
+  // These fields track the original source so we can reverse properly on delete.
+  // ────────────────────────────────────────────────────────────────────────
+  originalLiquiditySource?: 'bank' | 'cash';   // Where the invoice payment originally came from
+  originalLiquidityDocId?: string;             // Bank doc id or cashInHand doc id
+  originalLiquidityAmount?: number;            // Amount deducted from that pool
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Existing liquidity linkage (Transaction + ledger records)
+  // These are the bank/cash transaction records created when ATI payment is made
+  // ────────────────────────────────────────────────────────────────────────
+  // Populated on create so deleteEntry can precisely reverse the right account.
+  linkedTransactionId?: string;   // Firestore doc id in `transactions` collection
+  linkedBankTxnId?:     string;   // Firestore doc id in `bank_transactions` collection (Bank/Cheque only)
+  liquiditySource?:     'bank' | 'cash';  // which pool was debited for ATI payment
+  liquidityDocId?:      string;   // doc id in `banks` (Bank/Cheque) or `cashInHand` (Cash)
 
   // ── Extra ──────────────────────────────────────────────────
   description?:   string;
@@ -70,4 +93,9 @@ export interface InvoiceBalanceSummary {
   status:         ATIStatus;
   entryCount:     number;
   lastPaymentDate?: string;
+  
+  // ✨ NEW: Liquidity tracking in summary view
+  originalLiquiditySource?: 'bank' | 'cash';
+  originalLiquidityAmount?: number;
+  remainingLiquidityAmount?: number;
 }

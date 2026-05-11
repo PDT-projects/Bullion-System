@@ -1,6 +1,5 @@
-// Invoice Module - Firebase Service Layer
-// All Firestore + Firebase Storage operations for invoices
-// Change: added uploadInvoicePdf() and savePdfUrl() for PDF → Storage → Firestore URL flow
+// Invoice Module - Firebase Service Layer (UPDATED)
+// Added liquidity linkage when creating invoices
 
 import {
   collection, getDocs, getDoc, addDoc, updateDoc,
@@ -14,7 +13,7 @@ import { Invoice, CreateInvoiceDTO } from './types';
 
 const COLLECTION         = 'invoices';
 const COUNTER_COLLECTION = 'invoiceCounters';
-const PDF_STORAGE_PATH   = 'invoices/pdfs'; // Firebase Storage folder
+const PDF_STORAGE_PATH   = 'invoices/pdfs';
 
 const storage = getStorage();
 
@@ -64,10 +63,18 @@ function docToInvoice(d: any): Invoice {
     agentAmount:            data.agentAmount             || 0,
     digitalStamp:           data.digitalStamp,
     imageUrl:               data.imageUrl,
-    pdfUrl:                 data.pdfUrl,              // ← new
+    pdfUrl:                 data.pdfUrl,
     paidBy:                 data.paidBy,
     paidTo:                 data.paidTo,
     productLocation:        data.productLocation,
+    
+    // ✨ NEW: Liquidity linkage fields
+    originalLiquiditySource:   data.originalLiquiditySource,
+    originalLiquidityDocId:    data.originalLiquidityDocId,
+    originalLiquidityAmount:   data.originalLiquidityAmount,
+    remainingLiquidityAmount:  data.remainingLiquidityAmount,
+    originalBankTxnId:         data.originalBankTxnId,
+    
     createdAt:              data.createdAt,
     updatedAt:              data.updatedAt,
   } as Invoice;
@@ -99,8 +106,6 @@ export class InvoiceFirebaseService {
   }
 
   // ── Fetch all invoices ───────────────────────────────────────────────────
-  // -- Real-time listener: calls onData on every Firestore change.
-  // Returns an unsubscribe function to stop listening.
   static subscribeToInvoices(
     onData:  (invoices: Invoice[]) => void,
     onError: (error: Error) => void
@@ -148,14 +153,54 @@ export class InvoiceFirebaseService {
     }
   }
 
-  // ── Create invoice ───────────────────────────────────────────────────────
+  // ── Create invoice (UPDATED with liquidity linkage) ───────────────────────
   static async createInvoice(dto: Omit<Invoice, 'id'>): Promise<Invoice> {
     try {
       const now  = new Date().toISOString();
-      const data = stripUndefined({ ...dto, createdAt: now, updatedAt: now });
+      
+      // ✨ NEW: Compute liquidity linkage fields based on payment mode
+      let liquidityFields: Record<string, any> = {};
+      
+      if (dto.paymentMode === 'Bank' || dto.paymentMode === 'Cheque') {
+        // For Bank/Cheque: liquidity comes from the specified bank account
+        liquidityFields = {
+          originalLiquiditySource: 'bank',
+          originalLiquidityDocId: dto.bankId,  // Bank doc id where payment was received
+          originalLiquidityAmount: dto.totalAmount || 0,
+          remainingLiquidityAmount: dto.totalAmount || 0,  // Initially all available
+        };
+        console.log(`📌 Invoice will track Bank liquidity: ${dto.bankId} (${dto.bankName})`);
+      } else if (dto.paymentMode === 'Cash') {
+        // For Cash: liquidity comes from a cash location
+        // NOTE: You may need to add a locationId field to Invoice to track which cash location
+        // For now, using a default or placeholder
+        liquidityFields = {
+          originalLiquiditySource: 'cash',
+          originalLiquidityDocId: dto.productLocation || 'Head Office - Islamabad', // Adjust as needed
+          originalLiquidityAmount: dto.totalAmount || 0,
+          remainingLiquidityAmount: dto.totalAmount || 0,
+        };
+        console.log(`📌 Invoice will track Cash liquidity from: ${liquidityFields.originalLiquidityDocId}`);
+      }
+      // Online payments don't track liquidity deduction (already cleared)
+      
+      const data = stripUndefined({ 
+        ...dto, 
+        ...liquidityFields,
+        createdAt: now, 
+        updatedAt: now 
+      });
+      
       const ref  = await addDoc(collection(db, COLLECTION), data);
-      console.log('✅ Invoice created:', ref.id);
-      return { ...dto, id: ref.id, createdAt: now, updatedAt: now };
+      console.log('✅ Invoice created:', ref.id, 'with liquidity:', liquidityFields);
+      
+      return { 
+        ...dto, 
+        id: ref.id, 
+        ...liquidityFields,
+        createdAt: now, 
+        updatedAt: now 
+      };
     } catch (error) {
       console.error('❌ Error creating invoice:', error);
       throw new Error('Failed to create invoice in Firestore');
@@ -194,8 +239,6 @@ export class InvoiceFirebaseService {
   }
 
   // ── Upload PDF to Firebase Storage ──────────────────────────────────────
-  // Path: invoices/pdfs/{invoiceId}.pdf
-  // Returns the public download URL.
   static async uploadInvoicePdf(invoiceId: string, pdfBlob: Blob): Promise<string> {
     try {
       console.log('🔥 Uploading invoice PDF to Storage:', invoiceId);
@@ -221,6 +264,51 @@ export class InvoiceFirebaseService {
     } catch (error) {
       console.error('❌ Error saving PDF URL:', error);
       throw new Error('Failed to save PDF URL to Firestore');
+    }
+  }
+
+  // ── ONE-TIME MIGRATION: Backfill existing invoices with liquidity fields ──
+  static async backfillInvoiceLiquidity(): Promise<void> {
+    try {
+      console.log('🔄 Starting invoice liquidity backfill...');
+      const invoices = await this.fetchAllInvoices();
+      let updated = 0;
+
+      for (const inv of invoices) {
+        // Skip if already has liquidity linkage
+        if (inv.originalLiquiditySource) {
+          continue;
+        }
+
+        let liquidityFields: Record<string, any> = {};
+
+        if (inv.paymentMode === 'Bank' || inv.paymentMode === 'Cheque') {
+          liquidityFields = {
+            originalLiquiditySource: 'bank',
+            originalLiquidityDocId: inv.bankId || 'unknown',
+            originalLiquidityAmount: inv.totalAmount,
+            remainingLiquidityAmount: Math.max(0, inv.totalAmount - (inv.paidAmount || 0)),
+          };
+        } else if (inv.paymentMode === 'Cash') {
+          liquidityFields = {
+            originalLiquiditySource: 'cash',
+            originalLiquidityDocId: inv.productLocation || 'Head Office - Islamabad',
+            originalLiquidityAmount: inv.totalAmount,
+            remainingLiquidityAmount: Math.max(0, inv.totalAmount - (inv.paidAmount || 0)),
+          };
+        }
+
+        if (Object.keys(liquidityFields).length > 0) {
+          await this.updateInvoice(inv.id, liquidityFields);
+          updated++;
+          console.log(`  ✅ Updated invoice ${inv.invoiceNumber} (${inv.id})`);
+        }
+      }
+
+      console.log(`🎉 Backfill complete: ${updated} invoices updated`);
+    } catch (error) {
+      console.error('❌ Error during liquidity backfill:', error);
+      throw new Error('Failed to backfill invoice liquidity');
     }
   }
 }

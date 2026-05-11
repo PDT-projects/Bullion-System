@@ -91,6 +91,7 @@ export function useATIViewModel() {
   }, [entries, filters]);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
+  // Stats — uses atiPaidAmount-based summaries (independent of invoice paidAmount)
   const stats: ATIStats = useMemo(() => ({
     totalEntries:       entries.length,
     totalAmountPaid:    entries.reduce((s, e) => s + e.amount, 0),
