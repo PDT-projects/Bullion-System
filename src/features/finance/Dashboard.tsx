@@ -488,11 +488,11 @@ export function Dashboard() {
           pkrAmount={stats.totalBankBalance}
           subtitle={`${banks.length} account${banks.length !== 1 ? 's' : ''}`} {...cardCurrencyProps} />
         <AmountCard label="Overall Balance"
-          icon={<div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <DollarSign size={15} style={{ color: 'rgba(255,255,255,0.7)' }} /></div>}
+          icon={<div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#f1f5f9' }}>
+            <DollarSign size={15} style={{ color: '#334155' }} /></div>}
           pkrAmount={stats.overallBalance}
-          amountColor={stats.overallBalance < 0 ? 'text-red-300' : 'text-white'}
-          subtitle="Cash + Banks" dark {...cardCurrencyProps} />
+          amountColor={stats.overallBalance < 0 ? 'text-red-500' : 'text-gray-900'}
+          subtitle="Cash + Banks" {...cardCurrencyProps} />
       </div>
 
       {/* Secondary stats */}
@@ -606,6 +606,7 @@ export function Dashboard() {
       </div>
     </>
   );
+
 
   return (
     <div className="p-6 min-h-full bg-gray-50/70">
