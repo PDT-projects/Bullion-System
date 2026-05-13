@@ -15,7 +15,6 @@ interface Props {
   filters: InvoiceFilters;
   viewingInvoice: Invoice | null;
   isLoading: boolean;
-  // Filter handlers
   onSearch: (searchTerm: string) => void;
   onStatusFilter: (status: 'all' | 'Paid' | 'Unpaid') => void;
   onCityFilter: (city: string) => void;
@@ -23,12 +22,9 @@ interface Props {
   onDateFromFilter: (date: string) => void;
   onDateToFilter: (date: string) => void;
   onClearFilters: () => void;
-  // Dropdown options
   availableCities: string[];
   availableSalespersons: string[];
-  // id → display name map (e.g. { "cg68fp4Na9...": "Ali Hassan" })
   salespersonMap?: Record<string, string>;
-  // Actions
   onViewInvoice: (invoice: Invoice) => void;
   onCloseView: () => void;
   onEditInvoice: (id: string) => void;
@@ -37,13 +33,12 @@ interface Props {
   formatDate: (dateString: string) => string;
 }
 
-// Delivery status badge colours
 function deliveryBadge(status: string) {
   const map: Record<string, string> = {
-    'Delivered':     'bg-green-100 text-green-800',
-    'Self-collect':  'bg-blue-100 text-blue-800',
-    'LCS':           'bg-yellow-100 text-yellow-800',
-    'Daewoo':        'bg-purple-100 text-purple-800',
+    'Delivered':    'bg-green-100 text-green-800',
+    'Self-collect': 'bg-blue-100 text-blue-800',
+    'LCS':          'bg-yellow-100 text-yellow-800',
+    'Daewoo':       'bg-purple-100 text-purple-800',
   };
   return map[status] ?? 'bg-gray-100 text-gray-700';
 }
@@ -67,12 +62,9 @@ export function InvoiceListView({
   formatCurrency, formatDate,
 }: Props) {
 
-  // Resolve salesperson ID → display name
-  // If salespersonMap has the key, use it. If the value looks like a Firestore ID (>20 chars, no spaces), shorten it.
   const spName = (idOrName: string | undefined): string => {
     if (!idOrName) return '—';
     if (salespersonMap[idOrName]) return salespersonMap[idOrName];
-    // Looks like a raw Firestore ID — show truncated until map is provided
     const looksLikeId = idOrName.length > 15 && !/\s/.test(idOrName);
     if (looksLikeId) return idOrName.slice(0, 8) + '…';
     return idOrName;
@@ -116,8 +108,10 @@ export function InvoiceListView({
             {filteredInvoices.length} of {invoices.length} invoices shown
           </p>
         </div>
-        <button onClick={onCreateInvoice}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 active:scale-95 transition-all font-semibold shadow-md border border-gray-700">
+        <button
+          onClick={onCreateInvoice}
+          style={{ backgroundColor: '#1f2937', color: '#ffffff', border: '1px solid #374151' }}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg active:scale-95 transition-all font-semibold shadow-md whitespace-nowrap flex-shrink-0">
           <Plus size={18} /> Create Invoice
         </button>
       </div>
@@ -125,10 +119,10 @@ export function InvoiceListView({
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Invoices', value: stats.totalCount,                       color: 'text-gray-900' },
-          { label: 'Paid',           value: stats.paidCount,                        color: 'text-green-600' },
-          { label: 'Unpaid',         value: stats.unpaidCount,                      color: 'text-red-600'   },
-          { label: 'Total Amount',   value: formatCurrency(stats.totalAmount),      color: 'text-gray-900'  },
+          { label: 'Total Invoices', value: stats.totalCount,                  color: 'text-gray-900' },
+          { label: 'Paid',           value: stats.paidCount,                   color: 'text-green-600' },
+          { label: 'Unpaid',         value: stats.unpaidCount,                 color: 'text-red-600'   },
+          { label: 'Total Amount',   value: formatCurrency(stats.totalAmount), color: 'text-gray-900'  },
         ].map(s => (
           <div key={s.label} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
             <p className="text-xs text-gray-500 mb-1">{s.label}</p>
@@ -154,13 +148,18 @@ export function InvoiceListView({
         <div className="flex flex-wrap gap-3">
           <div className="flex-1 min-w-[220px] relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-            <input type="text"
+            <input
+              type="text"
               placeholder="Search invoice, customer, phone, city…"
-              value={filters.searchTerm} onChange={e => onSearch(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600" />
+              value={filters.searchTerm}
+              onChange={e => onSearch(e.target.value)}
+              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 placeholder-gray-400" />
           </div>
-          <select value={filters.statusFilter} onChange={e => onStatusFilter(e.target.value as any)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white">
+          {/* FIX: explicit bg-white + text-gray-900 ensures the select is readable */}
+          <select
+            value={filters.statusFilter}
+            onChange={e => onStatusFilter(e.target.value as any)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900">
             <option value="all">All Status</option>
             <option value="Paid">Paid</option>
             <option value="Unpaid">Unpaid</option>
@@ -169,32 +168,40 @@ export function InvoiceListView({
 
         {/* Row 2: City + Salesperson + Date range */}
         <div className="flex flex-wrap gap-3">
-          {/* City / Branch */}
-          <select value={filters.cityFilter} onChange={e => onCityFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white">
+          <select
+            value={filters.cityFilter}
+            onChange={e => onCityFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900">
             <option value="">📍 All Cities</option>
             {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
-          {/* Salesperson */}
-          <select value={filters.salespersonFilter} onChange={e => onSalespersonFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white">
+          <select
+            value={filters.salespersonFilter}
+            onChange={e => onSalespersonFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900">
             <option value="">👤 All Salespersons</option>
             {availableSalespersons.map(sp => <option key={sp} value={sp}>{spName(sp) || sp}</option>)}
           </select>
 
-          {/* Date From */}
-          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-gray-600">
+          {/* Date From — FIX: text-gray-900 so the date value is visible */}
+          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500">
             <span className="text-xs text-gray-400 font-medium whitespace-nowrap shrink-0">From</span>
-            <input type="date" value={filters.dateFrom} onChange={e => onDateFromFilter(e.target.value)}
-              className="text-sm outline-none bg-transparent w-36" />
+            <input
+              type="date"
+              value={filters.dateFrom}
+              onChange={e => onDateFromFilter(e.target.value)}
+              className="text-sm outline-none bg-transparent text-gray-900 w-36" />
           </div>
 
           {/* Date To */}
-          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-gray-600">
+          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500">
             <span className="text-xs text-gray-400 font-medium whitespace-nowrap shrink-0">To</span>
-            <input type="date" value={filters.dateTo} onChange={e => onDateToFilter(e.target.value)}
-              className="text-sm outline-none bg-transparent w-36" />
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={e => onDateToFilter(e.target.value)}
+              className="text-sm outline-none bg-transparent text-gray-900 w-36" />
           </div>
         </div>
       </div>
@@ -228,17 +235,14 @@ export function InvoiceListView({
               ) : filteredInvoices.map(invoice => (
                 <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
 
-                  {/* Invoice # */}
-                  <td className="px-4 py-3 font-semibold text-gray-800 font-semibold whitespace-nowrap">
+                  <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
                     {invoice.invoiceNumber}
                   </td>
 
-                  {/* Date */}
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                     {formatDate(invoice.date)}
                   </td>
 
-                  {/* Customer */}
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{invoice.customerName}</p>
                     <p className="text-xs text-gray-400">{invoice.customerPhone}</p>
@@ -247,7 +251,6 @@ export function InvoiceListView({
                     )}
                   </td>
 
-                  {/* Branch / City */}
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-800 text-sm">{invoice.customerCity || '—'}</p>
                     {invoice.salespersonLocation && (
@@ -258,7 +261,6 @@ export function InvoiceListView({
                     )}
                   </td>
 
-                  {/* Salesperson */}
                   <td className="px-4 py-3">
                     {invoice.salesperson ? (
                       <div>
@@ -273,12 +275,10 @@ export function InvoiceListView({
                     ) : <span className="text-gray-300 text-sm">—</span>}
                   </td>
 
-                  {/* Products */}
                   <td className="px-4 py-3 text-gray-600">
                     {invoice.products.length} item(s)
                   </td>
 
-                  {/* Amount */}
                   <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
                     {formatCurrency(invoice.totalAmount)}
                     {(invoice.deductionCharges || 0) > 0 && (
@@ -288,7 +288,6 @@ export function InvoiceListView({
                     )}
                   </td>
 
-                  {/* Delivery */}
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${deliveryBadge(invoice.deliveryStatus)}`}>
                       {invoice.deliveryStatus}
@@ -300,7 +299,6 @@ export function InvoiceListView({
                     )}
                   </td>
 
-                  {/* Payment */}
                   <td className="px-4 py-3">
                     {invoice.paymentMode ? (
                       <div className="space-y-0.5">
@@ -323,7 +321,6 @@ export function InvoiceListView({
                     ) : <span className="text-gray-300">—</span>}
                   </td>
 
-                  {/* Status */}
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                       invoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -332,7 +329,6 @@ export function InvoiceListView({
                     </span>
                   </td>
 
-                  {/* Actions */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => onViewInvoice(invoice)}
@@ -346,7 +342,7 @@ export function InvoiceListView({
                       <button
                         onClick={() => handleDownloadPdf(invoice)}
                         disabled={generatingPdf.has(invoice.id)}
-                        className="p-1.5 text-gray-700 hover:bg-gray-50 rounded disabled:opacity-40"
+                        className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-40"
                         title="Download PDF">
                         {generatingPdf.has(invoice.id)
                           ? <Loader2 size={15} className="animate-spin" />

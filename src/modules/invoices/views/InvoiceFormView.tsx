@@ -21,7 +21,10 @@ interface Props {
   isSaving: boolean;
   pdfGenerating: boolean;
   isDownloadingPdf: boolean;
-  provinceCities: Record<string, string[]>;
+  // Country/City (replaces provinceCities)
+  savedCountries: string[];
+  savedCitiesForCountry: (country: string) => string[];
+  handleAddCountryCity: (country: string, city: string) => Promise<void>;
   salespersonLocations: string[];
   deliveryStatuses: string[];
   collectionMethods: string[];
@@ -39,32 +42,23 @@ interface Props {
   handleSave: () => void;
   handleCancel: () => void;
   handleDownloadPdf: () => void;
-  handleAddCustomCity: (province: string, city: string) => Promise<void>;
   calculateTotal: () => number;
   formatCurrency: (amount: number) => string;
-  // Branch/company for transaction linking
   invoiceCompany: TxCompany;
   setInvoiceCompany: (v: TxCompany) => void;
   branches: string[];
   handleAddBranch: (name: string) => Promise<void>;
-  // Salesperson locations with Add New
   salespersonLocationsList?: string[];
   handleAddSalespersonLocation?: (name: string) => Promise<void>;
-  // Multi-currency
   selectedCurrencies?: InvoiceCurrency[];
   toggleCurrency?: (c: InvoiceCurrency) => void;
 }
 
-// Charcoal theme tokens
-const CHARCOAL      = '#374151'; // gray-700
-const CHARCOAL_DARK = '#1f2937'; // gray-800
-const CHARCOAL_LIGHT = '#f3f4f6'; // gray-100
-const CHARCOAL_RING  = 'focus:ring-gray-600';
-
+const CHARCOAL_RING = 'focus:ring-gray-600';
 const inp = `w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 ${CHARCOAL_RING} text-sm h-8`;
 const lbl = 'block text-xs font-medium text-gray-700 mb-0.5';
 
-// ── Branch / Company selector with Add New ───────────────────────────────────
+// ── Branch / Company selector ────────────────────────────────────────────────
 function BranchSelector({
   branches, invoiceCompany, setInvoiceCompany, handleAddBranch,
 }: {
@@ -77,39 +71,35 @@ function BranchSelector({
   const [newBranch,    setNewBranch]    = React.useState('');
   const [saving,       setSaving]       = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
-
   React.useEffect(() => { if (addingBranch) inputRef.current?.focus(); }, [addingBranch]);
 
   const save = async () => {
     if (!newBranch.trim()) return;
     setSaving(true);
     await handleAddBranch(newBranch.trim());
-    setNewBranch('');
-    setAddingBranch(false);
-    setSaving(false);
+    setNewBranch(''); setAddingBranch(false); setSaving(false);
   };
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Branch / Company</label>
-      <div className="flex flex-wrap gap-1.5 mt-1">
+      <label className="block text-xs font-medium text-gray-700 mb-1">Branch / Company</label>
+      <div className="flex flex-wrap gap-1.5">
         {branches.map(branch => {
           const val = makeBranchValue(branch);
           const sel = invoiceCompany === val;
           return (
-            <button key={branch} type="button"
-              onClick={() => setInvoiceCompany(val)}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+            <button key={branch} type="button" onClick={() => setInvoiceCompany(val)}
+              style={sel ? { backgroundColor: '#1f2937', color: '#ffffff', borderColor: '#1f2937' } : {}}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all flex items-center gap-1 ${
                 sel
-                  ? 'border-gray-700 bg-gray-700 text-white shadow-sm'
+                  ? 'shadow-sm ring-2 ring-gray-300'
                   : 'border-gray-200 bg-white text-gray-600 hover:border-gray-500 hover:bg-gray-50'
               }`}>
+              {sel && <span className="text-xs">✓</span>}
               {branch}
             </button>
           );
         })}
-
-        {/* Add New Branch */}
         {addingBranch ? (
           <div className="flex items-center gap-1.5">
             <input ref={inputRef} type="text" value={newBranch}
@@ -118,13 +108,12 @@ function BranchSelector({
               className="px-2 py-1 border-2 border-gray-600 rounded-lg text-xs outline-none w-28"
               placeholder="Branch name…" />
             <button type="button" onClick={save} disabled={saving || !newBranch.trim()}
-              className="px-2 py-1 bg-gray-700 text-white rounded text-xs font-semibold disabled:opacity-50">
+              style={{ backgroundColor: '#374151', color: '#ffffff' }}
+              className="px-2 py-1 rounded text-xs font-semibold disabled:opacity-50">
               {saving ? '…' : 'Save'}
             </button>
             <button type="button" onClick={() => setAddingBranch(false)}
-              className="px-2 py-1 border border-gray-200 rounded text-xs text-gray-600">
-              ✕
-            </button>
+              className="px-2 py-1 border border-gray-200 rounded text-xs text-gray-600">✕</button>
           </div>
         ) : (
           <button type="button" onClick={() => setAddingBranch(true)}
@@ -133,7 +122,6 @@ function BranchSelector({
           </button>
         )}
       </div>
-      {/* Show selected branch full name */}
       <p className="text-xs text-gray-400 mt-1">
         PDF header: <span className="text-gray-600 font-medium">Pakistan Detector Technologies Pvt. Ltd — {branchFromValue(invoiceCompany)}</span>
       </p>
@@ -141,15 +129,114 @@ function BranchSelector({
   );
 }
 
+// ── Country / City selector ───────────────────────────────────────────────────
+// Replaces the old Province/City picker.
+// Shows previously used countries in a dropdown; cities for the chosen country are
+// shown in a second dropdown.  Both fields have an "Add New" inline text entry.
+function CountryCitySelector({
+  country, city, savedCountries, savedCitiesForCountry, setFormData, handleAddCountryCity,
+}: {
+  country: string;
+  city: string;
+  savedCountries: string[];
+  savedCitiesForCountry: (c: string) => string[];
+  setFormData: (d: Partial<Invoice>) => void;
+  handleAddCountryCity: (country: string, city: string) => Promise<void>;
+}) {
+  const [addingCountry, setAddingCountry] = useState(false);
+  const [newCountry,    setNewCountry]    = useState('');
+  const [addingCity,    setAddingCity]    = useState(false);
+  const [newCity,       setNewCity]       = useState('');
+
+  const citiesForCountry = savedCitiesForCountry(country);
+
+  const saveCountry = () => {
+    const c = newCountry.trim();
+    if (!c) return;
+    setFormData({ customerProvince: c, customerCity: '' });
+    setNewCountry(''); setAddingCountry(false);
+  };
+
+  const saveCity = async () => {
+    const c = newCity.trim();
+    if (!c || !country) return;
+    await handleAddCountryCity(country, c);
+    setNewCity(''); setAddingCity(false);
+  };
+
+  return (
+    <>
+      {/* Country */}
+      <div>
+        <label className={lbl}>Country</label>
+        {addingCountry ? (
+          <div className="flex gap-1">
+            <input type="text" value={newCountry} onChange={e => setNewCountry(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveCountry(); if (e.key === 'Escape') { setAddingCountry(false); setNewCountry(''); } }}
+              placeholder="e.g. UAE" autoFocus className={`${inp} flex-1`} />
+            <button onClick={saveCountry} style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
+            <button onClick={() => { setAddingCountry(false); setNewCountry(''); }}
+              className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
+          </div>
+        ) : (
+          <div className="flex gap-1">
+            <select value={country}
+              onChange={e => setFormData({ customerProvince: e.target.value, customerCity: '' })}
+              className={`${inp} flex-1`}>
+              <option value="">Select country</option>
+              {savedCountries.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <button onClick={() => setAddingCountry(true)} title="Add new country"
+              className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-400 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap">
+              <Plus size={11} /> Add
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* City */}
+      <div>
+        <label className={lbl}>City</label>
+        {addingCity ? (
+          <div className="flex gap-1">
+            <input type="text" value={newCity} onChange={e => setNewCity(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveCity(); if (e.key === 'Escape') { setAddingCity(false); setNewCity(''); } }}
+              placeholder="e.g. Dubai" autoFocus className={`${inp} flex-1`} />
+            <button onClick={saveCity} style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
+            <button onClick={() => { setAddingCity(false); setNewCity(''); }}
+              className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
+          </div>
+        ) : (
+          <div className="flex gap-1">
+            <select value={city}
+              onChange={e => setFormData({ customerCity: e.target.value })}
+              disabled={!country}
+              className={`${inp} flex-1 disabled:bg-gray-50 disabled:text-gray-400`}>
+              <option value="">Select city</option>
+              {citiesForCountry.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <button onClick={() => setAddingCity(true)} title="Add new city"
+              disabled={!country}
+              className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-400 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
+              <Plus size={11} /> Add
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function InvoiceFormView({
   formData, selectedProducts, customerSuggestions, showSuggestions,
   isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
-  provinceCities, salespersonLocations, deliveryStatuses, collectionMethods,
+  savedCountries, savedCitiesForCountry, handleAddCountryCity,
+  salespersonLocations, deliveryStatuses, collectionMethods,
   availableProducts, activeEmployees, banks,
   setFormData, handleCustomerSearch, handleCustomerSelect,
   addProduct, removeProduct, updateProduct, updateSerial,
   getAvailableSerialsForProduct,
-  handleSave, handleCancel, handleDownloadPdf, handleAddCustomCity,
+  handleSave, handleCancel, handleDownloadPdf,
   calculateTotal, formatCurrency,
   invoiceCompany, setInvoiceCompany,
   branches, handleAddBranch,
@@ -160,17 +247,8 @@ export function InvoiceFormView({
 }: Props) {
   const total = calculateTotal();
 
-  const [addingCity, setAddingCity] = useState(false);
-  const [newCityName, setNewCityName] = useState('');
   const [addingSpLoc, setAddingSpLoc] = useState(false);
-  const [newSpLoc, setNewSpLoc] = useState('');
-
-  const handleSaveNewCity = async () => {
-    if (!newCityName.trim() || !formData.customerProvince) return;
-    await handleAddCustomCity(formData.customerProvince, newCityName.trim());
-    setNewCityName('');
-    setAddingCity(false);
-  };
+  const [newSpLoc,    setNewSpLoc]    = useState('');
 
   if (isLoading) {
     return (
@@ -179,10 +257,6 @@ export function InvoiceFormView({
       </div>
     );
   }
-
-  const citiesForProvince = formData.customerProvince
-    ? (provinceCities[formData.customerProvince] || [])
-    : [];
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
@@ -195,19 +269,14 @@ export function InvoiceFormView({
         <div className="flex items-center gap-2">
           {pdfGenerating && (
             <div className="flex items-center gap-2 text-xs text-gray-700 bg-gray-100 px-3 py-1 rounded-lg">
-              <Loader2 size={12} className="animate-spin" />
-              Saving PDF to cloud…
+              <Loader2 size={12} className="animate-spin" /> Saving PDF to cloud…
             </div>
           )}
-          <button
-            onClick={handleDownloadPdf}
-            disabled={isDownloadingPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-400 text-gray-700 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-xs font-medium shadow-sm"
-          >
+          <button onClick={handleDownloadPdf} disabled={isDownloadingPdf}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-400 text-gray-700 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-xs font-medium shadow-sm">
             {isDownloadingPdf
               ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
-              : <><FileDown size={13} /> Download PDF</>
-            }
+              : <><FileDown size={13} /> Download PDF</>}
           </button>
           <button onClick={handleCancel} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg">
             <X size={20} />
@@ -215,9 +284,9 @@ export function InvoiceFormView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2 pb-0">
 
-        {/* ── Customer Information — 4-column grid ── */}
+        {/* ── Customer Information ── */}
         <div className="border-b pb-2">
           <h4 className="font-semibold text-gray-900 mb-1.5 text-sm">Customer Information</h4>
 
@@ -226,29 +295,24 @@ export function InvoiceFormView({
             <div>
               <label className={lbl}>Invoice Number</label>
               {(() => {
-                // Format: "PDT-25189"  →  prefix "PDT-" (read-only) + editable last 3 digits
-                const full     = formData.invoiceNumber || '';
-                const dashIdx  = full.lastIndexOf('-');
-                const prefix   = dashIdx >= 0 ? full.slice(0, dashIdx + 1) : '';   // "PDT-"
-                const suffix   = dashIdx >= 0 ? full.slice(dashIdx + 1)    : full; // "25189"
-                const fixedPart    = suffix.length > 3 ? suffix.slice(0, suffix.length - 3) : ''; // "25"
-                const editablePart = suffix.slice(-3);                                             // "189"
+                const full    = formData.invoiceNumber || '';
+                const dashIdx = full.lastIndexOf('-');
+                const prefix  = dashIdx >= 0 ? full.slice(0, dashIdx + 1) : '';
+                const suffix  = dashIdx >= 0 ? full.slice(dashIdx + 1) : full;
+                const fixedPart    = suffix.length > 3 ? suffix.slice(0, suffix.length - 3) : '';
+                const editablePart = suffix.slice(-3);
                 return (
                   <div className="flex items-center h-8 border border-gray-300 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-gray-600 bg-white">
                     <span className="px-2 text-sm text-gray-500 bg-gray-50 whitespace-nowrap border-r border-gray-200 select-none h-full flex items-center">
                       {prefix}{fixedPart}
                     </span>
-                    <input
-                      type="text"
-                      value={editablePart}
-                      maxLength={3}
+                    <input type="text" value={editablePart} maxLength={3}
                       onChange={e => {
                         const val = e.target.value.replace(/\D/g, '').slice(0, 3);
                         setFormData({ invoiceNumber: `${prefix}${fixedPart}${val}` });
                       }}
                       className="flex-1 px-1 text-sm font-semibold text-gray-900 bg-white focus:outline-none text-center min-w-0"
-                      title="Edit last 3 digits of invoice number"
-                    />
+                      title="Edit last 3 digits of invoice number" />
                   </div>
                 );
               })()}
@@ -256,19 +320,11 @@ export function InvoiceFormView({
             <div>
               <label className={lbl}>Date</label>
               {isEditing ? (
-                /* Edit mode — allow date correction */
-                <input
-                  type="date"
-                  value={formData.date || ''}
-                  onChange={e => setFormData({ date: e.target.value })}
-                  className={inp}
-                />
+                <input type="date" value={formData.date || ''}
+                  onChange={e => setFormData({ date: e.target.value })} className={inp} />
               ) : (
-                /* Create mode — locked to today, not editable */
-                <div
-                  className={`${inp} flex items-center gap-1.5 bg-gray-50 text-gray-600 cursor-not-allowed select-none`}
-                  title="Date is automatically set to today and cannot be changed"
-                >
+                <div className={`${inp} flex items-center gap-1.5 bg-gray-50 text-gray-600 cursor-not-allowed select-none`}
+                  title="Date is automatically set to today">
                   <span className="text-xs">🔒</span>
                   <span>{formData.date || new Date().toISOString().split('T')[0]}</span>
                 </div>
@@ -276,13 +332,9 @@ export function InvoiceFormView({
             </div>
             <div className="relative">
               <label className={lbl}>Customer Name *</label>
-              <input
-                type="text"
-                value={formData.customerName || ''}
+              <input type="text" value={formData.customerName || ''}
                 onChange={e => handleCustomerSearch(e.target.value, 'customerName')}
-                placeholder="Enter customer name"
-                className={inp}
-              />
+                placeholder="Enter customer name" className={inp} />
               {showSuggestions && (
                 <div className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg w-full max-h-40 overflow-y-auto mt-1">
                   {customerSuggestions.map(s => (
@@ -296,127 +348,48 @@ export function InvoiceFormView({
             </div>
             <div>
               <label className={lbl}>CNIC *</label>
-              <input
-                type="text"
-                value={formData.customerCNIC || ''}
+              <input type="text" value={formData.customerCNIC || ''}
                 onChange={e => setFormData({ customerCNIC: e.target.value })}
-                placeholder="42101-1234567-1"
-                className={inp}
-              />
+                placeholder="42101-1234567-1" className={inp} />
             </div>
           </div>
 
-          {/* Row 2: Phone Number | Second Phone | Province | City */}
+          {/* Row 2: Phone | Second Phone | Country | City */}
           <div className="grid grid-cols-4 gap-2 mb-2">
             <div className="relative">
               <label className={lbl}>Phone Number *</label>
-              <input
-                type="tel"
-                value={formData.customerPhone || ''}
+              <input type="tel" value={formData.customerPhone || ''}
                 onChange={e => handleCustomerSearch(e.target.value, 'customerPhone')}
-                placeholder="+92 300 1234567"
-                className={inp}
-              />
+                placeholder="+92 300 1234567" className={inp} />
             </div>
             <div>
               <label className={lbl}>Second Phone</label>
-              <input
-                type="tel"
-                value={formData.customerPhone2 || ''}
-                onChange={e => setFormData({ customerPhone2: e.target.value })}
-                className={inp}
-              />
+              <input type="tel" value={formData.customerPhone2 || ''}
+                onChange={e => setFormData({ customerPhone2: e.target.value })} className={inp} />
             </div>
 
-            {/* Province */}
-            <div>
-              <label className={lbl}>Province</label>
-              <select
-                value={formData.customerProvince || ''}
-                onChange={e => {
-                  setFormData({ customerProvince: e.target.value, customerCity: '' });
-                  setAddingCity(false);
-                  setNewCityName('');
-                }}
-                className={inp}
-              >
-                <option value="">Select province</option>
-                {Object.keys(provinceCities).map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-
-            {/* City with "Add new city" */}
-            <div>
-              <label className={lbl}>City</label>
-              {addingCity ? (
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={newCityName}
-                    onChange={e => setNewCityName(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleSaveNewCity();
-                      if (e.key === 'Escape') { setAddingCity(false); setNewCityName(''); }
-                    }}
-                    placeholder="New city name"
-                    autoFocus
-                    className={`${inp} flex-1`}
-                  />
-                  <button
-                    onClick={handleSaveNewCity}
-                    className="px-2 py-1 bg-gray-700 text-white rounded-md text-xs hover:bg-gray-800 transition-colors"
-                  >Save</button>
-                  <button
-                    onClick={() => { setAddingCity(false); setNewCityName(''); }}
-                    className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs hover:bg-gray-200 transition-colors"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-1">
-                  <select
-                    value={formData.customerCity || ''}
-                    onChange={e => setFormData({ customerCity: e.target.value })}
-                    disabled={!formData.customerProvince}
-                    className={`${inp} flex-1 disabled:bg-gray-50 disabled:text-gray-400`}
-                  >
-                    <option value="">Select city</option>
-                    {citiesForProvince.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  {formData.customerProvince && (
-                    <button
-                      onClick={() => setAddingCity(true)}
-                      title="Add new city"
-                      className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-400 text-gray-600 rounded-md text-xs hover:bg-gray-50 transition-colors whitespace-nowrap"
-                    >
-                      <Plus size={11} /> Add
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* Country / City — replaces Province / City */}
+            <CountryCitySelector
+              country={formData.customerProvince || ''}
+              city={formData.customerCity || ''}
+              savedCountries={savedCountries}
+              savedCitiesForCountry={savedCitiesForCountry}
+              setFormData={setFormData}
+              handleAddCountryCity={handleAddCountryCity}
+            />
           </div>
 
-          {/* Row 3: Address | Warranty Location (span 2 each) */}
+          {/* Row 3: Address | Warranty Location */}
           <div className="grid grid-cols-4 gap-2">
             <div className="col-span-2">
               <label className={lbl}>Address</label>
-              <input
-                type="text"
-                value={formData.customerAddress || ''}
-                onChange={e => setFormData({ customerAddress: e.target.value })}
-                className={inp}
-              />
+              <input type="text" value={formData.customerAddress || ''}
+                onChange={e => setFormData({ customerAddress: e.target.value })} className={inp} />
             </div>
             <div className="col-span-2">
               <label className={lbl}>Warranty Location</label>
-              <input
-                type="text"
-                value={formData.warrantyLocation || ''}
-                onChange={e => setFormData({ warrantyLocation: e.target.value })}
-                className={inp}
-              />
+              <input type="text" value={formData.warrantyLocation || ''}
+                onChange={e => setFormData({ warrantyLocation: e.target.value })} className={inp} />
             </div>
           </div>
         </div>
@@ -425,10 +398,9 @@ export function InvoiceFormView({
         <div className="border-b pb-2">
           <div className="flex items-center justify-between mb-1.5">
             <h4 className="font-semibold text-gray-900 text-sm">Products</h4>
-            <button
-              onClick={addProduct}
-              className="flex items-center gap-1 text-xs bg-gray-700 text-white px-2.5 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
-            >
+            <button onClick={addProduct}
+              style={{ backgroundColor: '#374151', color: '#ffffff' }}
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors">
               <Plus size={14} /> Add Product
             </button>
           </div>
@@ -438,13 +410,10 @@ export function InvoiceFormView({
           ) : (
             <div className="space-y-2">
               {selectedProducts.map((product, index) => {
-                const serials = product.productId
-                  ? getAvailableSerialsForProduct(product.productId, product.id)
-                  : [];
+                const serials = product.productId ? getAvailableSerialsForProduct(product.productId, product.id) : [];
                 const ownSelected  = (product.serialNumbers || []).filter(s => s.trim() !== '');
                 const totalChoices = serials.length + ownSelected.length;
                 const maxQty       = Math.max(totalChoices, product.quantity);
-
                 return (
                   <div key={product.id} className="border rounded-lg p-2 bg-gray-50">
                     <div className="flex items-center justify-between mb-1.5">
@@ -453,7 +422,6 @@ export function InvoiceFormView({
                         <Trash2 size={14} />
                       </button>
                     </div>
-
                     <div className="grid grid-cols-3 gap-2 mb-1.5">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-0.5">Product *</label>
@@ -482,7 +450,6 @@ export function InvoiceFormView({
                           onChange={e => updateProduct(product.id, 'price', Number(e.target.value))} className={inp} />
                       </div>
                     </div>
-
                     {product.productId && (
                       <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
                         {product.brandName   && <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full font-medium">{product.brandName}</span>}
@@ -491,7 +458,6 @@ export function InvoiceFormView({
                         {product.description && <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full truncate max-w-xs">{product.description}</span>}
                       </div>
                     )}
-
                     {product.productId && product.quantity > 0 && (
                       <div className="border-t pt-2">
                         <div className="flex items-center gap-1.5 mb-1.5">
@@ -507,7 +473,8 @@ export function InvoiceFormView({
                               const currentVal = product.serialNumbers?.[i] || '';
                               const options = currentVal && !serials.includes(currentVal) ? [currentVal, ...serials] : serials;
                               return (
-                                <select key={i} value={currentVal} onChange={e => updateSerial(product.id, i, e.target.value)} className={inp}>
+                                <select key={i} value={currentVal}
+                                  onChange={e => updateSerial(product.id, i, e.target.value)} className={inp}>
                                   <option value="">— Serial #{i + 1} —</option>
                                   {options.map(s => (
                                     <option key={s} value={s} disabled={s !== currentVal && (product.serialNumbers || []).includes(s)}>{s}</option>
@@ -521,7 +488,6 @@ export function InvoiceFormView({
                         )}
                       </div>
                     )}
-
                     <div className="mt-2 text-right text-xs font-semibold text-gray-900">
                       Total: {formatCurrency(product.total)}
                     </div>
@@ -538,59 +504,51 @@ export function InvoiceFormView({
             <Truck size={14} className="text-gray-700" />
             <h4 className="font-semibold text-gray-900 text-sm">Delivery & Information</h4>
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          {/* Row 1: Delivery Status | Payment Status | Branch/Company (spans 2 cols) */}
+          <div className="grid grid-cols-4 gap-2 mb-2">
             <div>
               <label className={lbl}>Delivery Status</label>
-              <select value={formData.deliveryStatus || 'Self-collect'} onChange={e => setFormData({ deliveryStatus: e.target.value as any })} className={inp}>
+              <select value={formData.deliveryStatus || 'Self-collect'}
+                onChange={e => setFormData({ deliveryStatus: e.target.value as any })} className={inp}>
                 {deliveryStatuses.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label className={lbl}>Payment Status</label>
-              <select value={formData.status || 'Unpaid'} onChange={e => setFormData({ status: e.target.value as any })} className={inp}>
+              <select value={formData.status || 'Unpaid'}
+                onChange={e => setFormData({ status: e.target.value as any })} className={inp}>
                 <option value="Unpaid">Unpaid</option>
                 <option value="Paid">Paid</option>
               </select>
             </div>
-
-            {/* Branch / Company — dynamic, saved to Firestore */}
             <div className="col-span-2">
-              <BranchSelector
-                branches={branches}
-                invoiceCompany={invoiceCompany}
-                setInvoiceCompany={setInvoiceCompany}
-                handleAddBranch={handleAddBranch}
-              />
+              <BranchSelector branches={branches} invoiceCompany={invoiceCompany}
+                setInvoiceCompany={setInvoiceCompany} handleAddBranch={handleAddBranch} />
             </div>
+          </div>
 
-            {/* Digital Stamp Checkbox */}
-            <div className="col-span-2 flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer select-none h-8">
-                <input
-                  type="checkbox"
-                  checked={!!formData.digitalStamp}
+          {/* Row 2: Digital Stamp | Warranty Note */}
+          <div className="grid grid-cols-4 gap-2 items-end mb-2">
+            <div className="flex items-center h-8">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!formData.digitalStamp}
                   onChange={() => setFormData({ digitalStamp: !formData.digitalStamp })}
-                  className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-600 cursor-pointer"
-                />
+                  className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-600 cursor-pointer" />
                 <Stamp size={13} className="text-gray-500" />
                 <span className="text-xs font-medium text-gray-700">Add Digital Stamp to PDF</span>
               </label>
             </div>
+            <div className="col-span-3">
+              <label className={lbl}>Exchange & Warranty Note</label>
+              <textarea value={formData.exchangeWarrantyNote || ''}
+                onChange={e => setFormData({ exchangeWarrantyNote: e.target.value })}
+                rows={2} placeholder="e.g., 2 years warranty, no exchange after 7 days"
+                className={`${inp} resize-none h-auto`} />
+            </div>
           </div>
 
-          <div className="mt-2">
-            <label className={lbl}>Exchange & Warranty Note</label>
-            <textarea
-              value={formData.exchangeWarrantyNote || ''}
-              onChange={e => setFormData({ exchangeWarrantyNote: e.target.value })}
-              rows={2}
-              placeholder="e.g., 2 years warranty, no exchange after 7 days"
-              className={`${inp} resize-none h-auto`}
-            />
-          </div>
-
-          {/* ── Multi-currency selector ── */}
-          <div className="mt-2">
+          {/* Multi-currency selector */}
+          <div>
             <div className="flex items-center gap-1.5 mb-1">
               <Globe size={12} className="text-gray-600" />
               <label className="text-xs font-medium text-gray-700">Invoice Currencies (shown on PDF)</label>
@@ -601,15 +559,13 @@ export function InvoiceFormView({
                 const active = selectedCurrencies.includes(c.code);
                 return (
                   <button key={c.code} type="button" onClick={() => toggleCurrency(c.code)}
+                    style={active ? { backgroundColor: '#1f2937', color: '#ffffff', borderColor: '#1f2937' } : {}}
                     className={`px-3 py-1 rounded-lg border text-xs font-semibold transition-all ${
                       active
-                        ? 'border-gray-700 bg-gray-700 text-white shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-500 hover:bg-gray-50'
+                        ? 'shadow-sm ring-2 ring-gray-300'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-gray-500 hover:bg-gray-50'
                     }`}>
                     {c.symbol} {c.code}
-                    {active && selectedCurrencies.length > 1 && c.code !== selectedCurrencies[0] && (
-                      <span className="ml-1 opacity-70 text-[10px]">✓</span>
-                    )}
                   </button>
                 );
               })}
@@ -632,7 +588,8 @@ export function InvoiceFormView({
           <div className="grid grid-cols-4 gap-2">
             <div>
               <label className={lbl}>Salesperson</label>
-              <select value={formData.salesperson || ''} onChange={e => setFormData({ salesperson: e.target.value })} className={inp}>
+              <select value={formData.salesperson || ''}
+                onChange={e => setFormData({ salesperson: e.target.value })} className={inp}>
                 <option value="">Select salesperson</option>
                 {activeEmployees.map(e => <option key={e.id} value={e.id}>{e.name} — {e.position}</option>)}
               </select>
@@ -643,9 +600,7 @@ export function InvoiceFormView({
               <label className={lbl}>Salesperson Location</label>
               {addingSpLoc ? (
                 <div className="flex gap-1">
-                  <input
-                    type="text" value={newSpLoc}
-                    onChange={e => setNewSpLoc(e.target.value)}
+                  <input type="text" value={newSpLoc} onChange={e => setNewSpLoc(e.target.value)}
                     onKeyDown={async e => {
                       if (e.key === 'Enter' && newSpLoc.trim()) {
                         await handleAddSalespersonLocation(newSpLoc.trim());
@@ -654,23 +609,16 @@ export function InvoiceFormView({
                       }
                       if (e.key === 'Escape') { setAddingSpLoc(false); setNewSpLoc(''); }
                     }}
-                    placeholder="New location" autoFocus
-                    className={`${inp} flex-1`}
-                  />
-                  <button
-                    onClick={async () => {
-                      if (newSpLoc.trim()) {
-                        await handleAddSalespersonLocation(newSpLoc.trim());
-                        setFormData({ salespersonLocation: newSpLoc.trim() });
-                        setNewSpLoc(''); setAddingSpLoc(false);
-                      }
-                    }}
-                    className="px-2 py-1 bg-gray-700 text-white rounded-md text-xs hover:bg-gray-800 transition-colors"
-                  >Save</button>
+                    placeholder="New location" autoFocus className={`${inp} flex-1`} />
+                  <button onClick={async () => {
+                    if (newSpLoc.trim()) {
+                      await handleAddSalespersonLocation(newSpLoc.trim());
+                      setFormData({ salespersonLocation: newSpLoc.trim() });
+                      setNewSpLoc(''); setAddingSpLoc(false);
+                    }
+                  }} style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
                   <button onClick={() => { setAddingSpLoc(false); setNewSpLoc(''); }}
-                    className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs hover:bg-gray-200 transition-colors">
-                    <X size={12} />
-                  </button>
+                    className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
                 </div>
               ) : (
                 <div className="flex gap-1">
@@ -681,7 +629,7 @@ export function InvoiceFormView({
                     {salespersonLocationsList.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
                   <button onClick={() => setAddingSpLoc(true)} title="Add new location"
-                    className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-400 text-gray-600 rounded-md text-xs hover:bg-gray-50 transition-colors whitespace-nowrap">
+                    className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-400 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap">
                     <Plus size={11} /> Add
                   </button>
                 </div>
@@ -690,19 +638,22 @@ export function InvoiceFormView({
 
             <div>
               <label className={lbl}>Referral To</label>
-              <input type="text" value={formData.clientDealBy || ''} onChange={e => setFormData({ clientDealBy: e.target.value })} className={inp} />
+              <input type="text" value={formData.clientDealBy || ''}
+                onChange={e => setFormData({ clientDealBy: e.target.value })} className={inp} />
             </div>
             <div>
               <label className={lbl}>Referral From</label>
-              <input type="text" value={formData.referralBy || ''} onChange={e => setFormData({ referralBy: e.target.value })} className={inp} />
+              <input type="text" value={formData.referralBy || ''}
+                onChange={e => setFormData({ referralBy: e.target.value })} className={inp} />
             </div>
             <div className="col-span-4">
               <label className={lbl}>Created By</label>
-              <input type="text" value={formData.createdBy || ''} onChange={e => setFormData({ createdBy: e.target.value })} className={inp} />
+              <input type="text" value={formData.createdBy || ''}
+                onChange={e => setFormData({ createdBy: e.target.value })} className={inp} />
             </div>
           </div>
 
-          {/* ── Import Charges — Cargo / Customs / Agent ── */}
+          {/* Import Charges */}
           <div className="mt-2 pt-2 border-t border-blue-200">
             <div className="flex items-center gap-1.5 mb-1.5">
               <Package size={12} className="text-gray-600" />
@@ -746,7 +697,7 @@ export function InvoiceFormView({
         </div>
 
         {/* ── Payment & Collection (internal) ── */}
-        <div className="border-b pb-2 bg-green-50 p-2 rounded-xl">
+        <div className="pb-2 bg-green-50 p-2 rounded-xl">
           <div className="flex items-center gap-2 mb-1.5">
             <CreditCard size={13} className="text-green-600" />
             <h4 className="font-semibold text-gray-900 text-sm">Payment & Collection</h4>
@@ -755,32 +706,29 @@ export function InvoiceFormView({
           <div className="grid grid-cols-4 gap-2">
             <div>
               <label className={lbl}>Payment Mode</label>
-              <select
-                value={formData.paymentMode || 'Cash'}
+              <select value={formData.paymentMode || 'Cash'}
                 onChange={e => setFormData({
                   paymentMode: e.target.value as any,
                   bankId: '', bankName: '', bankAccountNumber: '',
                   chequeNumber: '', chequeBank: '', chequeDate: '',
                 })}
-                className={inp}
-              >
+                className={inp}>
                 <option value="Cash">Cash</option>
                 <option value="Online">Online (Bank Transfer)</option>
                 <option value="Cheque">Cheque</option>
               </select>
             </div>
-
             <div>
               <label className={lbl}>Payment Status</label>
-              <select value={formData.paymentStatus || 'Full'} onChange={e => {
-                const s = e.target.value as 'Full' | 'Partial';
-                setFormData({ paymentStatus: s, paidAmount: s === 'Full' ? total : 0, remainingAmount: s === 'Full' ? 0 : total });
-              }} className={inp}>
+              <select value={formData.paymentStatus || 'Full'}
+                onChange={e => {
+                  const s = e.target.value as 'Full' | 'Partial';
+                  setFormData({ paymentStatus: s, paidAmount: s === 'Full' ? total : 0, remainingAmount: s === 'Full' ? 0 : total });
+                }} className={inp}>
                 <option value="Full">Full Payment</option>
                 <option value="Partial">Partial Payment</option>
               </select>
             </div>
-
             <div>
               <label className={lbl}>Collection Method</label>
               <select value={formData.collectionMethod || 'Self Collection'}
@@ -788,23 +736,16 @@ export function InvoiceFormView({
                 {collectionMethods.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
-
             <div>
               <label className={lbl}>
                 Deduction Charges
                 <span className="ml-1 text-xs font-normal text-gray-400">(manual)</span>
               </label>
-              <input
-                type="number"
-                min="0"
-                value={formData.deductionCharges ?? 0}
+              <input type="number" min="0" value={formData.deductionCharges ?? 0}
                 onChange={e => setFormData({ deductionCharges: Number(e.target.value) })}
-                className={inp}
-                placeholder="0"
-              />
+                className={inp} placeholder="0" />
             </div>
 
-            {/* Partial payment fields */}
             {formData.paymentStatus === 'Partial' && (
               <>
                 <div>
@@ -820,7 +761,6 @@ export function InvoiceFormView({
               </>
             )}
 
-            {/* Online — bank selector */}
             {formData.paymentMode === 'Online' && (
               <div className="col-span-4">
                 <label className={lbl}>Company Bank Account (receiving payment)</label>
@@ -839,7 +779,6 @@ export function InvoiceFormView({
               </div>
             )}
 
-            {/* Cheque fields */}
             {formData.paymentMode === 'Cheque' && (
               <>
                 <div>
@@ -864,64 +803,58 @@ export function InvoiceFormView({
           </div>
         </div>
 
-        {/* ── Total & Save ── */}
-        <div className="bg-gray-50 rounded-xl p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-4">
-                <span className="text-sm font-semibold text-gray-900">Total Amount:</span>
-                <span className="text-xl font-bold text-gray-700">{formatCurrency(total)}</span>
-              </div>
-              {(formData.deductionCharges || 0) > 0 && (
-                <div className="flex items-center gap-4 text-xs">
-                  <span className="text-gray-500">Delivery Deduction:</span>
-                  <span className="text-red-600 font-medium">− {formatCurrency(formData.deductionCharges || 0)}</span>
-                </div>
-              )}
-              {((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0)) > 0 && (
-                <div className="flex items-center gap-4 text-xs">
-                  <span className="text-gray-500">Import Charges (cargo+customs+agent):</span>
-                  <span className="text-orange-600 font-medium">
-                    − {formatCurrency((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0))}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleDownloadPdf}
-                disabled={isDownloadingPdf}
-                className="flex items-center gap-1.5 px-3 py-2 border border-gray-400 text-gray-700 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-xs font-medium"
-              >
-                {isDownloadingPdf
-                  ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
-                  : <><FileDown size={13} /> Download PDF</>
-                }
-              </button>
-              <button onClick={handleCancel} className="px-3 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-xs">
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center gap-1.5 px-5 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors font-semibold text-sm"
-              >
-                {isSaving
-                  ? <><Loader2 size={16} className="animate-spin" /> Saving…</>
-                  : isEditing ? 'Update Invoice' : 'Create Invoice'
-                }
-              </button>
-            </div>
-          </div>
-          {pdfGenerating && (
-            <p className="text-xs text-gray-600 text-right flex items-center justify-end gap-1.5">
-              <Loader2 size={10} className="animate-spin" />
-              PDF uploading to cloud storage…
-            </p>
-          )}
-        </div>
-
       </div>
+
+      {/* ── Total & Save — sticky footer, always visible ── */}
+      <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-semibold text-gray-900">Total Amount:</span>
+              <span className="text-xl font-bold text-gray-700">{formatCurrency(total)}</span>
+            </div>
+            {(formData.deductionCharges || 0) > 0 && (
+              <div className="flex items-center gap-4 text-xs">
+                <span className="text-gray-500">Delivery Deduction:</span>
+                <span className="text-red-600 font-medium">− {formatCurrency(formData.deductionCharges || 0)}</span>
+              </div>
+            )}
+            {((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0)) > 0 && (
+              <div className="flex items-center gap-4 text-xs">
+                <span className="text-gray-500">Import Charges:</span>
+                <span className="text-orange-600 font-medium">
+                  − {formatCurrency((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0))}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleDownloadPdf} disabled={isDownloadingPdf}
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-xs font-medium">
+              {isDownloadingPdf
+                ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
+                : <><FileDown size={13} /> Download PDF</>}
+            </button>
+            <button onClick={handleCancel}
+              className="px-3 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium border border-gray-200">
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={isSaving}
+              style={{ backgroundColor: '#1f2937', color: '#ffffff' }}
+              className="flex items-center gap-1.5 px-5 py-2 rounded-lg disabled:opacity-50 transition-colors font-semibold text-sm shadow-sm whitespace-nowrap">
+              {isSaving
+                ? <><Loader2 size={16} className="animate-spin" /> Saving…</>
+                : isEditing ? 'Update Invoice' : 'Create Invoice'}
+            </button>
+          </div>
+        </div>
+        {pdfGenerating && (
+          <p className="text-xs text-gray-600 mt-1 text-right flex items-center justify-end gap-1.5">
+            <Loader2 size={10} className="animate-spin" /> PDF uploading to cloud storage…
+          </p>
+        )}
+      </div>
+
     </div>
   );
 }

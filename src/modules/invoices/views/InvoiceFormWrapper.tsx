@@ -16,7 +16,10 @@ export function InvoiceFormWrapper() {
       isSaving={vm.isSaving}
       pdfGenerating={vm.pdfGenerating}
       isDownloadingPdf={vm.isDownloadingPdf}
-      provinceCities={vm.provinceCities}
+      // Country/City (replaces provinceCities + handleAddCustomCity)
+      savedCountries={vm.savedCountries}
+      savedCitiesForCountry={vm.savedCitiesForCountry}
+      handleAddCountryCity={vm.handleAddCountryCity}
       salespersonLocations={vm.salespersonLocations}
       deliveryStatuses={vm.deliveryStatuses}
       collectionMethods={vm.collectionMethods}
@@ -34,13 +37,16 @@ export function InvoiceFormWrapper() {
       handleSave={vm.handleSave}
       handleCancel={vm.handleCancel}
       handleDownloadPdf={vm.handleDownloadPdf}
-      handleAddCustomCity={vm.handleAddCustomCity}
       calculateTotal={vm.calculateTotal}
       formatCurrency={vm.formatCurrency}
       invoiceCompany={vm.invoiceCompany}
       setInvoiceCompany={vm.setInvoiceCompany}
       branches={vm.branches}
       handleAddBranch={vm.handleAddBranch}
+      salespersonLocationsList={vm.salespersonLocationsList}
+      handleAddSalespersonLocation={vm.handleAddSalespersonLocation}
+      selectedCurrencies={vm.selectedCurrencies}
+      toggleCurrency={vm.toggleCurrency}
     />
   );
 }

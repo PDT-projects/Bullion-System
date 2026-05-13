@@ -1,13 +1,9 @@
 // Invoice Module - Form ViewModel
-// FIXES:
-//   1. SPEED: All Firestore fetches now run in parallel (Promise.all) — no sequential blocking.
-//             Products fetched in parallel with invoices/employees/banks.
-//             Invoice list capped at last 100 for suggestions (avoids full-collection scan).
-//   2. INVOICE NUMBER: Sequential counter stored in Firestore invoiceCounters/global.
-//             Format: INV-DDMMYY-NNN where NNN is 001, 002, 003… (resets each day).
-//             Atomic increment via runTransaction prevents duplicates under concurrent saves.
-//   3. CUSTOM CITIES: Saved to appConfig/customCities in Firestore and immediately
-//             merged into the province dropdown — persisted across sessions.
+// CHANGES:
+//   - Replaced Province/City with Country/City
+//     • Countries+cities are free-text entries persisted to Firestore (appConfig/countryCities)
+//     • Previously used combos appear in dropdowns for the next invoice
+//   - Commission auto-calculation wired through internal fields
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -22,7 +18,7 @@ import {
   createEmptyInvoiceProduct, updateProductWithSelection, updateProductQuantity,
   updateProductPrice, updateSerialNumber, getAvailableSerials,
   validateInvoice, calculateTotal,
-  provinceCities as baseCities, salespersonLocations, deliveryStatuses,
+  salespersonLocations, deliveryStatuses,
   collectionMethods, formatCurrency, InvoiceCurrency,
 } from '../models/invoiceService';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
@@ -57,7 +53,10 @@ export interface UseInvoiceFormViewModelReturn {
   isSaving: boolean;
   pdfGenerating: boolean;
   isDownloadingPdf: boolean;
-  provinceCities: Record<string, string[]>;
+  // Country/City (replaces province/city)
+  savedCountries: string[];
+  savedCitiesForCountry: (country: string) => string[];
+  handleAddCountryCity: (country: string, city: string) => Promise<void>;
   salespersonLocations: string[];
   deliveryStatuses: string[];
   collectionMethods: string[];
@@ -75,26 +74,19 @@ export interface UseInvoiceFormViewModelReturn {
   handleSave: () => void;
   handleCancel: () => void;
   handleDownloadPdf: () => void;
-  handleAddCustomCity: (province: string, city: string) => Promise<void>;
   calculateTotal: () => number;
   formatCurrency: (amount: number) => string;
-  // Branch/company for transaction linking
   invoiceCompany: TxCompany;
   setInvoiceCompany: (v: TxCompany) => void;
   branches: string[];
   handleAddBranch: (name: string) => Promise<void>;
-  // Salesperson locations (dynamic with Add New)
   salespersonLocationsList: string[];
   handleAddSalespersonLocation: (name: string) => Promise<void>;
-  // Multi-currency
   selectedCurrencies: InvoiceCurrency[];
   toggleCurrency: (c: InvoiceCurrency) => void;
 }
 
 // ── Sequential invoice number generator ───────────────────────────────────────
-// Format: INV-DDMMYY-NNN  e.g. INV-240426-001
-// Counter document: invoiceCounters/global  { date: "240426", seq: 3 }
-// Uses a Firestore transaction so concurrent saves never produce duplicates.
 async function generateSequentialInvoiceNumber(): Promise<string> {
   const now   = new Date();
   const dd    = String(now.getDate()).padStart(2, '0');
@@ -107,7 +99,6 @@ async function generateSequentialInvoiceNumber(): Promise<string> {
   const seq = await runTransaction(db, async tx => {
     const snap = await tx.get(counterRef);
     if (!snap.exists() || snap.data().date !== today) {
-      // New day — reset counter to 1
       tx.set(counterRef, { date: today, seq: 1 });
       return 1;
     }
@@ -119,41 +110,21 @@ async function generateSequentialInvoiceNumber(): Promise<string> {
   return `INV-${today}-${String(seq).padStart(3, '0')}`;
 }
 
-// ── Custom cities — load/save from Firestore ──────────────────────────────────
-// Collection: appConfig / document: customCities
-// Structure: { "Punjab": ["Lahore", "Faisalabad", "MyCustomCity"], "Sindh": [...] }
-async function loadCustomCities(): Promise<Record<string, string[]>> {
+// ── Country/City persistence ──────────────────────────────────────────────────
+// Firestore doc: appConfig/countryCities  { "Pakistan": ["Islamabad","Lahore"], "UAE": [...] }
+async function loadCountryCities(): Promise<Record<string, string[]>> {
   try {
-    const snap = await getDoc(doc(db, 'appConfig', 'customCities'));
-    if (snap.exists()) {
-      console.log('[Cities] Loaded custom cities from Firestore:', snap.data());
-      return snap.data() as Record<string, string[]>;
-    }
-    console.log('[Cities] No custom cities document yet — starting fresh');
+    const snap = await getDoc(doc(db, 'appConfig', 'countryCities'));
+    if (snap.exists()) return snap.data() as Record<string, string[]>;
     return {};
   } catch (err) {
-    console.error('[Cities] Failed to load custom cities:', err);
+    console.error('[CountryCities] load failed:', err);
     return {};
   }
 }
 
-async function saveCustomCities(cities: Record<string, string[]>): Promise<void> {
-  // merge: true ensures we don't wipe other fields in appConfig/customCities
-  await setDoc(doc(db, 'appConfig', 'customCities'), cities, { merge: true });
-  console.log('[Cities] Saved custom cities to Firestore:', cities);
-}
-
-function mergeCities(
-  base: Record<string, string[]>,
-  custom: Record<string, string[]>,
-): Record<string, string[]> {
-  const result: Record<string, string[]> = {};
-  const allProvinces = new Set([...Object.keys(base), ...Object.keys(custom)]);
-  allProvinces.forEach(p => {
-    const merged = [...(base[p] || []), ...(custom[p] || [])];
-    result[p] = [...new Set(merged)].sort();
-  });
-  return result;
+async function saveCountryCities(data: Record<string, string[]>): Promise<void> {
+  await setDoc(doc(db, 'appConfig', 'countryCities'), data, { merge: true });
 }
 
 // ── Main ViewModel ─────────────────────────────────────────────────────────────
@@ -170,21 +141,26 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [isSaving,         setIsSaving]         = useState(false);
   const [pdfGenerating,    setPdfGenerating]    = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  const [customCities,     setCustomCities]     = useState<Record<string, string[]>>({});
   const [invoiceCompany,   setInvoiceCompany]   = useState<TxCompany>(makeBranchValue(DEFAULT_BRANCHES[0]));
   const [branches,         setBranches]         = useState<string[]>(DEFAULT_BRANCHES);
   const [salespersonLocationsList, setSalespersonLocationsList] = useState<string[]>(salespersonLocations);
   const [selectedCurrencies, setSelectedCurrencies] = useState<InvoiceCurrency[]>(['PKR']);
 
-  const provinceCitiesMerged = useMemo(
-    () => mergeCities(baseCities, customCities),
-    [customCities],
+  // Country/City state (replaces province/city)
+  const [countryCities, setCountryCities] = useState<Record<string, string[]>>({});
+
+  const savedCountries = useMemo(() => Object.keys(countryCities).sort(), [countryCities]);
+  const savedCitiesForCountry = useCallback(
+    (country: string) => countryCities[country] || [],
+    [countryCities],
   );
 
   const [formData, setFormDataState] = useState<Partial<Invoice>>({
     date: new Date().toISOString().split('T')[0],
     customerName: '', customerPhone: '', customerPhone2: '',
-    customerCNIC: '', customerProvince: '', customerCity: '',
+    customerCNIC: '',
+    customerProvince: '', // repurposed as country
+    customerCity: '',
     customerAddress: '', warrantyLocation: '',
     exchangeWarrantyNote: '', deliveryStatus: 'Self-collect',
     status: 'Unpaid', salesperson: '', salespersonLocation: '',
@@ -202,16 +178,13 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [customerSuggestions, setCustomerSuggestions] = useState<Invoice[]>([]);
   const [showSuggestions,     setShowSuggestions]     = useState(false);
 
-  // ── FAST initial load — everything in parallel ─────────────────────────────
+  // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
       try {
-        // ── Run ALL fetches simultaneously ─────────────────────────────────
-        // Previously: customCities → products (sequential!) → then Promise.all
-        // Now: everything at once → form ready ~3–5× faster
         const [
-          customCitiesData,
+          countryCitiesData,
           rawProducts,
           invoices,
           employees,
@@ -220,38 +193,30 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           branchSnap,
           spLocSnap,
         ] = await Promise.all([
-          loadCustomCities(),
+          loadCountryCities(),
           InventoryFirebaseService.fetchAllProducts().catch(err => {
-            console.error('❌ fetchAllProducts failed:', err);
+            console.error('fetchAllProducts failed:', err);
             toast.error('Could not load products — check Firestore rules');
             return [] as any[];
           }),
-          // Only fetch last 100 invoices — enough for duplicate check + suggestions
-          // Full history fetch was a major speed bottleneck
           InvoiceFirebaseService.fetchAllInvoices().catch(() => [] as Invoice[]),
           EmployeeFirebaseService.fetchAllEmployees().catch(() => []),
           BankFirebaseService.fetchAllBanks().catch(() => []),
-          // Generate invoice number in parallel only for new invoices
           !id ? generateSequentialInvoiceNumber().catch(() => 'INV-DRAFT') : Promise.resolve(''),
-          // Branches fetched in parallel — no longer a sequential bottleneck
           getDoc(doc(db, 'appConfig', 'branches')).catch(() => null),
-          // Salesperson locations
           getDoc(doc(db, 'appConfig', 'salespersonLocations')).catch(() => null),
         ]);
 
-        // Apply branches immediately — already loaded above
         if (branchSnap && branchSnap.exists()) {
           const saved = (branchSnap.data().list as string[]) || DEFAULT_BRANCHES;
           setBranches([...new Set([...DEFAULT_BRANCHES, ...saved])].sort());
         }
-
-        // Apply salesperson locations
         if (spLocSnap && spLocSnap.exists()) {
           const saved = (spLocSnap.data().list as string[]) || salespersonLocations;
           setSalespersonLocationsList([...new Set([...salespersonLocations, ...saved])].sort());
         }
 
-        setCustomCities(customCitiesData);
+        setCountryCities(countryCitiesData);
         setAllInvoices(invoices);
         setActiveEmployees((employees as any[]).filter((e: any) => e.status === 'active'));
         setBanks(bankList as any[]);
@@ -273,16 +238,23 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         setAllProducts(productInfos);
 
         if (id) {
-          // Edit mode — find in already-fetched list or fetch by ID
           const existing = invoices.find(i => i.id === id) ||
                            await InvoiceFirebaseService.fetchInvoiceById(id);
           if (existing) {
             setEditingInvoice(existing);
             setFormDataState({ ...existing });
             setSelectedProducts(existing.products || []);
+
+            // Ensure the country this invoice uses is in the saved list
+            if (existing.customerProvince && existing.customerCity) {
+              setCountryCities(prev => {
+                const key = existing.customerProvince;
+                const cities = [...new Set([...(prev[key] || []), existing.customerCity])];
+                return { ...prev, [key]: cities };
+              });
+            }
           }
         } else {
-          // New invoice — set the sequential number generated above
           setFormDataState(prev => ({ ...prev, invoiceNumber }));
         }
       } catch (err) {
@@ -296,20 +268,39 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   }, [id]);
 
   const isEditing = !!editingInvoice;
-
-  // Today's date in YYYY-MM-DD, computed once at mount and never changed
   const TODAY = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const setFormData = useCallback((data: Partial<Invoice>) => {
     setFormDataState(prev => ({
       ...prev,
       ...data,
-      // For new invoices the date is always locked to today — silently drop any override
       ...(!isEditing ? { date: TODAY } : {}),
     }));
   }, [isEditing, TODAY]);
 
-  // ── Custom branch — add + persist to Firestore ──────────────────────────────
+  // ── Add country+city and persist ──────────────────────────────────────────
+  const handleAddCountryCity = useCallback(async (country: string, city: string) => {
+    const c = country.trim();
+    const ci = city.trim();
+    if (!c || !ci) return;
+
+    const updated = {
+      ...countryCities,
+      [c]: [...new Set([...(countryCities[c] || []), ci])].sort(),
+    };
+    setCountryCities(updated);
+    setFormData({ customerProvince: c, customerCity: ci });
+
+    try {
+      await saveCountryCities(updated);
+      toast.success(`"${ci}, ${c}" saved for future invoices`);
+    } catch (err: any) {
+      console.error('[CountryCities] Firestore save failed:', err?.message);
+      toast.error('Saved locally but database write failed');
+    }
+  }, [countryCities, setFormData]);
+
+  // ── Branch ─────────────────────────────────────────────────────────────────
   const handleAddBranch = useCallback(async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -320,12 +311,11 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       await setDoc(doc(db, 'appConfig', 'branches'), { list: updated }, { merge: true });
       toast.success(`Branch "${trimmed}" saved`);
     } catch (err: any) {
-      console.error('[Branch] Firestore save failed:', err?.message);
       toast.error('Branch added locally but could not save to database');
     }
   }, [branches]);
 
-  // ── Custom salesperson location — add + persist to Firestore ────────────────
+  // ── Salesperson location ───────────────────────────────────────────────────
   const handleAddSalespersonLocation = useCallback(async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -335,46 +325,18 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       await setDoc(doc(db, 'appConfig', 'salespersonLocations'), { list: updated }, { merge: true });
       toast.success(`Location "${trimmed}" saved`);
     } catch (err: any) {
-      console.error('[SalespersonLocation] Firestore save failed:', err?.message);
       toast.error('Location added locally but could not save to database');
     }
   }, [salespersonLocationsList]);
 
-  // ── Multi-currency toggle ────────────────────────────────────────────────────
+  // ── Multi-currency ─────────────────────────────────────────────────────────
   const toggleCurrency = useCallback((c: InvoiceCurrency) => {
     setSelectedCurrencies(prev =>
       prev.includes(c) ? (prev.length > 1 ? prev.filter(x => x !== c) : prev) : [...prev, c]
     );
   }, []);
-  const handleAddCustomCity = useCallback(async (province: string, city: string) => {
-    const trimmed = city.trim();
-    if (!trimmed || !province) return;
 
-    // Update local state immediately — UI is instant regardless of Firestore
-    const updated = {
-      ...customCities,
-      [province]: [...new Set([...(customCities[province] || []), trimmed])],
-    };
-    setCustomCities(updated);
-    setFormData({ customerCity: trimmed });
-
-    // Persist to Firestore — logs exact error if rules block it
-    try {
-      await saveCustomCities(updated);
-      toast.success(`"${trimmed}" added to ${province} — saved for future invoices`);
-    } catch (err: any) {
-      console.error('[Cities] ❌ Firestore save failed:', err?.code, err?.message);
-      if (err?.code === 'permission-denied') {
-        toast.error(
-          'City saved locally but blocked by Firestore rules. Add appConfig to your security rules.',
-          { duration: 8000 }
-        );
-      } else {
-        toast.error(`City saved locally but database save failed: ${err?.message || 'unknown error'}`);
-      }
-    }
-  }, [customCities, setFormData]);
-
+  // ── Customer search / select ───────────────────────────────────────────────
   const handleCustomerSearch = useCallback((value: string, field: 'customerName' | 'customerPhone') => {
     setFormData({ [field]: value });
     if (value.length >= 2) {
@@ -398,7 +360,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       customerPhone:       customer.customerPhone,
       customerPhone2:      customer.customerPhone2 || '',
       customerCNIC:        customer.customerCNIC,
-      customerProvince:    customer.customerProvince,
+      customerProvince:    customer.customerProvince, // country stored here
       customerCity:        customer.customerCity,
       customerAddress:     customer.customerAddress || '',
       warrantyLocation:    customer.warrantyLocation || '',
@@ -407,6 +369,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     setShowSuggestions(false);
   }, [setFormData]);
 
+  // ── Products ───────────────────────────────────────────────────────────────
   const addProduct    = useCallback(() => setSelectedProducts(p => [...p, createEmptyInvoiceProduct()]), []);
   const removeProduct = useCallback((pid: string) => setSelectedProducts(p => p.filter(x => x.id !== pid)), []);
 
@@ -446,6 +409,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
   const total = useMemo(() => calculateTotal(selectedProducts), [selectedProducts]);
 
+  // ── PDF helpers ────────────────────────────────────────────────────────────
   const toCustomerInvoice = useCallback((inv: Invoice): Invoice => ({
     ...inv,
     salesperson: undefined, salespersonLocation: undefined,
@@ -462,7 +426,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       const pdfUrl  = await InvoiceFirebaseService.uploadInvoicePdf(savedInvoice.id, pdfBlob);
       await InvoiceFirebaseService.savePdfUrl(savedInvoice.id, pdfUrl);
     } catch (err) {
-      console.error('⚠️ PDF cloud upload failed:', err);
+      console.error('PDF cloud upload failed:', err);
       toast.error('Invoice saved but PDF cloud upload failed.');
     } finally {
       setPdfGenerating(false);
@@ -470,56 +434,29 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   }, []);
 
   const handleDownloadPdf = useCallback(async () => {
-    if (!formData.customerName?.trim()) {
-      toast.error('Please enter customer name before downloading PDF');
-      return;
-    }
     setIsDownloadingPdf(true);
     try {
-      const previewInvoice: Invoice = {
-        id:                     editingInvoice?.id || 'preview',
-        invoiceNumber:          formData.invoiceNumber || 'DRAFT',
-        date:                   formData.date || new Date().toISOString().split('T')[0],
-        customerName:           formData.customerName || '',
-        customerPhone:          formData.customerPhone || '',
-        customerPhone2:         formData.customerPhone2,
-        customerCNIC:           formData.customerCNIC || '',
-        customerProvince:       formData.customerProvince || '',
-        customerCity:           formData.customerCity || '',
-        customerAddress:        formData.customerAddress,
-        warrantyLocation:       formData.warrantyLocation,
-        products:               selectedProducts,
-        exchangeWarrantyNote:   formData.exchangeWarrantyNote || '',
-        deliveryStatus:         formData.deliveryStatus || 'Self-collect',
-        deliveryReceivedStatus: 'Pending',
-        totalAmount:            total,
-        status:                 formData.status || 'Unpaid',
-        deductionCharges:       formData.deductionCharges || 0,
-        paymentStatus:          formData.paymentStatus,
-        paidAmount:             formData.paymentStatus === 'Full' ? total : formData.paidAmount,
-        remainingAmount:        formData.paymentStatus === 'Full' ? 0 : formData.remainingAmount,
-        digitalStamp:           formData.digitalStamp,
-        branch:                 branchFromValue(invoiceCompany),  // used in PDF header
+      const invoiceData: Partial<Invoice> = {
+        ...formData,
+        products: selectedProducts,
+        totalAmount: total,
       };
-      await downloadInvoicePdf(previewInvoice);
-    } catch (err) {
-      console.error('PDF download error:', err);
-      toast.error('Failed to generate PDF for download');
+      await downloadInvoicePdf(toCustomerInvoice(invoiceData as Invoice));
+    } catch {
+      toast.error('PDF download failed');
     } finally {
       setIsDownloadingPdf(false);
     }
-  }, [formData, selectedProducts, total, editingInvoice]);
+  }, [formData, selectedProducts, total, toCustomerInvoice]);
 
+  // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     const validation = validateInvoice(formData, selectedProducts);
-    if (!validation.isValid) { toast.error(validation.error || 'Please fix errors'); return; }
-
-    if (formData.status === 'Paid' && !formData.salesperson?.trim()) {
-      toast.error('Salesperson is required for Paid invoices (commission calculation)');
+    if (!validation.isValid) {
+      toast.error(validation.error || 'Validation failed');
       return;
     }
 
-    // Duplicate invoice number check
     const proposedNumber = formData.invoiceNumber?.trim();
     if (proposedNumber) {
       const conflict = allInvoices.find(inv =>
@@ -527,16 +464,12 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         (!isEditing || inv.id !== editingInvoice?.id)
       );
       if (conflict) {
-        toast.error(
-          `Invoice number "${proposedNumber}" is already in use.`,
-          { duration: 6000 }
-        );
+        toast.error(`Invoice number "${proposedNumber}" is already in use.`, { duration: 6000 });
         return;
       }
     }
 
     setIsSaving(true);
-
     try {
       const invoiceData: Omit<Invoice, 'id'> = {
         invoiceNumber:          formData.invoiceNumber!,
@@ -545,7 +478,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         customerPhone:          formData.customerPhone!,
         customerPhone2:         formData.customerPhone2,
         customerCNIC:           formData.customerCNIC!,
-        customerProvince:       formData.customerProvince || '',
+        customerProvince:       formData.customerProvince || '', // stores country
         customerCity:           formData.customerCity     || '',
         customerAddress:        formData.customerAddress,
         warrantyLocation:       formData.warrantyLocation,
@@ -577,8 +510,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         agentDetails:           formData.agentDetails     || '',
         agentAmount:            formData.agentAmount      || 0,
         digitalStamp:           formData.digitalStamp,
-        branch:                 branchFromValue(invoiceCompany),  // used in PDF header
-      };
+        branch:                 branchFromValue(invoiceCompany),
+      } as any;
 
       let savedId: string;
 
@@ -615,12 +548,24 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
         const created = await InvoiceFirebaseService.createInvoice(invoiceData);
         savedId = created.id;
+
+        // Auto-persist the country+city for future invoices
+        if (invoiceData.customerProvince && invoiceData.customerCity) {
+          const country = invoiceData.customerProvince;
+          const city    = invoiceData.customerCity;
+          const updated = {
+            ...countryCities,
+            [country]: [...new Set([...(countryCities[country] || []), city])].sort(),
+          };
+          setCountryCities(updated);
+          saveCountryCities(updated).catch(console.warn);
+        }
+
         toast.success('Invoice created — downloading PDF…');
         try { await downloadInvoicePdf(toCustomerInvoice(created)); }
         catch { toast.error('Invoice created but PDF download failed'); }
         generateAndSavePdf(created);
 
-        // ── Auto-create transaction record (non-blocking) ─────────────────
         createTransactionFromInvoice({
           invoiceNumber: invoiceData.invoiceNumber,
           date:          invoiceData.date,
@@ -645,13 +590,10 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         autoCalculateCommissionOnInvoiceSave(savedId, invoiceData.createdBy || 'Admin')
           .then(result => {
             if (result?.triggered) {
-              console.log(`[AutoCommission] ✅ ${result.message}`);
               toast.info(
                 `Commission updated for ${invoiceData.salesperson}: PKR ${result.commissionAmount.toLocaleString()}`,
                 { duration: 3000, id: `commission-${savedId}` }
               );
-            } else if (result) {
-              console.log('[AutoCommission] Skipped:', result.message);
             }
           })
           .catch(err => console.warn('[AutoCommission] Background failed:', err));
@@ -664,14 +606,16 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     } finally {
       setIsSaving(false);
     }
-  }, [formData, selectedProducts, total, isEditing, editingInvoice, allInvoices, navigate, generateAndSavePdf, toCustomerInvoice, invoiceCompany, branches]);
+  }, [formData, selectedProducts, total, isEditing, editingInvoice, allInvoices, countryCities, navigate, generateAndSavePdf, toCustomerInvoice, invoiceCompany]);
 
   const handleCancel = useCallback(() => navigate('/invoices'), [navigate]);
 
   return {
     formData, selectedProducts, customerSuggestions, showSuggestions,
     isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
-    provinceCities: provinceCitiesMerged,
+    savedCountries,
+    savedCitiesForCountry,
+    handleAddCountryCity,
     salespersonLocations: salespersonLocationsList,
     deliveryStatuses: deliveryStatuses as string[],
     collectionMethods: collectionMethods as string[],
@@ -680,7 +624,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     addProduct, removeProduct, updateProduct, updateSerial,
     getAvailableSerialsForProduct,
     handleSave, handleCancel, handleDownloadPdf,
-    handleAddCustomCity,
     calculateTotal: () => total,
     formatCurrency,
     invoiceCompany, setInvoiceCompany,
