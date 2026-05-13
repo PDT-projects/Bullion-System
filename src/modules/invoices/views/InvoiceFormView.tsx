@@ -108,8 +108,7 @@ function BranchSelector({
               className="px-2 py-1 border-2 border-gray-600 rounded-lg text-xs outline-none w-28"
               placeholder="Branch name…" />
             <button type="button" onClick={save} disabled={saving || !newBranch.trim()}
-              style={{ backgroundColor: '#374151', color: '#ffffff' }}
-              className="px-2 py-1 rounded text-xs font-semibold disabled:opacity-50">
+              style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded text-xs font-semibold disabled:opacity-50">
               {saving ? '…' : 'Save'}
             </button>
             <button type="button" onClick={() => setAddingBranch(false)}
@@ -147,21 +146,31 @@ function CountryCitySelector({
   const [newCountry,    setNewCountry]    = useState('');
   const [addingCity,    setAddingCity]    = useState(false);
   const [newCity,       setNewCity]       = useState('');
+  const [savingCountry, setSavingCountry] = useState(false);
+  const [savingCity,    setSavingCity]    = useState(false);
 
-  const citiesForCountry = savedCitiesForCountry(country);
+  const citiesForCountry = savedCitiesForCountry(country).filter(c => c !== '');
 
-  const saveCountry = () => {
+  // Persist new country to Firestore by calling handleAddCountryCity,
+  // then select it (city left blank for user to pick/add next).
+  const saveCountry = async () => {
     const c = newCountry.trim();
     if (!c) return;
+    setSavingCountry(true);
+    try {
+      // Pass empty string as city — ViewModel ignores empty cities when filtering
+      await handleAddCountryCity(c, '__COUNTRY_ONLY__');
+    } catch { /* non-blocking */ }
     setFormData({ customerProvince: c, customerCity: '' });
-    setNewCountry(''); setAddingCountry(false);
+    setNewCountry(''); setAddingCountry(false); setSavingCountry(false);
   };
 
   const saveCity = async () => {
     const c = newCity.trim();
     if (!c || !country) return;
+    setSavingCity(true);
     await handleAddCountryCity(country, c);
-    setNewCity(''); setAddingCity(false);
+    setNewCity(''); setAddingCity(false); setSavingCity(false);
   };
 
   return (
@@ -174,7 +183,7 @@ function CountryCitySelector({
             <input type="text" value={newCountry} onChange={e => setNewCountry(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveCountry(); if (e.key === 'Escape') { setAddingCountry(false); setNewCountry(''); } }}
               placeholder="e.g. UAE" autoFocus className={`${inp} flex-1`} />
-            <button onClick={saveCountry} style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
+            <button onClick={saveCountry} disabled={savingCountry} style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs disabled:opacity-50">{savingCountry ? '…' : 'Save'}</button>
             <button onClick={() => { setAddingCountry(false); setNewCountry(''); }}
               className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
           </div>
@@ -202,7 +211,7 @@ function CountryCitySelector({
             <input type="text" value={newCity} onChange={e => setNewCity(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveCity(); if (e.key === 'Escape') { setAddingCity(false); setNewCity(''); } }}
               placeholder="e.g. Dubai" autoFocus className={`${inp} flex-1`} />
-            <button onClick={saveCity} style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
+            <button onClick={saveCity} disabled={savingCity} style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs disabled:opacity-50">{savingCity ? '…' : 'Save'}</button>
             <button onClick={() => { setAddingCity(false); setNewCity(''); }}
               className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
           </div>
@@ -399,8 +408,7 @@ export function InvoiceFormView({
           <div className="flex items-center justify-between mb-1.5">
             <h4 className="font-semibold text-gray-900 text-sm">Products</h4>
             <button onClick={addProduct}
-              style={{ backgroundColor: '#374151', color: '#ffffff' }}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors">
+              style={{ backgroundColor: '#374151', color: '#ffffff' }} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors">
               <Plus size={14} /> Add Product
             </button>
           </div>
@@ -840,8 +848,7 @@ export function InvoiceFormView({
               Cancel
             </button>
             <button onClick={handleSave} disabled={isSaving}
-              style={{ backgroundColor: '#1f2937', color: '#ffffff' }}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-lg disabled:opacity-50 transition-colors font-semibold text-sm shadow-sm whitespace-nowrap">
+              style={{ backgroundColor: '#1f2937', color: '#ffffff' }} className="flex items-center gap-1.5 px-5 py-2 rounded-lg disabled:opacity-50 transition-colors font-semibold text-sm shadow-sm whitespace-nowrap">
               {isSaving
                 ? <><Loader2 size={16} className="animate-spin" /> Saving…</>
                 : isEditing ? 'Update Invoice' : 'Create Invoice'}

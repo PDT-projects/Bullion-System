@@ -5,6 +5,7 @@ import {
   FileText, Plus, Search, Eye, Edit, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Invoice, InvoiceStats, InvoiceFilters } from '../models/types';
 import { downloadInvoicePdf } from '../models/invoicePdfService';
 
@@ -72,6 +73,8 @@ export function InvoiceListView({
 
   const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
 
+  // FIX: Added toast.error() so the user sees feedback when PDF generation
+  // fails, instead of the error being silently swallowed in the catch block.
   const handleDownloadPdf = async (invoice: Invoice) => {
     if (generatingPdf.has(invoice.id)) return;
     setGeneratingPdf(prev => new Set(prev).add(invoice.id));
@@ -79,6 +82,7 @@ export function InvoiceListView({
       await downloadInvoicePdf(invoice);
     } catch (err) {
       console.error('PDF generation failed:', err);
+      toast.error('PDF download failed. Please try again.');
     } finally {
       setGeneratingPdf(prev => { const n = new Set(prev); n.delete(invoice.id); return n; });
     }

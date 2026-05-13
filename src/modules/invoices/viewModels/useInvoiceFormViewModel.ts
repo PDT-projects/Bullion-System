@@ -4,6 +4,8 @@
 //     • Countries+cities are free-text entries persisted to Firestore (appConfig/countryCities)
 //     • Previously used combos appear in dropdowns for the next invoice
 //   - Commission auto-calculation wired through internal fields
+//   - FIX: navigate('/invoices') is now delayed by 300 ms after downloadInvoicePdf()
+//     so the browser anchor-click has time to execute before the component unmounts.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -280,20 +282,33 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
   // ── Add country+city and persist ──────────────────────────────────────────
   const handleAddCountryCity = useCallback(async (country: string, city: string) => {
-    const c = country.trim();
+    const c  = country.trim();
     const ci = city.trim();
-    if (!c || !ci) return;
+    if (!c) return;
 
-    const updated = {
-      ...countryCities,
-      [c]: [...new Set([...(countryCities[c] || []), ci])].sort(),
-    };
+    // '__COUNTRY_ONLY__' is a sentinel used when registering a new country
+    // without a city yet — filter it out from the stored cities list.
+    const isCountryOnly = ci === '__COUNTRY_ONLY__' || ci === '';
+
+    const existingCities = countryCities[c] || [];
+    const newCities = isCountryOnly
+      ? existingCities  // keep existing, just ensure the country key exists
+      : [...new Set([...existingCities, ci])].sort();
+
+    const updated = { ...countryCities, [c]: newCities };
     setCountryCities(updated);
-    setFormData({ customerProvince: c, customerCity: ci });
+
+    if (!isCountryOnly) {
+      setFormData({ customerProvince: c, customerCity: ci });
+    }
 
     try {
       await saveCountryCities(updated);
-      toast.success(`"${ci}, ${c}" saved for future invoices`);
+      if (!isCountryOnly) {
+        toast.success(`"${ci}, ${c}" saved for future invoices`);
+      } else {
+        toast.success(`Country "${c}" saved — now add a city`);
+      }
     } catch (err: any) {
       console.error('[CountryCities] Firestore save failed:', err?.message);
       toast.error('Saved locally but database write failed');
@@ -599,6 +614,11 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           .catch(err => console.warn('[AutoCommission] Background failed:', err));
       }
 
+      // FIX: Wait 300 ms before navigating away so the browser has time to
+      // execute the download anchor click initiated inside downloadInvoicePdf().
+      // Without this delay, navigate() unmounts the component immediately and
+      // the programmatic click is cancelled before the browser processes it.
+      await new Promise<void>(resolve => setTimeout(resolve, 300));
       navigate('/invoices');
     } catch (err) {
       console.error('Save failed:', err);
