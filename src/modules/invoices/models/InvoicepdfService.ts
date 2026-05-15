@@ -358,7 +358,7 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   sf(doc, BRAND); doc.setLineWidth(0); doc.rect(0, PH - 11, PW, 11, 'F');
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); st(doc, LIGHT_GRAY);
   doc.text(
-    'Bullion Electronics  ·  Office #5, 4th Floor, Gulberg Trade Center, Islamabad  ·  03111444615',
+    'Bullion Electronics  ·  C108 Building 936 M-04, Plot- Mohammed Bin Zayed City, ME9, Abu Dhabi, United Arab Emirates  ·  +971 56 985 2213',
     PW / 2, PH - 4.5, { align: 'center' }
   );
 

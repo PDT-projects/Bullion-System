@@ -1,10 +1,14 @@
 // Inventory Module - View Layer
 // InventoryAddExistingView
+// UPDATED: Sell Price and Cost Price fields accept any currency (USD/AED/SAR/CAD/PKR)
+//          and auto-convert to PKR for storage. Prices shown in selected currency.
 
 import React from 'react';
 import { Search, Package, ArrowLeft, Loader2, Plus, Hash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UseInventoryAddExistingViewModelReturn } from '../viewModels/useInventoryAddExistingViewModel';
+import { useInventoryCurrency, formatInCurrency } from '../viewModels/useInventoryCurrency';
+import { InventoryCurrencyDropdown, CurrencyPriceInput, CurrencyExtraRows } from './InventoryCurrencyDropdown';
 
 interface Props extends UseInventoryAddExistingViewModelReturn {}
 
@@ -17,6 +21,15 @@ export const InventoryAddExistingView: React.FC<Props> = ({
   cities, formatCurrency,
 }) => {
   const navigate = useNavigate();
+
+  // ── Currency ──────────────────────────────────────────────────────────────
+  const {
+    primaryCurrency, extraCurrencies, rates,
+    setPrimaryCurrency, setExtraCurrencies,
+    loading: ratesLoading, error: ratesError, lastUpdated,
+  } = useInventoryCurrency();
+
+  const fmtPrimary = (pkr: number) => formatInCurrency(pkr, primaryCurrency, rates);
 
   const grouped = filteredProducts.reduce<Record<string, typeof filteredProducts>>((acc, p) => {
     const key = p.brandName || 'Unknown';
@@ -54,7 +67,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
 
       {/* Header */}
       <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button
             onClick={() => navigate('/inventory')}
             style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0 }}
@@ -64,10 +77,22 @@ export const InventoryAddExistingView: React.FC<Props> = ({
           <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Package size={17} color="#fff" />
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Add to Existing Inventory</div>
             <div style={{ fontSize: 11, color: '#64748b' }}>Select a product to add units, update prices, or add serial numbers</div>
           </div>
+
+          {/* ── Currency Dropdown ── */}
+          <InventoryCurrencyDropdown
+            primaryCurrency={primaryCurrency}
+            extraCurrencies={extraCurrencies}
+            setPrimaryCurrency={setPrimaryCurrency}
+            setExtraCurrencies={setExtraCurrencies}
+            loading={ratesLoading}
+            error={ratesError}
+            lastUpdated={lastUpdated}
+            compact
+          />
         </div>
       </div>
 
@@ -122,8 +147,15 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                         <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
                           <span style={{ fontSize: 11, color: '#6b7280' }}>Stock: {product.stock}</span>
                           {product.location && <span style={{ fontSize: 11, color: '#334155' }}>📍 {product.location}</span>}
-                          <span style={{ fontSize: 11, color: '#9ca3af' }}>{formatCurrency(product.sellPrice)}</span>
+                          {/* Sell price in primary currency */}
+                          <span style={{ fontSize: 11, color: '#9ca3af' }}>{fmtPrimary(product.sellPrice)}</span>
                         </div>
+                        {/* Extra currency rows under price */}
+                        {extraCurrencies.length > 0 && (
+                          <div style={{ marginTop: 2 }}>
+                            <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.sellPrice} rates={rates} />
+                          </div>
+                        )}
                       </button>
                     );
                   })}
@@ -157,16 +189,24 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                   <input type="number" value={entry.addQty} onChange={e => setAddQty(Number(e.target.value))} style={inp} min={1} />
                 </div>
 
-                {/* Prices */}
+                {/* Prices — CurrencyPriceInput */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Updated Sell Price (PKR)</label>
-                    <input type="number" value={entry.newSellPrice || ''} onChange={e => setNewSellPrice(Number(e.target.value))} style={inp} min={0} placeholder="0" />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Updated Cost Price (PKR)</label>
-                    <input type="number" value={entry.newCostPrice || ''} onChange={e => setNewCostPrice(Number(e.target.value))} style={inp} min={0} placeholder="0" />
-                  </div>
+                  <CurrencyPriceInput
+                    label="Updated Sell Price"
+                    pkrValue={entry.newSellPrice}
+                    onChange={setNewSellPrice}
+                    rates={rates}
+                    defaultInputCurrency={primaryCurrency}
+                    required
+                  />
+                  <CurrencyPriceInput
+                    label="Updated Cost Price"
+                    pkrValue={entry.newCostPrice}
+                    onChange={setNewCostPrice}
+                    rates={rates}
+                    defaultInputCurrency={primaryCurrency}
+                    required
+                  />
                 </div>
 
                 {/* Serials */}

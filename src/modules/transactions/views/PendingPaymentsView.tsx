@@ -269,7 +269,7 @@ export function PendingPaymentsView({
             onClick={() => setFilterStatus(key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
               filterStatus === key
-                ? 'bg-[#4f46e5] text-white border-[#4f46e5]'
+                ? 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#0f172a]'
                 : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
             }`}
           >

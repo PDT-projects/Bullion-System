@@ -1,12 +1,21 @@
 // Inventory Module - View Layer
-// InventoryListView - Product list with filters, location column, and location-grouped serial modal
-// UPDATED: Shows payment mode badge in table and full payment details in view modal
+// InventoryListView
+// UPDATED: Multi-currency display (PKR / USD / AED / SAR / CAD)
+//   - CurrencyDropdown in header (same pattern as Dashboard)
+//   - Cost / Sell Price columns show primary currency + extra currency rows
+//   - Total inventory value stat card shows all selected currencies
+//   - Price in view modal also shows currency extras
 
 import React from 'react';
 import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
+import { useInventoryCurrency, formatInCurrency } from './useInventoryCurrency';
+import { InventoryCurrencyDropdown, CurrencyExtraRows } from './InventoryCurrencyDropdown';
+
+// ── Re-export so pages that import this file don't need an extra import ───────
+export { useInventoryCurrency };
 
 interface InventoryListViewProps {
   products: Product[];
@@ -37,6 +46,8 @@ interface InventoryListViewProps {
   onBack?: () => void;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function getDisplayLocation(product: Product): string {
   if (product.location) return product.location;
   const cities = Object.values(product.serialCities || {}).filter(Boolean);
@@ -59,7 +70,7 @@ function getStatusColor(status: string): string {
   return colors[status] || 'bg-gray-100 text-gray-800';
 }
 
-// ── Payment mode badge component ─────────────────────────────────────────────
+// ── Payment mode badge ────────────────────────────────────────────────────────
 function PaymentModeBadge({ product }: { product: Product }) {
   const pi = (product as any).paymentInfo;
   if (!pi || pi.paymentStatus === 'unpaid') {
@@ -93,20 +104,15 @@ function PaymentModeBadge({ product }: { product: Product }) {
   return null;
 }
 
-// ── Payment detail panel inside view modal ───────────────────────────────────
+// ── Payment detail panel ──────────────────────────────────────────────────────
 function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: number) => string }) {
   const pi = (product as any).paymentInfo;
   if (!pi) return null;
-
   const statusColor: Record<string, string> = {
-    paid:    '#16a34a',
-    unpaid:  '#dc2626',
-    partial: '#d97706',
+    paid: '#16a34a', unpaid: '#dc2626', partial: '#d97706',
   };
-
   return (
     <div style={{ borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
         <CreditCard size={14} color="#0f172a" />
         <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Payment Details</span>
@@ -114,29 +120,23 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
           {pi.paymentStatus?.charAt(0).toUpperCase() + pi.paymentStatus?.slice(1)}
         </span>
       </div>
-
       <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* Transaction ID */}
         {pi.transactionId && (
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: '#6b7280' }}>Transaction ID</span>
             <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1e293b' }}>{pi.transactionId}</span>
           </div>
         )}
-
-        {/* Total / Paid / Remaining */}
         {[
-          ['Total Amount',   fmt(pi.totalAmount  || 0)],
-          ['Paid Amount',    fmt(pi.paidAmount   || 0)],
-          ['Remaining',      fmt(Math.max(0, (pi.totalAmount || 0) - (pi.paidAmount || 0)))],
+          ['Total Amount', fmt(pi.totalAmount || 0)],
+          ['Paid Amount',  fmt(pi.paidAmount  || 0)],
+          ['Remaining',    fmt(Math.max(0, (pi.totalAmount || 0) - (pi.paidAmount || 0)))],
         ].map(([label, value]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: '#6b7280' }}>{label}</span>
             <span style={{ fontWeight: 600, color: label === 'Remaining' && (pi.totalAmount - pi.paidAmount) > 0 ? '#dc2626' : '#111827' }}>{value}</span>
           </div>
         ))}
-
-        {/* Payment method */}
         {pi.paymentStatus !== 'unpaid' && (
           <div style={{ paddingTop: 8, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: '#6b7280' }}>Payment Method</span>
@@ -149,8 +149,6 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
             )}
           </div>
         )}
-
-        {/* Instalment breakdown */}
         {pi.installments?.length > 0 && (
           <div style={{ marginTop: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Instalment Breakdown</div>
@@ -180,6 +178,8 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
   );
 }
 
+// ── Main View ─────────────────────────────────────────────────────────────────
+
 export function InventoryListView({
   products, categories, uniqueLocations, filters, showFilters, activeFilterCount,
   viewProduct, isLoading, stats,
@@ -187,15 +187,27 @@ export function InventoryListView({
   onAddNew, onAddToExisting, onTransfer, onReceiveProduct, onEdit,
   onBack,
 }: InventoryListViewProps) {
-  const fmt = InventoryService.formatCurrency;
+  const fmt = InventoryService.formatCurrency; // fallback PKR formatter
   const navigate = useNavigate();
   const handleBack = () => onBack ? onBack() : navigate('/inventory');
+
+  // ── Currency state ────────────────────────────────────────────────────────
+  const currency = useInventoryCurrency();
+  const {
+    primaryCurrency, extraCurrencies, rates,
+    setPrimaryCurrency, setExtraCurrencies,
+    loading: ratesLoading, error: ratesError, lastUpdated,
+  } = currency;
+
+  /** Format a PKR amount in the chosen primary currency */
+  const fmtPrimary = (pkr: number) =>
+    formatInCurrency(pkr, primaryCurrency, rates);
 
   return (
     <div className="p-6">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <button onClick={handleBack}
             style={{ minWidth: 36, minHeight: 36 }}
@@ -206,12 +218,25 @@ export function InventoryListView({
           <div>
             <h2 className="text-2xl font-bold">Inventory</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {stats.totalProducts} products · {stats.totalStock} units · {fmt(stats.totalValue)} value
+              {stats.totalProducts} products · {stats.totalStock} units · {fmtPrimary(stats.totalValue)} value
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Currency + action buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+
+          {/* ── Currency Dropdown ── */}
+          <InventoryCurrencyDropdown
+            primaryCurrency={primaryCurrency}
+            extraCurrencies={extraCurrencies}
+            setPrimaryCurrency={setPrimaryCurrency}
+            setExtraCurrencies={setExtraCurrencies}
+            loading={ratesLoading}
+            error={ratesError}
+            lastUpdated={lastUpdated}
+          />
+
           <button
             onClick={toggleFilters}
             style={{
@@ -222,8 +247,6 @@ export function InventoryListView({
               color: showFilters ? '#fff' : '#374151',
               boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
             }}
-            onMouseEnter={e => { if (!showFilters) e.currentTarget.style.backgroundColor = '#e2e8f0'; }}
-            onMouseLeave={e => { if (!showFilters) e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
           >
             <Filter size={16} />
             Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
@@ -237,8 +260,6 @@ export function InventoryListView({
               border: '1px solid #e2e8f0', transition: 'all 0.15s',
               boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
             }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#e2e8f0'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
           >
             <Plus size={16} /> Add Stock
           </button>
@@ -251,8 +272,6 @@ export function InventoryListView({
               border: 'none', transition: 'all 0.15s',
               boxShadow: '0 2px 8px rgba(15,23,42,0.3)',
             }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#1e293b'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0f172a'; }}
           >
             <Plus size={16} /> New Product
           </button>
@@ -262,16 +281,33 @@ export function InventoryListView({
       {/* ── Stats ── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Products', value: stats.totalProducts, color: 'text-[#0f172a]' },
-          { label: 'Total Stock',    value: stats.totalStock,    color: 'text-green-600' },
-          { label: 'In Transit',     value: stats.inTransit,     color: 'text-yellow-600' },
-          { label: 'Available',      value: stats.available,     color: 'text-[#334155]' },
+          { label: 'Total Products', value: stats.totalProducts, color: 'text-[#0f172a]', isCurrency: false },
+          { label: 'Total Stock',    value: stats.totalStock,    color: 'text-green-600',  isCurrency: false },
+          { label: 'In Transit',     value: stats.inTransit,     color: 'text-yellow-600', isCurrency: false },
+          { label: 'Available',      value: stats.available,     color: 'text-[#334155]',  isCurrency: false },
         ].map(s => (
           <div key={s.label} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
             <div className="text-sm text-gray-600">{s.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* ── Total Value card with multi-currency ── */}
+      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>Total Inventory Value</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+              {fmtPrimary(stats.totalValue)}
+            </div>
+            <CurrencyExtraRows extras={extraCurrencies} pkrAmount={stats.totalValue} rates={rates} />
+          </div>
+          <div style={{ fontSize: 12, color: '#9ca3af', textAlign: 'right' }}>
+            <div>Cost Price basis</div>
+            <div>{stats.totalProducts} products</div>
+          </div>
+        </div>
       </div>
 
       {/* ── Filters ── */}
@@ -351,8 +387,11 @@ export function InventoryListView({
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Brand', 'Model', 'Category', 'Location', 'Stock', 'Cost', 'Sell Price', 'Status', 'Payment', 'Actions'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                {['Brand', 'Model', 'Category', 'Location', 'Stock',
+                  `Cost (${primaryCurrency})`,
+                  `Sell (${primaryCurrency})`,
+                  'Status', 'Payment', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -377,19 +416,31 @@ export function InventoryListView({
                       {product.stock} units
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{fmt(product.costPrice)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{fmt(product.sellPrice)}</td>
+
+                  {/* Cost Price — primary currency + extras */}
+                  <td className="px-4 py-3 text-sm">
+                    <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtPrimary(product.costPrice)}
+                    </div>
+                    <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.costPrice} rates={rates} />
+                  </td>
+
+                  {/* Sell Price — primary currency + extras */}
+                  <td className="px-4 py-3 text-sm">
+                    <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtPrimary(product.sellPrice)}
+                    </div>
+                    <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.sellPrice} rates={rates} />
+                  </td>
+
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
                       {product.status}
                     </span>
                   </td>
-
-                  {/* Payment mode badge */}
                   <td className="px-4 py-3">
                     <PaymentModeBadge product={product} />
                   </td>
-
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => setViewProduct(product)}
@@ -440,14 +491,27 @@ export function InventoryListView({
                   ['Status',   viewProduct.status],
                   ['Stock',    `${viewProduct.stock} units`],
                   ['Warranty', `${viewProduct.warrantyYears} year${viewProduct.warrantyYears !== 1 ? 's' : ''}`],
-                  ['Cost Price', fmt(viewProduct.costPrice)],
-                  ['Sell Price', fmt(viewProduct.sellPrice)],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <p className="text-xs text-gray-500">{label}</p>
                     <p className="font-medium text-gray-900">{value}</p>
                   </div>
                 ))}
+
+                {/* Cost Price — with currency extras */}
+                <div>
+                  <p className="text-xs text-gray-500">Cost Price</p>
+                  <p className="font-semibold text-gray-900">{fmtPrimary(viewProduct.costPrice)}</p>
+                  <CurrencyExtraRows extras={extraCurrencies} pkrAmount={viewProduct.costPrice} rates={rates} />
+                </div>
+
+                {/* Sell Price — with currency extras */}
+                <div>
+                  <p className="text-xs text-gray-500">Sell Price</p>
+                  <p className="font-semibold text-gray-900">{fmtPrimary(viewProduct.sellPrice)}</p>
+                  <CurrencyExtraRows extras={extraCurrencies} pkrAmount={viewProduct.sellPrice} rates={rates} />
+                </div>
+
                 <div className="col-span-2 flex items-center gap-2 pt-2 border-t border-gray-100">
                   <MapPin className="w-4 h-4 text-[#334155] flex-shrink-0" />
                   <div>
@@ -457,8 +521,8 @@ export function InventoryListView({
                 </div>
               </div>
 
-              {/* ── Payment Details ── */}
-              <PaymentDetailPanel product={viewProduct} fmt={fmt} />
+              {/* Payment Details */}
+              <PaymentDetailPanel product={viewProduct} fmt={pkr => fmtPrimary(pkr)} />
 
               {/* Serial Numbers */}
               {viewProduct.serialNumbers.length > 0 && (
@@ -508,7 +572,7 @@ export function InventoryListView({
                 Close
               </button>
               <button onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
-                className="flex items-center gap-2 px-4 py-2 bg-[#0f172a] text-gray-900 rounded-lg font-semibold hover:bg-[#1e293b] transition-colors shadow-sm">
+                className="flex items-center gap-2 px-4 py-2 bg-[#0f172a] text-white rounded-lg font-semibold hover:bg-[#1e293b] transition-colors shadow-sm">
                 <Edit2 size={16} /> Edit Product
               </button>
               {onReceiveProduct && (
