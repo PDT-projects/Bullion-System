@@ -78,10 +78,25 @@ export const ProductTransferCreateView: React.FC<Props> = ({
               </label>
               <div className="flex gap-2">
                 <select value={formData.fromLocation}
-                  onChange={e => setFormField('fromLocation', e.target.value)}
+                  onChange={async e => {
+                    const v = e.target.value;
+                    if (v === '__add_new__') {
+                      const nv = window.prompt('Add new From location (e.g. Dubai)');
+                      if (nv && nv.trim()) {
+                        const added = await addNewLocation(nv.trim());
+                        if (added) setFormField('fromLocation', added);
+                      } else {
+                        // reset selection if prompt cancelled
+                        setFormField('fromLocation', '');
+                      }
+                    } else {
+                      setFormField('fromLocation', v);
+                    }
+                  }}
                   className={inputCls}>
                   <option value="">Select source location</option>
                   {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                  <option value="__add_new__">➕ Add new location…</option>
                 </select>
                 <button type="button" onClick={async () => {
                   const v = window.prompt('Add new From location (e.g. Dubai)');
@@ -101,12 +116,26 @@ export const ProductTransferCreateView: React.FC<Props> = ({
               </label>
               <div className="flex gap-2">
                 <select value={formData.toLocation}
-                  onChange={e => setFormField('toLocation', e.target.value)}
+                  onChange={async e => {
+                    const v = e.target.value;
+                    if (v === '__add_new__') {
+                      const nv = window.prompt('Add new To location (e.g. Saudia)');
+                      if (nv && nv.trim()) {
+                        const added = await addNewLocation(nv.trim());
+                        if (added) setFormField('toLocation', added);
+                      } else {
+                        setFormField('toLocation', '');
+                      }
+                    } else {
+                      setFormField('toLocation', v);
+                    }
+                  }}
                   className={inputCls}>
                   <option value="">Select destination location</option>
                   {locations
                     .filter(loc => loc !== formData.fromLocation)
                     .map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                  <option value="__add_new__">➕ Add new location…</option>
                 </select>
                 <button type="button" onClick={async () => {
                   const v = window.prompt('Add new To location (e.g. Saudia)');
