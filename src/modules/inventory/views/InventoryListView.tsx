@@ -11,7 +11,7 @@ import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Buildin
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
-import { useInventoryCurrency, formatInCurrency } from './useInventoryCurrency';
+import { useInventoryCurrency, formatInCurrency } from '../viewModels/useInventoryCurrency';
 import { InventoryCurrencyDropdown, CurrencyExtraRows } from './InventoryCurrencyDropdown';
 
 // ── Re-export so pages that import this file don't need an extra import ───────

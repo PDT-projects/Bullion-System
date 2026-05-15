@@ -23,6 +23,8 @@ import {
 } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { BrandModelSelector } from '../components/BrandModelSelector';
+import { useInventoryCurrency } from '../viewModels/useInventoryCurrency';
+import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -198,6 +200,17 @@ export function CreateInventoryView({
   const selectedMode = PAYMENT_MODES.find(m => m.value === formData.paymentMethod) || null;
   const needsBank    = selectedMode?.needsBank ?? false;
 
+  const {
+    primaryCurrency,
+    extraCurrencies,
+    rates,
+    setPrimaryCurrency,
+    setExtraCurrencies,
+    loading: ratesLoading,
+    error: ratesError,
+    lastUpdated,
+  } = useInventoryCurrency();
+
   // ── Stepper config ────────────────────────────────────────────────────────
   const steps = [
     { id: 'details',      label: 'Product Details', number: 1 },
@@ -253,14 +266,31 @@ export function CreateInventoryView({
 
         {/* ── Brand & Model ── */}
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Brand & Model *</label>
-          {isEditMode && formData.brandName && (
-            <div className="mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-              <span className="text-blue-600 font-medium">Currently editing: </span>
-              <span className="text-blue-900 font-semibold">{formData.brandName} — {formData.modelName}</span>
-              <span className="ml-2 text-blue-400 text-xs">(change below if needed)</span>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Brand & Model *</label>
+              {isEditMode && formData.brandName && (
+                <div className="mt-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                  <span className="text-blue-600 font-medium">Currently editing: </span>
+                  <span className="text-blue-900 font-semibold">{formData.brandName} — {formData.modelName}</span>
+                  <span className="ml-2 text-blue-400 text-xs">(change below if needed)</span>
+                </div>
+              )}
             </div>
-          )}
+            <div className="min-w-[220px]">
+              <InventoryCurrencyDropdown
+                primaryCurrency={primaryCurrency}
+                extraCurrencies={extraCurrencies}
+                setPrimaryCurrency={setPrimaryCurrency}
+                setExtraCurrencies={setExtraCurrencies}
+                loading={ratesLoading}
+                error={ratesError}
+                lastUpdated={lastUpdated}
+                label="Display currency"
+                compact
+              />
+            </div>
+          </div>
           <BrandModelSelector
             initialBrandId={isEditMode ? (formData.brandId || undefined) : undefined}
             initialModelId={isEditMode ? (formData.modelId || undefined) : undefined}
@@ -312,29 +342,13 @@ export function CreateInventoryView({
 
         {/* ── Cost Price ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Cost Price (PKR) *
-            {typeof formData.costPrice === 'number' && formData.costPrice > 0 && (
-              <span className="ml-2 text-xs font-normal text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                ✓ PKR {formData.costPrice.toLocaleString()}
-              </span>
-            )}
-          </label>
-          <input
-            type="number"
-            value={formData.costPrice === 0 ? '' : (formData.costPrice ?? '')}
-            onChange={e => {
-              const raw = e.target.value.trim();
-              setField('costPrice', raw === '' ? 0 : (parseFloat(raw) || 0));
-            }}
-            onBlur={e => {
-              const parsed = parseFloat(e.target.value);
-              setField('costPrice', isNaN(parsed) ? 0 : parsed);
-            }}
-            className={inputCls(!!validation.fieldErrors?.costPrice) + ' font-semibold'}
-            placeholder="Enter cost price in PKR"
-            min={0}
-            step="any"
+          <CurrencyPriceInput
+            label="Cost Price"
+            pkrValue={formData.costPrice ?? 0}
+            onChange={value => setField('costPrice', value)}
+            rates={rates}
+            defaultInputCurrency={primaryCurrency}
+            required
           />
           {validation.fieldErrors?.costPrice && (
             <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.costPrice}</p>
@@ -343,18 +357,13 @@ export function CreateInventoryView({
 
         {/* ── Sell Price ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price (PKR) *</label>
-          <input
-            type="number"
-            value={formData.sellPrice === 0 ? '' : (formData.sellPrice ?? '')}
-            onChange={e => {
-              const raw = e.target.value.trim();
-              setField('sellPrice', raw === '' ? 0 : (parseFloat(raw) || 0));
-            }}
-            className={inputCls(!!validation.fieldErrors?.sellPrice)}
-            placeholder="Enter sell price in PKR"
-            min={0}
-            step="any"
+          <CurrencyPriceInput
+            label="Sell Price"
+            pkrValue={formData.sellPrice ?? 0}
+            onChange={value => setField('sellPrice', value)}
+            rates={rates}
+            defaultInputCurrency={primaryCurrency}
+            required
           />
           {validation.fieldErrors?.sellPrice && (
             <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.sellPrice}</p>
