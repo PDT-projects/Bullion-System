@@ -761,6 +761,7 @@ interface InvoiceProduct {
   price: number;
   total: number;
   serialNumbers: string[];
+  currency: string;
   isManual?: boolean;
   isAmanat?: boolean;
 }

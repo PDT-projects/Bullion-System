@@ -13,6 +13,7 @@ export interface InvoiceProduct {
   total: number;
   serialNumbers: string[];
   serialCities?: { [serialNumber: string]: string };
+  currency: string;
 }
 
 export interface Invoice {

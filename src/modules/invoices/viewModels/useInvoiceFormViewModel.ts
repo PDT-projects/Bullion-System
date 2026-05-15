@@ -42,6 +42,14 @@ export function branchFromValue(value: string): string {
   return value.replace(COMPANY_PREFIX, '');
 }
 
+export function getCurrencyFromBranch(branch: string): InvoiceCurrency {
+  switch (branch) {
+    case 'Saudia': return 'SAR';
+    case 'Chad': return 'CAD';
+    default: return 'PKR';
+  }
+}
+
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; }
 
@@ -246,6 +254,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
             setEditingInvoice(existing);
             setFormDataState({ ...existing });
             setSelectedProducts(existing.products || []);
+            setSelectedCurrencies(existing.selectedCurrencies || ['PKR']);
 
             // Ensure the country this invoice uses is in the saved list
             if (existing.customerProvince && existing.customerCity) {
@@ -385,26 +394,53 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   }, [setFormData]);
 
   // ── Products ───────────────────────────────────────────────────────────────
-  const addProduct    = useCallback(() => setSelectedProducts(p => [...p, createEmptyInvoiceProduct()]), []);
+  const addProduct    = useCallback(() => {
+    const branch = branchFromValue(invoiceCompany);
+    const currency = getCurrencyFromBranch(branch);
+    const product = createEmptyInvoiceProduct();
+    product.currency = currency;
+    setSelectedProducts(p => [...p, product]);
+  }, [invoiceCompany]);
   const removeProduct = useCallback((pid: string) => setSelectedProducts(p => p.filter(x => x.id !== pid)), []);
 
   const updateProduct = useCallback((pid: string, field: string, value: any) => {
     setSelectedProducts(prev => prev.map(p => {
       if (p.id !== pid) return p;
       switch (field) {
-        case 'productId': return updateProductWithSelection(p, value, allProducts);
+        case 'productId': {
+          const updated = updateProductWithSelection(p, value, allProducts);
+          const branch = branchFromValue(invoiceCompany);
+          const currency = getCurrencyFromBranch(branch);
+          return { ...updated, currency };
+        }
         case 'quantity':  return updateProductQuantity(p, value);
         case 'price':     return updateProductPrice(p, value);
         default:          return { ...p, [field]: value };
       }
     }));
-  }, [allProducts]);
+  }, [allProducts, invoiceCompany]);
 
   const updateSerial = useCallback((productId: string, index: number, value: string) => {
     setSelectedProducts(prev =>
       prev.map(p => p.id !== productId ? p : updateSerialNumber(p, index, value))
     );
   }, []);
+
+  // Update selectedCurrencies based on products' currencies
+  useEffect(() => {
+    const currencies = new Set<InvoiceCurrency>();
+    selectedProducts.forEach(p => {
+      if (p.productId) currencies.add(p.currency); // only count selected products
+    });
+    if (currencies.size > 0) {
+      setSelectedCurrencies(Array.from(currencies).sort()); // sort for consistency
+    } else {
+      // if no products, set to branch currency
+      const branch = branchFromValue(invoiceCompany);
+      const currency = getCurrencyFromBranch(branch);
+      setSelectedCurrencies([currency]);
+    }
+  }, [selectedProducts, invoiceCompany]);
 
   const getAvailableSerialsForProduct = useCallback((productId: string, rowId: string): string[] => {
     const p = allProducts.find(x => x.id === productId);
@@ -526,6 +562,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         agentAmount:            formData.agentAmount      || 0,
         digitalStamp:           formData.digitalStamp,
         branch:                 branchFromValue(invoiceCompany),
+        selectedCurrencies:     selectedCurrencies,
       } as any;
 
       let savedId: string;

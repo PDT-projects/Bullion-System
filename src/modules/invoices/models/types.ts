@@ -1,6 +1,8 @@
 // Invoice Module - Model Layer (UPDATED)
 // Added liquidity linkage fields
 
+export type InvoiceCurrency = 'PKR' | 'CAD' | 'SAR' | 'AED';
+
 export interface InvoiceProduct {
   id: string;
   productId: string;
@@ -14,6 +16,7 @@ export interface InvoiceProduct {
   total: number;
   serialNumbers: string[];
   serialCities?: { [serialNumber: string]: string };
+  currency: InvoiceCurrency;
 }
 
 export interface Invoice {
@@ -58,6 +61,7 @@ export interface Invoice {
   paidBy?: string;
   paidTo?: string;
   productLocation?: string;
+  selectedCurrencies?: InvoiceCurrency[];
   
   // ────────────────────────────────────────────────────────────────────
   // ✨ NEW: Liquidity Linkage Fields

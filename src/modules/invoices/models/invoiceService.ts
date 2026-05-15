@@ -69,6 +69,7 @@ export const createEmptyInvoiceProduct = (): InvoiceProduct => ({
   id: Date.now().toString(),
   productId: '', productName: '', brandName: '', modelName: '',
   category: '', description: '', quantity: 1, price: 0, total: 0, serialNumbers: [],
+  currency: 'PKR',
 });
 
 export const updateProductWithSelection = (product: InvoiceProduct, productId: string, products: ProductInfo[]): InvoiceProduct => {
@@ -85,6 +86,7 @@ export const updateProductWithSelection = (product: InvoiceProduct, productId: s
     price: p.sellPrice,
     total: product.quantity * p.sellPrice,
     serialNumbers: [],
+    currency: 'PKR', // TODO: set based on branch or product
   };
 };
 

@@ -11,6 +11,7 @@
 
 import jsPDF from 'jspdf';
 import { Invoice } from './types';
+import { InvoiceCurrency, INVOICE_CURRENCIES } from './invoiceService';
 
 import stampAsset from '../../../assets/PDT-stamp.png?url';
 const logoAsset = '/PDT-logo.png';
@@ -30,8 +31,27 @@ const sf = (d: jsPDF, c: RGB) => d.setFillColor(c[0], c[1], c[2]);
 const sd = (d: jsPDF, c: RGB) => d.setDrawColor(c[0], c[1], c[2]);
 const st = (d: jsPDF, c: RGB) => d.setTextColor(c[0], c[1], c[2]);
 
-const fmtAmt  = (n: number) =>
-  `PKR ${new Intl.NumberFormat('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)}`;
+const currencyMeta: Record<InvoiceCurrency, { locale: string; fractionDigits: number; code: string }> = {
+  PKR: { locale: 'en-PK', fractionDigits: 0, code: 'PKR' },
+  CAD: { locale: 'en-CA', fractionDigits: 2, code: 'CAD' },
+  SAR: { locale: 'en-US', fractionDigits: 2, code: 'SAR' },
+  AED: { locale: 'en-AE', fractionDigits: 2, code: 'AED' },
+};
+
+function formatCurrency(amount: number, currency: InvoiceCurrency = 'PKR'): string {
+  const meta = currencyMeta[currency] ?? currencyMeta.PKR;
+  try {
+    return new Intl.NumberFormat(meta.locale, {
+      style: 'currency',
+      currency: meta.code,
+      minimumFractionDigits: meta.fractionDigits,
+      maximumFractionDigits: meta.fractionDigits,
+    }).format(amount);
+  } catch {
+    return `${meta.code} ${amount.toFixed(meta.fractionDigits)}`;
+  }
+}
+
 const fmtDate = (d: string) =>
   d ? new Date(d).toLocaleDateString('en-PK', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
 
@@ -181,9 +201,9 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   doc.text(branchName, TEXT_X, 19);
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7); st(doc, LIGHT_GRAY);
-  doc.text('03111444615', PW - MR, 12, { align: 'right' });
-  doc.text('Office #5, 4th Floor, Gulberg Trade Center, Islamabad', PW - MR, 17.5, { align: 'right' });
-  doc.text('NTN: 52723', PW - MR, 23, { align: 'right' });
+  doc.text('+971 56 985 2213', PW - MR, 12, { align: 'right' });
+  doc.text('C108 Building 936 - M-04, Plot - Mohamed Bin Zayed City - ME9', PW - MR, 17.5, { align: 'right' });
+  doc.text('Abu Dhabi, United Arab Emirates', PW - MR, 23, { align: 'right' });
 
   let y = HEADER_H + 7;
 
@@ -229,6 +249,9 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     ['Status',     invoice.status || 'Unpaid'],
     ['Delivery',   invoice.deliveryStatus || ''],
   ];
+  if ((invoice as any).selectedCurrencies?.length) {
+    metaRows.push(['Currencies', (invoice as any).selectedCurrencies.join(', ')]);
+  }
   let rY = y;
   metaRows.forEach(([label, value]) => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); st(doc, GRAY);
@@ -269,7 +292,7 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     tdCell(doc, C.pn.x, y, C.pn.w, rH, pnLines,           { bold: true, alt });
     tdCell(doc, C.pd.x, y, C.pd.w, rH, pdLines,            { alt });
     tdCell(doc, C.bn.x, y, C.bn.w, rH, bnLines,            { fs: 7, alt });
-    tdCell(doc, C.am.x, y, C.am.w, rH, [fmtAmt(p.total)], { bold: true, align: 'right', alt });
+    tdCell(doc, C.am.x, y, C.am.w, rH, [formatCurrency(p.total, (p.currency || 'PKR') as InvoiceCurrency)], { bold: true, align: 'right', alt });
     y += rH;
   });
 
@@ -281,12 +304,22 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   y = pb(doc, y, 16);
   const TOT_W = 72, TOT_X = PW - MR - TOT_W;
 
-  sf(doc, BRAND); doc.setLineWidth(0); doc.rect(TOT_X, y, TOT_W, 10, 'F');
+  const totalsByCurrency = invoice.products.reduce((acc, p) => {
+    const currency = (p.currency || 'PKR') as InvoiceCurrency;
+    acc[currency] = (acc[currency] || 0) + p.total;
+    return acc;
+  }, {} as Record<InvoiceCurrency, number>);
+
+  const totalLines = Object.entries(totalsByCurrency)
+    .map(([currency, amount]) => `${currency}: ${formatCurrency(amount, currency as InvoiceCurrency)}`);
+  const totalBoxHeight = Math.max(10, totalLines.length * 5.5 + 4);
+
+  sf(doc, BRAND); doc.setLineWidth(0); doc.rect(TOT_X, y, TOT_W, totalBoxHeight, 'F');
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); st(doc, WHITE);
   doc.text('TOTAL', TOT_X + 3, y + 6.5);
-  doc.setFontSize(10);
-  doc.text(fmtAmt(invoice.totalAmount), PW - MR - 2, y + 6.5, { align: 'right' });
-  y += 14;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); st(doc, WHITE);
+  doc.text(totalLines, PW - MR - 2, y + 5, { align: 'right' });
+  y += totalBoxHeight + 4;
 
   // ── 5. WARRANTY / EXCHANGE NOTE ───────────────────────────────────
   if (invoice.exchangeWarrantyNote?.trim()) {
