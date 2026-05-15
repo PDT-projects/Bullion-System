@@ -7,6 +7,8 @@ import {
   ArrowLeft, ArrowRight, Package, Plus, Trash2, ChevronDown,
   Hash, Loader2, Check, AlertCircle,
 } from 'lucide-react';
+import { useInventoryCurrency, CurrencyCode } from '../viewModels/useInventoryCurrency';
+import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 import {
   UseInventoryMultiModelViewModelReturn,
   CATEGORIES, STOCKING_LOCATIONS, STATUSES, MultiModelEntry,
@@ -124,6 +126,7 @@ function SerialPanel({
 function ModelCard({
   entry, index, modelOptions, modelOptionsLoading, validationErrors,
   updateEntry, removeEntry, setEntrySerial, setEntrySerialCity, canRemove,
+  rates, defaultInputCurrency,
 }: {
   entry: MultiModelEntry;
   index: number;
@@ -135,6 +138,8 @@ function ModelCard({
   setEntrySerial: (entryId: string, idx: number, value: string) => void;
   setEntrySerialCity: (entryId: string, idx: number, city: string) => void;
   canRemove: boolean;
+  rates: Record<CurrencyCode, number>;
+  defaultInputCurrency: CurrencyCode;
 }) {
   const e = entry;
   const hasErr = (key: string) => !!validationErrors[`${key}_${index}`];
@@ -218,28 +223,28 @@ function ModelCard({
 
         {/* Cost Price */}
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Cost Price (PKR) *</label>
-          <input
-            type="number"
-            value={e.costPrice || ''}
-            onChange={ev => updateEntry(e.id, { costPrice: Number(ev.target.value) })}
+          <CurrencyPriceInput
+            label="Cost Price"
+            pkrValue={e.costPrice ?? 0}
+            onChange={value => updateEntry(e.id, { costPrice: value })}
+            rates={rates}
+            defaultInputCurrency={defaultInputCurrency}
             placeholder="0"
-            style={hasErr('cost') ? inpErr : inp}
-            min={0}
+            required
           />
           {hasErr('cost') && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 3 }}>{validationErrors[`cost_${index}`]}</p>}
         </div>
 
         {/* Sell Price */}
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Sell Price (PKR) *</label>
-          <input
-            type="number"
-            value={e.sellPrice || ''}
-            onChange={ev => updateEntry(e.id, { sellPrice: Number(ev.target.value) })}
+          <CurrencyPriceInput
+            label="Sell Price"
+            pkrValue={e.sellPrice ?? 0}
+            onChange={value => updateEntry(e.id, { sellPrice: value })}
+            rates={rates}
+            defaultInputCurrency={defaultInputCurrency}
             placeholder="0"
-            style={hasErr('sell') ? inpErr : inp}
-            min={0}
+            required
           />
         </div>
 
@@ -347,6 +352,17 @@ export const InventoryMultiModelView: React.FC<Props> = ({
   const [addingBrand, setAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState('');
 
+  const {
+    primaryCurrency,
+    extraCurrencies,
+    rates,
+    setPrimaryCurrency,
+    setExtraCurrencies,
+    loading: ratesLoading,
+    error: ratesError,
+    lastUpdated,
+  } = useInventoryCurrency();
+
   const applyNewBrand = () => {
     const name = newBrandName.trim();
     if (!name) return;
@@ -360,7 +376,7 @@ export const InventoryMultiModelView: React.FC<Props> = ({
 
       {/* Header */}
       <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button onClick={handleBack} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0 }}>
             <ArrowLeft size={17} />
           </button>
@@ -370,6 +386,19 @@ export const InventoryMultiModelView: React.FC<Props> = ({
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Add Multiple Models</div>
             <div style={{ fontSize: 11, color: '#64748b' }}>Step 3 — Select brand and add all models at once</div>
+          </div>
+          <div style={{ marginLeft: 'auto' }}>
+            <InventoryCurrencyDropdown
+              primaryCurrency={primaryCurrency}
+              extraCurrencies={extraCurrencies}
+              setPrimaryCurrency={setPrimaryCurrency}
+              setExtraCurrencies={setExtraCurrencies}
+              loading={ratesLoading}
+              error={ratesError}
+              lastUpdated={lastUpdated}
+              label="Currency"
+              compact
+            />
           </div>
         </div>
       </div>
@@ -455,6 +484,8 @@ export const InventoryMultiModelView: React.FC<Props> = ({
               setEntrySerial={setEntrySerial}
               setEntrySerialCity={setEntrySerialCity}
               canRemove={entries.length > 1}
+              rates={rates}
+              defaultInputCurrency={primaryCurrency}
             />
           ))}
 

@@ -15,7 +15,10 @@ import {
   UseInventoryProductDetailsViewModelReturn,
   SelectedModel,
 } from '../viewModels/useInventoryProductDetailsViewModel';
+import { useInventoryCurrency } from '../viewModels/useInventoryCurrency';
 import { BrandModelSelector } from '../components/BrandModelSelector';
+import { forceReseed } from '../models/BrandModelService';
+import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 
 
 
@@ -53,6 +56,17 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   // With-costing: local selectedModels state owns serial data
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [expandedModel, setExpandedModel]   = useState<string | null>(null);
+
+  const {
+    primaryCurrency,
+    extraCurrencies,
+    rates,
+    setPrimaryCurrency,
+    setExtraCurrencies,
+    loading: ratesLoading,
+    error: ratesError,
+    lastUpdated,
+  } = useInventoryCurrency();
 
   useEffect(() => {
     if (preloadedModels.length > 0) {
@@ -308,7 +322,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
 
         {/* Header */}
         <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <button onClick={handleBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
               <ArrowLeft size={16} /> Back
             </button>
@@ -318,6 +332,18 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Simple Product Entry</div>
               <div style={{ fontSize: 11, color: '#64748b' }}>Quick entry without detailed costing</div>
+            </div>
+            <div style={{ marginLeft: 'auto' }}>
+              <InventoryCurrencyDropdown
+                primaryCurrency={primaryCurrency}
+                extraCurrencies={extraCurrencies}
+                setPrimaryCurrency={setPrimaryCurrency}
+                setExtraCurrencies={setExtraCurrencies}
+                loading={ratesLoading}
+                error={ratesError}
+                lastUpdated={lastUpdated}
+                compact
+              />
             </div>
           </div>
         </div>
@@ -361,31 +387,29 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price (PKR)</label>
-                <input
-                  type="number"
-                  value={singleModel.costPrice || ''}
-                  onChange={e => {
-                    setSingleModelField('costPrice', Number(e.target.value));
-                    setCostPrice(Number(e.target.value));
+                <CurrencyPriceInput
+                  label="Cost Price"
+                  pkrValue={singleModel.costPrice ?? 0}
+                  onChange={value => {
+                    setSingleModelField('costPrice', value);
+                    setCostPrice(value);
                   }}
-                  className={inputCls}
-                  min={0}
-                  placeholder="0"
+                  rates={rates}
+                  defaultInputCurrency={primaryCurrency}
+                  required={false}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Sell Price (PKR) *</label>
-                <input
-                  type="number"
-                  value={singleModel.sellPrice || ''}
-                  onChange={e => {
-                    setSingleModelField('sellPrice', Number(e.target.value));
-                    setSellPrice(Number(e.target.value));
+                <CurrencyPriceInput
+                  label="Sell Price"
+                  pkrValue={singleModel.sellPrice ?? 0}
+                  onChange={value => {
+                    setSingleModelField('sellPrice', value);
+                    setSellPrice(value);
                   }}
-                  className={inputCls}
-                  min={0}
-                  placeholder="0"
+                  rates={rates}
+                  defaultInputCurrency={primaryCurrency}
+                  required
                 />
               </div>
             </div>
