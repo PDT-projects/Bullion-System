@@ -18,6 +18,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Product } from '../models/types';
 import { InventoryFirebaseService, TransferFirebaseService } from '../models/InventoryFirebaseService';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
 
 export interface TransferLine {
   productId: string;
@@ -52,14 +54,17 @@ export interface UseProductTransferCreateViewModelReturn {
   getAvailableSerials: (productId?: string, location?: string) => string[];
   getProductStockByLocation: (productId: string, location: string) => number;
   getProductById: (productId: string) => Product | undefined;
+  addNewLocation: (value: string) => Promise<string | null>;
 }
 
-const LOCATIONS = ['Islamabad', 'Karachi', 'Lahore', 'Bullion RND/SITE', 'Asif'];
+// Default transfer locations (fallback)
+const LOCATIONS = ['Dubai', 'Saudia', 'Chad', 'Sudan'];
 
 export function useProductTransferCreateViewModel(): UseProductTransferCreateViewModelReturn {
   const navigate = useNavigate();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [locations, setLocations] = useState<string[]>(LOCATIONS);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -87,12 +92,53 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     load();
   }, []);
 
-  const locations = useMemo(() => LOCATIONS, []);
+  // locations state is loaded from Firestore (appConfig/transferLocations) on mount
+
 
   const getProductById = useCallback(
     (id: string) => products.find(p => p.id === id),
     [products]
   );
+
+  // Load saved locations from Firestore appConfig/transferLocations
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'appConfig', 'transferLocations'));
+        if (!mounted) return;
+        if (snap.exists()) {
+          const list = (snap.data().list as string[]) || [];
+          setLocations([...new Set([...LOCATIONS, ...list])].sort());
+        } else {
+          setLocations(LOCATIONS.slice().sort());
+        }
+      } catch (err) {
+        console.warn('Failed to load transfer locations:', err);
+        setLocations(LOCATIONS.slice().sort());
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const saveLocationList = useCallback(async (newList: string[]) => {
+    try {
+      await setDoc(doc(db, 'appConfig', 'transferLocations'), { list: newList }, { merge: true });
+      console.log('✅ Saved transferLocations to appConfig');
+    } catch (err) {
+      console.error('Failed to save transferLocations:', err);
+      toast.error('Failed to save location');
+    }
+  }, []);
+
+  const addNewLocation = useCallback(async (value: string): Promise<string | null> => {
+    const trimmed = (value || '').trim();
+    if (!trimmed) return null;
+    const updated = [...new Set([...locations, trimmed])].sort();
+    setLocations(updated);
+    await saveLocationList(updated);
+    return trimmed;
+  }, [locations, saveLocationList]);
 
   // Serials that belong to a specific location
   const getAvailableSerials = useCallback(
@@ -249,5 +295,6 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     updateTransferItemProduct, updateTransferItemQuantity, updateTransferItemSerial,
     toggleSummary, handleSave, onBack,
     getAvailableSerials, getProductStockByLocation, getProductById,
+    addNewLocation,
   };
 }

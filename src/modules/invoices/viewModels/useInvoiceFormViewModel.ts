@@ -426,22 +426,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     );
   }, []);
 
-  // Update selectedCurrencies based on products' currencies
-  useEffect(() => {
-    const currencies = new Set<InvoiceCurrency>();
-    selectedProducts.forEach(p => {
-      if (p.productId) currencies.add(p.currency); // only count selected products
-    });
-    if (currencies.size > 0) {
-      setSelectedCurrencies(Array.from(currencies).sort()); // sort for consistency
-    } else {
-      // if no products, set to branch currency
-      const branch = branchFromValue(invoiceCompany);
-      const currency = getCurrencyFromBranch(branch);
-      setSelectedCurrencies([currency]);
-    }
-  }, [selectedProducts, invoiceCompany]);
-
   const getAvailableSerialsForProduct = useCallback((productId: string, rowId: string): string[] => {
     const p = allProducts.find(x => x.id === productId);
     if (!p) return [];

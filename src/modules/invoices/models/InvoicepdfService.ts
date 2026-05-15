@@ -11,9 +11,8 @@
 
 import jsPDF from 'jspdf';
 import { Invoice } from './types';
-import { InvoiceCurrency, INVOICE_CURRENCIES } from './invoiceService';
+import { InvoiceCurrency } from './invoiceService';
 
-import stampAsset from '../../../assets/PDT-stamp.png?url';
 const logoAsset = '/PDT-logo.png';
 
 const PW = 210, PH = 297, ML = 14, MR = 14, CW = PW - ML - MR;
@@ -50,6 +49,48 @@ function formatCurrency(amount: number, currency: InvoiceCurrency = 'PKR'): stri
   } catch {
     return `${meta.code} ${amount.toFixed(meta.fractionDigits)}`;
   }
+}
+
+const currencyRatesFallback: Record<InvoiceCurrency, number> = {
+  PKR: 279.5,
+  CAD: 1.38,
+  SAR: 3.75,
+  AED: 3.67,
+};
+
+function convertCurrency(
+  amount: number,
+  from: InvoiceCurrency,
+  to: InvoiceCurrency,
+  rates: Record<InvoiceCurrency, number>,
+): number {
+  if (from === to) return amount;
+  if (from === 'PKR') {
+    return to === 'PKR' ? amount : (amount / rates.PKR) * rates[to];
+  }
+  if (to === 'PKR') {
+    return (amount / rates[from]) * rates.PKR;
+  }
+  const baseInPKR = (amount / rates[from]) * rates.PKR;
+  return (baseInPKR / rates.PKR) * rates[to];
+}
+
+async function fetchCurrencyRates(): Promise<Record<InvoiceCurrency, number>> {
+  try {
+    const response = await fetch('https://open.er-api.com/v6/latest/USD');
+    const data = await response.json();
+    if (data?.result === 'success') {
+      return {
+        PKR: data.rates.PKR,
+        CAD: data.rates.CAD,
+        SAR: data.rates.SAR,
+        AED: data.rates.AED,
+      };
+    }
+  } catch (error) {
+    console.warn('[InvoicePdf] Currency rates fetch failed:', error);
+  }
+  return currencyRatesFallback;
 }
 
 const fmtDate = (d: string) =>
@@ -175,8 +216,8 @@ const STAMP_W = 45, STAMP_H = 23;
 async function buildPdf(invoice: Invoice): Promise<Blob> {
   const [logoImg, stampImg] = await Promise.all([
     loadImage(logoAsset),
-    invoice.digitalStamp && stampAsset
-      ? loadImage(stampAsset)
+    invoice.digitalStamp
+      ? Promise.resolve(null as ImageData | null)
       : Promise.resolve(null as ImageData | null),
   ]);
 
@@ -249,9 +290,6 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     ['Status',     invoice.status || 'Unpaid'],
     ['Delivery',   invoice.deliveryStatus || ''],
   ];
-  if ((invoice as any).selectedCurrencies?.length) {
-    metaRows.push(['Currencies', (invoice as any).selectedCurrencies.join(', ')]);
-  }
   let rY = y;
   metaRows.forEach(([label, value]) => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); st(doc, GRAY);
@@ -272,6 +310,12 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   thCell(doc, C.am.x, y, C.am.w, 'Amount',         'right');
   y += ROW_H;
 
+  const selectedCurrencies = Array.isArray((invoice as any).selectedCurrencies) && (invoice as any).selectedCurrencies.length
+    ? (invoice as any).selectedCurrencies as InvoiceCurrency[]
+    : ['PKR'];
+  const primaryCurrency = selectedCurrencies[0] || 'PKR';
+  const rates = await fetchCurrencyRates();
+
   invoice.products.forEach((p, idx) => {
     const serials   = (p.serialNumbers || []).filter(s => s.trim() !== '');
     const alt       = idx % 2 === 1;
@@ -286,13 +330,15 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     const LH_MM     = 8 * 0.42;
     const maxLn     = Math.max(1, pnLines.length, pdLines.length, bnLines.length);
     const rH        = Math.max(ROW_H, maxLn * LH_MM + 4);
+    // All stored invoice amounts are treated as PKR base amounts for conversion
+    const convertedTotal = convertCurrency(p.total, 'PKR', primaryCurrency, rates);
 
     y = pb(doc, y, rH);
     tdCell(doc, C.sr.x, y, C.sr.w, rH, [String(idx + 1)], { align: 'center', alt });
     tdCell(doc, C.pn.x, y, C.pn.w, rH, pnLines,           { bold: true, alt });
     tdCell(doc, C.pd.x, y, C.pd.w, rH, pdLines,            { alt });
     tdCell(doc, C.bn.x, y, C.bn.w, rH, bnLines,            { fs: 7, alt });
-    tdCell(doc, C.am.x, y, C.am.w, rH, [formatCurrency(p.total, (p.currency || 'PKR') as InvoiceCurrency)], { bold: true, align: 'right', alt });
+    tdCell(doc, C.am.x, y, C.am.w, rH, [formatCurrency(convertedTotal, primaryCurrency)], { bold: true, align: 'right', alt });
     y += rH;
   });
 
@@ -304,14 +350,9 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   y = pb(doc, y, 16);
   const TOT_W = 72, TOT_X = PW - MR - TOT_W;
 
-  const totalsByCurrency = invoice.products.reduce((acc, p) => {
-    const currency = (p.currency || 'PKR') as InvoiceCurrency;
-    acc[currency] = (acc[currency] || 0) + p.total;
-    return acc;
-  }, {} as Record<InvoiceCurrency, number>);
-
-  const totalLines = Object.entries(totalsByCurrency)
-    .map(([currency, amount]) => `${currency}: ${formatCurrency(amount, currency as InvoiceCurrency)}`);
+  const totalLines = selectedCurrencies.map(currency =>
+    formatCurrency(convertCurrency(invoice.totalAmount, 'PKR', currency, rates), currency)
+  );
   const totalBoxHeight = Math.max(10, totalLines.length * 5.5 + 4);
 
   sf(doc, BRAND); doc.setLineWidth(0); doc.rect(TOT_X, y, TOT_W, totalBoxHeight, 'F');

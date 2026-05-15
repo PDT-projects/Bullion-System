@@ -19,6 +19,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
   updateTransferItemProduct, updateTransferItemQuantity, updateTransferItemSerial,
   toggleSummary, handleSave, onBack,
   getAvailableSerials, getProductStockByLocation, getProductById,
+  addNewLocation,
 }) => {
   if (isLoading) {
     return (
@@ -75,25 +76,49 @@ export const ProductTransferCreateView: React.FC<Props> = ({
               <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
                 <MapPin className="w-3.5 h-3.5 inline mr-1 text-red-400" />From Location *
               </label>
-              <select value={formData.fromLocation}
-                onChange={e => setFormField('fromLocation', e.target.value)}
-                className={inputCls}>
-                <option value="">Select source location</option>
-                {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select value={formData.fromLocation}
+                  onChange={e => setFormField('fromLocation', e.target.value)}
+                  className={inputCls}>
+                  <option value="">Select source location</option>
+                  {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                </select>
+                <button type="button" onClick={async () => {
+                  const v = window.prompt('Add new From location (e.g. Dubai)');
+                  if (v && v.trim()) {
+                    const added = await addNewLocation(v.trim());
+                    if (added) setFormField('fromLocation', added);
+                  }
+                }}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                  <Plus size={14} />
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
                 <MapPin className="w-3.5 h-3.5 inline mr-1 text-green-500" />To Location *
               </label>
-              <select value={formData.toLocation}
-                onChange={e => setFormField('toLocation', e.target.value)}
-                className={inputCls}>
-                <option value="">Select destination location</option>
-                {locations
-                  .filter(loc => loc !== formData.fromLocation)
-                  .map(loc => <option key={loc} value={loc}>{loc}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select value={formData.toLocation}
+                  onChange={e => setFormField('toLocation', e.target.value)}
+                  className={inputCls}>
+                  <option value="">Select destination location</option>
+                  {locations
+                    .filter(loc => loc !== formData.fromLocation)
+                    .map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                </select>
+                <button type="button" onClick={async () => {
+                  const v = window.prompt('Add new To location (e.g. Saudia)');
+                  if (v && v.trim()) {
+                    const added = await addNewLocation(v.trim());
+                    if (added) setFormField('toLocation', added);
+                  }
+                }}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                  <Plus size={14} />
+                </button>
+              </div>
             </div>
           </div>
 
