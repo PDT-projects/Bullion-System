@@ -243,7 +243,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
           box-shadow:0 30px 80px rgba(0,0,0,0.45);
         }
 
-        /* LEFT */
+        /* LEFT PANEL */
 
         .be-left{
           flex:1;
@@ -251,73 +251,30 @@ export function Login({ onLoginSuccess }: LoginProps) {
           padding:42px 50px;
           display:flex;
           flex-direction:column;
-          justify-content:center;
+          justify-content:flex-start;
           overflow:hidden;
         }
 
-        /* SKYLINE */
+        /* SKYLINE STYLE CONFIGURATION */
 
         .be-skyline{
           position:absolute;
-          inset:0;
+          left:0;
+          right:0;
+          bottom:0;
+          height:100%;
           pointer-events:none;
-          opacity:0.10;
+          opacity:0.42;
+          display:flex;
+          align-items:flex-end;
+          justify-content:flex-start;
+          z-index:1;
         }
 
-        .tower{
-          position:absolute;
-          bottom:-10px;
-          background:linear-gradient(
-            to top,
-            rgba(16,185,129,0.45),
-            rgba(255,255,255,0.08)
-          );
-          border-radius:5px 5px 0 0;
-          animation:float 6s ease-in-out infinite;
-        }
-
-        .t1{
-          left:8%;
-          width:70px;
-          height:300px;
-        }
-
-        .t2{
-          left:22%;
-          width:90px;
-          height:200px;
-          animation-delay:1s;
-        }
-
-        .t3{
-          left:40%;
-          width:60px;
-          height:380px;
-          clip-path:polygon(48% 0%,52% 0%,65% 18%,65% 100%,35% 100%,35% 18%);
-          animation-delay:2s;
-        }
-
-        .t4{
-          left:58%;
-          width:110px;
-          height:250px;
-          animation-delay:1.5s;
-        }
-
-        .t5{
-          left:78%;
-          width:70px;
-          height:180px;
-          animation-delay:0.5s;
-        }
-
-        @keyframes float{
-          0%,100%{
-            transform:translateY(0px);
-          }
-          50%{
-            transform:translateY(-8px);
-          }
+        .be-skyline svg {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
 
         /* BRAND */
@@ -329,6 +286,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
           align-items:center;
           gap:14px;
           margin-bottom:28px;
+          margin-top: 20px;
         }
 
         .be-brand-icon{
@@ -386,8 +344,9 @@ export function Login({ onLoginSuccess }: LoginProps) {
           gap:14px;
           padding:16px;
           border-radius:16px;
-          background:rgba(255,255,255,0.04);
+          background:rgba(7, 20, 35, 0.6);
           border:1px solid rgba(255,255,255,0.05);
+          backdrop-filter: blur(8px);
           transition:0.25s;
         }
 
@@ -415,7 +374,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
           font-weight:500;
         }
 
-        /* RIGHT */
+        /* RIGHT PANEL */
 
         .be-right{
           width:460px;
@@ -426,6 +385,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
           justify-content:center;
           padding:38px;
           position:relative;
+          z-index:2;
         }
 
         .be-right::before{
@@ -491,7 +451,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
         .be-wrap{
           position:relative;
-        }
+          }
 
         .be-input{
           width:100%;
@@ -601,10 +561,9 @@ export function Login({ onLoginSuccess }: LoginProps) {
           box-shadow:0 0 12px rgba(16,185,129,0.7);
         }
 
-        /* MOBILE */
+        /* RESPONSIVE SCALING */
 
         @media(max-width:900px){
-
           body{
             overflow:auto;
           }
@@ -621,6 +580,11 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
           .be-left{
             padding:34px 24px;
+            min-height: 480px;
+          }
+
+          .be-skyline{
+            display:none;
           }
 
           .be-right{
@@ -646,42 +610,112 @@ export function Login({ onLoginSuccess }: LoginProps) {
             font-size:38px;
           }
         }
-
       `}</style>
 
       <div className="be-login">
-
         <div className="be-container">
-
-          {/* LEFT */}
-
+          
+          {/* LEFT PANEL WITH INTEGRATED SKYSCRAPER VECTORS */}
           <div className="be-left">
-
+            
             <div className="be-skyline">
-              <div className="tower t1"></div>
-              <div className="tower t2"></div>
-              <div className="tower t3"></div>
-              <div className="tower t4"></div>
-              <div className="tower t5"></div>
+              <svg viewBox="0 0 750 600" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYEnd slice">
+                {/* Baseline Grid Horizon */}
+                <line x1="0" y1="590" x2="750" y2="590" stroke="#34d399" strokeWidth="2.5" strokeOpacity="0.5" />
+                
+                {/* Left Background Minarets */}
+                <path d="M20 590 V460 H40 V590" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
+                <path d="M30 460 V390" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
+                <path d="M25 390 C25 375, 35 375, 35 390 Z" fill="rgba(16,185,129,0.1)" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
+                
+                <path d="M55 590 V490 H105 V590" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
+                <path d="M55 490 C55 450, 105 450, 105 490 Z" fill="rgba(16,185,129,0.05)" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
+
+                {/* Subground Abstract Structural Columns */}
+                <path d="M120 590 V360 H165 V590" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
+                <circle cx="142" cy="340" r="12" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
+                <line x1="142" y1="328" x2="142" y2="300" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
+
+                {/* PROMINENT BURJ KHALIFA STRUCTURE */}
+                <g id="burj-khalifa" transform="translate(190, 40)">
+                  {/* Foundation Core Podiums */}
+                  <path d="M50 550 V430 H110 V550" stroke="#34d399" strokeWidth="2" strokeOpacity="0.85" fill="rgba(4, 17, 31, 0.85)" />
+                  <path d="M35 550 V470 H125 V550" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.4" />
+                  
+                  {/* Tier Segment 2 */}
+                  <path d="M58 430 V320 H102 V430" stroke="#34d399" strokeWidth="2" strokeOpacity="0.85" fill="rgba(4, 17, 31, 0.85)" />
+                  <path d="M48 430 V360 H112 V430" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.4" />
+                  
+                  {/* Tier Segment 3 */}
+                  <path d="M66 320 V200 H94 V320" stroke="#34d399" strokeWidth="2" strokeOpacity="0.9" fill="rgba(4, 17, 31, 0.85)" />
+                  <path d="M58 320 V240 H102 V320" stroke="#10b981" strokeWidth="1.2" strokeOpacity="0.4" />
+
+                  {/* Upper Spire Spindle & Needle */}
+                  <path d="M74 200 V70 H86 V200" stroke="#34d399" strokeWidth="2" strokeOpacity="0.95" fill="rgba(4, 17, 31, 0.9)" />
+                  <line x1="80" y1="70" x2="80" y2="0" stroke="#34d399" strokeWidth="2.5" strokeOpacity="1" />
+                  <line x1="80" y1="550" x2="80" y2="70" stroke="#10b981" strokeWidth="1" strokeOpacity="0.3" />
+
+                  {/* Detailed Mechanical Louvers / Horizontal Architectural Facades */}
+                  <line x1="53" y1="510" x2="107" y2="510" stroke="#10b981" strokeWidth="1.2" strokeOpacity="0.4" />
+                  <line x1="53" y1="450" x2="107" y2="450" stroke="#10b981" strokeWidth="1.2" strokeOpacity="0.4" />
+                  <line x1="61" y1="390" x2="99" y2="390" stroke="#10b981" strokeWidth="1" strokeOpacity="0.4" />
+                  <line x1="61" y1="345" x2="99" y2="345" stroke="#10b981" strokeWidth="1" strokeOpacity="0.4" />
+                  <line x1="68" y1="270" x2="92" y2="270" stroke="#10b981" strokeWidth="1" strokeOpacity="0.4" />
+                  <line x1="68" y1="225" x2="92" y2="225" stroke="#10b981" strokeWidth="1" strokeOpacity="0.4" />
+                  <line x1="75" y1="150" x2="85" y2="150" stroke="#34d399" strokeWidth="1" strokeOpacity="0.6" />
+                  <line x1="75" y1="110" x2="85" y2="110" stroke="#34d399" strokeWidth="1" strokeOpacity="0.6" />
+                </g>
+
+                {/* HIGH-CONTRAST MEDIUM DENSITY ARCH DESIGN */}
+                <path d="M375 590 V390 C375 330, 425 330, 425 390 V590" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.5" fill="rgba(4, 17, 31, 0.4)" />
+                <path d="M390 390 V590 M410 390 V590" stroke="#10b981" strokeWidth="1.2" strokeOpacity="0.3" />
+
+                {/* ENHANCED LARGE BURJ AL ARAB VECTOR */}
+                <g id="burj-al-arab" transform="translate(450, 150)">
+                  {/* Distinct Outward Triangular Bow Outline */}
+                  <path d="M0 440 L90 140 C130 220, 140 335, 145 440" stroke="#34d399" strokeWidth="2.5" fill="rgba(16,185,129,0.06)" strokeOpacity="0.9" />
+                  <path d="M0 440 H145" stroke="#34d399" strokeWidth="2" strokeOpacity="0.8" />
+                  
+                  {/* Outer Exoskeleton Mast Truss */}
+                  <path d="M90 140 V90 L75 96" stroke="#34d399" strokeWidth="2.5" strokeOpacity="0.9" />
+                  <path d="M72 140 C115 140, 160 170, 168 215" stroke="#10b981" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.6" />
+                  
+                  {/* Horizontal Rib Struts */}
+                  <line x1="42" y1="290" x2="124" y2="290" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.5" />
+                  <line x1="53" y1="250" x2="116" y2="250" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.5" />
+                  <line x1="66" y1="210" x2="108" y2="210" stroke="#10b981" strokeWidth="1.2" strokeOpacity="0.5" />
+                  <line x1="28" y1="340" x2="135" y2="340" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.5" />
+                  <line x1="14" y1="390" x2="142" y2="390" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.5" />
+                  
+                  {/* Helipad Cantilever Projection */}
+                  <line x1="68" y1="180" x2="110" y2="180" stroke="#34d399" strokeWidth="2" strokeOpacity="0.9" />
+                </g>
+
+                {/* Right Edge Modern Tapered Towers */}
+                <path d="M620 590 L650 310 L700 350 L680 590" stroke="#34d399" strokeWidth="1.5" strokeOpacity="0.6" fill="rgba(4, 17, 31, 0.4)" />
+                <line x1="642" y1="380" x2="688" y2="400" stroke="#10b981" strokeWidth="1" strokeOpacity="0.4" />
+                <line x1="636" y1="430" x2="682" y2="450" stroke="#10b981" strokeWidth="1" strokeOpacity="0.4" />
+                <line x1="630" y1="480" x2="676" y2="500" stroke="#10b981" strokeWidth="1" strokeOpacity="0.4" />
+
+                {/* Ground Accents (Palm Frond Vector Layouts) */}
+                <path d="M175 572 C172 560, 162 555, 156 560 M175 572 C181 560, 191 555, 197 560 M175 590 V572" stroke="#34d399" strokeWidth="1.5" strokeOpacity="0.7" />
+                <path d="M435 578 C432 568, 424 564, 419 568 M435 578 C441 568, 449 564, 454 568 M435 590 V578" stroke="#34d399" strokeWidth="1.5" strokeOpacity="0.7" />
+              </svg>
             </div>
 
             <div className="be-brand">
-
               <div className="be-brand-icon">
                 <BarChart2 size={26} />
               </div>
-
               <div>
                 <div className="be-brand-name">
                   BULLION<br />
                   ELECTRONICS
                 </div>
-
                 <div className="be-brand-sub">
                   Enterprise Finance System
                 </div>
               </div>
-
             </div>
 
             <div className="be-text">
@@ -690,34 +724,25 @@ export function Login({ onLoginSuccess }: LoginProps) {
             </div>
 
             <div className="be-features">
-
               {features.map((f) => (
                 <div className="be-feature" key={f.label}>
-
                   <div className="be-feature-icon">
                     {f.icon}
                   </div>
-
                   <span>{f.label}</span>
-
                 </div>
               ))}
-
             </div>
 
           </div>
 
-          {/* RIGHT */}
-
+          {/* RIGHT PANEL FOR COMPACT FORM INTERACTION */}
           <div className="be-right">
-
             <div className="be-card">
-
+              
               <div className="be-heading">
                 <h1>Welcome</h1>
-                <p>
-                  Sign in securely to continue
-                </p>
+                <p>Sign in securely to continue</p>
               </div>
 
               {errors.general && (
@@ -727,15 +752,9 @@ export function Login({ onLoginSuccess }: LoginProps) {
               )}
 
               <form onSubmit={handleSubmit}>
-
                 <div className="be-field">
-
-                  <label className="be-label">
-                    Email Address
-                  </label>
-
+                  <label className="be-label">Email Address</label>
                   <div className="be-wrap">
-
                     <input
                       type="email"
                       className={`be-input ${errors.email ? 'err' : ''}`}
@@ -746,25 +765,17 @@ export function Login({ onLoginSuccess }: LoginProps) {
                       placeholder="Enter your email"
                       disabled={isLoading}
                     />
-
                   </div>
-
                   {errors.email && (
                     <div className="be-field-err">
                       {errors.email}
                     </div>
                   )}
-
                 </div>
 
                 <div className="be-field">
-
-                  <label className="be-label">
-                    Password
-                  </label>
-
+                  <label className="be-label">Password</label>
                   <div className="be-wrap">
-
                     <input
                       type={showPassword ? 'text' : 'password'}
                       className={`be-input pr ${errors.password ? 'err' : ''}`}
@@ -775,13 +786,10 @@ export function Login({ onLoginSuccess }: LoginProps) {
                       placeholder="Enter password"
                       disabled={isLoading}
                     />
-
                     <button
                       type="button"
                       className="be-eye"
-                      onClick={() =>
-                        setShowPassword((p) => !p)
-                      }
+                      onClick={() => setShowPassword((p) => !p)}
                     >
                       {showPassword ? (
                         <EyeOff size={18} />
@@ -789,15 +797,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
                         <Eye size={18} />
                       )}
                     </button>
-
                   </div>
-
                   {errors.password && (
                     <div className="be-field-err">
                       {errors.password}
                     </div>
                   )}
-
                 </div>
 
                 <button
@@ -805,13 +810,9 @@ export function Login({ onLoginSuccess }: LoginProps) {
                   className="be-btn"
                   disabled={isLoading}
                 >
-
                   {isLoading ? (
                     <>
-                      <Loader2
-                        size={18}
-                        className="be-spin"
-                      />
+                      <Loader2 size={18} className="be-spin" />
                       Signing In...
                     </>
                   ) : (
@@ -820,9 +821,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                       <ArrowRight size={16} />
                     </>
                   )}
-
                 </button>
-
               </form>
 
               <div className="be-secure">
@@ -831,11 +830,9 @@ export function Login({ onLoginSuccess }: LoginProps) {
               </div>
 
             </div>
-
           </div>
 
         </div>
-
       </div>
     </>
   );
