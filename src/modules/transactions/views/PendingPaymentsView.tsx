@@ -267,11 +267,12 @@ export function PendingPaymentsView({
           <button
             key={key}
             onClick={() => setFilterStatus(key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              filterStatus === key
-                ? 'bg-[#0f172a] text-white border-[#0f172a] hover:bg-[#0f172a]'
-                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-            }`}
+            className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+            style={{
+              backgroundColor: filterStatus === key ? '#1e293b' : '#ffffff',
+              color: filterStatus === key ? '#ffffff' : '#374151',
+              borderColor: filterStatus === key ? '#1e293b' : '#d1d5db',
+            }}
           >
             {label}
           </button>
