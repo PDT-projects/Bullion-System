@@ -73,7 +73,7 @@ interface SalaryFormViewProps {
   onCancel: () => void;
 }
 
-const inp    = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]';
+const inp    = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300';
 const inpErr = 'border-red-500';
 
 function formatDateDisplay(dateStr: string): string {
@@ -185,9 +185,9 @@ export function SalaryFormView({
                   <p className="text-xs text-gray-500 mb-0.5">Advance Paid</p>
                   <p className="font-bold text-orange-600">− {fmt(advancePaidThisMonth)}</p>
                 </div>
-                <div className="bg-[#4f46e5]/10 rounded-lg p-2.5 border border-[#4f46e5]/20 text-center">
-                  <p className="text-xs text-[#4f46e5] mb-0.5">Remaining to Pay</p>
-                  <p className="font-bold text-[#4f46e5] text-base">{fmt(remainingSalaryToPay)}</p>
+                <div className="rounded-lg p-2.5 border text-center" style={{ backgroundColor: 'rgba(30,41,59,0.08)', borderColor: 'rgba(30,41,59,0.15)' }}>
+                  <p className="text-xs mb-0.5" style={{ color: '#1e293b' }}>Remaining to Pay</p>
+                  <p className="font-bold text-base" style={{ color: '#1e293b' }}>{fmt(remainingSalaryToPay)}</p>
                 </div>
               </div>
               <p className="text-blue-600 text-xs mt-2">
@@ -267,7 +267,7 @@ export function SalaryFormView({
           <div className="mb-4 rounded-lg border overflow-hidden">
             {isLoanLoading ? (
               <div className="p-4 bg-gray-50 border-gray-200 flex items-center gap-3">
-                <div className="w-4 h-4 border-2 border-[#4f46e5] border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin flex-shrink-0" style={{ borderColor: '#1e293b', borderTopColor: 'transparent' }} />
                 <p className="text-sm text-gray-500">Checking for active loans...</p>
               </div>
             ) : employeeLoan ? (
@@ -409,7 +409,7 @@ export function SalaryFormView({
                   <select
                     value={formData.employeeId}
                     onChange={(e) => onFieldChange('employeeId', e.target.value)}
-                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${fieldErrors.employeeId ? inpErr : 'border-gray-300'}`}
+                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 ${fieldErrors.employeeId ? inpErr : 'border-gray-300'}`}
                   >
                     <option value="">Choose an employee...</option>
                     {employees.map(emp => (
@@ -449,7 +449,7 @@ export function SalaryFormView({
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
                       <p className="text-xs text-gray-400 mb-0.5">Monthly Salary</p>
-                      <p className="text-sm font-semibold text-[#4f46e5]">{fmt(selectedEmployee.salary || 0)}</p>
+                      <p className="text-sm font-semibold" style={{ color: '#1e293b' }}>{fmt(selectedEmployee.salary || 0)}</p>
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
                       <p className="text-xs text-gray-400 mb-0.5">Status</p>
@@ -515,10 +515,10 @@ export function SalaryFormView({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {isRegular ? 'Base Salary' : 'Advance Amount'} <span className="text-red-500">*</span>
                   {isRegular && advancePaidThisMonth > 0 && !regularAlreadyPaid && (
-                    <span className="ml-1 text-xs font-normal text-[#4f46e5]">(remaining after advance)</span>
+                    <span className="ml-1 text-xs font-normal" style={{ color: '#1e293b' }}>(remaining after advance)</span>
                   )}
                 </label>
-                <div className="flex rounded-lg border overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5] border-gray-300">
+                <div className="flex rounded-lg border overflow-hidden focus-within:ring-2 focus-within:ring-slate-400 border-gray-300">
                   <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
                     PKR
                   </span>
@@ -544,7 +544,7 @@ export function SalaryFormView({
                       </span>
                     )}
                   </label>
-                  <div className={`flex rounded-lg border overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5] ${
+                  <div className={`flex rounded-lg border overflow-hidden focus-within:ring-2 focus-within:ring-slate-400 ${
                     isCommissionAutoFilled && confirmedCommissionAmount > 0 && !isEditMode
                       ? 'border-green-400'
                       : 'border-gray-300'
@@ -585,7 +585,7 @@ export function SalaryFormView({
                     <span className="ml-1 text-xs text-orange-600 font-normal">(advance: {fmt(advancePaidThisMonth)})</span>
                   ) : null}
                 </label>
-                <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5]">
+                <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-slate-400">
                   <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
                     PKR
                   </span>
@@ -660,11 +660,11 @@ export function SalaryFormView({
                     <button
                       key={m} type="button"
                       onClick={() => onTransactionChange(0, 'mode', m)}
-                      className={`py-2.5 text-sm rounded-lg border font-medium transition-colors ${
-                        transaction.mode === m
-                          ? 'border-[#4f46e5] bg-[#4f46e5]/5 text-[#4f46e5]'
-                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                      }`}
+                      className="py-2.5 text-sm rounded-lg border font-medium transition-colors"
+                      style={transaction.mode === m
+                        ? { borderColor: '#1e293b', backgroundColor: 'rgba(30,41,59,0.07)', color: '#1e293b' }
+                        : { borderColor: '#d1d5db', color: '#4b5563' }
+                      }
                     >{m}</button>
                   ))}
                 </div>
@@ -682,7 +682,7 @@ export function SalaryFormView({
                         <select
                           value={transaction.bankId}
                           onChange={(e) => onTransactionChange(0, 'bankId', e.target.value)}
-                          className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${fieldErrors['transaction_0_bankName'] ? inpErr : 'border-gray-300'}`}
+                          className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 ${fieldErrors['transaction_0_bankName'] ? inpErr : 'border-gray-300'}`}
                         >
                           <option value="">Select bank...</option>
                           {banks.map(bank => (
@@ -696,7 +696,7 @@ export function SalaryFormView({
                           type="text"
                           value={transaction.bankName}
                           onChange={(e) => onTransactionChange(0, 'bankName', e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
                           placeholder="Bank name"
                         />
                       )}
@@ -711,7 +711,7 @@ export function SalaryFormView({
                       </div>
                       <div className="flex justify-between mt-1">
                         <span className="text-gray-500">After payment:</span>
-                        <span className={`font-semibold ${selectedBank.balance - calculatedNetAmount < 0 ? 'text-red-600' : 'text-indigo-700'}`}>
+                        <span className={`font-semibold ${selectedBank.balance - calculatedNetAmount < 0 ? 'text-red-600' : 'text-slate-700'}`}>
                           {fmt(selectedBank.balance - calculatedNetAmount)}
                         </span>
                       </div>
@@ -773,7 +773,7 @@ export function SalaryFormView({
                     Amount Being Paid Now
                     <span className="ml-1 text-xs font-normal text-gray-400">(enter how much is paid today)</span>
                   </label>
-                  <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-[#4f46e5]">
+                  <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-slate-400">
                     <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
                       PKR
                     </span>
@@ -807,7 +807,7 @@ export function SalaryFormView({
                   value={formData.note}
                   onChange={(e) => onFieldChange('note', e.target.value)}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
                   placeholder="Add any additional notes..."
                 />
               </div>
@@ -815,10 +815,10 @@ export function SalaryFormView({
           </div>
 
           {/* ── Net Amount Summary ───────────────────────────────────── */}
-          <div className="bg-[#4f46e5]/10 rounded-xl p-5">
+          <div className="rounded-xl p-5" style={{ backgroundColor: 'rgba(30,41,59,0.08)' }}>
             <div className="flex items-center justify-between mb-3">
               <span className="text-lg font-semibold text-gray-900">Net Amount to Pay:</span>
-              <span className="text-2xl font-bold text-[#4f46e5]">{fmt(calculatedNetAmount)}</span>
+              <span className="text-2xl font-bold" style={{ color: '#1e293b' }}>{fmt(calculatedNetAmount)}</span>
             </div>
             <div className="text-sm text-gray-600 flex flex-wrap gap-4">
               {formData.baseSalary > 0 && (
@@ -846,14 +846,14 @@ export function SalaryFormView({
               )}
             </div>
             {isRegular && advancePaidThisMonth > 0 && !regularAlreadyPaid && (
-              <div className="mt-3 pt-3 border-t border-[#4f46e5]/20 text-xs text-[#4f46e5]">
+              <div className="mt-3 pt-3 border-t text-xs" style={{ borderColor: 'rgba(30,41,59,0.15)', color: '#1e293b' }}>
                 ℹ️ Advance already paid this month: {fmt(advancePaidThisMonth)} · 
                 Paying remaining: {fmt(remainingSalaryToPay)}
               </div>
             )}
             {/* Loan repayment summary line */}
             {isRegular && loanDeduction > 0 && employeeLoan && !isEditMode && (
-              <div className="mt-2 pt-2 border-t border-[#4f46e5]/20 text-xs text-amber-700 flex items-center gap-1.5">
+              <div className="mt-2 pt-2 border-t text-xs text-amber-700 flex items-center gap-1.5" style={{ borderColor: 'rgba(30,41,59,0.15)' }}>
                 <Landmark size={11} />
                 Loan repayment of {fmt(loanDeduction)} will be deducted — loan balance:
                 {' '}{fmt(employeeLoan.remaining)} → {fmt(loanAfterDeduction)}
@@ -872,7 +872,10 @@ export function SalaryFormView({
             <button
               type="button" onClick={handleSubmitClick}
               disabled={isLoading || (regularAlreadyPaid && !isEditMode)}
-              className="px-6 py-2.5 text-sm font-medium text-white bg-[#4f46e5] border border-[#4f46e5] rounded-lg hover:bg-[#4338ca] disabled:opacity-50 transition-colors"
+              className="px-6 py-2.5 text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-colors"
+              style={{ backgroundColor: '#1e293b', borderColor: '#1e293b' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#334155'; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#1e293b'; }}
             >
               {isLoading ? 'Saving...' : submitButtonText}
             </button>

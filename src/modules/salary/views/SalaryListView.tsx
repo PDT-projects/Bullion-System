@@ -85,13 +85,20 @@ export function SalaryListView({
           </div>
           <div className="flex items-center gap-3">
             <button onClick={toggleFilters}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${showFilters ? 'bg-[#4f46e5] text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}>
+              className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border"
+              style={showFilters
+                ? { backgroundColor: '#1e293b', color: '#fff', borderColor: '#1e293b' }
+                : { backgroundColor: '#fff', color: '#374151', borderColor: '#d1d5db' }
+              }>
               <Filter size={20} />
               Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
             </button>
             {type !== 'all' && (
               <button onClick={() => handleAdd(type)}
-                className="flex items-center gap-2 bg-[#4f46e5] text-white px-4 py-2 rounded-lg hover:bg-[#4338ca] transition-colors">
+                className="flex items-center gap-2 text-white px-4 py-2 rounded-lg transition-colors"
+                style={{ backgroundColor: '#1e293b' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#334155'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#1e293b'; }}>
                 <Plus size={20} />
                 Pay {type === 'regular' ? 'Regular' : 'Advance'} Salary
               </button>
@@ -140,14 +147,14 @@ export function SalaryListView({
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                   <input type="text" placeholder="Name, ID, or month..."
                     value={filters.searchTerm} onChange={(e) => setFilter('searchTerm', e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400" />
                 </div>
               </div>
               {type === 'all' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                   <select value={filters.typeFilter} onChange={(e) => setFilter('typeFilter', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400">
                     <option value="all">All Types</option>
                     <option value="regular">Regular</option>
                     <option value="advance">Advance</option>
@@ -157,7 +164,7 @@ export function SalaryListView({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
                 <select value={filters.employeeFilter} onChange={(e) => setFilter('employeeFilter', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400">
                   <option value="">All Employees</option>
                   {uniqueEmployees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                 </select>
@@ -165,7 +172,7 @@ export function SalaryListView({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
                 <select value={filters.monthFilter} onChange={(e) => setFilter('monthFilter', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400">
                   <option value="">All Months</option>
                   {uniqueMonths.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
@@ -173,7 +180,7 @@ export function SalaryListView({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                 <select value={filters.paymentMethodFilter} onChange={(e) => setFilter('paymentMethodFilter', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400">
                   <option value="">All Methods</option>
                   <option value="Cash">Cash</option>
                   <option value="Bank">Bank</option>
@@ -183,12 +190,12 @@ export function SalaryListView({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
                 <input type="date" value={filters.dateFrom || ''} onChange={(e) => setFilter('dateFrom', e.target.value || null)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
                 <input type="date" value={filters.dateTo || ''} onChange={(e) => setFilter('dateTo', e.target.value || null)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400" />
               </div>
             </div>
             {activeFilterCount > 0 && (
@@ -203,7 +210,7 @@ export function SalaryListView({
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {isLoading ? (
             <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4f46e5] mx-auto mb-4" />
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: '#1e293b' }} />
               <p className="text-gray-600">Loading salary records...</p>
             </div>
           ) : (
