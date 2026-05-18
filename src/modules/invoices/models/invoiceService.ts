@@ -54,7 +54,6 @@ export const calculateTotal = (products: InvoiceProduct[]): number =>
 export const validateInvoice = (invoice: Partial<Invoice>, products: InvoiceProduct[]): ValidationResult => {
   if (!invoice.customerName?.trim()) return { isValid: false, error: 'Customer name is required' };
   if (!invoice.customerPhone?.trim()) return { isValid: false, error: 'Customer phone is required' };
-  if (!invoice.customerCNIC?.trim()) return { isValid: false, error: 'Customer CNIC is required' };
   if (products.length === 0) return { isValid: false, error: 'At least one product is required' };
   for (const p of products) {
     if (!p.productId) return { isValid: false, error: 'Please select a product for all items' };

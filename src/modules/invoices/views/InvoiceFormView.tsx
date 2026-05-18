@@ -149,6 +149,8 @@ function CountryCitySelector({
   const [savingCountry, setSavingCountry] = useState(false);
   const [savingCity,    setSavingCity]    = useState(false);
 
+  React.useEffect(() => { setNewCity(city); }, [city]);
+
   const citiesForCountry = savedCitiesForCountry(country).filter(c => c !== '');
 
   // Persist new country to Firestore by calling handleAddCountryCity,
@@ -203,34 +205,22 @@ function CountryCitySelector({
         )}
       </div>
 
-      {/* City */}
+      {/* City (free-text with suggestions) */}
       <div>
         <label className={lbl}>City</label>
-        {addingCity ? (
-          <div className="flex gap-1">
-            <input type="text" value={newCity} onChange={e => setNewCity(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') saveCity(); if (e.key === 'Escape') { setAddingCity(false); setNewCity(''); } }}
-              placeholder="e.g. Dubai" autoFocus className={`${inp} flex-1`} />
-            <button onClick={saveCity} disabled={savingCity} style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs disabled:opacity-50">{savingCity ? '…' : 'Save'}</button>
-            <button onClick={() => { setAddingCity(false); setNewCity(''); }}
-              className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
-          </div>
-        ) : (
-          <div className="flex gap-1">
-            <select value={city}
-              onChange={e => setFormData({ customerCity: e.target.value })}
-              disabled={!country}
-              className={`${inp} flex-1 disabled:bg-gray-50 disabled:text-gray-400`}>
-              <option value="">Select city</option>
-              {citiesForCountry.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <button onClick={() => setAddingCity(true)} title="Add new city"
-              disabled={!country}
-              className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-400 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
-              <Plus size={11} /> Add
-            </button>
-          </div>
-        )}
+        <div className="flex gap-1">
+          <input list={country ? `cities-${country}` : undefined} value={newCity}
+            onChange={e => { setNewCity(e.target.value); setFormData({ customerCity: e.target.value }); }}
+            onKeyDown={e => { if (e.key === 'Enter') saveCity(); if (e.key === 'Escape') { setNewCity(''); } }}
+            placeholder="e.g. Dubai" autoFocus className={`${inp} flex-1`} disabled={!country} />
+          <datalist id={country ? `cities-${country}` : undefined}>
+            {citiesForCountry.map(c => <option key={c} value={c}>{c}</option>)}
+          </datalist>
+          <button onClick={saveCity} disabled={!country || savingCity || !newCity.trim()}
+            style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs disabled:opacity-50">
+            {savingCity ? '…' : 'Save'}
+          </button>
+        </div>
       </div>
     </>
   );
@@ -355,12 +345,14 @@ export function InvoiceFormView({
                 </div>
               )}
             </div>
-            <div>
-              <label className={lbl}>CNIC *</label>
-              <input type="text" value={formData.customerCNIC || ''}
-                onChange={e => setFormData({ customerCNIC: e.target.value })}
-                placeholder="42101-1234567-1" className={inp} />
-            </div>
+            {isEditing && (
+              <div>
+                <label className={lbl}>CNIC *</label>
+                <input type="text" value={formData.customerCNIC || ''}
+                  onChange={e => setFormData({ customerCNIC: e.target.value })}
+                  placeholder="42101-1234567-1" className={inp} />
+              </div>
+            )}
           </div>
 
           {/* Row 2: Phone | Second Phone | Country | City */}

@@ -65,14 +65,11 @@ function convertCurrency(
   rates: Record<InvoiceCurrency, number>,
 ): number {
   if (from === to) return amount;
-  if (from === 'PKR') {
-    return to === 'PKR' ? amount : (amount / rates.PKR) * rates[to];
-  }
-  if (to === 'PKR') {
-    return (amount / rates[from]) * rates.PKR;
-  }
-  const baseInPKR = (amount / rates[from]) * rates.PKR;
-  return (baseInPKR / rates.PKR) * rates[to];
+  const fromRate = rates[from] ?? currencyRatesFallback[from];
+  const toRate   = rates[to]   ?? currencyRatesFallback[to];
+  // rates are provided as UNIT_PER_USD (e.g. PKR per USD). Convert via USD.
+  const inUsd = amount / fromRate;
+  return inUsd * toRate;
 }
 
 async function fetchCurrencyRates(): Promise<Record<InvoiceCurrency, number>> {
@@ -87,6 +84,7 @@ async function fetchCurrencyRates(): Promise<Record<InvoiceCurrency, number>> {
         AED: data.rates.AED,
       };
     }
+    console.warn('[InvoicePdf] Currency API returned non-success result, falling back');
   } catch (error) {
     console.warn('[InvoicePdf] Currency rates fetch failed:', error);
   }

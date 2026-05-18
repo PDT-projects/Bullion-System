@@ -360,6 +360,21 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     );
   }, []);
 
+  // Ensure primary currency follows branch/company selection: always keep
+  // branch-derived currency as first element in `selectedCurrencies`.
+  const handleSetInvoiceCompany = useCallback((v: TxCompany) => {
+    setInvoiceCompany(v);
+    try {
+      const branch = branchFromValue(v);
+      const currency = getCurrencyFromBranch(branch);
+      setSelectedCurrencies(prev => {
+        if (prev[0] === currency) return prev;
+        const without = prev.filter(c => c !== currency);
+        return [currency, ...without];
+      });
+    } catch (e) { /* non-blocking */ }
+  }, []);
+
   // ── Customer search / select ───────────────────────────────────────────────
   const handleCustomerSearch = useCallback((value: string, field: 'customerName' | 'customerPhone') => {
     setFormData({ [field]: value });
@@ -667,7 +682,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     handleSave, handleCancel, handleDownloadPdf,
     calculateTotal: () => total,
     formatCurrency,
-    invoiceCompany, setInvoiceCompany,
+    invoiceCompany, setInvoiceCompany: handleSetInvoiceCompany,
     branches, handleAddBranch,
     salespersonLocationsList,
     handleAddSalespersonLocation,
