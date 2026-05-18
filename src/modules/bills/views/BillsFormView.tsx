@@ -3,6 +3,7 @@
 // 1. Date field is now LOCKED (read-only display, auto today) — same pattern as Transactions
 // 2. Bill Category dropdown has an "+ Add new category" option (like Transactions sub-category)
 // 3. All existing fixes retained (vendor Other mode, bank dropdown, cheque fields, amount paid)
+// 4. All charcoal colors via inline styles to avoid Tailwind purging
 
 import React, { useState } from 'react';
 import { BillTransaction, BILL_CATEGORIES, COMPANIES } from '../models/types';
@@ -42,7 +43,11 @@ interface BillsFormViewProps {
   calculateTotal: () => number;
 }
 
-const inp    = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm';
+const CHARCOAL = '#1e293b';
+const CHARCOAL_HOVER = '#334155';
+const CHARCOAL_LIGHT = 'rgba(30,41,59,0.07)';
+
+const inp    = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 text-sm';
 const lbl    = 'block text-xs font-medium text-gray-600 mb-1';
 const errCls = 'border-red-400 ring-1 ring-red-300';
 
@@ -55,7 +60,6 @@ const CategoryIcon: React.FC<{ category: string }> = ({ category }) => {
   }
 };
 
-// Format date for display (e.g. "Apr 06, 2026")
 function formatDateDisplay(dateStr: string): string {
   if (!dateStr) return '';
   try {
@@ -76,7 +80,6 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
 }) => {
   const fmt = BillsService.formatCurrency;
 
-  // ── Add new category inline state ────────────────────────────────────────────
   const [addingCategory,  setAddingCategory]  = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [savingCategory,  setSavingCategory]  = useState(false);
@@ -93,7 +96,6 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
     setSavingCategory(false);
   };
 
-  // ── Vendor "Other" mode ──────────────────────────────────────────────────────
   const [otherVendorIds, setOtherVendorIds] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     billTransactions.forEach(txn => {
@@ -144,7 +146,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <select value={formData.company} onChange={(e) => setFormField('company', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${errors.company ? errCls : 'border-gray-300'}`}>
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 ${errors.company ? errCls : 'border-gray-300'}`}>
                   {companies.map(c => <option key={c} value={c}>{c.split(': ')[1] || c}</option>)}
                 </select>
               </div>
@@ -167,7 +169,6 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Bill Category *</label>
 
-              {/* If adding new category inline */}
               {addingCategory ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -206,7 +207,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                         setFormField('billCategory', e.target.value);
                       }
                     }}
-                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] ${errors.subCategory ? errCls : 'border-gray-300'}`}>
+                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 ${errors.subCategory ? errCls : 'border-gray-300'}`}>
                     {allBillCategories.map(c => <option key={c} value={c}>{c}</option>)}
                     <option disabled>──────────────</option>
                     <option value="__add_new__">＋ Add new category...</option>
@@ -220,7 +221,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
               <input type="text" value={formData.note} onChange={(e) => setFormField('note', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
                 placeholder="Additional notes" />
             </div>
           </div>
@@ -359,11 +360,12 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                         {(['Cash', 'Bank', 'Cheque'] as const).map(m => (
                           <button key={m} type="button"
                             onClick={() => updateBillTransaction(txn.id, 'mode', m)}
-                            className={`py-2 text-sm rounded-lg border font-medium transition-colors ${
-                              txn.mode === m
-                                ? 'border-[#4f46e5] bg-[#4f46e5]/5 text-[#4f46e5]'
-                                : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                            }`}>{m}</button>
+                            className="py-2 text-sm rounded-lg border font-medium transition-colors"
+                            style={txn.mode === m
+                              ? { borderColor: CHARCOAL, backgroundColor: CHARCOAL_LIGHT, color: CHARCOAL }
+                              : { borderColor: '#d1d5db', color: '#4b5563' }
+                            }
+                          >{m}</button>
                         ))}
                       </div>
                     </div>
@@ -398,7 +400,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                             </div>
                             <div className="flex justify-between mt-1">
                               <span className="text-gray-500">After payment:</span>
-                              <span className="font-semibold text-indigo-700">
+                              <span className="font-semibold" style={{ color: CHARCOAL }}>
                                 {fmt((banks.find(b => b.id === txn.bankId)?.balance || 0) - (txn.amountPaid > 0 ? txn.amountPaid : txn.amount))}
                               </span>
                             </div>
@@ -448,7 +450,11 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                   <div className="border-t pt-3">
                     <label className={lbl}>Receipt Image <span className="text-gray-400">(JPG/PNG, optional)</span></label>
                     <div className="flex items-center gap-2 mt-1">
-                      <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#4f46e5] hover:bg-[#4f46e5]/5 transition-colors">
+                      <label
+                        className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer transition-colors hover:bg-gray-50"
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = CHARCOAL; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#d1d5db'; }}
+                      >
                         <Upload size={15} className="text-gray-400" />
                         <span className="text-sm text-gray-500">{txn.imageUrl ? 'Change image' : 'Upload image'}</span>
                         <input type="file" accept="image/jpeg,image/jpg,image/png"
@@ -471,15 +477,22 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
           </div>
 
           {/* Total */}
-          <div className="bg-[#4f46e5]/10 rounded-lg p-4 flex items-center justify-between">
+          <div className="rounded-lg p-4 flex items-center justify-between" style={{ backgroundColor: CHARCOAL_LIGHT }}>
             <span className="text-lg font-semibold text-gray-900">Total Amount:</span>
-            <span className="text-2xl font-bold text-[#4f46e5]">{fmt(calculateTotal())}</span>
+            <span className="text-2xl font-bold" style={{ color: CHARCOAL }}>{fmt(calculateTotal())}</span>
           </div>
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-4 pt-4 border-t">
             <Button variant="outline" onClick={handleCancel} disabled={isSubmitting}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-[#4f46e5] hover:bg-[#4338ca] text-white hover:text-white">
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="text-white hover:text-white"
+              style={{ backgroundColor: CHARCOAL }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = CHARCOAL_HOVER)}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = CHARCOAL)}
+            >
               {isSubmitting ? 'Saving...' : (isEditing ? 'Update Bill' : 'Save Bill(s)')}
             </Button>
           </div>

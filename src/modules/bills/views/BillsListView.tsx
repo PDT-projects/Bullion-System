@@ -38,6 +38,10 @@ interface BillsListViewProps {
   getCategoryIconName: (category: string) => 'Zap' | 'Wifi' | 'Droplets' | 'Receipt';
 }
 
+const CHARCOAL = '#1e293b';
+const CHARCOAL_HOVER = '#334155';
+const CHARCOAL_LIGHT = 'rgba(30,41,59,0.08)';
+
 const CategoryIcon: React.FC<{ name: string }> = ({ name }) => {
   switch (name) {
     case 'Zap':      return <Zap className="w-4 h-4 text-yellow-600" />;
@@ -74,23 +78,30 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
         </div>
         <div className="flex items-center gap-3">
           <button onClick={toggleFilters}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-              showFilters ? 'bg-[#4f46e5] text-white border-[#4f46e5]' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-            }`}>
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors"
+            style={showFilters
+              ? { backgroundColor: CHARCOAL, color: '#fff', borderColor: CHARCOAL }
+              : { backgroundColor: '#fff', color: '#374151', borderColor: '#d1d5db' }
+            }>
             <Filter size={18} />
             Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
           </button>
-          <Button onClick={handleAdd} className="flex items-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white hover:text-white">
+          <Button
+            onClick={handleAdd}
+            className="flex items-center gap-2 text-white hover:text-white"
+            style={{ backgroundColor: CHARCOAL }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = CHARCOAL_HOVER)}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = CHARCOAL)}
+          >
             <Plus size={18} /> Add Bill
           </Button>
         </div>
       </div>
 
-
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Bills',  value: fmt(stats.totalAmount),      sub: `${stats.totalBills} records`,      icon: <Receipt size={18} className="text-[#4f46e5]" /> },
+          { label: 'Total Bills',  value: fmt(stats.totalAmount),      sub: `${stats.totalBills} records`,      icon: <Receipt size={18} style={{ color: CHARCOAL }} /> },
           { label: 'Electricity',  value: fmt(stats.electricityTotal), sub: `${stats.electricityCount} bills`,  icon: <Zap size={18} className="text-yellow-600" /> },
           { label: 'Internet',     value: fmt(stats.internetTotal),    sub: `${stats.internetCount} bills`,     icon: <Wifi size={18} className="text-blue-600" /> },
           { label: 'Utilities',    value: fmt(stats.utilitiesTotal),   sub: `${stats.utilitiesCount} bills`,    icon: <Droplets size={18} className="text-cyan-600" /> },
@@ -113,13 +124,14 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input type="text" placeholder="Vendor, company, cheque..."
                   value={filters.searchTerm} onChange={(e) => setFilter('searchTerm', e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2"
+                  style={{ '--tw-ring-color': CHARCOAL } as any} />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
               <select value={filters.categoryFilter} onChange={(e) => setFilter('categoryFilter', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2">
                 <option value="all">All Categories</option>
                 <option value="Electricity">Electricity</option>
                 <option value="Internet">Internet</option>
@@ -130,7 +142,7 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
               <select value={filters.paymentMethodFilter} onChange={(e) => setFilter('paymentMethodFilter', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2">
                 <option value="">All Methods</option>
                 <option value="Cash">Cash</option>
                 <option value="Bank">Bank</option>
@@ -140,12 +152,12 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
               <input type="date" value={filters.dateFrom || ''} onChange={(e) => setFilter('dateFrom', e.target.value || null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
               <input type="date" value={filters.dateTo || ''} onChange={(e) => setFilter('dateTo', e.target.value || null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2" />
             </div>
           </div>
           {activeFilterCount > 0 && (
@@ -160,7 +172,7 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#4f46e5] mx-auto mb-3" />
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-3" style={{ borderColor: CHARCOAL }} />
             <p className="text-gray-600">Loading bills...</p>
           </div>
         ) : (
@@ -217,7 +229,7 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
                       <div className="flex items-center gap-1">
                         <button onClick={() => setViewingBill(bill)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View"><Eye size={15} /></button>
                         <button onClick={() => handleEdit(bill.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Edit"><Edit size={15} /></button>
-                        <button onClick={() => setViewingSlip(bill)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded" title="Slip"><FileText size={15} /></button>
+                        <button onClick={() => setViewingSlip(bill)} className="p-1.5 rounded hover:bg-gray-100" style={{ color: CHARCOAL }} title="Slip"><FileText size={15} /></button>
                         <button onClick={() => handlePrint(bill)} className="p-1.5 text-purple-600 hover:bg-purple-50 rounded" title="Print"><Printer size={15} /></button>
                         <button onClick={() => handleDelete(bill.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete"><Trash2 size={15} /></button>
                       </div>
@@ -310,7 +322,7 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
             </div>
             <div className="p-8">
               <div className="text-center border-b pb-4 mb-6">
-                <h2 className="text-2xl font-bold text-[#4f46e5]">Pakistan Detectors Technologies</h2>
+                <h2 className="text-2xl font-bold" style={{ color: CHARCOAL }}>Pakistan Detectors Technologies</h2>
                 <p className="text-sm text-gray-600 mt-1">{viewingSlip.company?.split(': ')[1] || viewingSlip.company}</p>
                 <p className="text-lg font-semibold mt-3">BILL PAYMENT SLIP</p>
               </div>
@@ -339,10 +351,10 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
                   </div>
                 </div>
               )}
-              <div className="bg-[#4f46e5]/10 rounded-lg p-4 mb-4">
+              <div className="rounded-lg p-4 mb-4" style={{ backgroundColor: CHARCOAL_LIGHT }}>
                 <div className="flex justify-between items-center">
                   <span className="font-semibold">Amount Paid:</span>
-                  <span className="text-2xl font-bold text-[#4f46e5]">{fmt(viewingSlip.amountPaid ?? viewingSlip.amount)}</span>
+                  <span className="text-2xl font-bold" style={{ color: CHARCOAL }}>{fmt(viewingSlip.amountPaid ?? viewingSlip.amount)}</span>
                 </div>
                 {(viewingSlip.remainingAmount ?? 0) > 0 && (
                   <div className="flex justify-between text-sm text-yellow-700 mt-2">
