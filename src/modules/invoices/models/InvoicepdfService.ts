@@ -11,7 +11,7 @@
 
 import jsPDF from 'jspdf';
 import { Invoice } from './types';
-import { InvoiceCurrency } from './invoiceService';
+import { InvoiceCurrency, fetchCurrencyRates, convertCurrency, CURRENCY_RATE_FALLBACK } from './invoiceService';
 
 const logoAsset = '/PDT-logo.png';
 
@@ -51,45 +51,6 @@ function formatCurrency(amount: number, currency: InvoiceCurrency = 'PKR'): stri
   }
 }
 
-const currencyRatesFallback: Record<InvoiceCurrency, number> = {
-  PKR: 279.5,
-  CAD: 1.38,
-  SAR: 3.75,
-  AED: 3.67,
-};
-
-function convertCurrency(
-  amount: number,
-  from: InvoiceCurrency,
-  to: InvoiceCurrency,
-  rates: Record<InvoiceCurrency, number>,
-): number {
-  if (from === to) return amount;
-  const fromRate = rates[from] ?? currencyRatesFallback[from];
-  const toRate   = rates[to]   ?? currencyRatesFallback[to];
-  // rates are provided as UNIT_PER_USD (e.g. PKR per USD). Convert via USD.
-  const inUsd = amount / fromRate;
-  return inUsd * toRate;
-}
-
-async function fetchCurrencyRates(): Promise<Record<InvoiceCurrency, number>> {
-  try {
-    const response = await fetch('https://open.er-api.com/v6/latest/USD');
-    const data = await response.json();
-    if (data?.result === 'success') {
-      return {
-        PKR: data.rates.PKR,
-        CAD: data.rates.CAD,
-        SAR: data.rates.SAR,
-        AED: data.rates.AED,
-      };
-    }
-    console.warn('[InvoicePdf] Currency API returned non-success result, falling back');
-  } catch (error) {
-    console.warn('[InvoicePdf] Currency rates fetch failed:', error);
-  }
-  return currencyRatesFallback;
-}
 
 const fmtDate = (d: string) =>
   d ? new Date(d).toLocaleDateString('en-PK', { year: 'numeric', month: 'long', day: 'numeric' }) : '';

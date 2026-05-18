@@ -47,6 +47,7 @@ export function InvoiceFormWrapper() {
       handleAddSalespersonLocation={vm.handleAddSalespersonLocation}
       selectedCurrencies={vm.selectedCurrencies}
       toggleCurrency={vm.toggleCurrency}
+      currencyRates={vm.currencyRates}
     />
   );
 }

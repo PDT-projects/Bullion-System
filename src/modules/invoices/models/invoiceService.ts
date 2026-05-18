@@ -48,6 +48,45 @@ export const calculateDeductionCharges = (totalAmount: number, collectionMethod?
   return 25000;
 };
 
+export const CURRENCY_RATE_FALLBACK: Record<InvoiceCurrency, number> = {
+  PKR: 279.5,
+  CAD: 1.38,
+  AED: 3.67,
+  SAR: 3.75,
+};
+
+export async function fetchCurrencyRates(): Promise<Record<InvoiceCurrency, number>> {
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    const data = await res.json();
+    if (data?.result === 'success') {
+      return {
+        PKR: data.rates.PKR,
+        CAD: data.rates.CAD,
+        SAR: data.rates.SAR,
+        AED: data.rates.AED,
+      };
+    }
+    console.warn('[InvoiceService] Currency API returned non-success result, falling back');
+  } catch (err) {
+    console.warn('[InvoiceService] Currency fetch failed:', err);
+  }
+  return CURRENCY_RATE_FALLBACK;
+}
+
+export function convertCurrency(
+  amount: number,
+  from: InvoiceCurrency,
+  to: InvoiceCurrency,
+  rates: Record<InvoiceCurrency, number>,
+): number {
+  if (from === to) return amount;
+  const fromRate = rates[from] ?? CURRENCY_RATE_FALLBACK[from];
+  const toRate = rates[to] ?? CURRENCY_RATE_FALLBACK[to];
+  const amountInUsd = amount / fromRate;
+  return amountInUsd * toRate;
+}
+
 export const calculateTotal = (products: InvoiceProduct[]): number =>
   products.reduce((sum, p) => sum + p.total, 0);
 

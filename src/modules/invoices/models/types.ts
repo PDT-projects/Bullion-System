@@ -55,6 +55,13 @@ export interface Invoice {
   remainingAmount?: number;
   collectionMethod?: 'Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others';
   deductionCharges: number;
+  cargoAmount?: number;
+  cargoCurrency?: InvoiceCurrency;
+  customsAmount?: number;
+  customsCurrency?: InvoiceCurrency;
+  agentAmount?: number;
+  agentCurrency?: InvoiceCurrency;
+  agentDetails?: string;
   digitalStamp?: boolean;
   imageUrl?: string;
   pdfUrl?: string;
@@ -111,6 +118,13 @@ export interface CreateInvoiceDTO {
   remainingAmount?: number;
   collectionMethod?: 'Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others';
   deductionCharges: number;
+  cargoAmount?: number;
+  cargoCurrency?: InvoiceCurrency;
+  customsAmount?: number;
+  customsCurrency?: InvoiceCurrency;
+  agentAmount?: number;
+  agentCurrency?: InvoiceCurrency;
+  agentDetails?: string;
   digitalStamp?: boolean;
 }
 

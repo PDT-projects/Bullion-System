@@ -22,6 +22,7 @@ import {
   validateInvoice, calculateTotal,
   salespersonLocations, deliveryStatuses,
   collectionMethods, formatCurrency, InvoiceCurrency,
+  fetchCurrencyRates, convertCurrency, CURRENCY_RATE_FALLBACK,
 } from '../models/invoiceService';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
 import { generateInvoicePdf, downloadInvoicePdf } from '../models/invoicePdfService';
@@ -94,6 +95,7 @@ export interface UseInvoiceFormViewModelReturn {
   handleAddSalespersonLocation: (name: string) => Promise<void>;
   selectedCurrencies: InvoiceCurrency[];
   toggleCurrency: (c: InvoiceCurrency) => void;
+  currencyRates: Record<InvoiceCurrency, number>;
 }
 
 // ── Sequential invoice number generator ───────────────────────────────────────
@@ -155,6 +157,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [branches,         setBranches]         = useState<string[]>(DEFAULT_BRANCHES);
   const [salespersonLocationsList, setSalespersonLocationsList] = useState<string[]>(salespersonLocations);
   const [selectedCurrencies, setSelectedCurrencies] = useState<InvoiceCurrency[]>(['PKR']);
+  const [currencyRates, setCurrencyRates] = useState<Record<InvoiceCurrency, number>>(CURRENCY_RATE_FALLBACK);
 
   // Country/City state (replaces province/city)
   const [countryCities, setCountryCities] = useState<Record<string, string[]>>({});
@@ -178,7 +181,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     paymentMode: 'Cash', paymentStatus: 'Full', paidAmount: 0,
     remainingAmount: 0, collectionMethod: 'Self Collection',
     deductionCharges: 0,
-    cargoAmount: 0, customsAmount: 0, agentDetails: '', agentAmount: 0,
+    cargoAmount: 0, cargoCurrency: 'PKR', customsAmount: 0, customsCurrency: 'PKR', agentDetails: '', agentAmount: 0, agentCurrency: 'PKR',
     bankId: '', bankName: '', bankAccountNumber: '',
     chequeNumber: '', chequeBank: '', chequeDate: '',
     digitalStamp: false,
@@ -277,6 +280,22 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     };
     load();
   }, [id]);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchRates = async () => {
+      try {
+        const rates = await fetchCurrencyRates();
+        if (mounted) setCurrencyRates(rates);
+      } catch (err) {
+        console.warn('[InvoiceForm] Currency rates load failed:', err);
+        if (mounted) setCurrencyRates(CURRENCY_RATE_FALLBACK);
+      }
+    };
+    fetchRates();
+    const interval = window.setInterval(fetchRates, 30 * 60 * 1000);
+    return () => { mounted = false; window.clearInterval(interval); };
+  }, []);
 
   const isEditing = !!editingInvoice;
   const TODAY = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -556,9 +575,12 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         collectionMethod:       formData.collectionMethod,
         deductionCharges:       formData.deductionCharges || 0,
         cargoAmount:            formData.cargoAmount      || 0,
+        cargoCurrency:          formData.cargoCurrency     || 'PKR',
         customsAmount:          formData.customsAmount    || 0,
+        customsCurrency:        formData.customsCurrency   || 'PKR',
         agentDetails:           formData.agentDetails     || '',
         agentAmount:            formData.agentAmount      || 0,
+        agentCurrency:          formData.agentCurrency     || 'PKR',
         digitalStamp:           formData.digitalStamp,
         branch:                 branchFromValue(invoiceCompany),
         selectedCurrencies:     selectedCurrencies,
@@ -687,5 +709,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     salespersonLocationsList,
     handleAddSalespersonLocation,
     selectedCurrencies, toggleCurrency,
+    currencyRates,
   };
 }

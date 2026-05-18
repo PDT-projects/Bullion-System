@@ -6,7 +6,7 @@ import {
 import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
 import { makeBranchValue, branchFromValue } from '../viewModels/useInvoiceFormViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
-import { InvoiceCurrency, INVOICE_CURRENCIES } from '../models/invoiceService';
+import { InvoiceCurrency, INVOICE_CURRENCIES, convertCurrency } from '../models/invoiceService';
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; }
@@ -52,6 +52,7 @@ interface Props {
   handleAddSalespersonLocation?: (name: string) => Promise<void>;
   selectedCurrencies?: InvoiceCurrency[];
   toggleCurrency?: (c: InvoiceCurrency) => void;
+  currencyRates: Record<InvoiceCurrency, number>;
 }
 
 const CHARCOAL_RING = 'focus:ring-gray-600';
@@ -144,10 +145,8 @@ function CountryCitySelector({
 }) {
   const [addingCountry, setAddingCountry] = useState(false);
   const [newCountry,    setNewCountry]    = useState('');
-  const [addingCity,    setAddingCity]    = useState(false);
   const [newCity,       setNewCity]       = useState('');
   const [savingCountry, setSavingCountry] = useState(false);
-  const [savingCity,    setSavingCity]    = useState(false);
 
   React.useEffect(() => { setNewCity(city); }, [city]);
 
@@ -165,14 +164,6 @@ function CountryCitySelector({
     } catch { /* non-blocking */ }
     setFormData({ customerProvince: c, customerCity: '' });
     setNewCountry(''); setAddingCountry(false); setSavingCountry(false);
-  };
-
-  const saveCity = async () => {
-    const c = newCity.trim();
-    if (!c || !country) return;
-    setSavingCity(true);
-    await handleAddCountryCity(country, c);
-    setNewCity(''); setAddingCity(false); setSavingCity(false);
   };
 
   return (
@@ -211,15 +202,11 @@ function CountryCitySelector({
         <div className="flex gap-1">
           <input list={country ? `cities-${country}` : undefined} value={newCity}
             onChange={e => { setNewCity(e.target.value); setFormData({ customerCity: e.target.value }); }}
-            onKeyDown={e => { if (e.key === 'Enter') saveCity(); if (e.key === 'Escape') { setNewCity(''); } }}
+            onKeyDown={e => { if (e.key === 'Escape') { setNewCity(''); setFormData({ customerCity: '' }); } }}
             placeholder="e.g. Dubai" autoFocus className={`${inp} flex-1`} disabled={!country} />
           <datalist id={country ? `cities-${country}` : undefined}>
             {citiesForCountry.map(c => <option key={c} value={c}>{c}</option>)}
           </datalist>
-          <button onClick={saveCity} disabled={!country || savingCity || !newCity.trim()}
-            style={{ backgroundColor: '#374151', color: '#ffffff' }} className="px-2 py-1 rounded-md text-xs disabled:opacity-50">
-            {savingCity ? '…' : 'Save'}
-          </button>
         </div>
       </div>
     </>
@@ -243,6 +230,7 @@ export function InvoiceFormView({
   handleAddSalespersonLocation = async () => {},
   selectedCurrencies = ['PKR'],
   toggleCurrency = () => {},
+  currencyRates,
 }: Props) {
   const total = calculateTotal();
 
@@ -663,21 +651,42 @@ export function InvoiceFormView({
             <div className="grid grid-cols-4 gap-2">
               <div>
                 <label className={lbl}>Cargo Amount</label>
-                <input type="number" min="0" value={formData.cargoAmount ?? 0}
-                  onChange={e => setFormData({ cargoAmount: Number(e.target.value) })}
-                  className={inp} placeholder="0" />
+                <div className="flex gap-1">
+                  <input type="number" min="0" value={formData.cargoAmount ?? 0}
+                    onChange={e => setFormData({ cargoAmount: Number(e.target.value) })}
+                    className={`${inp} flex-1`} placeholder="0" />
+                  <select value={formData.cargoCurrency || 'PKR'}
+                    onChange={e => setFormData({ cargoCurrency: e.target.value as InvoiceCurrency })}
+                    className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm h-8">
+                    {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className={lbl}>Customs Amount</label>
-                <input type="number" min="0" value={formData.customsAmount ?? 0}
-                  onChange={e => setFormData({ customsAmount: Number(e.target.value) })}
-                  className={inp} placeholder="0" />
+                <div className="flex gap-1">
+                  <input type="number" min="0" value={formData.customsAmount ?? 0}
+                    onChange={e => setFormData({ customsAmount: Number(e.target.value) })}
+                    className={`${inp} flex-1`} placeholder="0" />
+                  <select value={formData.customsCurrency || 'PKR'}
+                    onChange={e => setFormData({ customsCurrency: e.target.value as InvoiceCurrency })}
+                    className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm h-8">
+                    {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className={lbl}>Agent Amount</label>
-                <input type="number" min="0" value={formData.agentAmount ?? 0}
-                  onChange={e => setFormData({ agentAmount: Number(e.target.value) })}
-                  className={inp} placeholder="0" />
+                <div className="flex gap-1">
+                  <input type="number" min="0" value={formData.agentAmount ?? 0}
+                    onChange={e => setFormData({ agentAmount: Number(e.target.value) })}
+                    className={`${inp} flex-1`} placeholder="0" />
+                  <select value={formData.agentCurrency || 'PKR'}
+                    onChange={e => setFormData({ agentCurrency: e.target.value as InvoiceCurrency })}
+                    className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm h-8">
+                    {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className={lbl}>Agent Details</label>
@@ -689,7 +698,11 @@ export function InvoiceFormView({
             {((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0)) > 0 && (
               <p className="mt-1 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1">
                 Total import charges: <strong>
-                  {formatCurrency((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0))}
+                  {formatCurrency(
+                    convertCurrency(formData.cargoAmount || 0, formData.cargoCurrency || 'PKR', 'PKR', currencyRates)
+                    + convertCurrency(formData.customsAmount || 0, formData.customsCurrency || 'PKR', 'PKR', currencyRates)
+                    + convertCurrency(formData.agentAmount || 0, formData.agentCurrency || 'PKR', 'PKR', currencyRates)
+                  )}
                 </strong> — will be deducted from commission
               </p>
             )}
