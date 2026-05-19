@@ -6,7 +6,8 @@
 //   - Total inventory value stat card shows all selected currencies
 //   - Price in view modal also shows currency extras
 // FIX: Delete button uses inline style (not Tailwind) so bg-red-600 is never purged
-// FIX: onDelete only fires after Firebase soft-delete succeeds; toast.error on failure
+// FIX: onDelete fires after Firebase soft-delete succeeds; item removed from list immediately
+// FIX: toast.success shown on successful delete; toast.error on failure
 
 import React from 'react';
 import { toast } from 'sonner';
@@ -199,26 +200,34 @@ export function InventoryListView({
   const [deleteConfirm, setDeleteConfirm] = React.useState<Product | null>(null);
   const [isDeleting,    setIsDeleting]    = React.useState(false);
 
-  // FIX: onDelete is only called AFTER the Firebase write succeeds.
-  // FIX: toast.error shown on failure so the user isn't left wondering.
+  // ── Delete handler ─────────────────────────────────────────────────────────
+  // 1. Calls Firebase — waits for confirmation
+  // 2. Only on success: calls onDelete(id) so the parent ViewModel removes the
+  //    item from its list state → row disappears immediately without a refetch
+  // 3. Shows toast.success so the user gets clear feedback
+  // 4. Shows toast.error on failure — item stays in the list, nothing is broken
   const handleDeleteConfirm = async () => {
     if (!deleteConfirm) return;
     setIsDeleting(true);
     try {
-      const user = currentUser || { uid: 'unknown', email: 'unknown@system', displayName: 'Unknown User' };
+      const user = currentUser ?? { uid: 'unknown', email: 'unknown@system', displayName: 'Unknown User' };
       await InventoryFirebaseService.deleteProduct(deleteConfirm.id, {
         uid:         user.uid,
         email:       user.email,
         displayName: user.displayName,
       });
-      // Only update local state after Firebase write confirmed
-      if (onDelete) onDelete(deleteConfirm.id);
+
+      // ✅ Firebase write confirmed — now update local state
+      onDelete?.(deleteConfirm.id);          // parent removes item from list
+      setDeleteConfirm(null);                // close modal
+      setViewProduct(null);                  // close view modal if open
+      toast.success(`${deleteConfirm.brandName} ${deleteConfirm.modelName} moved to Deleted Inventory`);
     } catch (err) {
       console.error('Delete failed:', err);
       toast.error('Failed to delete item. Please try again.');
+      setDeleteConfirm(null);
     } finally {
       setIsDeleting(false);
-      setDeleteConfirm(null);
     }
   };
 

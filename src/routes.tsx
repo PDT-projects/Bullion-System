@@ -37,6 +37,7 @@ import {
   InventoryProductDetailsWrapper,
   InventoryPaymentWrapper,
   InventoryAddExistingWrapper,
+  DeletedInventoryWrapper,
   ProductTransferWrapper,
   ProductTransferCreateWrapper,
   InventoryEditWrapper,
@@ -259,6 +260,7 @@ function AgainstInvoiceRoute() { return <AgainstInvoiceWrapper />; }
 function InventoryDashboardRoute()      { return <InventoryDashboardWrapper />; }
 function InventoryViewRoute()           { return <InventoryListWrapper inventoryType="in-stock" />; }
 function InventoryReceivableRoute()     { return <InventoryListWrapper inventoryType="on-order" />; }
+function DeletedInventoryRoute()        { return <DeletedInventoryWrapper />; }
 function InventoryTypeSelectionRoute()  { return <InventoryTypeSelectionWrapper />; }
 function InventoryCostingOptionRoute()  { return <InventoryCostingOptionWrapper />; }
 function InventoryCostingDetailsRoute() { return <InventoryCostingDetailsWrapper />; }
@@ -440,6 +442,7 @@ export const router = createBrowserRouter([
       { path: 'create-new/details',         element: <ScreenProtectedRoute requiredScreen="Inventory Product Details"><InventoryProductDetailsRoute /></ScreenProtectedRoute> },
       { path: 'create-new/payment',         element: <ScreenProtectedRoute requiredScreen="Inventory Payment"><InventoryPaymentRoute /></ScreenProtectedRoute> },
       { path: 'add-existing',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Existing"><InventoryAddExistingRoute /></ScreenProtectedRoute> },
+      { path: 'deleted',                    element: <ScreenProtectedRoute requiredScreen="Deleted Inventory"><DeletedInventoryRoute /></ScreenProtectedRoute> },
       { path: ':id/edit',                   element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryEditWrapper /></ScreenProtectedRoute> },
     ],
   },

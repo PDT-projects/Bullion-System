@@ -56,9 +56,11 @@ export type Screen =
   | 'Inventory Dashboard'
   | 'Inventory View'
   | 'Inventory Receivable'
+  | 'Deleted Inventory'
   | 'Inventory Type Selection'
   | 'Inventory Costing Option'
   | 'Inventory Costing Details'
+  | 'Inventory Multi Models'
   | 'Inventory Product Details'
   | 'Inventory Payment'
   | 'Inventory Add Existing'
@@ -91,6 +93,7 @@ export type Screen =
   // Reports (Finance)
   | 'Balance Sheet Report'
   | 'Bank Balance Report'
+  | 'Bank Activity Report'
   | 'Expenses Report'
   | 'Fixed Bills Report'
   | 'Profit Loss Report'
@@ -148,8 +151,8 @@ export const ALL_SCREEN_GROUPS: ScreenGroup[] = [
   {
     title: 'Inventory',
     screens: [
-      'Inventory Dashboard', 'Inventory View', 'Inventory Receivable', 'Inventory Type Selection',
-      'Inventory Costing Option', 'Inventory Costing Details', 'Inventory Product Details',
+      'Inventory Dashboard', 'Inventory View', 'Inventory Receivable', 'Deleted Inventory', 'Inventory Type Selection',
+      'Inventory Costing Option', 'Inventory Costing Details', 'Inventory Multi Models', 'Inventory Product Details',
       'Inventory Payment', 'Inventory Add Existing'
     ]
   },
@@ -179,7 +182,7 @@ export const ALL_SCREEN_GROUPS: ScreenGroup[] = [
   {
     title: 'Finance Reports',
     screens: [
-      'Balance Sheet Report', 'Bank Balance Report', 'Expenses Report', 
+      'Balance Sheet Report', 'Bank Balance Report', 'Bank Activity Report', 'Expenses Report', 
       'Fixed Bills Report', 'Profit Loss Report', 'Salaries Report',
       'Transaction History Report', 'Loan History'
     ]

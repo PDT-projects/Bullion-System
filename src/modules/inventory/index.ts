@@ -19,6 +19,7 @@ export { useCreateInventoryViewModel } from './viewModels/useCreateInventoryView
 export { useProductTransferViewModel } from './viewModels/useProductTransferViewModel';
 export { useProductTransferCreateViewModel } from './viewModels/useProductTransferCreateViewModel';
 export { useInventoryMultiModelViewModel } from './viewModels/useInventoryMultiModelViewModel';
+export { useDeletedInventoryViewModel } from './viewModels/useDeletedInventoryViewModel';
 
 // ── Components ───────────────────────────────────────────────
 export { CostingGlobalInputs } from './components/CostingGlobalInputs';
@@ -41,6 +42,7 @@ export { InventoryPaymentView } from './views/InventoryPaymentView';
 export { CreateInventoryView } from './views/CreateInventoryView';
 export { ProductTransferView } from './views/ProductTransferView';
 export { ProductTransferCreateView } from './views/ProductTransferCreateView';
+export { DeletedInventoryView } from './views/DeletedInventoryView';
 
 // ── Wrappers ─────────────────────────────────────────────────
 export { InventoryAddExistingWrapper } from './views/InventoryAddExistingWrapper';
@@ -51,6 +53,7 @@ export { InventoryCostingOptionWrapper } from './views/InventoryCostingOptionWra
 export { InventoryCostingDetailsWrapper } from './views/InventoryCostingDetailsWrapper';
 export { InventoryProductDetailsWrapper } from './views/InventoryProductDetailsWrapper';
 export { InventoryPaymentWrapper } from './views/InventoryPaymentWrapper';
+export { DeletedInventoryWrapper } from './views/DeletedInventoryWrapper';
 export { ProductTransferWrapper } from './views/ProductTransferWrapper';
 export { ProductTransferCreateWrapper } from './views/ProductTransferCreateWrapper';
 export { InventoryEditWrapper } from './views/InventoryEditWrapper';

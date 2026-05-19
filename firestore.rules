@@ -2,70 +2,6 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    match /transactions/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /salary/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /bills/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /banks/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /bank_transfers/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /cash/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /budgets/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /employees/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /loans/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /invoices/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /inventory/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /product_transfers/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /commission_slabs/{document} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /assets/{document} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-
-service cloud.firestore {
-  match /databases/{database}/documents {
 
     // ==================== COMMON FUNCTIONS ====================
 
@@ -90,6 +26,26 @@ service cloud.firestore {
 
     function isPartialUpdate() {
       return request.resource.data.keys().hasAny(resource.data.keys());
+    }
+
+    match /users/{userId} {
+      allow read, write: if isAuth() && request.auth.uid == userId;
+    }
+
+    match /salary/{document} {
+      allow read, write: if isAuth();
+    }
+
+    match /cash/{document} {
+      allow read, write: if isAuth();
+    }
+
+    match /inventory/{document} {
+      allow read, write: if isAuth();
+    }
+
+    match /product_transfers/{document} {
+      allow read, write: if isAuth();
     }
 
     // ==================== COUNTERS ====================
@@ -198,6 +154,13 @@ service cloud.firestore {
         && isNonEmptyString('category');
 
       allow update: if isAuth() && isPartialUpdate();
+      allow delete: if isAuth();
+    }
+
+    match /deleted_products/{document} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
       allow delete: if isAuth();
     }
 
