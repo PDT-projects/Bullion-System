@@ -8,7 +8,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { InventoryEntryType } from '../models/types';
+import { InventoryEntryType, INVENTORY_LOCATIONS } from '../models/types';
 import { BrandModelFirebaseService } from '../models/InventoryFirebaseService';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
@@ -28,7 +28,7 @@ export const CATEGORIES = [
   'Surveillance Systems', 'Access Control', 'Other',
 ];
 
-export const STOCKING_LOCATIONS = ['Islamabad', 'Karachi', 'Lahore', 'Bullion RND/SITE'];
+export const STOCKING_LOCATIONS = [...INVENTORY_LOCATIONS];
 
 export const STATUSES = ['New', 'Used', 'Returned'];
 

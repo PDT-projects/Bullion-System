@@ -337,7 +337,7 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
         toast.success(`✅ Inventory saved — ${formData.transactionId}`);
       }
 
-      navigate('/inventory');
+      navigate('/inventory/view');
     } catch (error) {
       console.error('❌ Error saving inventory item:', error);
       toast.error(isEditMode ? 'Failed to update inventory item' : 'Failed to create inventory item');

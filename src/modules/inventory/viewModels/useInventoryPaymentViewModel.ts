@@ -22,7 +22,7 @@ import { CashFirebaseService } from '../../banking/models/cashFirebaseService';
 import { Bank } from '../../banking/models/types';
 import { createTransactionFromInventory, TxCompany } from '../../transactions/models/TransactionBridgeService';
 
-export const DEFAULT_INVENTORY_BRANCHES = ['Islamabad', 'Karachi', 'Lahore'];
+export const DEFAULT_INVENTORY_BRANCHES: string[] = [];
 const COMPANY_PREFIX = 'Pakistan Detector Technologies Pvt. Ltd - ';
 export function makeInventoryBranchValue(branch: string): TxCompany {
   return `${COMPANY_PREFIX}${branch}` as TxCompany;
@@ -156,7 +156,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isSaving, setIsSaving]                       = useState(false);
-  const [inventoryCompany, setInventoryCompany]         = useState<TxCompany>(makeInventoryBranchValue(DEFAULT_INVENTORY_BRANCHES[0]));
+  const [inventoryCompany, setInventoryCompany]         = useState<TxCompany>(makeInventoryBranchValue(DEFAULT_INVENTORY_BRANCHES[0] || 'Other') as TxCompany);
   const [inventoryBranches, setInventoryBranches]       = useState<string[]>(DEFAULT_INVENTORY_BRANCHES);
   const [isGeneratingId, setIsGeneratingId]           = useState(true);
   const [transactionId, setTransactionId]             = useState('');
@@ -350,7 +350,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
       if (entry.mode === 'cash') {
         try {
           const cashRecord = await CashFirebaseService.getOrCreateCashForLocation(
-            location || 'Head Office - Islamabad'
+            location || 'Head Office - Dubai'
           );
           await CashFirebaseService.addCashTransaction({
             date:          entry.date || today,

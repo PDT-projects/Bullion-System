@@ -65,11 +65,7 @@ const PAYMENT_MODES = [
 // ── Main component ────────────────────────────────────────────────────────────
 
 // ── Default inventory locations ──────────────────────────────────────────────
-const DEFAULT_INVENTORY_LOCATIONS = [
-  'Head Office - Islamabad',
-  'Branch - Karachi',
-  'Branch - Lahore',
-];
+const DEFAULT_INVENTORY_LOCATIONS = [...INVENTORY_LOCATIONS];
 
 // ── LocationSelector — dynamic, persisted to Firestore ───────────────────────
 function LocationSelector({
@@ -124,7 +120,7 @@ function LocationSelector({
             onChange={e => setNewLocation(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') saveNewLocation(); if (e.key === 'Escape') setAddingNew(false); }}
             className="flex-1 px-3 py-2 border-2 border-indigo-400 rounded-lg text-sm outline-none"
-            placeholder="e.g. Branch - Faisalabad"
+            placeholder="e.g. Dubai"
           />
           <button type="button" onClick={saveNewLocation} disabled={saving || !newLocation.trim()}
             className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
@@ -143,6 +139,85 @@ function LocationSelector({
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
           >
             <option value="">Select location</option>
+            {locations.map(loc => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+          <button type="button" onClick={() => setAddingNew(true)}
+            className="px-3 py-2 border border-dashed border-indigo-400 rounded-lg text-sm font-semibold text-indigo-600 hover:bg-indigo-50 whitespace-nowrap">
+            + Add New
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SerialLocationSelector({
+  value, onChange,
+}: { value: string; onChange: (v: string) => void }) {
+  const [locations, setLocations] = React.useState<string[]>(DEFAULT_INVENTORY_LOCATIONS);
+  const [addingNew, setAddingNew] = React.useState(false);
+  const [newLocation, setNewLocation] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    getDoc(doc(db, 'appConfig', 'inventoryLocations'))
+      .then(snap => {
+        if (snap.exists()) {
+          const saved = snap.data().list as string[] || [];
+          setLocations([...new Set([...DEFAULT_INVENTORY_LOCATIONS, ...saved])].sort());
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  React.useEffect(() => { if (addingNew) inputRef.current?.focus(); }, [addingNew]);
+
+  const saveNewLocation = async () => {
+    const trimmed = newLocation.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    const updated = [...new Set([...locations, trimmed])].sort();
+    setLocations(updated);
+    onChange(trimmed);
+    try {
+      await setDoc(doc(db, 'appConfig', 'inventoryLocations'), { list: updated }, { merge: true });
+    } catch (err) {
+      console.error('[Serial Location] Save failed:', err);
+    }
+    setNewLocation('');
+    setAddingNew(false);
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ minWidth: 180 }}>
+      {addingNew ? (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={newLocation}
+            onChange={e => setNewLocation(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveNewLocation(); if (e.key === 'Escape') setAddingNew(false); }}
+            className="w-full px-3 py-2 border-2 border-indigo-400 rounded-lg text-sm outline-none"
+            placeholder="e.g. Saudia"
+          />
+          <button type="button" onClick={saveNewLocation} disabled={saving || !newLocation.trim()}
+            className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+            {saving ? '…' : 'Save'}
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+          >
+            <option value="">Select serial location</option>
             {locations.map(loc => (
               <option key={loc} value={loc}>{loc}</option>
             ))}
@@ -435,14 +510,7 @@ export function CreateInventoryView({
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
             placeholder="Enter serial number"
           />
-          <input
-            type="text"
-            value={serialCity}
-            onChange={e => setSerialCity(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSerialNumber(); } }}
-            className="w-44 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-            placeholder="City (optional)"
-          />
+          <SerialLocationSelector value={serialCity} onChange={setSerialCity} />
           <button type="button" onClick={addSerialNumber} style={btnAddSerial}>
             <Plus size={18} /> Add
           </button>

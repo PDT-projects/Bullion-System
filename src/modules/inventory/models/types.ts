@@ -12,10 +12,10 @@ export type InventoryEntryStep = 'details' | 'payment' | 'confirmation';
 
 // Canonical location list — single source of truth used across inventory + transfers
 export const INVENTORY_LOCATIONS = [
-  'Islamabad',
-  'Karachi',
-  'Lahore',
-  'Bullion RND/SITE',
+  'Dubai',
+  'Chad',
+  'Saudia',
+  'Sudan',
 ] as const;
 export type InventoryLocation = typeof INVENTORY_LOCATIONS[number];
 

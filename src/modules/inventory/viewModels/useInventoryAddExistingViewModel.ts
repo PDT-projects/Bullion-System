@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Product } from '../models/types';
+import { Product, INVENTORY_LOCATIONS } from '../models/types';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
 
 export interface AddStockEntry {
@@ -49,7 +49,7 @@ export interface UseInventoryAddExistingViewModelReturn {
   formatCurrency: (n: number) => string;
 }
 
-const CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Bullion RND/SITE', 'Asif'];
+const CITIES = [...INVENTORY_LOCATIONS];
 
 export function useInventoryAddExistingViewModel(): UseInventoryAddExistingViewModelReturn {
   const navigate = useNavigate();
