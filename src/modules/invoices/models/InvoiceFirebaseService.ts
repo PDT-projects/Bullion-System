@@ -57,6 +57,7 @@ function docToInvoice(d: any): Invoice {
     remainingAmount:        data.remainingAmount,
     collectionMethod:       data.collectionMethod,
     deductionCharges:       data.deductionCharges       || 0,
+    deductionCurrency:      data.deductionCurrency      || 'PKR',
     cargoAmount:            data.cargoAmount             || 0,
     cargoCurrency:          data.cargoCurrency           || 'PKR',
     customsAmount:          data.customsAmount           || 0,
@@ -254,6 +255,55 @@ export class InvoiceFirebaseService {
       console.error('❌ Error uploading PDF:', error);
       throw new Error('Failed to upload PDF to Firebase Storage');
     }
+  }
+
+  // ── Custom Delivery Statuses (persisted in Firestore) ────────────────────
+  static async fetchDeliveryStatuses(defaults: string[]): Promise<string[]> {
+    try {
+      const snap = await getDoc(doc(db, 'invoiceSettings', 'deliveryStatuses'));
+      if (snap.exists()) return snap.data().list as string[];
+    } catch (e) { console.warn('[InvoiceFirebase] fetchDeliveryStatuses:', e); }
+    return defaults;
+  }
+
+  static async addDeliveryStatus(name: string, current: string[]): Promise<string[]> {
+    const trimmed = name.trim();
+    if (!trimmed || current.includes(trimmed)) return current;
+    const updated = [...current, trimmed];
+    await updateDoc(doc(db, 'invoiceSettings', 'deliveryStatuses'), { list: updated })
+      .catch(async () => {
+        // doc may not exist yet — use addDoc to set field via updateDoc after create
+        await addDoc(collection(db, 'invoiceSettings'), {}).catch(() => {});
+        const ref = doc(db, 'invoiceSettings', 'deliveryStatuses');
+        await updateDoc(ref, { list: updated }).catch(async () => {
+          const { setDoc } = await import('firebase/firestore');
+          await setDoc(ref, { list: updated });
+        });
+      });
+    return updated;
+  }
+
+  // ── Custom Collection Methods (persisted in Firestore) ────────────────────
+  static async fetchCollectionMethods(defaults: string[]): Promise<string[]> {
+    try {
+      const snap = await getDoc(doc(db, 'invoiceSettings', 'collectionMethods'));
+      if (snap.exists()) return snap.data().list as string[];
+    } catch (e) { console.warn('[InvoiceFirebase] fetchCollectionMethods:', e); }
+    return defaults;
+  }
+
+  static async addCollectionMethod(name: string, current: string[]): Promise<string[]> {
+    const trimmed = name.trim();
+    if (!trimmed || current.includes(trimmed)) return current;
+    const updated = [...current, trimmed];
+    const ref = doc(db, 'invoiceSettings', 'collectionMethods');
+    try {
+      await updateDoc(ref, { list: updated });
+    } catch {
+      const { setDoc } = await import('firebase/firestore');
+      await setDoc(ref, { list: updated });
+    }
+    return updated;
   }
 
   // ── Save PDF URL back to Firestore invoice doc ───────────────────────────

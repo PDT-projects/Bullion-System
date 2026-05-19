@@ -30,12 +30,15 @@ export const INVOICE_CURRENCIES: { code: InvoiceCurrency; label: string; symbol:
   { code: 'AED', label: 'UAE Dirham',      symbol: 'AED' },
 ];
 
-export const deliveryStatuses: ('Self-collect' | 'LCS' | 'Daewoo' | 'Self-delivered')[] = [
-  'Self-collect', 'LCS', 'Daewoo', 'Self-delivered',
+// NOTE: These are the *default* seed values only.
+// The live lists are stored in Firestore and fetched at runtime;
+// custom entries added via "Add New" are appended there, not here.
+export const deliveryStatuses: string[] = [
+  'Self-collected', 'Delivered',
 ];
 
-export const collectionMethods: ('Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others')[] = [
-  'Self Collection', 'TCS', 'LCS', 'Daewoo', 'Others',
+export const collectionMethods: string[] = [
+  'Self-collected', 'Delivered',
 ];
 
 // Kept for reference but NOT used automatically — deduction charges are entered manually
