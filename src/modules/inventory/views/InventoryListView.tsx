@@ -5,9 +5,13 @@
 //   - Cost / Sell Price columns show primary currency + extra currency rows
 //   - Total inventory value stat card shows all selected currencies
 //   - Price in view modal also shows currency extras
+// FIX: Delete button uses inline style (not Tailwind) so bg-red-600 is never purged
+// FIX: onDelete only fires after Firebase soft-delete succeeds; toast.error on failure
 
 import React from 'react';
-import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard } from 'lucide-react';
+import { toast } from 'sonner';
+import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
+import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard, Trash2, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
@@ -43,7 +47,10 @@ interface InventoryListViewProps {
   onTransfer: (id: string) => void;
   onReceiveProduct?: (id: string) => void;
   onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
   onBack?: () => void;
+  /** The currently logged-in Firebase user — needed for delete attribution */
+  currentUser?: { uid: string; email: string; displayName?: string } | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -184,11 +191,37 @@ export function InventoryListView({
   products, categories, uniqueLocations, filters, showFilters, activeFilterCount,
   viewProduct, isLoading, stats,
   setFilter, clearFilters, toggleFilters, setViewProduct,
-  onAddNew, onAddToExisting, onTransfer, onReceiveProduct, onEdit,
-  onBack,
+  onAddNew, onAddToExisting, onTransfer, onReceiveProduct, onEdit, onDelete,
+  onBack, currentUser,
 }: InventoryListViewProps) {
-  const fmt = InventoryService.formatCurrency; // fallback PKR formatter
+  const fmt = InventoryService.formatCurrency;
   const navigate = useNavigate();
+  const [deleteConfirm, setDeleteConfirm] = React.useState<Product | null>(null);
+  const [isDeleting,    setIsDeleting]    = React.useState(false);
+
+  // FIX: onDelete is only called AFTER the Firebase write succeeds.
+  // FIX: toast.error shown on failure so the user isn't left wondering.
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+    setIsDeleting(true);
+    try {
+      const user = currentUser || { uid: 'unknown', email: 'unknown@system', displayName: 'Unknown User' };
+      await InventoryFirebaseService.deleteProduct(deleteConfirm.id, {
+        uid:         user.uid,
+        email:       user.email,
+        displayName: user.displayName,
+      });
+      // Only update local state after Firebase write confirmed
+      if (onDelete) onDelete(deleteConfirm.id);
+    } catch (err) {
+      console.error('Delete failed:', err);
+      toast.error('Failed to delete item. Please try again.');
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm(null);
+    }
+  };
+
   const handleBack = () => onBack ? onBack() : navigate('/inventory');
 
   // ── Currency state ────────────────────────────────────────────────────────
@@ -199,9 +232,7 @@ export function InventoryListView({
     loading: ratesLoading, error: ratesError, lastUpdated,
   } = currency;
 
-  /** Format a PKR amount in the chosen primary currency */
-  const fmtPrimary = (pkr: number) =>
-    formatInCurrency(pkr, primaryCurrency, rates);
+  const fmtPrimary = (pkr: number) => formatInCurrency(pkr, primaryCurrency, rates);
 
   return (
     <div className="p-6">
@@ -223,10 +254,7 @@ export function InventoryListView({
           </div>
         </div>
 
-        {/* Currency + action buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-
-          {/* ── Currency Dropdown ── */}
           <InventoryCurrencyDropdown
             primaryCurrency={primaryCurrency}
             extraCurrencies={extraCurrencies}
@@ -236,7 +264,6 @@ export function InventoryListView({
             error={ratesError}
             lastUpdated={lastUpdated}
           />
-
           <button
             onClick={toggleFilters}
             style={{
@@ -281,10 +308,10 @@ export function InventoryListView({
       {/* ── Stats ── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Products', value: stats.totalProducts, color: 'text-[#0f172a]', isCurrency: false },
-          { label: 'Total Stock',    value: stats.totalStock,    color: 'text-green-600',  isCurrency: false },
-          { label: 'In Transit',     value: stats.inTransit,     color: 'text-yellow-600', isCurrency: false },
-          { label: 'Available',      value: stats.available,     color: 'text-[#334155]',  isCurrency: false },
+          { label: 'Total Products', value: stats.totalProducts, color: 'text-[#0f172a]' },
+          { label: 'Total Stock',    value: stats.totalStock,    color: 'text-green-600'  },
+          { label: 'In Transit',     value: stats.inTransit,     color: 'text-yellow-600' },
+          { label: 'Available',      value: stats.available,     color: 'text-[#334155]'  },
         ].map(s => (
           <div key={s.label} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
@@ -416,23 +443,18 @@ export function InventoryListView({
                       {product.stock} units
                     </span>
                   </td>
-
-                  {/* Cost Price — primary currency + extras */}
                   <td className="px-4 py-3 text-sm">
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.costPrice)}
                     </div>
                     <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.costPrice} rates={rates} />
                   </td>
-
-                  {/* Sell Price — primary currency + extras */}
                   <td className="px-4 py-3 text-sm">
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.sellPrice)}
                     </div>
                     <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.sellPrice} rates={rates} />
                   </td>
-
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
                       {product.status}
@@ -453,6 +475,11 @@ export function InventoryListView({
                         title="Edit product">
                         <Edit2 size={16} />
                       </button>
+                      <button onClick={() => setDeleteConfirm(product)}
+                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Move to Deleted Inventory">
+                        <Trash2 size={16} />
+                      </button>
                       {onReceiveProduct && (
                         <button onClick={() => onReceiveProduct(product.id)}
                           className="px-2 py-1 text-black bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold border border-gray-200 whitespace-nowrap"
@@ -469,6 +496,60 @@ export function InventoryListView({
         )}
       </div>
 
+      {/* ── Delete Confirmation Modal ── */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-red-100 bg-red-50">
+              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-red-100">
+                <AlertTriangle size={18} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-red-800">Delete Inventory Item</h3>
+                <p className="text-xs text-red-500 mt-0.5">This action cannot be undone</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-gray-700">
+                You are about to permanently delete:
+              </p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 space-y-1">
+                <p className="text-sm font-bold text-gray-900">{deleteConfirm.brandName} {deleteConfirm.modelName}</p>
+                <p className="text-xs text-gray-500">{deleteConfirm.category} · {deleteConfirm.stock} units in stock</p>
+                <p className="text-xs text-gray-400 font-mono">{deleteConfirm.id}</p>
+              </div>
+              <p className="text-xs text-gray-500 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                ⚠️ This item will be moved to <strong>Deleted Inventory</strong> and hidden from all live views. The original record is preserved in Firebase and visible under the Deleted Inventory section.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                Cancel
+              </button>
+
+              {/* FIX: inline style ensures red is never purged by Tailwind */}
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 transition-colors"
+                style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+                onMouseEnter={e => { if (!isDeleting) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#b91c1c'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#dc2626'; }}
+              >
+                {isDeleting ? (
+                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Deleting…</>
+                ) : (
+                  <><Trash2 size={14} /> Delete Permanently</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── View Modal ── */}
       {viewProduct && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -482,7 +563,6 @@ export function InventoryListView({
             </div>
 
             <div className="p-6 space-y-5">
-              {/* Core fields */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 {[
                   ['Brand',    viewProduct.brandName],
@@ -497,21 +577,16 @@ export function InventoryListView({
                     <p className="font-medium text-gray-900">{value}</p>
                   </div>
                 ))}
-
-                {/* Cost Price — with currency extras */}
                 <div>
                   <p className="text-xs text-gray-500">Cost Price</p>
                   <p className="font-semibold text-gray-900">{fmtPrimary(viewProduct.costPrice)}</p>
                   <CurrencyExtraRows extras={extraCurrencies} pkrAmount={viewProduct.costPrice} rates={rates} />
                 </div>
-
-                {/* Sell Price — with currency extras */}
                 <div>
                   <p className="text-xs text-gray-500">Sell Price</p>
                   <p className="font-semibold text-gray-900">{fmtPrimary(viewProduct.sellPrice)}</p>
                   <CurrencyExtraRows extras={extraCurrencies} pkrAmount={viewProduct.sellPrice} rates={rates} />
                 </div>
-
                 <div className="col-span-2 flex items-center gap-2 pt-2 border-t border-gray-100">
                   <MapPin className="w-4 h-4 text-[#334155] flex-shrink-0" />
                   <div>
@@ -521,10 +596,8 @@ export function InventoryListView({
                 </div>
               </div>
 
-              {/* Payment Details */}
               <PaymentDetailPanel product={viewProduct} fmt={pkr => fmtPrimary(pkr)} />
 
-              {/* Serial Numbers */}
               {viewProduct.serialNumbers.length > 0 && (
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-3">
@@ -574,6 +647,14 @@ export function InventoryListView({
               <button onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
                 className="flex items-center gap-2 px-4 py-2 bg-[#0f172a] text-white rounded-lg font-semibold hover:bg-[#1e293b] transition-colors shadow-sm">
                 <Edit2 size={16} /> Edit Product
+              </button>
+              <button onClick={() => { setViewProduct(null); setDeleteConfirm(viewProduct); }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors shadow-sm"
+                style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#b91c1c'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#dc2626'; }}
+              >
+                <Trash2 size={16} /> Delete
               </button>
               {onReceiveProduct && (
                 <button onClick={() => { setViewProduct(null); onReceiveProduct(viewProduct.id); }}

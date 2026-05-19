@@ -1,5 +1,7 @@
 // Inventory Module - ViewModel Layer
 // useInventoryListViewModel - Fetches products from Firestore
+// FIX: Added onDelete handler that removes the item from local allProducts state
+//      so it disappears from the list immediately after soft-delete without a reload.
 // Change: adds locationFilter support + exposes uniqueLocations for the filter dropdown
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -13,7 +15,7 @@ interface UseInventoryListViewModelReturn {
   products: Product[];
   allProducts: Product[];
   categories: string[];
-  uniqueLocations: string[];          // ← new
+  uniqueLocations: string[];
   filters: ProductFilters;
   showFilters: boolean;
   activeFilterCount: number;
@@ -36,6 +38,7 @@ interface UseInventoryListViewModelReturn {
   onTransfer: (id: string) => void;
   onReceiveProduct?: (id: string) => void;
   onEdit: (id: string) => void;
+  onDelete: (id: string) => void; // ← FIX: now exposed so View can trigger local removal
 }
 
 const DEFAULT_FILTERS: ProductFilters = {
@@ -44,7 +47,7 @@ const DEFAULT_FILTERS: ProductFilters = {
   categoryFilter: '',
   statusFilter:   '',
   buyTypeFilter:  '',
-  locationFilter: '',              // ← new
+  locationFilter: '',
   minPrice:       null,
   maxPrice:       null,
   hasStock:       null,
@@ -79,19 +82,25 @@ export function useInventoryListViewModel(
 
   const products          = useMemo(() => InventoryService.filterProducts(allProducts, filters), [allProducts, filters]);
   const categories        = useMemo(() => InventoryService.getUniqueCategories(allProducts), [allProducts]);
-  const uniqueLocations   = useMemo(() => InventoryService.getUniqueLocations(allProducts), [allProducts]);  // ← new
+  const uniqueLocations   = useMemo(() => InventoryService.getUniqueLocations(allProducts), [allProducts]);
   const stats             = useMemo(() => InventoryService.calculateProductStats(products), [products]);
   const activeFilterCount = useMemo(() => InventoryService.countActiveProductFilters(filters), [filters]);
 
-  const setFilter    = useCallback((key: keyof ProductFilters, value: any) =>
+  const setFilter     = useCallback((key: keyof ProductFilters, value: any) =>
     setFilters(prev => ({ ...prev, [key]: value })), []);
-  const clearFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
+  const clearFilters  = useCallback(() => setFilters(DEFAULT_FILTERS), []);
   const toggleFilters = useCallback(() => setShowFilters(prev => !prev), []);
   const onAddNew      = useCallback(() => navigate('/inventory/create-new'), [navigate]);
   const onAddToExisting = useCallback(() => navigate('/inventory/add-existing'), [navigate]);
   const onTransfer    = useCallback((id: string) => navigate(`/product-transfer?productId=${id}`), [navigate]);
+  const onEdit        = useCallback((id: string) => navigate(`/inventory/${id}/edit`), [navigate]);
 
-  const onEdit         = useCallback((id: string) => navigate(`/inventory/${id}/edit`), [navigate]);
+  // FIX: onDelete removes the product from local state immediately so the UI
+  // reflects the soft-delete without requiring a page refresh.
+  const onDelete = useCallback((id: string) => {
+    setAllProducts(prev => prev.filter(p => p.id !== id));
+    toast.success('Item moved to Deleted Inventory');
+  }, []);
 
   const onReceiveProduct = useCallback(async (id: string) => {
     try {
@@ -120,5 +129,6 @@ export function useInventoryListViewModel(
     onAddNew, onAddToExisting, onTransfer,
     onReceiveProduct: inventoryType === 'on-order' ? onReceiveProduct : undefined,
     onEdit,
+    onDelete, // ← FIX: now returned
   };
 }

@@ -2,7 +2,7 @@
 // InventoryDashboardView - Main entry page for inventory operations
 // UPDATED: Shows recent inventory payment activity panel
 
-import { Plus, Package, ArrowRight, Boxes, PackagePlus, PackageSearch, ArrowRightLeft } from 'lucide-react';
+import { Plus, Package, ArrowRight, Boxes, PackagePlus, PackageSearch, ArrowRightLeft, Trash2 } from 'lucide-react';
 
 interface InventoryDashboardViewProps {
   onAddNewInventory: () => void;
@@ -10,10 +10,12 @@ interface InventoryDashboardViewProps {
   onViewReceivable: () => void;
   onViewInventory: () => void;
   onProductTransfer: () => void;
+  onViewDeleted: () => void;
 }
 
 export function InventoryDashboardView({
   onAddNewInventory, onAddToExisting, onViewReceivable, onViewInventory, onProductTransfer,
+  onViewDeleted,
 }: InventoryDashboardViewProps) {
   const cards = [
     {
@@ -50,6 +52,13 @@ export function InventoryDashboardView({
       icon: ArrowRightLeft,
       iconColor: '#0f766e', iconBg: '#f0fdfa', borderColor: '#99f6e4', hoverBorder: '#14b8a6', hoverBg: '#f0fdfa',
       onClick: onProductTransfer,
+    },
+    {
+      title: 'Deleted Inventory',
+      description: 'View archived records of deleted inventory items with deletion history',
+      icon: Trash2,
+      iconColor: '#b91c1c', iconBg: '#fef2f2', borderColor: '#fecaca', hoverBorder: '#ef4444', hoverBg: '#fef2f2',
+      onClick: onViewDeleted,
     },
   ];
 

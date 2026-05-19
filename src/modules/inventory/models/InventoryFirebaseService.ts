@@ -41,7 +41,20 @@ const PRODUCTS_COLLECTION  = 'products';
 const TRANSFERS_COLLECTION = 'transfers';
 const BRANDS_COLLECTION    = 'brands';
 const MODELS_COLLECTION    = 'brandModels';
-const COUNTERS_COLLECTION  = 'inv_counters';
+const COUNTERS_COLLECTION          = 'inv_counters';
+const DELETED_PRODUCTS_COLLECTION  = 'deleted_products';
+
+// ==================== TYPES ====================
+
+/** A soft-deleted product record — stored in `deleted_products` collection */
+export interface DeletedProduct extends Product {
+  originalId:     string;
+  _archiveId:     string;
+  deletedAt:      string;
+  deletedBy:      string;   // uid
+  deletedByEmail: string;
+  deletedByName:  string;
+}
 
 // ==================== UTILITIES ====================
 
@@ -172,8 +185,12 @@ export class InventoryFirebaseService {
       const q = query(collection(db, PRODUCTS_COLLECTION), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
       const products: Product[] = [];
-      snapshot.forEach(d => products.push(transformDocToProduct(d)));
-      console.log(`✅ Fetched ${products.length} products`);
+      snapshot.forEach(d => {
+        const p = transformDocToProduct(d);
+        if ((d.data() as any).isDeleted) return; // skip soft-deleted
+        products.push(p);
+      });
+      console.log(`✅ Fetched ${products.length} products (soft-deleted excluded)`);
       return products;
     } catch (error) {
       console.error('❌ Error fetching products:', error);
@@ -197,6 +214,7 @@ export class InventoryFirebaseService {
 
       const products: Product[] = [];
       snapshot.forEach(d => {
+        if ((d.data() as any).isDeleted) return; // skip soft-deleted
         const p = transformDocToProduct(d);
         if (inventoryType === 'in-stock' && p.receivableStatus === 'Pending') return;
         products.push(p);
@@ -393,13 +411,72 @@ export class InventoryFirebaseService {
     }
   }
 
-  static async deleteProduct(id: string): Promise<void> {
+  /**
+   * Soft-delete: copies the product to `deleted_products` with deletedBy/deletedAt
+   * metadata, then removes it from the live `products` collection.
+   */
+  static async deleteProduct(
+    id: string,
+    deletedBy: { uid: string; email: string; displayName?: string }
+  ): Promise<void> {
     try {
-      await deleteDoc(doc(db, PRODUCTS_COLLECTION, id));
-      console.log('✅ Product deleted:', id);
+      console.log(`🔥 Soft-deleting product ${id} by ${deletedBy.email}...`);
+      const productRef  = doc(db, PRODUCTS_COLLECTION, id);
+      const productSnap = await getDoc(productRef);
+      if (!productSnap.exists()) throw new Error(`Product ${id} not found`);
+      const now = new Date().toISOString();
+      // Write archived copy to deleted_products collection
+      await addDoc(collection(db, DELETED_PRODUCTS_COLLECTION), {
+        ...productSnap.data(),
+        originalId:     id,
+        deletedAt:      now,
+        deletedBy:      deletedBy.uid,
+        deletedByEmail: deletedBy.email,
+        deletedByName:  deletedBy.displayName || deletedBy.email,
+      });
+      // Mark original as deleted — NOT removed from Firebase, just hidden from live views
+      await updateDoc(productRef, {
+        isDeleted:  true,
+        deletedAt:  now,
+        deletedBy:  deletedBy.uid,
+        deletedByEmail: deletedBy.email,
+        deletedByName:  deletedBy.displayName || deletedBy.email,
+        updatedAt:  now,
+      });
+      console.log(`✅ Product ${id} marked as deleted by ${deletedBy.email} — original preserved in Firebase`);
     } catch (error) {
-      console.error(`❌ Error deleting product ${id}:`, error);
-      throw new Error('Failed to delete product from Firestore');
+      console.error(`❌ Error soft-deleting product ${id}:`, error);
+      throw new Error('Failed to delete product');
+    }
+  }
+
+  /** Fetch all soft-deleted products (for Deleted Inventory view) */
+  static async fetchDeletedProducts(): Promise<DeletedProduct[]> {
+    try {
+      const q = query(
+        collection(db, DELETED_PRODUCTS_COLLECTION),
+        orderBy('deletedAt', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      const results: DeletedProduct[] = [];
+      snapshot.forEach(d => {
+        const data = d.data() as any;
+        const fakeSnap = { id: data.originalId || d.id, data: () => data };
+        results.push({
+          ...transformDocToProduct(fakeSnap),
+          deletedAt:      data.deletedAt      || '',
+          deletedBy:      data.deletedBy      || '',
+          deletedByEmail: data.deletedByEmail || '',
+          deletedByName:  data.deletedByName  || '',
+          originalId:     data.originalId     || d.id,
+          _archiveId:     d.id,
+        });
+      });
+      console.log(`✅ Fetched ${results.length} deleted products`);
+      return results;
+    } catch (error) {
+      console.error('❌ Error fetching deleted products:', error);
+      throw new Error('Failed to fetch deleted products');
     }
   }
 
