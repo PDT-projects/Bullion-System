@@ -15,10 +15,10 @@ const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-no
 const lbl = 'block text-sm font-medium text-gray-700 mb-1';
 
 export function TransactionFormView({
-  office, date, transactionType, paymentMode, selectedBank,
+  office, date, manualDate, transactionType, paymentMode, selectedBank,
   chequeNumber, chequeDate, chequeBank,
   setChequeNumber, setChequeDate, setChequeBank,
-  enableMultiple, transactionItems,
+  setManualDate, enableMultiple, transactionItems,
   transactionId, isGeneratingId, isEditingId, setTransactionId, setIsEditingId,
   duplicateIdError, setDuplicateIdError,
   totalAmount, totalPaid, totalRemaining, currentBankBalance, remainingBalanceAfter,
@@ -249,15 +249,27 @@ export function TransactionFormView({
                 </div>
               )}
             </div>
-            <div>
-              <label className={lbl}>
-                Date <span className="text-xs font-normal text-gray-400 ml-1">(auto)</span>
-              </label>
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg min-h-[38px]">
+            <div className="space-y-3">
+              <div>
+                <label className={lbl}>
+                  Automatic Date <span className="text-xs font-normal text-gray-400 ml-1">(today)</span>
+                </label>
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg min-h-[38px]">
                   <Lock size={13} className="text-gray-400 shrink-0" />
                   <span className="text-sm text-gray-600">{formatDateDisplay(date)}</span>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Date is set automatically and cannot be changed</p>
+                <p className="text-xs text-gray-400 mt-1">This date is pre-filled automatically. Use the manual override below only if you need a different transaction date.</p>
+              </div>
+              <div>
+                <label className={lbl}>Manual Date Override <span className="text-xs font-normal text-gray-400">(optional)</span></label>
+                <input
+                  type="date"
+                  value={manualDate}
+                  onChange={e => setManualDate(e.target.value)}
+                  className={inp}
+                />
+                <p className="text-xs text-gray-400 mt-1">Leave blank to use the automatic date. If set, this value will overwrite the auto date when saving.</p>
+              </div>
             </div>
           </div>
         </div>

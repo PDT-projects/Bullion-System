@@ -55,6 +55,8 @@ export interface UseTransactionFormViewModelReturn {
   setChequeNumber: (v: string) => void;
   setChequeDate: (v: string) => void;
   setChequeBank: (v: string) => void;
+  manualDate: string;
+  setManualDate: (v: string) => void;
   enableMultiple: boolean;
   transactionItems: TransactionItem[];
   transactionId: string;
@@ -175,6 +177,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
 
   const [office,          setOffice]               = useState(COMPANIES[0].id);
   const [date,            setDate]                 = useState(new Date().toISOString().split('T')[0]);
+  const [manualDate,      setManualDate]           = useState('');
   const [transactionType, setTransactionTypeState] = useState<'Cash Inflow' | 'Cash Outflow' | 'Loan'>('Cash Inflow');
   const [paymentMode,     setPaymentMode]          = useState<'Cash' | 'Bank' | 'Cheque'>('Cash');
   const [selectedBank,    setSelectedBank]         = useState('');
@@ -235,6 +238,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             const officeId = COMPANIES.find(o => tx.company?.includes(o.name.split(':')[1]?.trim()))?.id || COMPANIES[0].id;
             setOffice(officeId);
             setDate(tx.date);
+            setManualDate(tx.date);
             setTransactionTypeState(tx.mainCategory as any);
             setPaymentMode(tx.mode);
             if (tx.bankId)       setSelectedBank(tx.bankId);
@@ -467,7 +471,9 @@ const getSuggestedClassification = (
       if (editingTx) {
         // ── Edit mode ─────────────────────────────────────────────────────
         const item = transactionItems[0];
+        const effectiveDate = manualDate.trim() || date;
         const updatedData: Partial<Transaction> = {
+          date:            effectiveDate,
           mainCategory:    transactionType,
           subCategory:     item.subCategory,
           detailCategory:  item.detailCategory,
@@ -483,8 +489,10 @@ const getSuggestedClassification = (
           chequeNumber:    paymentMode === 'Cheque' ? chequeNumber : undefined,
           chequeDate:      paymentMode === 'Cheque' ? chequeDate   : undefined,
           chequeBank:      paymentMode === 'Cheque' ? chequeBank   : undefined,
-          plMainCategory,  plSubCategory,
-          bsMainCategory,  bsSubCategory,
+          plMainCategory:  plMainCategory || undefined,
+          plSubCategory:   plSubCategory  || undefined,
+          bsMainCategory:  bsMainCategory || undefined,
+          bsSubCategory:   bsSubCategory  || undefined,
           currency,
         };
         await TransactionFirebaseService.updateTransaction(editingTx.id, updatedData);
@@ -502,12 +510,10 @@ const getSuggestedClassification = (
           // Resolve sequential ID
           let resolvedId = transactionId;
           if (resolvedId.includes('###')) {
-            resolvedId = await TransactionFirebaseService.getNextTransactionId(resolvedId);
+            resolvedId = await TransactionFirebaseService.generateTransactionId();
           }
           if (idx > 0) {
-            resolvedId = await TransactionFirebaseService.getNextTransactionId(
-              `TXN-${String(new Date().getDate()).padStart(2,'0')}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getFullYear()).slice(-2)}-###`
-            );
+            resolvedId = await TransactionFirebaseService.generateTransactionId();
           }
 
           // Check for duplicate
@@ -523,9 +529,10 @@ const getSuggestedClassification = (
           const officeObj      = companies.find(c => c.id === office);
           const companyName    = officeObj ? officeObj.name : office;
 
+          const effectiveDate = manualDate.trim() || date;
           const txData: Omit<Transaction, 'id'> = {
             transactionId:   resolvedId,
-            date,
+            date:            effectiveDate,
             time:            new Date().toTimeString().slice(0, 5),
             mainCategory:    transactionType,
             subCategory:     item.subCategory,
@@ -552,7 +559,7 @@ const getSuggestedClassification = (
             currency,
           } as any;
 
-          await TransactionFirebaseService.addTransaction(txData);
+          await TransactionFirebaseService.createTransaction(txData);
           if (idx === 0) firstTxId = resolvedId;
 
           if (paymentMode === 'Bank' && selectedBank) {
@@ -588,7 +595,7 @@ const getSuggestedClassification = (
       setIsSaving(false);
     }
   }, [
-    validate, editingTx, transactionItems, office, date,
+    validate, editingTx, transactionItems, office, date, manualDate,
     transactionType, paymentMode, selectedBank, banks,
     navigate, transactionId, chequeNumber, chequeDate, chequeBank,
     updateBankBalance, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory,
@@ -754,6 +761,7 @@ const getSuggestedClassification = (
     setOffice, setDate, setTransactionType, setPaymentMode, setSelectedBank,
     setEnableMultiple, updateItem, addItem, removeItem,
     handleSave, handleCancel,
+    manualDate, setManualDate,
     formatCurrency: formatCurrencyLocal,
     formatDateDisplay,
     duplicateIdError, setDuplicateIdError,

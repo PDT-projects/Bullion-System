@@ -45,6 +45,7 @@ export interface Transaction {
   detailCategory?: string;
   amount: number;
   mode: 'Cash' | 'Bank' | 'Cheque';
+  currency?: string;
   bankName?: string;
   bankId?: string;
   chequeNumber?: string;
