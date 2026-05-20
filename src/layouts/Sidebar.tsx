@@ -256,7 +256,12 @@ export function Sidebar() {
   return (
     <div className="w-64 bg-white border-r border-gray-100 flex flex-col h-full">
       <div className="p-6 border-b border-gray-100">
-        <h1 className="font-bold text-xl text-slate-800 tracking-tight">Bullion Electronics</h1>
+        <NavLink
+          to="/dashboard"
+          className="font-bold text-xl text-slate-800 tracking-tight hover:text-slate-900 transition-colors"
+        >
+          Bullion Electronics
+        </NavLink>
       </div>
 
       <nav className="flex-1 p-3 overflow-y-auto">
