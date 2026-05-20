@@ -302,29 +302,34 @@ export function Login({ onLoginSuccess }: LoginProps) {
           position:relative;
           z-index:2;
           display:flex;
-          align-items:center;
+          align-items:flex-start;
           gap:18px;
           margin-bottom:34px;
           margin-top:10px;
         }
 
-        .be-brand-icon{
-          width:74px;
-          height:74px;
-          border-radius:22px;
-          background:linear-gradient(
-            135deg,
-            #f6d365 0%,
-            #d4af37 45%,
-            #b8860b 100%
-          );
+        .be-brand-logo{
+          width:96px;
+          height:96px;
+          border-radius:20px;
+          overflow:hidden;
           display:flex;
           align-items:center;
           justify-content:center;
-          color:#000;
+          flex-shrink:0;
+          background:#fff;
+          border:2.5px solid #000;
+          margin-top:6px;
           box-shadow:
-            0 15px 40px rgba(212,175,55,0.28),
-            inset 0 1px 2px rgba(255,255,255,0.4);
+            0 4px 20px rgba(0,0,0,0.6),
+            0 1px 4px rgba(0,0,0,0.4);
+        }
+
+        .be-brand-logo img{
+          width:100%;
+          height:100%;
+          object-fit:cover;
+          display:block;
         }
 
         .be-brand-name{
@@ -798,8 +803,11 @@ export function Login({ onLoginSuccess }: LoginProps) {
             </div>
 
             <div className="be-brand">
-              <div className="be-brand-icon">
-                <BarChart2 size={32} />
+              <div className="be-brand-logo">
+                <img
+                  src="/BullionLogo.jpeg"
+                  alt="Bullion Electronics logo"
+                />
               </div>
 
               <div>
