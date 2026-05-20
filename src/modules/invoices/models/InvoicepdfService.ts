@@ -9,7 +9,7 @@ import {
   convertCurrency,
 } from './invoiceService';
 
-const logoAsset = '/PDT-logo.png';
+const logoAsset = '/BullionLogo.jpeg';
 
 const PW = 210,
   PH = 297,
@@ -296,21 +296,26 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   });
 
   // ── HEADER ─────────────────────────────────────────
-  const HEADER_H = 36;
+  const HEADER_H = 42;
 
-  sf(doc, BLACK);
+  // Pure black background — no gold top stripe so nothing taints the black
+  sf(doc, [0, 0, 0] as RGB);
+  doc.setLineWidth(0);
   doc.rect(0, 0, PW, HEADER_H, 'F');
 
-  sf(doc, GOLD);
-  doc.rect(0, 0, PW, 2, 'F');
-
+  // Yellow bottom accent stripe only
   sf(doc, YELLOW);
-  doc.rect(0, HEADER_H - 1.5, PW, 1.5, 'F');
+  doc.rect(0, HEADER_H - 1.8, PW, 1.8, 'F');
 
-  const LOGO_SIZE = 22;
+  const LOGO_SIZE = 32;
   const LOGO_Y = (HEADER_H - LOGO_SIZE) / 2;
 
   if (logoImg) {
+    // Black rect behind logo ensures clean render
+    sf(doc, [0, 0, 0] as RGB);
+    doc.setLineWidth(0);
+    doc.rect(ML, LOGO_Y, LOGO_SIZE, LOGO_SIZE, 'F');
+
     doc.addImage(
       logoImg.dataUrl,
       logoImg.format,
@@ -321,41 +326,41 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     );
   }
 
-  const TEXT_X = logoImg ? ML + LOGO_SIZE + 5 : ML;
+  const TEXT_X = logoImg ? ML + LOGO_SIZE + 6 : ML;
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(17);
+  doc.setFontSize(18);
   st(doc, WHITE);
 
-  doc.text('Bullion Electronics', TEXT_X, 14);
+  doc.text('Bullion Electronics', TEXT_X, HEADER_H / 2 - 2);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   st(doc, GOLD_RICH);
 
   const branchName = (invoice as any).branch || 'Islamabad';
 
-  doc.text(branchName, TEXT_X, 20);
+  doc.text(branchName, TEXT_X, HEADER_H / 2 + 5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   st(doc, LIGHT_GRAY);
 
-  doc.text('+971 56 985 2213', PW - MR, 12, {
+  doc.text('+971 56 985 2213', PW - MR, 13, {
     align: 'right',
   });
 
   doc.text(
     'C108 Building 936 - M-04, Plot - Mohamed Bin Zayed City - ME9',
     PW - MR,
-    17.5,
+    19,
     { align: 'right' }
   );
 
   doc.text(
     'Abu Dhabi, United Arab Emirates',
     PW - MR,
-    23,
+    25,
     { align: 'right' }
   );
 
@@ -363,7 +368,7 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
 
   doc.roundedRect(
     PW - MR - 26,
-    HEADER_H - 10,
+    HEADER_H - 11,
     26,
     8,
     1,
@@ -375,7 +380,7 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   doc.setFontSize(9);
   st(doc, BLACK);
 
-  doc.text('INVOICE', PW - MR - 13, HEADER_H - 4.5, {
+  doc.text('INVOICE', PW - MR - 13, HEADER_H - 5.5, {
     align: 'center',
   });
 
