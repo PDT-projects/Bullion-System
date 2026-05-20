@@ -2,6 +2,8 @@
 // InventoryAddExistingView
 // UPDATED: Sell Price and Cost Price fields accept any currency (USD/AED/SAR/CAD/PKR)
 //          and auto-convert to PKR for storage. Prices shown in selected currency.
+// UPDATED: Serial unit location selectors now use SerialLocationSelector, which loads
+//          locations from Firestore and lets users add new ones inline (persisted).
 
 import React from 'react';
 import { Search, Package, ArrowLeft, Loader2, Plus, Hash } from 'lucide-react';
@@ -9,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { UseInventoryAddExistingViewModelReturn } from '../viewModels/useInventoryAddExistingViewModel';
 import { useInventoryCurrency, formatInCurrency } from '../viewModels/useInventoryCurrency';
 import { InventoryCurrencyDropdown, CurrencyPriceInput, CurrencyExtraRows } from './InventoryCurrencyDropdown';
+import { SerialLocationSelector } from './LocationSelector';
 
 interface Props extends UseInventoryAddExistingViewModelReturn {}
 
@@ -147,10 +150,8 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                         <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
                           <span style={{ fontSize: 11, color: '#6b7280' }}>Stock: {product.stock}</span>
                           {product.location && <span style={{ fontSize: 11, color: '#334155' }}>📍 {product.location}</span>}
-                          {/* Sell price in primary currency */}
                           <span style={{ fontSize: 11, color: '#9ca3af' }}>{fmtPrimary(product.sellPrice)}</span>
                         </div>
-                        {/* Extra currency rows under price */}
                         {extraCurrencies.length > 0 && (
                           <div style={{ marginTop: 2 }}>
                             <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.sellPrice} rates={rates} />
@@ -189,7 +190,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                   <input type="number" value={entry.addQty} onChange={e => setAddQty(Number(e.target.value))} style={inp} min={1} />
                 </div>
 
-                {/* Prices — CurrencyPriceInput */}
+                {/* Prices */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <CurrencyPriceInput
                     label="Updated Sell Price"
@@ -209,41 +210,64 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                   />
                 </div>
 
-                {/* Serials */}
+                {/* Serial Numbers */}
                 {entry.addQty > 0 && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
                       <Hash size={14} color="#334155" />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Serial Numbers ({entry.addQty} required)</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                        Serial Numbers ({entry.addQty} required)
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 260, overflowY: 'auto' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
                       {Array.from({ length: entry.addQty }, (_, i) => (
-                        <div key={i} style={{ backgroundColor: '#fff', borderRadius: 8, padding: '12px 14px', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unit {i + 1}</label>
-                          <input type="text" value={entry.newSerials[i] || ''} onChange={e => setNewSerial(i, e.target.value)} placeholder={`Serial #${i + 1}`} style={inp} />
-                          <select
-                            value={entry.newSerials[i] ? entry.newSerialCities[entry.newSerials[i]] || '' : ''}
-                            onChange={e => setNewSerialCity(i, e.target.value)}
+                        <div
+                          key={i}
+                          style={{
+                            backgroundColor: '#fff', borderRadius: 8, padding: '12px 14px',
+                            border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: 10,
+                          }}
+                        >
+                          <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Unit {i + 1}
+                          </label>
+
+                          {/* Serial number input */}
+                          <input
+                            type="text"
+                            value={entry.newSerials[i] || ''}
+                            onChange={e => setNewSerial(i, e.target.value)}
+                            placeholder={`Serial #${i + 1}`}
                             style={inp}
-                          >
-                            <option value="">Select location (optional)</option>
-                            {cities.map(city => <option key={city} value={city}>{city}</option>)}
-                          </select>
+                          />
+
+                          {/* Location — SerialLocationSelector with Add New */}
+                          <SerialLocationSelector
+                            value={
+                              entry.newSerials[i]
+                                ? entry.newSerialCities[entry.newSerials[i]] || ''
+                                : ''
+                            }
+                            onChange={city => setNewSerialCity(i, city)}
+                            placeholder="Location (optional)"
+                          />
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Save */}
+                {/* Save button */}
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    padding: '12px 20px', borderRadius: 10, border: 'none', cursor: isSaving ? 'not-allowed' : 'pointer',
+                    padding: '12px 20px', borderRadius: 10, border: 'none',
+                    cursor: isSaving ? 'not-allowed' : 'pointer',
                     backgroundColor: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 14,
-                    boxShadow: '0 2px 8px rgba(22,163,74,0.35)', opacity: isSaving ? 0.7 : 1, transition: 'all 0.2s',
+                    boxShadow: '0 2px 8px rgba(22,163,74,0.35)',
+                    opacity: isSaving ? 0.7 : 1, transition: 'all 0.2s',
                   }}
                 >
                   {isSaving ? (
@@ -252,6 +276,7 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                     <><Plus size={16} /> Add {entry.addQty} Unit{entry.addQty > 1 ? 's' : ''} to Stock</>
                   )}
                 </button>
+
               </div>
             </div>
           )}

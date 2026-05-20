@@ -7,9 +7,11 @@
 //   - Cheque option also prompts for bank selection
 //   - bankId + bankName passed through setField so ViewModel saves them
 //   - All other logic (TXN ID, serials, stepper, confirmation) unchanged
+//   - LocationSelector & SerialLocationSelector now imported from shared LocationSelector.tsx
+//     (supports Add New location → persisted to Firestore appConfig/inventoryLocations)
 
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import {
   ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertCircle,
@@ -19,12 +21,13 @@ import {
   ProductFormData,
   ValidationResult,
   InventoryEntryStep,
-  INVENTORY_LOCATIONS,
 } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { BrandModelSelector } from '../components/BrandModelSelector';
 import { useInventoryCurrency } from '../viewModels/useInventoryCurrency';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
+// ── Shared location components (load from Firestore, support Add New) ─────────
+import { LocationSelector, SerialLocationSelector } from './LocationSelector';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,181 +59,13 @@ interface CreateInventoryViewProps {
 // ── Payment method options ────────────────────────────────────────────────────
 
 const PAYMENT_MODES = [
-  { value: 'Cash',          label: 'Cash',          icon: Banknote,  color: '#16a34a', bg: '#f0fdf4', border: '#22c55e', needsBank: false },
-  { value: 'Bank Transfer', label: 'Bank Transfer', icon: Building2, color: '#2563eb', bg: '#eff6ff', border: '#3b82f6', needsBank: true  },
+  { value: 'Cash',          label: 'Cash',          icon: Banknote,   color: '#16a34a', bg: '#f0fdf4', border: '#22c55e', needsBank: false },
+  { value: 'Bank Transfer', label: 'Bank Transfer', icon: Building2,  color: '#2563eb', bg: '#eff6ff', border: '#3b82f6', needsBank: true  },
   { value: 'Cheque',        label: 'Cheque',        icon: CreditCard, color: '#7c3aed', bg: '#f5f3ff', border: '#8b5cf6', needsBank: true  },
   { value: 'Credit Card',   label: 'Credit Card',   icon: CreditCard, color: '#d97706', bg: '#fffbeb', border: '#f59e0b', needsBank: false },
 ];
 
 // ── Main component ────────────────────────────────────────────────────────────
-
-// ── Default inventory locations ──────────────────────────────────────────────
-const DEFAULT_INVENTORY_LOCATIONS = [...INVENTORY_LOCATIONS];
-
-// ── LocationSelector — dynamic, persisted to Firestore ───────────────────────
-function LocationSelector({
-  value, onChange,
-}: { value: string; onChange: (v: string) => void }) {
-  const [locations,    setLocations]    = React.useState<string[]>(DEFAULT_INVENTORY_LOCATIONS);
-  const [addingNew,    setAddingNew]    = React.useState(false);
-  const [newLocation,  setNewLocation]  = React.useState('');
-  const [saving,       setSaving]       = React.useState(false);
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
-  // Load saved custom locations from Firestore on mount
-  React.useEffect(() => {
-    getDoc(doc(db, 'appConfig', 'inventoryLocations'))
-      .then(snap => {
-        if (snap.exists()) {
-          const saved = snap.data().list as string[] || [];
-          setLocations([...new Set([...DEFAULT_INVENTORY_LOCATIONS, ...saved])].sort());
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  React.useEffect(() => { if (addingNew) inputRef.current?.focus(); }, [addingNew]);
-
-  const saveNewLocation = async () => {
-    const trimmed = newLocation.trim();
-    if (!trimmed) return;
-    setSaving(true);
-    const updated = [...new Set([...locations, trimmed])].sort();
-    setLocations(updated);
-    onChange(trimmed);
-    try {
-      await setDoc(doc(db, 'appConfig', 'inventoryLocations'), { list: updated }, { merge: true });
-    } catch (err) {
-      console.error('[Location] Save failed:', err);
-    }
-    setNewLocation('');
-    setAddingNew(false);
-    setSaving(false);
-  };
-
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Primary Location</label>
-      {addingNew ? (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={newLocation}
-            onChange={e => setNewLocation(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') saveNewLocation(); if (e.key === 'Escape') setAddingNew(false); }}
-            className="flex-1 px-3 py-2 border-2 border-indigo-400 rounded-lg text-sm outline-none"
-            placeholder="e.g. Dubai"
-          />
-          <button type="button" onClick={saveNewLocation} disabled={saving || !newLocation.trim()}
-            className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
-            {saving ? '…' : 'Save'}
-          </button>
-          <button type="button" onClick={() => setAddingNew(false)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-600">
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-          >
-            <option value="">Select location</option>
-            {locations.map(loc => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
-          <button type="button" onClick={() => setAddingNew(true)}
-            className="px-3 py-2 border border-dashed border-indigo-400 rounded-lg text-sm font-semibold text-indigo-600 hover:bg-indigo-50 whitespace-nowrap">
-            + Add New
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SerialLocationSelector({
-  value, onChange,
-}: { value: string; onChange: (v: string) => void }) {
-  const [locations, setLocations] = React.useState<string[]>(DEFAULT_INVENTORY_LOCATIONS);
-  const [addingNew, setAddingNew] = React.useState(false);
-  const [newLocation, setNewLocation] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
-    getDoc(doc(db, 'appConfig', 'inventoryLocations'))
-      .then(snap => {
-        if (snap.exists()) {
-          const saved = snap.data().list as string[] || [];
-          setLocations([...new Set([...DEFAULT_INVENTORY_LOCATIONS, ...saved])].sort());
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  React.useEffect(() => { if (addingNew) inputRef.current?.focus(); }, [addingNew]);
-
-  const saveNewLocation = async () => {
-    const trimmed = newLocation.trim();
-    if (!trimmed) return;
-    setSaving(true);
-    const updated = [...new Set([...locations, trimmed])].sort();
-    setLocations(updated);
-    onChange(trimmed);
-    try {
-      await setDoc(doc(db, 'appConfig', 'inventoryLocations'), { list: updated }, { merge: true });
-    } catch (err) {
-      console.error('[Serial Location] Save failed:', err);
-    }
-    setNewLocation('');
-    setAddingNew(false);
-    setSaving(false);
-  };
-
-  return (
-    <div style={{ minWidth: 180 }}>
-      {addingNew ? (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={newLocation}
-            onChange={e => setNewLocation(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') saveNewLocation(); if (e.key === 'Escape') setAddingNew(false); }}
-            className="w-full px-3 py-2 border-2 border-indigo-400 rounded-lg text-sm outline-none"
-            placeholder="e.g. Saudia"
-          />
-          <button type="button" onClick={saveNewLocation} disabled={saving || !newLocation.trim()}
-            className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
-            {saving ? '…' : 'Save'}
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-          >
-            <option value="">Select serial location</option>
-            {locations.map(loc => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
-          <button type="button" onClick={() => setAddingNew(true)}
-            className="px-3 py-2 border border-dashed border-indigo-400 rounded-lg text-sm font-semibold text-indigo-600 hover:bg-indigo-50 whitespace-nowrap">
-            + Add New
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function CreateInventoryView({
   formData,
@@ -255,7 +90,7 @@ export function CreateInventoryView({
 }: CreateInventoryViewProps) {
 
   // ── Banks — fetched once when payment step mounts ─────────────────────────
-  const [banks, setBanks]             = useState<BankOption[]>([]);
+  const [banks, setBanks]               = useState<BankOption[]>([]);
   const [banksLoading, setBanksLoading] = useState(false);
 
   useEffect(() => {
@@ -458,11 +293,13 @@ export function CreateInventoryView({
           />
         </div>
 
-        {/* ── Primary Location ── */}
+        {/* ── Primary Location — uses shared LocationSelector ── */}
         <div>
           <LocationSelector
             value={formData.location || ''}
             onChange={loc => setField('location', loc)}
+            label="Stocking Location *"
+            placeholder="Select location"
           />
         </div>
 
@@ -501,6 +338,7 @@ export function CreateInventoryView({
             Serials already saved in Firestore are shown below. Add or remove as needed.
           </p>
         )}
+        {/* Serial input row — serial text + SerialLocationSelector + Add button */}
         <div className="flex gap-3 mb-4">
           <input
             type="text"
@@ -510,7 +348,12 @@ export function CreateInventoryView({
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
             placeholder="Enter serial number"
           />
-          <SerialLocationSelector value={serialCity} onChange={setSerialCity} />
+          {/* SerialLocationSelector — dropdown + Add New, persisted to Firestore */}
+          <SerialLocationSelector
+            value={serialCity}
+            onChange={setSerialCity}
+            placeholder="Location (optional)"
+          />
           <button type="button" onClick={addSerialNumber} style={btnAddSerial}>
             <Plus size={18} /> Add
           </button>
@@ -601,7 +444,6 @@ export function CreateInventoryView({
                   type="button"
                   onClick={() => {
                     setField('paymentMethod', mode.value);
-                    // Clear bank if switching to a mode that doesn't need one
                     if (!mode.needsBank) {
                       setField('bankId', undefined);
                       setField('bankName', undefined);
@@ -619,9 +461,7 @@ export function CreateInventoryView({
                   <span style={{ fontSize: 13, fontWeight: 700, color: sel ? mode.color : '#374151' }}>
                     {mode.label}
                   </span>
-                  {sel && (
-                    <Check size={14} color={mode.color} style={{ marginLeft: 'auto' }} />
-                  )}
+                  {sel && <Check size={14} color={mode.color} style={{ marginLeft: 'auto' }} />}
                 </button>
               );
             })}
@@ -672,7 +512,6 @@ export function CreateInventoryView({
                   </select>
                   <ChevronDown size={16} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }} />
                 </div>
-                {/* Selected bank confirmation chip */}
                 {formData.bankName && (
                   <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', backgroundColor: '#eff6ff', borderRadius: 6, fontSize: 12, color: '#1d4ed8', fontWeight: 600 }}>
                     <Building2 size={12} /> {formData.bankName}
@@ -734,7 +573,6 @@ export function CreateInventoryView({
                 </div>
               </>
             )}
-            {/* Payment method summary line */}
             {formData.paymentMethod && (
               <div style={{ borderTop: '1px solid #bfdbfe', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between' }}>
                 <span className="text-blue-700">Method:</span>

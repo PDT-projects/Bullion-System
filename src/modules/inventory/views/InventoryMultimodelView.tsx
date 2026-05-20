@@ -13,6 +13,7 @@ import {
   UseInventoryMultiModelViewModelReturn,
   CATEGORIES, STOCKING_LOCATIONS, STATUSES, MultiModelEntry,
 } from '../viewModels/useInventoryMultiModelViewModel';
+import { LocationSelector, SerialLocationSelector } from './LocationSelector';
 
 interface Props extends UseInventoryMultiModelViewModelReturn {}
 
@@ -106,14 +107,11 @@ function SerialPanel({
                 onChange={e => setEntrySerial(entry.id, i, e.target.value)}
                 style={inp}
               />
-              <select
+              <SerialLocationSelector
                 value={entry.serialNumbers[i] ? (entry.serialCities[entry.serialNumbers[i]] || '') : ''}
-                onChange={e => setEntrySerialCity(entry.id, i, e.target.value)}
-                style={inp}
-              >
-                <option value="">Location (optional)</option>
-                {STOCKING_LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-              </select>
+                onChange={city => setEntrySerialCity(entry.id, i, city)}
+                placeholder="Location (optional)"
+              />
             </div>
           ))}
         </div>
@@ -290,11 +288,12 @@ function ModelCard({
 
         {/* Stocking Location */}
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Stocking Location *</label>
-          <select value={e.stockingLocation} onChange={ev => updateEntry(e.id, { stockingLocation: ev.target.value })} style={hasErr('loc') ? inpErr : inp}>
-            <option value="">Select location</option>
-            {STOCKING_LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
+          <LocationSelector
+            value={e.stockingLocation}
+            onChange={loc => updateEntry(e.id, { stockingLocation: loc })}
+            label="Stocking Location *"
+            placeholder="Select location"
+          />
           {hasErr('loc') && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 3 }}>{validationErrors[`loc_${index}`]}</p>}
         </div>
 
