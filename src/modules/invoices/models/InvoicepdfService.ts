@@ -307,26 +307,40 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   sf(doc, YELLOW);
   doc.rect(0, HEADER_H - 1.8, PW, 1.8, 'F');
 
-  const LOGO_SIZE = 32;
-  const LOGO_Y = (HEADER_H - LOGO_SIZE) / 2;
+  // Logo: clean, no border rings
+  const LOGO_D = 36;
+  const LOGO_R = LOGO_D / 2;
+  const LOGO_CX = ML + LOGO_R;
+  const LOGO_CY = HEADER_H / 2;
+  const LOGO_Y = LOGO_CY - LOGO_R;
 
   if (logoImg) {
-    // Black rect behind logo ensures clean render
-    sf(doc, [0, 0, 0] as RGB);
-    doc.setLineWidth(0);
-    doc.rect(ML, LOGO_Y, LOGO_SIZE, LOGO_SIZE, 'F');
-
+    // Draw the logo image
     doc.addImage(
       logoImg.dataUrl,
       logoImg.format,
       ML,
       LOGO_Y,
-      LOGO_SIZE,
-      LOGO_SIZE
+      LOGO_D,
+      LOGO_D
     );
+
+    // Paint black corner masks over the 4 square corners of the JPEG
+    // so the logo appears as a clean circle on the black header — no ring needed
+    const cr = LOGO_R * 0.29;
+    sf(doc, [0, 0, 0] as RGB);
+    doc.setLineWidth(0);
+    // top-left
+    doc.rect(ML, LOGO_Y, cr, cr, 'F');
+    // top-right
+    doc.rect(ML + LOGO_D - cr, LOGO_Y, cr, cr, 'F');
+    // bottom-left
+    doc.rect(ML, LOGO_Y + LOGO_D - cr, cr, cr, 'F');
+    // bottom-right
+    doc.rect(ML + LOGO_D - cr, LOGO_Y + LOGO_D - cr, cr, cr, 'F');
   }
 
-  const TEXT_X = logoImg ? ML + LOGO_SIZE + 6 : ML;
+  const TEXT_X = logoImg ? ML + LOGO_D + 6 : ML;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
