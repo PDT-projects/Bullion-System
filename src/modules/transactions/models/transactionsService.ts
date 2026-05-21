@@ -4,7 +4,26 @@ import { Transaction, TransactionFilters, TransactionStats, LOAN_SUB_CATEGORIES,
 
 export const getTransactionTotals = (t: Transaction) => {
   const partialTotal = (t.partialPayments || []).reduce((s, p) => s + p.amount, 0);
-  const totalPaid = partialTotal > 0 ? partialTotal : (t.amountPaid ?? t.amount ?? 0);
+
+  // Priority order for totalPaid:
+  // 1. Sum of partialPayments (most accurate, set by addPartialPayment)
+  // 2. t.remainingAmount stored in Firestore — if present, back-calculate paid amount
+  // 3. t.amountPaid — explicitly stored paid amount
+  // 4. If paymentStatus === 'Full', the whole amount is paid
+  // 5. Default to 0 — NEVER fall back to t.amount (that would mean "fully paid")
+  let totalPaid: number;
+  if (partialTotal > 0) {
+    totalPaid = partialTotal;
+  } else if (t.remainingAmount != null) {
+    totalPaid = Math.max(0, (t.amount ?? 0) - t.remainingAmount);
+  } else if (t.amountPaid != null) {
+    totalPaid = t.amountPaid;
+  } else if (t.paymentStatus === 'Full') {
+    totalPaid = t.amount ?? 0;
+  } else {
+    totalPaid = 0;
+  }
+
   const remaining = Math.max(0, (t.amount ?? 0) - totalPaid);
   return { totalPaid, remainingAmount: remaining };
 };
