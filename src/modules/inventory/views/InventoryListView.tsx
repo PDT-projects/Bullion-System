@@ -473,25 +473,49 @@ export function InventoryListView({
                     <PaymentModeBadge product={product} />
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setViewProduct(product)}
-                        className="p-1.5 text-gray-500 hover:text-[#0f172a] hover:bg-slate-50 rounded-lg transition-colors"
-                        title="View details">
-                        <Eye size={16} />
+                    <div className="flex items-center gap-1.5">
+                      {/* View — slate */}
+                      <button
+                        onClick={() => setViewProduct(product)}
+                        title="View details"
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          width: 30, height: 30, borderRadius: 7, border: 'none', cursor: 'pointer',
+                          backgroundColor: '#f1f5f9', color: '#334155', transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#e2e8f0'; (e.currentTarget as HTMLButtonElement).style.color = '#0f172a'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#334155'; }}
+                      >
+                        <Eye size={15} />
                       </button>
                       <button onClick={() => onEdit?.(product.id)}
-                        className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        className="p-1.5 text-gray-500 hover:text-[#0f172a] hover:bg-slate-100 rounded-lg transition-colors"
                         title="Edit product">
                         <Edit2 size={16} />
                       </button>
-                      <button onClick={() => setDeleteConfirm(product)}
-                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Move to Deleted Inventory">
-                        <Trash2 size={16} />
+                      {/* Delete — solid red, always visible */}
+                      <button
+                        onClick={() => setDeleteConfirm(product)}
+                        title="Delete product"
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          width: 30, height: 30, borderRadius: 7, border: 'none', cursor: 'pointer',
+                          backgroundColor: '#dc2626', color: '#ffffff', transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#b91c1c'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#dc2626'; }}
+                      >
+                        <Trash2 size={15} />
                       </button>
                       {onReceiveProduct && (
                         <button onClick={() => onReceiveProduct(product.id)}
-                          className="px-2 py-1 text-black bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold border border-gray-200 whitespace-nowrap"
+                          style={{
+                            padding: '4px 10px', borderRadius: 7, border: '1px solid #e2e8f0',
+                            backgroundColor: '#f8fafc', color: '#374151', cursor: 'pointer',
+                            fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#0f172a'; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f8fafc'; (e.currentTarget as HTMLButtonElement).style.color = '#374151'; }}
                           title="Move to Stock">
                           → Stock
                         </button>
@@ -653,8 +677,17 @@ export function InventoryListView({
                 className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                 Close
               </button>
-              <button onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
-                className="flex items-center gap-2 px-4 py-2 bg-[#0f172a] text-white rounded-lg font-semibold hover:bg-[#1e293b] transition-colors shadow-sm">
+              <button
+                onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '9px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  backgroundColor: '#f1f5f9', color: '#0f172a',
+                  fontWeight: 700, fontSize: 14,
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#e2e8f0'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f1f5f9'; }}
+              >
                 <Edit2 size={16} /> Edit Product
               </button>
               <button onClick={() => { setViewProduct(null); setDeleteConfirm(viewProduct); }}
