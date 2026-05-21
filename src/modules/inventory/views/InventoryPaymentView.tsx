@@ -17,15 +17,7 @@ import {
   MultiModelPaymentEntry,
 } from '../viewModels/useInventoryPaymentViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
-import {
-  AlertDialog,
-  AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-} from '../../../components/ui/alert-dialog';
+// AlertDialog replaced with a plain custom modal (no Radix/portal dependency)
 
 interface InventoryPaymentViewProps extends UseInventoryPaymentViewModelReturn {}
 
@@ -662,24 +654,96 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             </button>
           </div>
 
-          <AlertDialog open={duplicateDialogOpen} onOpenChange={handleDuplicateDialogOpenChange}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Duplicate inventory detected</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {duplicateDialogMessage || 'This inventory item already exists and cannot be saved again.'}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => handleDuplicateDialogOpenChange(false)}>
-                  Close
-                </AlertDialogCancel>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
         </div>
       </div>
+
+      {/* Plain fixed-position modal — bypasses all Radix/portal/z-index issues */}
+      {duplicateDialogOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => handleDuplicateDialogOpenChange(false)}
+            style={{
+              position: 'fixed', inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              zIndex: 99998,
+            }}
+          />
+          {/* Dialog box */}
+          <div style={{
+            position: 'fixed',
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 99999,
+            width: '90%', maxWidth: 480,
+            backgroundColor: '#fff',
+            borderRadius: 14,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            overflow: 'hidden',
+          }}>
+            {/* Red header bar */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              backgroundColor: '#fef2f2', borderBottom: '1px solid #fecaca',
+              padding: '16px 20px',
+            }}>
+              <AlertCircle size={22} color="#dc2626" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#991b1b' }}>
+                Duplicate Inventory Detected
+              </span>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px 24px' }}>
+              {(() => {
+                const msg = duplicateDialogMessage || 'This inventory item already exists and cannot be saved again.';
+                const lines = msg.split('\n');
+                return (
+                  <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                    {lines.map((line, i) => {
+                      if (line.startsWith('• ')) {
+                        return (
+                          <span key={i} style={{
+                            display: 'inline-flex', alignItems: 'center',
+                            margin: '3px 4px 3px 0',
+                            padding: '3px 12px', borderRadius: 99,
+                            backgroundColor: '#fee2e2', color: '#991b1b',
+                            fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
+                            border: '1px solid #fecaca',
+                          }}>
+                            {line.slice(2)}
+                          </span>
+                        );
+                      }
+                      if (line.trim() === '') return <div key={i} style={{ height: 6 }} />;
+                      return <p key={i} style={{ margin: '0 0 4px 0' }}>{line}</p>;
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '12px 24px 20px',
+              display: 'flex', justifyContent: 'flex-end',
+            }}>
+              <button
+                onClick={() => handleDuplicateDialogOpenChange(false)}
+                style={{
+                  backgroundColor: '#0f172a', color: '#fff',
+                  border: 'none', fontWeight: 700, fontSize: 13,
+                  cursor: 'pointer', borderRadius: 8,
+                  padding: '10px 24px',
+                }}
+              >
+                Got it, go back
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
     </div>
   );
 };

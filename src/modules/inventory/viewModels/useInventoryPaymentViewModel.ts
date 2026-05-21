@@ -471,7 +471,16 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             // Store dealer price in custom field if supported
             ...(me.dealerPrice ? { dealerPrice: me.dealerPrice } : {}),
           };
-          await InventoryFirebaseService.createProduct(dto, paymentInfo);
+          try {
+            await InventoryFirebaseService.createProduct(dto, paymentInfo);
+          } catch (err) {
+            if (err instanceof Error && err.message.toLowerCase().includes('duplicate')) {
+              // Enrich message with model name so user knows which model blocked
+              const serials = err.message.replace(/^duplicate serial numbers?:\s*/i, '').trim();
+              throw new Error(`__DUPLICATE__MODEL:${me.modelName}|SERIALS:${serials}`);
+            }
+            throw err;
+          }
         }
       }
       // ── WITH COSTING PATH ────────────────────────────────────────────────────
@@ -492,7 +501,15 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             receivableStatus:    isOnOrder ? 'Pending' : undefined,
             expectedReceiveDate: undefined,
           };
-          await InventoryFirebaseService.createProduct(dto, paymentInfo);
+          try {
+            await InventoryFirebaseService.createProduct(dto, paymentInfo);
+          } catch (err) {
+            if (err instanceof Error && err.message.toLowerCase().includes('duplicate')) {
+              const serials = err.message.replace(/^duplicate serial numbers?:\s*/i, '').trim();
+              throw new Error(`__DUPLICATE__MODEL:${sm.modelName}|SERIALS:${serials}`);
+            }
+            throw err;
+          }
         }
       }
       // ── SINGLE PRODUCT PATH ──────────────────────────────────────────────────
@@ -567,14 +584,42 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
 
     } catch (error) {
       console.error('Error saving product:', error);
-      const message = error instanceof Error
+      const rawMessage = error instanceof Error
         ? error.message
         : typeof error === 'string'
           ? error
           : JSON.stringify(error, Object.getOwnPropertyNames(error) || undefined);
 
-      if (message.toLowerCase().includes('duplicate')) {
-        setDuplicateDialogMessage(message);
+      if (rawMessage.toLowerCase().includes('duplicate') || rawMessage.startsWith('__DUPLICATE__')) {
+        // Reset isSaving immediately so the UI unfreezes before the dialog opens.
+        // The finally block will also set it false, which is harmless.
+        setIsSaving(false);
+        // Parse enriched format: __DUPLICATE__MODEL:<name>|SERIALS:<serials>
+        let userMessage: string;
+        if (rawMessage.startsWith('__DUPLICATE__')) {
+          const modelMatch  = rawMessage.match(/MODEL:([^|]+)/);
+          const serialMatch = rawMessage.match(/SERIALS:(.+)$/);
+          const modelLabel  = modelMatch  ? ` for model "${modelMatch[1].trim()}"` : '';
+          const serialList  = serialMatch ? serialMatch[1].trim() : '';
+          const serialsFormatted = serialList
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean)
+            .map(s => '• ' + s)
+            .join('\n');
+          userMessage = 'The following serial number' + (serialList.includes(',') ? 's are' : ' is') + ' already registered in the system' + modelLabel + ':\n\n' + serialsFormatted + '\n\nPlease check your inventory — this item may have already been added. Remove or replace the duplicate serial number(s) before submitting.';
+        } else {
+          // Simple serial duplicate from single-product path
+          const serialsRaw = rawMessage.replace(/^duplicate serial numbers?:\s*/i, '').trim();
+          const serialsFormatted = serialsRaw
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean)
+            .map(s => '• ' + s)
+            .join('\n');
+          userMessage = 'The following serial number' + (serialsRaw.includes(',') ? 's are' : ' is') + ' already registered in the system:\n\n' + serialsFormatted + '\n\nPlease check your inventory — this item may have already been added. Remove or replace the duplicate serial number(s) before submitting.';
+        }
+        setDuplicateDialogMessage(userMessage);
         setDuplicateDialogOpen(true);
       } else {
         toast.error('Failed to save product. Please try again.');

@@ -397,6 +397,11 @@ export class InventoryFirebaseService {
       return transformDocToProduct(newDoc);
     } catch (error) {
       console.error('❌ Error creating product:', error);
+      // Re-throw duplicate errors with their original message intact so the
+      // ViewModel can detect them and show the user a specific dialog.
+      if (error instanceof Error && error.message.toLowerCase().includes('duplicate')) {
+        throw error;
+      }
       throw new Error('Failed to create product in Firestore');
     }
   }
