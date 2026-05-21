@@ -207,7 +207,7 @@ export function TransactionFormView({
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={lbl}>Office/Branch *</label>
+              <label className={lbl}>Location/Branch *</label>
               {addingCompany ? (
                 <div className="flex items-center gap-2">
                   <input
@@ -215,7 +215,7 @@ export function TransactionFormView({
                     autoFocus
                     value={newCompanyName}
                     onChange={e => setNewCompanyName(e.target.value)}
-                    placeholder="New company name..."
+                    placeholder="New location name..."
                     onKeyDown={e => {
                       if (e.key === 'Enter') { handleAddCompany(); }
                       if (e.key === 'Escape') { setAddingCompany(false); setNewCompanyName(''); }
@@ -240,7 +240,7 @@ export function TransactionFormView({
                   </select>
                   <button
                     type="button"
-                    title="Add new company"
+                    title="Add new location"
                     onClick={() => { setAddingCompany(true); setNewCompanyName(''); }}
                     style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}
                   >
@@ -977,7 +977,7 @@ export function TransactionFormView({
         {saveAttempted && !isSaving && (
           (() => {
             const errs: string[] = [];
-            if (!office) errs.push('Select an office/branch');
+            if (!office) errs.push('Select a location/branch');
             if (!date)   errs.push('Select a date');
             transactionItems.forEach((item, i) => {
               const n = transactionItems.length > 1 ? ` (item ${i + 1})` : '';

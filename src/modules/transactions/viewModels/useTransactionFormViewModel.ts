@@ -8,7 +8,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Transaction, TransactionItem, COMPANIES, SUB_CATEGORIES, DynamicCategory, PLMainCategory, BSMainCategory, Company } from '../models/types';
+import { Transaction, TransactionItem, SUB_CATEGORIES, DynamicCategory, PLMainCategory, BSMainCategory, Company } from '../models/types';
 import { formatCurrency } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
@@ -175,7 +175,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [isEditingId,      setIsEditingId]      = useState(false);
   const [duplicateIdError, setDuplicateIdError] = useState('');
 
-  const [office,          setOffice]               = useState(COMPANIES[0].id);
+  const [office,          setOffice]               = useState('loc-sa');
   const [date,            setDate]                 = useState(new Date().toISOString().split('T')[0]);
   const [manualDate,      setManualDate]           = useState('');
   const [transactionType, setTransactionTypeState] = useState<'Cash Inflow' | 'Cash Outflow' | 'Loan'>('Cash Inflow');
@@ -198,10 +198,14 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [plSubCategory,        setPlSubCategory]        = useState('');
   const [bsMainCategory,       setBsMainCategoryState]  = useState<BSMainCategory | ''>('');
   const [bsSubCategory,        setBsSubCategory]        = useState('');
-  // Companies / Branches — merged from static seed + Firestore
-  const [companies, setCompanies] = useState<Company[]>(
-    COMPANIES.map(c => ({ ...c, createdAt: 'static' }))
-  );
+  // Locations — default seed (Saudi Arabia, Dubai, Chad, Sudan) + Firestore user-added
+  const DEFAULT_LOCATIONS: Company[] = [
+    { id: 'loc-sa', name: 'Saudi Arabia', createdAt: 'static' },
+    { id: 'loc-ae', name: 'Dubai',        createdAt: 'static' },
+    { id: 'loc-td', name: 'Chad',         createdAt: 'static' },
+    { id: 'loc-sd', name: 'Sudan',        createdAt: 'static' },
+  ];
+  const [companies, setCompanies] = useState<Company[]>(DEFAULT_LOCATIONS);
 
   // ── Load banks + existing transaction (edit mode) ──────────────────────
   useEffect(() => {
@@ -235,7 +239,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             setEditingTx(tx);
             setTransactionId(tx.transactionId || '');
             setIsGeneratingId(false);
-            const officeId = COMPANIES.find(o => tx.company?.includes(o.name.split(':')[1]?.trim()))?.id || COMPANIES[0].id;
+            const officeId = DEFAULT_LOCATIONS.find(o => tx.company?.includes(o.name))?.id || DEFAULT_LOCATIONS[0].id;
             setOffice(officeId);
             setDate(tx.date);
             setManualDate(tx.date);
