@@ -1,11 +1,8 @@
 // Inventory Module - ViewModel Layer
 // useProductTransferViewModel - Transfer list + Mark Received logic
 //
-// MARK RECEIVED LOGIC:
-//   1. Find the same product (brandName + modelName) at destination in Firestore
-//   2. If found: merge serials into it, increment stock, update serialCities to toLocation
-//   3. If not found: update the original product doc with toLocation serials added back
-//   4. Set transfer status → 'Received'
+// FIX (v2): handleMarkReceived now writes serialCities based on toLocation for ALL
+// received serials, permanently fixing stale city entries going forward.
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -73,7 +70,6 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
     load();
   }, []);
 
-  // Basic filter — search by product name or location
   const transfers = useMemo(() => {
     let list = [...allTransfers];
     if (filters.productSearch)
@@ -117,7 +113,6 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
     }
 
     try {
-      // Find the source product doc to know brandName/modelName
       const sourceProduct = allProducts.find(p => p.id === transfer.productId);
       if (!sourceProduct) {
         toast.error('Source product not found');
@@ -127,44 +122,51 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
       const transferredSerials = transfer.serialNumbers || [];
       const toLocation = transfer.toLocation;
 
-      // Look for an existing product with the same brand+model at the destination
-      // (could be same doc or a different one if stock was split previously)
       const destProduct = allProducts.find(
         p =>
           p.brandName === sourceProduct.brandName &&
           p.modelName === sourceProduct.modelName &&
           p.id !== transfer.productId &&
           p.receivableStatus !== 'Pending'
-      ) || sourceProduct; // fallback: update the same product doc
+      ) || sourceProduct;
 
-      // Merge serials into destination product
       const existingSerials = destProduct.serialNumbers || [];
-      const mergedSerials   = [
+      const mergedSerials = [
         ...existingSerials.filter(s => !transferredSerials.includes(s)),
         ...transferredSerials,
       ];
-      const mergedCities = { ...destProduct.serialCities };
-      transferredSerials.forEach(s => { mergedCities[s] = toLocation; });
+
+      // Build a clean serialCities map:
+      // - All existing serials → toLocation (since the whole product is now here)
+      // - All received serials → toLocation explicitly
+      const mergedCities: Record<string, string> = {};
+      mergedSerials.forEach(s => {
+        mergedCities[s] = toLocation;
+      });
 
       await InventoryFirebaseService.updateProduct(destProduct.id, {
         stock:         (destProduct.stock || 0) + transferredSerials.length,
         serialNumbers: mergedSerials,
         serialCities:  mergedCities,
-        location:      toLocation,   // update primary location on receipt
+        location:      toLocation,
       });
 
-      // Mark transfer received
       const receivedAt = new Date().toISOString();
       await TransferFirebaseService.updateTransferStatus(transfer.id, 'Received', receivedAt);
 
-      // Update local state
       setAllTransfers(prev =>
         prev.map(t => t.id === transfer.id ? { ...t, status: 'Received', receivedAt } : t)
       );
       setAllProducts(prev =>
         prev.map(p =>
           p.id === destProduct.id
-            ? { ...p, stock: (p.stock || 0) + transferredSerials.length, serialNumbers: mergedSerials, serialCities: mergedCities, location: toLocation }
+            ? {
+                ...p,
+                stock: (p.stock || 0) + transferredSerials.length,
+                serialNumbers: mergedSerials,
+                serialCities: mergedCities,
+                location: toLocation,
+              }
             : p
         )
       );

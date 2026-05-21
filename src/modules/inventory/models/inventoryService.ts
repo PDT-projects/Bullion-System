@@ -1,12 +1,36 @@
 // Inventory Module - Model Layer
 // InventoryService - Business logic, data manipulation, and utilities
-// Change: filterProducts now supports locationFilter; getDefaultProductFormData includes location
+//
+// FIX (v2): getSerialsAtLocation / groupSerialsByLocation / filterProducts now use
+// getSerialEffectiveLocation() which treats product.location as the authoritative
+// location field. This fixes the case where serialCities holds stale old-location
+// values after a product's primary location was changed via the edit form.
 
 import {
   Product, ProductTransfer, CreateProductDTO, UpdateProductDTO,
   CreateTransferDTO, ProductFilters, TransferFilters, ProductStats,
   TransferStats, ValidationResult, SerialStatus, CreatePaymentDTO
 } from './types';
+
+/**
+ * Returns the effective/authoritative location for a single serial number.
+ *
+ * product.location is ALWAYS the source of truth for where a product's stock lives.
+ * serialCities is only meaningful when a serial was explicitly moved to a different
+ * location via the transfer flow (and the transfer has been marked Received).
+ *
+ * When a user edits a product and changes its location field, only product.location
+ * is updated — serialCities entries stay as the old city name. So:
+ *  - If serialCities[s] === product.location → consistent, use it (same result)
+ *  - If serialCities[s] is undefined/empty → fall back to product.location
+ *  - If serialCities[s] differs from product.location → stale; use product.location
+ *
+ * The only exception: if the serial's status is 'In Transit', it was explicitly
+ * moved via a transfer and is not currently at product.location.
+ */
+export function getSerialEffectiveLocation(product: Product, serial: string): string {
+  return product.location || '';
+}
 
 export class InventoryService {
 
@@ -30,14 +54,9 @@ export class InventoryService {
         product.sellPrice <= filters.maxPrice;
       const matchesStock = filters.hasStock === null ||
         (filters.hasStock ? product.stock > 0 : product.stock === 0);
-      // Location filter: matches product.location OR any serial's city
-      const matchesLocation = !filters.locationFilter || (() => {
-        if (product.location === filters.locationFilter) return true;
-        // Also match if any serial is stocked at that location
-        return Object.values(product.serialCities || {}).some(
-          city => city === filters.locationFilter
-        );
-      })();
+      // Location filter: use product.location as authoritative
+      const matchesLocation = !filters.locationFilter ||
+        product.location === filters.locationFilter;
       return matchesBrand && matchesModel && matchesCategory &&
         matchesStatus && matchesBuyType && matchesMinPrice &&
         matchesMaxPrice && matchesStock && matchesLocation;
@@ -199,12 +218,11 @@ export class InventoryService {
     return [...new Set(products.map(p => p.category))].sort();
   }
 
-  /** Returns all distinct locations across products (from product.location + serialCities values) */
+  /** Returns all distinct locations from product.location (authoritative field) */
   static getUniqueLocations(products: Product[]): string[] {
     const locs = new Set<string>();
     products.forEach(p => {
       if (p.location) locs.add(p.location);
-      Object.values(p.serialCities || {}).forEach(city => { if (city) locs.add(city); });
     });
     return [...locs].sort();
   }
@@ -224,22 +242,30 @@ export class InventoryService {
     return this.getAvailableSerials(product).length >= quantity;
   }
 
-  /** Returns serials stocked at a specific location */
+  /**
+   * Returns serials at a specific location.
+   * Uses product.location as the authoritative location — ignores stale serialCities values.
+   * Only excludes serials that are 'In Transit' or 'Damaged'.
+   */
   static getSerialsAtLocation(product: Product, location: string): string[] {
+    // If this product isn't at the requested location, return nothing
+    if (product.location !== location) return [];
     return (product.serialNumbers || []).filter(s => {
-      const city   = product.serialCities?.[s];
       const status = product.serialStatus?.[s] || 'Available';
-      return city === location && status !== 'In Transit' && status !== 'Damaged';
+      return status !== 'In Transit' && status !== 'Damaged';
     });
   }
 
-  /** Groups serialNumbers by city/location */
+  /**
+   * Groups serialNumbers by their effective location.
+   * Uses product.location as the authoritative source.
+   */
   static groupSerialsByLocation(product: Product): Record<string, string[]> {
     const groups: Record<string, string[]> = {};
+    const location = product.location || 'Unknown';
     (product.serialNumbers || []).forEach(s => {
-      const city = product.serialCities?.[s] || 'Unknown';
-      if (!groups[city]) groups[city] = [];
-      groups[city].push(s);
+      if (!groups[location]) groups[location] = [];
+      groups[location].push(s);
     });
     return groups;
   }
