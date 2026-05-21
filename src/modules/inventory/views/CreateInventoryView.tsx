@@ -10,12 +10,13 @@
 //   - LocationSelector & SerialLocationSelector now imported from shared LocationSelector.tsx
 //     (supports Add New location → persisted to Firestore appConfig/inventoryLocations)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import {
   ArrowLeft, ArrowRight, Check, Plus, Trash2, AlertCircle,
   Loader2, Hash, Banknote, Building2, CreditCard, ChevronDown,
+  ImagePlus, X,
 } from 'lucide-react';
 import {
   ProductFormData,
@@ -54,6 +55,10 @@ interface CreateInventoryViewProps {
   goToPreviousStep: () => void;
   handleSubmit: () => void;
   handleCancel: () => void;
+  // Images (optional)
+  selectedImages?: File[];
+  addImages?: (files: File[]) => void;
+  removeImage?: (index: number) => void;
 }
 
 // ── Payment method options ────────────────────────────────────────────────────
@@ -64,6 +69,129 @@ const PAYMENT_MODES = [
   { value: 'Cheque',        label: 'Cheque',        icon: CreditCard, color: '#7c3aed', bg: '#f5f3ff', border: '#8b5cf6', needsBank: true  },
   { value: 'Credit Card',   label: 'Credit Card',   icon: CreditCard, color: '#d97706', bg: '#fffbeb', border: '#f59e0b', needsBank: false },
 ];
+
+// ── ImageUploadSection ────────────────────────────────────────────────────────
+
+function ImageUploadSection({
+  images,
+  existingUrls,
+  onAdd,
+  onRemove,
+}: {
+  images: File[];
+  existingUrls: string[];
+  onAdd: (files: File[]) => void;
+  onRemove: (index: number) => void;
+}) {
+  const fileInputRef              = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging]   = useState(false);
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return;
+    const imgs = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (imgs.length) onAdd(imgs);
+  };
+
+  const totalCount = existingUrls.length + images.length;
+
+  return (
+    <div className="border border-gray-200 rounded-xl p-5 bg-white">
+      <div className="flex items-center gap-2 mb-4">
+        <ImagePlus size={16} className="text-gray-500" />
+        <span className="text-sm font-semibold text-gray-700">Product Images</span>
+        <span className="text-xs text-gray-400 font-normal ml-1">(Optional)</span>
+        {totalCount > 0 && (
+          <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-600">
+            {totalCount} {totalCount === 1 ? 'image' : 'images'}
+          </span>
+        )}
+      </div>
+
+      {/* Drop zone */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
+        onClick={() => fileInputRef.current?.click()}
+        style={{
+          border: `2px dashed ${dragging ? '#6366f1' : '#d1d5db'}`,
+          borderRadius: 10, padding: '20px', textAlign: 'center',
+          cursor: 'pointer', backgroundColor: dragging ? '#f0f4ff' : '#f9fafb',
+          transition: 'all 0.15s',
+        }}
+      >
+        <ImagePlus size={24} color={dragging ? '#6366f1' : '#94a3b8'} style={{ margin: '0 auto 8px' }} />
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: dragging ? '#6366f1' : '#6b7280' }}>
+          {dragging ? 'Drop images here' : 'Click or drag & drop images'}
+        </p>
+        <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>JPG, PNG, WEBP supported</p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={e => handleFiles(e.target.files)}
+        />
+      </div>
+
+      {/* Existing (already-uploaded) images — shown in edit mode */}
+      {existingUrls.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs text-gray-400 font-semibold mb-2 uppercase tracking-wide">Saved</p>
+          <div className="flex flex-wrap gap-2">
+            {existingUrls.map((url, i) => (
+              <div key={i} style={{ position: 'relative', width: 72, height: 72, borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                <img src={url} alt={`img-${i}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Newly-selected (pending upload) images */}
+      {images.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs text-gray-400 font-semibold mb-2 uppercase tracking-wide">New — will upload on save</p>
+          <div className="flex flex-wrap gap-2">
+            {images.map((file, i) => {
+              const url = URL.createObjectURL(file);
+              return (
+                <div key={i} style={{ position: 'relative', width: 72, height: 72, borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0', flexShrink: 0 }}>
+                  <img src={url} alt={file.name} onLoad={() => URL.revokeObjectURL(url)}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <button
+                    onClick={e => { e.stopPropagation(); onRemove(i); }}
+                    style={{
+                      position: 'absolute', top: 2, right: 2,
+                      width: 18, height: 18, borderRadius: '50%',
+                      backgroundColor: 'rgba(0,0,0,0.6)', border: 'none',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                    }}
+                  >
+                    <X size={11} color="#fff" strokeWidth={3} />
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                width: 72, height: 72, borderRadius: 8, border: '2px dashed #cbd5e1',
+                backgroundColor: '#f8fafc', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+                color: '#94a3b8', flexShrink: 0,
+              }}
+            >
+              <Plus size={16} />
+              <span style={{ fontSize: 9, fontWeight: 700 }}>More</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -87,6 +215,9 @@ export function CreateInventoryView({
   goToPreviousStep,
   handleSubmit,
   handleCancel,
+  selectedImages = [],
+  addImages,
+  removeImage,
 }: CreateInventoryViewProps) {
 
   // ── Banks — fetched once when payment step mounts ─────────────────────────
@@ -387,6 +518,14 @@ export function CreateInventoryView({
           {formData.serialNumbers.length} serial{formData.serialNumbers.length !== 1 ? 's' : ''} — stock count syncs automatically
         </p>
       </div>
+
+      {/* ── Product Images (optional) ── */}
+      <ImageUploadSection
+        images={selectedImages}
+        existingUrls={(formData as any).imageUrls || []}
+        onAdd={addImages ?? (() => {})}
+        onRemove={removeImage ?? (() => {})}
+      />
     </div>
   );
 

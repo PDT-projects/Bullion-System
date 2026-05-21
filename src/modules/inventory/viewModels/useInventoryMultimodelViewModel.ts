@@ -10,6 +10,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { InventoryEntryType, INVENTORY_LOCATIONS } from '../models/types';
 import { BrandModelFirebaseService } from '../models/InventoryFirebaseService';
+import { uploadInventoryImages } from '../models/InventoryFirebaseService';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 
@@ -45,6 +46,8 @@ export interface MultiModelEntry {
   description: string;
   serialNumbers: string[];      // filled one per unit
   serialCities: { [s: string]: string };
+  images: File[];               // optional product images (not yet uploaded)
+  imageUrls: string[];          // uploaded URLs (filled after save)
 }
 
 export interface BrandOption {
@@ -77,6 +80,8 @@ function emptyEntry(): MultiModelEntry {
     description: '',
     serialNumbers: [''],
     serialCities: {},
+    images: [],
+    imageUrls: [],
   };
 }
 
@@ -99,6 +104,8 @@ export interface UseInventoryMultiModelViewModelReturn {
   // serial helpers per entry
   setEntrySerial: (entryId: string, idx: number, value: string) => void;
   setEntrySerialCity: (entryId: string, idx: number, city: string) => void;
+  setEntryImages: (entryId: string, files: File[]) => void;
+  removeEntryImage: (entryId: string, index: number) => void;
   // totals
   grandTotalCost: number;
   grandTotalUnits: number;
@@ -218,6 +225,20 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
     }));
   }, []);
 
+  const setEntryImages = useCallback((entryId: string, files: File[]) => {
+    setEntries(prev => prev.map(e =>
+      e.id !== entryId ? e : { ...e, images: [...e.images, ...files] }
+    ));
+  }, []);
+
+  const removeEntryImage = useCallback((entryId: string, index: number) => {
+    setEntries(prev => prev.map(e => {
+      if (e.id !== entryId) return e;
+      const images = e.images.filter((_, i) => i !== index);
+      return { ...e, images };
+    }));
+  }, []);
+
   // ── Totals ────────────────────────────────────────────────────────────────
   const grandTotalCost = useMemo(
     () => entries.reduce((s, e) => s + e.costPrice * e.stockQty, 0),
@@ -279,6 +300,17 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
         // non-blocking — proceed even if save fails
       }
 
+      // Upload images for each entry (optional — entries with no images are skipped)
+      const imageUrlsMap: Record<string, string[]> = {};
+      for (const e of entries) {
+        if (e.images.length > 0) {
+          const productKey = `${selectedBrandName}-${e.modelName}-${Date.now()}`.replace(/\s+/g, '_');
+          imageUrlsMap[e.id] = await uploadInventoryImages(e.images, productKey);
+        } else {
+          imageUrlsMap[e.id] = [];
+        }
+      }
+
       const params = new URLSearchParams({
         type:             inventoryType,
         costing:          'without',
@@ -296,6 +328,7 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
           description:     e.description,
           serialNumbers:   e.serialNumbers.filter(s => s.trim() !== ''),
           serialCities:    e.serialCities,
+          imageUrls:       imageUrlsMap[e.id] ?? [],
         }))),
         grandTotalCost:   grandTotalCost.toString(),
         grandTotalUnits:  grandTotalUnits.toString(),
@@ -324,6 +357,7 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
     modelOptions, modelOptionsLoading,
     entries, addEntry, removeEntry, updateEntry,
     setEntrySerial, setEntrySerialCity,
+    setEntryImages, removeEntryImage,
     grandTotalCost, grandTotalUnits,
     validationErrors, isValid,
     handleNext, handleBack,

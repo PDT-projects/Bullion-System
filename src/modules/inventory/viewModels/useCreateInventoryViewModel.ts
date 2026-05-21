@@ -20,6 +20,7 @@ import {
   UpdateProductDTO,
 } from '../models/types';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
+import { uploadInventoryImages } from '../models/InventoryFirebaseService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure-JS fallback — used only when Firestore is unreachable.
@@ -47,6 +48,10 @@ export interface UseCreateInventoryViewModelReturn {
   serialCity: string;
   isFetchingProduct: boolean;
   isGeneratingTxnId: boolean;
+  // Images
+  selectedImages: File[];
+  addImages: (files: File[]) => void;
+  removeImage: (index: number) => void;
   setField: (field: string, value: any) => void;
   setCurrentStep: (step: InventoryEntryStep) => void;
   setSerialInput: (value: string) => void;
@@ -97,6 +102,7 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
   const [serialCity,        setSerialCity]         = useState('');
   const [validation,        setValidation]         = useState<ValidationResult>({ isValid: true, fieldErrors: {} });
   const [isSubmitting,      setIsSubmitting]       = useState(false);
+  const [selectedImages,    setSelectedImages]      = useState<File[]>([]);
 
   // ── Generate TXN ID on mount — CREATE mode only ───────────────────────────
   // InventoryFirebaseService.generateTransactionId() owns the db reference
@@ -156,6 +162,7 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           costingOption: product.costingOption,
           costing:       product.costing,
           transactionId: product.transactionId || '',   // preserve original TXN ID
+          imageUrls:     (product as any).imageUrls || [],
           paymentMethod: undefined,
           paidAmount:    undefined,
           currentStep:   'details' as const,
@@ -173,6 +180,15 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
       }
     })();
   }, [params?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Image management ─────────────────────────────────────────────────────
+  const addImages = useCallback((files: File[]) => {
+    setSelectedImages(prev => [...prev, ...files.filter(f => f.type.startsWith('image/'))]);
+  }, []);
+
+  const removeImage = useCallback((index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   // ── setField ──────────────────────────────────────────────────────────────
   const setField = useCallback((field: string, value: any) => {
@@ -292,6 +308,13 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
 
       if (isEditMode && editingId) {
         // ── UPDATE ─────────────────────────────────────────────────────────
+        // Upload any newly selected images and merge with existing ones
+        let newImageUrls: string[] = [];
+        if (selectedImages.length > 0) {
+          newImageUrls = await uploadInventoryImages(selectedImages, editingId);
+        }
+        const existingUrls: string[] = (formData as any).imageUrls || [];
+
         const updateDto: UpdateProductDTO = {
           brandName:     formData.brandName,
           modelName:     formData.modelName,
@@ -310,6 +333,7 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           costingOption: formData.costingOption,
           costing:       formData.costing,
           transactionId: formData.transactionId || undefined,
+          imageUrls:     [...existingUrls, ...newImageUrls],
         };
 
         await InventoryFirebaseService.updateProduct(editingId, updateDto);
@@ -317,6 +341,13 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
 
       } else {
         // ── CREATE ─────────────────────────────────────────────────────────
+        // Upload images first; use a temp key derived from brand+model+timestamp
+        let imageUrls: string[] = [];
+        if (selectedImages.length > 0) {
+          const productKey = `${formData.brandName}-${formData.modelName}-${Date.now()}`.replace(/\s+/g, '_');
+          imageUrls = await uploadInventoryImages(selectedImages, productKey);
+        }
+
         const createDto: CreateProductDTO = {
           brandName:     formData.brandName,
           modelName:     formData.modelName,
@@ -334,7 +365,8 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           isDamaged:     formData.isDamaged      ?? false,
           costingOption: formData.costingOption,
           costing:       formData.costing,
-          transactionId: formData.transactionId,   // ← TXN-DDMMYY-### saved on document
+          transactionId: formData.transactionId,
+          imageUrls,
         };
 
         const paymentInfo = formData.paymentMethod
@@ -375,6 +407,9 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     editingId,
     isFetchingProduct,
     isGeneratingTxnId,
+    selectedImages,
+    addImages,
+    removeImage,
     serialInput,
     serialCity,
     setField,

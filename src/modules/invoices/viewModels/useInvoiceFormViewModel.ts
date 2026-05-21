@@ -445,10 +445,15 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           const updated = updateProductWithSelection(p, value, allProducts);
           const branch = branchFromValue(invoiceCompany);
           const currency = getCurrencyFromBranch(branch);
-          return { ...updated, currency };
+          // Price from inventory is always PKR — store original PKR price as pricePKR hint
+          return { ...updated, currency, pricePKR: updated.price };
         }
         case 'quantity':  return updateProductQuantity(p, value);
-        case 'price':     return updateProductPrice(p, value);
+        // price is ALWAYS stored in PKR regardless of display currency
+        case 'price':     return { ...updateProductPrice(p, value), pricePKR: (p as any).pricePKR ?? value };
+        // currency: only tags the row — the View manages its own inputValue locally
+        // so no follow-up 'price' call is needed on currency switch.
+        case 'currency':  return { ...p, currency: value };
         default:          return { ...p, [field]: value };
       }
     }));

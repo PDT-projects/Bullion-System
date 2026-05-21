@@ -25,7 +25,53 @@ import {
   where,
   runTransaction,
 } from 'firebase/firestore';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from 'firebase/storage';
 import { db } from '../../../api/firebase/firebase';
+
+// ==================== IMAGE UPLOAD ====================
+
+const storage = getStorage();
+
+/**
+ * Upload one or more image Files to Firebase Storage under
+ * `inventory-images/<productId>/` and return their download URLs.
+ * Pass a temporary client-side key (e.g. Date.now()) when the product
+ * doesn't have a Firestore ID yet — callers can rename later if needed.
+ */
+export async function uploadInventoryImages(
+  images: File[],
+  productKey: string
+): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of images) {
+    const ext     = file.name.split('.').pop() ?? 'jpg';
+    const path    = `inventory-images/${productKey}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+    const fileRef = storageRef(storage, path);
+    await uploadBytes(fileRef, file);
+    const url = await getDownloadURL(fileRef);
+    urls.push(url);
+  }
+  return urls;
+}
+
+/**
+ * Delete a single image from Firebase Storage by its full download URL.
+ * Fails silently — a stale URL should never block a product save.
+ */
+export async function deleteInventoryImage(url: string): Promise<void> {
+  try {
+    const fileRef = storageRef(storage, url);
+    await deleteObject(fileRef);
+  } catch {
+    // non-blocking
+  }
+}
 import type {
   Product,
   ProductTransfer,
@@ -124,6 +170,7 @@ function transformDocToProduct(docSnap: any): Product {
     costingConsignmentValue:  d.costingConsignmentValue  ?? undefined,
     costingTotalValueOfBrand: d.costingTotalValueOfBrand ?? undefined,
     costingModelsJson:        d.costingModelsJson        || undefined,
+    imageUrls:     d.imageUrls     || [],
     createdAt: d.createdAt || '',
     updatedAt: d.updatedAt || '',
   };
@@ -378,6 +425,7 @@ export class InventoryFirebaseService {
         status:        dto.status,
         isDamaged:     dto.isDamaged,
         costingOption: dto.costingOption,
+        imageUrls:     dto.imageUrls     || [],
         billId:              dto.billId,
         receivableStatus:    dto.receivableStatus,
         expectedReceiveDate: dto.expectedReceiveDate,
@@ -457,6 +505,7 @@ export class InventoryFirebaseService {
       if (dto.status        !== undefined) updateData.status        = dto.status;
       if (dto.isDamaged     !== undefined) updateData.isDamaged     = dto.isDamaged;
       if (dto.costingOption !== undefined) updateData.costingOption = dto.costingOption;
+      if (dto.imageUrls     !== undefined) updateData.imageUrls     = dto.imageUrls;
 
       // Merge costing flat fields if present
       Object.assign(updateData, costingFields);

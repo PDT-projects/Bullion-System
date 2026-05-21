@@ -2,10 +2,10 @@
 // InventoryMultiModelView
 // "Without Costing" path: pick a brand, add N models with all details at once.
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ArrowLeft, ArrowRight, Package, Plus, Trash2, ChevronDown,
-  Hash, Loader2, Check, AlertCircle,
+  Hash, Loader2, Check, AlertCircle, ImagePlus, X,
 } from 'lucide-react';
 import { useInventoryCurrency, CurrencyCode } from '../viewModels/useInventoryCurrency';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
@@ -120,10 +120,132 @@ function SerialPanel({
   );
 }
 
+// ── Image Upload Panel ────────────────────────────────────────────────────────
+function ImageUploadPanel({
+  entryId,
+  images,
+  setEntryImages,
+  removeEntryImage,
+}: {
+  entryId: string;
+  images: File[];
+  setEntryImages: (entryId: string, files: File[]) => void;
+  removeEntryImage: (entryId: string, index: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const fileInputRef    = useRef<HTMLInputElement>(null);
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return;
+    const accepted = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (accepted.length) setEntryImages(entryId, accepted);
+  };
+
+  const [dragging, setDragging] = useState(false);
+
+  return (
+    <div style={{ marginTop: 10, border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen(p => !p)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '9px 14px', background: '#f8fafc', border: 'none', cursor: 'pointer',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ImagePlus size={14} color="#334155" />
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+            Product Images
+            {images.length > 0 && (
+              <span style={{ marginLeft: 6, padding: '2px 7px', borderRadius: 99, fontSize: 10, fontWeight: 700, backgroundColor: '#e0f2fe', color: '#0369a1' }}>
+                {images.length} {images.length === 1 ? 'file' : 'files'} selected
+              </span>
+            )}
+            <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 400, color: '#9ca3af' }}>(Optional)</span>
+          </span>
+        </div>
+        <ChevronDown size={14} color="#9ca3af" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </button>
+
+      {open && (
+        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Drop zone */}
+          <div
+            onDragOver={e => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              border: `2px dashed ${dragging ? '#6366f1' : '#cbd5e1'}`,
+              borderRadius: 8, padding: '20px 16px', textAlign: 'center',
+              cursor: 'pointer', backgroundColor: dragging ? '#f0f4ff' : '#f8fafc',
+              transition: 'all 0.15s',
+            }}
+          >
+            <ImagePlus size={22} color={dragging ? '#6366f1' : '#94a3b8'} style={{ margin: '0 auto 6px' }} />
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: dragging ? '#6366f1' : '#64748b' }}>
+              {dragging ? 'Drop to add images' : 'Click or drag images here'}
+            </p>
+            <p style={{ margin: '3px 0 0', fontSize: 11, color: '#9ca3af' }}>JPG, PNG, WEBP — any size</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => handleFiles(e.target.files)}
+            />
+          </div>
+
+          {/* Previews */}
+          {images.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {images.map((file, i) => {
+                const url = URL.createObjectURL(file);
+                return (
+                  <div key={i} style={{ position: 'relative', width: 72, height: 72, borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0', flexShrink: 0 }}>
+                    <img src={url} alt={file.name} onLoad={() => URL.revokeObjectURL(url)}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      onClick={e => { e.stopPropagation(); removeEntryImage(entryId, i); }}
+                      style={{
+                        position: 'absolute', top: 2, right: 2,
+                        width: 18, height: 18, borderRadius: '50%',
+                        backgroundColor: 'rgba(0,0,0,0.6)', border: 'none',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: 0,
+                      }}
+                    >
+                      <X size={11} color="#fff" strokeWidth={3} />
+                    </button>
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  width: 72, height: 72, borderRadius: 8, border: '2px dashed #cbd5e1',
+                  backgroundColor: '#f8fafc', cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+                  color: '#94a3b8',
+                }}
+              >
+                <Plus size={16} />
+                <span style={{ fontSize: 9, fontWeight: 700 }}>Add more</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Model Card ─────────────────────────────────────────────────────────────────
 function ModelCard({
   entry, index, modelOptions, modelOptionsLoading, validationErrors,
-  updateEntry, removeEntry, setEntrySerial, setEntrySerialCity, canRemove,
+  updateEntry, removeEntry, setEntrySerial, setEntrySerialCity,
+  setEntryImages, removeEntryImage, canRemove,
   rates, defaultInputCurrency,
 }: {
   entry: MultiModelEntry;
@@ -135,6 +257,8 @@ function ModelCard({
   removeEntry: (id: string) => void;
   setEntrySerial: (entryId: string, idx: number, value: string) => void;
   setEntrySerialCity: (entryId: string, idx: number, city: string) => void;
+  setEntryImages: (entryId: string, files: File[]) => void;
+  removeEntryImage: (entryId: string, index: number) => void;
   canRemove: boolean;
   rates: Record<CurrencyCode, number>;
   defaultInputCurrency: CurrencyCode;
@@ -330,6 +454,16 @@ function ModelCard({
             setEntrySerialCity={setEntrySerialCity}
           />
         </div>
+
+        {/* Product Images (optional) */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <ImageUploadPanel
+            entryId={e.id}
+            images={e.images}
+            setEntryImages={setEntryImages}
+            removeEntryImage={removeEntryImage}
+          />
+        </div>
       </div>
     </div>
   );
@@ -343,6 +477,7 @@ export const InventoryMultiModelView: React.FC<Props> = ({
   modelOptions, modelOptionsLoading,
   entries, addEntry, removeEntry, updateEntry,
   setEntrySerial, setEntrySerialCity,
+  setEntryImages, removeEntryImage,
   grandTotalCost, grandTotalUnits,
   validationErrors, isValid,
   handleNext, handleBack,
@@ -482,6 +617,8 @@ export const InventoryMultiModelView: React.FC<Props> = ({
               removeEntry={removeEntry}
               setEntrySerial={setEntrySerial}
               setEntrySerialCity={setEntrySerialCity}
+              setEntryImages={setEntryImages}
+              removeEntryImage={removeEntryImage}
               canRemove={entries.length > 1}
               rates={rates}
               defaultInputCurrency={primaryCurrency}
