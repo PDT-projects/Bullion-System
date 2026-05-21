@@ -245,6 +245,61 @@ export class InventoryFirebaseService {
     }
   }
 
+  private static arraysEqual(a: string[], b: string[]) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  static async findDuplicateInventory(criteria: {
+    brandName: string;
+    modelName: string;
+    costPrice: number;
+    sellPrice: number;
+    location: string;
+    serialNumbers: string[];
+  }, ignoreId?: string) {
+    const products = await InventoryFirebaseService.fetchAllProducts();
+    const incomingSerials = criteria.serialNumbers
+      .map(s => s.trim())
+      .filter(s => s !== '');
+
+    if (incomingSerials.length > 0) {
+      const duplicates = new Set<string>();
+      for (const product of products) {
+        if (product.id === ignoreId) continue;
+        (product.serialNumbers || []).forEach(serial => {
+          if (incomingSerials.includes(serial)) duplicates.add(serial);
+        });
+      }
+      if (duplicates.size > 0) {
+        return { type: 'serial', serials: Array.from(duplicates) } as const;
+      }
+    }
+
+    const normalizedSerials = [...incomingSerials].sort();
+    const exactMatch = products.find(product => {
+      if (product.id === ignoreId) return false;
+      if (
+        product.brandName !== criteria.brandName ||
+        product.modelName !== criteria.modelName ||
+        product.costPrice !== criteria.costPrice ||
+        product.sellPrice !== criteria.sellPrice ||
+        product.location !== criteria.location
+      ) return false;
+      const existingSerials = (product.serialNumbers || []).map(s => s.trim()).filter(s => s !== '').sort();
+      return InventoryFirebaseService.arraysEqual(existingSerials, normalizedSerials);
+    });
+
+    if (exactMatch) {
+      return { type: 'product', existingProduct: exactMatch } as const;
+    }
+
+    return null;
+  }
+
   static async createProduct(
     dto: CreateProductDTO,
     paymentInfo?: {
@@ -287,6 +342,22 @@ export class InventoryFirebaseService {
       const remainingAmount = paymentInfo
         ? (paymentInfo.totalAmount || 0) - (paymentInfo.paidAmount || 0)
         : undefined;
+
+      const duplicateCheck = await InventoryFirebaseService.findDuplicateInventory({
+        brandName: dto.brandName,
+        modelName: dto.modelName,
+        costPrice: dto.costPrice ?? 0,
+        sellPrice: dto.sellPrice,
+        location: dto.location || '',
+        serialNumbers: dto.serialNumbers || [],
+      });
+
+      if (duplicateCheck) {
+        if (duplicateCheck.type === 'serial' && duplicateCheck.serials?.length > 0) {
+          throw new Error(`Duplicate serial number${duplicateCheck.serials.length > 1 ? 's' : ''}: ${duplicateCheck.serials.join(', ')}`);
+        }
+        throw new Error('Duplicate inventory already exists with the same product, price, location and serial numbers.');
+      }
 
       // FIX 3 — costPrice and description are explicitly included so they are
       // NEVER lost to stripUndefined or type mismatch.

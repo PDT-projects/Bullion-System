@@ -169,11 +169,38 @@ export function useInventoryAddExistingViewModel(): UseInventoryAddExistingViewM
       return;
     }
 
-    // Check for duplicate serials (against existing ones)
+    // Check for duplicate serials within new entries
+    const serialCount: Record<string, number> = {};
+    const duplicateLocal: string[] = [];
+    validSerials.forEach(serial => {
+      const key = serial.trim();
+      serialCount[key] = (serialCount[key] || 0) + 1;
+      if (serialCount[key] > 1) duplicateLocal.push(key);
+    });
+    if (duplicateLocal.length > 0) {
+      toast.error(`Duplicate serial${duplicateLocal.length > 1 ? 's' : ''} in the new batch: ${[...new Set(duplicateLocal)].join(', ')}`);
+      return;
+    }
+
+    // Check for duplicate serials against the selected product
     const existing = selectedProduct.serialNumbers || [];
     const dupes = validSerials.filter(s => existing.includes(s));
     if (dupes.length > 0) {
       toast.error(`Duplicate serial${dupes.length > 1 ? 's' : ''}: ${dupes.join(', ')}`);
+      return;
+    }
+
+    // Check for serials already in any other inventory item
+    const duplicateCheck = await InventoryFirebaseService.findDuplicateInventory({
+      brandName: selectedProduct.brandName,
+      modelName: selectedProduct.modelName,
+      costPrice: entry.newCostPrice,
+      sellPrice: entry.newSellPrice,
+      location: selectedProduct.location,
+      serialNumbers: validSerials,
+    }, selectedProduct.id);
+    if (duplicateCheck?.type === 'serial' && duplicateCheck.serials?.length) {
+      toast.error(`Serial number${duplicateCheck.serials.length > 1 ? 's' : ''} already exists in another inventory item: ${duplicateCheck.serials.join(', ')}`);
       return;
     }
 

@@ -272,6 +272,24 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
         paidAmount > 0            ? 'partial' :
                                     'unpaid';
 
+      const duplicateCheck = await InventoryFirebaseService.findDuplicateInventory({
+        brandName: formData.brandName,
+        modelName: formData.modelName,
+        costPrice,
+        sellPrice: formData.sellPrice,
+        location: formData.location,
+        serialNumbers: formData.serialNumbers || [],
+      }, isEditMode ? editingId ?? undefined : undefined);
+
+      if (duplicateCheck) {
+        if (duplicateCheck.type === 'serial' && duplicateCheck.serials?.length) {
+          toast.error(`This inventory contains serial number${duplicateCheck.serials.length > 1 ? 's' : ''} already in stock: ${duplicateCheck.serials.join(', ')}`);
+        } else {
+          toast.error('This inventory already exists with the same product, price, location and serial numbers.');
+        }
+        return;
+      }
+
       if (isEditMode && editingId) {
         // ── UPDATE ─────────────────────────────────────────────────────────
         const updateDto: UpdateProductDTO = {

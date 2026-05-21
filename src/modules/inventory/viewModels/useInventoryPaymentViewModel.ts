@@ -96,6 +96,10 @@ export interface UseInventoryPaymentViewModelReturn {
   setTransactionId: (id: string) => void;
   setIsEditingTransactionId: (v: boolean) => void;
   setPaidAmount: (value: number) => void;
+  duplicateDialogOpen: boolean;
+  setDuplicateDialogOpen: (open: boolean) => void;
+  duplicateDialogMessage: string;
+  setDuplicateDialogMessage: (message: string) => void;
   handleSubmit: () => void;
   handleBack: () => void;
   formatCurrency: (amount: number) => string;
@@ -277,6 +281,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const [paymentStatus, setPaymentStatusState] = useState<PaymentStatusType>('paid');
   const [paidAmount, setPaidAmountState]       = useState(0);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateDialogMessage, setDuplicateDialogMessage] = useState('');
 
   // ── Total amount: multiModel path uses grandTotalCost; with costing uses costing.totalValueOfBrand ─
   const totalAmount = useMemo(() => {
@@ -507,7 +513,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         await InventoryFirebaseService.createProduct(dto, paymentInfo);
       }
 
-      // ── Record payment transactions ────────────────────────────────────────
+      // ── Record payment transactions ──────────────────────────────────────
       if (entries.length > 0) {
         await recordPaymentActivity(effectivePaid, entries);
       }
@@ -561,7 +567,18 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
 
     } catch (error) {
       console.error('Error saving product:', error);
-      toast.error('Failed to save product. Please try again.');
+      const message = error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : JSON.stringify(error, Object.getOwnPropertyNames(error) || undefined);
+
+      if (message.toLowerCase().includes('duplicate')) {
+        setDuplicateDialogMessage(message);
+        setDuplicateDialogOpen(true);
+      } else {
+        toast.error('Failed to save product. Please try again.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -667,6 +684,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     inventoryCompany, setInventoryCompany,
     inventoryBranches, handleAddInventoryBranch,
     setPaymentStatus, setTransactionId, setPaidAmount,
+    duplicateDialogOpen, setDuplicateDialogOpen, duplicateDialogMessage, setDuplicateDialogMessage,
     handleSubmit, handleBack, formatCurrency, productSummary,
     multiModelEntries, isMultiModel,
   };

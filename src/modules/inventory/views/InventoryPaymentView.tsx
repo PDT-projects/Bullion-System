@@ -17,6 +17,15 @@ import {
   MultiModelPaymentEntry,
 } from '../viewModels/useInventoryPaymentViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
+import {
+  AlertDialog,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from '../../../components/ui/alert-dialog';
 
 interface InventoryPaymentViewProps extends UseInventoryPaymentViewModelReturn {}
 
@@ -287,6 +296,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   costingOption, inventoryType, totalAmount,
   paymentStatus, transactionId, isGeneratingId, isEditingTransactionId,
   paidAmount, remainingAmount, validationErrors, isValid, isSaving,
+  duplicateDialogOpen, setDuplicateDialogOpen, duplicateDialogMessage, setDuplicateDialogMessage,
   paymentMode, setPaymentMode, selectedBankId, setSelectedBankId, banks, isBanksLoading,
   installments, addInstallment, removeInstallment, updateInstallment, instalmentTotal,
   setPaymentStatus, setTransactionId, setIsEditingTransactionId,
@@ -305,6 +315,11 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
         { number: 3, label: 'Models' }, { number: 4, label: 'Payment' },
       ];
   const currentStep = steps.length;
+
+  const handleDuplicateDialogOpenChange = (open: boolean) => {
+    setDuplicateDialogOpen(open);
+    if (!open) setDuplicateDialogMessage('');
+  };
 
   const showPaymentDetails = paymentStatus !== 'unpaid';
   const showInstallments   = paymentStatus === 'partial';
@@ -646,6 +661,22 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
               }
             </button>
           </div>
+
+          <AlertDialog open={duplicateDialogOpen} onOpenChange={handleDuplicateDialogOpenChange}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Duplicate inventory detected</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {duplicateDialogMessage || 'This inventory item already exists and cannot be saved again.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => handleDuplicateDialogOpenChange(false)}>
+                  Close
+                </AlertDialogCancel>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
         </div>
       </div>
