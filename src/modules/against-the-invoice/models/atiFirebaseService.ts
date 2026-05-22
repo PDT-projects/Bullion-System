@@ -280,21 +280,67 @@ export class ATIFirebaseService {
         txn.set(txnCounterRef, { date: counterKey, count: txnCounterNext }, { merge: true });
 
         // ── Write transaction record ─────────────────────────────────────────
+        //
+        // IMPORTANT — all four payment-status fields must be set explicitly so that
+        // isPending() / getTransactionTotals() in transactionsService immediately
+        // return "not pending".  Leaving them undefined causes the service to
+        // compute totalPaid = 0 and remainingAmount = amount, which makes every
+        // ATI collection appear as an unpaid receivable in Pending Payments.
+        //
+        // mode must match the Transaction type ('Cash' | 'Bank' | 'Cheque') so the
+        // Banking Activity Report and Cash-in-Hand ledger pick it up correctly.
+        const txnMode: 'Cash' | 'Bank' | 'Cheque' =
+          dto.paymentMode === 'Bank'   ? 'Bank'   :
+          dto.paymentMode === 'Cheque' ? 'Cheque' : 'Cash';
+
+        // Balance-sheet bucket: collecting from a customer always increases
+        // Cash or Bank assets, depending on how they paid.
+        const bsSubCategory =
+          txnMode === 'Bank' || txnMode === 'Cheque'
+            ? 'Bank Balances'
+            : 'Cash & Cash Equivalents';
+
         const txnPayload = clean({
-          transactionId:  txnId,            // required by Firestore create rule
-          type:           'Cash Inflow',
-          mainCategory:   'Cash Inflow',
-          subCategory:    'Collection Against Invoice',
-          amount:         dto.amount,
-          date:           dto.date,
-          company:        dto.company,
-          invoiceId:      dto.invoiceId,
-          invoiceNumber:  dto.invoiceNumber,
-          customerName:   dto.customerName,
-          paymentMode:    dto.paymentMode,
-          description:    dto.description || `ATI collection against invoice ${dto.invoiceNumber}`,
-          linkedATI:      newAtiRef.id,
-          createdAt:      nowISO,
+          transactionId:   txnId,
+          type:            'Cash Inflow',
+          mainCategory:    'Cash Inflow',
+          subCategory:     'Collection Against Invoice',
+          detailCategory:  `Invoice: ${dto.invoiceNumber} — ${dto.customerName}`,
+          amount:          dto.amount,
+          // ── Payment status fields (prevent Pending Payments false-positive) ──
+          amountPaid:      dto.amount,
+          remainingAmount: 0,
+          totalPaid:       dto.amount,
+          paymentStatus:   'Full',
+          isFullyCleared:  txnMode !== 'Cheque',   // cheques need manual bank clearance
+          // ── Mode / bank linkage ──────────────────────────────────────────────
+          mode:            txnMode,
+          bankId:          txnMode !== 'Cash' ? dto.bankId   : undefined,
+          bankName:        txnMode !== 'Cash' ? dto.bankName : undefined,
+          chequeNumber:    txnMode === 'Cheque' ? dto.chequeNumber : undefined,
+          chequeBank:      txnMode === 'Cheque' ? dto.chequeBank   : undefined,
+          chequeDate:      txnMode === 'Cheque' ? dto.chequeDate   : undefined,
+          // ── Who paid ────────────────────────────────────────────────────────
+          paidBy:          dto.customerName,
+          // ── Other fields ────────────────────────────────────────────────────
+          date:            dto.date,
+          time:            now.toTimeString().split(' ')[0],
+          company:         dto.company,
+          invoiceId:       dto.invoiceId,
+          invoiceNumber:   dto.invoiceNumber,
+          customerName:    dto.customerName,
+          note:            dto.description || `ATI collection against invoice ${dto.invoiceNumber}`,
+          linkedATI:       newAtiRef.id,
+          linkedType:      'ati',
+          linkedId:        dto.invoiceNumber,
+          approvalStatus:  'not_required',
+          // ── P&L classification (Revenue) ─────────────────────────────────────
+          plMainCategory:  'Revenue',
+          plSubCategory:   'Collection Against Invoice',
+          // ── Balance-sheet classification ─────────────────────────────────────
+          bsMainCategory:  'Assets',
+          bsSubCategory,
+          createdAt:       nowISO,
         });
         txn.set(newTxnRef, txnPayload);
 
@@ -600,4 +646,47 @@ export class ATIFirebaseService {
       return [];
     }
   }
+}
+// ── One-time migration: fix stale ATI transactions ──────────────────────────
+//
+// Old ATI entries wrote to `transactions` without payment-status fields,
+// causing them to appear as pending receivables in Pending Payments.
+// Call this once from an admin/settings page to patch existing Firestore docs.
+//
+// Safe to call repeatedly — only updates docs where paymentStatus is missing,
+// identified by subCategory === 'Collection Against Invoice'.
+export async function migrateStaleATITransactions(): Promise<{ fixed: number; skipped: number }> {
+  const q    = query(collection(db, 'transactions'), where('subCategory', '==', 'Collection Against Invoice'));
+  const snap = await getDocs(q);
+  let fixed = 0, skipped = 0;
+
+  await Promise.all(snap.docs.map(async (d) => {
+    const data = d.data() as any;
+    if (data.paymentStatus === 'Full' && data.remainingAmount === 0 && data.isFullyCleared != null) {
+      skipped++;
+      return;
+    }
+    const amount = Number(data.amount) || 0;
+    const txnMode: 'Cash' | 'Bank' | 'Cheque' =
+      data.mode === 'Bank' ? 'Bank' : data.mode === 'Cheque' ? 'Cheque' : 'Cash';
+
+    await updateDoc(doc(db, 'transactions', d.id), {
+      amountPaid:      amount,
+      remainingAmount: 0,
+      totalPaid:       amount,
+      paymentStatus:   'Full',
+      isFullyCleared:  txnMode !== 'Cheque',
+      approvalStatus:  data.approvalStatus  || 'not_required',
+      plMainCategory:  data.plMainCategory  || 'Revenue',
+      plSubCategory:   data.plSubCategory   || 'Collection Against Invoice',
+      bsMainCategory:  data.bsMainCategory  || 'Assets',
+      bsSubCategory:   data.bsSubCategory   || (txnMode !== 'Cash' ? 'Bank Balances' : 'Cash & Cash Equivalents'),
+      updatedAt:       new Date().toISOString(),
+    });
+    fixed++;
+    console.log(`[ATI migration] Patched stale transaction: ${d.id}`);
+  }));
+
+  console.log(`[ATI migration] Done — fixed: ${fixed}, skipped: ${skipped}`);
+  return { fixed, skipped };
 }

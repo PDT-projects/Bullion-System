@@ -136,7 +136,7 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
 
   // ── Transaction detail fields ──────────────────────────────────────────────
   const [subCategory,       setSubCategory]       = useState(OUTFLOW_SUB_CATEGORIES[0]);
-  const [paidBy,            setPaidBy]            = useState('');
+
   const [paidTo,            setPaidTo]            = useState('');
   const [accountablePerson, setAccountablePerson] = useState('');
   const [transactionBy,     setTransactionBy]     = useState('');
@@ -281,7 +281,6 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
       // These are stored on the ATI entry and forwarded to atiFirebaseService
       // which writes them onto the transactions collection document.
       ...(subCategory       && { subCategory }),
-      ...(paidBy            && { paidBy }),
       ...(paidTo            && { paidTo }),
       ...(accountablePerson && { accountablePerson }),
       ...(transactionBy     && { transactionBy }),
@@ -609,32 +608,18 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
                 </div>
               </div>
 
-              {/* Paid By / Paid To */}
-              <div style={S.row2}>
-                <div>
-                  <label style={S.label}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <User size={10} /> Paid By
-                    </span>
-                  </label>
-                  <input
-                    value={paidBy} onChange={e => setPaidBy(e.target.value)}
-                    placeholder="Your company / payer"
-                    style={S.input}
-                  />
-                </div>
-                <div>
-                  <label style={S.label}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <User size={10} /> Paid To
-                    </span>
-                  </label>
-                  <input
-                    value={paidTo} onChange={e => setPaidTo(e.target.value)}
-                    placeholder="Supplier / recipient"
-                    style={S.input}
-                  />
-                </div>
+              {/* Paid To */}
+              <div>
+                <label style={S.label}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <User size={10} /> Paid To
+                  </span>
+                </label>
+                <input
+                  value={paidTo} onChange={e => setPaidTo(e.target.value)}
+                  placeholder="Supplier / recipient"
+                  style={S.input}
+                />
               </div>
 
               {/* Accountable Person / Transaction By */}

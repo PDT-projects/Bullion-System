@@ -124,16 +124,29 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
   // - Include payment-pending, pending_approval, and rejected
   // - EXCLUDE any transaction that is now fully settled (paid + cleared)
   //   so it drops off this screen automatically and lives only in Transaction List
+  // - EXCLUDE ATI "Collection Against Invoice" transactions — these are
+  //   already fully paid at creation time (paymentStatus=Full, remainingAmount=0)
+  //   and belong to the Against Invoice module, not Pending Payments.
   const transactions = useMemo(() => {
     return allTransactions.filter(t => {
+      // Never show ATI collection records here — they are always fully settled
+      if (t.subCategory === 'Collection Against Invoice') return false;
+
       // Always show approval-queue and rejected tabs regardless of settlement
       if (t.approvalStatus === 'pending_approval' || t.approvalStatus === 'rejected') {
         return true;
       }
-      // For payment-pending transactions: only show if NOT yet fully settled
-      if (isPending(t) && !isSettled(t)) {
-        return true;
-      }
+
+      // Primary check: does this transaction still have an outstanding balance?
+      // We use remainingAmount directly rather than isPending() because isPending()
+      // short-circuits on isFullyCleared — which can be incorrectly true if a partial
+      // Cash payment was saved before the isFullyCleared logic was fixed.
+      const { remainingAmount } = getTransactionTotals(t);
+      if (remainingAmount > 0) return true;
+
+      // Also keep uncleared cheques (remainingAmount = 0 but bank hasn't cleared it)
+      if (t.mode === 'Cheque' && !t.isFullyCleared) return true;
+
       return false;
     });
   }, [allTransactions]);
@@ -141,9 +154,13 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       if (filterStatus === 'All') {
-        // 'All' shows only payment-pending (approved/not_required with remaining balance)
-        // and NOT the approval/rejected queue — those have their own dedicated tabs
-        return isPending(t) && !isSettled(t);
+        // 'All' shows every transaction that still has an outstanding balance,
+        // including partially-paid outflows where isFullyCleared may have been
+        // incorrectly set to true by an earlier bug.  Using remainingAmount > 0
+        // as the source of truth is safer than isPending() alone.
+        if (t.approvalStatus === 'pending_approval' || t.approvalStatus === 'rejected') return false;
+        const { remainingAmount } = getTransactionTotals(t);
+        return remainingAmount > 0;
       }
 
       if (filterStatus === 'PendingApproval') {
@@ -171,7 +188,16 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
   }, [transactions, filterStatus]);
 
   const summaryStats = useMemo(() => {
-    const paymentPending = allTransactions.filter(t => isPending(t) && !isSettled(t));
+    // Use the same remainingAmount-based logic as the transactions useMemo
+    // so stats stay consistent even if isFullyCleared was incorrectly set.
+    const paymentPending = allTransactions.filter(t => {
+      if (t.subCategory === 'Collection Against Invoice') return false;
+      if (t.approvalStatus === 'pending_approval' || t.approvalStatus === 'rejected') return false;
+      const { remainingAmount } = getTransactionTotals(t);
+      if (remainingAmount > 0) return true;
+      if (t.mode === 'Cheque' && !t.isFullyCleared) return true;
+      return false;
+    });
     const receivable     = paymentPending.filter(t => t.mainCategory === 'Cash Inflow');
     const payable        = paymentPending.filter(t => t.mainCategory !== 'Cash Inflow');
 
@@ -185,7 +211,7 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
       totalPending:         payable.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
       totalReceivable:      receivable.reduce((s, t) => s + getTransactionTotals(t).remainingAmount, 0),
       unclearedCount,
-      totalTransactions:    filteredTransactions.length,
+      totalTransactions:    paymentPending.length,   // always "All Pending" count, not active tab
       pendingApprovalCount: allTransactions.filter(t => t.approvalStatus === 'pending_approval').length,
       rejectedCount:        allTransactions.filter(t => t.approvalStatus === 'rejected').length,
     };
