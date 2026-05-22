@@ -8,11 +8,137 @@ import {
 } from 'lucide-react';
 import { SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory } from '../models/types';
 import { UseTransactionFormViewModelReturn } from '../viewModels/useTransactionFormViewModel';
+import { SUPPORTED_CURRENCIES, SupportedCurrency } from '../viewModels/useTransactionFormViewModel';
+import { convertCurrency } from '../../invoices/models/invoiceService';
 
 interface Props extends UseTransactionFormViewModelReturn {}
 
 const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm';
 const lbl = 'block text-sm font-medium text-gray-700 mb-1';
+
+// ── CurrencyAmountInput ───────────────────────────────────────────────────────
+// Lets the user type an amount in any supported currency.
+// The PKR equivalent is computed on every keystroke and pushed to the parent.
+// On currency switch the display value is immediately re-expressed in the new unit.
+//
+// State contract:
+//   displayValue       — what the <input> shows; always in `inputCurrency` units
+//   item.amount        — PKR authoritative value stored in ViewModel
+//   item.inputCurrency — which currency the user typed in (stored as extra field)
+function CurrencyAmountInput({
+  value,          // PKR value from ViewModel
+  inputCurrency,  // currently selected input currency
+  currencyRates,
+  placeholder,
+  hasError,
+  label,
+  hint,
+  onAmountChange,     // (pkrValue, originalValue, currency) => void
+  onCurrencyChange,   // (newCurrency) => void
+  readOnly,
+}: {
+  value: number;
+  inputCurrency: SupportedCurrency;
+  currencyRates: Record<string, number>;
+  placeholder?: string;
+  hasError?: boolean;
+  label: string;
+  hint?: string;
+  onAmountChange: (pkrValue: number, originalValue: number, currency: SupportedCurrency) => void;
+  onCurrencyChange: (c: SupportedCurrency) => void;
+  readOnly?: boolean;
+}) {
+  // Convert PKR → display currency for initial render
+  const toDisplay = (pkr: number, cur: SupportedCurrency): number => {
+    if (pkr === 0) return 0;
+    if (cur === 'PKR') return pkr;
+    return +convertCurrency(pkr, 'PKR', cur as any, currencyRates as any).toFixed(2);
+  };
+
+  const [displayValue, setDisplayValue] = React.useState<number>(
+    () => toDisplay(value, inputCurrency)
+  );
+
+  // Sync when PKR value changes externally OR currency switches
+  const prevRef = React.useRef<{ pkr: number; cur: SupportedCurrency }>({ pkr: value, cur: inputCurrency });
+  React.useEffect(() => {
+    const prev = prevRef.current;
+    const currencyChanged = prev.cur !== inputCurrency;
+    const valueChanged    = prev.pkr !== value;
+    if (currencyChanged || (valueChanged && !currencyChanged)) {
+      setDisplayValue(toDisplay(value, inputCurrency));
+    }
+    prevRef.current = { pkr: value, cur: inputCurrency };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, inputCurrency]);
+
+  const pkrPer1Unit = inputCurrency === 'PKR'
+    ? 1
+    : +convertCurrency(1, inputCurrency as any, 'PKR', currencyRates as any).toFixed(2);
+
+  const handleAmountChange = (raw: number) => {
+    setDisplayValue(raw);
+    const pkr = inputCurrency === 'PKR'
+      ? raw
+      : +convertCurrency(raw, inputCurrency as any, 'PKR', currencyRates as any).toFixed(2);
+    onAmountChange(pkr, raw, inputCurrency);
+  };
+
+  const handleCurrencyChange = (newCur: SupportedCurrency) => {
+    // Re-express current PKR value in new currency immediately
+    setDisplayValue(toDisplay(value, newCur));
+    onCurrencyChange(newCur);
+  };
+
+  return (
+    <div>
+      <label className={lbl}>
+        {label}
+        {inputCurrency !== 'PKR' && (
+          <span className="ml-1 text-xs font-normal text-blue-500">· {inputCurrency}</span>
+        )}
+      </label>
+      <div className="flex gap-1.5">
+        <input
+          type="number"
+          min="0"
+          step="any"
+          value={displayValue || ''}
+          readOnly={readOnly}
+          onChange={e => !readOnly && handleAmountChange(Number(e.target.value))}
+          placeholder={placeholder || '0'}
+          className={`${inp} flex-1 ${hasError ? 'border-red-400 ring-1 ring-red-300' : ''} ${readOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+        />
+        {!readOnly && (
+          <select
+            value={inputCurrency}
+            onChange={e => handleCurrencyChange(e.target.value as SupportedCurrency)}
+            className="px-1.5 py-1 border border-gray-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 shrink-0"
+            title="Select input currency — amount is always stored in PKR"
+          >
+            {SUPPORTED_CURRENCIES.map(c => (
+              <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
+            ))}
+          </select>
+        )}
+      </div>
+      {inputCurrency !== 'PKR' && value > 0 && (
+        <div className="mt-1 space-y-0.5">
+          <p className="text-xs text-gray-500">
+            ≈ <span className="font-semibold text-gray-700">
+              PKR {value.toLocaleString('en-PK', { maximumFractionDigits: 0 })}
+            </span>
+            <span className="ml-1.5 text-gray-400">
+              · 1 {inputCurrency} = PKR {pkrPer1Unit.toLocaleString('en-PK', { maximumFractionDigits: 2 })}
+            </span>
+          </p>
+        </div>
+      )}
+      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function TransactionFormView({
   office, date, manualDate, transactionType, paymentMode, selectedBank,
@@ -32,6 +158,7 @@ export function TransactionFormView({
   dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
   bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
   companies, onAddCompany,
+  currencyRates,
 }: Props) {
   const [saveAttempted,    setSaveAttempted]    = useState(false);
   const [addingSubCatFor,  setAddingSubCatFor]  = useState<string | null>(null);
@@ -490,21 +617,31 @@ export function TransactionFormView({
               <h4 className="font-medium text-gray-800 text-sm mb-3">Amount Details</h4>
               {isInflow ? (
                 <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className={lbl}>Total Amount *</label>
-                    <input type="number" min="0" value={item.amount || ''}
-                      onChange={e => updateItem(item.id, 'amount', Number(e.target.value))}
-                      placeholder="0"
-                      className={`${inp} ${saveAttempted && (!item.amount || item.amount <= 0) ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
-                  </div>
-                  <div>
-                    <label className={lbl}>Amount Received <span className="text-gray-400 font-normal">(blank = full)</span></label>
-                    <input type="number" min="0" value={item.amountPaid || ''}
-                      onChange={e => updateItem(item.id, 'amountPaid', Number(e.target.value))}
-                      placeholder="Leave blank if fully received"
-                      className={inp} />
-                    <p className="text-xs text-gray-400 mt-1">e.g. installment, partial receipt</p>
-                  </div>
+                  <CurrencyAmountInput
+                    label="Total Amount *"
+                    value={item.amount || 0}
+                    inputCurrency={(item as any).inputCurrency || 'PKR'}
+                    currencyRates={currencyRates}
+                    hasError={saveAttempted && (!item.amount || item.amount <= 0)}
+                    onAmountChange={(pkr, orig, cur) => {
+                      updateItem(item.id, 'amount', pkr);
+                      updateItem(item.id, 'inputCurrency' as any, cur);
+                      updateItem(item.id, 'originalAmount' as any, orig);
+                    }}
+                    onCurrencyChange={cur => updateItem(item.id, 'inputCurrency' as any, cur)}
+                  />
+                  <CurrencyAmountInput
+                    label={`Amount Received`}
+                    hint="Leave blank if fully received"
+                    value={item.amountPaid || 0}
+                    inputCurrency={(item as any).inputCurrency || 'PKR'}
+                    currencyRates={currencyRates}
+                    onAmountChange={(pkr, orig) => {
+                      updateItem(item.id, 'amountPaid', pkr);
+                      updateItem(item.id, 'originalAmountPaid' as any, orig);
+                    }}
+                    onCurrencyChange={cur => updateItem(item.id, 'inputCurrency' as any, cur)}
+                  />
                   <div>
                     <label className={lbl}>Status</label>
                     <div className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${
@@ -519,19 +656,31 @@ export function TransactionFormView({
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className={lbl}>Total Amount *</label>
-                    <input type="number" min="0" value={item.amount || ''}
-                      onChange={e => updateItem(item.id, 'amount', Number(e.target.value))}
-                      placeholder="0"
-                      className={`${inp} ${saveAttempted && (!item.amount || item.amount <= 0) ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
-                  </div>
-                  <div>
-                    <label className={lbl}>Amount Paid <span className="text-gray-400 font-normal">(blank = full)</span></label>
-                    <input type="number" min="0" value={item.amountPaid || ''}
-                      onChange={e => updateItem(item.id, 'amountPaid', Number(e.target.value))}
-                      placeholder="0 = full payment" className={inp} />
-                  </div>
+                  <CurrencyAmountInput
+                    label="Total Amount *"
+                    value={item.amount || 0}
+                    inputCurrency={(item as any).inputCurrency || 'PKR'}
+                    currencyRates={currencyRates}
+                    hasError={saveAttempted && (!item.amount || item.amount <= 0)}
+                    onAmountChange={(pkr, orig, cur) => {
+                      updateItem(item.id, 'amount', pkr);
+                      updateItem(item.id, 'inputCurrency' as any, cur);
+                      updateItem(item.id, 'originalAmount' as any, orig);
+                    }}
+                    onCurrencyChange={cur => updateItem(item.id, 'inputCurrency' as any, cur)}
+                  />
+                  <CurrencyAmountInput
+                    label="Amount Paid"
+                    hint="Leave blank for full payment"
+                    value={item.amountPaid || 0}
+                    inputCurrency={(item as any).inputCurrency || 'PKR'}
+                    currencyRates={currencyRates}
+                    onAmountChange={(pkr, orig) => {
+                      updateItem(item.id, 'amountPaid', pkr);
+                      updateItem(item.id, 'originalAmountPaid' as any, orig);
+                    }}
+                    onCurrencyChange={cur => updateItem(item.id, 'inputCurrency' as any, cur)}
+                  />
                   <div>
                     <label className={lbl}>Payment Status</label>
                     <div className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${

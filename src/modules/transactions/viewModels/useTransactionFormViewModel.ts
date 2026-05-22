@@ -12,6 +12,7 @@ import { Transaction, TransactionItem, SUB_CATEGORIES, DynamicCategory, PLMainCa
 import { formatCurrency } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
+import { fetchCurrencyRates, convertCurrency, CURRENCY_RATE_FALLBACK } from '../../invoices/models/invoiceService';
 
 interface BankInfo { id: string; name: string; balance: number; }
 
@@ -119,6 +120,7 @@ export interface UseTransactionFormViewModelReturn {
   currency: SupportedCurrency;
   setCurrency: (c: SupportedCurrency) => void;
   currencyOptions: CurrencyOption[];
+  currencyRates: Record<string, number>;
 }
 
 const emptyItem = (type: string): TransactionItem => ({
@@ -188,6 +190,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
 
   // Currency state — default to PKR
   const [currency, setCurrency] = useState<SupportedCurrency>('PKR');
+  const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(CURRENCY_RATE_FALLBACK as any);
 
   const [enableMultiple,       setEnableMultiple]       = useState(false);
   const [transactionItems,     setTransactionItems]     = useState<TransactionItem[]>([emptyItem('Cash Inflow')]);
@@ -214,6 +217,11 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
       try {
         const bankList = await BankFirebaseService.fetchAllBanks().catch(() => []);
         setBanks(bankList as any[]);
+
+        // Fetch live currency rates (non-blocking — falls back to static rates on error)
+        fetchCurrencyRates().then(rates => {
+          if (rates) setCurrencyRates(rates as any);
+        }).catch(() => {/* silently use fallback */});
 
         // Load user-added dynamic categories
         const dynCats = await TransactionFirebaseService.fetchDynamicCategories().catch(() => []);
@@ -541,6 +549,7 @@ const getSuggestedClassification = (
             mainCategory:    transactionType,
             subCategory:     item.subCategory,
             detailCategory:  item.detailCategory,
+            // Store PKR-converted amounts as authoritative values; preserve originals
             amount:          item.amount,
             amountPaid:      item.amountPaid || item.amount,
             remainingAmount: item.remainingAmount,
@@ -561,6 +570,10 @@ const getSuggestedClassification = (
             bsMainCategory:  bsMainCategory || undefined,
             bsSubCategory:   bsSubCategory  || undefined,
             currency,
+            // ── Original (pre-conversion) currency fields ──────────────────
+            originalCurrency:    (item as any).inputCurrency || currency,
+            originalAmount:      (item as any).originalAmount ?? item.amount,
+            originalAmountPaid:  (item as any).originalAmountPaid ?? (item.amountPaid || item.amount),
           } as any;
 
           await TransactionFirebaseService.createTransaction(txData);
@@ -776,5 +789,6 @@ const getSuggestedClassification = (
     dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
     companies, onAddCompany,
     currency, setCurrency, currencyOptions: SUPPORTED_CURRENCIES,
+    currencyRates,
   };
 }
