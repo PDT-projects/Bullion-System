@@ -6,8 +6,18 @@ import { AgainstInvoiceEntry, ATIFilters, ATIStats, InvoiceBalanceSummary } from
 import { ATIFirebaseService } from '../models/atiFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { Invoice } from '../../invoices/models/types';
+import { BillsFirebaseService, BillBranch } from '../../bills/models/Billsfirebaseservice';
 
 export type ATIView = 'list' | 'balances' | 'create';
+
+interface BranchInfo { id: string; name: string; }
+
+const DEFAULT_BRANCHES: BranchInfo[] = [
+  { id: '__default_sa__',   name: 'Saudi Arabia' },
+  { id: '__default_sd__',   name: 'Sudan'        },
+  { id: '__default_dxb__',  name: 'Dubai'        },
+  { id: '__default_chad__', name: 'Chad'         },
+];
 
 const DEFAULT_FILTERS: ATIFilters = {
   searchTerm:    '',
@@ -44,6 +54,7 @@ export function useATIViewModel() {
   const [isSubmitting,     setIsSubmitting]     = useState(false);
   const [activeView,       setActiveView]       = useState<ATIView>('list');
   const [selectedEntry,    setSelectedEntry]    = useState<AgainstInvoiceEntry | null>(null);
+  const [branches,         setBranches]         = useState<BranchInfo[]>(DEFAULT_BRANCHES);
 
   const invoicesCacheReady = useRef(false);
 
@@ -52,14 +63,21 @@ export function useATIViewModel() {
     setIsLoading(true);
     invoicesCacheReady.current = false;
     try {
-      const [atiData, invoiceData, summaryData] = await Promise.all([
+      const [atiData, invoiceData, summaryData, branchList] = await Promise.all([
         ATIFirebaseService.fetchAll(),
         InvoiceFirebaseService.fetchAllInvoices(),
         ATIFirebaseService.fetchInvoiceBalanceSummaries(),
+        BillsFirebaseService.fetchAllBranches().catch(() => [] as BillBranch[]),
       ]);
       setEntries(atiData);
       setInvoices(invoiceData);
       setBalanceSummaries(summaryData);
+
+      // Merge defaults + Firestore-saved branches, deduplicated by name
+      const combined = [...DEFAULT_BRANCHES, ...branchList].filter(
+        (b, i, arr) => arr.findIndex(x => x.name.toLowerCase() === b.name.toLowerCase()) === i
+      );
+      setBranches(combined);
       invoicesCacheReady.current = true;
     } catch (err: any) {
       toast.error(err?.message || 'Failed to load data');
@@ -171,6 +189,25 @@ export function useATIViewModel() {
     }
   }, []);
 
+  // ── Add new branch ────────────────────────────────────────────────────────
+  const onAddBranch = useCallback(async (name: string): Promise<string | null> => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    if (branches.some(b => b.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error('Branch already exists');
+      return null;
+    }
+    try {
+      const created = await BillsFirebaseService.createBranch(trimmed);
+      setBranches(prev => [...prev, { id: created.id, name: created.name }]);
+      toast.success(`Branch "${trimmed}" added`);
+      return trimmed;
+    } catch {
+      toast.error('Failed to add branch');
+      return null;
+    }
+  }, [branches]);
+
   return {
     entries,
     filteredEntries,
@@ -183,6 +220,7 @@ export function useATIViewModel() {
     isSubmitting,
     activeView,
     selectedEntry,
+    branches,
     setFilters,
     resetFilters,
     setActiveView,
@@ -191,6 +229,7 @@ export function useATIViewModel() {
     handleSubmit: handleCreate,
     handleDelete,
     searchInvoices,
+    onAddBranch,
     refresh: loadData,
   };
 }

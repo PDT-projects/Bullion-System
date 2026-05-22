@@ -6,20 +6,26 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Receipt, Search, Loader2, CheckCircle,
   AlertCircle, Building2, Wallet, CreditCard, FileText,
-  Banknote, X, RefreshCw, User, Tag, Users,
+  Banknote, X, RefreshCw, User, Tag, Users, Check, Plus,
 } from 'lucide-react';
 import { Invoice } from '../../invoices/models/types';
 import { AgainstInvoiceEntry, ATIPaymentMode } from '../models/types';
 import { generateATIId } from '../models/atiFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { SUB_CATEGORIES } from '../../transactions/models/types';
-import { CASH_LOCATIONS } from '../../banking/models/bankingService';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n);
 
-const COMPANIES = [...CASH_LOCATIONS] as unknown as string[];
+interface BranchInfo { id: string; name: string; }
 
+// ── Default branches — kept in sync with useATIViewModel DEFAULT_BRANCHES ──
+const FORM_DEFAULT_BRANCHES: BranchInfo[] = [
+  { id: '__default_sa__',   name: 'Saudi Arabia' },
+  { id: '__default_sd__',   name: 'Sudan'        },
+  { id: '__default_dxb__',  name: 'Dubai'        },
+  { id: '__default_chad__', name: 'Chad'         },
+];
 
 // Sub-categories relevant to an outflow payment against an invoice
 const OUTFLOW_SUB_CATEGORIES = SUB_CATEGORIES['Cash Outflow'] ?? [
@@ -32,6 +38,8 @@ const OUTFLOW_SUB_CATEGORIES = SUB_CATEGORIES['Cash Outflow'] ?? [
 interface Props {
   invoices:         Invoice[];
   isSubmitting:     boolean;
+  branches?:        BranchInfo[];
+  onAddBranch?:     (name: string) => Promise<string | null>;
   onSubmit:         (dto: Omit<AgainstInvoiceEntry, 'id'>) => Promise<void>;
   onCancel:         () => void;
   onSearchInvoices: (query: string) => Promise<Invoice[]>;
@@ -81,7 +89,7 @@ const S = {
   row3: { display: 'grid' as const, gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' },
 };
 
-export function ATICreateForm({ invoices, isSubmitting, onSubmit, onCancel, onSearchInvoices }: Props) {
+export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_BRANCHES, onAddBranch, onSubmit, onCancel, onSearchInvoices }: Props) {
 
   // ── Invoice selection ──────────────────────────────────────────────────────
   const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -128,12 +136,24 @@ export function ATICreateForm({ invoices, isSubmitting, onSubmit, onCancel, onSe
 
   // ── Transaction detail fields ──────────────────────────────────────────────
   const [subCategory,       setSubCategory]       = useState(OUTFLOW_SUB_CATEGORIES[0]);
-  const [paidBy,            setPaidBy]            = useState('');   // who made the payment
-  const [paidTo,            setPaidTo]            = useState('');   // who received it (usually your company)
-  const [accountablePerson, setAccountablePerson] = useState('');   // internal accountable staff
-  const [transactionBy,     setTransactionBy]     = useState('');   // person who recorded the txn
-  const [company,           setCompany]           = useState(COMPANIES[0]);
+  const [paidBy,            setPaidBy]            = useState('');
+  const [paidTo,            setPaidTo]            = useState('');
+  const [accountablePerson, setAccountablePerson] = useState('');
+  const [transactionBy,     setTransactionBy]     = useState('');
+  const [company,           setCompany]           = useState('');
   const [description,       setDescription]       = useState('');
+
+  // Branch add-new state
+  const [addingBranch,  setAddingBranch]  = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [savingBranch,  setSavingBranch]  = useState(false);
+
+  // Keep company in sync with first branch on load
+  useEffect(() => {
+    if (branches.length > 0 && !company) {
+      setCompany(branches[0].name);
+    }
+  }, [branches, company]);
 
   const [error, setError] = useState('');
 
@@ -195,6 +215,18 @@ export function ATICreateForm({ invoices, isSubmitting, onSubmit, onCancel, onSe
     setInvoiceSearch(''); setSelectedInv(null); setLiveInv(null);
     setShowDropdown(false); setAmount(''); setPaidTo('');
     onSearchInvoices('').then(setSearchResults).catch(() => setSearchResults([]));
+  };
+
+  const handleAddBranch = async () => {
+    if (!newBranchName.trim() || !onAddBranch) return;
+    setSavingBranch(true);
+    const added = await onAddBranch(newBranchName.trim());
+    if (added) {
+      setCompany(added);
+      setNewBranchName('');
+      setAddingBranch(false);
+    }
+    setSavingBranch(false);
   };
 
   // ── Validation ─────────────────────────────────────────────────────────────
@@ -649,9 +681,70 @@ export function ATICreateForm({ invoices, isSubmitting, onSubmit, onCancel, onSe
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={S.label}>Company / Branch</label>
-                <select value={company} onChange={e => setCompany(e.target.value)} style={S.input}>
-                  {COMPANIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+
+                {addingBranch ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input
+                        type="text"
+                        value={newBranchName}
+                        onChange={e => setNewBranchName(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); handleAddBranch(); }
+                          if (e.key === 'Escape') { setAddingBranch(false); setNewBranchName(''); }
+                        }}
+                        placeholder="New branch name..."
+                        autoFocus
+                        style={{ ...S.input, flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddBranch}
+                        disabled={savingBranch || !newBranchName.trim()}
+                        style={{
+                          padding: '0 12px', borderRadius: '8px', border: 'none',
+                          background: '#16a34a', color: '#fff', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '4px',
+                          fontSize: '12px', fontWeight: 600,
+                          opacity: (savingBranch || !newBranchName.trim()) ? 0.5 : 1,
+                        }}
+                      >
+                        {savingBranch
+                          ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                          : <Check size={13} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAddingBranch(false); setNewBranchName(''); }}
+                        style={{
+                          padding: '0 10px', borderRadius: '8px',
+                          border: '1.5px solid #d1d5db', background: '#fff',
+                          color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                        }}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#9ca3af' }}>Press Enter to save · Esc to cancel</div>
+                  </div>
+                ) : (
+                  <select
+                    value={company}
+                    onChange={e => {
+                      if (e.target.value === '__add_branch__') {
+                        setAddingBranch(true);
+                      } else {
+                        setCompany(e.target.value);
+                      }
+                    }}
+                    style={S.input}
+                  >
+                    {branches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                    <option disabled>──────────────</option>
+                    <option value="__add_branch__">＋ Add new branch...</option>
+                  </select>
+                )}
+
                 <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
                   Also used to identify the cash account when payment mode is Cash
                 </div>

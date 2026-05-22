@@ -146,9 +146,25 @@ export class ATIFirebaseService {
     // security rules then deny with permission-denied.
     let cashDocId: string | null = null;
     if (dto.paymentMode === 'Cash') {
-      const companySuffix = dto.company?.includes(' - ')
-        ? dto.company.split(' - ').pop()!.toLowerCase().replace(/\s+/g, '')
-        : (dto.company || 'islamabad').toLowerCase().replace(/\s+/g, '');
+      // Map branch display names to their cashInHand document IDs.
+      // Add entries here whenever a new branch is added.
+      const BRANCH_TO_CASH_DOC: Record<string, string> = {
+        'saudi arabia': 'saudiarabia',
+        'sudan':        'sudan',
+        'dubai':        'dubai',
+        'chad':         'chad',
+        // legacy / fallback slugs
+        'islamabad':    'islamabad',
+        'lahore':       'lahore',
+        'karachi':      'karachi',
+      };
+      const companyKey = (dto.company || '').toLowerCase().trim();
+      // Try exact map first, then fall back to stripping spaces
+      const companySuffix =
+        BRANCH_TO_CASH_DOC[companyKey] ??
+        (dto.company?.includes(' - ')
+          ? dto.company.split(' - ').pop()!.toLowerCase().replace(/\s+/g, '')
+          : companyKey.replace(/\s+/g, ''));
       const preCheckSnap = await getDoc(doc(db, CASH_BAL_COL, companySuffix));
       if (preCheckSnap.exists()) {
         cashDocId = companySuffix;
