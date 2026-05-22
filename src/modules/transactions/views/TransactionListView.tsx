@@ -705,8 +705,8 @@ export function TransactionListView({
       </div>
 
       {/* ── Transaction Table ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between rounded-t-2xl">
           <div>
             <h3 className="text-sm font-bold text-gray-900 tracking-tight">All Transactions</h3>
             <p className="text-xs text-gray-400 mt-0.5">{filteredTransactions.length} record{filteredTransactions.length !== 1 ? 's' : ''} found</p>
@@ -717,7 +717,18 @@ export function TransactionListView({
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* txn-table-scroll: sticky header + dual-axis scroll, scrollbar always visible */}
+        <style>{`
+          .txn-table-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+          .txn-table-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 0 0 16px 16px; }
+          .txn-table-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 999px; border: 2px solid #f1f5f9; }
+          .txn-table-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+          .txn-table-scroll thead th { position: sticky; top: 0; z-index: 2; background: #f9fafb; }
+        `}</style>
+        <div
+          className="txn-table-scroll overflow-x-auto overflow-y-auto"
+          style={{ borderRadius: '0 0 16px 16px', maxHeight: '60vh', scrollbarWidth: 'thin', scrollbarColor: '#94a3b8 #f1f5f9' }}
+        >
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
@@ -727,7 +738,7 @@ export function TransactionListView({
                 ].map(h => (
                   <th
                     key={h}
-                    className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap"
+                    className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap border-b border-gray-100"
                   >
                     {h}
                   </th>
