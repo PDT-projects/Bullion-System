@@ -15,10 +15,11 @@ export const BillsCreateWrapper: React.FC = () => {
       isSubmitting={vm.isSubmitting}
       errors={vm.errors}
       predefinedVendors={vm.predefinedVendors}
-      companies={vm.companies}
+      branches={vm.branches}
       banks={vm.banks}
       allBillCategories={vm.allBillCategories}
       onAddBillCategory={vm.onAddBillCategory}
+      onAddBranch={vm.onAddBranch}
       setFormField={vm.setFormField}
       addBillTransaction={vm.addBillTransaction}
       removeBillTransaction={vm.removeBillTransaction}

@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Bill, BillTransaction, BILL_CATEGORIES, COMPANIES } from '../models/types';
+import { Bill, BillTransaction, BILL_CATEGORIES } from '../models/types';
 import { BillsService } from '../models/billsService';
 import { BillsFirebaseService } from '../models/Billsfirebaseservice';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
@@ -15,12 +15,22 @@ import { TransactionFirebaseService } from '../../transactions/models/transactio
 
 interface BankInfo { id: string; name: string; balance: number; }
 
+interface BranchInfo { id: string; name: string; }
+
 // Dynamic category stored in Firestore (reuse same collection as transactions)
 interface DynamicBillCategory {
   id: string;
   name: string;
   createdAt: string;
 }
+
+// Default branches (shown if none exist in Firestore)
+const DEFAULT_BRANCHES: BranchInfo[] = [
+  { id: '__default_sa__',    name: 'Saudi Arabia' },
+  { id: '__default_sd__',    name: 'Sudan' },
+  { id: '__default_dxb__',   name: 'Dubai' },
+  { id: '__default_chad__',  name: 'Chad' },
+];
 
 interface UseBillsFormViewModelReturn {
   formData: {
@@ -34,11 +44,13 @@ interface UseBillsFormViewModelReturn {
   isSubmitting: boolean;
   errors: { [key: string]: string };
   predefinedVendors: string[];
-  companies: string[];
+  branches: BranchInfo[];
   banks: BankInfo[];
   // Dynamic category support
   allBillCategories: string[];
   onAddBillCategory: (name: string) => Promise<string | null>;
+  // Dynamic branch support
+  onAddBranch: (name: string) => Promise<string | null>;
   setFormField: (field: string, value: any) => void;
   addBillTransaction: () => void;
   removeBillTransaction: (id: string) => void;
@@ -60,7 +72,7 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
   const todayStr = new Date().toISOString().split('T')[0];
 
   const [formData, setFormData] = useState({
-    company:      COMPANIES[0] as string,
+    company:      DEFAULT_BRANCHES[0].name,
     billCategory: 'Electricity' as string,
     date:         todayStr,
     note:         '',
@@ -71,6 +83,7 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
   ]);
 
   const [banks,              setBanks]              = useState<BankInfo[]>([]);
+  const [branches,           setBranches]           = useState<BranchInfo[]>(DEFAULT_BRANCHES);
   const [dynamicCategories,  setDynamicCategories]  = useState<DynamicBillCategory[]>([]);
   const [isSubmitting,       setIsSubmitting]       = useState(false);
   const [errors,             setErrors]             = useState<{ [key: string]: string }>({});
@@ -89,15 +102,14 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
       .filter(name => !BASE_CATEGORIES.includes(name)),
   ];
 
-  // Load banks, dynamic categories, and existing bill (if editing)
   useEffect(() => {
     const load = async () => {
       setIsSubmitting(true);
       try {
-        const [bankList, dynCats] = await Promise.all([
+        const [bankList, dynCats, branchList] = await Promise.all([
           BankFirebaseService.fetchAllBanks().catch(() => []),
-          // Reuse transactions dynamic categories collection, filtered by type 'billCategory'
           TransactionFirebaseService.fetchDynamicCategories().catch(() => []),
+          BillsFirebaseService.fetchAllBranches().catch(() => []),
         ]);
         setBanks(bankList as BankInfo[]);
         // Filter only bill-category type entries
@@ -106,13 +118,20 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
           .map(d => ({ id: d.id, name: d.name, createdAt: d.createdAt }));
         setDynamicCategories(billDynCats);
 
+        // Merge default branches with any Firestore-saved ones, deduplicated by name
+        const savedBranches = branchList as BranchInfo[];
+        const combined = [...DEFAULT_BRANCHES, ...savedBranches].filter(
+          (b, i, arr) => arr.findIndex(x => x.name.toLowerCase() === b.name.toLowerCase()) === i
+        );
+        setBranches(combined);
+
         if (isEditing && id) {
           const bill = await BillsFirebaseService.fetchBillById(id);
           if (!bill) { toast.error('Bill not found'); navigate('/bills'); return; }
           setFormData({
-            company:      bill.company || COMPANIES[0],
+            company:      bill.company || DEFAULT_BRANCHES[0].name,
             billCategory: bill.subCategory || 'Electricity',
-            date:         bill.date || todayStr,   // display only
+            date:         bill.date || todayStr,
             note:         bill.note || '',
           });
           setBillTransactions([{
@@ -165,6 +184,25 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
       return null;
     }
   }, [allBillCategories]);
+
+  // Add a new branch to Firestore
+  const onAddBranch = useCallback(async (name: string): Promise<string | null> => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    if (branches.some(b => b.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error('Branch already exists');
+      return null;
+    }
+    try {
+      const created = await BillsFirebaseService.createBranch(trimmed);
+      setBranches(prev => [...prev, { id: created.id, name: created.name }]);
+      toast.success(`Branch "${trimmed}" added`);
+      return trimmed;
+    } catch {
+      toast.error('Failed to add branch');
+      return null;
+    }
+  }, [branches]);
 
   const setFormField = useCallback((field: string, value: any) => {
     // Prevent changing the date field — it is locked
@@ -351,10 +389,11 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
     isSubmitting,
     errors,
     predefinedVendors,
-    companies: COMPANIES as unknown as string[],
+    branches,
     banks,
     allBillCategories,
     onAddBillCategory,
+    onAddBranch,
     setFormField,
     addBillTransaction,
     removeBillTransaction,

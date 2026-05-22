@@ -15,6 +15,13 @@ import {
 import { db } from '../../../api/firebase/firebase';
 import { Bill } from './types';
 
+export interface BillBranch {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+const BRANCHES_COLLECTION = 'billBranches';
 const COLLECTION = 'bills';
 
 function stripUndefined<T extends object>(obj: T): Partial<T> {
@@ -83,6 +90,32 @@ export class BillsFirebaseService {
     } catch (error) {
       console.error('❌ Error deleting bill:', error);
       throw new Error('Failed to delete bill from Firestore');
+    }
+  }
+
+  // ==================== BRANCH MANAGEMENT ====================
+
+  static async fetchAllBranches(): Promise<BillBranch[]> {
+    try {
+      const q = query(collection(db, BRANCHES_COLLECTION), orderBy('createdAt', 'asc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BillBranch));
+    } catch (error) {
+      console.error('❌ Error fetching branches:', error);
+      throw new Error('Failed to fetch branches from Firestore');
+    }
+  }
+
+  static async createBranch(name: string): Promise<BillBranch> {
+    try {
+      const now = new Date().toISOString();
+      const payload = { name: name.trim(), createdAt: now };
+      const docRef = await addDoc(collection(db, BRANCHES_COLLECTION), payload);
+      console.log('✅ Branch created:', docRef.id);
+      return { id: docRef.id, ...payload };
+    } catch (error) {
+      console.error('❌ Error creating branch:', error);
+      throw new Error('Failed to create branch in Firestore');
     }
   }
 }

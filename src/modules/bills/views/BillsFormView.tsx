@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 interface BankInfo { id: string; name: string; balance: number; }
+interface BranchInfo { id: string; name: string; }
 
 interface BillsFormViewProps {
   formData: {
@@ -29,10 +30,11 @@ interface BillsFormViewProps {
   isSubmitting: boolean;
   errors: { [key: string]: string };
   predefinedVendors: string[];
-  companies: string[];
+  branches: BranchInfo[];
   banks: BankInfo[];
   allBillCategories: string[];
   onAddBillCategory: (name: string) => Promise<string | null>;
+  onAddBranch: (name: string) => Promise<string | null>;
   setFormField: (field: string, value: any) => void;
   addBillTransaction: () => void;
   removeBillTransaction: (id: string) => void;
@@ -73,8 +75,8 @@ function formatDateDisplay(dateStr: string): string {
 
 export const BillsFormView: React.FC<BillsFormViewProps> = ({
   formData, billTransactions, isEditing, isSubmitting, errors,
-  predefinedVendors, companies, banks,
-  allBillCategories, onAddBillCategory,
+  predefinedVendors, branches = [], banks = [],
+  allBillCategories = [], onAddBillCategory, onAddBranch,
   setFormField, addBillTransaction, removeBillTransaction,
   updateBillTransaction, handleImageUpload, handleSubmit, handleCancel, calculateTotal,
 }) => {
@@ -83,6 +85,10 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
   const [addingCategory,  setAddingCategory]  = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [savingCategory,  setSavingCategory]  = useState(false);
+
+  const [addingBranch,  setAddingBranch]  = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [savingBranch,  setSavingBranch]  = useState(false);
 
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -94,6 +100,18 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
       setAddingCategory(false);
     }
     setSavingCategory(false);
+  };
+
+  const handleAddBranch = async () => {
+    if (!newBranchName.trim()) return;
+    setSavingBranch(true);
+    const added = await onAddBranch(newBranchName.trim());
+    if (added) {
+      setFormField('company', added);
+      setNewBranchName('');
+      setAddingBranch(false);
+    }
+    setSavingBranch(false);
   };
 
   const [otherVendorIds, setOtherVendorIds] = useState<Set<string>>(() => {
@@ -140,16 +158,56 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-            {/* Company */}
+            {/* Branch / Location */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Company *</label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <select value={formData.company} onChange={(e) => setFormField('company', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 ${errors.company ? errCls : 'border-gray-300'}`}>
-                  {companies.map(c => <option key={c} value={c}>{c.split(': ')[1] || c}</option>)}
-                </select>
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Branch / Location *</label>
+
+              {addingBranch ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newBranchName}
+                      onChange={e => setNewBranchName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleAddBranch();
+                        if (e.key === 'Escape') { setAddingBranch(false); setNewBranchName(''); }
+                      }}
+                      placeholder="New branch name..."
+                      autoFocus
+                      className={`${inp} flex-1`}
+                    />
+                    <button type="button" onClick={handleAddBranch}
+                      disabled={savingBranch || !newBranchName.trim()}
+                      className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                      {savingBranch ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                    </button>
+                    <button type="button" onClick={() => { setAddingBranch(false); setNewBranchName(''); }}
+                      className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400">Press Enter to save · Esc to cancel</p>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <select
+                    value={formData.company}
+                    onChange={(e) => {
+                      if (e.target.value === '__add_branch__') {
+                        setAddingBranch(true);
+                      } else {
+                        setFormField('company', e.target.value);
+                      }
+                    }}
+                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 ${errors.company ? errCls : 'border-gray-300'}`}>
+                    {branches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                    <option disabled>──────────────</option>
+                    <option value="__add_branch__">＋ Add new branch...</option>
+                  </select>
+                </div>
+              )}
               {errors.company && <p className="text-red-500 text-xs mt-1">{errors.company}</p>}
             </div>
 
