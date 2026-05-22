@@ -285,7 +285,7 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
 
         const transferredSerials = item.selectedSerials.filter(s => s.trim() !== '');
 
-        // Remove transferred serials from source product.
+      // Remove transferred serials from source product.
         // Rebuild serialCities for ALL remaining serials using the effective location
         // (this permanently fixes any stale city entries on the source product).
         const remainingSerials = (product.serialNumbers || []).filter(
@@ -298,10 +298,17 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
           newCities[s] = getSerialEffectiveLocation(product, s);
         });
 
+        // Mark transferred serials as 'In Transit' in serialStatus
+        const updatedSerialStatus: Record<string, string> = { ...(product.serialStatus || {}) };
+        transferredSerials.forEach(s => {
+          updatedSerialStatus[s] = 'In Transit';
+        });
+
         await InventoryFirebaseService.updateProduct(product.id, {
-          stock:         Math.max(0, product.stock - item.quantity),
+          stock:         remainingSerials.length,   // derive from actual count, not arithmetic
           serialNumbers: remainingSerials,
           serialCities:  newCities,
+          serialStatus:  updatedSerialStatus,
         });
 
         // Create transfer record (status: 'In Transit')

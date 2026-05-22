@@ -4,7 +4,7 @@
 // Changes:
 //   • Download PDF button added to Actions column (blue, Download icon)
 //   • Download PDF button added to View Transfer modal footer
-//   • Button uses downloadTransferPDF utility
+//   • PDF generated inline using jsPDF — Bullion Electronics yellow/black branding
 
 import React from 'react';
 import {
@@ -13,7 +13,217 @@ import {
   User, FileText, ArrowRightLeft, Download,
 } from 'lucide-react';
 import { ProductTransfer } from '../models/types';
-import { downloadTransferPDF } from '../utils/transferPdfGenerator';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+// ── Bullion Electronics brand tokens ────────────────────────────────────────
+const _BLACK      = '#0D0D0D';
+const _YELLOW     = '#F5B800';
+const _YELLOW_BG  = '#FFF8DC';
+const _WHITE      = '#FFFFFF';
+const _GRAY_TEXT  = '#555555';
+
+const _COMPANY = {
+  name:    'Bullion Electronics',
+  branch:  'Saudia',
+  address: 'C108 Building 936 - M-04, Plot - Mohamed Bin Zayed City - ME9',
+  city:    'Abu Dhabi, United Arab Emirates',
+  phone:   '+971 56 985 2213',
+};
+
+function _hex(hex: string): [number, number, number] {
+  const c = hex.replace('#', '');
+  const n = parseInt(c, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function _fill(doc: jsPDF, hex: string)  { doc.setFillColor(..._hex(hex)); }
+function _text(doc: jsPDF, hex: string)  { doc.setTextColor(..._hex(hex)); }
+function _draw(doc: jsPDF, hex: string)  { doc.setDrawColor(..._hex(hex)); }
+
+function _fmtDate(d?: string): string {
+  if (!d) return '-';
+  try { return new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch { return d; }
+}
+
+function downloadTransferPDF(transfer: ProductTransfer): void {
+  const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW  = 210;
+  const mL     = 14;
+  const mR     = 14;
+  const cW     = pageW - mL - mR;
+  let y        = 0;
+
+  // ── 1. Black header bar ──────────────────────────────────────────────────
+  _fill(doc, _BLACK);
+  doc.rect(0, 0, pageW, 36, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  _text(doc, _YELLOW);
+  doc.text(_COMPANY.name, mL, 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  _text(doc, _YELLOW);
+  doc.text(_COMPANY.branch, mL, 20);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  _text(doc, _WHITE);
+  doc.text(_COMPANY.phone,   pageW - mR, 10, { align: 'right' });
+  doc.text(_COMPANY.address, pageW - mR, 16, { align: 'right' });
+  doc.text(_COMPANY.city,    pageW - mR, 21, { align: 'right' });
+
+  // Badge: PRODUCT TRANSFER NOTE
+  const bW = 62, bH = 8, bX = pageW - mR - bW, bY = 36 - bH - 3;
+  _fill(doc, _YELLOW);
+  doc.roundedRect(bX, bY, bW, bH, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  _text(doc, _BLACK);
+  doc.text('PRODUCT TRANSFER NOTE', bX + bW / 2, bY + 5.5, { align: 'center' });
+
+  y = 36 + 8;
+
+  // ── 2. Meta info card ────────────────────────────────────────────────────
+  _fill(doc, _YELLOW_BG);
+  doc.roundedRect(mL, y, cW, 28, 3, 3, 'F');
+  _draw(doc, _YELLOW);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(mL, y, cW, 28, 3, 3, 'S');
+
+  const col2X   = pageW / 2 + 4;
+  const labelW  = 34;
+  const metaY0  = y + 6;
+  const lineH   = 8;
+
+  const leftRows  = [
+    { label: 'From Location:',  value: transfer.fromLocation  || '-' },
+    { label: 'To Location:',    value: transfer.toLocation    || '-' },
+    { label: 'Transferred By:', value: transfer.transferredBy || '-' },
+  ];
+  const rightRows = [
+    { label: 'Transfer ID:', value: (transfer.id || '-').slice(0, 18) },
+    { label: 'Date:',        value: _fmtDate(transfer.transferDate || transfer.date) },
+    { label: 'Status:',      value: transfer.status || 'In Transit' },
+  ];
+
+  leftRows.forEach(({ label, value }, i) => {
+    const ry = metaY0 + i * lineH;
+    doc.setFont('helvetica', 'bold');   doc.setFontSize(8); _text(doc, _GRAY_TEXT); doc.text(label,          mL + 3,          ry);
+    doc.setFont('helvetica', 'normal');                     _text(doc, _BLACK);     doc.text(value,          mL + 3 + labelW, ry);
+  });
+  rightRows.forEach(({ label, value }, i) => {
+    const ry = metaY0 + i * lineH;
+    doc.setFont('helvetica', 'bold');   doc.setFontSize(8); _text(doc, _GRAY_TEXT); doc.text(label, col2X,          ry);
+    const statusColor = label === 'Status:'
+      ? (value === 'Received' ? '#16a34a' : value === 'In Transit' ? '#1d4ed8' : '#b45309')
+      : _BLACK;
+    doc.setFont(label === 'Status:' ? 'helvetica' : 'helvetica', label === 'Status:' ? 'bold' : 'normal');
+    _text(doc, statusColor);
+    doc.text(value, col2X + labelW, ry);
+  });
+
+  y += 28 + 8;
+
+  // ── 3. Route bar ─────────────────────────────────────────────────────────
+  _fill(doc, _BLACK);
+  doc.roundedRect(mL, y, cW, 10, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+  _text(doc, '#FF8080'); doc.text(`FROM: ${transfer.fromLocation || '-'}`, mL + 5, y + 6.5);
+  _text(doc, _YELLOW);   doc.text('→', pageW / 2 - 3, y + 6.5);
+  _text(doc, '#86efac'); doc.text(`TO: ${transfer.toLocation || '-'}`,   pageW / 2 + 5, y + 6.5);
+
+  y += 10 + 7;
+
+  // ── 4. Items table ────────────────────────────────────────────────────────
+  const serials = transfer.serialNumbers || [];
+  autoTable(doc, {
+    startY: y,
+    head: [['Sr.No', 'Product Name', 'Model', 'Serial Numbers', 'Qty']],
+    body: [[
+      '1',
+      transfer.productName || '-',
+      transfer.brandName   || transfer.modelName || '-',
+      serials.join(', ')   || '-',
+      String(transfer.quantity || serials.length || 0),
+    ]],
+    margin: { left: mL, right: mR },
+    tableWidth: cW,
+    styles: {
+      fontSize: 8.5,
+      cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+      textColor: _hex(_BLACK),
+      lineColor: _hex(_YELLOW),
+      lineWidth: 0.3,
+    },
+    headStyles: {
+      fillColor: _hex(_BLACK),
+      textColor: _hex(_YELLOW),
+      fontStyle: 'bold',
+      fontSize: 8.5,
+    },
+    alternateRowStyles: { fillColor: _hex(_YELLOW_BG) },
+    bodyStyles:         { fillColor: _hex(_WHITE) },
+    columnStyles: {
+      0: { cellWidth: 13, halign: 'center' },
+      1: { cellWidth: 45 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 70 },
+      4: { cellWidth: 18, halign: 'center' },
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 7;
+
+  // ── 5. Note ───────────────────────────────────────────────────────────────
+  if (transfer.note) {
+    doc.setFont('helvetica', 'bold');   doc.setFontSize(8.5); _text(doc, _GRAY_TEXT);
+    doc.text('Note:', mL, y);
+    doc.setFont('helvetica', 'normal');                       _text(doc, _BLACK);
+    doc.text(transfer.note, mL + 14, y);
+    y += 10;
+  }
+
+  // ── 6. Yellow divider rule ───────────────────────────────────────────────
+  _draw(doc, _YELLOW); doc.setLineWidth(0.8); doc.line(mL, y, pageW - mR, y);
+  y += 8;
+
+  // ── 7. Terms & Conditions ─────────────────────────────────────────────────
+  _fill(doc, _YELLOW); doc.rect(mL, y, cW, 6.5, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); _text(doc, _BLACK);
+  doc.text('Terms and Conditions', mL + 3, y + 4.5);
+  y += 6.5 + 4;
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); _text(doc, _GRAY_TEXT);
+  [
+    'This transfer document is an official record of goods movement between company locations.',
+    'The receiving party must verify serial numbers and quantities upon receipt.',
+    'Any discrepancies must be reported within 24 hours of receipt.',
+    'Products in transit remain the property of Bullion Electronics.',
+    'The transferring party is responsible for safe packaging and handover.',
+    'This document must be retained for audit and warranty purposes.',
+  ].forEach(t => { doc.text(`• ${t}`, mL + 2, y); y += 5; });
+
+  // ── 8. Black footer — pinned to page bottom (A4 = 297 mm) ────────────
+  const pageH   = 297;
+  const footerH = 18;
+  const footerY = pageH - footerH;
+  _fill(doc, _BLACK); doc.rect(0, footerY, pageW, footerH, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); _text(doc, _YELLOW);
+  doc.text('Thank you!', pageW / 2, footerY + 7, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); _text(doc, _WHITE);
+  doc.text(
+    `${_COMPANY.name} · ${_COMPANY.address}, ${_COMPANY.city} · ${_COMPANY.phone}`,
+    pageW / 2, footerY + 13, { align: 'center' }
+  );
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  const from = (transfer.fromLocation || 'Unknown').replace(/\s+/g, '_');
+  const to   = (transfer.toLocation   || 'Unknown').replace(/\s+/g, '_');
+  doc.save(`Transfer_${transfer.id || 'draft'}_${from}_to_${to}.pdf`);
+}
 
 interface ProductTransferViewProps {
   transfers: ProductTransfer[];

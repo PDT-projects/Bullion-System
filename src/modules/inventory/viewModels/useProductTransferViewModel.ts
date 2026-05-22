@@ -122,53 +122,93 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
       const transferredSerials = transfer.serialNumbers || [];
       const toLocation = transfer.toLocation;
 
+      // ── Step 1: Remove transferred serials from SOURCE product ──────────────
+      // The source product already had its serialNumbers stripped when the transfer
+      // was created (handleSave removes them). But we must update its serialCities
+      // to clean up any stale entries for the remaining serials.
+      const sourceRemainingSerials = (sourceProduct.serialNumbers || []).filter(
+        s => !transferredSerials.includes(s)
+      );
+      const sourceCities: Record<string, string> = {};
+      sourceRemainingSerials.forEach(s => {
+        // Keep each remaining serial at its current effective location
+        sourceCities[s] = sourceProduct.serialCities?.[s] || sourceProduct.location || '';
+      });
+
+      // Only write back to source if it still has remaining serials or we need
+      // to clear stale cities — always update to keep data clean.
+      await InventoryFirebaseService.updateProduct(sourceProduct.id, {
+        stock:         sourceRemainingSerials.length,
+        serialNumbers: sourceRemainingSerials,
+        serialCities:  sourceCities,
+        // Do NOT change sourceProduct.location — it belongs to the source office
+      });
+
+      // ── Step 2: Find or use destination product record ──────────────────────
+      // Prefer a product record that is ALREADY at toLocation so we don't
+      // accidentally overwrite the wrong record's location.
       const destProduct = allProducts.find(
         p =>
           p.brandName === sourceProduct.brandName &&
           p.modelName === sourceProduct.modelName &&
-          p.id !== transfer.productId &&
+          p.id !== sourceProduct.id &&
+          p.location === toLocation &&
           p.receivableStatus !== 'Pending'
-      ) || sourceProduct;
+      ) ?? allProducts.find(
+        p =>
+          p.brandName === sourceProduct.brandName &&
+          p.modelName === sourceProduct.modelName &&
+          p.id !== sourceProduct.id &&
+          p.receivableStatus !== 'Pending'
+      ) ?? sourceProduct; // last resort: same record (single-location product)
 
-      const existingSerials = destProduct.serialNumbers || [];
-      const mergedSerials = [
-        ...existingSerials.filter(s => !transferredSerials.includes(s)),
-        ...transferredSerials,
-      ];
+      const existingSerials = (destProduct.serialNumbers || []).filter(
+        s => !transferredSerials.includes(s) // deduplicate
+      );
+      const mergedSerials = [...existingSerials, ...transferredSerials];
 
-      // Build a clean serialCities map:
-      // - All existing serials → toLocation (since the whole product is now here)
-      // - All received serials → toLocation explicitly
+      // All serials in destProduct are now at toLocation
       const mergedCities: Record<string, string> = {};
       mergedSerials.forEach(s => {
         mergedCities[s] = toLocation;
       });
 
       await InventoryFirebaseService.updateProduct(destProduct.id, {
-        stock:         (destProduct.stock || 0) + transferredSerials.length,
+        stock:         mergedSerials.length,   // derive from actual serial count
         serialNumbers: mergedSerials,
         serialCities:  mergedCities,
-        location:      toLocation,
+        location:      toLocation,             // update dest record to toLocation
       });
 
+      // ── Step 3: Mark transfer as Received ───────────────────────────────────
       const receivedAt = new Date().toISOString();
       await TransferFirebaseService.updateTransferStatus(transfer.id, 'Received', receivedAt);
 
+      // ── Step 4: Sync local state ─────────────────────────────────────────────
       setAllTransfers(prev =>
         prev.map(t => t.id === transfer.id ? { ...t, status: 'Received', receivedAt } : t)
       );
       setAllProducts(prev =>
-        prev.map(p =>
-          p.id === destProduct.id
-            ? {
-                ...p,
-                stock: (p.stock || 0) + transferredSerials.length,
-                serialNumbers: mergedSerials,
-                serialCities: mergedCities,
-                location: toLocation,
-              }
-            : p
-        )
+        prev.map(p => {
+          if (p.id === sourceProduct.id) {
+            return {
+              ...p,
+              stock:         sourceRemainingSerials.length,
+              serialNumbers: sourceRemainingSerials,
+              serialCities:  sourceCities,
+            };
+          }
+          if (p.id === destProduct.id) {
+            return {
+              ...p,
+              stock:         mergedSerials.length,
+              serialNumbers: mergedSerials,
+              serialCities:  mergedCities,
+              location:      toLocation,
+            };
+          }
+          return p;
+        })
       );
 
       toast.success(
