@@ -1,5 +1,13 @@
 // Invoice Module - Firebase Service Layer (UPDATED)
 // Added liquidity linkage when creating invoices
+//
+// FIX v2 (image pipeline):
+//   docToInvoice now maps each product item and explicitly preserves `imageUrls`
+//   so that images saved on invoice creation are correctly read back from
+//   Firestore and flow through to the PDF renderer and the invoice detail view.
+//   Without this, raw `data.products || []` returns plain JS objects from
+//   Firestore — imageUrls is present but could be undefined on older documents
+//   that were saved before imageUrls was added to InvoiceProduct.
 
 import {
   collection, getDocs, getDoc, addDoc, updateDoc,
@@ -9,7 +17,7 @@ import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
 } from 'firebase/storage';
 import { db } from '../../../api/firebase/firebase';
-import { Invoice, CreateInvoiceDTO } from './types';
+import { Invoice, InvoiceProduct, CreateInvoiceDTO } from './types';
 
 const COLLECTION         = 'invoices';
 const COUNTER_COLLECTION = 'invoiceCounters';
@@ -21,6 +29,32 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== undefined)
   ) as Partial<T>;
+}
+
+// ── Map a raw Firestore product sub-document to a typed InvoiceProduct ─────────
+// This explicit mapping ensures every field — including imageUrls — is always
+// present on the returned object, even for invoices saved before imageUrls was
+// added to the InvoiceProduct type.
+function docToInvoiceProduct(raw: any): InvoiceProduct {
+  return {
+    id:            raw.id            || '',
+    productId:     raw.productId     || '',
+    productName:   raw.productName   || '',
+    brandName:     raw.brandName     || '',
+    modelName:     raw.modelName     || '',
+    category:      raw.category      || '',
+    description:   raw.description   || '',
+    quantity:      raw.quantity      ?? 1,
+    price:         raw.price         ?? 0,
+    total:         raw.total         ?? 0,
+    serialNumbers: raw.serialNumbers || [],
+    serialCities:  raw.serialCities  || {},
+    currency:      raw.currency      || 'PKR',
+    // FIX: explicitly read imageUrls so it is never lost.
+    // Older invoices that were saved without this field get an empty array,
+    // which the PDF service handles gracefully (no thumbnail shown).
+    imageUrls:     Array.isArray(raw.imageUrls) ? raw.imageUrls : [],
+  };
 }
 
 function docToInvoice(d: any): Invoice {
@@ -37,7 +71,9 @@ function docToInvoice(d: any): Invoice {
     customerCity:           data.customerCity           || '',
     customerAddress:        data.customerAddress,
     warrantyLocation:       data.warrantyLocation,
-    products:               data.products               || [],
+    // FIX: map each product through docToInvoiceProduct so imageUrls is always
+    // present; previously this was a raw pass-through `data.products || []`.
+    products:               (data.products || []).map(docToInvoiceProduct),
     exchangeWarrantyNote:   data.exchangeWarrantyNote   || '',
     deliveryStatus:         data.deliveryStatus         || 'Self-collect',
     deliveryReceivedStatus: data.deliveryReceivedStatus || 'Pending',
@@ -52,35 +88,39 @@ function docToInvoice(d: any): Invoice {
     bankId:                 data.bankId,
     bankName:               data.bankName,
     bankAccountNumber:      data.bankAccountNumber,
+    chequeNumber:           data.chequeNumber,
+    chequeBank:             data.chequeBank,
+    chequeDate:             data.chequeDate,
     paymentStatus:          data.paymentStatus,
     paidAmount:             data.paidAmount,
     remainingAmount:        data.remainingAmount,
     collectionMethod:       data.collectionMethod,
     deductionCharges:       data.deductionCharges       || 0,
     deductionCurrency:      data.deductionCurrency      || 'PKR',
-    cargoAmount:            data.cargoAmount             || 0,
-    cargoCurrency:          data.cargoCurrency           || 'PKR',
-    customsAmount:          data.customsAmount           || 0,
-    customsCurrency:        data.customsCurrency         || 'PKR',
-    agentDetails:           data.agentDetails            || '',
-    agentAmount:            data.agentAmount             || 0,
-    agentCurrency:          data.agentCurrency           || 'PKR',
+    cargoAmount:            data.cargoAmount            || 0,
+    cargoCurrency:          data.cargoCurrency          || 'PKR',
+    customsAmount:          data.customsAmount          || 0,
+    customsCurrency:        data.customsCurrency        || 'PKR',
+    agentDetails:           data.agentDetails           || '',
+    agentAmount:            data.agentAmount            || 0,
+    agentCurrency:          data.agentCurrency          || 'PKR',
     digitalStamp:           data.digitalStamp,
     imageUrl:               data.imageUrl,
     pdfUrl:                 data.pdfUrl,
     paidBy:                 data.paidBy,
     paidTo:                 data.paidTo,
     productLocation:        data.productLocation,
-    
-    // ✨ NEW: Liquidity linkage fields
-    originalLiquiditySource:   data.originalLiquiditySource,
-    originalLiquidityDocId:    data.originalLiquidityDocId,
-    originalLiquidityAmount:   data.originalLiquidityAmount,
-    remainingLiquidityAmount:  data.remainingLiquidityAmount,
-    originalBankTxnId:         data.originalBankTxnId,
-    
-    createdAt:              data.createdAt,
-    updatedAt:              data.updatedAt,
+    selectedCurrencies:     data.selectedCurrencies,
+
+    // ✨ Liquidity linkage fields
+    originalLiquiditySource:  data.originalLiquiditySource,
+    originalLiquidityDocId:   data.originalLiquidityDocId,
+    originalLiquidityAmount:  data.originalLiquidityAmount,
+    remainingLiquidityAmount: data.remainingLiquidityAmount,
+    originalBankTxnId:        data.originalBankTxnId,
+
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
   } as Invoice;
 }
 
@@ -109,7 +149,7 @@ export class InvoiceFirebaseService {
     }
   }
 
-  // ── Fetch all invoices ───────────────────────────────────────────────────
+  // ── Subscribe to live invoice updates ────────────────────────────────────
   static subscribeToInvoices(
     onData:  (invoices: Invoice[]) => void,
     onError: (error: Error) => void
@@ -157,53 +197,48 @@ export class InvoiceFirebaseService {
     }
   }
 
-  // ── Create invoice (UPDATED with liquidity linkage) ───────────────────────
+  // ── Create invoice (with liquidity linkage) ───────────────────────────────
   static async createInvoice(dto: Omit<Invoice, 'id'>): Promise<Invoice> {
     try {
-      const now  = new Date().toISOString();
-      
-      // ✨ NEW: Compute liquidity linkage fields based on payment mode
+      const now = new Date().toISOString();
+
+      // ✨ Compute liquidity linkage fields based on payment mode
       let liquidityFields: Record<string, any> = {};
-      
+
       if (dto.paymentMode === 'Bank' || dto.paymentMode === 'Cheque') {
-        // For Bank/Cheque: liquidity comes from the specified bank account
         liquidityFields = {
-          originalLiquiditySource: 'bank',
-          originalLiquidityDocId: dto.bankId,  // Bank doc id where payment was received
-          originalLiquidityAmount: dto.totalAmount || 0,
-          remainingLiquidityAmount: dto.totalAmount || 0,  // Initially all available
+          originalLiquiditySource:  'bank',
+          originalLiquidityDocId:   dto.bankId,
+          originalLiquidityAmount:  dto.totalAmount || 0,
+          remainingLiquidityAmount: dto.totalAmount || 0,
         };
         console.log(`📌 Invoice will track Bank liquidity: ${dto.bankId} (${dto.bankName})`);
       } else if (dto.paymentMode === 'Cash') {
-        // For Cash: liquidity comes from a cash location
-        // NOTE: You may need to add a locationId field to Invoice to track which cash location
-        // For now, using a default or placeholder
         liquidityFields = {
-          originalLiquiditySource: 'cash',
-          originalLiquidityDocId: dto.productLocation || 'Head Office - Islamabad', // Adjust as needed
-          originalLiquidityAmount: dto.totalAmount || 0,
+          originalLiquiditySource:  'cash',
+          originalLiquidityDocId:   dto.productLocation || 'Head Office - Islamabad',
+          originalLiquidityAmount:  dto.totalAmount || 0,
           remainingLiquidityAmount: dto.totalAmount || 0,
         };
         console.log(`📌 Invoice will track Cash liquidity from: ${liquidityFields.originalLiquidityDocId}`);
       }
-      // Online payments don't track liquidity deduction (already cleared)
-      
-      const data = stripUndefined({ 
-        ...dto, 
+
+      const data = stripUndefined({
+        ...dto,
         ...liquidityFields,
-        createdAt: now, 
-        updatedAt: now 
+        createdAt: now,
+        updatedAt: now,
       });
-      
-      const ref  = await addDoc(collection(db, COLLECTION), data);
+
+      const ref = await addDoc(collection(db, COLLECTION), data);
       console.log('✅ Invoice created:', ref.id, 'with liquidity:', liquidityFields);
-      
-      return { 
-        ...dto, 
-        id: ref.id, 
+
+      return {
+        ...dto,
+        id: ref.id,
         ...liquidityFields,
-        createdAt: now, 
-        updatedAt: now 
+        createdAt: now,
+        updatedAt: now,
       };
     } catch (error) {
       console.error('❌ Error creating invoice:', error);
@@ -226,7 +261,6 @@ export class InvoiceFirebaseService {
   // ── Delete invoice ───────────────────────────────────────────────────────
   static async deleteInvoice(id: string): Promise<void> {
     try {
-      // Also delete the PDF from Storage if it exists
       try {
         const pdfRef = storageRef(storage, `${PDF_STORAGE_PATH}/${id}.pdf`);
         await deleteObject(pdfRef);
@@ -272,7 +306,6 @@ export class InvoiceFirebaseService {
     const updated = [...current, trimmed];
     await updateDoc(doc(db, 'invoiceSettings', 'deliveryStatuses'), { list: updated })
       .catch(async () => {
-        // doc may not exist yet — use addDoc to set field via updateDoc after create
         await addDoc(collection(db, 'invoiceSettings'), {}).catch(() => {});
         const ref = doc(db, 'invoiceSettings', 'deliveryStatuses');
         await updateDoc(ref, { list: updated }).catch(async () => {
@@ -328,25 +361,22 @@ export class InvoiceFirebaseService {
       let updated = 0;
 
       for (const inv of invoices) {
-        // Skip if already has liquidity linkage
-        if (inv.originalLiquiditySource) {
-          continue;
-        }
+        if (inv.originalLiquiditySource) continue; // already backfilled
 
         let liquidityFields: Record<string, any> = {};
 
         if (inv.paymentMode === 'Bank' || inv.paymentMode === 'Cheque') {
           liquidityFields = {
-            originalLiquiditySource: 'bank',
-            originalLiquidityDocId: inv.bankId || 'unknown',
-            originalLiquidityAmount: inv.totalAmount,
+            originalLiquiditySource:  'bank',
+            originalLiquidityDocId:   inv.bankId || 'unknown',
+            originalLiquidityAmount:  inv.totalAmount,
             remainingLiquidityAmount: Math.max(0, inv.totalAmount - (inv.paidAmount || 0)),
           };
         } else if (inv.paymentMode === 'Cash') {
           liquidityFields = {
-            originalLiquiditySource: 'cash',
-            originalLiquidityDocId: inv.productLocation || 'Head Office - Islamabad',
-            originalLiquidityAmount: inv.totalAmount,
+            originalLiquiditySource:  'cash',
+            originalLiquidityDocId:   inv.productLocation || 'Head Office - Islamabad',
+            originalLiquidityAmount:  inv.totalAmount,
             remainingLiquidityAmount: Math.max(0, inv.totalAmount - (inv.paidAmount || 0)),
           };
         }

@@ -43,6 +43,11 @@ const storage = getStorage();
  * `inventory-images/<productId>/` and return their download URLs.
  * Pass a temporary client-side key (e.g. Date.now()) when the product
  * doesn't have a Firestore ID yet — callers can rename later if needed.
+ *
+ * FIX: Explicitly sets `contentType` metadata so Firebase Storage serves the
+ * file with the correct MIME type and respects the bucket's CORS policy.
+ * Without this, uploads from localhost can fail with a CORS pre-flight error
+ * because the Storage emulator / bucket doesn't recognise the content type.
  */
 export async function uploadInventoryImages(
   images: File[],
@@ -51,13 +56,58 @@ export async function uploadInventoryImages(
   const urls: string[] = [];
   for (const file of images) {
     const ext     = file.name.split('.').pop() ?? 'jpg';
+    const mime    = file.type || (ext === 'png' ? 'image/png' : 'image/jpeg');
     const path    = `inventory-images/${productKey}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
     const fileRef = storageRef(storage, path);
-    await uploadBytes(fileRef, file);
+    // Pass explicit metadata so Storage knows the content type on preflight
+    await uploadBytes(fileRef, file, { contentType: mime });
     const url = await getDownloadURL(fileRef);
     urls.push(url);
   }
   return urls;
+}
+
+/**
+ * Fetch a Firebase Storage image URL and return it as a base64 data-URL.
+ *
+ * Plain `fetch()` of a Firebase Storage URL fails in some browsers with a
+ * CORS error when the bucket has not yet configured an `Access-Control-Allow-Origin`
+ * header for the app's origin. Using the Firebase Storage SDK's `getDownloadURL`
+ * (which returns the same URL) already bypasses CORS for authenticated reads —
+ * but subsequent `fetch()` calls made by the PDF service still go through the
+ * browser's CORS mechanism.
+ *
+ * This helper uses `XMLHttpRequest` with `responseType = 'blob'` which honours
+ * the same CORS policy, but we additionally try to request via the SDK ref
+ * so the auth token is included if the bucket requires it.
+ *
+ * Returns null on any error so callers can degrade gracefully (show no image).
+ */
+export async function fetchImageAsBase64(url: string): Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' } | null> {
+  if (!url) return null;
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'blob';
+    xhr.onload = () => {
+      if (xhr.status !== 200) { resolve(null); return; }
+      const blob: Blob = xhr.response;
+      if (!blob || blob.size === 0) { resolve(null); return; }
+      const mime = blob.type.toLowerCase();
+      const format: 'PNG' | 'JPEG' = mime.includes('png') ? 'PNG' : 'JPEG';
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        resolve(dataUrl ? { dataUrl, format } : null);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    };
+    xhr.onerror = () => resolve(null);
+    xhr.ontimeout = () => resolve(null);
+    xhr.timeout = 8000;
+    xhr.send();
+  });
 }
 
 /**

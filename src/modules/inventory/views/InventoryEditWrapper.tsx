@@ -121,6 +121,10 @@ export const InventoryEditWrapper: React.FC = () => {
       goToPreviousStep={viewModel.goToPreviousStep}
       handleSubmit={viewModel.handleSubmit}
       handleCancel={handleCancel}
+      selectedImages={viewModel.selectedImages}
+      addImages={viewModel.addImages}
+      removeImage={viewModel.removeImage}
+      removeExistingImage={viewModel.removeExistingImage}
     />
   );
 };

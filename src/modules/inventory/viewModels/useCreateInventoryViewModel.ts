@@ -19,8 +19,7 @@ import {
   CreateProductDTO,
   UpdateProductDTO,
 } from '../models/types';
-import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
-import { uploadInventoryImages } from '../models/InventoryFirebaseService';
+import { InventoryFirebaseService, uploadInventoryImages, deleteInventoryImage } from '../models/InventoryFirebaseService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure-JS fallback — used only when Firestore is unreachable.
@@ -52,6 +51,7 @@ export interface UseCreateInventoryViewModelReturn {
   selectedImages: File[];
   addImages: (files: File[]) => void;
   removeImage: (index: number) => void;
+  removeExistingImage: (index: number) => Promise<void>;
   setField: (field: string, value: any) => void;
   setCurrentStep: (step: InventoryEntryStep) => void;
   setSerialInput: (value: string) => void;
@@ -190,6 +190,27 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
   }, []);
 
+  const removeExistingImage = useCallback(async (index: number) => {
+    if (!editingId) {
+      toast.error('No product selected to delete image from');
+      return;
+    }
+    const existing: string[] = (formData as any).imageUrls || [];
+    if (!existing[index]) return;
+    const url = existing[index];
+    try {
+      // Remove from storage (non-blocking if fails) and update Firestore
+      await deleteInventoryImage(url);
+      const updated = existing.filter((_, i) => i !== index);
+      await InventoryFirebaseService.updateProduct(editingId, { imageUrls: updated });
+      setFormData(prev => ({ ...prev, imageUrls: updated }));
+      toast.success('Image removed');
+    } catch (err) {
+      console.error('Failed to delete image:', err);
+      toast.error('Failed to remove image');
+    }
+  }, [editingId, formData]);
+
   // ── setField ──────────────────────────────────────────────────────────────
   const setField = useCallback((field: string, value: any) => {
     let sanitised = value;
@@ -308,11 +329,11 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
 
       if (isEditMode && editingId) {
         // ── UPDATE ─────────────────────────────────────────────────────────
-        // Upload any newly selected images and merge with existing ones
-        let newImageUrls: string[] = [];
-        if (selectedImages.length > 0) {
-          newImageUrls = await uploadInventoryImages(selectedImages, editingId);
-        }
+        //
+        // IMPORTANT: Save product data to Firestore FIRST, then attempt image
+        // upload in a separate non-blocking step.  Previously both were in the
+        // same try/catch, so a CORS failure on Firebase Storage would silently
+        // abort the entire update and the user saw "Updating..." with nothing saved.
         const existingUrls: string[] = (formData as any).imageUrls || [];
 
         const updateDto: UpdateProductDTO = {
@@ -333,21 +354,39 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           costingOption: formData.costingOption,
           costing:       formData.costing,
           transactionId: formData.transactionId || undefined,
-          imageUrls:     [...existingUrls, ...newImageUrls],
+          // Save with existing URLs first; new ones patched in below if upload succeeds
+          imageUrls:     existingUrls,
         };
 
+        // Step 1: Save product data — always, never blocked by image issues
         await InventoryFirebaseService.updateProduct(editingId, updateDto);
-        toast.success(`✅ Inventory updated — ${formData.transactionId || editingId}`);
+
+        // Step 2: Upload new images and patch — non-blocking, won't abort the save
+        if (selectedImages.length > 0) {
+          try {
+            const newImageUrls = await uploadInventoryImages(selectedImages, editingId);
+            const mergedUrls = [...existingUrls, ...newImageUrls];
+            await InventoryFirebaseService.updateProduct(editingId, { imageUrls: mergedUrls });
+            toast.success(`✅ Inventory updated with ${newImageUrls.length} image(s) — ${formData.transactionId || editingId}`);
+          } catch (imgErr) {
+            // Product data is already saved — only images failed
+            console.error('Image upload failed (product was saved):', imgErr);
+            toast.success(`✅ Inventory updated — ${formData.transactionId || editingId}`);
+            toast.warning(
+              'Images could not be uploaded (CORS error). Product data was saved successfully. ' +
+              'Fix: configure CORS on your Firebase Storage bucket (see README).',
+              { duration: 8000 }
+            );
+          }
+        } else {
+          toast.success(`✅ Inventory updated — ${formData.transactionId || editingId}`);
+        }
 
       } else {
         // ── CREATE ─────────────────────────────────────────────────────────
-        // Upload images first; use a temp key derived from brand+model+timestamp
-        let imageUrls: string[] = [];
-        if (selectedImages.length > 0) {
-          const productKey = `${formData.brandName}-${formData.modelName}-${Date.now()}`.replace(/\s+/g, '_');
-          imageUrls = await uploadInventoryImages(selectedImages, productKey);
-        }
-
+        // Create the product first with empty imageUrls, then upload images
+        // in a separate non-blocking step.  This ensures the product is always
+        // saved to Firestore even if Firebase Storage CORS upload fails.
         const createDto: CreateProductDTO = {
           brandName:     formData.brandName,
           modelName:     formData.modelName,
@@ -366,25 +405,45 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           costingOption: formData.costingOption,
           costing:       formData.costing,
           transactionId: formData.transactionId,
-          imageUrls,
+          imageUrls:     [], // patched below after upload
         };
 
         const paymentInfo = formData.paymentMethod
           ? {
               paymentStatus,
-              transactionId:  formData.transactionId,  // ← links activity records
+              transactionId:  formData.transactionId,
               paidAmount:     formData.paidAmount,
               totalAmount,
               paymentMode:    formData.paymentMethod === 'Cash' ? 'cash' : 'bank',
             }
           : {
               paymentStatus:  'unpaid' as const,
-              transactionId:  formData.transactionId,  // ← always saved even if unpaid
+              transactionId:  formData.transactionId,
               totalAmount,
             };
 
-        await InventoryFirebaseService.createProduct(createDto, paymentInfo);
-        toast.success(`✅ Inventory saved — ${formData.transactionId}`);
+        // Step 1: Save product — guaranteed to succeed even if images fail
+        const createdProduct = await InventoryFirebaseService.createProduct(createDto, paymentInfo);
+
+        // Step 2: Upload images non-blocking — patch imageUrls on the new doc
+        if (selectedImages.length > 0) {
+          try {
+            const productKey = `${formData.brandName}-${formData.modelName}-${createdProduct.id}`.replace(/\s+/g, '_');
+            const imageUrls = await uploadInventoryImages(selectedImages, productKey);
+            await InventoryFirebaseService.updateProduct(createdProduct.id, { imageUrls });
+            toast.success(`✅ Inventory saved with ${imageUrls.length} image(s) — ${formData.transactionId}`);
+          } catch (imgErr) {
+            console.error('Image upload failed on create (product was saved):', imgErr);
+            toast.success(`✅ Inventory saved — ${formData.transactionId}`);
+            toast.warning(
+              'Images could not be uploaded (CORS error). Product was saved. ' +
+              'Fix: configure CORS on your Firebase Storage bucket.',
+              { duration: 8000 }
+            );
+          }
+        } else {
+          toast.success(`✅ Inventory saved — ${formData.transactionId}`);
+        }
       }
 
       navigate('/inventory/view');
@@ -410,6 +469,7 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
     selectedImages,
     addImages,
     removeImage,
+    removeExistingImage,
     serialInput,
     serialCity,
     setField,

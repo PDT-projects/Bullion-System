@@ -691,14 +691,25 @@ export function InvoiceFormView({
                           />
                         </div>
                       </div>
-                      {product.productId && (
-                        <div className="mb-2 flex flex-wrap gap-1 text-xs">
-                          {product.brandName   && <span className="px-2 py-0.5 bg-white border border-yellow-200 text-gray-700 rounded-full font-medium">{product.brandName}</span>}
-                          {product.modelName   && <span className="px-2 py-0.5 bg-white border border-yellow-200 text-gray-700 rounded-full font-medium">{product.modelName}</span>}
-                          {product.category    && <span className="px-2 py-0.5 bg-white border border-yellow-100 text-gray-600 rounded-full">{product.category}</span>}
-                          {product.description && <span className="px-2 py-0.5 bg-white border border-yellow-100 text-gray-500 rounded-full truncate max-w-xs">{product.description}</span>}
-                        </div>
-                      )}
+                      {product.productId && (() => {
+                        const pInfo = availableProducts.find(ap => ap.id === product.productId);
+                        const thumb = pInfo?.imageUrls && pInfo.imageUrls.length > 0 ? pInfo.imageUrls[0] : undefined;
+                        return (
+                          <div className="mb-2 flex items-center gap-3">
+                            {thumb && (
+                              <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', border: '1px solid #f6e7c7', background: '#fff' }}>
+                                <img src={thumb} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              </div>
+                            )}
+                            <div className="flex flex-wrap gap-1 text-xs">
+                              {product.brandName   && <span className="px-2 py-0.5 bg-white border border-yellow-200 text-gray-700 rounded-full font-medium">{product.brandName}</span>}
+                              {product.modelName   && <span className="px-2 py-0.5 bg-white border border-yellow-200 text-gray-700 rounded-full font-medium">{product.modelName}</span>}
+                              {product.category    && <span className="px-2 py-0.5 bg-white border border-yellow-100 text-gray-600 rounded-full">{product.category}</span>}
+                              {product.description && <span className="px-2 py-0.5 bg-white border border-yellow-100 text-gray-500 rounded-full truncate max-w-xs">{product.description}</span>}
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {product.productId && product.quantity > 0 && (
                         <div className="border-t border-yellow-200 pt-2">
                           <div className="flex items-center gap-1.5 mb-1.5">

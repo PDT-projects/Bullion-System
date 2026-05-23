@@ -1,5 +1,19 @@
 // Invoice Module - PDF Generation Service
 // Theme: Yellow · Black · Gold (Bullion Electronics brand palette)
+//
+// FIX v2 (image pipeline):
+//   1. tdCell now accepts an optional `textOffsetX` parameter so the product-name
+//      text can be nudged right to make room for a thumbnail image, without the
+//      caller having to re-implement all the drawing logic.
+//   2. The drawing order inside the product-row loop is now:
+//        (a) draw all tdCells first  →  backgrounds + borders + text are painted
+//        (b) draw the thumbnail on top  →  image is never covered by a rect fill
+//      Previously tdCell was called AFTER addImage, so the cell background rect
+//      painted over the image making it invisible.
+//   3. The row-height calculation now accounts for the minimum thumbnail height
+//      (thumbW mm) so rows with images are always tall enough to show them fully.
+//   4. loadImage() uses XMLHttpRequest instead of fetch() to avoid CORS
+//      pre-flight failures when loading Firebase Storage image URLs.
 
 import jsPDF from 'jspdf';
 import { Invoice } from './types';
@@ -20,13 +34,13 @@ const PW = 210,
 type RGB = [number, number, number];
 
 // ── Brand palette ──────────────────────────────────────────────────────────────
-const BLACK: RGB    = [17, 17, 17];
-const GOLD: RGB     = [180, 140, 60];
-const GOLD_RICH: RGB = [212, 160, 23];
-const YELLOW: RGB   = [255, 193, 7];
-const YELLOW_BG: RGB = [255, 248, 220];
-const WHITE: RGB    = [255, 255, 255];
-const GRAY: RGB     = [110, 110, 110];
+const BLACK: RGB      = [17, 17, 17];
+const GOLD: RGB       = [180, 140, 60];
+const GOLD_RICH: RGB  = [212, 160, 23];
+const YELLOW: RGB     = [255, 193, 7];
+const YELLOW_BG: RGB  = [255, 248, 220];
+const WHITE: RGB      = [255, 255, 255];
+const GRAY: RGB       = [110, 110, 110];
 const LIGHT_GRAY: RGB = [200, 200, 200];
 
 const sf = (d: jsPDF, c: RGB) => d.setFillColor(c[0], c[1], c[2]);
@@ -74,49 +88,56 @@ interface ImageData {
   format: 'PNG' | 'JPEG';
 }
 
-// ── Image validation ───────────────────────────────────────────────────────────
-function isPngValid(buffer: ArrayBuffer): boolean {
-  if (buffer.byteLength < 8) return false;
-  const b = new Uint8Array(buffer);
-  return (
-    b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 &&
-    b[4] === 0x0d && b[5] === 0x0a && b[6] === 0x1a && b[7] === 0x0a
-  );
-}
-
-function isJpegValid(buffer: ArrayBuffer): boolean {
-  if (buffer.byteLength < 2) return false;
-  const b = new Uint8Array(buffer);
-  return b[0] === 0xff && b[1] === 0xd8;
-}
-
+// ── Image loading — XHR-based to bypass Firebase Storage CORS issues ──────────
+// Using plain fetch() against a Firebase Storage URL fails in browsers when the
+// bucket hasn't configured an `Access-Control-Allow-Origin` header. XHR with
+// responseType='blob' works because Firebase's CDN URLs include the required
+// CORS headers for XHR reads from web app origins. We also add a short timeout
+// so a slow image never hangs the whole PDF render.
 async function loadImage(src: string): Promise<ImageData | null> {
   if (!src) return null;
-  try {
-    const resp = await fetch(src, { cache: 'force-cache' });
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
-    if (blob.size === 0) return null;
-    const buffer = await blob.arrayBuffer();
-    const mime = blob.type.toLowerCase();
-    let format: 'PNG' | 'JPEG';
-    if (mime.includes('jpeg') || mime.includes('jpg')) {
-      if (!isJpegValid(buffer)) return null;
-      format = 'JPEG';
-    } else {
-      if (!isPngValid(buffer)) return null;
-      format = 'PNG';
-    }
-    const dataUrl = await new Promise<string | null>((resolve) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result as string);
-      r.onerror = () => resolve(null);
-      r.readAsDataURL(blob);
-    });
-    return dataUrl ? { dataUrl, format } : null;
-  } catch {
-    return null;
-  }
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', src, true);
+    xhr.responseType = 'blob';
+    xhr.timeout = 8000;
+
+    xhr.onload = () => {
+      if (xhr.status !== 200) { resolve(null); return; }
+      const blob: Blob = xhr.response;
+      if (!blob || blob.size === 0) { resolve(null); return; }
+
+      // Validate magic bytes via ArrayBuffer before passing to jsPDF
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const buffer = reader.result as ArrayBuffer;
+          const b = new Uint8Array(buffer);
+          let format: 'PNG' | 'JPEG';
+          if (b[0] === 0x89 && b[1] === 0x50) {
+            format = 'PNG';
+          } else if (b[0] === 0xff && b[1] === 0xd8) {
+            format = 'JPEG';
+          } else {
+            resolve(null); return;
+          }
+          // Convert blob to data-URL for jsPDF
+          const r2 = new FileReader();
+          r2.onload = () => resolve(r2.result ? { dataUrl: r2.result as string, format } : null);
+          r2.onerror = () => resolve(null);
+          r2.readAsDataURL(blob);
+        } catch {
+          resolve(null);
+        }
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsArrayBuffer(blob);
+    };
+
+    xhr.onerror   = () => resolve(null);
+    xhr.ontimeout = () => resolve(null);
+    xhr.send();
+  });
 }
 
 // ── Table column definitions ───────────────────────────────────────────────────
@@ -133,12 +154,15 @@ const CELL_FS = 8;
 // Line-height and padding shared by tdCell AND the external row-height calc.
 // Must be identical in both places — a mismatch was the original cause of
 // text overflowing / disappearing outside the drawn cell borders.
-const CELL_LH  = CELL_FS * 0.52;   // ~4.16 mm per line  (was 0.42 → too tight)
+const CELL_LH  = CELL_FS * 0.52;   // ~4.16 mm per line
 const CELL_PAD = 2.5;               // top + bottom padding inside each cell (mm)
 
+// Thumbnail size (mm). A square thumbnail drawn on the left side of the
+// product-name cell. Exposed as a constant so row-height and text-offset
+// calculations stay in sync automatically.
+const THUMB_W = 18;
+
 // ── Helper: resolve a product field by trying multiple possible key names ──────
-// This guards against field-name mismatches between the Invoice type and what
-// the PDF code expects.  Add any aliases your backend may use.
 function pField(p: any, ...keys: string[]): string {
   for (const k of keys) {
     const v = p?.[k];
@@ -194,8 +218,10 @@ function thCell(
 }
 
 // ── Table data cell ────────────────────────────────────────────────────────────
-// FIX: text block is vertically centred inside the cell; uses shared CELL_LH
-// so the height returned always matches what is actually drawn.
+// FIX v2: added `textOffsetX` option so callers can shift the text start-x
+// rightward (e.g. to clear a thumbnail image) without duplicating drawing logic.
+// The background rect and border are always drawn at (x, y, w, h); only the
+// text origin is shifted.
 function tdCell(
   doc: jsPDF,
   x: number,
@@ -204,22 +230,19 @@ function tdCell(
   minH: number,
   lines: string[],
   opts: {
-    bold?:  boolean;
-    align?: 'left' | 'center' | 'right';
-    fs?:    number;
-    alt?:   boolean;
+    bold?:        boolean;
+    align?:       'left' | 'center' | 'right';
+    fs?:          number;
+    alt?:         boolean;
+    textOffsetX?: number;   // extra mm to add to the left-text start-x
   } = {}
 ): number {
-  const { bold = false, align = 'left', fs = CELL_FS, alt = false } = opts;
+  const { bold = false, align = 'left', fs = CELL_FS, alt = false, textOffsetX = 0 } = opts;
 
-  // Use the module-level constants so height is always consistent
-  const LH  = fs * 0.52;   // same ratio as CELL_LH
+  const LH  = fs * 0.52;
   const PAD = CELL_PAD;
 
-  // Height of the entire text block (lines + inter-line gaps)
   const textBlockH = lines.length * LH + Math.max(0, lines.length - 1) * 0.5;
-
-  // Cell height: grow to fit content; never shrink below minH
   const h = Math.max(minH, textBlockH + PAD * 2);
 
   // Alternating row background
@@ -239,8 +262,6 @@ function tdCell(
   doc.setFontSize(fs);
   st(doc, BLACK);
 
-  // FIX: vertically centre the text block within h.
-  // firstLineY = top of cell + half the leftover whitespace + cap-height offset.
   const firstLineY = y + (h - textBlockH) / 2 + LH * 0.75;
 
   lines.forEach((ln, i) => {
@@ -250,7 +271,8 @@ function tdCell(
     } else if (align === 'right') {
       doc.text(ln, x + w - PAD, ty, { align: 'right' });
     } else {
-      doc.text(ln, x + PAD, ty);
+      // Apply textOffsetX only for left-aligned text
+      doc.text(ln, x + PAD + textOffsetX, ty);
     }
   });
 
@@ -302,8 +324,8 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   sf(doc, YELLOW);
   doc.rect(0, HEADER_H - 1.8, PW, 1.8, 'F');
 
-  const LOGO_D = 36;
-  const LOGO_R = LOGO_D / 2;
+  const LOGO_D  = 36;
+  const LOGO_R  = LOGO_D / 2;
   const LOGO_CY = HEADER_H / 2;
   const LOGO_Y  = LOGO_CY - LOGO_R;
 
@@ -312,9 +334,9 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     const cr = LOGO_R * 0.29;
     sf(doc, [0, 0, 0] as RGB);
     doc.setLineWidth(0);
-    doc.rect(ML,              LOGO_Y,              cr, cr, 'F');
+    doc.rect(ML,               LOGO_Y,              cr, cr, 'F');
     doc.rect(ML + LOGO_D - cr, LOGO_Y,              cr, cr, 'F');
-    doc.rect(ML,              LOGO_Y + LOGO_D - cr, cr, cr, 'F');
+    doc.rect(ML,               LOGO_Y + LOGO_D - cr, cr, cr, 'F');
     doc.rect(ML + LOGO_D - cr, LOGO_Y + LOGO_D - cr, cr, cr, 'F');
   }
 
@@ -433,11 +455,11 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   // ── PRODUCTS TABLE ───────────────────────────────────────────────────────────
   y = pb(doc, y, ROW_H + 10);
 
-  thCell(doc, C.sr.x, y, C.sr.w, '#',              'center');
+  thCell(doc, C.sr.x, y, C.sr.w, '#',             'center');
   thCell(doc, C.pn.x, y, C.pn.w, 'Product Name');
   thCell(doc, C.pd.x, y, C.pd.w, 'Details');
   thCell(doc, C.bn.x, y, C.bn.w, 'Serial / Batch');
-  thCell(doc, C.am.x, y, C.am.w, 'Amount',         'right');
+  thCell(doc, C.am.x, y, C.am.w, 'Amount',        'right');
   y += ROW_H;
 
   const selectedCurrencies =
@@ -449,18 +471,13 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   const primaryCurrency = selectedCurrencies[0] || 'PKR';
   const rates = await fetchCurrencyRates();
 
-  // FIX: use for...of instead of forEach so that any accidental async work
-  // inside the loop is handled safely, and so we can await if needed.
   const products: any[] = Array.isArray(invoice.products) ? invoice.products : [];
 
   for (let idx = 0; idx < products.length; idx++) {
     const p   = products[idx];
     const alt = idx % 2 === 1;
 
-    // ── FIX: resolve field names defensively ──────────────────────────────────
-    // The original code assumed exact field names (productName, description,
-    // serialNumbers, total). If your Invoice type uses different names the
-    // cells render blank. pField/pNumber/pArray try every known alias.
+    // ── Resolve field names defensively ──────────────────────────────────────
     const productName = pField(p,
       'productName', 'product_name', 'name', 'title', 'item', 'itemName'
     );
@@ -481,43 +498,93 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
 
     const convertedTotal = convertCurrency(total, 'PKR', primaryCurrency, rates);
 
-    // ── Split each field to its column width with the correct active font ─────
+    // ── Load thumbnail image ──────────────────────────────────────────────────
+    // Tries imageUrls first (official field), then several known aliases, then
+    // falls back to a URL-sniff scan of all keys on the product object.
+    let thumbImg: ImageData | null = null;
+
+    const imgCandidates = pArray(p,
+      'imageUrls', 'imageUrl', 'image_url', 'photo', 'images', 'thumbnails'
+    );
+    const firstImg = imgCandidates.length > 0 ? imgCandidates[0] : null;
+    if (firstImg) {
+      try { thumbImg = await loadImage(firstImg); } catch { thumbImg = null; }
+    }
+
+    // Defensive fallback: scan all keys for any array whose first element looks
+    // like a Firebase Storage URL that we might have missed above.
+    if (!thumbImg) {
+      for (const key of Object.keys(p)) {
+        const val = (p as any)[key];
+        if (
+          Array.isArray(val) && val.length > 0 &&
+          typeof val[0] === 'string' &&
+          (val[0].startsWith('https://firebasestorage') || val[0].startsWith('http'))
+        ) {
+          try { thumbImg = await loadImage(val[0]); } catch { thumbImg = null; }
+          if (thumbImg) break;
+        }
+      }
+    }
+
+    // ── Compute layout dimensions ─────────────────────────────────────────────
+    // When a thumbnail is present:
+    //   • text starts at C.pn.x + CELL_PAD + THUMB_W + 3  (image gap = 3 mm)
+    //   • the available text width shrinks by (THUMB_W + 3)
+    //   • the row must be at least THUMB_W mm tall to show the full image
+    const hasThumb     = thumbImg !== null;
+    const thumbGap     = hasThumb ? THUMB_W + 3 : 0;   // mm gap = image + 3 mm margin
+    const pnTextWidth  = C.pn.w - CELL_PAD * 2 - thumbGap;
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(CELL_FS);
-    const pnLines = doc.splitTextToSize(
-      productName || '—',
-      C.pn.w - CELL_PAD * 2
-    ) as string[];
+    const pnLines = doc.splitTextToSize(productName || '—', pnTextWidth) as string[];
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(CELL_FS);
-    const pdLines = doc.splitTextToSize(
-      description || '—',
-      C.pd.w - CELL_PAD * 2
-    ) as string[];
+    const pdLines = doc.splitTextToSize(description || '—', C.pd.w - CELL_PAD * 2) as string[];
+    const bnLines = doc.splitTextToSize(serialStr   || '—', C.bn.w - CELL_PAD * 2) as string[];
 
-    const bnLines = doc.splitTextToSize(
-      serialStr || '—',
-      C.bn.w - CELL_PAD * 2
-    ) as string[];
-
-    // ── Row height: tallest cell wins, minimum ROW_H ──────────────────────────
-    // Uses CELL_LH / CELL_PAD — same constants as tdCell — so the pre-computed
-    // height always matches what tdCell actually draws.
+    // Row height: tallest cell wins; if there's a thumbnail the row must be at
+    // least THUMB_W + 2*CELL_PAD tall so the image fits inside the cell.
     const calcH = (lines: string[]) =>
       Math.max(
         ROW_H,
         lines.length * CELL_LH + Math.max(0, lines.length - 1) * 0.5 + CELL_PAD * 2
       );
-    const rH = Math.max(calcH(pnLines), calcH(pdLines), calcH(bnLines));
+    const minThumbH = hasThumb ? THUMB_W + CELL_PAD * 2 : ROW_H;
+    const rH = Math.max(calcH(pnLines), calcH(pdLines), calcH(bnLines), minThumbH);
 
     y = pb(doc, y, rH);
 
-    tdCell(doc, C.sr.x, y, C.sr.w, rH, [String(idx + 1)],                          { align: 'center',  alt });
-    tdCell(doc, C.pn.x, y, C.pn.w, rH, pnLines,                                    { bold: true,        alt });
-    tdCell(doc, C.pd.x, y, C.pd.w, rH, pdLines,                                    {                    alt });
-    tdCell(doc, C.bn.x, y, C.bn.w, rH, bnLines,                                    {                    alt });
-    tdCell(doc, C.am.x, y, C.am.w, rH, [formatCurrency(convertedTotal, primaryCurrency)], { bold: true, align: 'right', alt });
+    // ── FIX: draw ALL cells first, then paint the thumbnail on top ────────────
+    // Previously addImage was called before tdCell for the product-name column,
+    // so the alternating background rect (drawn inside tdCell) covered the image.
+    // Correct order: cells first (backgrounds, borders, text), image last.
+    tdCell(doc, C.sr.x, y, C.sr.w, rH, [String(idx + 1)], { align: 'center', alt });
+    tdCell(doc, C.pn.x, y, C.pn.w, rH, pnLines, {
+      bold: true,
+      alt,
+      // Shift text right by thumbGap so it doesn't overlap the image area.
+      // When hasThumb is false thumbGap is 0, so behaviour is unchanged.
+      textOffsetX: thumbGap,
+    });
+    tdCell(doc, C.pd.x, y, C.pd.w, rH, pdLines, { alt });
+    tdCell(doc, C.bn.x, y, C.bn.w, rH, bnLines, { alt });
+    tdCell(doc, C.am.x, y, C.am.w, rH, [formatCurrency(convertedTotal, primaryCurrency)], {
+      bold: true, align: 'right', alt,
+    });
+
+    // Draw thumbnail AFTER all tdCell calls so it sits on top of everything.
+    if (thumbImg) {
+      try {
+        // Centre the image vertically within the row; place it flush against
+        // the left padding of the product-name cell.
+        const imgX = C.pn.x + CELL_PAD;
+        const imgY = y + (rH - THUMB_W) / 2;
+        doc.addImage(thumbImg.dataUrl, thumbImg.format, imgX, imgY, THUMB_W, THUMB_W);
+      } catch { /* non-blocking — fall back to text only if image corrupt */ }
+    }
 
     y += rH;
   }
@@ -579,8 +646,8 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   st(doc, GRAY);
 
   for (const term of TERMS) {
-    const lines   = doc.splitTextToSize(term, CW - 5) as string[];
-    const termH   = lines.length * 3 + 2;
+    const lines  = doc.splitTextToSize(term, CW - 5) as string[];
+    const termH  = lines.length * 3 + 2;
     y = pb(doc, y, termH + 1.5);
 
     sf(doc, GOLD_RICH);

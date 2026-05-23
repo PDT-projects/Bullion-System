@@ -59,6 +59,7 @@ interface CreateInventoryViewProps {
   selectedImages?: File[];
   addImages?: (files: File[]) => void;
   removeImage?: (index: number) => void;
+  removeExistingImage?: (index: number) => void;
 }
 
 // ── Payment method options ────────────────────────────────────────────────────
@@ -77,11 +78,13 @@ function ImageUploadSection({
   existingUrls,
   onAdd,
   onRemove,
+  onRemoveExisting,
 }: {
   images: File[];
   existingUrls: string[];
   onAdd: (files: File[]) => void;
   onRemove: (index: number) => void;
+  onRemoveExisting?: (index: number) => void;
 }) {
   const fileInputRef              = useRef<HTMLInputElement>(null);
   const [dragging, setDragging]   = useState(false);
@@ -136,13 +139,26 @@ function ImageUploadSection({
       </div>
 
       {/* Existing (already-uploaded) images — shown in edit mode */}
-      {existingUrls.length > 0 && (
+            {existingUrls.length > 0 && (
         <div className="mt-3">
           <p className="text-xs text-gray-400 font-semibold mb-2 uppercase tracking-wide">Saved</p>
           <div className="flex flex-wrap gap-2">
             {existingUrls.map((url, i) => (
               <div key={i} style={{ position: 'relative', width: 72, height: 72, borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
                 <img src={url} alt={`img-${i}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {onRemoveExisting && (
+                  <button
+                    onClick={e => { e.stopPropagation(); if (confirm('Remove this image?')) onRemoveExisting(i); }}
+                    title="Remove"
+                    style={{
+                      position: 'absolute', top: 4, right: 4,
+                      width: 18, height: 18, borderRadius: '50%', border: 'none',
+                      backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                    }}
+                  >
+                    <X size={11} color="#fff" strokeWidth={3} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -218,6 +234,7 @@ export function CreateInventoryView({
   selectedImages = [],
   addImages,
   removeImage,
+  removeExistingImage,
 }: CreateInventoryViewProps) {
 
   // ── Banks — fetched once when payment step mounts ─────────────────────────
@@ -525,6 +542,7 @@ export function CreateInventoryView({
         existingUrls={(formData as any).imageUrls || []}
         onAdd={addImages ?? (() => {})}
         onRemove={removeImage ?? (() => {})}
+        onRemoveExisting={removeExistingImage}
       />
     </div>
   );

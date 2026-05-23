@@ -17,6 +17,7 @@ export interface InvoiceProduct {
   serialNumbers: string[];
   serialCities?: { [serialNumber: string]: string };
   currency: InvoiceCurrency;
+  imageUrls?: string[];
 }
 
 export interface Invoice {
@@ -166,6 +167,7 @@ export interface ProductInfo {
   serialCities: { [serialNumber: string]: string };
   serialStatus?: { [serialNumber: string]: 'Available' | 'In Transit' | 'Damaged' | 'Returned' };
   description: string;
+  imageUrls?: string[];
 }
 
 export interface CustomerSuggestion {

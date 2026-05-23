@@ -128,6 +128,7 @@ export const updateProductWithSelection = (product: InvoiceProduct, productId: s
     total: product.quantity * p.sellPrice,
     serialNumbers: [],
     currency: 'PKR', // TODO: set based on branch or product
+    imageUrls: p.imageUrls || [],
   };
 };
 

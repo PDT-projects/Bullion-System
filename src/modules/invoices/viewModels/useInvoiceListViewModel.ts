@@ -131,6 +131,7 @@ export interface ProductInfo {
   serialCities: { [serialNumber: string]: string };
   serialStatus?: { [serialNumber: string]: 'Available' | 'In Transit' | 'Damaged' | 'Returned' };
   description: string;
+  imageUrls?: string[];
 }
 
 export interface CustomerSuggestion {
