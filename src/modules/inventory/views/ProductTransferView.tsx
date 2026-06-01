@@ -1,10 +1,14 @@
 // Inventory Module - View Layer
-// ProductTransferView - Shows all transfers with status and Mark Received action
+// ProductTransferView
 //
-// Changes:
-//   • Download PDF button added to Actions column (blue, Download icon)
-//   • Download PDF button added to View Transfer modal footer
-//   • PDF generated inline using jsPDF — Bullion Electronics yellow/black branding
+// CHANGES (v3):
+//  • formatDate prop renamed to formatDateTime — shows full date + time in table, modal, etc.
+//  • "Date" column in table now renders date+time
+//  • "Received" timestamp in modal shows date+time
+//  • PDF generator updated:
+//    - Date field shows full date+time
+//    - Received At banner shows full date+time
+//    - Serial numbers table row split into individual rows when >1 serial (clearer PDF)
 
 import React from 'react';
 import {
@@ -40,10 +44,21 @@ function _fill(doc: jsPDF, hex: string)  { doc.setFillColor(..._hex(hex)); }
 function _text(doc: jsPDF, hex: string)  { doc.setTextColor(..._hex(hex)); }
 function _draw(doc: jsPDF, hex: string)  { doc.setDrawColor(..._hex(hex)); }
 
-function _fmtDate(d?: string): string {
+/** Format ISO string → "01 Jun 2026, 14:30" */
+function _fmtDateTime(d?: string): string {
   if (!d) return '-';
-  try { return new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return d; }
+  try {
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleString('en-PK', {
+      day:    '2-digit',
+      month:  'short',
+      year:   'numeric',
+      hour:   '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  } catch { return d; }
 }
 
 function downloadTransferPDF(transfer: ProductTransfer): void {
@@ -98,6 +113,10 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
   const metaY0  = y + 6;
   const lineH   = 8;
 
+  // Full date+time in the Date field
+  const xferDateTime   = _fmtDateTime(transfer.transferDate || (transfer as any).date);
+  const receivedAt     = transfer.receivedAt ? _fmtDateTime(transfer.receivedAt) : null;
+
   const leftRows  = [
     { label: 'From Location:',  value: transfer.fromLocation  || '-' },
     { label: 'To Location:',    value: transfer.toLocation    || '-' },
@@ -105,7 +124,7 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
   ];
   const rightRows = [
     { label: 'Transfer ID:', value: (transfer.id || '-').slice(0, 18) },
-    { label: 'Date:',        value: _fmtDate(transfer.transferDate || transfer.date) },
+    { label: 'Date & Time:', value: xferDateTime },
     { label: 'Status:',      value: transfer.status || 'In Transit' },
   ];
 
@@ -120,7 +139,7 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
     const statusColor = label === 'Status:'
       ? (value === 'Received' ? '#16a34a' : value === 'In Transit' ? '#1d4ed8' : '#b45309')
       : _BLACK;
-    doc.setFont(label === 'Status:' ? 'helvetica' : 'helvetica', label === 'Status:' ? 'bold' : 'normal');
+    doc.setFont('helvetica', label === 'Status:' ? 'bold' : 'normal');
     _text(doc, statusColor);
     doc.text(value, col2X + labelW, ry);
   });
@@ -132,23 +151,39 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
   doc.roundedRect(mL, y, cW, 10, 2, 2, 'F');
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
   _text(doc, '#FF8080'); doc.text(`FROM: ${transfer.fromLocation || '-'}`, mL + 5, y + 6.5);
-  _text(doc, _YELLOW);   doc.text('→', pageW / 2 - 3, y + 6.5);
-  _text(doc, '#86efac'); doc.text(`TO: ${transfer.toLocation || '-'}`,   pageW / 2 + 5, y + 6.5);
+  _text(doc, _YELLOW);   doc.text('>>', pageW / 2 - 5, y + 6.5);
+  _text(doc, '#86efac'); doc.text(`TO: ${transfer.toLocation || '-'}`, pageW / 2 + 7, y + 6.5);
 
   y += 10 + 7;
 
-  // ── 4. Items table ────────────────────────────────────────────────────────
+  // ── 4. Items table — one row per serial for clarity ──────────────────────
   const serials = transfer.serialNumbers || [];
+  const tableBody: string[][] = serials.length > 0
+    ? serials.map((s, i) => [
+        String(i + 1),
+        transfer.productName || '-',
+        transfer.modelName || transfer.brandName || '-',
+        s,
+        '1',
+      ])
+    : [['1', transfer.productName || '-', transfer.modelName || '-', '-', String(transfer.quantity || 0)]];
+
+  // If only one serial (or none), fall back to single-row with all serials joined
+  const useSingleRow = serials.length <= 1;
+  const finalBody = useSingleRow
+    ? [[
+        '1',
+        transfer.productName || '-',
+        transfer.modelName || transfer.brandName || '-',
+        serials.join(', ') || '-',
+        String(transfer.quantity || serials.length || 0),
+      ]]
+    : tableBody;
+
   autoTable(doc, {
     startY: y,
-    head: [['Sr.No', 'Product Name', 'Model', 'Serial Numbers', 'Qty']],
-    body: [[
-      '1',
-      transfer.productName || '-',
-      transfer.brandName   || transfer.modelName || '-',
-      serials.join(', ')   || '-',
-      String(transfer.quantity || serials.length || 0),
-    ]],
+    head: [['Sr.No', 'Product Name', 'Model', 'Serial Number', 'Qty']],
+    body: finalBody,
     margin: { left: mL, right: mR },
     tableWidth: cW,
     styles: {
@@ -173,6 +208,17 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
       3: { cellWidth: 70 },
       4: { cellWidth: 18, halign: 'center' },
     },
+    // Footer row showing total quantity
+    foot: serials.length > 1
+      ? [['', '', '', 'Total Units:', String(serials.length)]]
+      : undefined,
+    footStyles: {
+      fillColor: _hex(_BLACK),
+      textColor: _hex(_YELLOW),
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'right',
+    },
   });
 
   y = (doc as any).lastAutoTable.finalY + 7;
@@ -182,15 +228,27 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
     doc.setFont('helvetica', 'bold');   doc.setFontSize(8.5); _text(doc, _GRAY_TEXT);
     doc.text('Note:', mL, y);
     doc.setFont('helvetica', 'normal');                       _text(doc, _BLACK);
-    doc.text(transfer.note, mL + 14, y);
-    y += 10;
+    const noteLines = doc.splitTextToSize(transfer.note, cW - 20);
+    doc.text(noteLines, mL + 14, y);
+    y += (noteLines.length * 4.5) + 8;
   }
 
-  // ── 6. Yellow divider rule ───────────────────────────────────────────────
+  // ── 6. Received banner (shows full date+time) ─────────────────────────────
+  if (receivedAt) {
+    _fill(doc, '#dcfce7');
+    doc.roundedRect(mL, y, cW, 9, 2, 2, 'F');
+    _draw(doc, '#16a34a'); doc.setLineWidth(0.4);
+    doc.roundedRect(mL, y, cW, 9, 2, 2, 'S');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); _text(doc, '#15803d');
+    doc.text(`Received: ${receivedAt}`, mL + 4, y + 6);
+    y += 9 + 7;
+  }
+
+  // ── 7. Yellow divider rule ───────────────────────────────────────────────
   _draw(doc, _YELLOW); doc.setLineWidth(0.8); doc.line(mL, y, pageW - mR, y);
   y += 8;
 
-  // ── 7. Terms & Conditions ─────────────────────────────────────────────────
+  // ── 8. Terms & Conditions ─────────────────────────────────────────────────
   _fill(doc, _YELLOW); doc.rect(mL, y, cW, 6.5, 'F');
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8); _text(doc, _BLACK);
   doc.text('Terms and Conditions', mL + 3, y + 4.5);
@@ -204,9 +262,9 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
     'Products in transit remain the property of Bullion Electronics.',
     'The transferring party is responsible for safe packaging and handover.',
     'This document must be retained for audit and warranty purposes.',
-  ].forEach(t => { doc.text(`• ${t}`, mL + 2, y); y += 5; });
+  ].forEach(t => { doc.text(`* ${t}`, mL + 2, y); y += 5; });
 
-  // ── 8. Black footer — pinned to page bottom (A4 = 297 mm) ────────────
+  // ── 9. Black footer ──────────────────────────────────────────────────────
   const pageH   = 297;
   const footerH = 18;
   const footerY = pageH - footerH;
@@ -225,6 +283,8 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
   doc.save(`Transfer_${transfer.id || 'draft'}_${from}_to_${to}.pdf`);
 }
 
+// ── View component ───────────────────────────────────────────────────────────
+
 interface ProductTransferViewProps {
   transfers: ProductTransfer[];
   viewTransfer: ProductTransfer | null;
@@ -240,21 +300,19 @@ interface ProductTransferViewProps {
   onMarkReceived: (transfer: ProductTransfer) => void;
   onDelete: (id: string) => void;
   onCloseView: () => void;
-  formatDate: (date: string) => string;
+  /** Formats an ISO datetime string → "1 Jun 2026, 14:30" */
+  formatDateTime: (date: string) => string;
 }
 
 export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
   transfers, viewTransfer, isLoading, stats,
-  onAdd, onView, onMarkReceived, onDelete, onCloseView, formatDate,
+  onAdd, onView, onMarkReceived, onDelete, onCloseView, formatDateTime,
 }) => {
   const statusBadge = (status: string) => {
     const base = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold';
-    if (status === 'Received' || status === 'Completed')
-      return `${base} bg-green-100 text-green-700`;
-    if (status === 'In Transit')
-      return `${base} bg-slate-100 text-[#1e293b]`;
-    if (status === 'Pending')
-      return `${base} bg-amber-100 text-amber-700`;
+    if (status === 'Received' || status === 'Completed') return `${base} bg-green-100 text-green-700`;
+    if (status === 'In Transit')                          return `${base} bg-slate-100 text-[#1e293b]`;
+    if (status === 'Pending')                             return `${base} bg-amber-100 text-amber-700`;
     return `${base} bg-gray-100 text-gray-600`;
   };
 
@@ -267,7 +325,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
   return (
     <div className="h-full overflow-y-auto p-6">
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Product Transfers</h2>
@@ -291,7 +349,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
         </button>
       </div>
 
-      {/* Stats */}
+      {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Total',      value: stats.totalTransfers,     color: 'bg-gray-50 border-gray-200',   text: 'text-gray-800' },
@@ -306,7 +364,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
         ))}
       </div>
 
-      {/* Table */}
+      {/* ── Transfers Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="text-base font-semibold text-gray-800">
@@ -329,7 +387,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
             <table className="w-full">
               <thead className="border-b border-gray-200">
                 <tr>
-                  {['Date', 'Product', 'Route', 'Qty', 'Serials', 'By', 'Status', 'Actions'].map(h => (
+                  {['Date & Time', 'Product', 'Route', 'Qty', 'Serials', 'By', 'Status', 'Actions'].map(h => (
                     <th key={h} className="px-6 py-3.5 text-left text-sm font-semibold text-gray-500">
                       {h}
                     </th>
@@ -340,10 +398,19 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                 {transfers.map(t => (
                   <tr key={t.id} className="hover:bg-gray-50 transition-colors">
 
+                    {/* Date + Time */}
                     <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap">
-                      {formatDate(t.date || t.transferDate || '')}
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {formatDateTime(t.transferDate || t.date || '').split(',')[0]}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {formatDateTime(t.transferDate || t.date || '').split(',')[1]?.trim() || ''}
+                        </span>
+                      </div>
                     </td>
 
+                    {/* Product */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4 text-slate-400 shrink-0" />
@@ -351,6 +418,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                       </div>
                     </td>
 
+                    {/* Route */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
@@ -363,10 +431,12 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                       </div>
                     </td>
 
+                    {/* Qty */}
                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">
                       {t.quantity}
                     </td>
 
+                    {/* Serials preview */}
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1 max-w-[180px]">
                         {(t.serialNumbers || []).slice(0, 2).map(s => (
@@ -375,15 +445,17 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                           </span>
                         ))}
                         {(t.serialNumbers || []).length > 2 && (
-                          <span className="text-xs text-gray-400">+{t.serialNumbers.length - 2}</span>
+                          <span className="text-xs text-gray-400">+{t.serialNumbers.length - 2} more</span>
                         )}
                       </div>
                     </td>
 
+                    {/* Transferred By */}
                     <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap">
-                      {t.transferredBy || '—'}
+                      {t.transferredBy || '-'}
                     </td>
 
+                    {/* Status */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={statusBadge(t.status)}>
                         {statusIcon(t.status)}
@@ -391,11 +463,9 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                       </span>
                     </td>
 
-                    {/* ── ACTIONS ── */}
+                    {/* Actions */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-1">
-
-                        {/* View details */}
                         <button
                           onClick={() => onView(t)}
                           className="p-2 text-[#334155] hover:bg-slate-50 rounded-lg transition-colors"
@@ -404,7 +474,6 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                           <Eye size={16} />
                         </button>
 
-                        {/* Mark Received */}
                         {(t.status === 'Pending' || t.status === 'In Transit') && (
                           <button
                             onClick={() => onMarkReceived(t)}
@@ -414,7 +483,6 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                           </button>
                         )}
 
-                        {/* ── Download PDF — blue theme ── */}
                         <button
                           onClick={() => downloadTransferPDF(t)}
                           className="p-2 text-gray-800 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 border border-gray-300 rounded-lg transition-colors"
@@ -423,7 +491,6 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                           <Download size={16} />
                         </button>
 
-                        {/* Delete */}
                         <button
                           onClick={() => onDelete(t.id)}
                           className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
@@ -431,7 +498,6 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                         >
                           <Trash2 size={16} />
                         </button>
-
                       </div>
                     </td>
 
@@ -443,11 +509,13 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
         )}
       </div>
 
-      {/* View Transfer Modal */}
+      {/* ── View Transfer Modal ── */}
       {viewTransfer && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl" style={{ maxHeight: 'min(680px, calc(100vh - 2rem))' }}>
-
+          <div
+            className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl"
+            style={{ maxHeight: 'min(700px, calc(100vh - 2rem))' }}
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -457,7 +525,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Transfer Details</h3>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {formatDate(viewTransfer.date || viewTransfer.transferDate || '')}
+                    {formatDateTime(viewTransfer.transferDate || viewTransfer.date || '')}
                   </p>
                 </div>
               </div>
@@ -522,7 +590,18 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Transferred By</p>
                   </div>
                   <p className="text-sm font-semibold text-gray-900 mt-1">
-                    {viewTransfer.transferredBy || '—'}
+                    {viewTransfer.transferredBy || '-'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Transfer Date+Time */}
+              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
+                <Calendar size={14} className="text-gray-400 shrink-0" />
+                <div>
+                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Transfer Date &amp; Time</p>
+                  <p className="text-sm font-semibold text-gray-900 mt-0.5">
+                    {formatDateTime(viewTransfer.transferDate || viewTransfer.date || '')}
                   </p>
                 </div>
               </div>
@@ -562,13 +641,15 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                 </div>
               )}
 
-              {/* Received At */}
+              {/* Received At — full date+time */}
               {viewTransfer.receivedAt && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-xl">
                   <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
                   <div>
                     <p className="text-xs font-semibold text-green-700">Received</p>
-                    <p className="text-xs text-green-600">{formatDate(viewTransfer.receivedAt)}</p>
+                    <p className="text-xs text-green-600">
+                      {formatDateTime(viewTransfer.receivedAt)}
+                    </p>
                   </div>
                 </div>
               )}
@@ -577,8 +658,6 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
 
             {/* Modal Footer */}
             <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
-
-              {/* Left: Download PDF */}
               <button
                 onClick={() => downloadTransferPDF(viewTransfer)}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm bg-gray-100 text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-200 active:bg-gray-300 transition-colors font-semibold"
@@ -586,15 +665,13 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                 <Download size={15} /> Download PDF
               </button>
 
-              {/* Right: Mark Received + Close */}
               <div className="flex items-center gap-2">
                 {(viewTransfer.status === 'Pending' || viewTransfer.status === 'In Transit') && (
                   <button
                     onClick={() => onMarkReceived(viewTransfer)}
                     className="flex items-center gap-2 px-5 py-2.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
                   >
-                    <CheckCircle2 size={16} />
-                    Mark as Received
+                    <CheckCircle2 size={16} /> Mark as Received
                   </button>
                 )}
                 <button
@@ -604,7 +681,6 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                   Close
                 </button>
               </div>
-
             </div>
 
           </div>

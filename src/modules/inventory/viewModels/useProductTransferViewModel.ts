@@ -1,8 +1,9 @@
 // Inventory Module - ViewModel Layer
 // useProductTransferViewModel - Transfer list + Mark Received logic
 //
-// FIX (v2): handleMarkReceived now writes serialCities based on toLocation for ALL
-// received serials, permanently fixing stale city entries going forward.
+// CHANGES (v3):
+//  • formatDate → formatDateTime — renders full date + time (e.g. "1 Jun 2026, 14:30")
+//  • handleMarkReceived unchanged in logic, just uses updated datetime helper
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -31,6 +32,9 @@ interface UseProductTransferViewModelReturn {
   setViewTransfer: (transfer: ProductTransfer | null) => void;
   onBack: () => void;
   onNewTransfer: () => void;
+  /** Formats an ISO date/datetime string → "1 Jun 2026, 14:30" */
+  formatDateTime: (date: string) => string;
+  /** Legacy alias kept for any consumers that still call formatDate */
   formatDate: (date: string) => string;
 }
 
@@ -86,10 +90,10 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
   }, [allTransfers, filters]);
 
   const stats = useMemo(() => ({
-    totalTransfers:    allTransfers.length,
-    pendingTransfers:  allTransfers.filter(t => t.status === 'Pending').length,
-    inTransitTransfers:allTransfers.filter(t => t.status === 'In Transit').length,
-    receivedTransfers: allTransfers.filter(t => t.status === 'Received').length,
+    totalTransfers:     allTransfers.length,
+    pendingTransfers:   allTransfers.filter(t => t.status === 'Pending').length,
+    inTransitTransfers: allTransfers.filter(t => t.status === 'In Transit').length,
+    receivedTransfers:  allTransfers.filter(t => t.status === 'Received').length,
   }), [allTransfers]);
 
   const activeFilterCount = useMemo(
@@ -105,7 +109,7 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
   const clearFilters  = useCallback(() => setFiltersState(DEFAULT_FILTERS), []);
   const toggleFilters = useCallback(() => setShowFilters(p => !p), []);
 
-  // ── CORE: Mark Received → add serials to destination product ─────────────────
+  // ── CORE: Mark Received → add serials to destination product ─────────────
   const handleMarkReceived = useCallback(async (transfer: ProductTransfer) => {
     if (transfer.status === 'Received') {
       toast.error('This transfer is already marked as received');
@@ -114,99 +118,75 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
 
     try {
       const sourceProduct = allProducts.find(p => p.id === transfer.productId);
-      if (!sourceProduct) {
-        toast.error('Source product not found');
-        return;
-      }
+      if (!sourceProduct) { toast.error('Source product not found'); return; }
 
       const transferredSerials = transfer.serialNumbers || [];
       const toLocation = transfer.toLocation;
 
-      // ── Step 1: Remove transferred serials from SOURCE product ──────────────
-      // The source product already had its serialNumbers stripped when the transfer
-      // was created (handleSave removes them). But we must update its serialCities
-      // to clean up any stale entries for the remaining serials.
+      // Step 1: Clean up source product
       const sourceRemainingSerials = (sourceProduct.serialNumbers || []).filter(
         s => !transferredSerials.includes(s)
       );
       const sourceCities: Record<string, string> = {};
       sourceRemainingSerials.forEach(s => {
-        // Keep each remaining serial at its current effective location
         sourceCities[s] = sourceProduct.serialCities?.[s] || sourceProduct.location || '';
       });
 
-      // Only write back to source if it still has remaining serials or we need
-      // to clear stale cities — always update to keep data clean.
       await InventoryFirebaseService.updateProduct(sourceProduct.id, {
         stock:         sourceRemainingSerials.length,
         serialNumbers: sourceRemainingSerials,
         serialCities:  sourceCities,
-        // Do NOT change sourceProduct.location — it belongs to the source office
       });
 
-      // ── Step 2: Find or use destination product record ──────────────────────
-      // Prefer a product record that is ALREADY at toLocation so we don't
-      // accidentally overwrite the wrong record's location.
-      const destProduct = allProducts.find(
-        p =>
-          p.brandName === sourceProduct.brandName &&
-          p.modelName === sourceProduct.modelName &&
-          p.id !== sourceProduct.id &&
-          p.location === toLocation &&
-          p.receivableStatus !== 'Pending'
-      ) ?? allProducts.find(
-        p =>
-          p.brandName === sourceProduct.brandName &&
-          p.modelName === sourceProduct.modelName &&
-          p.id !== sourceProduct.id &&
-          p.receivableStatus !== 'Pending'
-      ) ?? sourceProduct; // last resort: same record (single-location product)
+      // Step 2: Find or use destination product record
+      const destProduct =
+        allProducts.find(
+          p =>
+            p.brandName === sourceProduct.brandName &&
+            p.modelName === sourceProduct.modelName &&
+            p.id !== sourceProduct.id &&
+            p.location === toLocation &&
+            p.receivableStatus !== 'Pending'
+        ) ??
+        allProducts.find(
+          p =>
+            p.brandName === sourceProduct.brandName &&
+            p.modelName === sourceProduct.modelName &&
+            p.id !== sourceProduct.id &&
+            p.receivableStatus !== 'Pending'
+        ) ??
+        sourceProduct;
 
       const existingSerials = (destProduct.serialNumbers || []).filter(
-        s => !transferredSerials.includes(s) // deduplicate
+        s => !transferredSerials.includes(s)
       );
       const mergedSerials = [...existingSerials, ...transferredSerials];
-
-      // All serials in destProduct are now at toLocation
       const mergedCities: Record<string, string> = {};
-      mergedSerials.forEach(s => {
-        mergedCities[s] = toLocation;
-      });
+      mergedSerials.forEach(s => { mergedCities[s] = toLocation; });
 
       await InventoryFirebaseService.updateProduct(destProduct.id, {
-        stock:         mergedSerials.length,   // derive from actual serial count
+        stock:         mergedSerials.length,
         serialNumbers: mergedSerials,
         serialCities:  mergedCities,
-        location:      toLocation,             // update dest record to toLocation
+        location:      toLocation,
       });
 
-      // ── Step 3: Mark transfer as Received ───────────────────────────────────
+      // Step 3: Mark transfer as Received with full ISO timestamp
       const receivedAt = new Date().toISOString();
       await TransferFirebaseService.updateTransferStatus(transfer.id, 'Received', receivedAt);
 
-      // ── Step 4: Sync local state ─────────────────────────────────────────────
+      // Step 4: Sync local state
       setAllTransfers(prev =>
-        prev.map(t => t.id === transfer.id ? { ...t, status: 'Received', receivedAt } : t)
+        prev.map(t =>
+          t.id === transfer.id ? { ...t, status: 'Received', receivedAt } : t
+        )
       );
       setAllProducts(prev =>
         prev.map(p => {
-          if (p.id === sourceProduct.id) {
-            return {
-              ...p,
-              stock:         sourceRemainingSerials.length,
-              serialNumbers: sourceRemainingSerials,
-              serialCities:  sourceCities,
-            };
-          }
-          if (p.id === destProduct.id) {
-            return {
-              ...p,
-              stock:         mergedSerials.length,
-              serialNumbers: mergedSerials,
-              serialCities:  mergedCities,
-              location:      toLocation,
-            };
-          }
+          if (p.id === sourceProduct.id)
+            return { ...p, stock: sourceRemainingSerials.length, serialNumbers: sourceRemainingSerials, serialCities: sourceCities };
+          if (p.id === destProduct.id)
+            return { ...p, stock: mergedSerials.length, serialNumbers: mergedSerials, serialCities: mergedCities, location: toLocation };
           return p;
         })
       );
@@ -232,10 +212,30 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
     }
   }, []);
 
-  const formatDate = useCallback(
-    (date: string) => date ? new Date(date).toLocaleDateString('en-PK') : '-',
-    []
-  );
+  /**
+   * Renders an ISO datetime string as "1 Jun 2026, 14:30" (Pakistan locale).
+   * Falls back gracefully for old date-only strings like "2026-06-01".
+   */
+  const formatDateTime = useCallback((date: string): string => {
+    if (!date) return '—';
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return date;
+      return d.toLocaleString('en-PK', {
+        day:    'numeric',
+        month:  'short',
+        year:   'numeric',
+        hour:   '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    } catch {
+      return date;
+    }
+  }, []);
+
+  // Legacy alias — keeps any old consumers working without changes
+  const formatDate = formatDateTime;
 
   const onBack        = useCallback(() => navigate('/inventory'), [navigate]);
   const onNewTransfer = useCallback(() => navigate('/product-transfer/new'), [navigate]);
@@ -245,6 +245,7 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
     viewTransfer, stats,
     setFilter, clearFilters, toggleFilters,
     handleMarkReceived, handleDeleteTransfer,
-    setViewTransfer, onBack, onNewTransfer, formatDate,
+    setViewTransfer, onBack, onNewTransfer,
+    formatDateTime, formatDate,
   };
 }

@@ -21,7 +21,7 @@ export const ProductTransferWrapper: React.FC = () => {
       onMarkReceived={t => viewModel.handleMarkReceived(t)}
       onDelete={id => viewModel.handleDeleteTransfer(id)}
       onCloseView={() => viewModel.setViewTransfer(null)}
-      formatDate={viewModel.formatDate}
+      formatDateTime={viewModel.formatDateTime}
     />
   );
 };
