@@ -293,14 +293,11 @@ export function useCommissionSlabFormViewModel(
       addCustomLocation(trimmed);
     }
 
-    // Convert amounts to PKR for storage
-    const pkrFrom = formData.inputCurrency === 'PKR'
-      ? formData.fromAmount
-      : +convertCommissionCurrency(formData.fromAmount, formData.inputCurrency, 'PKR', currencyRates).toFixed(2);
-
-    const pkrTo = formData.inputCurrency === 'PKR'
-      ? formData.toAmount
-      : +convertCommissionCurrency(formData.toAmount, formData.inputCurrency, 'PKR', currencyRates).toFixed(2);
+    // fromAmount and toAmount are ALWAYS stored in PKR internally.
+    // CurrencyAmountInput.handleChange already converts to PKR via onPkrChange,
+    // so we must NOT convert again here — doing so causes double-conversion.
+    const pkrFrom = +formData.fromAmount.toFixed(2);
+    const pkrTo   = +formData.toAmount.toFixed(2);
 
     // Determine which salesperson IDs to create/update for
     const isAll = formData.salesperson === ALL_SALESPERSONS;
