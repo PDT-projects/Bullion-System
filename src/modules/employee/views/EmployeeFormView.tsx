@@ -5,31 +5,28 @@ import { ArrowLeft } from 'lucide-react';
 import { Employee } from '../models/types';
 import { EmployeeFormFields } from './components/EmployeeFormFields';
 
-/**
- * Props for EmployeeFormView component
- */
 interface EmployeeFormViewProps {
   formData: Partial<Employee>;
   isEditMode: boolean;
   pageTitle: string;
   submitButtonText: string;
+  allLocations: string[];
+  addCustomLocation: (name: string) => void;
   onFieldChange: (field: keyof Employee, value: any) => void;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
-/**
- * EmployeeFormView - Dumb component for employee form (Create/Edit)
- * Shared between Create and Edit pages
- */
 export function EmployeeFormView({
   formData,
   isEditMode,
   pageTitle,
   submitButtonText,
+  allLocations,
+  addCustomLocation,
   onFieldChange,
   onSubmit,
-  onCancel
+  onCancel,
 }: EmployeeFormViewProps) {
   return (
     <div className="p-6">
@@ -54,6 +51,8 @@ export function EmployeeFormView({
             <EmployeeFormFields
               formData={formData}
               onFieldChange={onFieldChange}
+              allLocations={allLocations}
+              addCustomLocation={addCustomLocation}
             />
 
             {/* Form Actions */}
@@ -73,7 +72,6 @@ export function EmployeeFormView({
               >
                 {submitButtonText}
               </button>
-
             </div>
           </div>
         </div>

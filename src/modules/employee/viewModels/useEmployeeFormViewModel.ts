@@ -1,5 +1,5 @@
 // Employee Module - ViewModel Layer
-// useEmployeeFormViewModel - Business logic for employee form (Create/Edit) with Data Connect
+// useEmployeeFormViewModel - Business logic for employee form (Create/Edit)
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -8,16 +8,54 @@ import { Employee, CreateEmployeeDTO, UpdateEmployeeDTO } from '../models/types'
 import { EmployeeService } from '../models/employeeService';
 import { EmployeeFirebaseService } from '../models/employeeFirebaseService';
 
-/**
- * Props for useEmployeeFormViewModel
- */
+// ── Locations ──────────────────────────────────────────────────────────────────
+export const DEFAULT_EMPLOYEE_LOCATIONS: readonly string[] = [
+  'Dubai',
+  'Abu Dhabi',
+  'Sharjah',
+  'Riyadh',
+  'Jeddah',
+  'Dammam',
+  'Doha',
+  'Kuwait City',
+  'Muscat',
+  'Bahrain',
+  'Chad',
+  'Sudan',
+  'Cairo',
+  'Nairobi',
+  'Lagos',
+  'London',
+  'Toronto',
+  'New York',
+  'Other',
+];
+
+const CUSTOM_LOCATIONS_KEY = 'employee_custom_locations';
+
+function loadCustomEmployeeLocations(): string[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_LOCATIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomEmployeeLocations(locs: string[]): void {
+  try {
+    localStorage.setItem(CUSTOM_LOCATIONS_KEY, JSON.stringify(locs));
+  } catch {
+    // localStorage unavailable — ignore
+  }
+}
+
+// ── Props ──────────────────────────────────────────────────────────────────────
 interface UseEmployeeFormViewModelProps {
   mode: 'create' | 'edit';
 }
 
-/**
- * Return type for useEmployeeFormViewModel
- */
+// ── Return type ────────────────────────────────────────────────────────────────
 interface UseEmployeeFormViewModelReturn {
   // Form State
   formData: Partial<Employee>;
@@ -25,45 +63,66 @@ interface UseEmployeeFormViewModelReturn {
   errorMessage: string | null;
   isLoading: boolean;
   isSaving: boolean;
-  
+
   // Meta
   isEditMode: boolean;
   pageTitle: string;
   submitButtonText: string;
-  
+
+  // Locations
+  allLocations: string[];
+  addCustomLocation: (name: string) => void;
+
   // Actions
   onFieldChange: (field: keyof Employee, value: any) => void;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
-
-/**
- * ViewModel hook for Employee Form page (Create/Edit)
- * Shared logic for both creating and editing employees
- * Now integrated with Firebase Data Connect
- */
-export function useEmployeeFormViewModel({ 
-  mode 
+// ── Hook ───────────────────────────────────────────────────────────────────────
+export function useEmployeeFormViewModel({
+  mode,
 }: UseEmployeeFormViewModelProps): UseEmployeeFormViewModelReturn {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
   // ==================== STATE ====================
-  
+
   const [formData, setFormData] = useState<Partial<Employee>>(
     EmployeeService.getDefaultFormData()
   );
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Custom locations — persisted in localStorage
+  const [customLocations, setCustomLocations] = useState<string[]>(
+    loadCustomEmployeeLocations
+  );
+
+  const allLocations: string[] = [
+    ...DEFAULT_EMPLOYEE_LOCATIONS,
+    ...customLocations.filter(
+      (l) => !(DEFAULT_EMPLOYEE_LOCATIONS as readonly string[]).includes(l)
+    ),
+  ];
+
+  const addCustomLocation = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setCustomLocations((prev) => {
+      if (prev.includes(trimmed)) return prev;
+      const next = [...prev, trimmed];
+      saveCustomEmployeeLocations(next);
+      return next;
+    });
+  }, []);
+
   // ==================== COMPUTED VALUES ====================
-  
+
   const isEditMode = mode === 'edit';
   const pageTitle = isEditMode ? 'Edit Employee' : 'Add Employee';
   const submitButtonText = isEditMode ? 'Update Employee' : 'Save Employee';
 
-  // Validation
   const validation = useCallback(() => {
     return EmployeeService.validateEmployee(formData);
   }, [formData]);
@@ -72,17 +131,16 @@ export function useEmployeeFormViewModel({
   const errorMessage = validation().error;
 
   // ==================== EFFECTS ====================
-  
-  // Load existing employee data when in edit mode
+
   useEffect(() => {
     if (isEditMode && id) {
       const loadEmployee = async () => {
         try {
           setIsLoading(true);
           console.log(`🔄 Loading employee ${id} for editing...`);
-          
-const employee = await EmployeeFirebaseService.fetchEmployeeById(id);
-          
+
+          const employee = await EmployeeFirebaseService.fetchEmployeeById(id);
+
           if (employee) {
             setFormData(employee);
             console.log('✅ Employee loaded for editing:', employee.name);
@@ -104,25 +162,18 @@ const employee = await EmployeeFirebaseService.fetchEmployeeById(id);
   }, [isEditMode, id, navigate]);
 
   // ==================== ACTIONS ====================
-  
-  /**
-   * Update a specific form field
-   */
+
   const setField = useCallback((field: keyof Employee, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  /**
-   * Handle form submission
-   */
   const handleSubmit = useCallback(async () => {
     console.log('🔘 Save button clicked');
     console.log('📋 Form data:', formData);
-    
-    // Validate
+
     const validation = EmployeeService.validateEmployee(formData);
     console.log('✅ Validation result:', validation);
-    
+
     if (!validation.isValid) {
       console.log('❌ Validation failed:', validation.error);
       toast.error(validation.error || 'Please fill in all required fields');
@@ -133,19 +184,17 @@ const employee = await EmployeeFirebaseService.fetchEmployeeById(id);
 
     try {
       if (isEditMode && id) {
-        // Update existing employee
         console.log('📝 Updating employee:', id);
         const updateData: UpdateEmployeeDTO = {
           ...(formData as CreateEmployeeDTO),
-          id
+          id,
         };
-await EmployeeFirebaseService.updateEmployee(updateData);
+        await EmployeeFirebaseService.updateEmployee(updateData);
         toast.success('Employee updated successfully');
       } else {
-        // Create new employee
         console.log('➕ Creating new employee');
         const createData: CreateEmployeeDTO = formData as CreateEmployeeDTO;
-await EmployeeFirebaseService.createEmployee(createData);
+        await EmployeeFirebaseService.createEmployee(createData);
         toast.success('Employee added successfully');
       }
 
@@ -159,33 +208,25 @@ await EmployeeFirebaseService.createEmployee(createData);
     }
   }, [formData, isEditMode, id, navigate]);
 
-
-  /**
-   * Handle cancel action
-   */
   const handleCancel = useCallback(() => {
     navigate('/employees');
   }, [navigate]);
 
   // ==================== RETURN ====================
-  
+
   return {
-    // Form State
     formData,
     isValid,
     errorMessage,
     isLoading,
     isSaving,
-    
-    // Meta
     isEditMode,
     pageTitle,
     submitButtonText,
-    
-    // Actions (renamed to match View props)
+    allLocations,
+    addCustomLocation,
     onFieldChange: setField,
     onSubmit: handleSubmit,
-    onCancel: handleCancel
+    onCancel: handleCancel,
   };
-
 }
