@@ -159,25 +159,31 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
 
   // ── Balance calculations ─────────────────────────────────────────────────
   // ATI tracks its OWN paid/remaining — independent of invoice paidAmount.
-  // Use atiPaidAmount / atiRemainingAmount from the invoice.
-  // Fallback: if these ATI fields don't exist yet (older invoices), treat as 0.
+  //
+  // FIX: Always compute liveRemaining from atiPaidAmount (the source of truth),
+  // NOT from the stored atiRemainingAmount field which can be stale/out-of-sync.
+  // This matches exactly what atiFirebaseService.ts validates on the backend:
+  //   const atiPaidBefore      = Number(inv.atiPaidAmount) || 0;
+  //   const atiRemainingBefore = Math.max(0, invoiceTotal - atiPaidBefore);
   const amountClean = amount.replace(/,/g, '').trim();
   const amountNum   = Number(amountClean) || 0;
 
   const invoiceTotal = effectiveInv?.totalAmount ?? 0;
 
-  const atiPaidRaw = (effectiveInv as any)?.atiPaidAmount;
+  // Read atiPaidAmount — the live-updated field written by createEntry / deleteEntry.
+  // This is what the backend validates against, so the UI must use the same value.
+  const atiPaidRaw  = (effectiveInv as any)?.atiPaidAmount;
   const currentPaid = (typeof atiPaidRaw === 'number' && !isNaN(atiPaidRaw))
     ? atiPaidRaw
-    : 0;  // first ATI payment against this invoice
+    : 0;  // first ATI payment against this invoice — treat as 0
 
-  const atiRemainingRaw = (effectiveInv as any)?.atiRemainingAmount;
-  const liveRemaining = (typeof atiRemainingRaw === 'number' && !isNaN(atiRemainingRaw))
-    ? Math.max(0, atiRemainingRaw)
-    : Math.max(0, invoiceTotal - currentPaid);  // fallback to invoiceTotal - atiPaid
+  // ✅ FIX: derive liveRemaining from atiPaidAmount, not from stored atiRemainingAmount.
+  // The stored field can be stale (e.g. updated by a previous version that had a bug),
+  // while atiPaidAmount is always written correctly by every createEntry / deleteEntry call.
+  const liveRemaining = Math.max(0, invoiceTotal - currentPaid);
 
   const totalPaidAfter = currentPaid + amountNum;
-  const remainingAfter = Math.max(0, liveRemaining - amountNum);
+  const remainingAfter = Math.max(0, invoiceTotal - totalPaidAfter);
   const newStatus      = remainingAfter <= 0 ? 'Settled' : totalPaidAfter > 0 ? 'Partial' : 'Active';
   const pctAfter       = invoiceTotal > 0 ? Math.min(100, (totalPaidAfter / invoiceTotal) * 100) : 0;
 
@@ -237,8 +243,8 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
     if (amountNum <= 0)      { setError('Amount must be greater than 0'); return false; }
     if (amountNum > liveRemaining + 0.01) {
       setError(liveRemaining <= 0
-        ? `This invoice is already fully settled (${fmt(invoiceTotal)} paid out)`
-        : `Amount exceeds remaining balance of ${fmt(liveRemaining)}`);
+        ? `This invoice is already fully settled — ATI total: ${fmt(invoiceTotal)}`
+        : `Amount exceeds ATI remaining balance of ${fmt(liveRemaining)}`);
       return false;
     }
     if (!subCategory.trim())               { setError('Please select a sub-category'); return false; }

@@ -177,6 +177,26 @@ export class ATIFirebaseService {
       }
     }
 
+    // ── Pre-compute true atiPaidBefore by summing all existing ATI entries ──
+    // We do this OUTSIDE the Firestore transaction because transactions cannot
+    // run collection queries (getDocs). The stored inv.atiPaidAmount can be
+    // stale if entries were deleted or if an older bug wrote a wrong value.
+    // Summing live entries is always accurate regardless of stored field state.
+    let atiPaidBeforeVerified = 0;
+    try {
+      const existingEntries = await getDocs(
+        query(collection(db, COLLECTION), where('invoiceId', '==', dto.invoiceId))
+      );
+      atiPaidBeforeVerified = existingEntries.docs.reduce(
+        (sum, d) => sum + (Number(d.data().amount) || 0), 0
+      );
+      console.log(`ℹ️ ATI live sum for invoice ${dto.invoiceId}: PKR ${atiPaidBeforeVerified.toLocaleString()} (${existingEntries.size} entries)`);
+    } catch (sumErr) {
+      console.warn('⚠️ Could not sum existing ATI entries — falling back to stored atiPaidAmount', sumErr);
+      // fallback: will be read from invoice doc inside the transaction
+      atiPaidBeforeVerified = -1; // sentinel: use stored value
+    }
+
     try {
       const saved = await firestoreRunTransaction(db, async (txn) => {
 
@@ -192,8 +212,13 @@ export class ATIFirebaseService {
         const inv          = invoiceSnap.data();
         const invoiceTotal = Number(inv.totalAmount) || 0;
 
-        // ── ATI uses its OWN paid/remaining fields on the invoice ────────────
-        const atiPaidBefore      = Number(inv.atiPaidAmount) || 0;
+        // ── ATI paid before: use verified live sum; fall back to stored field ─
+        // The stored inv.atiPaidAmount can be stale after deletes or buggy writes.
+        // The live sum computed above is always accurate.
+        const atiPaidBefore = atiPaidBeforeVerified >= 0
+          ? atiPaidBeforeVerified
+          : (Number(inv.atiPaidAmount) || 0);
+
         const atiRemainingBefore = Math.max(0, invoiceTotal - atiPaidBefore);
 
         // ── Validate amount against ATI balance ──────────────────────────────
@@ -459,6 +484,7 @@ export class ATIFirebaseService {
         // ── Update invoice — ATI-own fields only ────────────────────────────
         // We NEVER touch paidAmount/remainingAmount (those track supplier costs).
         // We only update atiPaidAmount / atiRemainingAmount / atiStatus.
+        // NOTE: paidAfter = verified live sum + dto.amount, so this self-heals any stale stored value.
         txn.update(invoiceRef, {
           atiPaidAmount:      paidAfter,
           atiRemainingAmount: remainingAfter,
@@ -722,4 +748,68 @@ export async function migrateStaleATITransactions(): Promise<{ fixed: number; sk
 
   console.log(`[ATI migration] Done — fixed: ${fixed}, skipped: ${skipped}`);
   return { fixed, skipped };
+}
+
+// ── One-time repair: resync stale atiPaidAmount on invoice documents ──────────
+//
+// If inv.atiPaidAmount is out of sync with the actual ATI entries (e.g. due to
+// a deleted entry that didn't correctly decrement, or a buggy prior write),
+// this function recomputes the true sum from live ATI entries and patches the
+// invoice document.
+//
+// Call once from an admin/settings page. Safe to call repeatedly.
+export async function repairStaleATIPaidAmounts(): Promise<{ fixed: number; skipped: number; errors: number }> {
+  let fixed = 0, skipped = 0, errors = 0;
+
+  // 1. Load all ATI entries grouped by invoiceId
+  const atiSnap = await getDocs(collection(db, COLLECTION));
+  const grouped = new Map<string, number>();
+  atiSnap.docs.forEach(d => {
+    const invoiceId = d.data().invoiceId as string;
+    const amount    = Number(d.data().amount) || 0;
+    grouped.set(invoiceId, (grouped.get(invoiceId) || 0) + amount);
+  });
+
+  // 2. For each invoice that has ATI entries, compare and patch if needed
+  await Promise.all(Array.from(grouped.entries()).map(async ([invoiceId, trueSum]) => {
+    try {
+      const invoiceRef  = doc(db, INVOICE_COL, invoiceId);
+      const invoiceSnap = await getDoc(invoiceRef);
+      if (!invoiceSnap.exists()) { errors++; return; }
+
+      const inv          = invoiceSnap.data();
+      const invoiceTotal = Number(inv.totalAmount) || 0;
+      const storedPaid   = Number(inv.atiPaidAmount) || 0;
+
+      if (Math.abs(storedPaid - trueSum) < 0.01) {
+        // Already in sync — no patch needed
+        skipped++;
+        return;
+      }
+
+      const trueRemaining = Math.max(0, invoiceTotal - trueSum);
+      let   trueStatus: ATIStatus = 'Active';
+      if      (trueRemaining <= 0) trueStatus = 'Settled';
+      else if (trueSum > 0)        trueStatus = 'Partial';
+
+      await updateDoc(invoiceRef, {
+        atiPaidAmount:      trueSum,
+        atiRemainingAmount: trueRemaining,
+        atiStatus:          trueStatus,
+        updatedAt:          new Date().toISOString(),
+      });
+
+      console.log(
+        `[ATI repair] Invoice ${invoiceId}: atiPaidAmount ${storedPaid} → ${trueSum} ` +
+        `(diff: ${trueSum - storedPaid}), remaining → ${trueRemaining}`
+      );
+      fixed++;
+    } catch (err) {
+      console.error(`[ATI repair] Error patching invoice ${invoiceId}:`, err);
+      errors++;
+    }
+  }));
+
+  console.log(`[ATI repair] Done — fixed: ${fixed}, skipped: ${skipped}, errors: ${errors}`);
+  return { fixed, skipped, errors };
 }
