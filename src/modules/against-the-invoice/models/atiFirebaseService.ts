@@ -7,6 +7,10 @@
 //   3. Deduct from original liquidity pool (bank or cashInHand)
 //   4. Create ATI entry + ledger records (existing logic)
 //   5. On delete, restore everything
+//
+// FIX (2026-06-03): Transactions now correctly classified as 'Cash Outflow'
+// instead of 'Cash Inflow'. ATI represents payments made AGAINST invoices
+// (money going out), not collections coming in.
 
 import {
   collection, getDocs, getDoc, addDoc, updateDoc,
@@ -285,16 +289,19 @@ export class ATIFirebaseService {
         // isPending() / getTransactionTotals() in transactionsService immediately
         // return "not pending".  Leaving them undefined causes the service to
         // compute totalPaid = 0 and remainingAmount = amount, which makes every
-        // ATI collection appear as an unpaid receivable in Pending Payments.
+        // ATI payment appear as an unpaid payable in Pending Payments.
         //
         // mode must match the Transaction type ('Cash' | 'Bank' | 'Cheque') so the
         // Banking Activity Report and Cash-in-Hand ledger pick it up correctly.
+        //
+        // FIX: type and mainCategory changed from 'Cash Inflow' → 'Cash Outflow'
+        // because ATI records payments going OUT against invoices owed.
         const txnMode: 'Cash' | 'Bank' | 'Cheque' =
           dto.paymentMode === 'Bank'   ? 'Bank'   :
           dto.paymentMode === 'Cheque' ? 'Cheque' : 'Cash';
 
-        // Balance-sheet bucket: collecting from a customer always increases
-        // Cash or Bank assets, depending on how they paid.
+        // Balance-sheet bucket: paying against an invoice reduces
+        // Cash or Bank assets, depending on payment mode.
         const bsSubCategory =
           txnMode === 'Bank' || txnMode === 'Cheque'
             ? 'Bank Balances'
@@ -302,9 +309,10 @@ export class ATIFirebaseService {
 
         const txnPayload = clean({
           transactionId:   txnId,
-          type:            'Cash Inflow',
-          mainCategory:    'Cash Inflow',
-          subCategory:     'Collection Against Invoice',
+          // ✅ FIX: was 'Cash Inflow' — ATI payments are outflows
+          type:            'Cash Outflow',
+          mainCategory:    'Cash Outflow',
+          subCategory:     'Payment Against Invoice',
           detailCategory:  `Invoice: ${dto.invoiceNumber} — ${dto.customerName}`,
           amount:          dto.amount,
           // ── Payment status fields (prevent Pending Payments false-positive) ──
@@ -320,8 +328,8 @@ export class ATIFirebaseService {
           chequeNumber:    txnMode === 'Cheque' ? dto.chequeNumber : undefined,
           chequeBank:      txnMode === 'Cheque' ? dto.chequeBank   : undefined,
           chequeDate:      txnMode === 'Cheque' ? dto.chequeDate   : undefined,
-          // ── Who paid ────────────────────────────────────────────────────────
-          paidBy:          dto.customerName,
+          // ── Who was paid ─────────────────────────────────────────────────────
+          paidTo:          dto.customerName,
           // ── Other fields ────────────────────────────────────────────────────
           date:            dto.date,
           time:            now.toTimeString().split(' ')[0],
@@ -329,14 +337,15 @@ export class ATIFirebaseService {
           invoiceId:       dto.invoiceId,
           invoiceNumber:   dto.invoiceNumber,
           customerName:    dto.customerName,
-          note:            dto.description || `ATI collection against invoice ${dto.invoiceNumber}`,
+          note:            dto.description || `ATI payment against invoice ${dto.invoiceNumber}`,
           linkedATI:       newAtiRef.id,
           linkedType:      'ati',
           linkedId:        dto.invoiceNumber,
           approvalStatus:  'not_required',
-          // ── P&L classification (Revenue) ─────────────────────────────────────
-          plMainCategory:  'Revenue',
-          plSubCategory:   'Collection Against Invoice',
+          // ── P&L classification (Expense) ─────────────────────────────────────
+          // ✅ FIX: was 'Revenue' / 'Collection Against Invoice'
+          plMainCategory:  'Expense',
+          plSubCategory:   'Payment Against Invoice',
           // ── Balance-sheet classification ─────────────────────────────────────
           bsMainCategory:  'Assets',
           bsSubCategory,
@@ -350,9 +359,10 @@ export class ATIFirebaseService {
             bankId:        dto.bankId,
             bankName:      dto.bankName,
             date:          dto.date,
-            type:          'credit',
+            // ✅ FIX: was 'credit' — outgoing payment is a debit on the bank account
+            type:          'debit',
             amount:        dto.amount,
-            description:   `ATI collection: invoice ${dto.invoiceNumber} — ${dto.customerName}`,
+            description:   `ATI payment: invoice ${dto.invoiceNumber} — ${dto.customerName}`,
             reference:     newAtiRef.id,
             invoiceId:     dto.invoiceId,
             createdAt:     nowISO,
@@ -360,32 +370,35 @@ export class ATIFirebaseService {
           txn.set(newLedgerRef, ledgerPayload);
 
           if (paymentLiquidityRef !== null && paymentLiquidityBalance !== null) {
-            txn.update(paymentLiquidityRef, { balance: paymentLiquidityBalance + dto.amount, updatedAt: nowISO });
-            console.log(`🏦 Credited PKR ${dto.amount.toLocaleString()} to payment bank: ${dto.bankId}`);
+            // ✅ FIX: was + dto.amount (credit) — outflow debits the bank balance
+            txn.update(paymentLiquidityRef, { balance: paymentLiquidityBalance - dto.amount, updatedAt: nowISO });
+            console.log(`🏦 Debited PKR ${dto.amount.toLocaleString()} from payment bank: ${dto.bankId}`);
           } else {
             console.warn(`⚠️ Payment bank doc "${dto.bankId}" not found — bank balance not updated`);
           }
         } else {
           const ledgerPayload = clean({
-            mainCategory:   'Cash Inflow',
-            subCategory:    'Collection Against Invoice',
+            // ✅ FIX: was 'Cash Inflow'
+            mainCategory:   'Cash Outflow',
+            subCategory:    'Payment Against Invoice',
             company:        dto.company,
             location:       dto.company,
             amount:         dto.amount,
             date:           dto.date,
-            note:           `ATI collection: invoice ${dto.invoiceNumber} — ${dto.customerName}`,
+            note:           `ATI payment: invoice ${dto.invoiceNumber} — ${dto.customerName}`,
             reference:      newAtiRef.id,
             createdAt:      nowISO,
           });
           txn.set(newLedgerRef, ledgerPayload);
 
           if (paymentLiquidityRef !== null && paymentLiquidityBalance !== null) {
+            // ✅ FIX: was + dto.amount (credit) — outflow debits the cash balance
             txn.update(paymentLiquidityRef, {
-              balance:     paymentLiquidityBalance + dto.amount,
+              balance:     paymentLiquidityBalance - dto.amount,
               lastUpdated: nowISO,
-              updatedBy:   'System (ATI customer collection)',
+              updatedBy:   'System (ATI invoice payment)',
             });
-            console.log(`💵 Credited PKR ${dto.amount.toLocaleString()} to cash: ${liquidityDocId}`);
+            console.log(`💵 Debited PKR ${dto.amount.toLocaleString()} from cash: ${liquidityDocId}`);
           } else {
             console.warn(`⚠️ cashInHand doc "${liquidityDocId}" not found — cash balance not updated`);
           }
@@ -400,7 +413,7 @@ export class ATIFirebaseService {
             txn.update(origLiquidityRef, {
               balance:     origLiquidityBalance + dto.amount,
               lastUpdated: nowISO,
-              updatedBy:   'System (ATI customer collection)',
+              updatedBy:   'System (ATI invoice payment)',
             });
             console.log(`💰 Credited PKR ${dto.amount.toLocaleString()} back to original cash: ${originalLiquidityDocId}`);
           }
@@ -457,7 +470,7 @@ export class ATIFirebaseService {
           `✅ [txn] ATI ${newAtiRef.id} created. ` +
           `Invoice ${dto.invoiceId}: atiPaid ${paidBefore} → ${paidAfter}, atiRemaining → ${remainingAfter}. ` +
           `Liquidity credited: ${originalLiquiditySource ?? 'none'} / ${originalLiquidityDocId ?? 'none'}. ` +
-          `Transaction: ${newTxnRef.id} (${txnId})`
+          `Transaction: ${newTxnRef.id} (${txnId}) [Cash Outflow]`
         );
 
         return {
@@ -540,21 +553,24 @@ export class ATIFirebaseService {
           }
         }
 
-        // ── 3. Reverse the payment-mode account (undo the credit on collection) ─
+        // ── 3. Reverse the payment-mode account (undo the debit on payment) ──
+        // FIX: on delete we ADD back what was debited (previously subtracted on create)
         if (entry.liquiditySource && entry.liquidityDocId) {
           if (entry.liquiditySource === 'bank') {
             const bankRef  = doc(db, BANK_COL, entry.liquidityDocId);
             const bankSnap = await txn.get(bankRef);
             if (bankSnap.exists()) {
               const currentBal = Number(bankSnap.data().balance) || 0;
-              txn.update(bankRef, { balance: currentBal - entry.amount, updatedAt: new Date().toISOString() });
+              // ✅ FIX: was - entry.amount; reversal of an outflow adds back to balance
+              txn.update(bankRef, { balance: currentBal + entry.amount, updatedAt: new Date().toISOString() });
             }
           } else {
             const cashRef  = doc(db, CASH_BAL_COL, entry.liquidityDocId);
             const cashSnap = await txn.get(cashRef);
             if (cashSnap.exists()) {
               const currentBal = Number(cashSnap.data().balance) || 0;
-              txn.update(cashRef, { balance: currentBal - entry.amount, lastUpdated: new Date().toISOString(), updatedBy: 'System (ATI collection reversal)' });
+              // ✅ FIX: was - entry.amount; reversal of an outflow adds back to balance
+              txn.update(cashRef, { balance: currentBal + entry.amount, lastUpdated: new Date().toISOString(), updatedBy: 'System (ATI payment reversal)' });
             }
           }
         }
@@ -647,38 +663,55 @@ export class ATIFirebaseService {
     }
   }
 }
+
 // ── One-time migration: fix stale ATI transactions ──────────────────────────
 //
-// Old ATI entries wrote to `transactions` without payment-status fields,
-// causing them to appear as pending receivables in Pending Payments.
+// Old ATI entries wrote to `transactions` with wrong type/category fields,
+// causing them to appear as inflow instead of outflow.
 // Call this once from an admin/settings page to patch existing Firestore docs.
 //
-// Safe to call repeatedly — only updates docs where paymentStatus is missing,
-// identified by subCategory === 'Collection Against Invoice'.
+// Safe to call repeatedly — identifies records by subCategory containing
+// 'Against Invoice' and patches the type/category fields.
 export async function migrateStaleATITransactions(): Promise<{ fixed: number; skipped: number }> {
-  const q    = query(collection(db, 'transactions'), where('subCategory', '==', 'Collection Against Invoice'));
+  // Match both old subCategory ('Collection Against Invoice') and new ('Payment Against Invoice')
+  const q    = query(collection(db, 'transactions'), where('subCategory', 'in', ['Collection Against Invoice', 'Payment Against Invoice']));
   const snap = await getDocs(q);
   let fixed = 0, skipped = 0;
 
   await Promise.all(snap.docs.map(async (d) => {
     const data = d.data() as any;
-    if (data.paymentStatus === 'Full' && data.remainingAmount === 0 && data.isFullyCleared != null) {
+
+    // Skip if already correctly classified as outflow
+    if (
+      data.type === 'Cash Outflow' &&
+      data.mainCategory === 'Cash Outflow' &&
+      data.plMainCategory === 'Expense' &&
+      data.paymentStatus === 'Full' &&
+      data.remainingAmount === 0 &&
+      data.isFullyCleared != null
+    ) {
       skipped++;
       return;
     }
+
     const amount = Number(data.amount) || 0;
     const txnMode: 'Cash' | 'Bank' | 'Cheque' =
       data.mode === 'Bank' ? 'Bank' : data.mode === 'Cheque' ? 'Cheque' : 'Cash';
 
     await updateDoc(doc(db, 'transactions', d.id), {
+      // ✅ FIX: correct outflow classification
+      type:            'Cash Outflow',
+      mainCategory:    'Cash Outflow',
+      subCategory:     'Payment Against Invoice',
       amountPaid:      amount,
       remainingAmount: 0,
       totalPaid:       amount,
       paymentStatus:   'Full',
       isFullyCleared:  txnMode !== 'Cheque',
       approvalStatus:  data.approvalStatus  || 'not_required',
-      plMainCategory:  data.plMainCategory  || 'Revenue',
-      plSubCategory:   data.plSubCategory   || 'Collection Against Invoice',
+      // ✅ FIX: was 'Revenue' — ATI payments are an Expense
+      plMainCategory:  'Expense',
+      plSubCategory:   data.plSubCategory   || 'Payment Against Invoice',
       bsMainCategory:  data.bsMainCategory  || 'Assets',
       bsSubCategory:   data.bsSubCategory   || (txnMode !== 'Cash' ? 'Bank Balances' : 'Cash & Cash Equivalents'),
       updatedAt:       new Date().toISOString(),
