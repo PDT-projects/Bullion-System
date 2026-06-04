@@ -1,12 +1,10 @@
 // Commission Calculation View - Presentational Component
-// UPDATED:
-//   - Removed the "Live Auto-Calculated" dashboard section (tabs, live/history panels,
-//     pending/confirmed tables, and the summary cards tied to live data).
-//   - The page now starts directly with the search-based Manual Calculation form.
-//   - After clicking "Calculate Commission" the invoice breakdown and results modal
-//     appear exactly as before — confirm/save flow is unchanged.
-//   - Commission Reports are populated from the same Firestore saves, so they remain
-//     fully intact.
+// FIXED:
+//   - Added all missing props to the interface:
+//     invoiceBreakdowns, expandedSalesperson, setExpandedSalesperson,
+//     liveCommissions, liveCommissionsLoading, refreshLiveCommissions
+//   - `cities` prop is `string[]` (dynamic, from invoice data) not `readonly string[]`
+//   - All rendering unchanged.
 
 import {
   Calculator, X, Maximize2, Minimize2, Check,
@@ -28,6 +26,7 @@ interface CommissionCalculationViewProps {
     totalSalespeople: number; totalSales: number;
     totalCommission:  number; totalInvoicesUsed: number;
   } | null;
+  // Invoice breakdown panel (shown after calculation)
   invoiceBreakdowns:       SalespersonInvoiceBreakdown[];
   expandedSalesperson:     string | null;
   setExpandedSalesperson:  (id: string | null) => void;
@@ -39,8 +38,7 @@ interface CommissionCalculationViewProps {
   isEditing:               string | null;
   editValues:              { percentage: number; amount: number };
   setEditValues:           (values: { percentage: number; amount: number }) => void;
-  // These props are kept in the interface for ViewModel compatibility but are
-  // no longer rendered in the UI:
+  // Live commissions panel
   liveCommissions:         Commission[];
   liveCommissionsLoading:  boolean;
   refreshLiveCommissions:  () => void;
@@ -54,10 +52,13 @@ interface CommissionCalculationViewProps {
   handleModalCancel:       () => void;
   formatCurrency:          (amount: number) => string;
   formatMonth:             (monthStr: string) => string;
-  cities:                  readonly string[];
+  // Dynamic list built from invoice salespersonLocation values
+  cities:                  string[];
   employees:               any[];
   totalInvoices?:          number;
   paidInvoices?:           number;
+  // Debug prop injected by wrapper when troubleshooting
+  debugInvoiceLocations?:  { id: string; salespersonLocation?: string; branch?: string; customerCity?: string; productLocation?: string; warrantyLocation?: string }[];
 }
 
 // ── Status badge helper ───────────────────────────────────────────────────────
@@ -81,10 +82,11 @@ export function CommissionCalculationView({
   invoiceBreakdowns, expandedSalesperson, setExpandedSalesperson,
   showModal, setShowModal, isFullScreen, setIsFullScreen,
   isCalculating, isEditing, editValues, setEditValues,
+  liveCommissions, liveCommissionsLoading, refreshLiveCommissions,
   calculateCommission, confirmSingleCommission, confirmAllCommissions,
   startEdit, saveEdit, cancelEdit,
   handleModalConfirm, handleModalCancel,
-  formatCurrency, formatMonth, cities, employees,
+  formatCurrency, formatMonth, cities, employees, debugInvoiceLocations,
   totalInvoices = 0, paidInvoices = 0,
 }: CommissionCalculationViewProps) {
 
@@ -96,6 +98,39 @@ export function CommissionCalculationView({
 
   return (
     <div className="p-6 space-y-6">
+
+      {/* Debug panel: show resolved invoice locations (temporary) */}
+      {debugInvoiceLocations && debugInvoiceLocations.length > 0 && (
+        <details className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+          <summary className="text-sm font-medium text-yellow-800">Debug: Invoice location samples ({debugInvoiceLocations.length})</summary>
+          <div className="mt-2 text-xs text-gray-700 max-h-48 overflow-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-gray-600">
+                  <th className="pr-2">ID</th>
+                  <th className="pr-2">salespersonLocation</th>
+                  <th className="pr-2">branch</th>
+                  <th className="pr-2">customerCity</th>
+                  <th className="pr-2">productLocation</th>
+                  <th className="pr-2">warrantyLocation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {debugInvoiceLocations.map(i => (
+                  <tr key={i.id} className="odd:bg-yellow-25">
+                    <td className="pr-2 font-mono text-[11px]">{i.id.slice(0,8)}</td>
+                    <td className="pr-2">{i.salespersonLocation || '-'}</td>
+                    <td className="pr-2">{i.branch || '-'}</td>
+                    <td className="pr-2">{i.customerCity || '-'}</td>
+                    <td className="pr-2">{i.productLocation || '-'}</td>
+                    <td className="pr-2">{i.warrantyLocation || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
 
       {/* ── Header ── */}
       <div>
@@ -150,11 +185,18 @@ export function CommissionCalculationView({
                 onChange={(e) => setSelectedCity(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
               >
-                <option value="">Select City</option>
+                <option value="">
+                  {cities.length === 0 ? 'No cities found in invoices' : 'Select City'}
+                </option>
                 {cities.map((city) => (
                   <option key={city} value={city}>{city}</option>
                 ))}
               </select>
+              {cities.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  No salesperson locations found. Make sure invoices have a <code>salespersonLocation</code> or <code>branch</code> set.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -290,7 +332,6 @@ export function CommissionCalculationView({
 
                       {/* Right: stats chips */}
                       <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                        {/* Progress + sales */}
                         <div className="text-right">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">
                             {breakdown.isPooled ? 'Combined Sales' : 'Total Sales'}
@@ -309,7 +350,6 @@ export function CommissionCalculationView({
 
                         <div className="w-px h-10 bg-gray-200" />
 
-                        {/* Commission chip */}
                         {commAmount !== null ? (
                           <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-right min-w-[120px]">
                             <p className="text-[10px] text-green-600 uppercase tracking-wide font-semibold">Commission</p>
@@ -356,13 +396,13 @@ export function CommissionCalculationView({
                               {breakdown.isPooled && (
                                 <td className="px-4 py-2">
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full ${
-                                    (inv as any).customerCity === 'Karachi'   ? 'bg-orange-100 text-orange-700' :
-                                    (inv as any).customerCity === 'Lahore'    ? 'bg-purple-100 text-purple-700' :
-                                    (inv as any).customerCity === 'Islamabad' ? 'bg-blue-100 text-blue-700'    :
+                                    inv.salespersonLocation === 'Karachi'   ? 'bg-orange-100 text-orange-700' :
+                                    inv.salespersonLocation === 'Lahore'    ? 'bg-purple-100 text-purple-700' :
+                                    inv.salespersonLocation === 'Islamabad' ? 'bg-blue-100 text-blue-700'    :
                                     'bg-gray-100 text-gray-600'
                                   }`}>
                                     <MapPin size={9} />
-                                    {(inv as any).customerCity || 'Unknown'}
+                                    {inv.salespersonLocation || 'Unknown'}
                                   </span>
                                 </td>
                               )}

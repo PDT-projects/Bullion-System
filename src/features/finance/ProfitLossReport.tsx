@@ -13,9 +13,12 @@
 import React, { useMemo, useState, useRef } from 'react';
 import {
   ArrowLeft, FileSpreadsheet, FileText,
-  Calendar, ChevronDown, ChevronUp, Tag, Filter, X, MapPin,
+  Calendar, ChevronDown, ChevronUp, Tag, Filter, X, MapPin, ShieldCheck,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { getTransactionTotals } from '../../modules/transactions/models/transactionsService';
+import { CurrencyCode, useCurrencyRates, convertFromPKR, fmtCurrency } from './currencyUtils';
+import { CurrencyDropdown, CurrencyRows } from './CurrencyPicker';
 
 // ─── SubCategory lookup tables (must match Firestore exactly) ─────────────────
 
@@ -148,6 +151,13 @@ function SectionTotal({ label, value, colorClass }: { label: string; value: numb
 
 export function ProfitLossReport({ transactions, invoices = [], onBack }: ProfitLossReportProps) {
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('PKR');
+  const [extraCurrencies, setExtraCurrencies]   = useState<CurrencyCode[]>([]);
+  const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
+  const displayCurrencyCodes = [primaryCurrency, ...extraCurrencies];
+
+  const fmtPrimary = (value: number) => fmtCurrency(convertFromPKR(value, primaryCurrency, rates), primaryCurrency);
 
   const today    = new Date().toISOString().split('T')[0];
   const thisYear = new Date().getFullYear();
@@ -357,10 +367,17 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
   const netProfit     = grossProfit - totalExpenses;
   const isProfit      = netProfit >= 0;
 
+  const currencyMetrics = useMemo(() => displayCurrencyCodes.map(code => ({
+    code,
+    revenue: convertFromPKR(totalRevenue, code, rates),
+    grossProfit: convertFromPKR(grossProfit, code, rates),
+    netProfit: convertFromPKR(netProfit, code, rates),
+  })), [rates, displayCurrencyCodes, totalRevenue, grossProfit, netProfit]);
+
   // Cash collections from transactions (informational — not counted in Revenue)
   const cashCollected = filtered
     .filter(t => t.mainCategory === 'Cash Inflow' && !INFLOW_LOAN_CATS.includes(t.subCategory || ''))
-    .reduce((s, t) => s + (t.amount || 0), 0);
+    .reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
 
   // ── Financing / excluded items (informational only) ────────────────────────
   const financing = useMemo(() => {
@@ -915,24 +932,46 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
         </div>
       </div>
 
-      {/* ── Summary cards ── */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total Revenue',  value: totalRevenue,  color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
-          { label: 'Total Expenses', value: totalExpenses, color: 'text-red-600',   bg: 'bg-red-50',   border: 'border-red-200'   },
-          {
-            label: isProfit ? 'Net Profit' : 'Net Loss',
-            value: netProfit,
-            color:  isProfit ? 'text-blue-600'  : 'text-red-600',
-            bg:     isProfit ? 'bg-blue-50'     : 'bg-red-50',
-            border: isProfit ? 'border-blue-200': 'border-red-200',
-          },
-        ].map(({ label, value, color, bg, border }) => (
-          <div key={label} className={`${bg} border ${border} rounded-xl p-5 text-center`}>
-            <p className="text-sm text-gray-600 mb-1">{label}</p>
-            <p className={`text-2xl font-bold ${color}`}>{fmt(value)}</p>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr,1fr]">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <ShieldCheck size={18} className="text-indigo-500" />
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Currency display</p>
+              <p className="text-xs text-gray-500">Pick the primary report currency and optional extra conversions.</p>
+            </div>
           </div>
-        ))}
+          <CurrencyDropdown
+            primary={primaryCurrency}
+            extras={extraCurrencies}
+            onPrimaryChange={setPrimaryCurrency}
+            onExtrasChange={setExtraCurrencies}
+            loading={ratesLoading}
+            error={ratesError}
+            lastUpdated={lastUpdated}
+          />
+          {ratesError && <p className="text-sm text-red-600">Failed to load live rates. Showing PKR values only.</p>}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            { label: 'Total Revenue',  value: totalRevenue,  color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
+            { label: 'Total Expenses', value: totalExpenses, color: 'text-red-600',   bg: 'bg-red-50',   border: 'border-red-200'   },
+            {
+              label: isProfit ? 'Net Profit' : 'Net Loss',
+              value: netProfit,
+              color:  isProfit ? 'text-blue-600'  : 'text-red-600',
+              bg:     isProfit ? 'bg-blue-50'     : 'bg-red-50',
+              border: isProfit ? 'border-blue-200': 'border-red-200',
+            },
+          ].map(({ label, value, color, bg, border }) => (
+            <div key={label} className={`${bg} border ${border} rounded-xl p-5 text-center`}>
+              <p className="text-sm text-gray-600 mb-1">{label}</p>
+              <p className={`text-2xl font-bold ${color}`}>{fmtPrimary(value)}</p>
+              <CurrencyRows extras={extraCurrencies} pkrAmount={value} rates={rates} />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Full P&L Statement ── */}

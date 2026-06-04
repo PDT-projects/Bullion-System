@@ -95,6 +95,7 @@ function docToInvoice(d: any): Invoice {
     paidAmount:             data.paidAmount,
     remainingAmount:        data.remainingAmount,
     collectionMethod:       data.collectionMethod,
+    branch:                 data.branch,
     deductionCharges:       data.deductionCharges       || 0,
     deductionCurrency:      data.deductionCurrency      || 'PKR',
     cargoAmount:            data.cargoAmount            || 0,

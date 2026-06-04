@@ -111,6 +111,8 @@ export interface InvoiceReference {
   id: string;
   date: string;
   customerCity: string;
+  salespersonLocation?: string;
+  branch?: string;
   totalAmount: number;
   status: 'Paid' | 'Unpaid';
   salesperson?: string;

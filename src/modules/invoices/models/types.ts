@@ -104,6 +104,7 @@ export interface CreateInvoiceDTO {
   status: 'Paid' | 'Unpaid';
   salesperson?: string;
   salespersonLocation?: string;
+  branch?: string;
   clientDealBy?: string;
   referralBy?: string;
   createdBy?: string;

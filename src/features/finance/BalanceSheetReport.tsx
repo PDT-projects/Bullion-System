@@ -9,9 +9,11 @@
 // Priority: manual classification (saved from form) → shown in dedicated section.
 
 import React, { useMemo, useState } from 'react';
-import { resolveBSBucket } from '../../modules/transactions/models/transactionsService';
+import { resolveBSBucket, getTransactionTotals } from '../../modules/transactions/models/transactionsService';
 import type { Transaction } from '../../modules/transactions/models/types';
 import { ArrowLeft, Tag, ChevronDown, ChevronUp, Filter, X, Calendar, MapPin } from 'lucide-react';
+import { CurrencyCode, useCurrencyRates, convertFromPKR, fmtCurrency as fmtForeignCurrency, getCurrencyMeta } from './currencyUtils';
+import { CurrencyDropdown } from './CurrencyPicker';
 
 // Remove local type - use imported Transaction type
 type Bank      = { id: string; name: string; balance: number; accountNumber: string; };
@@ -76,6 +78,10 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const [customTo,          setCustomTo]          = useState('');
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
+  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('PKR');
+  const [extraCurrencies, setExtraCurrencies]   = useState<CurrencyCode[]>(['USD', 'AED', 'SAR']);
+  const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
+  const reportCurrencyCodes: CurrencyCode[] = [primaryCurrency, ...extraCurrencies];
 
   const availableYears = useMemo(() => {
     const s = new Set<number>();
@@ -217,9 +223,11 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
   const bs = useMemo(() => {
     // ── ASSETS ──────────────────────────────────────────────────────────────
-    // Cash in Hand: total inflow − total outflow from Cash-mode transactions
-    const cashIn  = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && t.mode === 'Cash').reduce((s, t) => s + t.amount, 0);
-    const cashOut = liquid.filter(t => t.mainCategory === 'Cash Outflow' && t.mode === 'Cash').reduce((s, t) => s + t.amount, 0);
+    // Cash in Hand: only the amounts actually paid in Cash mode.
+    const cashIn  = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && t.mode === 'Cash')
+      .reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
+    const cashOut = liquid.filter(t => t.mainCategory === 'Cash Outflow' && t.mode === 'Cash')
+      .reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
     const cashInHand = Math.max(0, cashIn - cashOut);
 
     // Bank balance: from banks collection
@@ -238,8 +246,11 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       .filter(l => l.type === 'Receivable' && l.status !== 'Full')
       .reduce((s, l) => s + (l.remaining || 0), 0);
 
-    // Add classified assets to heuristic totals
-    const classifiedAssets = Array.from(classifiedBS.get('Assets')?.values() || []).reduce((sum, entry) => sum + entry.total, 0);
+    // Add manually classified assets that are not already represented by the standard totals.
+    const knownAssetBuckets = new Set(['Cash & Cash Equivalents', 'Inventory', 'Accounts Receivable', 'Loans Receivable']);
+    const classifiedAssets = Array.from(classifiedBS.get('Assets')?.entries() || [])
+      .filter(([sub]) => !knownAssetBuckets.has(sub))
+      .reduce((sum, [, entry]) => sum + entry.total, 0);
     const totalCurrentAssets = cashInHand + bankBalance + accountsReceivable + inventoryValue + loansReceivable + classifiedAssets;
 
     // Fixed assets — keep as 0 unless a fixed asset module is added
@@ -263,8 +274,11 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       .filter(b => b.status === 'Pending' || b.status === 'Overdue')
       .reduce((s, b) => s + b.amount, 0);
 
-    // Add classified liabilities to heuristic totals
-    const classifiedLiabilities = Array.from(classifiedBS.get('Liabilities & Equity')?.values() || []).reduce((sum, entry) => sum + entry.total, 0);
+    // Add manually classified liabilities that are not already included in standard current liability totals.
+    const knownLiabilityBuckets = new Set(['Accounts Payable', 'Short-term Loans']);
+    const classifiedLiabilities = Array.from(classifiedBS.get('Liabilities & Equity')?.entries() || [])
+      .filter(([sub]) => !knownLiabilityBuckets.has(sub))
+      .reduce((sum, [, entry]) => sum + entry.total, 0);
     const totalCurrentLiabilities = accountsPayable + loansPayable + pendingBills + classifiedLiabilities;
     const totalLiabilities        = totalCurrentLiabilities;
 
@@ -288,6 +302,13 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       balanced: Math.abs(totalAssets - totalLiabilitiesAndEquity) < 1,
     };
   }, [liquid, banks, loans, products, bills]);
+
+  const currencyMetrics = useMemo(() => reportCurrencyCodes.map(code => ({
+    code,
+    totalAssets: convertFromPKR(bs.assets.totalAssets, code, rates),
+    totalLiabilities: convertFromPKR(bs.liabilities.totalLiabilities, code, rates),
+    totalEquity: convertFromPKR(bs.equity.totalEquity, code, rates),
+  })), [rates, reportCurrencyCodes, bs.assets.totalAssets, bs.liabilities.totalLiabilities, bs.equity.totalEquity]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -451,6 +472,51 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       </div>
 
 
+
+      <div className="grid grid-cols-1 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Currency conversion summary</h3>
+              <p className="text-xs text-gray-500">Choose the report currency and optional extra conversions.</p>
+            </div>
+            <CurrencyDropdown
+              primary={primaryCurrency}
+              extras={extraCurrencies}
+              onPrimaryChange={setPrimaryCurrency}
+              onExtrasChange={setExtraCurrencies}
+              loading={ratesLoading}
+              error={ratesError}
+              lastUpdated={lastUpdated}
+            />
+          </div>
+          <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+            <span>{ratesLoading ? 'Loading exchange rates…' : ratesError ? 'Using fallback rates' : `Updated ${lastUpdated ? lastUpdated.toLocaleTimeString('en-US') : '—'}`}</span>
+            {ratesError && <span className="text-amber-600">Using estimated rates</span>}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {currencyMetrics.map(item => (
+              <div key={item.code} className="rounded-xl border border-gray-100 p-4 bg-slate-50">
+                <div className="text-sm font-semibold text-gray-900">{getCurrencyMeta(item.code).flag} {item.code}</div>
+                <div className="mt-3 space-y-2 text-sm text-gray-700">
+                  <div>
+                    <div className="text-xs text-gray-500">Total Assets</div>
+                    <div className="font-semibold text-gray-900">{fmtForeignCurrency(item.totalAssets, item.code)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Total Liabilities</div>
+                    <div className="font-semibold text-gray-900">{fmtForeignCurrency(item.totalLiabilities, item.code)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Equity</div>
+                    <div className="font-semibold text-gray-900">{fmtForeignCurrency(item.totalEquity, item.code)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* ── ASSETS ── */}

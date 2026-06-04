@@ -1,12 +1,15 @@
 // Commission Calculation ViewModel
-// UPDATED: Auto-saves commissions without manual confirmation modal
-// SPECIAL RULE — Uzair Naseem:
-//   His commission is calculated on a pooled total of:
-//     1. ALL his own invoices (any city)
-//     2. ALL invoices from Karachi branch (any salesperson)
-//     3. ALL invoices from Lahore branch (any salesperson)
-//   That combined total is matched against his commission slab (city = his own city / Islamabad)
-//   and ONE combined commission record is produced for him.
+// FIXED:
+//   - Invoices in Firestore store salesperson as a NAME string (e.g. "Fatima Malik"),
+//     NOT a Firestore ID. The old code grouped by inv.salesperson (name) and then
+//     tried employees.find(e => e.id === salespersonId) — which NEVER matched.
+//   - Now resolves name → employee before grouping, so all lookups use the employee
+//     object directly and commission slabs are matched by employee ID correctly.
+//   - Cities dropdown is derived from real invoice `salespersonLocation` values,
+//     NOT from the hardcoded CITIES constant. The wrapper calls
+//     `setInvoiceCities(cities)` after loading invoices so the dropdown always
+//     reflects what actually exists in your invoice data.
+//   - All other logic (Uzair pooled rule, auto-save, salary linking) unchanged.
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
@@ -20,21 +23,14 @@ import {
   formatCurrency,
   formatMonth,
   getCurrentMonth,
-  CITIES,
 } from '../models/commissionService';
 import { CommissionFirebaseService } from '../models/Commissionfirebaseservice';
 import { SalaryFirebaseService }     from '../../salary/models/salaryFirebaseService';
 
 // ─── Uzair Naseem special config ─────────────────────────────────────────────
-// Change this name if the employee record ever changes.
-const UZAIR_NAME_MATCH = 'uzair naseem'; // case-insensitive match against employee.name
-
-// Branches whose FULL sales are pooled into Uzair's commission total.
+const UZAIR_NAME_MATCH    = 'uzair naseem'; // case-insensitive match against employee.name
 const UZAIR_POOLED_CITIES = ['Karachi', 'Lahore'];
-
-// The slab city used to look up Uzair's commission percentage.
-// Uzair's slabs must be defined for this city in the commission slabs collection.
-const UZAIR_SLAB_CITY = 'Islamabad';
+const UZAIR_SLAB_CITY     = 'Islamabad';
 
 // ─── Per-salesperson invoice breakdown ───────────────────────────────────────
 
@@ -48,7 +44,6 @@ export interface SalespersonInvoiceBreakdown {
   slabTo:              number;
   nextSlabThreshold:   number | null;
   slabProgressPercent: number;
-  // Uzair-specific: extra breakdown info shown in the UI
   isPooled?:           boolean;
   pooledCitySales?:    { city: string; amount: number; invoiceCount: number }[];
 }
@@ -77,71 +72,92 @@ function calculateCommissionsFromInvoices(
     return (raw ?? '').trim().toLowerCase();
   }
 
-  function cityMatches(inv: InvoiceReference, targetCity: string): boolean {
-    return normalizeCity(inv.customerCity) === normalizeCity(targetCity);
+  function normalizeStr(s: string | undefined): string {
+    return (s ?? '').trim().toLowerCase();
   }
 
-  // ── Identify Uzair ───────────────────────────────────────────────────────
+  // Invoices store salesperson as a NAME. We match by salespersonLocation for city.
+  function cityMatches(inv: InvoiceReference, targetCity: string): boolean {
+    const normalizedTarget = normalizeCity(targetCity);
+    if (normalizeCity(inv.salespersonLocation) === normalizedTarget) return true;
+    if (normalizeCity(inv.customerCity) === normalizedTarget) return true;
+    if (normalizeCity(inv.branch) === normalizedTarget) return true;
+    return false;
+  }
+
+  // ── Build a name → employee lookup map ───────────────────────────────────
+  // Key: lowercased name, Value: EmployeeReference
+  const employeeByName = new Map<string, EmployeeReference>();
+  employees.forEach(e => {
+    if (e.name) employeeByName.set(normalizeStr(e.name), e);
+  });
+
+  // Also build an ID → employee lookup map for invoices that may store the
+  // salesperson as an employee ID instead of a name.
+  const employeeById = new Map<string, EmployeeReference>();
+  employees.forEach(e => {
+    if (e.id) employeeById.set(e.id, e);
+  });
+
+  // ── Identify Uzair by employee object ────────────────────────────────────
   const uzairEmployee = employees.find(
-    e => e.name?.trim().toLowerCase() === UZAIR_NAME_MATCH
+    e => normalizeStr(e.name) === UZAIR_NAME_MATCH
   );
 
-  // ── Standard city invoices (paid, correct city, correct month) ──────────
+  // ── Standard city invoices (paid, salesperson present, correct month) ──
   const standardInvoices = invoices.filter(inv => {
-    if (inv.status !== 'Paid') return false;
-    if (!inv.salesperson)      return false;
-    if (!isInMonth(inv))       return false;
-    if (!cityMatches(inv, city)) return false;
+    if (inv.status !== 'Paid')      return false;
+    if (!inv.salesperson)           return false;
+    if (!isInMonth(inv))            return false;
+    if (!cityMatches(inv, city))    return false;
     return true;
   });
 
-  // ── Group standard invoices by salesperson ───────────────────────────────
+  // ── Group invoices by salesperson — prefer employee ID when available,
+  // otherwise fall back to the raw salesperson string (usually a name).
   const grouped: Record<string, InvoiceReference[]> = {};
   standardInvoices.forEach(inv => {
-    const key = inv.salesperson!;
+    const raw = inv.salesperson!.trim();
+    const byId = employeeById.get(raw);
+    const byName = employeeByName.get(normalizeStr(raw));
+    const key = byId ? byId.id : byName ? byName.id : raw;
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(inv);
   });
-
-  // ── Also grab Uzair's own invoices from ALL cities (he may appear across cities) ──
-  // We need them only if Uzair is in the selected city OR if we are building his pool.
-  // They will be merged into his pooled bucket below.
 
   const commissions: Commission[] = [];
   const breakdowns:  SalespersonInvoiceBreakdown[] = [];
 
   // ── Process each salesperson found in standard grouping ─────────────────
-  Object.entries(grouped).forEach(([salespersonId, spInvoices]) => {
-    const employee = employees.find(e => e.id === salespersonId);
+  Object.entries(grouped).forEach(([salespersonKey, spInvoices]) => {
+    // Resolve key → employee (key may be an ID or a raw name)
+    const employee = employeeById.get(salespersonKey) ?? employeeByName.get(normalizeStr(salespersonKey));
     if (!employee) {
-      errors.push(`Employee not found for salesperson ID: ${salespersonId}`);
+      errors.push(`Employee record not found for salesperson: "${salespersonKey}"`);
       return;
     }
 
-    const isUzair = employee.name?.trim().toLowerCase() === UZAIR_NAME_MATCH;
+    const salespersonId = employee.id;
+    const isUzair       = normalizeStr(employee.name) === UZAIR_NAME_MATCH;
 
     // ── UZAIR SPECIAL LOGIC ──────────────────────────────────────────────
-    // Only apply pooled logic when searching Islamabad — his home city.
-    // For any other city search he is treated as a normal salesperson.
     if (isUzair && normalizeCity(city) === normalizeCity(UZAIR_SLAB_CITY)) {
-      // Collect invoices from the pooled cities (ALL paid, correct month, those cities, any salesperson)
       const pooledCityData: { city: string; amount: number; invoiceCount: number }[] = [];
-      let pooledInvoices: InvoiceReference[] = [...spInvoices]; // start with Uzair's own in selected city
+      let pooledInvoices: InvoiceReference[] = [...spInvoices];
 
       UZAIR_POOLED_CITIES.forEach(poolCity => {
         const cityInvoices = invoices.filter(inv => {
           if (inv.status !== 'Paid') return false;
           if (!isInMonth(inv))       return false;
-          if (!cityMatches(inv, poolCity)) return false;
-          return true; // ALL salespersons from this city
+          if (normalizeCity(inv.salespersonLocation) !== normalizeCity(poolCity)) return false;
+          return true;
         });
-
         const cityTotal = cityInvoices.reduce((s, i) => s + i.totalAmount, 0);
         pooledCityData.push({ city: poolCity, amount: cityTotal, invoiceCount: cityInvoices.length });
         pooledInvoices = [...pooledInvoices, ...cityInvoices];
       });
 
-      // De-duplicate invoices by id (in case Uzair also has invoices in pooled cities)
+      // De-duplicate by id
       const seen = new Set<string>();
       pooledInvoices = pooledInvoices.filter(inv => {
         if (seen.has(inv.id)) return false;
@@ -151,7 +167,6 @@ function calculateCommissionsFromInvoices(
 
       const totalSales = pooledInvoices.reduce((s, i) => s + i.totalAmount, 0);
 
-      // Look up slab using Uzair's designated slab city
       const applicableSlab = slabs.find(
         slab =>
           slab.salesperson === salespersonId &&
@@ -180,7 +195,6 @@ function calculateCommissionsFromInvoices(
         slabProgressPercent = Math.min(100, Math.round((totalSales / nextSlabThreshold) * 100));
       }
 
-      // Own-city sales (for breakdown display)
       const ownCitySales = spInvoices.reduce((s, i) => s + i.totalAmount, 0);
       const allPooledData = [
         { city: city, amount: ownCitySales, invoiceCount: spInvoices.length },
@@ -226,11 +240,10 @@ function calculateCommissionsFromInvoices(
         calculatedBy,
         calculatedAt:               new Date().toISOString(),
         isLocked:                   false,
-        // Store breakdown note in a field the UI can show
         notes: `Pooled: ${city} (Rs ${ownCitySales.toLocaleString()}) + Karachi (Rs ${pooledCityData.find(p=>p.city==='Karachi')?.amount.toLocaleString() ?? 0}) + Lahore (Rs ${pooledCityData.find(p=>p.city==='Lahore')?.amount.toLocaleString() ?? 0})`,
       } as Commission);
 
-      return; // ← Uzair processed; skip normal logic
+      return;
     }
 
     // ── STANDARD LOGIC for all other salespersons ─────────────────────────
@@ -239,13 +252,17 @@ function calculateCommissionsFromInvoices(
     const applicableSlab = slabs.find(
       slab =>
         slab.salesperson === salespersonId &&
-        slab.city        === city &&
-        totalSales       >= slab.fromAmount &&
-        totalSales       <= slab.toAmount
+        normalizeCity(slab.city) === normalizeCity(city) &&
+        totalSales >= slab.fromAmount &&
+        totalSales <= slab.toAmount
     );
 
     const higherSlabs = slabs
-      .filter(s => s.salesperson === salespersonId && s.city === city && s.fromAmount > totalSales)
+      .filter(s =>
+        s.salesperson === salespersonId &&
+        normalizeCity(s.city) === normalizeCity(city) &&
+        s.fromAmount > totalSales
+      )
       .sort((a, b) => a.fromAmount - b.fromAmount);
 
     const nextSlabThreshold = higherSlabs.length > 0 ? higherSlabs[0].fromAmount : null;
@@ -298,20 +315,19 @@ function calculateCommissionsFromInvoices(
   });
 
   // ── Edge case: Uzair is not in the selected city's invoices ─────────────
-  // Only runs when city = Islamabad. For Karachi/Lahore searches Uzair is
-  // handled as a normal salesperson (or simply has no invoices there).
-  if (
-    uzairEmployee &&
-    normalizeCity(city) === normalizeCity(UZAIR_SLAB_CITY) &&
-    !Object.keys(grouped).includes(uzairEmployee.id)
-  ) {
+  const groupedContainsUzair = Object.keys(grouped).some(k => {
+    const emp = employeeById.get(k) ?? employeeByName.get(normalizeStr(k));
+    return emp ? normalizeStr(emp.name) === UZAIR_NAME_MATCH : false;
+  });
+
+  if (uzairEmployee && normalizeCity(city) === normalizeCity(UZAIR_SLAB_CITY) && !groupedContainsUzair) {
     const pooledCityData: { city: string; amount: number; invoiceCount: number }[] = [];
     let pooledInvoices: InvoiceReference[] = [];
 
     // Include Uzair's own invoices across ALL cities for the month
     const uzairAllInvoices = invoices.filter(inv =>
       inv.status === 'Paid' &&
-      inv.salesperson === uzairEmployee.id &&
+      normalizeStr(inv.salesperson) === UZAIR_NAME_MATCH &&
       isInMonth(inv)
     );
     const uzairOwnTotal = uzairAllInvoices.reduce((s, i) => s + i.totalAmount, 0);
@@ -325,7 +341,7 @@ function calculateCommissionsFromInvoices(
       const cityInvoices = invoices.filter(inv => {
         if (inv.status !== 'Paid') return false;
         if (!isInMonth(inv))       return false;
-        if (!cityMatches(inv, poolCity)) return false;
+        if (normalizeCity(inv.salespersonLocation) !== normalizeCity(poolCity)) return false;
         return true;
       });
       const cityTotal = cityInvoices.reduce((s, i) => s + i.totalAmount, 0);
@@ -420,7 +436,7 @@ function calculateCommissionsFromInvoices(
       totalSalespeople:  commissions.length,
       totalSales:        commissions.reduce((s, c) => s + c.totalSales, 0),
       totalCommission:   commissions.reduce((s, c) => s + c.calculatedCommissionAmount, 0),
-      totalInvoicesUsed: [...new Set(commissions.flatMap(c => c.invoiceCount))].reduce((a, b) => a + b, 0),
+      totalInvoicesUsed: commissions.reduce((s, c) => s + c.invoiceCount, 0),
     },
     breakdowns,
   };
@@ -464,7 +480,8 @@ interface UseCommissionCalculationViewModelReturn {
   handleModalCancel:       () => void;
   formatCurrency:          (amount: number) => string;
   formatMonth:             (monthStr: string) => string;
-  cities:                  readonly string[];
+  cities:                  string[];
+  setInvoiceCities:        (cities: string[]) => void;
 }
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
@@ -490,6 +507,9 @@ export function useCommissionCalculationViewModel(
   const [editValues,          setEditValues]          = useState({ percentage: 0, amount: 0 });
   const [liveCommissions,         setLiveCommissions]         = useState<Commission[]>([]);
   const [liveCommissionsLoading,  setLiveCommissionsLoading]  = useState(false);
+
+  // Dynamic cities — set by the wrapper after invoices are loaded
+  const [invoiceCities, setInvoiceCities] = useState<string[]>([]);
 
   // ── Fetch ALL commissions for live panel ──────────────────────────────
   const refreshLiveCommissions = useCallback(async () => {
@@ -532,9 +552,7 @@ export function useCommissionCalculationViewModel(
         setSummary(result.summary);
         setInvoiceBreakdowns(result.breakdowns);
 
-        // Always clean up stale records for salespersons whose slab didn't match
-        // this runs BEFORE the early-return so it executes even when zero commissions
-        // are saved (e.g. Uzair has no slab covering his current sales range).
+        // Clean up stale records for salespersons whose slab didn't match
         {
           const savedSalespersonIds = new Set(result.commissions.map(c => c.salesperson));
           const staleCleanups = result.breakdowns
@@ -552,7 +570,7 @@ export function useCommissionCalculationViewModel(
         }
 
         if (result.commissions.length === 0) {
-          toast.error('No commissions to save');
+          toast.error('No commissions to save — check that salesperson names match employee records and slabs are configured for this city.');
           return false;
         }
 
@@ -606,9 +624,6 @@ export function useCommissionCalculationViewModel(
             (linkedCount > 0 ? ` Linked to ${linkedCount} salary record(s).` : ' Ready for salary forms.')
           );
 
-          // ✅ Keep results visible — do NOT resetState() here.
-          // User can see what was calculated and saved.
-          // They can manually cancel/clear using the Cancel button.
           await refreshLiveCommissions();
           onCommissionsSaved();
           return true;
@@ -723,6 +738,7 @@ export function useCommissionCalculationViewModel(
     handleModalCancel,
     formatCurrency,
     formatMonth,
-    cities: CITIES,
+    cities:          invoiceCities,
+    setInvoiceCities,
   };
 }
