@@ -13,7 +13,7 @@ import React from 'react';
 import {
   ArrowLeft, ArrowRight, Plus, Trash2, Loader2,
   MapPin, Package, Hash, User, Calendar, FileText,
-  CheckSquare, Square,
+  CheckSquare, Square, DollarSign,
 } from 'lucide-react';
 import { UseProductTransferCreateViewModelReturn } from '../viewModels/useProductTransferCreateViewModel';
 
@@ -22,6 +22,7 @@ interface Props extends UseProductTransferCreateViewModelReturn {}
 export const ProductTransferCreateView: React.FC<Props> = ({
   products, locations, formData, transferItems,
   showSummary, isSubmitting, isLoading, validation,
+  costPerUnit,
   setFormField, addTransferItem, removeTransferItem,
   updateTransferItemProduct, toggleSerial,
   toggleSummary, handleSave, onBack,
@@ -93,6 +94,41 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                   placeholder="e.g. Manager Ahmed"
                   className={inputCls}
                 />
+              </div>
+
+              {/* Shipment Cost */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                  <DollarSign className="w-3.5 h-3.5 inline mr-1 text-amber-500" />Total Shipment Cost (AED)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.shipmentCost || ''}
+                  onChange={e => setFormField('shipmentCost', parseFloat(e.target.value) || 0)}
+                  placeholder="e.g. 500"
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Cost per unit — live derived display */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                  <DollarSign className="w-3.5 h-3.5 inline mr-1 text-green-500" />Cost Per Unit (Auto-calculated)
+                </label>
+                <div className={`${inputCls} bg-gray-50 text-gray-700 flex items-center justify-between`}>
+                  <span className="font-semibold text-green-700">
+                    {costPerUnit > 0
+                      ? `AED ${costPerUnit.toFixed(2)}`
+                      : <span className="text-gray-400 font-normal">Enter cost + select serials</span>}
+                  </span>
+                  {costPerUnit > 0 && (
+                    <span className="text-xs text-gray-400">
+                      {formData.shipmentCost} ÷ {transferItems.reduce((s, it) => s + it.selectedSerials.length, 0)} units
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* From Location */}
@@ -403,6 +439,20 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                   {formData.toLocation}
                 </span>
               </div>
+
+              {/* Shipment cost summary */}
+              {formData.shipmentCost > 0 && (
+                <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Total Shipment Cost</p>
+                    <p className="text-lg font-bold text-amber-800">AED {formData.shipmentCost.toFixed(2)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Cost Per Unit</p>
+                    <p className="text-lg font-bold text-green-700">AED {costPerUnit.toFixed(2)}</p>
+                  </div>
+                </div>
+              )}
 
               <table className="w-full text-sm">
                 <thead>

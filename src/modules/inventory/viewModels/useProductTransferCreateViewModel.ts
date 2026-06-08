@@ -1,13 +1,5 @@
 // Inventory Module - ViewModel Layer
 // useProductTransferCreateViewModel
-//
-// CHANGES (v3):
-//  • transferDateTime stored as full ISO string (date + time) instead of date-only
-//  • selectedSerials uses a Set-based toggle approach — serials are chosen via
-//    checkbox multi-select, not individual dropdowns
-//  • quantity is auto-derived from selectedSerials.size (no manual entry needed)
-//  • getAvailableSerials / getProductStockByLocation unchanged — same logic
-//  • handleSave passes the full ISO datetime string to Firestore
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -19,19 +11,21 @@ import { db } from '../../../api/firebase/firebase';
 
 export interface TransferLine {
   productId: string;
-  selectedSerials: string[];   // ordered list of checked serials
+  selectedSerials: string[];
 }
 
 export interface UseProductTransferCreateViewModelReturn {
   products: Product[];
   locations: string[];
   formData: {
-    transferDateTime: string;  // full ISO string  e.g. "2026-06-01T14:30"
+    transferDateTime: string;
     fromLocation: string;
     toLocation: string;
     transferredBy: string;
     note: string;
+    shipmentCost: number;
   };
+  costPerUnit: number;
   transferItems: TransferLine[];
   showSummary: boolean;
   isSubmitting: boolean;
@@ -57,7 +51,6 @@ function getSerialEffectiveLocation(product: Product, serial: string): string {
   return product.location || '';
 }
 
-/** Returns current local datetime in the format required by <input type="datetime-local"> */
 function localDateTimeNow(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -79,6 +72,7 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     toLocation: '',
     transferredBy: '',
     note: '',
+    shipmentCost: 0,
   });
   const [transferItems, setTransferItems] = useState<TransferLine[]>([
     { productId: '', selectedSerials: [] },
@@ -86,14 +80,12 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
   const [showSummary, setShowSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ── Load products ──────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
       try {
         const fetched = await InventoryFirebaseService.fetchAllProducts();
         setProducts(fetched.filter(p => p.receivableStatus !== 'Pending'));
-        console.log(`✅ Loaded ${fetched.length} products for transfer`);
       } catch (err) {
         toast.error('Failed to load products');
       } finally {
@@ -103,7 +95,6 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     load();
   }, []);
 
-  // ── Load saved locations ──────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -145,7 +136,6 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     [products]
   );
 
-  // ── Serial helpers ─────────────────────────────────────────────────────────
   const getAvailableSerials = useCallback(
     (productId?: string, location?: string): string[] => {
       if (!productId || !location) return [];
@@ -166,11 +156,9 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     [getAvailableSerials]
   );
 
-  // ── Form helpers ───────────────────────────────────────────────────────────
   const setFormField = useCallback(
     (field: string, value: any) => {
       setFormData(prev => ({ ...prev, [field]: value }));
-      // When fromLocation changes, reset all serial selections
       if (field === 'fromLocation') {
         setTransferItems(prev => prev.map(it => ({ ...it, selectedSerials: [] })));
       }
@@ -198,7 +186,6 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     });
   }, []);
 
-  /** Toggle a single serial for a given transfer line */
   const toggleSerial = useCallback((lineIndex: number, serial: string) => {
     setTransferItems(prev => {
       const items = prev.map(it => ({ ...it, selectedSerials: [...it.selectedSerials] }));
@@ -215,7 +202,18 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
 
   const toggleSummary = useCallback(() => setShowSummary(p => !p), []);
 
-  // ── Validation ─────────────────────────────────────────────────────────────
+  const totalUnits = useMemo(
+    () => transferItems.reduce((sum, it) => sum + it.selectedSerials.length, 0),
+    [transferItems]
+  );
+
+  const costPerUnit = useMemo(
+    () => (formData.shipmentCost > 0 && totalUnits > 0
+      ? formData.shipmentCost / totalUnits
+      : 0),
+    [formData.shipmentCost, totalUnits]
+  );
+
   const validation = useMemo(() => {
     if (!formData.fromLocation)
       return { isValid: false, error: 'Select a From location' };
@@ -236,21 +234,15 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     return { isValid: true };
   }, [formData, transferItems]);
 
-  // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!validation.isValid) { toast.error(validation.error || 'Fix errors first'); return; }
     setIsSubmitting(true);
     try {
-      // Convert datetime-local value to full ISO string
       const isoDateTime = new Date(formData.transferDateTime).toISOString();
-
       for (const item of transferItems) {
         const product = getProductById(item.productId);
         if (!product) continue;
-
         const transferredSerials = item.selectedSerials;
-
-        // Remove transferred serials from source product
         const remainingSerials = (product.serialNumbers || []).filter(
           s => !transferredSerials.includes(s)
         );
@@ -258,19 +250,14 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
         remainingSerials.forEach(s => {
           newCities[s] = getSerialEffectiveLocation(product, s);
         });
-
-        // Mark transferred serials as 'In Transit'
         const updatedSerialStatus: Record<string, string> = { ...(product.serialStatus || {}) };
         transferredSerials.forEach(s => { updatedSerialStatus[s] = 'In Transit'; });
-
         await InventoryFirebaseService.updateProduct(product.id, {
           stock:         remainingSerials.length,
           serialNumbers: remainingSerials,
           serialCities:  newCities,
           serialStatus:  updatedSerialStatus,
         });
-
-        // Create transfer record with full ISO datetime
         await TransferFirebaseService.createTransfer({
           productId:     product.id,
           productName:   `${product.brandName} ${product.modelName}`,
@@ -280,20 +267,14 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
           toLocation:    formData.toLocation,
           quantity:      transferredSerials.length,
           serialNumbers: transferredSerials,
-          transferDate:  isoDateTime,    // ← full ISO datetime
+          transferDate:  isoDateTime,
           transferredBy: formData.transferredBy,
           note:          formData.note,
+          shipmentCost:  formData.shipmentCost,
+          costPerUnit:   costPerUnit,
         });
-
-        console.log(
-          `✅ Transferred ${transferredSerials.length} unit(s) of ${product.modelName}`,
-          `from ${formData.fromLocation} → ${formData.toLocation}`
-        );
       }
-
-      toast.success(
-        `Transfer created — products removed from ${formData.fromLocation} and are In Transit to ${formData.toLocation}`
-      );
+      toast.success(`Transfer created — products removed from ${formData.fromLocation} and are In Transit to ${formData.toLocation}`);
       navigate('/product-transfer');
     } catch (err) {
       console.error('Transfer failed:', err);
@@ -301,13 +282,14 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     } finally {
       setIsSubmitting(false);
     }
-  }, [validation, transferItems, formData, getProductById, navigate]);
+  }, [validation, transferItems, formData, getProductById, navigate, costPerUnit]);
 
   const onBack = useCallback(() => navigate('/product-transfer'), [navigate]);
 
   return {
     products, locations, formData, transferItems,
     showSummary, isSubmitting, isLoading, validation,
+    costPerUnit,
     setFormField, addTransferItem, removeTransferItem,
     updateTransferItemProduct, toggleSerial,
     toggleSummary, handleSave, onBack,

@@ -223,7 +223,34 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
 
   y = (doc as any).lastAutoTable.finalY + 7;
 
-  // ── 5. Note ───────────────────────────────────────────────────────────────
+  // ── 5. Shipment Cost ─────────────────────────────────────────────────────
+  if (transfer.shipmentCost && transfer.shipmentCost > 0) {
+    const costPerUnit = transfer.costPerUnit ?? 0;
+    _fill(doc, _YELLOW_BG);
+    doc.roundedRect(mL, y, cW, 14, 2, 2, 'F');
+    _draw(doc, _YELLOW); doc.setLineWidth(0.4);
+    doc.roundedRect(mL, y, cW, 14, 2, 2, 'S');
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); _text(doc, _GRAY_TEXT);
+    doc.text('Total Shipment Cost:', mL + 3, y + 5.5);
+    doc.setFont('helvetica', 'bold'); _text(doc, '#92400e');
+    doc.text(`AED ${transfer.shipmentCost.toFixed(2)}`, mL + 45, y + 5.5);
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); _text(doc, _GRAY_TEXT);
+    doc.text('Cost Per Unit:', mL + 3, y + 11);
+    doc.setFont('helvetica', 'bold'); _text(doc, '#15803d');
+    doc.text(`AED ${costPerUnit.toFixed(2)} / unit`, mL + 45, y + 11);
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); _text(doc, _GRAY_TEXT);
+    doc.text(
+      `(AED ${transfer.shipmentCost.toFixed(2)} ÷ ${transfer.quantity} units)`,
+      pageW - mR, y + 11, { align: 'right' }
+    );
+
+    y += 14 + 6;
+  }
+
+  // ── 6. Note ───────────────────────────────────────────────────────────────
   if (transfer.note) {
     doc.setFont('helvetica', 'bold');   doc.setFontSize(8.5); _text(doc, _GRAY_TEXT);
     doc.text('Note:', mL, y);
@@ -387,7 +414,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
             <table className="w-full">
               <thead className="border-b border-gray-200">
                 <tr>
-                  {['Date & Time', 'Product', 'Route', 'Qty', 'Serials', 'By', 'Status', 'Actions'].map(h => (
+                  {['Date & Time', 'Product', 'Route', 'Qty', 'Serials', 'Shipment Cost', 'By', 'Status', 'Actions'].map(h => (
                     <th key={h} className="px-6 py-3.5 text-left text-sm font-semibold text-gray-500">
                       {h}
                     </th>
@@ -448,6 +475,18 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                           <span className="text-xs text-gray-400">+{t.serialNumbers.length - 2} more</span>
                         )}
                       </div>
+                    </td>
+
+                    {/* Shipment Cost */}
+                    <td className="px-6 py-4 text-sm whitespace-nowrap">
+                      {t.shipmentCost && t.shipmentCost > 0 ? (
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-amber-700">AED {t.shipmentCost.toFixed(2)}</span>
+                          <span className="text-xs text-green-600">{(t.costPerUnit ?? 0).toFixed(2)}/unit</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
 
                     {/* Transferred By */}
@@ -624,6 +663,22 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                         {s}
                       </span>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Shipment Cost */}
+              {(viewTransfer.shipmentCost != null && viewTransfer.shipmentCost > 0) && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                    <p className="text-xs text-amber-600 font-medium uppercase tracking-wide mb-1">Shipment Cost</p>
+                    <p className="text-xl font-bold text-amber-800">AED {viewTransfer.shipmentCost.toFixed(2)}</p>
+                    <p className="text-xs text-amber-500">total</p>
+                  </div>
+                  <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
+                    <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-1">Cost Per Unit</p>
+                    <p className="text-xl font-bold text-green-700">AED {(viewTransfer.costPerUnit ?? 0).toFixed(2)}</p>
+                    <p className="text-xs text-green-500">per piece</p>
                   </div>
                 </div>
               )}
