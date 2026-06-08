@@ -495,8 +495,8 @@ export function Dashboard() {
           subtitle="Cash + Banks" {...cardCurrencyProps} />
       </div>
 
-      {/* Secondary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+      {/* Secondary stats — 5 cards, uniform style */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-5">
         <SmallStatCard label="Pending Transactions"
           countValue={<span className="text-orange-500">{stats.pendingTransactions}</span>}
           pkrAmount={stats.pendingAmount} subtitleSuffix="outstanding" {...cardCurrencyProps} />
@@ -507,6 +507,8 @@ export function Dashboard() {
         <SmallStatCard label="Pending Bills"
           countValue={<span className="text-yellow-500">{stats.pendingBills}</span>}
           pkrAmount={stats.pendingBillsAmount} subtitleSuffix="due" {...cardCurrencyProps} />
+        <SmallStatCard label="Payable to Futuristic"
+          pkrAmount={stats.payableToFuturistic ?? 0} subtitle="Outstanding" amountColor="text-red-500" {...cardCurrencyProps} />
       </div>
 
       {/* Charts */}
