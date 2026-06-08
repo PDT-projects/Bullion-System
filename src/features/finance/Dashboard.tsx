@@ -32,9 +32,9 @@ interface CurrencyMeta {
 }
 
 const CURRENCIES: CurrencyMeta[] = [
+  { code: 'AED', label: 'UAE Dirham',      flag: '🇦🇪', locale: 'en-AE', decimals: 2 },
   { code: 'PKR', label: 'Pakistani Rupee', flag: '🇵🇰', locale: 'en-PK', decimals: 0 },
   { code: 'CAD', label: 'Canadian Dollar', flag: '🇨🇦', locale: 'en-CA', decimals: 2 },
-  { code: 'AED', label: 'UAE Dirham',      flag: '🇦🇪', locale: 'en-AE', decimals: 2 },
   { code: 'SAR', label: 'Saudi Riyal',     flag: '🇸🇦', locale: 'en-US', decimals: 2 },
 ];
 
@@ -417,7 +417,7 @@ export function Dashboard() {
   const canViewOverview = hasPermission('Dashboard');
 
   const [activeTab, setActiveTab]     = useState<string | null>(null);
-  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('PKR');
+  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('AED');
   const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>([]);
 
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();

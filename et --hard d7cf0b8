@@ -1,0 +1,254 @@
+[33mc8b2e0c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Changes
+[33m2c80a23[m  Changes
+[33md7cf0b8[m  Changes
+[33me1c77b0[m Changes
+[33md8deb46[m Changes
+[33m88eace8[m Changes
+[33mdf42469[m Changes
+[33m70ef2c3[m Changes
+[33m7457373[m Changes in product transfer screen
+[33m0282c38[m Changes
+[33m53c7649[m Changes
+[33m90ce3d2[m Changes
+[33m96c61ac[m Changes
+[33m778b213[m Changes
+[33m7bb308b[m Changes
+[33m98ee489[m Changes
+[33mc659e94[m Changes
+[33mee200a9[m Changes
+[33m27d76a1[m Changes
+[33meb05bc8[m Changes
+[33m02a3960[m  Changes
+[33m8c447ef[m  Changes
+[33me1abe41[m  Changes
+[33me9c75b4[m  Changes
+[33m6e0068d[m Changes
+[33m8185e1c[m Changes
+[33mcb29ebe[m Changes
+[33m21ab49c[m Changes
+[33m072cc30[m Changes
+[33m73507cb[m Changes
+[33m2fbb458[m Changes
+[33m33d1588[m  Changes
+[33mcd81647[m  Changes in Invoices
+[33m9da7a85[m  Changes in Inventory
+[33me73efd8[m  Changes in inventory
+[33mff3f174[m Changes in invoices module
+[33mdf83197[m Login styling changes
+[33m04801fb[m Changes
+[33m7e12583[m Changes
+[33mceed3ab[m Changes in pending payments styling
+[33mb613bd6[m Changes
+[33m96200dc[m Changes in invoices
+[33m3e3e6fa[m Changes
+[33m59e20e2[m Product transfer locations
+[33md694c90[m Invoices changes
+[33m4449441[m Changes in login screen
+[33m12cccf2[m Changes in login screen
+[33m132863b[m Add inventory changes
+[33m6315a48[m View inventory currency fixes
+[33mf93a0dd[m Changes
+[33mf067af9[m Invoice pdf changes
+[33m629f1fd[m Invoice module changes
+[33m515979f[m Changes
+[33m0ab9505[m Changes
+[33mef22055[m Changes
+[33m2f41b9a[m Changes in Invoices module
+[33m79cea1b[m Changes in Inventory module styling
+[33maf958d9[m Inventory styling theme changings
+[33m7205c10[m Against the Invoice module added!
+[33m87fab02[m Changes
+[33m381724f[m Changes in transaction module
+[33m8967983[m Login Screen changes
+[33med4cccd[m Changes
+[33mb6e7173[m Change in firebase config
+[33m0dcf1ae[m Changes in Dashboard
+[33m2b9faf0[m Bullion Electronics project!
+[33m8980819[m Initial commit
+[33m8aa8de2[m Modifications
+[33mcbcb030[m Modifications
+[33m99eb58a[m Changes
+[33m1a1839d[m Changes
+[33m498238e[m Changes
+[33m383fab8[m Changes
+[33m48f1893[m Changes
+[33mbf0bb16[m Changes
+[33mbe5c2d6[m Changes
+[33ma61853e[m Changes
+[33m5b6e7e7[m Changes
+[33mee00a2a[m Changes
+[33m93d6e80[m Inventory report!
+[33mf994694[m Changes in inventory module
+[33mc4c7303[m Changes
+[33mf02fba9[m Changes
+[33m896f1ff[m Changes
+[33m7f67510[m Changes
+[33m073c28b[m Changes
+[33meb7a838[m Changes
+[33ma11820a[m Changes
+[33m8c5637e[m Changes
+[33me7eed10[m Changes
+[33m72b961f[m Changes
+[33mf0d9a8c[m Bank activity report changes
+[33m3b565ea[m Changes in transactions module
+[33mba96214[m Changes
+[33m0e38e40[m changes
+[33mcb31d39[m Changes
+[33ma08fee6[m Invoice & inventory linked to transatcions
+[33m22fc0dc[m Inventory brands & its models changes
+[33mf709fa2[m Changes
+[33m6643f8f[m Activity report
+[33mede16cd[m Bank activity report in banking module
+[33mb741a1c[m Asset management screen modifications!
+[33m9507f1a[m Reports styling modifications
+[33m1b58729[m Inventory styling changes
+[33mbcb0757[m Inovices module changes
+[33m298fbac[m Inventory module changes
+[33m8d0d7ef[m User management module modifications
+[33m0f494a8[m Changes!!
+[33ma4e7a16[m Modifications
+[33meda33cb[m[33m ([m[1;32mbackup-main[m[33m)[m Changes
+[33m488c40b[m Invoice form styling changes
+[33m327b4fb[m Invoice email sent to admin
+[33m614140d[m User management module changes
+[33m43c0c38[m User management module changes
+[33m7db61fb[m User management added
+[33m977ce6e[m User management added
+[33mb6ec75f[m UI modifications
+[33mdae85a9[m Changes
+[33m80a2637[m Changes
+[33mda46361[m Modifications!
+[33mb9de9c5[m Changes!
+[33mf23fde7[m Reports modifications
+[33mb8ba8c6[m Changes
+[33m4061495[m Reports!
+[33m1c40855[m Commission calculation & reports!
+[33mf98c7a3[m Transaction module changes
+[33m9741059[m Commission module modifications
+[33ma32914d[m Commission module modifications
+[33m9c43c1a[m Changes
+[33m84ded29[m Changes
+[33m47912dd[m Changes in inventory UI
+[33m7dcf3c7[m Changes
+[33m7033e2f[m Commission module changes
+[33m2cbd474[m Transaction module, Profit & loss and Balanace sheet classification added
+[33mb54cd6c[m Changes!
+[33m68f16de[m changes
+[33m37def59[m changes
+[33mcef69fd[m Invoices module modifications
+[33m742f7c7[m Modifications in Inventory &  product transfer modules
+[33m1f72db8[m Banking & product transfer changes
+[33me0839ad[m Salary module changes
+[33mbce9b24[m Fixed bills changes
+[33me0f7f7e[m Transaction module modifications
+[33ma12d315[m Email credentials for login
+[33m792407e[m Changes
+[33m3bb7e8a[m Changes
+[33mebf0644[m Changes in Cash in Hand screen
+[33m07753e3[m Styling fixes
+[33m242ea2c[m Email authorization feature enhancements
+[33m2657f58[m Email for transactions authorization feature added and ignored env files
+[33m96ba5bd[m Changes
+[33ma098602[m Changes
+[33m9f073e0[m Changes!
+[33m786f7ca[m Styling enhancements
+[33mbe1db38[m Styling modifications
+[33m9c5c2e0[m Styling changes!
+[33mbdc4df0[m Styling modifications
+[33m4e586a3[m Inventory Screen styling modifications!
+[33md334a94[m Changes in invoices module!
+[33md3234b4[m Inventory changes
+[33m615c668[m Finance module modification - logic builidng
+[33m90f75b5[m Changes
+[33m95e98b9[m Changes in routes!
+[33m69aa312[m Transaction module & Reports changes
+[33m99a72de[m Invoices, product transfer, commission module backend connected
+[33m750880b[m changes
+[33ma72b653[m Invnetory module changes
+[33mc2d3845[m Inventory with costing - Changes
+[33m03da3d7[m Inventory module
+[33mb151858[m Loans, Budgets complete backend!
+[33m58eea55[m Merge pull request #37 from Dilkash931/dilkash
+[33mf5770fe[m Banks and Cash in hand integrated to the firebase
+[33mf39cf70[m Merge pull request #36 from Dilkash931/dilkash
+[33mea6c1da[m Employee connect to data connect
+[33m74e49fa[m Merge pull request #35 from Dilkash931/dilkash
+[33mb2cf545[m data connect sdk added
+[33mea6d114[m Merge pull request #34 from fatima
+[33m1b114c1[m Firebase Configuration!
+[33md9b9a40[m Merge pull request #33 from Dilkash931/dilkash
+[33me73e210[m Merge branch main into dilkash - conflicts resolved
+[33ma1dd3ab[m new ui changes with routes
+[33m2f2677f[m Merge pull request #32 from Dilkash931/dilkash
+[33mf068606[m Employee fields added
+[33mc698d40[m Merge pull request #31 from Dilkash931/dilkash
+[33m5aa72f5[m Opening balance added in cash in hand
+[33m4cbf8cb[m Merge pull request #30 from Dilkash931/dilkash
+[33m206c1a7[m Transaction changed to MVVM architecture
+[33mfb19ef5[m Merge pull request #29 from Dilkash931/fatima
+[33m83e7cbd[m Firebase auth
+[33m5e5ebb7[m Merge pull request #28 from Dilkash931/dilkash
+[33m98e9a6c[m MVVM structure for 9 modules
+[33m8f9cf2e[m Merge pull request #27 from Dilkash931/dilkash
+[33m74cbe70[m Routing done for all pages
+[33mdf0e7fe[m Merge pull request #26 from fatima
+[33m3317ef2[m Firebase connection
+[33md2fb5c0[m Routing
+[33m5edd68c[m Merge pull request #25 from Dilkash931/dilkash
+[33m0de6c48[m invoice router
+[33maa01c87[m Merge pull request #24 from Dilkash931/dilkash
+[33mdf81ede[m invoice router
+[33m20390b4[m Merge pull request #23 from Dilkash931/fatima
+[33m1c50958[m Merge branch 'main' into fatima
+[33mbc8f8c2[m Operations routes
+[33m4b23056[m Merge pull request #22 from Dilkash931/dilkash
+[33me5eeb1a[m inventory routes added
+[33m669120e[m Merge pull request #21 from Dilkash931/dilkash
+[33me224329[m Route set for employees
+[33m83c2976[m Merge pull request #20 from Dilkash931/dilkash
+[33ma7a6954[m Route set for employees
+[33m08669ff[m routing and project structured
+[33m1e60e18[m Routes
+[33m026cd92[m Merge pull request #19 from Dilkash931/fatima
+[33m97d7b28[m Authentication screens completed with backend
+[33md1a4d61[m Merge pull request #18 from Dilkash931/fatima
+[33m5ee1519[m Firebase Connected!
+[33md678a0c[m Merge pull request #17 from Dilkash931/dilkash
+[33m606f543[m new changes
+[33mbacfd59[m Merge pull request #16 from Fatima
+[33m3746d68[m Changes in Inventory module
+[33m87a8703[m Merge pull request #15 from fatima
+[33mcc5d5bf[m Changes in Inventory
+[33m577c18c[m Merge pull request #14 from Fatima
+[33m89fa737[m Inventory changes
+[33meec19d8[m Merge pull request #13 from Fatima
+[33m858eb87[m Changes in Transactions, Invoices & Salary!
+[33mee7e804[m Merge pull request #12 from Dilkash931/dilkash
+[33m748bbb2[m Merge branch 'main' into dilkash
+[33mb404e44[m Inventory changes
+[33m65e0209[m Merge pull request #11 from Dilkash931/dilkash
+[33m5ee79b9[m Dahsboard changes
+[33m1699b19[m Merge pull request #10 from Dilkash931/dilkash
+[33md00b492[m reports added on the dashboard
+[33m11b793b[m Merge pull request #9 from Fatima
+[33mde5f6ec[m Changes in Invoices!
+[33mb3cf9ba[m Merge pull request #8 from Dilkash931/fatima
+[33m8735e47[m Changes!
+[33mcea308a[m Merge pull request #7 from Dilkash931/dilkash
+[33md4fefda[m Merge branch 'main' into dilkash
+[33md7e4e22[m Commission, product costing, filteration, and visualization added
+[33m2343227[m Merge pull request #6 from Fatima
+[33mdba0f89[m commision, filters, product costing, visualization added
+[33m5625754[m Dashboard enhancements, budgets, Salary & Transaction changes!
+[33m9777884[m Merge pull request #5 from Dilkash931/dilkash
+[33meda9bca[m Commission and costing screens added
+[33m94c46f6[m Merge pull request #4 from Fatima
+[33m8d96935[m Changes in invoice screen
+[33me53b375[m Merge pull request #3 from Fatima
+[33m5fd7f55[m Changes!
+[33m6e344d0[m Merge pull request #2 from Dilkash931/dilkash
+[33mf4b210f[m Merge branch 'main' into dilkash
+[33mf9c0520[m Inventory update
+[33m2c82e63[m Merge pull request #1 from Fatima
+[33mcf919f7[m Pending transactions changes!
+[33m5c9d903[m Initial commit

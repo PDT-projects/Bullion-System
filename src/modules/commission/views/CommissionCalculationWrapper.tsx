@@ -1,13 +1,4 @@
 // Commission Calculation Wrapper — fetches employees + invoices from Firestore
-// FIXED:
-//   - Raw Firestore invoices store `salesperson` as a NAME string (e.g. "Fatima Malik").
-//     The InvoiceReference.salesperson field is now populated from that name directly.
-//     The ViewModel now resolves name → employee ID internally.
-//   - Branch/city is derived from `branch` (stripping the company prefix) or
-//     `salespersonLocation`, whichever is populated. Both are stored in
-//     InvoiceReference.salespersonLocation so the ViewModel's cityMatches() works.
-//   - City dropdown is built from the unique non-empty salespersonLocation values
-//     across all invoices, then sorted alphabetically.
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
