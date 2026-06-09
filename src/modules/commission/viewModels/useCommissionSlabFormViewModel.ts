@@ -1,4 +1,12 @@
-// Commission Slab Form ViewModel — multi-currency, international locations, "All Salespersons"
+// Commission Slab Form ViewModel — multi-currency, international locations
+// CHANGED:
+//   - ALL_SALESPERSONS ('__ALL__') slabs are now saved as a SINGLE Firestore
+//     record with salesperson: '__ALL__', instead of fanning out into one
+//     record per employee. This means Khalid, Nibras, and every other
+//     salesperson share the same slab record — no duplicate rows.
+//   - Slab lookup in useCommissionCalculationViewModel checks person-specific
+//     slabs first, then falls back to __ALL__ slabs for the same city.
+//   - Edit mode for an __ALL__ slab updates only that one record.
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
@@ -105,7 +113,12 @@ function saveCustomLocations(locs: string[]): void {
 // ─────────────────────────────────────────────────────────────────────────────
 // Sentinel values
 // ─────────────────────────────────────────────────────────────────────────────
-/** Special salesperson value meaning "apply to all salespersons". */
+/**
+ * Special salesperson value meaning "applies to all salespersons".
+ * Saved as a SINGLE Firestore document with salesperson === '__ALL__'.
+ * The calculation engine checks person-specific slabs first, then falls
+ * back to __ALL__ slabs when no personal slab is found for that city.
+ */
 export const ALL_SALESPERSONS = '__ALL__';
 
 /** Special location value triggering the "add new location" inline input. */
@@ -151,7 +164,10 @@ export interface UseCommissionSlabFormViewModelReturn {
   setEditingSlab: (slab: CommissionSlab | null) => void;
   startEdit: (slab: CommissionSlab) => void;
   handleAdd: () => void;
-  /** employees param needed so ALL_SALESPERSONS can fan out into multiple slabs */
+  /**
+   * employees param is still accepted for API compatibility but is no longer
+   * used for fan-out. ALL_SALESPERSONS saves as a single __ALL__ record.
+   */
   handleSave: (existingSlabs: CommissionSlab[], employees: any[]) => Promise<void>;
   // Locations
   allLocations: string[];
@@ -275,7 +291,9 @@ export function useCommissionSlabFormViewModel(
   }, [resetForm]);
 
   // ── handleSave ─────────────────────────────────────────────────────────────
-  const handleSave = useCallback(async (existingSlabs: CommissionSlab[], employees: any[]) => {
+  // KEY CHANGE: ALL_SALESPERSONS is now saved as a SINGLE record with
+  // salesperson === '__ALL__'. No fan-out into individual employee records.
+  const handleSave = useCallback(async (existingSlabs: CommissionSlab[], _employees: any[]) => {
     setIsSubmitting(true);
     setErrors([]);
 
@@ -289,39 +307,25 @@ export function useCommissionSlabFormViewModel(
         return;
       }
       resolvedLocation = trimmed;
-      // Persist the new location for future sessions
       addCustomLocation(trimmed);
     }
 
     // fromAmount and toAmount are ALWAYS stored in PKR internally.
-    // CurrencyAmountInput.handleChange already converts to PKR via onPkrChange,
-    // so we must NOT convert again here — doing so causes double-conversion.
     const pkrFrom = +formData.fromAmount.toFixed(2);
     const pkrTo   = +formData.toAmount.toFixed(2);
 
-    // Determine which salesperson IDs to create/update for
-    const isAll = formData.salesperson === ALL_SALESPERSONS;
-    const targetIds: string[] = isAll
-      ? employees.map(e => e.id)
-      : [formData.salesperson];
-
-    if (targetIds.length === 0) {
-      setErrors(['No salespersons found.']);
-      setIsSubmitting(false);
-      return;
-    }
+    const payload = {
+      salesperson: formData.salesperson,      // '__ALL__' or an employee ID
+      city: resolvedLocation,                 // kept as 'city' for backward compat
+      location: resolvedLocation,
+      fromAmount: pkrFrom,
+      toAmount: pkrTo,
+      commissionPercentage: formData.commissionPercentage,
+    };
 
     try {
-      if (editingSlab && !isAll) {
-        // Single-slab edit
-        const payload = {
-          salesperson: formData.salesperson,
-          city: resolvedLocation,        // keep "city" field for backward compat
-          location: resolvedLocation,
-          fromAmount: pkrFrom,
-          toAmount: pkrTo,
-          commissionPercentage: formData.commissionPercentage,
-        };
+      if (editingSlab) {
+        // Edit: update the single existing slab record
         const validation = validateCommissionSlab(
           payload as unknown as CreateCommissionSlabDTO,
           existingSlabs,
@@ -329,46 +333,24 @@ export function useCommissionSlabFormViewModel(
         );
         if (!validation.isValid) { setErrors(validation.errors); return; }
         await CommissionFirebaseService.updateSlab(editingSlab.id, payload);
-        toast.success('Commission slab updated');
+        toast.success(
+          formData.salesperson === ALL_SALESPERSONS
+            ? 'Shared slab updated (applies to all salespersons)'
+            : 'Commission slab updated'
+        );
       } else {
-        // Create one slab per resolved salesperson ID (fan-out for ALL)
-        let created = 0;
-        let skipped = 0;
-        for (const spId of targetIds) {
-          const payload = {
-            salesperson: spId,
-            city: resolvedLocation,
-            location: resolvedLocation,
-            fromAmount: pkrFrom,
-            toAmount: pkrTo,
-            commissionPercentage: formData.commissionPercentage,
-          };
-          const validation = validateCommissionSlab(
-            payload as unknown as CreateCommissionSlabDTO,
-            existingSlabs,
-          );
-          if (!validation.isValid) {
-            // For ALL mode: skip duplicates silently, only block if single
-            if (!isAll) { setErrors(validation.errors); return; }
-            skipped++;
-            continue;
-          }
-          await CommissionFirebaseService.createSlab(payload);
-          created++;
-        }
-        if (isAll) {
-          if (created === 0) {
-            setErrors(['All slabs already exist for these salespersons in this range.']);
-            return;
-          }
-          toast.success(
-            skipped > 0
-              ? `Created ${created} slab(s). ${skipped} skipped (already exist).`
-              : `Created ${created} slab(s) for all salespersons.`
-          );
-        } else {
-          toast.success('Commission slab created');
-        }
+        // Create: validate and save ONE record
+        const validation = validateCommissionSlab(
+          payload as unknown as CreateCommissionSlabDTO,
+          existingSlabs,
+        );
+        if (!validation.isValid) { setErrors(validation.errors); return; }
+        await CommissionFirebaseService.createSlab(payload);
+        toast.success(
+          formData.salesperson === ALL_SALESPERSONS
+            ? 'Shared slab created (applies to all salespersons)'
+            : 'Commission slab created'
+        );
       }
 
       setIsModalOpen(false);
@@ -381,7 +363,7 @@ export function useCommissionSlabFormViewModel(
     } finally {
       setIsSubmitting(false);
     }
-  }, [editingSlab, formData, currencyRates, addCustomLocation, onSuccess, resetForm]);
+  }, [editingSlab, formData, addCustomLocation, onSuccess, resetForm]);
 
   return {
     formData, setFormData, resetForm,

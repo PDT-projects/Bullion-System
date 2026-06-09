@@ -1,12 +1,17 @@
 // Commission Slab List View — multi-currency, international locations
+// CHANGED:
+//   - Slabs with salesperson === '__ALL__' now display as "★ All Salespersons"
+//     with a teal badge instead of a raw ID, so shared slabs are clearly
+//     distinguishable from person-specific ones.
 
 import { useState } from 'react';
-import { Plus, Search, Edit, Trash2, Filter, SlidersHorizontal, RefreshCw, Globe } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Filter, SlidersHorizontal, RefreshCw, Globe, Users } from 'lucide-react';
 import type { CommissionSlab, CommissionSlabFilter } from '../models/types';
 import {
   COMMISSION_CURRENCIES,
   CommissionCurrency,
   convertCommissionCurrency,
+  ALL_SALESPERSONS,
 } from '../viewModels/useCommissionSlabFormViewModel';
 import { formatCommissionCurrency } from '../viewModels/useCommissionSlabListViewModel';
 
@@ -123,6 +128,31 @@ function MultiCurrencyCell({
   );
 }
 
+// ── Salesperson display ───────────────────────────────────────────────────────
+// Shows a teal "All Salespersons" pill for shared slabs, or the resolved name
+// for person-specific slabs.
+function SalespersonCell({
+  salespersonId,
+  getSalespersonName,
+}: {
+  salespersonId: string;
+  getSalespersonName: (id: string) => string;
+}) {
+  if (salespersonId === ALL_SALESPERSONS) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+        <Users size={11} />
+        All Salespersons
+      </span>
+    );
+  }
+  return (
+    <span className="text-sm font-medium text-gray-900">
+      {getSalespersonName(salespersonId)}
+    </span>
+  );
+}
+
 // ── Main list view ────────────────────────────────────────────────────────────
 export function CommissionSlabListView({
   slabs, filteredSlabs, isLoading,
@@ -133,7 +163,6 @@ export function CommissionSlabListView({
   currencyRates, isFetchingRates, lastRatesFetchAt,
   displayCurrencies, setDisplayCurrencies, formatInCurrency,
 }: CommissionSlabListViewProps) {
-  // Defensive: guarantee arrays even if parent passes undefined during async loading
   const safeSlabs             = slabs             ?? [];
   const safeFilteredSlabs     = filteredSlabs     ?? [];
   const safeDisplayCurrencies = displayCurrencies ?? ['PKR'];
@@ -141,9 +170,12 @@ export function CommissionSlabListView({
     ? lastRatesFetchAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null;
 
-  // resolve location — support both old "city" field and new "location" field
   const getLocation = (slab: CommissionSlab) =>
     (slab as any).location || (slab as any).city || '—';
+
+  // Count shared vs personal slabs for the info bar
+  const sharedCount   = safeSlabs.filter(s => s.salesperson === ALL_SALESPERSONS).length;
+  const personalCount = safeSlabs.length - sharedCount;
 
   return (
     <div className="p-6 space-y-6">
@@ -153,13 +185,21 @@ export function CommissionSlabListView({
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Commission Slabs</h1>
           <p className="text-gray-600 mt-1">Manage commission slabs for salespeople across locations</p>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
-            <RefreshCw size={11} className={isFetchingRates ? 'animate-spin text-gray-500' : ''} />
-            {isFetchingRates
-              ? 'Refreshing exchange rates…'
-              : timeStr
-                ? `Exchange rates updated at ${timeStr}`
-                : 'Using fallback exchange rates'}
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <RefreshCw size={11} className={isFetchingRates ? 'animate-spin text-gray-500' : ''} />
+              {isFetchingRates
+                ? 'Refreshing exchange rates…'
+                : timeStr
+                  ? `Exchange rates updated at ${timeStr}`
+                  : 'Using fallback exchange rates'}
+            </div>
+            {sharedCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+                <Users size={10} />
+                {sharedCount} shared · {personalCount} personal
+              </span>
+            )}
           </div>
         </div>
         <button
@@ -172,10 +212,22 @@ export function CommissionSlabListView({
         </button>
       </div>
 
+      {/* ── Shared slab info banner ── */}
+      {sharedCount > 0 && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-teal-50 border border-teal-200 text-sm text-teal-800">
+          <Users size={16} className="mt-0.5 shrink-0 text-teal-600" />
+          <span>
+            <strong>{sharedCount} shared slab{sharedCount !== 1 ? 's' : ''}</strong> apply to all
+            salespersons when no personal slab is found for a given city. Person-specific slabs
+            always take priority over shared ones.
+          </span>
+        </div>
+      )}
+
       {/* ── Stats ── */}
       <div className="grid gap-4 md:grid-cols-3">
         {[
-          { label: 'Total Slabs',    value: totalSlabs,           Icon: SlidersHorizontal },
+          { label: 'Total Slabs',    value: totalSlabs,               Icon: SlidersHorizontal },
           { label: 'Active Filters', value: Object.values(filter).filter(Boolean).length, Icon: Filter },
           { label: 'Showing',        value: safeFilteredSlabs.length, Icon: Search, sub: `of ${safeSlabs.length} total` },
         ].map(({ label, value, Icon, sub }) => (
@@ -256,9 +308,17 @@ export function CommissionSlabListView({
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
                   {safeFilteredSlabs.map(slab => (
-                    <tr key={slab.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-4 text-sm font-medium text-gray-900">
-                        {getSalespersonName(slab.salesperson)}
+                    <tr
+                      key={slab.id}
+                      className={`hover:bg-gray-50 transition-colors ${
+                        slab.salesperson === ALL_SALESPERSONS ? 'bg-teal-50/30' : ''
+                      }`}
+                    >
+                      <td className="px-4 py-4">
+                        <SalespersonCell
+                          salespersonId={slab.salesperson}
+                          getSalespersonName={getSalespersonName}
+                        />
                       </td>
                       <td className="px-4 py-4">
                         <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">

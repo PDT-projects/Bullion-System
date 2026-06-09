@@ -1,9 +1,13 @@
 // Commission Slab Form View — international locations, All Salespersons, multi-currency
+// CHANGED:
+//   - "All Salespersons" now clearly states it saves ONE shared slab (not N copies).
+//   - Footer count removed (no fan-out). Save button says "Save Shared Slab".
+//   - All other UI unchanged.
 
 import { useState, useEffect, useRef } from 'react';
 import {
   X, Maximize2, Minimize2, AlertCircle, RefreshCw,
-  TrendingUp, ChevronDown, ChevronUp, PlusCircle, Globe,
+  TrendingUp, ChevronDown, ChevronUp, PlusCircle, Globe, Users,
 } from 'lucide-react';
 import type { CommissionSlab } from '../models/types';
 import {
@@ -154,14 +158,11 @@ export function CommissionSlabFormView({
   currencyRates, isFetchingRates, lastRatesFetchAt,
 }: CommissionSlabFormViewProps) {
 
-  // ── ALL hooks must run before any early return ────────────────────────────
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // ── Defensive: guarantee these are always arrays even if parent passes undefined ──
   const employees    = employeesProp    ?? [];
   const allLocations = allLocationsProp ?? [];
 
-  // ── Derived state ─────────────────────────────────────────────────────────
   const currency       = formData?.inputCurrency ?? 'PKR';
   const salesperson    = formData?.salesperson    ?? '';
   const location       = formData?.location       ?? '';
@@ -174,7 +175,6 @@ export function CommissionSlabFormView({
   const isAddingLoc    = location    === ADD_NEW_LOCATION;
   const hasBothAmounts = fromAmount > 0 && toAmount > 0;
 
-  // ── Early return AFTER hooks ──────────────────────────────────────────────
   if (!isModalOpen) return null;
 
   return (
@@ -244,23 +244,23 @@ export function CommissionSlabFormView({
               className={inp}
             >
               <option value="">Select Salesperson</option>
-              <option value={ALL_SALESPERSONS}>★ All Salespersons (apply same slab to everyone)</option>
+              <option value={ALL_SALESPERSONS}>★ All Salespersons (shared slab)</option>
               <option disabled>──────────────────</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>{emp.name}</option>
               ))}
             </select>
 
-            {isAllSP && employees.length > 0 && (
+            {isAllSP && (
               <div
                 className="mt-2 flex items-start gap-2 px-3 py-2 rounded-lg text-xs"
-                style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}
+                style={{ backgroundColor: '#f0fdfa', border: '1px solid #99f6e4', color: '#0f766e' }}
               >
-                <Globe size={13} className="mt-0.5 shrink-0" />
+                <Users size={13} className="mt-0.5 shrink-0" />
                 <span>
-                  This slab will be created for{' '}
-                  <strong>all {employees.length} salesperson{employees.length !== 1 ? 's' : ''}</strong>.
-                  Existing duplicates will be skipped automatically.
+                  Saves as <strong>one shared slab</strong>. Applied to every salesperson who
+                  doesn't have their own personal slab for this location. Personal slabs always
+                  take priority.
                 </span>
               </div>
             )}
@@ -431,37 +431,28 @@ export function CommissionSlabFormView({
           )}
         </div>
 
-        {/* ── Footer — always visible ── */}
-        <div className="flex-none flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-white rounded-b-xl">
-          {isAllSP && !editingSlab ? (
-            <p className="text-xs text-gray-400">
-              Will create up to <strong>{employees.length}</strong> slab{employees.length !== 1 ? 's' : ''}
-            </p>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-3">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSubmitting}
-              style={{ backgroundColor: isSubmitting ? '#9ca3af' : CHARCOAL }}
-              className="px-5 py-2 text-white rounded-lg transition-opacity disabled:opacity-60 text-sm font-semibold hover:opacity-90"
-            >
-              {isSubmitting
-                ? 'Saving…'
-                : isAllSP && !editingSlab
-                  ? `Save for All (${employees.length})`
-                  : editingSlab
-                    ? 'Update Slab'
-                    : 'Save Slab'}
-            </button>
-          </div>
+        {/* ── Footer ── */}
+        <div className="flex-none flex items-center justify-end px-6 py-3 border-t border-gray-200 bg-white rounded-b-xl gap-3">
+          <button
+            onClick={() => setIsModalOpen(false)}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSubmitting}
+            style={{ backgroundColor: isSubmitting ? '#9ca3af' : CHARCOAL }}
+            className="px-5 py-2 text-white rounded-lg transition-opacity disabled:opacity-60 text-sm font-semibold hover:opacity-90"
+          >
+            {isSubmitting
+              ? 'Saving…'
+              : isAllSP && !editingSlab
+                ? 'Save Shared Slab'
+                : editingSlab
+                  ? 'Update Slab'
+                  : 'Save Slab'}
+          </button>
         </div>
       </div>
     </div>
