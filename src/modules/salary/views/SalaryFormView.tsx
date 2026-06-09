@@ -635,7 +635,7 @@ export function SalaryFormView({
                   value={transaction.paidBy}
                   onChange={(e) => onTransactionChange(0, 'paidBy', e.target.value)}
                   className={`${inp} ${fieldErrors['transaction_0_paidBy'] ? inpErr : ''}`}
-                  placeholder="e.g. PDT Islamabad"
+                  placeholder="e.g. Bullion"
                 />
                 {fieldErrors['transaction_0_paidBy'] && <p className="mt-1 text-sm text-red-600">{fieldErrors['transaction_0_paidBy']}</p>}
               </div>
