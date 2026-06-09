@@ -1,23 +1,42 @@
 // Commission Calculation View - Presentational Component
-// FIXED:
-//   - Added all missing props to the interface:
-//     invoiceBreakdowns, expandedSalesperson, setExpandedSalesperson,
-//     liveCommissions, liveCommissionsLoading, refreshLiveCommissions
-//   - `cities` prop is `string[]` (dynamic, from invoice data) not `readonly string[]`
-//   - All rendering unchanged.
+// CHANGED (salesperson-first multi-select):
+//   - City dropdown removed; replaced with a multi-select salesperson dropdown
+//     (checkbox list with search, "Select All", badge counts).
+//   - Props updated: `selectedCity` / `setSelectedCity` replaced with
+//     `selectedSalespersons`, `toggleSalesperson`, `clearSalespersons`, `allEmployees`.
+//   - Inline "No commission slab" / "No invoices" messages shown per person
+//     in the breakdown panel (read from `breakdown.noSlabMessage`).
+//   - All other panels (modal, live commissions, invoice breakdown table) unchanged.
+//   - COLOR THEME: Charcoal (#2d2d2d) replaces all indigo/blue accents.
 
+import { useState, useRef, useEffect } from 'react';
 import {
   Calculator, X, Maximize2, Minimize2, Check,
   AlertCircle, Edit2, Save, XCircle, FileText,
   ChevronDown, ChevronRight, Receipt, Search,
-  CheckCircle, RefreshCw, MapPin,
+  CheckCircle, RefreshCw, Users, ChevronUp,
 } from 'lucide-react';
 import type { Commission, InvoiceReference } from '../models/types';
 import type { SalespersonInvoiceBreakdown } from '../viewModels/useCommissionCalculationViewModel';
 
+// ─── Charcoal palette constants ───────────────────────────────────────────────
+const C = {
+  dark:        '#2d2d2d',
+  darker:      '#1a1a1a',
+  bg:          '#f0f0f0',   // light charcoal tint for row backgrounds
+  bgMid:       '#e8e8e8',   // slightly darker tint for badges
+  border:      '#c8c8c8',
+  borderDark:  '#2d2d2d',
+};
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
 interface CommissionCalculationViewProps {
-  selectedCity:            string;
-  setSelectedCity:         (city: string) => void;
+  selectedSalespersons:    string[];
+  toggleSalesperson:       (id: string) => void;
+  clearSalespersons:       () => void;
+  allEmployees:            { id: string; name: string }[];
+
   selectedMonth:           string;
   setSelectedMonth:        (month: string) => void;
   commissionData:          Commission[];
@@ -26,7 +45,6 @@ interface CommissionCalculationViewProps {
     totalSalespeople: number; totalSales: number;
     totalCommission:  number; totalInvoicesUsed: number;
   } | null;
-  // Invoice breakdown panel (shown after calculation)
   invoiceBreakdowns:       SalespersonInvoiceBreakdown[];
   expandedSalesperson:     string | null;
   setExpandedSalesperson:  (id: string | null) => void;
@@ -38,7 +56,6 @@ interface CommissionCalculationViewProps {
   isEditing:               string | null;
   editValues:              { percentage: number; amount: number };
   setEditValues:           (values: { percentage: number; amount: number }) => void;
-  // Live commissions panel
   liveCommissions:         Commission[];
   liveCommissionsLoading:  boolean;
   refreshLiveCommissions:  () => void;
@@ -52,31 +69,217 @@ interface CommissionCalculationViewProps {
   handleModalCancel:       () => void;
   formatCurrency:          (amount: number) => string;
   formatMonth:             (monthStr: string) => string;
-  // Dynamic list built from invoice salespersonLocation values
-  cities:                  string[];
-  employees:               any[];
   totalInvoices?:          number;
   paidInvoices?:           number;
-  // Debug prop injected by wrapper when troubleshooting
-  debugInvoiceLocations?:  { id: string; salespersonLocation?: string; branch?: string; customerCity?: string; productLocation?: string; warrantyLocation?: string }[];
+  cities?:                 string[];
+  employees?:              any[];
+  debugInvoiceLocations?:  any[];
 }
 
-// ── Status badge helper ───────────────────────────────────────────────────────
+// ─── Status badge ─────────────────────────────────────────────────────────────
+
 function StatusBadge({ status }: { status: string }) {
   const cls =
     status === 'Confirmed' ? 'bg-green-100 text-green-800' :
     status === 'Adjusted'  ? 'bg-yellow-100 text-yellow-800' :
-                             'bg-blue-100 text-blue-800';
+                             'text-gray-700';
+  const style = (status !== 'Confirmed' && status !== 'Adjusted')
+    ? { backgroundColor: C.bgMid } : undefined;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full ${cls}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full ${cls}`}
+      style={style}
+    >
       {status === 'Confirmed' && <CheckCircle size={10} />}
       {status}
     </span>
   );
 }
 
+// ─── Multi-select salesperson dropdown ───────────────────────────────────────
+
+interface SalespersonDropdownProps {
+  allEmployees:  { id: string; name: string }[];
+  selectedIds:   string[];
+  onToggle:      (id: string) => void;
+  onClear:       () => void;
+  onSelectAll:   () => void;
+}
+
+function SalespersonDropdown({
+  allEmployees, selectedIds, onToggle, onClear, onSelectAll,
+}: SalespersonDropdownProps) {
+  const [open, setOpen]     = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef        = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const filtered   = allEmployees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
+  const allSelected = allEmployees.length > 0 && selectedIds.length === allEmployees.length;
+
+  let buttonLabel: React.ReactNode;
+  if (selectedIds.length === 0) {
+    buttonLabel = <span className="text-gray-400">Select salesperson(s)…</span>;
+  } else if (selectedIds.length === 1) {
+    const emp = allEmployees.find(e => e.id === selectedIds[0]);
+    buttonLabel = <span className="font-medium" style={{ color: C.dark }}>{emp?.name ?? selectedIds[0]}</span>;
+  } else {
+    buttonLabel = (
+      <span className="font-medium" style={{ color: C.dark }}>
+        {selectedIds.length} salesperson{selectedIds.length > 1 ? 's' : ''} selected
+      </span>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Trigger button */}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm min-h-[40px] focus:outline-none"
+        style={{ boxShadow: open ? `0 0 0 2px ${C.dark}` : undefined }}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <Users size={15} className="text-gray-400 flex-shrink-0" />
+          {buttonLabel}
+          {selectedIds.length > 0 && (
+            <span
+              className="inline-flex items-center justify-center px-1.5 py-0.5 text-white text-[10px] font-bold rounded-full min-w-[18px]"
+              style={{ backgroundColor: C.dark }}
+            >
+              {selectedIds.length}
+            </span>
+          )}
+        </div>
+        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+          {/* Search */}
+          <div className="p-2 border-b border-gray-200">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                autoFocus
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search salesperson…"
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none"
+                style={{ boxShadow: undefined }}
+                onFocus={e => (e.currentTarget.style.boxShadow = `0 0 0 2px ${C.dark}`)}
+                onBlur={e  => (e.currentTarget.style.boxShadow = '')}
+              />
+            </div>
+          </div>
+
+          {/* Select all / Clear row */}
+          <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-100">
+            <button
+              type="button"
+              onClick={allSelected ? onClear : onSelectAll}
+              className="text-xs font-semibold hover:underline"
+              style={{ color: C.dark }}
+            >
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-0.5"
+              >
+                <X size={11} /> Clear
+              </button>
+            )}
+          </div>
+
+          {/* Employee list */}
+          <ul className="max-h-56 overflow-y-auto">
+            {filtered.length === 0 && (
+              <li className="px-4 py-3 text-sm text-gray-400 text-center">No salespersons found</li>
+            )}
+            {filtered.map(emp => {
+              const checked = selectedIds.includes(emp.id);
+              return (
+                <li key={emp.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <button
+                    type="button"
+                    onClick={() => onToggle(emp.id)}
+                    data-checked={checked ? 'true' : 'false'}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left"
+                    style={{
+                      backgroundColor: checked ? '#e0e0e0' : 'transparent',
+                      borderLeft: checked ? `3px solid #2d2d2d` : '3px solid transparent',
+                    }}
+                    onMouseEnter={e => {
+                      if (e.currentTarget.dataset.checked !== 'true') {
+                        e.currentTarget.style.backgroundColor = '#f3f4f6';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (e.currentTarget.dataset.checked !== 'true') {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    {/* Custom checkbox — uses inline style so it always renders */}
+                    <span
+                      className="flex-shrink-0 w-4 h-4 rounded flex items-center justify-center transition-colors"
+                      style={{
+                        backgroundColor: checked ? C.dark : '#ffffff',
+                        border: checked ? `2px solid ${C.dark}` : '2px solid #d1d5db',
+                      }}
+                    >
+                      {checked && <Check size={10} color="#ffffff" strokeWidth={3} />}
+                    </span>
+                    <span
+                      className="text-sm"
+                      style={{ color: checked ? C.dark : '#374151', fontWeight: checked ? 600 : 400 }}
+                    >
+                      {emp.name}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Done button */}
+          <div className="p-2 border-t border-gray-100 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="w-full py-1.5 text-white text-sm font-semibold rounded-lg transition-colors"
+              style={{ backgroundColor: C.dark }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = C.darker)}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = C.dark)}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main View ────────────────────────────────────────────────────────────────
+
 export function CommissionCalculationView({
-  selectedCity, setSelectedCity,
+  selectedSalespersons, toggleSalesperson, clearSalespersons, allEmployees,
   selectedMonth, setSelectedMonth,
   commissionData, calculationErrors, summary,
   invoiceBreakdowns, expandedSalesperson, setExpandedSalesperson,
@@ -86,66 +289,38 @@ export function CommissionCalculationView({
   calculateCommission, confirmSingleCommission, confirmAllCommissions,
   startEdit, saveEdit, cancelEdit,
   handleModalConfirm, handleModalCancel,
-  formatCurrency, formatMonth, cities, employees, debugInvoiceLocations,
+  formatCurrency, formatMonth,
   totalInvoices = 0, paidInvoices = 0,
 }: CommissionCalculationViewProps) {
 
   const getEmployeeName = (id: string) =>
-    employees.find(e => e.id === id)?.name || id;
+    allEmployees.find(e => e.id === id)?.name || id;
 
   const toggleBreakdown = (id: string) =>
     setExpandedSalesperson(expandedSalesperson === id ? null : id);
 
+  const selectAll = () =>
+    allEmployees.filter(e => !selectedSalespersons.includes(e.id)).forEach(e => toggleSalesperson(e.id));
+
   return (
     <div className="p-6 space-y-6">
-
-      {/* Debug panel: show resolved invoice locations (temporary) */}
-      {debugInvoiceLocations && debugInvoiceLocations.length > 0 && (
-        <details className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <summary className="text-sm font-medium text-yellow-800">Debug: Invoice location samples ({debugInvoiceLocations.length})</summary>
-          <div className="mt-2 text-xs text-gray-700 max-h-48 overflow-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-gray-600">
-                  <th className="pr-2">ID</th>
-                  <th className="pr-2">salespersonLocation</th>
-                  <th className="pr-2">branch</th>
-                  <th className="pr-2">customerCity</th>
-                  <th className="pr-2">productLocation</th>
-                  <th className="pr-2">warrantyLocation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {debugInvoiceLocations.map(i => (
-                  <tr key={i.id} className="odd:bg-yellow-25">
-                    <td className="pr-2 font-mono text-[11px]">{i.id.slice(0,8)}</td>
-                    <td className="pr-2">{i.salespersonLocation || '-'}</td>
-                    <td className="pr-2">{i.branch || '-'}</td>
-                    <td className="pr-2">{i.customerCity || '-'}</td>
-                    <td className="pr-2">{i.productLocation || '-'}</td>
-                    <td className="pr-2">{i.warrantyLocation || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
 
       {/* ── Header ── */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">Commission Calculation</h1>
         <p className="text-gray-600 mt-1">
-          Select a city and month, then click <strong>Calculate Commission</strong> to compute commissions
-          from paid invoices according to the active slabs.
+          Select one or more salespersons and a month, then click <strong>Calculate Commission</strong>{' '}
+          to compute commissions from their paid invoices against the active slabs.
         </p>
       </div>
 
-      {/* ── Summary cards (invoice counts) ── */}
+      {/* ── Invoice count cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg"><FileText size={18} className="text-blue-600" /></div>
+            <div className="p-2 rounded-lg" style={{ backgroundColor: C.bg }}>
+              <FileText size={18} style={{ color: C.dark }} />
+            </div>
             <div>
               <p className="text-xs text-gray-500">Total Invoices</p>
               <p className="text-2xl font-bold text-gray-900">{totalInvoices}</p>
@@ -167,37 +342,42 @@ export function CommissionCalculationView({
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-            <Calculator size={18} className="text-[#4f46e5]" />
+            <Calculator size={18} style={{ color: C.dark }} />
             Calculate Commission
           </h3>
           <p className="text-sm text-gray-500 mt-0.5">
-            Select a city and month to calculate commissions from paid invoices against the configured slabs.
+            Select salesperson(s) and a month to calculate commissions from paid invoices against configured slabs.
           </p>
         </div>
+
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* ── Salesperson multi-select ── */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                City / Territory <span className="text-red-500">*</span>
+                Salesperson <span className="text-red-500">*</span>
               </label>
-              <select
-                value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
-              >
-                <option value="">
-                  {cities.length === 0 ? 'No cities found in invoices' : 'Select City'}
-                </option>
-                {cities.map((city) => (
-                  <option key={city} value={city}>{city}</option>
-                ))}
-              </select>
-              {cities.length === 0 && (
+              <SalespersonDropdown
+                allEmployees={allEmployees}
+                selectedIds={selectedSalespersons}
+                onToggle={toggleSalesperson}
+                onClear={clearSalespersons}
+                onSelectAll={selectAll}
+              />
+              {allEmployees.length === 0 && (
                 <p className="mt-1 text-xs text-amber-600">
-                  No salesperson locations found. Make sure invoices have a <code>salespersonLocation</code> or <code>branch</code> set.
+                  No employees found. Make sure employee records are loaded.
+                </p>
+              )}
+              {selectedSalespersons.length > 0 && (
+                <p className="mt-1 text-xs text-gray-500">
+                  {selectedSalespersons.length} of {allEmployees.length} salesperson{selectedSalespersons.length > 1 ? 's' : ''} selected
                 </p>
               )}
             </div>
+
+            {/* ── Month ── */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Month <span className="text-red-500">*</span>
@@ -206,11 +386,39 @@ export function CommissionCalculationView({
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none"
+                onFocus={e => (e.currentTarget.style.boxShadow = `0 0 0 2px ${C.dark}`)}
+                onBlur={e  => (e.currentTarget.style.boxShadow = '')}
               />
             </div>
           </div>
 
+          {/* ── Selected salesperson chips ── */}
+          {selectedSalespersons.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {selectedSalespersons.map(id => {
+                const emp = allEmployees.find(e => e.id === id);
+                return (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-white text-xs font-semibold rounded-full"
+                    style={{ backgroundColor: C.dark }}
+                  >
+                    {emp?.name ?? id}
+                    <button
+                      type="button"
+                      onClick={() => toggleSalesperson(id)}
+                      className="hover:text-red-300 transition-colors"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Errors ── */}
           {calculationErrors.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-start gap-2">
@@ -227,11 +435,14 @@ export function CommissionCalculationView({
           <div className="flex justify-end">
             <button
               onClick={calculateCommission}
-              disabled={isCalculating || !selectedCity || !selectedMonth}
-              className="flex items-center gap-2 bg-[#4f46e5] text-white px-6 py-2.5 rounded-lg hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isCalculating || selectedSalespersons.length === 0 || !selectedMonth}
+              className="flex items-center gap-2 text-white px-6 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: C.dark }}
+              onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = C.darker; }}
+              onMouseLeave={e => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = C.dark; }}
             >
               {isCalculating
-                ? <><RefreshCw size={18} className="animate-spin" /> Calculating...</>
+                ? <><RefreshCw size={18} className="animate-spin" /> Calculating…</>
                 : <><Search size={18} /> Calculate Commission</>
               }
             </button>
@@ -239,207 +450,197 @@ export function CommissionCalculationView({
         </div>
       </div>
 
-      {/* ── Invoice Breakdown Panel (shown after calculation, before modal) ── */}
+      {/* ── Invoice Breakdown Panel ── */}
       {invoiceBreakdowns.length > 0 && !showModal && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-[#4f46e5]/10 rounded-lg">
-                <Receipt size={16} className="text-[#4f46e5]" />
+              <div className="p-1.5 rounded-lg" style={{ backgroundColor: C.bg }}>
+                <Receipt size={16} style={{ color: C.dark }} />
               </div>
-              <h3 className="text-base font-semibold text-gray-900">Invoice Breakdown by Salesperson</h3>
+              <h3 className="text-base font-semibold text-gray-900">Commission Breakdown by Salesperson</h3>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-200">
+              <span
+                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full"
+                style={{ backgroundColor: C.bg, color: C.dark, border: `1px solid ${C.border}` }}
+              >
                 <Receipt size={10} />
                 {invoiceBreakdowns.reduce((s, b) => s + b.invoiceCount, 0)} invoices
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 text-xs font-semibold rounded-full border border-purple-200">
+              <span
+                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full"
+                style={{ backgroundColor: C.bgMid, color: C.dark, border: `1px solid ${C.border}` }}
+              >
                 {invoiceBreakdowns.length} salesperson{invoiceBreakdowns.length !== 1 ? 's' : ''}
               </span>
             </div>
           </div>
+
           <div className="divide-y divide-gray-100">
-            {invoiceBreakdowns.map((breakdown) => (
-              <div key={breakdown.salespersonId} className={breakdown.isPooled ? 'bg-indigo-50/30' : ''}>
+            {invoiceBreakdowns.map((breakdown) => {
+              const hasNoSlab = !!breakdown.noSlabMessage;
 
-                {/* ── Pooled commission banner (Uzair Naseem only) ── */}
-                {breakdown.isPooled && breakdown.pooledCitySales && (
-                  <div className="mx-5 mt-4 mb-2 bg-white border-2 border-indigo-300 rounded-xl overflow-hidden shadow-sm">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600">
-                      <span className="text-white text-sm font-bold">⭐ Pooled Commission</span>
-                      <span className="text-indigo-200 text-xs font-medium">
-                        — Islamabad + Karachi + Lahore combined for slab matching
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 divide-x divide-indigo-100 bg-white">
-                      {breakdown.pooledCitySales.map(p => (
-                        <div key={p.city} className="px-4 py-3">
-                          <p className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest mb-1">{p.city}</p>
-                          <p className="text-base font-bold text-gray-900">{formatCurrency(p.amount)}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">{p.invoiceCount} invoice{p.invoiceCount !== 1 ? 's' : ''}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-2 bg-indigo-50 border-t border-indigo-200">
-                      <span className="text-xs font-semibold text-indigo-700">Combined Total (slab lookup basis)</span>
-                      <span className="text-sm font-black text-indigo-700">{formatCurrency(breakdown.totalSales)}</span>
-                    </div>
-                  </div>
-                )}
+              return (
+                <div key={breakdown.salespersonId}>
+                  {(() => {
+                    const commission = commissionData.find(c => c.salesperson === breakdown.salespersonId);
+                    const commAmt = commission
+                      ? commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount
+                      : 0;
+                    const pct = commission
+                      ? commission.overriddenCommissionPercentage ?? commission.commissionPercentage
+                      : 0;
+                    const isExpanded = expandedSalesperson === breakdown.salespersonId;
 
-                {/* ── Salesperson toggle row ── */}
-                {(() => {
-                  const comm = commissionData.find(c => c.salesperson === breakdown.salespersonId);
-                  const commAmount = comm ? (comm.overriddenCommissionAmount ?? comm.calculatedCommissionAmount) : null;
-                  const commRate   = comm ? (comm.overriddenCommissionPercentage ?? comm.commissionPercentage) : null;
-                  const slabLabel  = comm ? `${formatCurrency(comm.appliedSlabFrom)} – ${formatCurrency(comm.appliedSlabTo)}` : null;
-                  const isExpanded = expandedSalesperson === breakdown.salespersonId;
-
-                  return (
-                    <button
-                      className="w-full flex items-center justify-between px-6 py-5 hover:bg-gray-50/70 transition-colors text-left"
-                      onClick={() => toggleBreakdown(breakdown.salespersonId)}
-                    >
-                      {/* Left: chevron + name + meta */}
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors ${isExpanded ? 'bg-[#4f46e5] text-white' : 'bg-gray-100 text-gray-500'}`}>
-                          {isExpanded
-                            ? <ChevronDown size={14} />
-                            : <ChevronRight size={14} />
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => breakdown.invoiceCount > 0 && toggleBreakdown(breakdown.salespersonId)}
+                        className={`w-full text-left px-5 py-4 flex items-center gap-4 transition-colors ${
+                          breakdown.invoiceCount > 0 ? 'cursor-pointer' : 'cursor-default'
+                        }`}
+                        style={{ backgroundColor: isExpanded ? C.bg : undefined }}
+                        onMouseEnter={e => { if (breakdown.invoiceCount > 0 && !isExpanded) e.currentTarget.style.backgroundColor = '#f9fafb'; }}
+                        onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.backgroundColor = ''; }}
+                      >
+                        {/* Expand chevron */}
+                        <div className="flex-shrink-0">
+                          {breakdown.invoiceCount > 0
+                            ? (isExpanded
+                                ? <ChevronDown size={16} style={{ color: C.dark }} />
+                                : <ChevronRight size={16} className="text-gray-400" />)
+                            : <span className="w-4" />
                           }
                         </div>
-                        <div className="min-w-0">
+
+                        {/* Name + invoice count */}
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-bold text-gray-900">{breakdown.salespersonName}</p>
-                            {breakdown.isPooled && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                ⭐ POOLED
+                            <span className="font-semibold text-gray-900 text-sm">
+                              {breakdown.salespersonName}
+                            </span>
+                            {breakdown.invoiceCount > 0 && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-full"
+                                style={{ backgroundColor: C.bgMid, color: C.dark }}
+                              >
+                                <Receipt size={10} /> {breakdown.invoiceCount} invoice{breakdown.invoiceCount !== 1 ? 's' : ''}
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {breakdown.invoiceCount} invoice{breakdown.invoiceCount !== 1 ? 's' : ''}
-                            {breakdown.isPooled ? ' · Islamabad + Karachi + Lahore combined' : ''}
-                          </p>
-                          {slabLabel && commRate !== null && (
-                            <p className="text-xs text-indigo-600 mt-0.5 font-medium">
-                              Slab: {slabLabel} @ {commRate}%
-                            </p>
+                          {/* Progress bar */}
+                          {!hasNoSlab && breakdown.invoiceCount > 0 && (
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden max-w-[200px]">
+                                <div
+                                  className="h-full rounded-full transition-all"
+                                  style={{ width: `${breakdown.slabProgressPercent}%`, backgroundColor: C.dark }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-gray-400">{breakdown.slabProgressPercent}% of slab</span>
+                            </div>
                           )}
                         </div>
-                      </div>
 
-                      {/* Right: stats chips */}
-                      <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                        <div className="text-right">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">
-                            {breakdown.isPooled ? 'Combined Sales' : 'Total Sales'}
-                          </p>
-                          <p className="text-sm font-bold text-gray-800">{formatCurrency(breakdown.totalSales)}</p>
-                          <div className="flex items-center gap-1.5 mt-1.5 justify-end">
-                            <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${breakdown.isPooled ? 'bg-indigo-500' : 'bg-[#4f46e5]'}`}
-                                style={{ width: `${breakdown.slabProgressPercent}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-gray-400">{breakdown.slabProgressPercent}%</span>
-                          </div>
-                        </div>
-
-                        <div className="w-px h-10 bg-gray-200" />
-
-                        {commAmount !== null ? (
-                          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-right min-w-[120px]">
-                            <p className="text-[10px] text-green-600 uppercase tracking-wide font-semibold">Commission</p>
-                            <p className="text-base font-black text-green-700 mt-0.5">{formatCurrency(commAmount)}</p>
-                          </div>
-                        ) : (
-                          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-right min-w-[120px]">
-                            <p className="text-[10px] text-red-500 uppercase tracking-wide font-semibold">Commission</p>
-                            <div className="flex items-center gap-1 mt-0.5 justify-end">
-                              <AlertCircle size={11} className="text-red-400" />
-                              <p className="text-xs text-red-500 font-medium">No slab matched</p>
-                            </div>
+                        {/* Total sales */}
+                        {breakdown.invoiceCount > 0 && (
+                          <div className="text-right flex-shrink-0 hidden sm:block">
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total Sales</p>
+                            <p className="text-sm font-bold text-gray-900">{formatCurrency(breakdown.totalSales)}</p>
                           </div>
                         )}
-                      </div>
-                    </button>
-                  );
-                })()}
 
-                {expandedSalesperson === breakdown.salespersonId && (
-                  <div className="px-6 pb-4">
-                    <div className="overflow-x-auto rounded-lg border border-gray-200">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Invoice ID</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                            {breakdown.isPooled && (
-                              <th className="px-4 py-2 text-left text-xs font-medium text-indigo-500 uppercase">City</th>
-                            )}
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 bg-white">
-                          {breakdown.invoices.map((inv) => (
-                            <tr key={inv.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-2 font-mono text-xs text-gray-700">{inv.id}</td>
-                              <td className="px-4 py-2 text-gray-700">
-                                {new Date(inv.date).toLocaleDateString('en-PK', {
-                                  year: 'numeric', month: 'short', day: 'numeric',
-                                })}
-                              </td>
-                              {breakdown.isPooled && (
-                                <td className="px-4 py-2">
-                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full ${
-                                    inv.salespersonLocation === 'Karachi'   ? 'bg-orange-100 text-orange-700' :
-                                    inv.salespersonLocation === 'Lahore'    ? 'bg-purple-100 text-purple-700' :
-                                    inv.salespersonLocation === 'Islamabad' ? 'bg-blue-100 text-blue-700'    :
-                                    'bg-gray-100 text-gray-600'
-                                  }`}>
-                                    <MapPin size={9} />
-                                    {inv.salespersonLocation || 'Unknown'}
+                        {/* Commission amount or no-slab badge */}
+                        <div className="flex-shrink-0 min-w-[130px] text-right">
+                          {hasNoSlab ? (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-right">
+                              <AlertCircle size={13} className="text-red-400 flex-shrink-0" />
+                              <div>
+                                <p className="text-[10px] text-red-500 font-semibold uppercase tracking-wide leading-none">No Commission</p>
+                                <p className="text-[11px] text-red-400 mt-0.5 leading-tight">
+                                  {breakdown.invoiceCount === 0
+                                    ? 'No paid invoices'
+                                    : `No slab for ${formatCurrency(breakdown.totalSales)}`}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-right min-w-[120px]">
+                              <p className="text-[10px] text-green-600 uppercase tracking-wide font-semibold">Commission</p>
+                              <p className="text-base font-black text-green-700">{formatCurrency(commAmt)}</p>
+                              <p className="text-[10px] text-green-500 mt-0.5">{pct}% applied</p>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })()}
+
+                  {/* ── Expanded invoice table ── */}
+                  {expandedSalesperson === breakdown.salespersonId && breakdown.invoiceCount > 0 && (
+                    <div className="px-6 pb-4">
+                      <div className="overflow-x-auto rounded-lg border border-gray-200">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Invoice ID</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">City</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                            {breakdown.invoices.map((inv) => (
+                              <tr key={inv.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 font-mono text-xs text-gray-700">{inv.id}</td>
+                                <td className="px-4 py-2 text-gray-700">
+                                  {new Date(inv.date).toLocaleDateString('en-PK', {
+                                    year: 'numeric', month: 'short', day: 'numeric',
+                                  })}
+                                </td>
+                                <td className="px-4 py-2 text-gray-700">
+                                  {inv.salespersonLocation || inv.branch || inv.customerCity || '—'}
+                                </td>
+                                <td className="px-4 py-2 text-right font-medium text-gray-900">
+                                  {formatCurrency(inv.totalAmount)}
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                  <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    {inv.status}
                                   </span>
                                 </td>
-                              )}
-                              <td className="px-4 py-2 text-right font-medium text-gray-900">
-                                {formatCurrency(inv.totalAmount)}
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-gray-50 border-t border-gray-200">
+                            <tr>
+                              <td colSpan={3} className="px-4 py-2 text-xs font-semibold text-gray-700">
+                                Total ({breakdown.invoiceCount} invoice{breakdown.invoiceCount !== 1 ? 's' : ''})
                               </td>
-                              <td className="px-4 py-2 text-center">
-                                <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                                  {inv.status}
-                                </span>
+                              <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
+                                {formatCurrency(breakdown.totalSales)}
                               </td>
+                              <td />
                             </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-gray-50 border-t border-gray-200">
-                          <tr>
-                            <td colSpan={breakdown.isPooled ? 3 : 2} className="px-4 py-2 text-xs font-semibold text-gray-700">
-                              Total ({breakdown.invoiceCount} invoices)
-                            </td>
-                            <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
-                              {formatCurrency(breakdown.totalSales)}
-                            </td>
-                            <td />
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                    {breakdown.nextSlabThreshold && (
-                      <div className="mt-2 text-xs text-[#4f46e5] bg-indigo-50 border border-indigo-100 rounded px-3 py-1.5">
-                        Next slab starts at {formatCurrency(breakdown.nextSlabThreshold)} —
-                        needs {formatCurrency(breakdown.nextSlabThreshold - breakdown.totalSales)} more in sales
+                          </tfoot>
+                        </table>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+                      {breakdown.nextSlabThreshold && (
+                        <div
+                          className="mt-2 text-xs rounded px-3 py-1.5"
+                          style={{ color: C.dark, backgroundColor: C.bg, border: `1px solid ${C.border}` }}
+                        >
+                          Next slab starts at {formatCurrency(breakdown.nextSlabThreshold)} —{' '}
+                          needs {formatCurrency(breakdown.nextSlabThreshold - breakdown.totalSales)} more in sales
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -458,7 +659,7 @@ export function CommissionCalculationView({
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  Commission Results — {selectedCity} · {formatMonth(selectedMonth)}
+                  Commission Results — {formatMonth(selectedMonth)}
                 </h2>
                 {summary && (
                   <p className="text-sm text-gray-500 mt-0.5">
@@ -483,7 +684,7 @@ export function CommissionCalculationView({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-gray-50 border-b border-gray-200">
                   <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Invoices Used</p>
-                    <p className="text-2xl font-bold text-blue-600 mt-1">{summary.totalInvoicesUsed}</p>
+                    <p className="text-2xl font-bold mt-1" style={{ color: C.dark }}>{summary.totalInvoicesUsed}</p>
                   </div>
                   <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Salespeople</p>
@@ -530,20 +731,13 @@ export function CommissionCalculationView({
                       {commissionData.map((commission) => (
                         <tr key={commission.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                            <div>
-                              {getEmployeeName(commission.salesperson)}
-                              {commission.city?.includes('Pooled') && (
-                                <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">
-                                  ⭐ Pooled
-                                </span>
-                              )}
-                              {(commission as any).notes && (
-                                <p className="text-xs text-gray-400 mt-0.5 font-normal">{(commission as any).notes}</p>
-                              )}
-                            </div>
+                            {getEmployeeName(commission.salesperson)}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full"
+                              style={{ backgroundColor: C.bgMid, color: C.dark }}
+                            >
                               <Receipt size={11} />{commission.invoiceCount}
                             </span>
                           </td>
@@ -601,7 +795,7 @@ export function CommissionCalculationView({
                                 </>
                               ) : (
                                 <>
-                                  <button onClick={() => startEdit(commission)} disabled={commission.isLocked} className="p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-600 disabled:opacity-30" title="Edit">
+                                  <button onClick={() => startEdit(commission)} disabled={commission.isLocked} className="p-1.5 hover:bg-gray-100 rounded transition-colors disabled:opacity-30" style={{ color: C.dark }} title="Edit">
                                     <Edit2 size={16} />
                                   </button>
                                   <button onClick={() => confirmSingleCommission(commission.id)} disabled={commission.isLocked} className="p-1.5 hover:bg-green-50 rounded transition-colors text-green-600 disabled:opacity-30" title="Confirm">
@@ -628,7 +822,13 @@ export function CommissionCalculationView({
                 <button onClick={handleModalCancel} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 transition-colors">
                   Cancel
                 </button>
-                <button onClick={handleModalConfirm} className="px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors">
+                <button
+                  onClick={handleModalConfirm}
+                  className="px-4 py-2 text-white rounded-lg transition-colors"
+                  style={{ backgroundColor: C.dark }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = C.darker)}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = C.dark)}
+                >
                   Save All to Firestore
                 </button>
               </div>

@@ -1,13 +1,12 @@
 // Commission Calculation ViewModel
-// CHANGED:
-//   - Removed all Uzair Naseem hardcoded special-case logic (pooled cities,
-//     UZAIR_NAME_MATCH, UZAIR_POOLED_CITIES, UZAIR_SLAB_CITY constants).
-//     All salespersons are now treated identically.
-//   - Slab lookup now uses a two-tier fallback:
-//       1. Person-specific slab  (salesperson === employeeId  AND city matches)
-//       2. Shared slab           (salesperson === '__ALL__'   AND city matches)
-//     This means a slab created with "All Salespersons" is automatically
-//     shared between Khalid, Nibras, and anyone else — no duplicate rows.
+// CHANGED (salesperson-first multi-select):
+//   - Removed `selectedCity` / city-first selection.
+//   - Added `selectedSalespersons: string[]`  (array of employee IDs, multi-select).
+//   - Calculation now groups ALL paid invoices for the selected month by
+//     salesperson (across every city), then looks up the matching slab per
+//     salesperson+city bucket — identical slab-lookup logic, different entry point.
+//   - `SalespersonInvoiceBreakdown` gains a `noSlabMessage` field so the View
+//     can render a "No commission slab" row for each unmatched person.
 //   - Everything else (auto-save, salary linking, live commissions,
 //     edit/confirm helpers) is unchanged.
 
@@ -42,11 +41,11 @@ export interface SalespersonInvoiceBreakdown {
   slabProgressPercent: number;
   isPooled?:           boolean;
   pooledCitySales?:    { city: string; amount: number; invoiceCount: number }[];
+  // Set when no slab matched for this person — shown inline in the UI
+  noSlabMessage?:      string;
 }
 
 // ─── Slab lookup helper ───────────────────────────────────────────────────────
-// Returns the best-matching slab for a given employee + city + totalSales.
-// Priority: person-specific slab > shared (__ALL__) slab.
 function findApplicableSlab(
   slabs: any[],
   employeeId: string,
@@ -56,7 +55,7 @@ function findApplicableSlab(
 ): any | undefined {
   const cityNorm = normalizeCity(city);
 
-  // 1. Person-specific
+  // 1. Person-specific slab
   const personal = slabs.find(
     s =>
       s.salesperson === employeeId &&
@@ -66,7 +65,7 @@ function findApplicableSlab(
   );
   if (personal) return personal;
 
-  // 2. Shared (__ALL__)
+  // 2. Shared (__ALL__) slab
   return slabs.find(
     s =>
       s.salesperson === ALL_SALESPERSONS &&
@@ -76,8 +75,6 @@ function findApplicableSlab(
   );
 }
 
-// Returns all slabs with fromAmount > totalSales for a given employee + city,
-// checking both personal and shared slabs (deduped by fromAmount).
 function findHigherSlabs(
   slabs: any[],
   employeeId: string,
@@ -96,9 +93,11 @@ function findHigherSlabs(
 }
 
 // ─── Local calculation helper ─────────────────────────────────────────────────
+// Now salesperson-first: for each selected salesperson, aggregate their paid
+// invoices for the month (across all cities), then look up a slab per city bucket.
 
 function calculateCommissionsFromInvoices(
-  city:        string,
+  selectedSalespersonIds: string[],   // ← replaces `city`
   month:       string,
   invoices:    InvoiceReference[],
   employees:   EmployeeReference[],
@@ -123,14 +122,6 @@ function calculateCommissionsFromInvoices(
     return (s ?? '').trim().toLowerCase();
   }
 
-  function cityMatches(inv: InvoiceReference, targetCity: string): boolean {
-    const normalizedTarget = normalizeCity(targetCity);
-    if (normalizeCity(inv.salespersonLocation) === normalizedTarget) return true;
-    if (normalizeCity(inv.customerCity) === normalizedTarget) return true;
-    if (normalizeCity(inv.branch) === normalizedTarget) return true;
-    return false;
-  }
-
   // ── Build lookup maps ─────────────────────────────────────────────────
   const employeeByName = new Map<string, EmployeeReference>();
   employees.forEach(e => { if (e.name) employeeByName.set(normalizeStr(e.name), e); });
@@ -138,42 +129,100 @@ function calculateCommissionsFromInvoices(
   const employeeById = new Map<string, EmployeeReference>();
   employees.forEach(e => { if (e.id) employeeById.set(e.id, e); });
 
-  // ── Filter paid invoices for this city + month ────────────────────────
-  const standardInvoices = invoices.filter(inv => {
-    if (inv.status !== 'Paid')   return false;
-    if (!inv.salesperson)        return false;
-    if (!isInMonth(inv))         return false;
-    if (!cityMatches(inv, city)) return false;
-    return true;
-  });
+  // ── Resolve selected IDs → employee records ───────────────────────────
+  const selectedEmployees = selectedSalespersonIds
+    .map(id => employeeById.get(id))
+    .filter((e): e is EmployeeReference => !!e);
 
-  // ── Group by salesperson (resolve name → employee ID) ─────────────────
-  const grouped: Record<string, InvoiceReference[]> = {};
-  standardInvoices.forEach(inv => {
-    const raw  = inv.salesperson!.trim();
-    const byId = employeeById.get(raw);
-    const byNm = employeeByName.get(normalizeStr(raw));
-    const key  = byId ? byId.id : byNm ? byNm.id : raw;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(inv);
+  // ── Filter paid invoices for this month (all cities) ─────────────────
+  const paidMonthInvoices = invoices.filter(inv => {
+    if (inv.status !== 'Paid') return false;
+    if (!inv.salesperson)      return false;
+    if (!isInMonth(inv))       return false;
+    return true;
   });
 
   const commissions: Commission[] = [];
   const breakdowns:  SalespersonInvoiceBreakdown[] = [];
 
-  // ── Process each salesperson ──────────────────────────────────────────
-  Object.entries(grouped).forEach(([salespersonKey, spInvoices]) => {
-    const employee = employeeById.get(salespersonKey) ?? employeeByName.get(normalizeStr(salespersonKey));
-    if (!employee) {
-      errors.push(`Employee record not found for salesperson: "${salespersonKey}"`);
+  // ── Process each selected salesperson ────────────────────────────────
+  selectedEmployees.forEach(employee => {
+    const salespersonId = employee.id;
+    const salespersonNameNorm = normalizeStr(employee.name);
+
+    // Collect invoices for this salesperson (match by ID or name)
+    const spInvoices = paidMonthInvoices.filter(inv => {
+      const raw  = inv.salesperson!.trim();
+      const byId = employeeById.get(raw);
+      const byNm = employeeByName.get(normalizeStr(raw));
+      const resolvedId = byId ? byId.id : byNm ? byNm.id : raw;
+      return resolvedId === salespersonId || normalizeStr(raw) === salespersonNameNorm;
+    });
+
+    if (spInvoices.length === 0) {
+      // No invoices at all for this person this month
+      breakdowns.push({
+        salespersonId,
+        salespersonName:   employee.name,
+        invoices:          [],
+        totalSales:        0,
+        invoiceCount:      0,
+        slabFrom:          0,
+        slabTo:            0,
+        nextSlabThreshold: null,
+        slabProgressPercent: 0,
+        noSlabMessage: `No paid invoices found for ${employee.name} in ${formatMonth(month)}`,
+      });
+      errors.push(`No paid invoices for ${employee.name} in ${formatMonth(month)}`);
       return;
     }
 
-    const salespersonId = employee.id;
-    const totalSales    = spInvoices.reduce((s, inv) => s + inv.totalAmount, 0);
+    // Group by city (salespersonLocation → branch → customerCity)
+    const byCityMap: Record<string, InvoiceReference[]> = {};
+    spInvoices.forEach(inv => {
+      const city = (
+        (inv.salespersonLocation || '').trim() ||
+        (inv.branch || '').trim() ||
+        (inv.customerCity || '').trim() ||
+        'Unknown'
+      );
+      if (!byCityMap[city]) byCityMap[city] = [];
+      byCityMap[city].push(inv);
+    });
 
-    const applicableSlab = findApplicableSlab(slabs, salespersonId, city, totalSales, normalizeCity);
-    const higherSlabs    = findHigherSlabs(slabs, salespersonId, city, totalSales, normalizeCity);
+    const totalSales = spInvoices.reduce((s, inv) => s + inv.totalAmount, 0);
+
+    // Try to find a matching slab across any of the cities
+    let bestSlab: any | undefined;
+    let bestCity = '';
+
+    for (const [city, cityInvs] of Object.entries(byCityMap)) {
+      const cityTotal = cityInvs.reduce((s, inv) => s + inv.totalAmount, 0);
+      const slab = findApplicableSlab(slabs, salespersonId, city, cityTotal, normalizeCity);
+      if (slab) {
+        // Prefer the city whose slab gives the highest commission
+        if (
+          !bestSlab ||
+          (cityTotal * slab.commissionPercentage) / 100 >
+          (Object.entries(byCityMap).find(([c]) => c === bestCity)?.[1].reduce((s, i) => s + i.totalAmount, 0) ?? 0) *
+            (bestSlab?.commissionPercentage ?? 0) / 100
+        ) {
+          bestSlab = slab;
+          bestCity = city;
+        }
+      }
+    }
+
+    // Use aggregate totalSales for the slab lookup (across all cities)
+    const applicableSlab =
+      bestSlab ??
+      findApplicableSlab(slabs, salespersonId, Object.keys(byCityMap)[0] ?? '', totalSales, normalizeCity);
+
+    const higherSlabs = findHigherSlabs(
+      slabs, salespersonId,
+      bestCity || Object.keys(byCityMap)[0] || '',
+      totalSales, normalizeCity,
+    );
 
     const nextSlabThreshold   = higherSlabs.length > 0 ? higherSlabs[0].fromAmount : null;
     let   slabProgressPercent = 0;
@@ -190,27 +239,46 @@ function calculateCommissionsFromInvoices(
       slabProgressPercent = Math.min(100, Math.round((totalSales / nextSlabThreshold) * 100));
     }
 
+    if (!applicableSlab) {
+      breakdowns.push({
+        salespersonId,
+        salespersonName:   employee.name,
+        invoices:          spInvoices,
+        totalSales,
+        invoiceCount:      spInvoices.length,
+        slabFrom:          0,
+        slabTo:            0,
+        nextSlabThreshold,
+        slabProgressPercent,
+        noSlabMessage: `No commission slab for ${employee.name} covering sales of ${formatCurrency(totalSales)}`,
+      });
+      errors.push(
+        `No commission slab for ${employee.name} covering sales of ${formatCurrency(totalSales)}`
+      );
+
+      // Clean up any stale Firestore records (across all cities) for this person
+      Object.keys(byCityMap).forEach(city => {
+        CommissionFirebaseService.deleteExistingCommissions(
+          salespersonId, month, city
+        ).catch(() => {});
+      });
+      return;
+    }
+
     breakdowns.push({
       salespersonId,
       salespersonName:   employee.name,
       invoices:          spInvoices,
       totalSales,
       invoiceCount:      spInvoices.length,
-      slabFrom:          applicableSlab?.fromAmount ?? 0,
-      slabTo:            applicableSlab?.toAmount   ?? 0,
+      slabFrom:          applicableSlab.fromAmount,
+      slabTo:            applicableSlab.toAmount,
       nextSlabThreshold,
       slabProgressPercent,
-      isPooled: false,
     });
 
-    if (!applicableSlab) {
-      errors.push(
-        `No commission slab for ${employee.name} in ${city} covering sales of ${formatCurrency(totalSales)}`,
-      );
-      return;
-    }
-
     const commissionAmount = (totalSales * applicableSlab.commissionPercentage) / 100;
+    const city = bestCity || Object.keys(byCityMap)[0] || '';
 
     commissions.push({
       id:                         `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -247,8 +315,11 @@ function calculateCommissionsFromInvoices(
 // ─── Return type ──────────────────────────────────────────────────────────────
 
 interface UseCommissionCalculationViewModelReturn {
-  selectedCity:            string;
-  setSelectedCity:         (city: string) => void;
+  // Multi-select salesperson (replaces city)
+  selectedSalespersons:    string[];           // array of employee IDs
+  setSelectedSalespersons: (ids: string[]) => void;
+  toggleSalesperson:       (id: string) => void;
+  clearSalespersons:       () => void;
   selectedMonth:           string;
   setSelectedMonth:        (month: string) => void;
   commissionData:          Commission[];
@@ -282,6 +353,7 @@ interface UseCommissionCalculationViewModelReturn {
   handleModalCancel:       () => void;
   formatCurrency:          (amount: number) => string;
   formatMonth:             (monthStr: string) => string;
+  // Kept for compatibility with other parts of the system that pass cities
   cities:                  string[];
   setInvoiceCities:        (cities: string[]) => void;
 }
@@ -292,24 +364,33 @@ export function useCommissionCalculationViewModel(
   onCommissionsSaved: () => void
 ): UseCommissionCalculationViewModelReturn {
 
-  const [selectedCity,        setSelectedCity]        = useState('');
-  const [selectedMonth,       setSelectedMonth]       = useState(getCurrentMonth());
-  const [commissionData,      setCommissionData]      = useState<Commission[]>([]);
-  const [calculationErrors,   setCalculationErrors]   = useState<string[]>([]);
-  const [summary,             setSummary]             = useState<{
+  const [selectedSalespersons, setSelectedSalespersons] = useState<string[]>([]);
+  const [selectedMonth,        setSelectedMonth]        = useState(getCurrentMonth());
+  const [commissionData,       setCommissionData]       = useState<Commission[]>([]);
+  const [calculationErrors,    setCalculationErrors]    = useState<string[]>([]);
+  const [summary,              setSummary]              = useState<{
     totalSalespeople: number; totalSales: number;
     totalCommission: number;  totalInvoicesUsed: number;
   } | null>(null);
-  const [invoiceBreakdowns,   setInvoiceBreakdowns]   = useState<SalespersonInvoiceBreakdown[]>([]);
-  const [expandedSalesperson, setExpandedSalesperson] = useState<string | null>(null);
-  const [showModal,           setShowModal]           = useState(false);
-  const [isFullScreen,        setIsFullScreen]        = useState(false);
-  const [isCalculating,       setIsCalculating]       = useState(false);
-  const [isEditing,           setIsEditing]           = useState<string | null>(null);
-  const [editValues,          setEditValues]          = useState({ percentage: 0, amount: 0 });
+  const [invoiceBreakdowns,    setInvoiceBreakdowns]    = useState<SalespersonInvoiceBreakdown[]>([]);
+  const [expandedSalesperson,  setExpandedSalesperson]  = useState<string | null>(null);
+  const [showModal,            setShowModal]            = useState(false);
+  const [isFullScreen,         setIsFullScreen]         = useState(false);
+  const [isCalculating,        setIsCalculating]        = useState(false);
+  const [isEditing,            setIsEditing]            = useState<string | null>(null);
+  const [editValues,           setEditValues]           = useState({ percentage: 0, amount: 0 });
   const [liveCommissions,        setLiveCommissions]        = useState<Commission[]>([]);
   const [liveCommissionsLoading, setLiveCommissionsLoading] = useState(false);
   const [invoiceCities,          setInvoiceCities]          = useState<string[]>([]);
+
+  // ── Multi-select helpers ──────────────────────────────────────────────
+  const toggleSalesperson = useCallback((id: string) => {
+    setSelectedSalespersons(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  }, []);
+
+  const clearSalespersons = useCallback(() => setSelectedSalespersons([]), []);
 
   // ── Fetch ALL commissions for live panel ──────────────────────────────
   const refreshLiveCommissions = useCallback(async () => {
@@ -332,8 +413,8 @@ export function useCommissionCalculationViewModel(
   // ── Calculate + AUTO SAVE ─────────────────────────────────────────────
   const calculateCommission = useCallback(
     async (invoices: InvoiceReference[], employees: EmployeeReference[]): Promise<boolean> => {
-      if (!selectedCity || !selectedMonth) {
-        setCalculationErrors(['Please select both a city and a month']);
+      if (selectedSalespersons.length === 0 || !selectedMonth) {
+        setCalculationErrors(['Please select at least one salesperson and a month']);
         return false;
       }
       setIsCalculating(true);
@@ -342,7 +423,7 @@ export function useCommissionCalculationViewModel(
       try {
         const slabs  = await CommissionFirebaseService.fetchAllSlabs();
         const result = calculateCommissionsFromInvoices(
-          selectedCity, selectedMonth, invoices, employees, slabs, 'Admin'
+          selectedSalespersons, selectedMonth, invoices, employees, slabs, 'Admin'
         );
 
         setCommissionData(result.commissions);
@@ -350,25 +431,10 @@ export function useCommissionCalculationViewModel(
         setSummary(result.summary);
         setInvoiceBreakdowns(result.breakdowns);
 
-        // Clean up stale records for salespersons whose slab didn't match
-        {
-          const savedIds     = new Set(result.commissions.map(c => c.salesperson));
-          const staleCleanup = result.breakdowns
-            .filter(b => !savedIds.has(b.salespersonId))
-            .map(b =>
-              CommissionFirebaseService.deleteExistingCommissions(
-                b.salespersonId,
-                selectedMonth,
-                selectedCity,
-              )
-            );
-          await Promise.allSettled(staleCleanup);
-        }
-
         if (result.commissions.length === 0) {
           toast.error(
             'No commissions to save — check that salesperson names match employee records ' +
-            'and slabs are configured for this city.'
+            'and slabs are configured.'
           );
           return false;
         }
@@ -438,7 +504,7 @@ export function useCommissionCalculationViewModel(
         setIsCalculating(false);
       }
     },
-    [selectedCity, selectedMonth, onCommissionsSaved, refreshLiveCommissions]
+    [selectedSalespersons, selectedMonth, onCommissionsSaved, refreshLiveCommissions]
   );
 
   // ── Confirm helpers ───────────────────────────────────────────────────
@@ -487,7 +553,7 @@ export function useCommissionCalculationViewModel(
   // ── Reset ─────────────────────────────────────────────────────────────
   const resetState = useCallback(() => {
     setCommissionData([]);
-    setSelectedCity('');
+    setSelectedSalespersons([]);
     setSelectedMonth(getCurrentMonth());
     setCalculationErrors([]);
     setSummary(null);
@@ -507,7 +573,8 @@ export function useCommissionCalculationViewModel(
   }, [resetState]);
 
   return {
-    selectedCity,          setSelectedCity,
+    selectedSalespersons,  setSelectedSalespersons,
+    toggleSalesperson,     clearSalespersons,
     selectedMonth,         setSelectedMonth,
     commissionData,
     calculationErrors,

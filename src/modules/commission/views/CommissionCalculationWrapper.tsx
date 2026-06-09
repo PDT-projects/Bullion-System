@@ -1,4 +1,10 @@
-// Commission Calculation Wrapper — fetches employees + invoices from Firestore
+// Commission Calculation Wrapper
+// CHANGED (salesperson-first multi-select):
+//   - No longer derives `invoiceCities` from invoice data.
+//   - Passes `allEmployees` to CommissionCalculationView for the salesperson dropdown.
+//   - Wires `selectedSalespersons`, `toggleSalesperson`, `clearSalespersons`
+//     from the updated ViewModel.
+//   - Everything else (invoice mapping, salary linking, debug panel) is unchanged.
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -8,13 +14,7 @@ import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseS
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import type { InvoiceReference } from '../models/types';
 
-// Strip the full company prefix that some invoice form versions store in `branch`.
-// The separator character varies by how the invoice was created:
-//   hyphen:   'Pakistan Detector Technologies Pvt. Ltd - Saudia'
-//   em-dash:  'Pakistan Detector Technologies Pvt. Ltd — Saudia'  ← most common
-//   en-dash:  'Pakistan Detector Technologies Pvt. Ltd – Saudia'
-// All three are handled. If no prefix matches, the raw value is returned as-is
-// (e.g. 'Saudia' stored directly → 'Saudia').
+// Strip the full company prefix from a branch string.
 const COMPANY_PREFIXES = [
   'Pakistan Detector Technologies Pvt. Ltd — ', // em-dash U+2014 (most common)
   'Pakistan Detector Technologies Pvt. Ltd – ', // en-dash U+2013
@@ -26,13 +26,10 @@ function extractBranch(raw: string | undefined): string {
   for (const prefix of COMPANY_PREFIXES) {
     if (t.startsWith(prefix)) return t.slice(prefix.length).trim();
   }
-  // Generic fallback: match any "Pakistan Detector Technologies..." followed by any dash
   const genericMatch = t.match(/^Pakistan Detector Technologies[^—–-]*[—–-]\s*(.+)$/);
   if (genericMatch) return genericMatch[1].trim();
-
   const bareCompanyPrefix = t.match(/^Pakistan Detector Technologies[^—–-]*$/i);
   if (bareCompanyPrefix) return '';
-
   return t;
 }
 
@@ -61,79 +58,34 @@ export function CommissionCalculationWrapper({
         setEmployees(fetchedEmployees);
 
         const mappedInvoices: InvoiceReference[] = fetchedInvoices.map((inv) => {
-          // Resolve the invoice's office/branch location from `branch` first.
-          // If the invoice has a branch office saved, use that as the commission
-          // selection key. Fallback to salespersonLocation only when branch is
-          // missing or blank.
-          const locFromBranch = extractBranch(inv.branch);
+          const locFromBranch      = extractBranch(inv.branch);
           const locFromSalesperson = extractBranch(inv.salespersonLocation);
           const locFromCustomerCity = extractBranch(inv.customerCity);
 
-          // Prefer the explicit `salespersonLocation` field when present (this
-          // is the direct invoice location the salesperson selected). Fall
-          // back to `branch` (company prefix stripped) and then
-          // `customerCity`. This ensures we use the invoice's exact location
-          // rather than an often-stored company branch prefix like 'Saudia'.
           const branchCity = locFromSalesperson || locFromBranch || locFromCustomerCity || '';
 
-          // Some historical invoices may have stored `salesperson` as an employee ID
-          // while newer ones store the NAME. If we detect an ID that matches a
-          // fetched employee, replace it with the employee's name so downstream
-          // grouping (which expects names) works consistently.
+          // Resolve salesperson by ID → name for consistent grouping
           let salespersonRaw = inv.salesperson || '';
-          const matchedById = (fetchedEmployees || []).find(e => e.id === salespersonRaw);
+          const matchedById = (fetchedEmployees || []).find((e: any) => e.id === salespersonRaw);
           const salespersonName = matchedById ? matchedById.name : salespersonRaw;
 
           return {
             id:   inv.id,
             date: inv.date || '',
-
-            // Store the resolved salesperson NAME (or original string if unresolved).
             salesperson:         salespersonName,
-
-            // salespersonLocation is what the ViewModel uses for city matching.
             salespersonLocation: branchCity,
             branch:              inv.branch || branchCity,
-
-            // customerCity is kept for reference and can help recover missing
-            // branch values from older invoice payloads.
-            customerCity: inv.customerCity || branchCity,
-
-            totalAmount: inv.totalAmount || 0,
-            status:      inv.status === 'Paid' ? 'Paid' : 'Unpaid',
+            customerCity:        inv.customerCity || branchCity,
+            totalAmount:         inv.totalAmount || 0,
+            status:              inv.status === 'Paid' ? 'Paid' : 'Unpaid',
           };
         });
 
         setInvoices(mappedInvoices);
 
-        // Unique sorted city list derived from actual invoice data for the dropdown.
-        // Derive unique cities from multiple invoice fields. Deduplicate
-        // case-insensitively but preserve the first-seen display form so UI
-        // shows familiar capitalization (e.g., 'Dubai', 'Abu Dhabi'). Include
-        // `productLocation` and `warrantyLocation` as invoices sometimes store
-        // the office there.
-        const cityCandidates = [
-          ...mappedInvoices.map(inv => inv.salespersonLocation || ''),
-          ...mappedInvoices.map(inv => inv.branch || ''),
-          ...mappedInvoices.map(inv => inv.customerCity || ''),
-          ...mappedInvoices.map(inv => (inv as any).productLocation || ''),
-          ...mappedInvoices.map(inv => (inv as any).warrantyLocation || ''),
-        ].filter(Boolean);
-
-        const cityMap = new Map<string, string>();
-        for (const c of cityCandidates) {
-          const n = c.trim().toLowerCase();
-          if (!n) continue;
-          if (!cityMap.has(n)) cityMap.set(n, c.trim());
-        }
-
-        const uniqueCities = Array.from(cityMap.values()).sort((a, b) => a.localeCompare(b));
-
-        console.log('[CommissionWrapper] Cities derived from invoices:', uniqueCities);
         console.log('[CommissionWrapper] Total invoices mapped:', mappedInvoices.length);
         console.log('[CommissionWrapper] Paid invoices:', mappedInvoices.filter(i => i.status === 'Paid').length);
-
-        vm.setInvoiceCities(uniqueCities);
+        console.log('[CommissionWrapper] Employees loaded:', fetchedEmployees.length);
 
       } catch (error) {
         toast.error('Failed to load data for commission calculation');
@@ -154,7 +106,7 @@ export function CommissionCalculationWrapper({
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-3">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#4f46e5] mx-auto" />
-          <p className="text-sm text-gray-500">Loading invoices and employee data...</p>
+          <p className="text-sm text-gray-500">Loading invoices and employee data…</p>
         </div>
       </div>
     );
@@ -162,10 +114,17 @@ export function CommissionCalculationWrapper({
 
   return (
     <CommissionCalculationView
-      selectedCity={vm.selectedCity}
-      setSelectedCity={vm.setSelectedCity}
+      // ── Salesperson multi-select (new) ──────────────────────────────────
+      selectedSalespersons={vm.selectedSalespersons}
+      toggleSalesperson={vm.toggleSalesperson}
+      clearSalespersons={vm.clearSalespersons}
+      allEmployees={employees.map((e: any) => ({ id: e.id, name: e.name }))}
+
+      // ── Month ────────────────────────────────────────────────────────────
       selectedMonth={vm.selectedMonth}
       setSelectedMonth={vm.setSelectedMonth}
+
+      // ── Results / state ──────────────────────────────────────────────────
       commissionData={vm.commissionData}
       calculationErrors={vm.calculationErrors}
       summary={vm.summary}
@@ -177,6 +136,13 @@ export function CommissionCalculationWrapper({
       isEditing={vm.isEditing}
       editValues={vm.editValues}
       setEditValues={vm.setEditValues}
+
+      // ── Breakdown panel ───────────────────────────────────────────────────
+      invoiceBreakdowns={vm.invoiceBreakdowns}
+      expandedSalesperson={vm.expandedSalesperson}
+      setExpandedSalesperson={vm.setExpandedSalesperson}
+
+      // ── Actions ──────────────────────────────────────────────────────────
       calculateCommission={handleCalculate}
       confirmSingleCommission={vm.confirmSingleCommission}
       confirmAllCommissions={vm.confirmAllCommissions}
@@ -185,27 +151,22 @@ export function CommissionCalculationWrapper({
       cancelEdit={vm.cancelEdit}
       handleModalConfirm={vm.handleModalConfirm}
       handleModalCancel={vm.handleModalCancel}
+
+      // ── Formatters ────────────────────────────────────────────────────────
       formatCurrency={vm.formatCurrency}
       formatMonth={vm.formatMonth}
-      cities={vm.cities}
-      employees={employees}
+
+      // ── Invoice count cards ───────────────────────────────────────────────
       totalInvoices={invoices.length}
       paidInvoices={invoices.filter(i => i.status === 'Paid').length}
-      invoiceBreakdowns={vm.invoiceBreakdowns}
-      expandedSalesperson={vm.expandedSalesperson}
-      setExpandedSalesperson={vm.setExpandedSalesperson}
+
+      // ── Live commissions panel ────────────────────────────────────────────
       liveCommissions={vm.liveCommissions}
       liveCommissionsLoading={vm.liveCommissionsLoading}
       refreshLiveCommissions={vm.refreshLiveCommissions}
-      // Debug: sample of invoice location fields to help verify mapping
-      debugInvoiceLocations={invoices.slice(0, 200).map(i => ({
-        id: i.id,
-        salespersonLocation: i.salespersonLocation,
-        branch: i.branch,
-        customerCity: i.customerCity,
-        productLocation: (i as any).productLocation,
-        warrantyLocation: (i as any).warrantyLocation,
-      }))}
+
+      // ── Kept for any consumers that still read `employees` from this prop ─
+      employees={employees}
     />
   );
 }
