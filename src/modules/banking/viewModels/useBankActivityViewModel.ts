@@ -296,11 +296,11 @@ export function useBankActivityViewModel() {
   const clearFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
 
   const formatCurrency = useCallback((n: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n)
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n)
   , []);
 
   const formatDate = useCallback((d: string) => {
-    try { return new Intl.DateTimeFormat('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(d)); }
+    try { return new Intl.DateTimeFormat('en-AE', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(d)); }
     catch { return d; }
   }, []);
 

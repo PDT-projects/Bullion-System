@@ -61,8 +61,8 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="p-4 bg-[#4f46e5]/10 rounded-full inline-block mb-4">
-            <Loader2 className="animate-spin text-[#4f46e5]" size={48} />
+          <div className="p-4 bg-[#374151]/10 rounded-full inline-block mb-4">
+            <Loader2 className="animate-spin text-[#374151]" size={48} />
           </div>
           <p className="text-lg font-medium text-gray-900">Loading bank details...</p>
           <p className="text-sm text-gray-500 mt-1">Fetching data from database</p>
@@ -112,7 +112,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.name 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   }`}
                   placeholder="e.g., Habib Bank Limited"
                 />
@@ -140,7 +140,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.accountNumber 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   }`}
                   placeholder="e.g., HBL-1234567890"
                 />
@@ -159,9 +159,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                 {isEditMode ? 'Current Balance' : 'Initial Balance'}
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
-                  PKR
-                </span>
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">AED</span>
                 <input
                   type="number"
                   value={formData.balance || ''}
@@ -173,7 +171,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                   className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.balance 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   }`}
                   placeholder="0"
                   min="0"
@@ -204,7 +202,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
             </div>
 
             {/* Summary Preview */}
-            <div className="bg-[#4f46e5]/10 border border-[#4f46e5]/20 rounded-lg p-4">
+            <div className="bg-[#374151]/10 border border-[#374151]/20 rounded-lg p-4">
               <h4 className="font-semibold text-gray-900 mb-3">Account Preview</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -219,9 +217,9 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                     {formData.accountNumber || 'Not specified'}
                   </span>
                 </div>
-                <div className="flex justify-between border-t border-[#4f46e5]/20 pt-2 mt-2">
+                <div className="flex justify-between border-t border-[#374151]/20 pt-2 mt-2">
                   <span className="text-gray-600">{isEditMode ? 'Current' : 'Initial'} Balance:</span>
-                  <span className="font-bold text-[#4f46e5]">
+                  <span className="font-bold text-[#374151]">
                     {formatCurrency(formData.balance)}
                   </span>
                 </div>
@@ -241,7 +239,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
               <button
                 type="submit"
                 disabled={!isValid || isSaving}
-                className="flex items-center gap-2 px-6 py-3 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-3 bg-[#374151] text-white rounded-lg hover:bg-[#1f2937] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
                   <>

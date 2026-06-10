@@ -85,8 +85,8 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="p-4 bg-[#4f46e5]/10 rounded-full inline-block mb-4">
-            <Loader2 className="animate-spin text-[#4f46e5]" size={48} />
+          <div className="p-4 bg-[#374151]/10 rounded-full inline-block mb-4">
+            <Loader2 className="animate-spin text-[#374151]" size={48} />
           </div>
           <p className="text-lg font-medium text-gray-900">Loading...</p>
           <p className="text-sm text-gray-500 mt-1">Fetching data from database</p>
@@ -168,7 +168,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.location 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   }`}
                 >
                   <option value="">Select location</option>
@@ -203,7 +203,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.date 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   }`}
                 />
               </div>
@@ -230,7 +230,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.company 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   }`}
                   placeholder="Enter company or party name"
                 />
@@ -255,7 +255,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                 className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                   errors.subCategory 
                     ? 'border-red-300 focus:ring-red-200' 
-                    : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                    : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                 }`}
               >
                 <option value="">Select category</option>
@@ -274,9 +274,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                 Amount *
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
-                  PKR
-                </span>
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">AED</span>
                 <input
                   type="number"
                   value={formData.amount || ''}
@@ -288,7 +286,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                   className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.amount 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   }`}
                   placeholder="0"
                   min="1"
@@ -310,7 +308,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                 onChange={(e) => setFormField('note', e.target.value)}
                 disabled={isSaving}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] disabled:bg-gray-50 disabled:cursor-not-allowed"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#374151]/20 focus:border-[#374151] disabled:bg-gray-50 disabled:cursor-not-allowed"
                 placeholder="Add any additional notes..."
               />
             </div>
@@ -393,7 +391,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
               <button
                 type="submit"
                 disabled={!isValid || isSaving}
-                className="flex items-center gap-2 px-6 py-3 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-3 bg-[#374151] text-white rounded-lg hover:bg-[#1f2937] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
                   <>

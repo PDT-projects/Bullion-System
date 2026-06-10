@@ -16,15 +16,15 @@ import {
 export class BankingService {
 
   static formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-PK', {
+    return new Intl.NumberFormat('en-AE', {
       style: 'currency',
-      currency: 'PKR',
+      currency: 'AED',
       minimumFractionDigits: 0
     }).format(amount);
   }
 
   static formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString('en-PK', {
+    return new Date(dateString).toLocaleDateString('en-AE', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'

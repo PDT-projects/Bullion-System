@@ -102,7 +102,7 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.fromBankId 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   } ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 >
                   <option value="">Select source bank</option>
@@ -140,7 +140,7 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.toBankId 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   } ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 >
                   <option value="">Select destination bank</option>
@@ -162,9 +162,7 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                 Transfer Amount *
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
-                  PKR
-                </span>
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">AED</span>
                 <input
                   type="number"
                   value={formData.amount || ''}
@@ -176,7 +174,7 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                   className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.amount || hasInsufficientFunds
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   } ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                   placeholder="0"
                   min="1"
@@ -212,7 +210,7 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.date 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]'
+                      : 'border-gray-300 focus:ring-[#374151]/20 focus:border-[#374151]'
                   } ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 />
               </div>
@@ -231,16 +229,16 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                 onChange={(e) => setFormField('note', e.target.value)}
                 disabled={isSaving}
                 rows={3}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#374151]/20 focus:border-[#374151] ${isSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 placeholder="Add any additional notes about this transfer..."
               />
             </div>
 
             {/* Transfer Preview */}
             {(fromBank && toBank && formData.amount > 0) && (
-              <div className="bg-[#4f46e5]/10 border border-[#4f46e5]/20 rounded-lg p-4">
+              <div className="bg-[#374151]/10 border border-[#374151]/20 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <ArrowRightLeft size={18} className="text-[#4f46e5]" />
+                  <ArrowRightLeft size={18} className="text-[#374151]" />
                   Transfer Preview
                 </h4>
                 <div className="space-y-2 text-sm">
@@ -252,9 +250,9 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
                     <span className="text-gray-600">To:</span>
                     <span className="font-medium text-green-600">{toBank.name}</span>
                   </div>
-                  <div className="flex justify-between border-t border-[#4f46e5]/20 pt-2 mt-2">
+                  <div className="flex justify-between border-t border-[#374151]/20 pt-2 mt-2">
                     <span className="text-gray-600">Amount:</span>
-                    <span className="font-bold text-[#4f46e5]">{formatCurrency(formData.amount)}</span>
+                    <span className="font-bold text-[#374151]">{formatCurrency(formData.amount)}</span>
                   </div>
                   {fromBank && (
                     <>
@@ -285,7 +283,7 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
               <button
                 type="submit"
                 disabled={!isValid || hasInsufficientFunds || isSaving}
-                className="flex items-center gap-2 px-6 py-3 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-3 bg-[#374151] text-white rounded-lg hover:bg-[#1f2937] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
                   <>
