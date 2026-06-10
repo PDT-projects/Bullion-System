@@ -320,7 +320,7 @@ const TERMS = [
   'Customers can watch/visit our YouTube Channel for machine training and air testing before purchasing the machine.',
   'Machines work well on old/buried objects.',
   'Company is exclusively responsible for providing after-sales services to customers who have purchased machines from us.',
-  "For warranty claims, the client must present the original purchaser's CNIC and a copy of this invoice.",
+  "For warranty claims, the client must present the original purchaser's Identity and a copy of this invoice.",
   'Warranty claims take approximately 90 working days to process.',
   'The Company shall not be held responsible for any illegal activities undertaken by clients.',
   'Clients are strictly prohibited from excavating on legally restricted properties; the Company disclaims any responsibility for such actions.',
