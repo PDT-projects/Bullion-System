@@ -151,7 +151,7 @@ export function useATIViewModel() {
     try {
       const created = await ATIFirebaseService.createEntry(dto);
       setEntries(prev => [created, ...prev]);
-      toast.success(`Payment of Rs ${dto.amount.toLocaleString()} recorded against ${dto.invoiceNumber}`);
+      toast.success(`Payment of AED ${dto.amount.toLocaleString('en-AE')} recorded against ${dto.invoiceNumber}`);
       setActiveView('list');
       // Refresh summaries and invoice cache so balances are up to date
       const [summaryData, freshInvoices] = await Promise.all([
@@ -172,7 +172,7 @@ export function useATIViewModel() {
   // ── Delete entry ──────────────────────────────────────────────────────────
   const handleDelete = useCallback(async (entry: AgainstInvoiceEntry) => {
     if (!window.confirm(
-      `Delete payment of Rs ${entry.amount.toLocaleString()} against ${entry.invoiceNumber}? This will reverse the invoice balance.`
+      `Delete payment of AED ${entry.amount.toLocaleString('en-AE')} against ${entry.invoiceNumber}? This will reverse the invoice balance.`
     )) return;
     try {
       await ATIFirebaseService.deleteEntry(entry.id, entry);

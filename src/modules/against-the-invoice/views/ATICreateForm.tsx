@@ -15,7 +15,7 @@ import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseSer
 import { SUB_CATEGORIES } from '../../transactions/models/types';
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n);
 
 interface BranchInfo { id: string; name: string; }
 
@@ -518,7 +518,7 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
                   <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.input} />
                 </div>
                 <div>
-                  <label style={S.label}>Amount (PKR) <span style={{ color: '#ef4444' }}>*</span></label>
+                  <label style={S.label}>Amount (AED) <span style={{ color: '#ef4444' }}>*</span></label>
                   <input
                     type="number" value={amount} onChange={e => setAmount(e.target.value)}
                     placeholder="0" min={1}

@@ -11,10 +11,10 @@ import { ATICreateForm } from './ATICreateForm';
 import { AgainstInvoiceEntry, InvoiceBalanceSummary } from '../models/types';
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n);
 
 const fmtDate = (d: string) =>
-  d ? new Date(d).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+  d ? new Date(d).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; border: string }> = {
   Settled: { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
