@@ -42,7 +42,7 @@ function MultiSelectDropdown({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between text-sm focus:outline-none focus:ring-2 focus:ring-[#374151] focus:border-transparent"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between text-sm focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent"
       >
         <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-900'}>{label}</span>
         <ChevronDown size={15} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -50,13 +50,13 @@ function MultiSelectDropdown({
       {open && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
-            <button type="button" onClick={() => onChange([...options])} className="text-xs text-[#374151] font-medium hover:underline">Select all</button>
+            <button type="button" onClick={() => onChange([...options])} className="text-xs text-gray-700 font-medium hover:underline">Select all</button>
             <button type="button" onClick={() => onChange([])} className="text-xs text-gray-500 hover:underline">Clear</button>
           </div>
           <div className="overflow-y-auto">
             {options.map(opt => (
               <label key={opt} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm">
-                <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} className="accent-[#374151] w-4 h-4 rounded" />
+                <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} className="accent-gray-700 w-4 h-4 rounded" />
                 <span className="text-gray-800">{labelFn ? labelFn(opt) : opt}</span>
               </label>
             ))}
@@ -68,7 +68,7 @@ function MultiSelectDropdown({
 }
 
 // ── Pill ───────────────────────────────────────────────────────────────────────
-function Pill({ label, onRemove, colorClass = 'bg-[#374151]/10 text-[#374151]' }: {
+function Pill({ label, onRemove, colorClass = 'bg-gray-700/10 text-gray-700' }: {
   label: string; onRemove: () => void; colorClass?: string;
 }) {
   return (
@@ -187,7 +187,7 @@ export function BankActivityView() {
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#374151] rounded-lg flex items-center justify-center">
+          <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
             <Activity size={20} className="text-white" />
           </div>
           <div>
@@ -213,7 +213,7 @@ export function BankActivityView() {
       {/* ── Filters ─────────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex items-center gap-2 mb-4">
-          <Filter size={18} className="text-[#374151]" />
+          <Filter size={18} className="text-gray-700" />
           <h2 className="font-semibold text-gray-900">Filters</h2>
           {hasActiveFilters && (
             <button onClick={handleClearAll} className="ml-auto text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1">
@@ -236,7 +236,7 @@ export function BankActivityView() {
                 value={filters.searchTerm}
                 onChange={e => setFilter('searchTerm', e.target.value)}
                 placeholder="Description, bank, ref…"
-                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#374151] focus:border-transparent"
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent"
               />
             </div>
           </div>
@@ -291,7 +291,7 @@ export function BankActivityView() {
               value={filters.dateFrom}
               disabled={allTime}
               onChange={e => setFilter('dateFrom', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#374151] focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
             />
           </div>
 
@@ -305,15 +305,15 @@ export function BankActivityView() {
               value={filters.dateTo}
               disabled={allTime}
               onChange={e => setFilter('dateTo', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#374151] focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
             />
             <button
               type="button"
               onClick={() => setAllTime(v => !v)}
               className={`mt-1.5 w-full text-xs font-medium py-1 rounded-md border transition-colors ${
                 allTime
-                  ? 'bg-[#374151] text-white border-[#374151]'
-                  : 'bg-white text-[#374151] border-[#374151] hover:bg-[#374151]/10'
+                  ? 'bg-gray-700 text-white border-gray-700'
+                  : 'bg-white text-gray-700 border-gray-700 hover:bg-gray-700/10'
               }`}
             >
               {allTime ? '✓ All Time' : 'Show All Time'}
@@ -326,15 +326,15 @@ export function BankActivityView() {
           <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-gray-500">Active:</span>
             {filters.searchTerm && (
-              <Pill label={`"${filters.searchTerm}"`} onRemove={() => setFilter('searchTerm', '')} colorClass="bg-[#374151]/10 text-[#374151]" />
+              <Pill label={`"${filters.searchTerm}"`} onRemove={() => setFilter('searchTerm', '')} colorClass="bg-gray-700/10 text-gray-700" />
             )}
             {allTime
-              ? <Pill label="All Time" onRemove={() => setAllTime(false)} colorClass="bg-[#374151]/10 text-[#374151]" />
+              ? <Pill label="All Time" onRemove={() => setAllTime(false)} colorClass="bg-gray-700/10 text-gray-700" />
               : (filters.dateFrom || filters.dateTo) && (
                 <Pill
                   label={`${filters.dateFrom || '…'} → ${filters.dateTo || '…'}`}
                   onRemove={() => { setFilter('dateFrom', ''); setFilter('dateTo', ''); }}
-                  colorClass="bg-[#374151]/10 text-[#374151]"
+                  colorClass="bg-gray-700/10 text-gray-700"
                 />
               )
             }
@@ -364,7 +364,7 @@ export function BankActivityView() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20 gap-3">
-            <Loader2 size={26} className="text-[#374151] animate-spin" />
+            <Loader2 size={26} className="text-gray-700 animate-spin" />
             <span className="text-gray-500 text-sm">Loading activity data…</span>
           </div>
         ) : error ? (
@@ -394,7 +394,7 @@ export function BankActivityView() {
                   return (
                     <React.Fragment key={entry.id}>
                       <tr
-                        className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-[#374151]/5 cursor-pointer transition-colors`}
+                        className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-700/5 cursor-pointer transition-colors`}
                         onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                       >
                         <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-700">
@@ -416,7 +416,7 @@ export function BankActivityView() {
                             <div className="text-xs text-gray-400 mt-0.5">{entry.category}</div>
                           )}
                         </td>
-                        <td className="px-5 py-3 whitespace-nowrap font-mono text-xs text-[#374151] font-semibold">
+                        <td className="px-5 py-3 whitespace-nowrap font-mono text-xs text-gray-700 font-semibold">
                           {entry.reference || '—'}
                         </td>
                         <td className="px-5 py-3 whitespace-nowrap">
@@ -432,7 +432,7 @@ export function BankActivityView() {
 
                       {/* Expanded detail row */}
                       {isExpanded && (
-                        <tr className="bg-purple-50 border-l-4 border-[#374151]">
+                        <tr className="bg-purple-50 border-l-4 border-gray-700">
                           <td colSpan={7} className="px-6 py-4">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
                               {[
@@ -464,9 +464,9 @@ export function BankActivityView() {
 
         {/* Footer total */}
         {displayEntries.length > 0 && !isLoading && (
-          <div className="bg-gray-50 border-t-2 border-[#374151] px-6 py-4 flex items-center justify-between">
+          <div className="bg-gray-50 border-t-2 border-gray-700 px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <DollarSign size={18} className="text-[#374151]" />
+              <DollarSign size={18} className="text-gray-700" />
               <span className="font-semibold text-gray-900">Total Entries</span>
               <span className="text-sm text-gray-500">{displayEntries.length}</span>
             </div>
