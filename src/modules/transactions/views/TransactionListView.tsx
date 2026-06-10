@@ -29,9 +29,9 @@ interface CurrencyMeta {
 }
 
 const CURRENCIES: CurrencyMeta[] = [
+  { code: 'AED', label: 'UAE Dirham',        countryCode: 'AE', locale: 'en-AE', decimals: 2 },
   { code: 'PKR', label: 'Pakistani Rupee',  countryCode: 'PK', locale: 'en-PK', decimals: 0 },
   { code: 'CAD', label: 'Canadian Dollar',   countryCode: 'CA', locale: 'en-CA', decimals: 2 },
-  { code: 'AED', label: 'UAE Dirham',        countryCode: 'AE', locale: 'en-AE', decimals: 2 },
   { code: 'SAR', label: 'Saudi Riyal',       countryCode: 'SA', locale: 'en-US', decimals: 2 },
 ];
 
@@ -385,9 +385,9 @@ export function TransactionListView({
   const navigate = useNavigate();
   const [showFilters, setShowFilters] = React.useState(false);
 
-  // Currency state — local to this view
-  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('PKR');
-  const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>([]);
+  // Currency state — local to this view (AED is primary by default)
+  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('AED');
+  const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>(['PKR']);
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated, refresh: refreshRates } = useCurrencyRates();
 
   const cardProps = { primary: primaryCurrency, extras: extraCurrencies, rates };
