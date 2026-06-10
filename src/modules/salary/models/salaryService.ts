@@ -156,16 +156,16 @@ export class SalaryService {
   // ==================== FORMATTING ====================
 
   static formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-PK', {
+    return new Intl.NumberFormat('en-AE', {
       style: 'currency',
-      currency: 'PKR',
+      currency: 'AED',
       minimumFractionDigits: 0
     }).format(amount);
   }
 
   static formatDate(dateString: string): string {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-PK', {
+    return new Date(dateString).toLocaleDateString('en-AE', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'

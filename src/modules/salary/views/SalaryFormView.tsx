@@ -79,7 +79,7 @@ const inpErr = 'border-red-500';
 function formatDateDisplay(dateStr: string): string {
   if (!dateStr) return '';
   try {
-    return new Date(dateStr).toLocaleDateString('en-PK', {
+    return new Date(dateStr).toLocaleDateString('en-AE', {
       year: 'numeric', month: 'short', day: 'numeric',
     });
   } catch { return dateStr; }
@@ -319,7 +319,7 @@ export function SalaryFormView({
                   <div className="flex items-center gap-3">
                     <div className="flex flex-1 rounded-lg border border-amber-300 overflow-hidden focus-within:ring-2 focus-within:ring-amber-400">
                       <span className="flex items-center px-3 bg-amber-50 border-r border-amber-300 text-amber-700 text-sm font-medium whitespace-nowrap select-none">
-                        PKR
+                        AED
                       </span>
                       <input
                         type="number"
@@ -520,7 +520,7 @@ export function SalaryFormView({
                 </label>
                 <div className="flex rounded-lg border overflow-hidden focus-within:ring-2 focus-within:ring-slate-400 border-gray-300">
                   <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
-                    PKR
+                    AED
                   </span>
                   <input
                     type="number"
@@ -550,7 +550,7 @@ export function SalaryFormView({
                       : 'border-gray-300'
                   }`}>
                     <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
-                      PKR
+                      AED
                     </span>
                     <input
                       type="number"
@@ -587,7 +587,7 @@ export function SalaryFormView({
                 </label>
                 <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-slate-400">
                   <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
-                    PKR
+                    AED
                   </span>
                   <input
                     type="number"
@@ -775,7 +775,7 @@ export function SalaryFormView({
                   </label>
                   <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-slate-400">
                     <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
-                      PKR
+                      AED
                     </span>
                     <input
                       type="number"
