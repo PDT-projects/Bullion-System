@@ -1,10 +1,12 @@
 // Commission Report View - Presentational Component
 // UPDATED: Shows salary linkage status badge on each commission row
 // Added refresh button to manually reload commission data
+// UPDATED: All monetary amounts show AED (primary) + PKR (secondary)
 
 import { Download, Filter, FileText, TrendingUp, DollarSign, CheckCircle, Receipt, Link, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 import type { Commission, CommissionFilter, CommissionStats } from '../models/types';
 import type { SalaryLinkStatus } from '../viewModels/useCommissionReportViewModel';
+import { formatDual, formatAED, formatPKR } from '../models/currencyUtils';
 
 interface CommissionReportViewProps {
   commissions:         Commission[];
@@ -81,6 +83,7 @@ export function CommissionReportView({
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Commission Report</h1>
           <p className="text-gray-600 mt-1">Full history of all commission records</p>
+          <p className="text-xs text-gray-400 mt-0.5">💱 Amounts shown in AED (primary) and PKR — 1 PKR = {formatAED(1)}</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -137,7 +140,7 @@ export function CommissionReportView({
             <span className="text-sm text-gray-600">Total Amount</span>
             <DollarSign className="h-4 w-4 text-gray-400" />
           </div>
-          <div className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalAmount)}</div>
+          <div className="text-2xl font-bold text-gray-900">{formatDual(stats.totalAmount)}</div>
         </div>
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
@@ -268,15 +271,16 @@ export function CommissionReportView({
                           <Receipt size={11} />{commission.invoiceCount ?? '—'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(commission.totalSales)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{formatDual(commission.totalSales)}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">
-                        {formatCurrency(commission.appliedSlabFrom)} – {formatCurrency(commission.appliedSlabTo)}
+                        {formatAED(commission.appliedSlabFrom)} – {formatAED(commission.appliedSlabTo)}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
                         {commission.overriddenCommissionPercentage ?? commission.commissionPercentage}%
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {formatCurrency(commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount)}
+                        <span className="block">{formatAED(commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount)}</span>
+                        <span className="block text-xs text-gray-400">{formatPKR(commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount)}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${

@@ -8,8 +8,13 @@
 //     in the breakdown panel (read from `breakdown.noSlabMessage`).
 //   - All other panels (modal, live commissions, invoice breakdown table) unchanged.
 //   - COLOR THEME: Charcoal (#2d2d2d) replaces all indigo/blue accents.
+// CHANGED (dual-currency AED + PKR):
+//   - All monetary amounts now show AED (primary) + PKR (secondary).
+//   - formatDual() from currencyUtils is used for every amount display.
+//   - A subtle exchange-rate note is shown in the calculation form header.
 
 import { useState, useRef, useEffect } from 'react';
+import { formatDual, formatAED, formatPKR, PKR_TO_AED } from '../models/currencyUtils';
 import {
   Calculator, X, Maximize2, Minimize2, Check,
   AlertCircle, Edit2, Save, XCircle, FileText,
@@ -341,13 +346,25 @@ export function CommissionCalculationView({
       {/* ── Calculation Form ── */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-            <Calculator size={18} style={{ color: C.dark }} />
-            Calculate Commission
-          </h3>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Select salesperson(s) and a month to calculate commissions from paid invoices against configured slabs.
-          </p>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                <Calculator size={18} style={{ color: C.dark }} />
+                Calculate Commission
+              </h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Select salesperson(s) and a month to calculate commissions from paid invoices against configured slabs.
+              </p>
+            </div>
+            {/* Exchange rate notice */}
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
+              style={{ backgroundColor: C.bg, color: C.dark, border: `1px solid ${C.border}` }}
+            >
+              <span>💱</span>
+              <span>1 PKR = {formatAED(1)} &nbsp;·&nbsp; All amounts shown as AED / PKR</span>
+            </div>
+          </div>
         </div>
 
         <div className="p-6 space-y-4">
@@ -547,7 +564,7 @@ export function CommissionCalculationView({
                         {breakdown.invoiceCount > 0 && (
                           <div className="text-right flex-shrink-0 hidden sm:block">
                             <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total Sales</p>
-                            <p className="text-sm font-bold text-gray-900">{formatCurrency(breakdown.totalSales)}</p>
+                            <p className="text-sm font-bold text-gray-900">{formatDual(breakdown.totalSales)}</p>
                           </div>
                         )}
 
@@ -561,14 +578,15 @@ export function CommissionCalculationView({
                                 <p className="text-[11px] text-red-400 mt-0.5 leading-tight">
                                   {breakdown.invoiceCount === 0
                                     ? 'No paid invoices'
-                                    : `No slab for ${formatCurrency(breakdown.totalSales)}`}
+                                    : `No slab for ${formatAED(breakdown.totalSales)}`}
                                 </p>
                               </div>
                             </div>
                           ) : (
-                            <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-right min-w-[120px]">
+                            <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-right min-w-[140px]">
                               <p className="text-[10px] text-green-600 uppercase tracking-wide font-semibold">Commission</p>
-                              <p className="text-base font-black text-green-700">{formatCurrency(commAmt)}</p>
+                              <p className="text-base font-black text-green-700">{formatAED(commAmt)}</p>
+                              <p className="text-[10px] text-green-500 font-medium">({formatPKR(commAmt)})</p>
                               <p className="text-[10px] text-green-500 mt-0.5">{pct}% applied</p>
                             </div>
                           )}
@@ -604,7 +622,7 @@ export function CommissionCalculationView({
                                   {inv.salespersonLocation || inv.branch || inv.customerCity || '—'}
                                 </td>
                                 <td className="px-4 py-2 text-right font-medium text-gray-900">
-                                  {formatCurrency(inv.totalAmount)}
+                                  {formatDual(inv.totalAmount)}
                                 </td>
                                 <td className="px-4 py-2 text-center">
                                   <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">
@@ -620,7 +638,7 @@ export function CommissionCalculationView({
                                 Total ({breakdown.invoiceCount} invoice{breakdown.invoiceCount !== 1 ? 's' : ''})
                               </td>
                               <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
-                                {formatCurrency(breakdown.totalSales)}
+                                {formatDual(breakdown.totalSales)}
                               </td>
                               <td />
                             </tr>
@@ -632,8 +650,8 @@ export function CommissionCalculationView({
                           className="mt-2 text-xs rounded px-3 py-1.5"
                           style={{ color: C.dark, backgroundColor: C.bg, border: `1px solid ${C.border}` }}
                         >
-                          Next slab starts at {formatCurrency(breakdown.nextSlabThreshold)} —{' '}
-                          needs {formatCurrency(breakdown.nextSlabThreshold - breakdown.totalSales)} more in sales
+                          Next slab starts at {formatAED(breakdown.nextSlabThreshold)} —{' '}
+                          needs {formatAED(breakdown.nextSlabThreshold - breakdown.totalSales)} more in sales
                         </div>
                       )}
                     </div>
@@ -692,11 +710,11 @@ export function CommissionCalculationView({
                   </div>
                   <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Total Sales</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(summary.totalSales)}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{formatDual(summary.totalSales)}</p>
                   </div>
                   <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
                     <p className="text-sm text-gray-500">Total Commission</p>
-                    <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(summary.totalCommission)}</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">{formatDual(summary.totalCommission)}</p>
                   </div>
                 </div>
               )}
@@ -742,10 +760,10 @@ export function CommissionCalculationView({
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                            {formatCurrency(commission.totalSales)}
+                            {formatDual(commission.totalSales)}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500 text-center">
-                            {formatCurrency(commission.appliedSlabFrom)} – {formatCurrency(commission.appliedSlabTo)}
+                            {formatAED(commission.appliedSlabFrom)} – {formatAED(commission.appliedSlabTo)}
                           </td>
                           <td className="px-4 py-3 text-center">
                             {isEditing === commission.id ? (
@@ -775,7 +793,7 @@ export function CommissionCalculationView({
                               />
                             ) : (
                               <span className="text-sm font-medium text-gray-900">
-                                {formatCurrency(commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount)}
+                                {formatDual(commission.overriddenCommissionAmount ?? commission.calculatedCommissionAmount)}
                               </span>
                             )}
                           </td>
