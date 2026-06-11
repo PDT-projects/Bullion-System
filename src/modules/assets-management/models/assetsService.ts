@@ -2,12 +2,22 @@ import { AssetsFirebaseService } from './assetsFirebaseService';
 import { toast } from 'sonner';
 import type { Asset } from './types';
 
-const formatCurrency = (amount: number) =>
+const AED_TO_PKR = 76.03;
+
+const formatPKR = (amount: number) =>
   new Intl.NumberFormat('en-PK', {
-    style: 'currency', 
-    currency: 'PKR', 
-    minimumFractionDigits: 0 
+    style: 'currency',
+    currency: 'PKR',
+    minimumFractionDigits: 0,
   }).format(amount);
+
+const formatAED = (pkrAmount: number) => {
+  const aed = pkrAmount / AED_TO_PKR;
+  return `د.إ ${new Intl.NumberFormat('en-AE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(aed)} AED`;
+};
 
 export class AssetsServiceClass {
   static async createAsset(assetData: Omit<Asset, 'id' | 'createdAt'>): Promise<void> {
@@ -49,10 +59,16 @@ export class AssetsServiceClass {
     }
   }
 
+  /** Format as PKR (default, stored currency) */
   static formatPrice(price: number): string {
-    return formatCurrency(price);
+    return formatPKR(price);
   }
+
+  /** Format as AED (converted from PKR) */
+  static formatPriceAED(price: number): string {
+    return formatAED(price);
+  }
+
+  /** Rate constant for use in views */
+  static readonly AED_TO_PKR = AED_TO_PKR;
 }
-
-// AssetsServiceClass exported directly
-
