@@ -5,6 +5,9 @@ import { ArrowLeft } from 'lucide-react';
 import { Employee } from '../models/types';
 import { EmployeeFormFields } from './components/EmployeeFormFields';
 
+// Single source of truth for this type — import from here everywhere
+export type SalaryCurrency = 'PKR' | 'AED';
+
 interface EmployeeFormViewProps {
   formData: Partial<Employee>;
   isEditMode: boolean;
@@ -15,33 +18,46 @@ interface EmployeeFormViewProps {
   onFieldChange: (field: keyof Employee, value: any) => void;
   onSubmit: () => void;
   onCancel: () => void;
+  salaryCurrency: SalaryCurrency;
+  onSalaryCurrencyChange: (currency: SalaryCurrency) => void;
 }
 
 export function EmployeeFormView({
-  formData,
-  isEditMode,
-  pageTitle,
-  submitButtonText,
-  allLocations,
-  addCustomLocation,
-  onFieldChange,
-  onSubmit,
-  onCancel,
+  formData, isEditMode, pageTitle, submitButtonText,
+  allLocations, addCustomLocation, onFieldChange,
+  onSubmit, onCancel, salaryCurrency, onSalaryCurrencyChange,
 }: EmployeeFormViewProps) {
   return (
     <div className="p-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-[#4f46e5] text-white">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-800 text-white rounded-t-xl">
           <div className="flex items-center gap-3">
-            <button
-              onClick={onCancel}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              title="Back to Employees"
-            >
+            <button onClick={onCancel} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Back to Employees">
               <ArrowLeft size={20} />
             </button>
             <h3 className="text-xl font-bold">{pageTitle}</h3>
+          </div>
+
+          {/* Currency Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-white/60 text-sm">Salary in:</span>
+            <div className="flex items-center bg-white/10 rounded-lg p-1 gap-1">
+              {(['PKR', 'AED'] as SalaryCurrency[]).map(cur => (
+                <button
+                  key={cur}
+                  type="button"
+                  onClick={() => onSalaryCurrencyChange(cur)}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    salaryCurrency === cur
+                      ? 'bg-white text-gray-800'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {cur === 'PKR' ? '₨ PKR' : 'د.إ AED'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -53,22 +69,17 @@ export function EmployeeFormView({
               onFieldChange={onFieldChange}
               allLocations={allLocations}
               addCustomLocation={addCustomLocation}
+              salaryCurrency={salaryCurrency}
+              onSalaryCurrencyChange={onSalaryCurrencyChange}
             />
 
-            {/* Form Actions */}
             <div className="flex items-center justify-end gap-3 pt-4">
-              <button
-                onClick={onCancel}
-                className="px-6 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-              >
+              <button onClick={onCancel} className="px-6 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  console.log('🖱️ Button clicked in View');
-                  onSubmit();
-                }}
-                className="px-6 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors flex items-center gap-2"
+                onClick={() => { console.log('🖱️ Submit clicked'); onSubmit(); }}
+                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 {submitButtonText}
               </button>
