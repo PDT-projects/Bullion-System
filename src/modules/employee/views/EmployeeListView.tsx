@@ -54,9 +54,10 @@ export function EmployeeListView({
               <button
                 key={cur}
                 onClick={() => onCurrencyToggle(cur)}
+                style={displayCurrency === cur ? { backgroundColor: '#374151', color: '#ffffff' } : {}}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   displayCurrency === cur
-                    ? 'bg-gray-800 text-white shadow-sm'
+                    ? 'shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
@@ -67,8 +68,9 @@ export function EmployeeListView({
 
           <button
             onClick={toggleFilters}
+            style={showFilters ? { backgroundColor: '#374151', color: '#ffffff' } : {}}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-              showFilters ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              showFilters ? '' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             <Filter size={20} />
@@ -77,7 +79,8 @@ export function EmployeeListView({
 
           <button
             onClick={handleAddEmployee}
-            className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+            style={{ backgroundColor: '#374151' }}
+            className="flex items-center gap-2 text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
           >
             <Plus size={20} />
             Add Employee

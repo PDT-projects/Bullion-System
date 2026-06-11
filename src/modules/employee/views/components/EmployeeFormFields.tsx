@@ -117,9 +117,10 @@ export function EmployeeFormFields({
                 key={cur}
                 type="button"
                 onClick={() => onSalaryCurrencyChange(cur)}
+                style={salaryCurrency === cur ? { backgroundColor: '#374151', color: '#ffffff' } : {}}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   salaryCurrency === cur
-                    ? 'bg-gray-800 text-white shadow-sm'
+                    ? 'shadow-sm'
                     : 'text-gray-500 hover:text-gray-800'
                 }`}
               >
@@ -188,7 +189,8 @@ export function EmployeeFormFields({
               className={`${inp} flex-1`}
             />
             <button type="button" onClick={handleAddCity} disabled={!newCityInput.trim()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap">
+              style={{ backgroundColor: '#374151' }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity whitespace-nowrap">
               <PlusCircle size={14} /> Add City
             </button>
             <button type="button" onClick={() => { setShowNewCityInput(false); setNewCityInput(''); }}

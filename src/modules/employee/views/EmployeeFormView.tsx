@@ -31,7 +31,7 @@ export function EmployeeFormView({
     <div className="p-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-800 text-white rounded-t-xl">
+        <div style={{ backgroundColor: '#374151' }} className="flex items-center justify-between p-6 border-b border-gray-200 text-white rounded-t-xl">
           <div className="flex items-center gap-3">
             <button onClick={onCancel} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Back to Employees">
               <ArrowLeft size={20} />
@@ -48,9 +48,10 @@ export function EmployeeFormView({
                   key={cur}
                   type="button"
                   onClick={() => onSalaryCurrencyChange(cur)}
+                  style={salaryCurrency === cur ? { backgroundColor: '#ffffff', color: '#374151' } : {}}
                   className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                     salaryCurrency === cur
-                      ? 'bg-white text-gray-800'
+                      ? 'font-semibold shadow-sm'
                       : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}
                 >
@@ -79,7 +80,8 @@ export function EmployeeFormView({
               </button>
               <button
                 onClick={() => { console.log('🖱️ Submit clicked'); onSubmit(); }}
-                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                style={{ backgroundColor: '#374151' }}
+                className="px-6 py-2.5 text-white rounded-lg hover:opacity-90 transition-opacity"
               >
                 {submitButtonText}
               </button>

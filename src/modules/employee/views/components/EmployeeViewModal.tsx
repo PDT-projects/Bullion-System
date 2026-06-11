@@ -30,7 +30,7 @@ export function EmployeeViewModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl max-w-2xl w-full shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-800 text-white rounded-t-xl">
+        <div style={{ backgroundColor: "#374151" }} className="flex items-center justify-between p-6 border-b border-gray-200 text-white rounded-t-xl">
           <h3 className="text-xl font-bold">Employee Details</h3>
           <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors">
             <X size={20} />
