@@ -239,6 +239,18 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
     setIsSubmitting(true);
     try {
       const isoDateTime = new Date(formData.transferDateTime).toISOString();
+      // Build a summary of all items for PDF / modal multi-model display
+      const transferItemsSummary = transferItems.map(item => {
+        const product = getProductById(item.productId);
+        return {
+          productId:     item.productId,
+          productName:   product ? `${product.brandName} ${product.modelName}` : item.productId,
+          modelName:     product?.modelName || '',
+          brandName:     product?.brandName || '',
+          serialNumbers: item.selectedSerials,
+          quantity:      item.selectedSerials.length,
+        };
+      });
       for (const item of transferItems) {
         const product = getProductById(item.productId);
         if (!product) continue;
@@ -272,6 +284,7 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
           note:          formData.note,
           shipmentCost:  formData.shipmentCost,
           costPerUnit:   costPerUnit,
+          transferItems: transferItemsSummary,
         });
       }
       toast.success(`Transfer created — products removed from ${formData.fromLocation} and are In Transit to ${formData.toLocation}`);

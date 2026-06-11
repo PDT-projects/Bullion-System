@@ -2,6 +2,7 @@
 import React from 'react';
 import { useAuth } from '../../../providers/context/AuthContext';
 import { useInventoryListViewModel } from '../viewModels/useInventoryListViewModel';
+import { useProductTransferViewModel } from '../viewModels/useProductTransferViewModel';
 import { InventoryListView } from './InventoryListView';
 
 interface Props { inventoryType?: 'in-stock' | 'on-order'; }
@@ -9,6 +10,7 @@ interface Props { inventoryType?: 'in-stock' | 'on-order'; }
 export const InventoryListWrapper: React.FC<Props> = ({ inventoryType = 'in-stock' }) => {
   const { user } = useAuth();
   const viewModel = useInventoryListViewModel(inventoryType);
+  const { transfers } = useProductTransferViewModel();
 
   return (
     <InventoryListView
@@ -32,6 +34,7 @@ export const InventoryListWrapper: React.FC<Props> = ({ inventoryType = 'in-stoc
       onEdit={viewModel.onEdit}
       onDelete={viewModel.onDelete}
       currentUser={user}
+      transfers={transfers}
     />
   );
 };

@@ -244,9 +244,9 @@ export const ProductTransferCreateView: React.FC<Props> = ({
               </h3>
               <button
                 onClick={addTransferItem}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors font-semibold" style={{ backgroundColor: '#1e293b', color: '#f8fafc' }}
               >
-                <Plus size={16} /> Add Item
+                <Plus size={16} /> Add Another Model
               </button>
             </div>
 
@@ -422,7 +422,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
               <p className="text-sm text-indigo-700 mb-3">
                 <span className="font-semibold">Date &amp; Time:</span>{' '}
                 {formData.transferDateTime
-                  ? new Date(formData.transferDateTime).toLocaleString('en-PK', {
+                  ? new Date(formData.transferDateTime).toLocaleString('en-AE', {
                       dateStyle: 'medium',
                       timeStyle: 'short',
                     })
