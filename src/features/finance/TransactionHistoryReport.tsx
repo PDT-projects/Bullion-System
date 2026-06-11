@@ -7,10 +7,14 @@ type TransactionHistoryReportProps = {
 };
 
 const companyOptions = [
-  'Pakistan Detectors Technologies: Islamabad/ Head Office',
-  'Pakistan Detectors Technologies: Karachi',
-  'Pakistan Detectors Technologies: Lahore',
-  'Pakistan Detectors Technologies: Bullion RND/ SITE office'
+  'Pakistan Detectors Technologies: Dubai',
+  'Pakistan Detectors Technologies: Saudi Arabia',
+  'Pakistan Detectors Technologies: Chad',
+  'Pakistan Detectors Technologies: Abu Dhabi',
+  'Pakistan Detectors Technologies: Sharjah',
+  'Pakistan Detectors Technologies: Oman',
+  'Pakistan Detectors Technologies: Qatar',
+  'Pakistan Detectors Technologies: Kuwait',
 ];
 
 // All possible categories from Expenses, Bills, Salary, and Other categories
@@ -202,9 +206,14 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
 
   // Extract city name from company string
   const getCityFromCompany = (company: string) => {
-    if (company.includes('Islamabad')) return 'Islamabad';
-    if (company.includes('Karachi')) return 'Karachi';
-    if (company.includes('Lahore')) return 'Lahore';
+    if (company.includes('Dubai'))        return 'Dubai';
+    if (company.includes('Saudi Arabia')) return 'Saudi Arabia';
+    if (company.includes('Chad'))          return 'Chad';
+    if (company.includes('Abu Dhabi'))    return 'Abu Dhabi';
+    if (company.includes('Sharjah'))      return 'Sharjah';
+    if (company.includes('Oman'))         return 'Oman';
+    if (company.includes('Qatar'))        return 'Qatar';
+    if (company.includes('Kuwait'))       return 'Kuwait';
     if (company.includes('Bullion')) return 'Bullion RND/SITE';
     return company;
   };

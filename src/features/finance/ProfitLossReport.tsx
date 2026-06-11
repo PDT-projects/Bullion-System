@@ -175,29 +175,39 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
 
   const getTransactionLocation = (t: Transaction): string => {
     const loc = t.location || t.branch || t.city || '';
-    if (loc.includes('Karachi'))   return 'Karachi';
-    if (loc.includes('Islamabad')) return 'Islamabad';
-    if (loc.includes('Lahore'))    return 'Lahore';
+    if (loc.includes('Dubai'))         return 'Dubai';
+    if (loc.includes('Saudi Arabia'))  return 'Saudi Arabia';
+    if (loc.includes('Chad'))          return 'Chad';
     const c = t.company || '';
-    if (c.includes('Karachi'))   return 'Karachi';
-    if (c.includes('Islamabad')) return 'Islamabad';
-    if (c.includes('Lahore'))    return 'Lahore';
+    if (c.includes('Dubai'))         return 'Dubai';
+    if (c.includes('Saudi Arabia'))  return 'Saudi Arabia';
+    if (c.includes('Chad'))          return 'Chad';
+    if (c.includes('Abu Dhabi'))     return 'Abu Dhabi';
+    if (c.includes('Sharjah'))       return 'Sharjah';
+    if (c.includes('Oman'))          return 'Oman';
+    if (c.includes('Qatar'))         return 'Qatar';
+    if (c.includes('Kuwait'))        return 'Kuwait';
     return '';
   };
 
   // Invoice location: check branchOffice → salesperson location → customerCity
   const getInvoiceLocation = (inv: Invoice): string => {
     const b = inv.branchOffice || inv.salespersonLocation || inv.salesperson || inv.customerCity || '';
-    if (b.includes('Karachi'))   return 'Karachi';
-    if (b.includes('Islamabad')) return 'Islamabad';
-    if (b.includes('Lahore'))    return 'Lahore';
+    if (b.includes('Dubai'))         return 'Dubai';
+    if (b.includes('Saudi Arabia'))  return 'Saudi Arabia';
+    if (b.includes('Chad'))          return 'Chad';
+    if (b.includes('Abu Dhabi'))     return 'Abu Dhabi';
+    if (b.includes('Sharjah'))       return 'Sharjah';
+    if (b.includes('Oman'))          return 'Oman';
+    if (b.includes('Qatar'))         return 'Qatar';
+    if (b.includes('Kuwait'))        return 'Kuwait';
     return '';
   };
   const LOCATIONS = useMemo(() => {
     const s = new Set<string>();
     transactions.forEach(t => { const l = getTransactionLocation(t); if (l) s.add(l); });
     invoices.forEach(inv => { const l = getInvoiceLocation(inv); if (l) s.add(l); });
-    return ['Karachi','Islamabad','Lahore'].filter(l => s.has(l));
+    return ['Dubai','Saudi Arabia','Chad','Abu Dhabi','Sharjah','Oman','Qatar','Kuwait'].filter(l => s.has(l));
   }, [transactions, invoices]);
   // Derive available years and months from transaction data
   const availableYears = useMemo(() => {

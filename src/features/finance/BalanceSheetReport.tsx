@@ -58,15 +58,20 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const thisYear = new Date().getFullYear();
   const getTransactionLocation = (t: any): string => {
     const c = t.company || '';
-    if (c.includes('Karachi'))   return 'Karachi';
-    if (c.includes('Islamabad')) return 'Islamabad';
-    if (c.includes('Lahore'))    return 'Lahore';
+    if (c.includes('Dubai'))         return 'Dubai';
+    if (c.includes('Saudi Arabia'))  return 'Saudi Arabia';
+    if (c.includes('Chad'))          return 'Chad';
+    if (c.includes('Abu Dhabi'))     return 'Abu Dhabi';
+    if (c.includes('Sharjah'))       return 'Sharjah';
+    if (c.includes('Oman'))          return 'Oman';
+    if (c.includes('Qatar'))         return 'Qatar';
+    if (c.includes('Kuwait'))        return 'Kuwait';
     return '';
   };
   const LOCATIONS = useMemo(() => {
     const s = new Set<string>();
     transactions.forEach(t => { const l = getTransactionLocation(t); if (l) s.add(l); });
-    return ['Karachi','Islamabad','Lahore'].filter(l => s.has(l));
+    return ['Dubai','Saudi Arabia','Chad','Abu Dhabi','Sharjah','Oman','Qatar','Kuwait'].filter(l => s.has(l));
   }, [transactions]);
 
   // ── Filter state ────────────────────────────────────────────────────────────

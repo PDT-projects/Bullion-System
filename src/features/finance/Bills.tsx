@@ -1,4 +1,4 @@
- import { useState } from 'react';
+import { useState } from 'react';
 import { Transaction, Bank } from '../../App';
 import { Plus, Eye, Trash2, X, Printer, Download, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -23,16 +23,21 @@ const predefinedVendors = [
 ];
 
 const companies = [
-  'Pakistan Detectors Technologies: Islamabad/ Head Office',
-  'Pakistan Detectors Technologies: Karachi',
-  'Pakistan Detectors Technologies: Lahore',
+  'Pakistan Detectors Technologies: Dubai',
+  'Pakistan Detectors Technologies: Saudi Arabia',
+  'Pakistan Detectors Technologies: Chad',
+  'Pakistan Detectors Technologies: Abu Dhabi',
+  'Pakistan Detectors Technologies: Sharjah',
+  'Pakistan Detectors Technologies: Oman',
+  'Pakistan Detectors Technologies: Qatar',
+  'Pakistan Detectors Technologies: Kuwait',
   'Pakistan Detectors Technologies: Bullion RND/ SITE office'
 ];
 
 type BillTransaction = {
   id: string;
   amount: number;
-  paidBy: string; // Person/company who paid (e.g., "Pakistan Detectors - Islamabad")
+  paidBy: string; // Person/company who paid (e.g., "Pakistan Detectors - Dubai")
   paidTo: string; // Vendor receiving payment
   transactionBy: string; // Person who processed the transaction
   mode: 'Cash' | 'Bank' | 'Cheque'; // Payment method
@@ -59,7 +64,7 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
   const [billTransactions, setBillTransactions] = useState<BillTransaction[]>([{
     id: Date.now().toString(),
     amount: 0,
-    paidBy: 'Pakistan Detectors - Islamabad',
+    paidBy: 'Pakistan Detectors - Dubai',
     paidTo: '',
     transactionBy: '',
     mode: 'Cash',
@@ -497,7 +502,7 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
                             value={txn.paidBy}
                             onChange={(e) => updateBillTransaction(txn.id, 'paidBy', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4f46e5] text-sm"
-                            placeholder="e.g., Pakistan Detectors - Islamabad"
+                            placeholder="e.g., Pakistan Detectors - Dubai"
                           />
                         </div>
                         <div>

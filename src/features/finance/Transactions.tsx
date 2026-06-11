@@ -25,9 +25,14 @@ interface Transaction {
 
 // Category structure based on user requirements
 const companies = [
-  'Pakistan Detectors Technologies - Islamabad/Head Office',
-  'Pakistan Detectors Technologies - Karachi',
-  'Pakistan Detectors Technologies - Lahore',
+  'Pakistan Detectors Technologies - Dubai',
+  'Pakistan Detectors Technologies - Saudi Arabia',
+  'Pakistan Detectors Technologies - Chad',
+  'Pakistan Detectors Technologies - Abu Dhabi',
+  'Pakistan Detectors Technologies - Sharjah',
+  'Pakistan Detectors Technologies - Oman',
+  'Pakistan Detectors Technologies - Qatar',
+  'Pakistan Detectors Technologies - Kuwait',
   'Pakistan Detectors Technologies - Bullion',
   'Pakistan Detectors Technologies - RND/SITE Office'
 ];
@@ -102,7 +107,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 1,
     date: '2026-01-19',
-    company: 'Pakistan Detectors Technologies - Islamabad/Head Office',
+    company: 'Pakistan Detectors Technologies - Dubai',
     mainCategory: 'Cash Outflow',
     subCategory: 'Employee salary',
     amount: 45000,
@@ -113,7 +118,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 2,
     date: '2026-01-19',
-    company: 'Pakistan Detectors Technologies - Karachi',
+    company: 'Pakistan Detectors Technologies - Saudi Arabia',
     mainCategory: 'Cash Inflow',
     subCategory: 'Product sale received',
     amount: 125000,
@@ -124,7 +129,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 3,
     date: '2026-01-18',
-    company: 'Pakistan Detectors Technologies - Lahore',
+    company: 'Pakistan Detectors Technologies - Chad',
     mainCategory: 'Cash Outflow',
     subCategory: 'Office Rent',
     amount: 75000,
@@ -135,7 +140,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 4,
     date: '2026-01-18',
-    company: 'Pakistan Detectors Technologies - Islamabad/Head Office',
+    company: 'Pakistan Detectors Technologies - Dubai',
     mainCategory: 'Cash Inflow',
     subCategory: 'Payment received - Customers',
     amount: 85000,
@@ -145,7 +150,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 5,
     date: '2026-01-17',
-    company: 'Pakistan Detectors Technologies - Karachi',
+    company: 'Pakistan Detectors Technologies - Saudi Arabia',
     mainCategory: 'Cash Outflow',
     subCategory: 'Electricity Bill',
     amount: 12500,
