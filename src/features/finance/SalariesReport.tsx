@@ -166,7 +166,7 @@ export function SalariesReport() {
   const paidCount    = useMemo(() => filteredData.filter(r => r.paymentStatus === 'Paid').length, [filteredData]);
 
   const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
 
   const handleExportCSV = () => {
     const headers = ['Employee', 'Month', 'Base Salary', 'Commission', 'Deductions', 'Net Amount', 'Status'];

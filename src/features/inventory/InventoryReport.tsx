@@ -8,7 +8,7 @@ type InventoryReportProps = {
   products: Product[];
 };
 
-const CITIES = ['Karachi', 'Islamabad', 'Lahore'];
+const CITIES = ['Dubai', 'Abu Dhabi', 'Saudi Arabia'];
 
 // ── Multi-select dropdown component ──────────────────────────────────────────
 function MultiSelect({
@@ -261,7 +261,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
 
   const hasActiveFilters =
     selectedCities.length > 0 ||
@@ -310,7 +310,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Inventory Report</h2>
-            <p className="text-sm text-gray-600 mt-1">City-wise product inventory for Pakistan Detectors Technologies</p>
+            <p className="text-sm text-gray-600 mt-1">City-wise product inventory for Middle East Detectors Technologies</p>
           </div>
           <button
             onClick={() => setShowVisualization(!showVisualization)}

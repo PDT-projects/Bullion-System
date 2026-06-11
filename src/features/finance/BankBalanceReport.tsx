@@ -175,7 +175,7 @@ export function BankBalanceReport() {
   const positiveTotal = useMemo(() => filteredData.filter(b => b.balance > 0).reduce((s, b) => s + b.balance, 0), [filteredData]);
 
   const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
 
   const handleExportCSV = () => {
     const headers = ['Bank Name', 'Account Number', 'Balance', 'Status'];
@@ -418,7 +418,7 @@ export function BankBalanceReport() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {bank.transactions[0]
-                        ? new Date(bank.transactions[0].date).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' })
+                        ? new Date(bank.transactions[0].date).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })
                         : <span className="text-gray-400 italic">No transactions</span>
                       }
                     </td>
@@ -504,7 +504,7 @@ export function BankBalanceReport() {
                     : viewBank.transactions.slice(0, 5).map((tx: any, idx: number) => (
                       <div key={idx} className="flex items-center justify-between text-sm p-2.5 bg-gray-50 rounded-lg">
                         <div>
-                          <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                          <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
                           <p className="text-gray-800 font-medium">{tx.description || tx.note || '—'}</p>
                         </div>
                         <span className={`font-semibold text-sm ${(tx.amount || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>

@@ -182,12 +182,12 @@ export function ExpensesReport() {
   const cashTotal   = useMemo(() => filteredData.filter(e => e.mode === 'Cash').reduce((s, e) => s + e.amount, 0), [filteredData]);
 
   const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
 
   const handleExportCSV = () => {
     const headers = ['Date', 'ID', 'Category', 'Amount', 'Mode', 'Bank', 'Notes'];
     const rows = filteredData.map(e => [
-      new Date(e.date).toLocaleDateString('en-PK'),
+      new Date(e.date).toLocaleDateString('en-AE'),
       e.transactionId, e.subCategory, e.amount, e.mode, e.bankName || '', e.notes || ''
     ].map(v => `"${v}"`).join(','));
     const csv  = [headers.join(','), ...rows].join('\n');
@@ -430,7 +430,7 @@ export function ExpensesReport() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex items-center gap-2">
                         <Calendar size={14} className="text-gray-400" />
-                        {new Date(exp.date).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        {new Date(exp.date).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-600">{exp.transactionId}</td>
@@ -495,7 +495,7 @@ export function ExpensesReport() {
             </div>
             <div className="p-6 grid grid-cols-2 gap-5">
               {[
-                ['Date',     new Date(viewExpense.date).toLocaleDateString('en-PK', { year: 'numeric', month: 'long', day: 'numeric' })],
+                ['Date',     new Date(viewExpense.date).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })],
                 ['ID',       viewExpense.transactionId],
                 ['Category', viewExpense.subCategory],
                 ['Mode',     viewExpense.mode],

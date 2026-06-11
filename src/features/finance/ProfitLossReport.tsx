@@ -126,7 +126,7 @@ function resolvePLBucket(t: Transaction): PLBucket {
 // ─── UI helpers ───────────────────────────────────────────────────────────────
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n);
 
 function Row({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
   if (value === 0 && !highlight) return null;
@@ -152,7 +152,7 @@ function SectionTotal({ label, value, colorClass }: { label: string; value: numb
 export function ProfitLossReport({ transactions, invoices = [], onBack }: ProfitLossReportProps) {
   const reportRef = useRef<HTMLDivElement>(null);
 
-  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('PKR');
+  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('AED');
   const [extraCurrencies, setExtraCurrencies]   = useState<CurrencyCode[]>([]);
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
   const displayCurrencyCodes = [primaryCurrency, ...extraCurrencies];
@@ -416,7 +416,7 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
     // Revenue from invoices by month
     for (const inv of filteredInvoices) {
       const key = new Date((inv.date || '').slice(0, 10) + 'T00:00:00')
-        .toLocaleDateString('en-PK', { year: 'numeric', month: 'short' });
+        .toLocaleDateString('en-AE', { year: 'numeric', month: 'short' });
       if (!map.has(key)) map.set(key, { revenue: 0, cogs: 0, expenses: 0 });
       map.get(key)!.revenue += inv.totalAmount;
     }
@@ -426,7 +426,7 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
       const b = resolvePLBucket(t);
       if (!b) continue;
       const key = new Date((t.date || '').slice(0, 10) + 'T00:00:00')
-        .toLocaleDateString('en-PK', { year: 'numeric', month: 'short' });
+        .toLocaleDateString('en-AE', { year: 'numeric', month: 'short' });
       if (!map.has(key)) map.set(key, { revenue: 0, cogs: 0, expenses: 0 });
       const e = map.get(key)!;
       if (b.plMain === 'Cost of Goods Sold (COGS)') e.cogs     += t.amount || 0;
@@ -442,7 +442,7 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
   const handleExportCSV = () => {
     const rows: (string | number)[][] = [
       ['Profit & Loss Report', `${dateFrom} to ${dateTo}`],
-      ['Generated', new Date().toLocaleString('en-PK')],
+      ['Generated', new Date().toLocaleString('en-AE')],
       [],
       ['REVENUE (from Invoices)'],
     ];
@@ -500,7 +500,7 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
 
     // ── helpers ───────────────────────────────────────────────────────────────
     const money = (n: number) =>
-      new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n);
+      new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n);
 
     const checkPage = (needed = 10) => {
       if (y + needed > PH - 12) { pdf.addPage(); y = 18; }
@@ -578,7 +578,7 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'normal');
     pdf.text(
-      `Period: ${periodStr}   |   Generated: ${new Date().toLocaleDateString('en-PK', { dateStyle: 'medium' })}`,
+      `Period: ${periodStr}   |   Generated: ${new Date().toLocaleDateString('en-AE', { dateStyle: 'medium' })}`,
       PW - MR, 9.5, { align: 'right' }
     );
 
@@ -960,7 +960,7 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
             error={ratesError}
             lastUpdated={lastUpdated}
           />
-          {ratesError && <p className="text-sm text-red-600">Failed to load live rates. Showing PKR values only.</p>}
+          {ratesError && <p className="text-sm text-red-600">Failed to load live rates. Showing AED values only.</p>}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

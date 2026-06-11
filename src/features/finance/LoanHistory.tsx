@@ -96,7 +96,7 @@ function Pill({ label, onRemove, colorClass = 'bg-[#4f46e5]/10 text-[#4f46e5]' }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(v);
+  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(v);
 
 const typeColor   = (t: string) => t === 'Receivable' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800';
 const statusColor = (s: string) => s === 'Full' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
@@ -397,7 +397,7 @@ export function LoanHistory({ loans }: LoanHistoryProps) {
                 filtered.map((loan, index) => (
                   <tr key={loan.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100 transition-colors`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {new Date(loan.date).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      {new Date(loan.date).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                       {loan.receiverName || loan.entityName}

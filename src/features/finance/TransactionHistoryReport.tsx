@@ -196,9 +196,9 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
 
   // Format currency
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-PK', {
+    return new Intl.NumberFormat('en-AE', {
       style: 'currency',
-      currency: 'PKR',
+      currency: 'AED',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount);
@@ -476,7 +476,7 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
                     onClick={() => setViewTransaction(transaction)}
                   >
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(transaction.date).toLocaleDateString('en-PK', {
+                      {new Date(transaction.date).toLocaleDateString('en-AE', {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric'
@@ -599,7 +599,7 @@ export function TransactionHistoryReport({ transactions }: TransactionHistoryRep
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <p className="text-sm text-gray-600">Date</p>
-                  <p className="font-medium">{new Date(viewTransaction.date).toLocaleDateString('en-PK')}</p>
+                  <p className="font-medium">{new Date(viewTransaction.date).toLocaleDateString('en-AE')}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Office</p>

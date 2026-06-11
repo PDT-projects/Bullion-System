@@ -32,8 +32,8 @@ type BalanceSheetReportProps = {
 };
 
 const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-PK', {
-    style: 'currency', currency: 'PKR', minimumFractionDigits: 0
+  new Intl.NumberFormat('en-AE', {
+    style: 'currency', currency: 'AED', minimumFractionDigits: 0
   }).format(amount);
 
 const Row = ({ label, value, bold = false }: { label: string; value: number; bold?: boolean }) => (
@@ -83,8 +83,8 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const [customTo,          setCustomTo]          = useState('');
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
-  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('PKR');
-  const [extraCurrencies, setExtraCurrencies]   = useState<CurrencyCode[]>(['USD', 'AED', 'SAR']);
+  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('AED');
+  const [extraCurrencies, setExtraCurrencies]   = useState<CurrencyCode[]>(['USD', 'SAR', 'PKR']);
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
   const reportCurrencyCodes: CurrencyCode[] = [primaryCurrency, ...extraCurrencies];
 
@@ -591,31 +591,33 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
       {/* ── Manual BS Classification Panel ── */}
       {bsClassifiedCount > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-indigo-200 overflow-hidden">
+        <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-800 overflow-hidden">
           <button
             onClick={() => setShowBSClassified(v => !v)}
-            className="w-full flex items-center justify-between p-5 hover:bg-indigo-50 transition-colors"
+            className="w-full flex items-center justify-between p-5 hover:bg-gray-800 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Tag size={16} className="text-indigo-600" />
-              <h2 className="text-base font-bold text-gray-900">
+              <Tag size={16} className="text-gray-200" />
+              <h2 className="text-base font-bold text-gray-100">
                 Balance Sheet — Manual Classification
               </h2>
-              <span className="bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+              <span className="bg-gray-800 text-gray-200 text-xs font-semibold px-2 py-0.5 rounded-full">
                 {bsClassifiedCount} transactions
               </span>
             </div>
             {showBSClassified
-              ? <ChevronUp size={20} className="text-gray-500" />
-              : <ChevronDown size={20} className="text-gray-500" />
+              ? <ChevronUp size={20} className="text-gray-400" />
+              : <ChevronDown size={20} className="text-gray-400" />
             }
           </button>
           {showBSClassified && (
-            <div className="p-5 border-t border-indigo-100 space-y-6">
+            <div className="p-5 border-t border-gray-800 space-y-6">
               <p className="text-xs text-gray-400">
                 Transactions with a manual Balance Sheet category override set in the transaction form.
                 These reflect your deliberate classification and are shown here for reporting.
               </p>
+
+
 
               {Array.from(bsClassified.entries()).map(([mainCat, subMap]) => (
                 <div key={mainCat}>
@@ -694,6 +696,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           {bs.balanced ? '✓ Balance sheet is balanced' : '⚠ Minor rounding difference detected'}
         </p>
       </div>
-    </div>
+     </div>
   );
 }

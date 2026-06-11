@@ -25,16 +25,16 @@ interface Transaction {
 
 // Category structure based on user requirements
 const companies = [
-  'Pakistan Detectors Technologies - Dubai',
-  'Pakistan Detectors Technologies - Saudi Arabia',
-  'Pakistan Detectors Technologies - Chad',
-  'Pakistan Detectors Technologies - Abu Dhabi',
-  'Pakistan Detectors Technologies - Sharjah',
-  'Pakistan Detectors Technologies - Oman',
-  'Pakistan Detectors Technologies - Qatar',
-  'Pakistan Detectors Technologies - Kuwait',
-  'Pakistan Detectors Technologies - Bullion',
-  'Pakistan Detectors Technologies - RND/SITE Office'
+  'Middle East Detectors Technologies - Dubai',
+  'Middle East Detectors Technologies - Saudi Arabia',
+  'Middle East Detectors Technologies - Chad',
+  'Middle East Detectors Technologies - Abu Dhabi',
+  'Middle East Detectors Technologies - Sharjah',
+  'Middle East Detectors Technologies - Oman',
+  'Middle East Detectors Technologies - Qatar',
+  'Middle East Detectors Technologies - Kuwait',
+  'Middle East Detectors Technologies - Bullion',
+  'Middle East Detectors Technologies - RND/SITE Office'
 ];
 
 const mainCategories = ['Cash Inflow', 'Cash Outflow', 'Loans & Advances'];
@@ -107,7 +107,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 1,
     date: '2026-01-19',
-    company: 'Pakistan Detectors Technologies - Dubai',
+    company: 'Middle East Detectors Technologies - Dubai',
     mainCategory: 'Cash Outflow',
     subCategory: 'Employee salary',
     amount: 45000,
@@ -118,7 +118,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 2,
     date: '2026-01-19',
-    company: 'Pakistan Detectors Technologies - Saudi Arabia',
+    company: 'Middle East Detectors Technologies - Saudi Arabia',
     mainCategory: 'Cash Inflow',
     subCategory: 'Product sale received',
     amount: 125000,
@@ -129,7 +129,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 3,
     date: '2026-01-18',
-    company: 'Pakistan Detectors Technologies - Chad',
+    company: 'Middle East Detectors Technologies - Chad',
     mainCategory: 'Cash Outflow',
     subCategory: 'Office Rent',
     amount: 75000,
@@ -140,7 +140,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 4,
     date: '2026-01-18',
-    company: 'Pakistan Detectors Technologies - Dubai',
+    company: 'Middle East Detectors Technologies - Dubai',
     mainCategory: 'Cash Inflow',
     subCategory: 'Payment received - Customers',
     amount: 85000,
@@ -150,7 +150,7 @@ const initialTransactions: Transaction[] = [
   {
     id: 5,
     date: '2026-01-17',
-    company: 'Pakistan Detectors Technologies - Saudi Arabia',
+    company: 'Middle East Detectors Technologies - Saudi Arabia',
     mainCategory: 'Cash Outflow',
     subCategory: 'Electricity Bill',
     amount: 12500,
@@ -334,7 +334,7 @@ export function Transactions() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="amount">Amount (PKR)</Label>
+                <Label htmlFor="amount">Amount (AED)</Label>
                 <Input
                   id="amount"
                   type="number"
@@ -399,7 +399,7 @@ export function Transactions() {
             <div className="space-y-2">
               <p className="text-sm text-gray-500">Total Inflow</p>
               <h3 className="text-2xl font-bold text-[#10b981]">
-                PKR {transactions
+                AED {transactions
                   .filter(t => t.mainCategory === 'Cash Inflow')
                   .reduce((sum, t) => sum + t.amount, 0)
                   .toLocaleString()}
@@ -412,7 +412,7 @@ export function Transactions() {
             <div className="space-y-2">
               <p className="text-sm text-gray-500">Total Outflow</p>
               <h3 className="text-2xl font-bold text-[#ef4444]">
-                PKR {transactions
+                AED {transactions
                   .filter(t => t.mainCategory === 'Cash Outflow')
                   .reduce((sum, t) => sum + t.amount, 0)
                   .toLocaleString()}
@@ -425,7 +425,7 @@ export function Transactions() {
             <div className="space-y-2">
               <p className="text-sm text-gray-500">Net Balance</p>
               <h3 className="text-2xl font-bold text-[#4f46e5]">
-                PKR {(transactions
+                AED {(transactions
                   .filter(t => t.mainCategory === 'Cash Inflow')
                   .reduce((sum, t) => sum + t.amount, 0) -
                   transactions
@@ -477,7 +477,7 @@ export function Transactions() {
               {filteredTransactions.map((transaction) => (
                 <TableRow key={transaction.id}>
                   <TableCell className="font-medium">{transaction.date}</TableCell>
-                  <TableCell className="text-sm max-w-xs truncate">{transaction.company.replace('Pakistan Detectors Technologies - ', '')}</TableCell>
+                  <TableCell className="text-sm max-w-xs truncate">{transaction.company.replace('Middle East Detectors Technologies - ', '')}</TableCell>
                   <TableCell>
                     <Badge variant={transaction.mainCategory === 'Cash Inflow' ? 'default' : 'destructive'}>
                       {transaction.mainCategory}
@@ -485,7 +485,7 @@ export function Transactions() {
                   </TableCell>
                   <TableCell className="text-sm">{transaction.subCategory}</TableCell>
                   <TableCell className={`font-semibold ${transaction.mainCategory === 'Cash Inflow' ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
-                    {transaction.mainCategory === 'Cash Inflow' ? '+' : '-'} PKR {transaction.amount.toLocaleString()}
+                    {transaction.mainCategory === 'Cash Inflow' ? '+' : '-'} AED {transaction.amount.toLocaleString()}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">{transaction.mode}</Badge>
@@ -517,7 +517,7 @@ export function Transactions() {
                                 <div>
                                   <p className="text-sm text-gray-500">Amount</p>
                                   <p className={`font-bold text-lg ${viewTransaction.mainCategory === 'Cash Inflow' ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
-                                    PKR {viewTransaction.amount.toLocaleString()}
+                                    AED {viewTransaction.amount.toLocaleString()}
                                   </p>
                                 </div>
                                 <div className="col-span-2">
@@ -617,7 +617,7 @@ export function Transactions() {
                               </Select>
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="edit-amount">Amount (PKR)</Label>
+                              <Label htmlFor="edit-amount">Amount (AED)</Label>
                               <Input
                                 id="edit-amount"
                                 type="number"

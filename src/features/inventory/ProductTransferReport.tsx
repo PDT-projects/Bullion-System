@@ -189,7 +189,7 @@ export function ProductTransferReport({ transferLogs }: ProductTransferReportPro
     const rows: string[] = [];
     filteredLogs.forEach(log => {
       rows.push([
-        new Date(log.timestamp).toLocaleString('en-PK'), log.action, log.productName,
+        new Date(log.timestamp).toLocaleString('en-AE'), log.action, log.productName,
         log.brandName, log.modelName, log.serialNumbers.join('; '),
         log.fromLocation || '', log.toLocation || '', log.oldStatus || '',
         log.newStatus || '', log.quantity.toString(), log.performedBy, log.notes || ''
@@ -341,7 +341,7 @@ export function ProductTransferReport({ transferLogs }: ProductTransferReportPro
                 filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex items-center gap-2"><Calendar size={14} className="text-gray-400" />{new Date(log.timestamp).toLocaleString('en-PK')}</div>
+                      <div className="flex items-center gap-2"><Calendar size={14} className="text-gray-400" />{new Date(log.timestamp).toLocaleString('en-AE')}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${getActionColor(log.action)}`}>
@@ -389,7 +389,7 @@ export function ProductTransferReport({ transferLogs }: ProductTransferReportPro
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-sm text-gray-600">Timestamp</p><p className="font-medium text-gray-900">{new Date(viewLog.timestamp).toLocaleString('en-PK')}</p></div>
+                <div><p className="text-sm text-gray-600">Timestamp</p><p className="font-medium text-gray-900">{new Date(viewLog.timestamp).toLocaleString('en-AE')}</p></div>
                 <div>
                   <p className="text-sm text-gray-600">Action</p>
                   <span className={`inline-flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full ${getActionColor(viewLog.action)}`}>

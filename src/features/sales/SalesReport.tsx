@@ -15,7 +15,7 @@ type SalesReportProps = {
   products: Product[];
 };
 
-const BRANCH_LOCATIONS = ['Islamabad', 'Karachi', 'Lahore'] as const;
+const BRANCH_LOCATIONS = ['Abu Dhabi', 'Dubai', 'Saudi Arabia'] as const;
 type BranchLocation = typeof BRANCH_LOCATIONS[number];
 
 function normalizeBranch(raw: string): string {
@@ -232,13 +232,13 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
   };
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
 
   const hasActiveFilters = dateFrom || dateTo || selectedBranches.length > 0 || selectedSalespersons.length > 0 || selectedDeliveryStatuses.length > 0 || selectedPayStatuses.length > 0;
 
-  const BRANCH_COLORS: Record<string, string> = { Islamabad: 'border-blue-400 bg-blue-50', Karachi: 'border-emerald-400 bg-emerald-50', Lahore: 'border-purple-400 bg-purple-50' };
-  const BRANCH_TEXT: Record<string, string> = { Islamabad: 'text-blue-700', Karachi: 'text-emerald-700', Lahore: 'text-purple-700' };
-  const BRANCH_BTN: Record<string, string> = { Islamabad: 'bg-blue-600 hover:bg-blue-700', Karachi: 'bg-emerald-600 hover:bg-emerald-700', Lahore: 'bg-purple-600 hover:bg-purple-700' };
+  const BRANCH_COLORS: Record<string, string> = { 'Abu Dhabi': 'border-blue-400 bg-blue-50', Dubai: 'border-emerald-400 bg-emerald-50', 'Saudi Arabia': 'border-purple-400 bg-purple-50' };
+  const BRANCH_TEXT: Record<string, string> = { 'Abu Dhabi': 'text-blue-700', Dubai: 'text-emerald-700', 'Saudi Arabia': 'text-purple-700' };
+  const BRANCH_BTN: Record<string, string> = { 'Abu Dhabi': 'bg-blue-600 hover:bg-blue-700', Dubai: 'bg-emerald-600 hover:bg-emerald-700', 'Saudi Arabia': 'bg-purple-600 hover:bg-purple-700' };
   const BRANCH_CHART_COLORS = ['#3b82f6', '#10b981', '#8b5cf6'];
 
   return (
@@ -476,7 +476,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       {item.branch ? (
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full
-                          ${item.branch === 'Islamabad' ? 'bg-blue-100 text-blue-700' : item.branch === 'Karachi' ? 'bg-emerald-100 text-emerald-700' : item.branch === 'Lahore' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                          ${item.branch === 'Abu Dhabi' ? 'bg-blue-100 text-blue-700' : item.branch === 'Dubai' ? 'bg-emerald-100 text-emerald-700' : item.branch === 'Saudi Arabia' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
                           <Building2 size={10} />{item.branch}
                         </span>
                       ) : <span className="text-gray-300 text-xs">—</span>}
@@ -572,7 +572,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
                   <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Building2 size={11} /> Branch & Sales Info</p>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     {viewInvoice.salesperson && <div><p className="text-gray-400 text-xs">Salesperson</p><p className="font-medium text-gray-900">{viewInvoice.salesperson}</p></div>}
-                    {viewInvoice.salespersonLocation && <div><p className="text-gray-400 text-xs">Branch / Office</p><span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full mt-0.5 ${viewInvoice.salespersonLocation === 'Islamabad' ? 'bg-blue-100 text-blue-700' : viewInvoice.salespersonLocation === 'Karachi' ? 'bg-emerald-100 text-emerald-700' : viewInvoice.salespersonLocation === 'Lahore' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}><Building2 size={10} />{viewInvoice.salespersonLocation}</span></div>}
+                    {viewInvoice.salespersonLocation && <div><p className="text-gray-400 text-xs">Branch / Office</p><span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full mt-0.5 ${viewInvoice.salespersonLocation === 'Abu Dhabi' ? 'bg-blue-100 text-blue-700' : viewInvoice.salespersonLocation === 'Dubai' ? 'bg-emerald-100 text-emerald-700' : viewInvoice.salespersonLocation === 'Saudi Arabia' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}><Building2 size={10} />{viewInvoice.salespersonLocation}</span></div>}
                     {viewInvoice.productLocation && <div><p className="text-gray-400 text-xs">Product / Stock Location</p><p className="font-medium text-gray-900">{viewInvoice.productLocation}</p></div>}
                     {viewInvoice.clientDealBy && <div><p className="text-gray-400 text-xs">Client Deal By</p><p className="font-medium text-gray-900">{viewInvoice.clientDealBy}</p></div>}
                     {viewInvoice.referralBy && <div><p className="text-gray-400 text-xs">Referral By</p><p className="font-medium text-gray-900">{viewInvoice.referralBy}</p></div>}

@@ -172,10 +172,10 @@ export function FixedBillsReport() {
   const totalAll     = useMemo(() => filteredData.reduce((s, b) => s + b.amount, 0), [filteredData]);
 
   const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
 
   const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
+    new Date(d).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' });
 
   const handleExportCSV = () => {
     const headers = ['Vendor', 'Bill Number', 'Category', 'Amount', 'Due Date', 'Status', 'Recurring'];
