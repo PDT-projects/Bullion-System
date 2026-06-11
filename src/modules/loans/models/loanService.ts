@@ -2,6 +2,7 @@
  * Loans Module - Business Logic Service
  * Pure functions: filtering, sorting, validation, statistics, formatting.
  * No localStorage. No Firestore calls. All persistence goes through LoanFirebaseService.
+ * Currency: AED (UAE Dirham)
  */
 
 import type {
@@ -18,16 +19,17 @@ import type {
 // ==================== FORMATTING ====================
 
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-PK', {
+  return new Intl.NumberFormat('en-AE', {
     style: 'currency',
-    currency: 'PKR',
-    minimumFractionDigits: 0,
+    currency: 'AED',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount);
 };
 
 export const formatDate = (dateString: string): string => {
   if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('en-PK', {
+  return new Date(dateString).toLocaleDateString('en-AE', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -179,7 +181,7 @@ export const calculateStatistics = (loans: Loan[]): LoanStatistics => {
 // ==================== EXPORT ====================
 
 export const exportLoansToCSV = (loans: Loan[]): string => {
-  const headers = ['ID','Entity Name','Receiver Name','Receiver Type','Loan Type','Category','Amount','Paid','Remaining','Status','Date','Payment Mode','Bank Name','Employee Name'];
+  const headers = ['ID','Entity Name','Receiver Name','Receiver Type','Loan Type','Category','Amount (AED)','Paid (AED)','Remaining (AED)','Status','Date','Payment Mode','Bank Name','Employee Name'];
   const rows = loans.map(l => [l.id, l.entityName, l.receiverName, l.receiverType, l.type, l.loanType, l.loanAmount, l.paid, l.remaining, l.status, l.date, l.mode, l.bankName || '', l.employeeName || '']);
   return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 };

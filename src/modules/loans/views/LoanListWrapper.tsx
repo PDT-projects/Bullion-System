@@ -1,6 +1,7 @@
 /**
  * Loan List Wrapper
  * Connects list ViewModel to View.
+ * Currency: AED (UAE Dirham)
  *
  * Change: accepts an optional `defaultType` prop.
  * Pass defaultType="Payable"    → Payable Loans screen

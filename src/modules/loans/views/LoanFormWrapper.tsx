@@ -2,6 +2,7 @@
 // Fetches employees and banks from Firestore before mounting the ViewModel.
 // The inner component is only rendered once both arrays are ready,
 // preventing useMemo in useLoanFormViewModel from calling .find on a non-array.
+// Currency: AED (UAE Dirham)
 
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';

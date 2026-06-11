@@ -1,6 +1,7 @@
 // Loans Module - Loan Payment Wrapper
 // Fetches banks from Firestore before mounting the ViewModel.
 // The inner component is only rendered once the banks array is ready.
+// Currency: AED (UAE Dirham)
 
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';

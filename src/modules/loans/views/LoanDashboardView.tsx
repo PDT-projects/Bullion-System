@@ -1,6 +1,7 @@
 /**
  * Loan Dashboard View
  * Presentational component for the loans dashboard.
+ * Currency: AED (UAE Dirham)
  */
 
 import React from 'react';

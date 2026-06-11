@@ -1,6 +1,7 @@
 /**
  * Loan Dashboard Wrapper
  * Connects dashboard ViewModel to View.
+ * Currency: AED (UAE Dirham)
  */
 
 import React from 'react';

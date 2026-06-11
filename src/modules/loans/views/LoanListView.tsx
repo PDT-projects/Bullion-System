@@ -123,7 +123,13 @@ export const LoanListView: React.FC<LoanListViewProps> = ({
           <button onClick={onExport} className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             <Download className="h-4 w-4" /> Export
           </button>
-          <button onClick={onCreate} className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors">
+          <button
+            onClick={onCreate}
+            style={{ backgroundColor: '#374151' }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#1f2937')}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#374151')}
+            className="flex items-center gap-2 px-4 py-2 text-white rounded-lg transition-colors"
+          >
             <Plus className="h-4 w-4" /> Create Loan
           </button>
         </div>
