@@ -2,6 +2,10 @@
 // UPDATED: Commission calculated from internal details (deductionCharges + importCharges)
 
 import React, { useState } from 'react';
+
+// ── Currency helpers ──────────────────────────────────────────────────────────
+type DisplayCurrency = 'PKR' | 'AED';
+const AED_TO_PKR = 76.03;
 import { Download, FileText, Filter, X, Eye, Loader2, TrendingUp, ChevronDown, ChevronRight } from 'lucide-react';
 import { Invoice, InvoiceStats } from '../models/types';
 
@@ -113,6 +117,15 @@ export function InvoiceReportView({
   // Commission rate can be adjusted by the user (shown as %)
   const [commRate, setCommRate] = useState(DEFAULT_COMMISSION_RATE);
   const [showCommSection, setShowCommSection] = useState(true);
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('PKR');
+
+  const formatDisplay = (pkrAmount: number): string => {
+    if (displayCurrency === 'AED') {
+      const aed = pkrAmount / AED_TO_PKR;
+      return `د.إ ${new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(aed)} AED`;
+    }
+    return formatDisplay(pkrAmount);
+  };
 
   const commStats = calcCommissionStats(filteredInvoices, commRate);
 
@@ -132,10 +145,27 @@ export function InvoiceReportView({
           <h2 className="text-2xl font-bold text-gray-900">Invoice Reports</h2>
           <p className="text-gray-600">Generate and export invoice reports</p>
         </div>
-        <button onClick={handleExportCSV}
-          className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors">
-          <Download size={20} /> Export CSV
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Currency Toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
+            {(['PKR', 'AED'] as DisplayCurrency[]).map(cur => (
+              <button
+                key={cur}
+                onClick={() => setDisplayCurrency(cur)}
+                style={displayCurrency === cur ? { backgroundColor: '#374151', color: '#ffffff' } : {}}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  displayCurrency === cur ? 'shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {cur === 'PKR' ? '₨ PKR' : 'د.إ AED'}
+              </button>
+            ))}
+          </div>
+          <button onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] transition-colors">
+            <Download size={20} /> Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -144,7 +174,7 @@ export function InvoiceReportView({
           { label: 'Total Invoices', value: stats.totalCount,                    color: 'text-gray-900' },
           { label: 'Paid',           value: stats.paidCount,                     color: 'text-green-600' },
           { label: 'Unpaid',         value: stats.unpaidCount,                   color: 'text-red-600' },
-          { label: 'Total Amount',   value: formatCurrency(stats.totalAmount),   color: 'text-gray-900' },
+          { label: 'Total Amount',   value: formatDisplay(stats.totalAmount),   color: 'text-gray-900' },
         ].map(s => (
           <div key={s.label} className="bg-white p-4 rounded-lg border border-gray-200">
             <p className="text-sm text-gray-600">{s.label}</p>
@@ -183,11 +213,11 @@ export function InvoiceReportView({
           <div className="border-t border-gray-200 p-4">
             <div className="grid grid-cols-5 gap-4 mb-4">
               {[
-                { label: 'Total Sales',        value: formatCurrency(filteredInvoices.reduce((s,i) => s + i.totalAmount, 0)), color: 'text-gray-900' },
-                { label: 'Delivery Deductions',value: formatCurrency(commStats.totalDeductions),    color: 'text-red-600'   },
-                { label: 'Net Sales',          value: formatCurrency(commStats.totalNetSale),       color: 'text-gray-900'  },
-                { label: 'Import Charges',     value: formatCurrency(commStats.totalImportCharges), color: 'text-orange-600'},
-                { label: `Commission (${(commRate * 100).toFixed(1)}%)`, value: formatCurrency(commStats.totalCommission), color: 'text-indigo-700' },
+                { label: 'Total Sales',        value: formatDisplay(filteredInvoices.reduce((s,i) => s + i.totalAmount, 0)), color: 'text-gray-900' },
+                { label: 'Delivery Deductions',value: formatDisplay(commStats.totalDeductions),    color: 'text-red-600'   },
+                { label: 'Net Sales',          value: formatDisplay(commStats.totalNetSale),       color: 'text-gray-900'  },
+                { label: 'Import Charges',     value: formatDisplay(commStats.totalImportCharges), color: 'text-orange-600'},
+                { label: `Commission (${(commRate * 100).toFixed(1)}%)`, value: formatDisplay(commStats.totalCommission), color: 'text-indigo-700' },
               ].map(s => (
                 <div key={s.label} className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-xs text-gray-500 mb-1">{s.label}</p>
@@ -197,6 +227,7 @@ export function InvoiceReportView({
             </div>
             <p className="text-xs text-gray-400">
               Formula: Commission = (Total – Delivery Deductions – Import Charges) × {(commRate * 100).toFixed(1)}%
+              {displayCurrency === 'AED' && <span className="ml-2 text-gray-300">· Rate: 1 AED = {AED_TO_PKR} PKR</span>}
             </p>
           </div>
         )}
@@ -281,15 +312,15 @@ export function InvoiceReportView({
                   <td className="px-3 py-3 text-xs text-gray-600">{inv.customerCity || '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-600">{inv.salesperson || '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-600">{inv.products.length} item(s)</td>
-                  <td className="px-3 py-3 text-sm font-medium text-gray-900">{formatCurrency(inv.totalAmount)}</td>
+                  <td className="px-3 py-3 text-sm font-medium text-gray-900">{formatDisplay(inv.totalAmount)}</td>
                   <td className="px-3 py-3 text-xs text-red-600">
-                    {comm.deductionCharges > 0 ? `−${formatCurrency(comm.deductionCharges)}` : '—'}
+                    {comm.deductionCharges > 0 ? `−${formatDisplay(comm.deductionCharges)}` : '—'}
                   </td>
                   <td className="px-3 py-3 text-xs text-orange-600">
-                    {comm.importCharges > 0 ? `−${formatCurrency(comm.importCharges)}` : '—'}
+                    {comm.importCharges > 0 ? `−${formatDisplay(comm.importCharges)}` : '—'}
                   </td>
                   <td className="px-3 py-3 text-xs font-semibold text-indigo-700">
-                    {formatCurrency(comm.commissionAmount)}
+                    {formatDisplay(comm.commissionAmount)}
                   </td>
                   <td className="px-3 py-3">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${inv.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -359,8 +390,8 @@ export function InvoiceReportView({
                     <tr key={i} className="border-b">
                       <td className="px-3 py-2">{p.productName}</td>
                       <td className="px-3 py-2">{p.quantity}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(p.price)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(p.total)}</td>
+                      <td className="px-3 py-2 text-right">{formatDisplay(p.price)}</td>
+                      <td className="px-3 py-2 text-right">{formatDisplay(p.total)}</td>
                     </tr>
                   ))}</tbody>
                 </table>
@@ -376,19 +407,19 @@ export function InvoiceReportView({
                       <TrendingUp size={14} /> Commission Breakdown
                     </p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="flex justify-between"><span className="text-gray-600">Total Amount</span><span className="font-medium">{formatCurrency(c.totalAmount)}</span></div>
-                      {c.deductionCharges > 0 && <div className="flex justify-between"><span className="text-gray-600">Delivery Deduction</span><span className="text-red-600 font-medium">−{formatCurrency(c.deductionCharges)}</span></div>}
+                      <div className="flex justify-between"><span className="text-gray-600">Total Amount</span><span className="font-medium">{formatDisplay(c.totalAmount)}</span></div>
+                      {c.deductionCharges > 0 && <div className="flex justify-between"><span className="text-gray-600">Delivery Deduction</span><span className="text-red-600 font-medium">−{formatDisplay(c.deductionCharges)}</span></div>}
                       {importChgs > 0 && (
                         <>
-                          {viewInvoice.cargoAmount   ? <div className="flex justify-between"><span className="text-gray-600">Cargo</span><span className="text-orange-600 font-medium">−{formatCurrency(viewInvoice.cargoAmount)}</span></div> : null}
-                          {viewInvoice.customsAmount ? <div className="flex justify-between"><span className="text-gray-600">Customs</span><span className="text-orange-600 font-medium">−{formatCurrency(viewInvoice.customsAmount)}</span></div> : null}
-                          {viewInvoice.agentAmount   ? <div className="flex justify-between"><span className="text-gray-600">Agent ({viewInvoice.agentDetails || ''})</span><span className="text-orange-600 font-medium">−{formatCurrency(viewInvoice.agentAmount)}</span></div> : null}
+                          {viewInvoice.cargoAmount   ? <div className="flex justify-between"><span className="text-gray-600">Cargo</span><span className="text-orange-600 font-medium">−{formatDisplay(viewInvoice.cargoAmount)}</span></div> : null}
+                          {viewInvoice.customsAmount ? <div className="flex justify-between"><span className="text-gray-600">Customs</span><span className="text-orange-600 font-medium">−{formatDisplay(viewInvoice.customsAmount)}</span></div> : null}
+                          {viewInvoice.agentAmount   ? <div className="flex justify-between"><span className="text-gray-600">Agent ({viewInvoice.agentDetails || ''})</span><span className="text-orange-600 font-medium">−{formatDisplay(viewInvoice.agentAmount)}</span></div> : null}
                         </>
                       )}
-                      <div className="flex justify-between border-t pt-1 col-span-2"><span className="text-gray-700 font-medium">Commission Base</span><span className="font-semibold">{formatCurrency(c.commissionBase)}</span></div>
+                      <div className="flex justify-between border-t pt-1 col-span-2"><span className="text-gray-700 font-medium">Commission Base</span><span className="font-semibold">{formatDisplay(c.commissionBase)}</span></div>
                       <div className="flex justify-between col-span-2">
                         <span className="text-indigo-700 font-semibold">Commission ({(commRate * 100).toFixed(1)}%)</span>
-                        <span className="text-indigo-700 font-bold text-sm">{formatCurrency(c.commissionAmount)}</span>
+                        <span className="text-indigo-700 font-bold text-sm">{formatDisplay(c.commissionAmount)}</span>
                       </div>
                     </div>
                   </div>
@@ -397,7 +428,14 @@ export function InvoiceReportView({
 
               <div className="border-t pt-4 flex justify-between items-center">
                 <p className="text-lg font-bold">Total Amount</p>
-                <p className="text-2xl font-bold text-[#4f46e5]">{formatCurrency(viewInvoice.totalAmount)}</p>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-[#4f46e5]">{formatDisplay(viewInvoice.totalAmount)}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    ≈ {displayCurrency === 'PKR'
+                      ? `د.إ ${(viewInvoice.totalAmount / AED_TO_PKR).toFixed(2)} AED`
+                      : `₨ ${Math.round(viewInvoice.totalAmount * AED_TO_PKR).toLocaleString('en-PK')} PKR`}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

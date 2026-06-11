@@ -1,6 +1,15 @@
 // Invoice Module - List View
 
 import React, { useState } from 'react';
+
+// ── Currency helpers ──────────────────────────────────────────────────────────
+type DisplayCurrency = 'PKR' | 'AED';
+const AED_TO_PKR = 76.03;
+
+function convertToDisplay(pkrAmount: number, currency: DisplayCurrency): number {
+  return currency === 'AED' ? pkrAmount / AED_TO_PKR : pkrAmount;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 import {
   FileText, Plus, Search, Eye, Edit, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin,
@@ -72,6 +81,15 @@ export function InvoiceListView({
   };
 
   const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('PKR');
+
+  const formatDisplay = (pkrAmount: number): string => {
+    const converted = convertToDisplay(pkrAmount, displayCurrency);
+    if (displayCurrency === 'AED') {
+      return `د.إ ${new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(converted)} AED`;
+    }
+    return formatCurrency(pkrAmount);
+  };
 
   // FIX: Added toast.error() so the user sees feedback when PDF generation
   // fails, instead of the error being silently swallowed in the catch block.
@@ -112,12 +130,29 @@ export function InvoiceListView({
             {filteredInvoices.length} of {invoices.length} invoices shown
           </p>
         </div>
-        <button
-          onClick={onCreateInvoice}
-          style={{ backgroundColor: '#1f2937', color: '#ffffff', border: '1px solid #374151' }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg active:scale-95 transition-all font-semibold shadow-md whitespace-nowrap flex-shrink-0">
-          <Plus size={18} /> Create Invoice
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Currency Toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
+            {(['PKR', 'AED'] as DisplayCurrency[]).map(cur => (
+              <button
+                key={cur}
+                onClick={() => setDisplayCurrency(cur)}
+                style={displayCurrency === cur ? { backgroundColor: '#374151', color: '#ffffff' } : {}}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  displayCurrency === cur ? 'shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {cur === 'PKR' ? '₨ PKR' : 'د.إ AED'}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={onCreateInvoice}
+            style={{ backgroundColor: '#1f2937', color: '#ffffff', border: '1px solid #374151' }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg active:scale-95 transition-all font-semibold shadow-md whitespace-nowrap flex-shrink-0">
+            <Plus size={18} /> Create Invoice
+          </button>
+        </div>
       </div>
 
       {/* ── Stats ── */}
@@ -126,7 +161,7 @@ export function InvoiceListView({
           { label: 'Total Invoices', value: stats.totalCount,                  color: 'text-gray-900' },
           { label: 'Paid',           value: stats.paidCount,                   color: 'text-green-600' },
           { label: 'Unpaid',         value: stats.unpaidCount,                 color: 'text-red-600'   },
-          { label: 'Total Amount',   value: formatCurrency(stats.totalAmount), color: 'text-gray-900'  },
+          { label: 'Total Amount',   value: formatDisplay(stats.totalAmount), color: 'text-gray-900'  },
         ].map(s => (
           <div key={s.label} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
             <p className="text-xs text-gray-500 mb-1">{s.label}</p>
@@ -218,7 +253,7 @@ export function InvoiceListView({
               <tr>
                 {[
                   'Invoice #', 'Date', 'Customer', 'Branch / City',
-                  'Salesperson', 'Products', 'Amount', 'Delivery',
+                  'Salesperson', 'Products', `Amount (${displayCurrency})`, 'Delivery',
                   'Payment', 'Status', 'Actions',
                 ].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
@@ -284,10 +319,10 @@ export function InvoiceListView({
                   </td>
 
                   <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
-                    {formatCurrency(invoice.totalAmount)}
+                    {formatDisplay(invoice.totalAmount)}
                     {(invoice.deductionCharges || 0) > 0 && (
                       <p className="text-xs text-red-500 font-normal">
-                        −{formatCurrency(invoice.deductionCharges)} deduction
+                        −{formatDisplay(invoice.deductionCharges)} deduction
                       </p>
                     )}
                   </td>
@@ -318,7 +353,7 @@ export function InvoiceListView({
                         )}
                         {invoice.paymentStatus === 'Partial' && (
                           <p className="text-xs text-orange-600 font-medium">
-                            Partial · {formatCurrency(invoice.paidAmount || 0)} paid
+                            Partial · {formatDisplay(invoice.paidAmount || 0)} paid
                           </p>
                         )}
                       </div>
@@ -463,7 +498,7 @@ export function InvoiceListView({
                             {p.brandName && <p className="text-xs text-gray-400">{p.brandName} · {p.modelName}</p>}
                             {p.category && <p className="text-xs text-gray-400">{p.category}</p>}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-700">{p.quantity} × {formatCurrency(p.price)}</td>
+                          <td className="px-3 py-2.5 text-gray-700">{p.quantity} × {formatDisplay(p.price)}</td>
                           <td className="px-3 py-2.5">
                             <div className="flex flex-wrap gap-1">
                               {(p.serialNumbers || []).map(s => (
@@ -471,7 +506,7 @@ export function InvoiceListView({
                               ))}
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(p.total)}</td>
+                          <td className="px-3 py-2.5 text-right font-medium">{formatDisplay(p.total)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -523,8 +558,8 @@ export function InvoiceListView({
                   )}
                   {viewingInvoice.paymentStatus === 'Partial' && (
                     <>
-                      <div><p className="text-gray-500">Paid Amount</p><p className="font-medium text-green-700">{formatCurrency(viewingInvoice.paidAmount || 0)}</p></div>
-                      <div><p className="text-gray-500">Remaining</p><p className="font-medium text-red-600">{formatCurrency(viewingInvoice.remainingAmount || 0)}</p></div>
+                      <div><p className="text-gray-500">Paid Amount</p><p className="font-medium text-green-700">{formatDisplay(viewingInvoice.paidAmount || 0)}</p></div>
+                      <div><p className="text-gray-500">Remaining</p><p className="font-medium text-red-600">{formatDisplay(viewingInvoice.remainingAmount || 0)}</p></div>
                     </>
                   )}
                   {viewingInvoice.paymentMode === 'Online' && viewingInvoice.bankName && (
@@ -544,20 +579,29 @@ export function InvoiceListView({
               <div className="border border-gray-200 rounded-lg p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Subtotal</span>
-                  <span className="font-medium">{formatCurrency(viewingInvoice.totalAmount)}</span>
+                  <span className="font-medium">{formatDisplay(viewingInvoice.totalAmount)}</span>
                 </div>
                 {(viewingInvoice.deductionCharges || 0) > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Deduction Charges</span>
-                    <span className="text-red-600 font-medium">−{formatCurrency(viewingInvoice.deductionCharges)}</span>
+                    <span className="text-red-600 font-medium">−{formatDisplay(viewingInvoice.deductionCharges)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-1">
                   <span className="text-base font-bold text-gray-900">Net Total</span>
-                  <span className="text-2xl font-bold text-gray-800">
-                    {formatCurrency(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-gray-800">
+                      {formatDisplay(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
+                    </span>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      ≈ {displayCurrency === 'PKR'
+                        ? `د.إ ${((viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0)) / AED_TO_PKR).toFixed(2)} AED`
+                        : `₨ ${Math.round((viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0)) * AED_TO_PKR).toLocaleString('en-PK')} PKR`
+                      }
+                    </p>
+                  </div>
                 </div>
+                <p className="text-xs text-gray-400 text-right">Rate: 1 AED = {AED_TO_PKR} PKR</p>
               </div>
 
               {viewingInvoice.exchangeWarrantyNote && (
