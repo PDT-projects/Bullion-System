@@ -80,7 +80,9 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
   setFormField, addBillTransaction, removeBillTransaction,
   updateBillTransaction, handleImageUpload, handleSubmit, handleCancel, calculateTotal,
 }) => {
-  const fmt = BillsService.formatCurrency;
+  // Always display bill amounts in AED
+  const formatAED = (n: number): string =>
+    `AED ${Number(n || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const [addingCategory,  setAddingCategory]  = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -311,20 +313,26 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                   {/* Amounts row */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
-                      <label className={lbl}>Total Amount *</label>
-                      <input type="number" min="0" value={txn.amount || ''}
-                        onChange={(e) => updateBillTransaction(txn.id, 'amount', Number(e.target.value))}
-                        className={`${inp} ${errors[`transaction_${index}_amount`] ? errCls : ''}`}
-                        placeholder="0" />
+                      <label className={lbl}>Total Amount (AED) *</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500 pointer-events-none"></span>
+                        <input type="number" min="0" value={txn.amount || ''}
+                          onChange={(e) => updateBillTransaction(txn.id, 'amount', Number(e.target.value))}
+                          className={`${inp} pl-11 ${errors[`transaction_${index}_amount`] ? errCls : ''}`}
+                          placeholder="0.00" />
+                      </div>
                       {errors[`transaction_${index}_amount`] && (
                         <p className="text-red-500 text-xs mt-1">{errors[`transaction_${index}_amount`]}</p>
                       )}
                     </div>
                     <div>
-                      <label className={lbl}>Amount Paid <span className="text-gray-400">(blank=full)</span></label>
-                      <input type="number" min="0" value={txn.amountPaid || ''}
-                        onChange={(e) => updateBillTransaction(txn.id, 'amountPaid', Number(e.target.value))}
-                        className={inp} placeholder="Leave blank for full" />
+                      <label className={lbl}>Amount Paid AED <span className="text-gray-400">(blank=full)</span></label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500 pointer-events-none">AED</span>
+                        <input type="number" min="0" value={txn.amountPaid || ''}
+                          onChange={(e) => updateBillTransaction(txn.id, 'amountPaid', Number(e.target.value))}
+                          className={`${inp} pl-11`} placeholder="Leave blank for full" />
+                      </div>
                     </div>
                     <div>
                       <label className={lbl}>Status</label>
@@ -335,7 +343,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                       }`}>
                         {txn.paymentStatus === 'Full'
                           ? <><CheckCircle size={13} /> Full Payment</>
-                          : <><AlertCircle size={13} /> Partial — Rem: {fmt(txn.remainingAmount)}</>}
+                          : <><AlertCircle size={13} /> Partial — Rem: {formatAED(txn.remainingAmount)}</>}
                       </div>
                     </div>
                     <div>
@@ -348,7 +356,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
 
                   {txn.paymentStatus === 'Partial' && txn.remainingAmount > 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
-                      ⚠️ Partial payment — {fmt(txn.remainingAmount)} remaining will appear in <strong>Pending Payments</strong>
+                      ⚠️ Partial payment — {formatAED(txn.remainingAmount)} remaining will appear in <strong>Pending Payments</strong>
                     </div>
                   )}
 
@@ -438,7 +446,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                               className={`${inp} ${errors[`transaction_${index}_bankId`] ? errCls : ''}`}>
                               <option value="">— Select Bank —</option>
                               {banks.map(b => (
-                                <option key={b.id} value={b.id}>{b.name} — {fmt(b.balance)}</option>
+                                <option key={b.id} value={b.id}>{b.name} — {formatAED(b.balance)}</option>
                               ))}
                             </select>
                           ) : (
@@ -454,12 +462,12 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
                             <div className="flex justify-between">
                               <span className="text-gray-500">Current balance:</span>
-                              <span className="font-medium text-blue-700">{fmt(banks.find(b => b.id === txn.bankId)?.balance || 0)}</span>
+                              <span className="font-medium text-blue-700">{formatAED(banks.find(b => b.id === txn.bankId)?.balance || 0)}</span>
                             </div>
                             <div className="flex justify-between mt-1">
                               <span className="text-gray-500">After payment:</span>
                               <span className="font-semibold" style={{ color: CHARCOAL }}>
-                                {fmt((banks.find(b => b.id === txn.bankId)?.balance || 0) - (txn.amountPaid > 0 ? txn.amountPaid : txn.amount))}
+                                {formatAED((banks.find(b => b.id === txn.bankId)?.balance || 0) - (txn.amountPaid > 0 ? txn.amountPaid : txn.amount))}
                               </span>
                             </div>
                           </div>
@@ -537,7 +545,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
           {/* Total */}
           <div className="rounded-lg p-4 flex items-center justify-between" style={{ backgroundColor: CHARCOAL_LIGHT }}>
             <span className="text-lg font-semibold text-gray-900">Total Amount:</span>
-            <span className="text-2xl font-bold" style={{ color: CHARCOAL }}>{fmt(calculateTotal())}</span>
+            <span className="text-2xl font-bold" style={{ color: CHARCOAL }}>{formatAED(calculateTotal())}</span>
           </div>
 
           {/* Actions */}
