@@ -400,7 +400,7 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                       <label className={lbl}>Paid By</label>
                       <input type="text" value={txn.paidBy}
                         onChange={(e) => updateBillTransaction(txn.id, 'paidBy', e.target.value)}
-                        className={inp} placeholder="e.g., PDT Islamabad" />
+                        className={inp} placeholder="e.g., Manager Ali" />
                     </div>
                     <div>
                       <label className={lbl}>Transaction By</label>
