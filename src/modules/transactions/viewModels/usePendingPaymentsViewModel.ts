@@ -158,9 +158,14 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
         // including partially-paid outflows where isFullyCleared may have been
         // incorrectly set to true by an earlier bug.  Using remainingAmount > 0
         // as the source of truth is safer than isPending() alone.
+        // Also include uncleared cheques (remainingAmount may be 0 but bank hasn't cleared).
         if (t.approvalStatus === 'pending_approval' || t.approvalStatus === 'rejected') return false;
         const { remainingAmount } = getTransactionTotals(t);
-        return remainingAmount > 0;
+        if (remainingAmount > 0) return true;
+        if (t.mode === 'Cheque' && !t.isFullyCleared) return true;
+        // Keep partially-paid transactions regardless of paymentStatus field inconsistencies
+        if ((t.partialPayments || []).length > 0 && t.paymentStatus === 'Partial') return true;
+        return false;
       }
 
       if (filterStatus === 'PendingApproval') {
