@@ -12,9 +12,9 @@
 import React from 'react';
 import { toast } from 'sonner';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
-import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Product, ProductFilters } from '../models/types';
+import { Product, ProductFilters, ProductTransfer } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { useInventoryCurrency, formatInCurrency } from '../viewModels/useInventoryCurrency';
 import { InventoryCurrencyDropdown, CurrencyExtraRows } from './InventoryCurrencyDropdown';
@@ -50,6 +50,8 @@ interface InventoryListViewProps {
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onBack?: () => void;
+  /** Active transfers — used to show route pill on In Transit products */
+  transfers?: ProductTransfer[];
   /** The currently logged-in Firebase user — needed for delete attribution */
   currentUser?: { uid: string; email: string; displayName?: string } | null;
 }
@@ -63,6 +65,24 @@ function getDisplayLocation(product: Product): string {
   const freq: Record<string, number> = {};
   cities.forEach(c => { freq[c] = (freq[c] || 0) + 1; });
   return Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+/** Returns the most recent In Transit transfer route for a product, or null */
+function getTransitRoute(product: Product, transfers: ProductTransfer[]): { from: string; to: string } | null {
+  if (product.status !== 'In Transit') return null;
+  // Find the latest In Transit or Pending transfer for this product
+  const match = transfers
+    .filter(t =>
+      t.productId === product.id &&
+      (t.status === 'In Transit' || t.status === 'Pending')
+    )
+    .sort((a, b) => {
+      const da = new Date(a.transferDate || a.date || 0).getTime();
+      const db = new Date(b.transferDate || b.date || 0).getTime();
+      return db - da;
+    })[0];
+  if (!match) return null;
+  return { from: match.fromLocation, to: match.toLocation };
 }
 
 function getStatusColor(status: string): string {
@@ -193,7 +213,7 @@ export function InventoryListView({
   viewProduct, isLoading, stats,
   setFilter, clearFilters, toggleFilters, setViewProduct,
   onAddNew, onAddToExisting, onTransfer, onReceiveProduct, onEdit, onDelete,
-  onBack, currentUser,
+  onBack, currentUser, transfers = [],
 }: InventoryListViewProps) {
   const fmt = InventoryService.formatCurrency;
   const navigate = useNavigate();
@@ -433,17 +453,45 @@ export function InventoryListView({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {products.map(product => (
-                <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                <tr
+                  key={product.id}
+                  className="transition-colors"
+                  style={
+                    product.status === 'In Transit'
+                      ? { backgroundColor: '#fffbeb', borderLeft: '3px solid #f59e0b' }
+                      : { borderLeft: '3px solid transparent' }
+                  }
+                  onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fef3c7' : '#f9fafb'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fffbeb' : ''; }}
+                >
                   <td className="px-4 py-3 font-semibold text-gray-900 text-sm">{product.brandName}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">{product.modelName}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{product.category}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                      <MapPin size={12} className="text-slate-400 flex-shrink-0" />
-                      <span className="truncate max-w-[100px]" title={getDisplayLocation(product)}>
-                        {getDisplayLocation(product)}
-                      </span>
-                    </div>
+                    {(() => {
+                      const route = getTransitRoute(product, transfers);
+                      if (route) {
+                        return (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold whitespace-nowrap">
+                              {route.from}
+                            </span>
+                            <ArrowRight size={11} className="text-yellow-600 shrink-0" />
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold whitespace-nowrap">
+                              {route.to}
+                            </span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                          <MapPin size={12} className="text-slate-400 flex-shrink-0" />
+                          <span className="truncate max-w-[100px]" title={getDisplayLocation(product)}>
+                            {getDisplayLocation(product)}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -622,9 +670,22 @@ export function InventoryListView({
                 </div>
                 <div className="col-span-2 flex items-center gap-2 pt-2 border-t border-gray-100">
                   <MapPin className="w-4 h-4 text-[#334155] flex-shrink-0" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-xs text-gray-500">Primary Location</p>
-                    <p className="font-semibold text-[#1e293b]">{getDisplayLocation(viewProduct)}</p>
+                    {(() => {
+                      const route = getTransitRoute(viewProduct, transfers);
+                      if (route) {
+                        return (
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">{route.from}</span>
+                            <ArrowRight size={13} className="text-yellow-600 shrink-0" />
+                            <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">{route.to}</span>
+                            <span className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-full font-medium">In Transit</span>
+                          </div>
+                        );
+                      }
+                      return <p className="font-semibold text-[#1e293b]">{getDisplayLocation(viewProduct)}</p>;
+                    })()}
                   </div>
                 </div>
               </div>

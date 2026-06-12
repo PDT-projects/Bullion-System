@@ -195,6 +195,17 @@ export function TransactionFormView({
   const isPreviewId = transactionId?.includes('###');
   const isInflow = transactionType === 'Cash Inflow';
 
+  // ── AED summary helpers ────────────────────────────────────────────────────
+  // Items store amounts in PKR internally. Convert to AED for the Summary panel.
+  const toAED = (pkr: number): number =>
+    pkr > 0 ? +convertCurrency(pkr, 'PKR', 'AED' as any, currencyRates as any).toFixed(2) : 0;
+
+  const formatAED = (pkr: number): string => {
+    const aed = toAED(pkr);
+    return `AED ${aed.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+  // ──────────────────────────────────────────────────────────────────────────
+
   // Classification is required — at least one of P&L or BS must be fully set
   const hasClassification = (plMainCategory && plSubCategory) || (bsMainCategory && bsSubCategory);
   const classificationError = saveAttempted && !hasClassification;
@@ -1097,7 +1108,7 @@ export function TransactionFormView({
             <div className="grid grid-cols-2 gap-4 text-center">
               <div style={{background:'#f8fafc', border:'1px solid #99f6e4', borderRadius:'12px', padding:'16px'}}>
                 <p style={{color:'#1e293b', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Total Inflow Amount</p>
-                <p style={{fontSize:'24px', fontWeight:700, color:'#0f172a'}}>{formatCurrency(totalAmount)}</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#0f172a'}}>{formatAED(totalAmount)}</p>
               </div>
               <div style={{background:'#f9fafb', border:'1px solid #f3f4f6', borderRadius:'12px', padding:'16px'}}>
                 <p style={{color:'#6b7280', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Items</p>
@@ -1108,15 +1119,15 @@ export function TransactionFormView({
             <div className="grid grid-cols-3 gap-4 text-center">
               <div style={{background:'#f9fafb', border:'1px solid #f3f4f6', borderRadius:'12px', padding:'16px'}}>
                 <p style={{color:'#6b7280', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Total Amount</p>
-                <p style={{fontSize:'24px', fontWeight:700, color:'#111827'}}>{formatCurrency(totalAmount)}</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#111827'}}>{formatAED(totalAmount)}</p>
               </div>
               <div style={{background:'#f8fafc', border:'1px solid #99f6e4', borderRadius:'12px', padding:'16px'}}>
                 <p style={{color:'#1e293b', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Total Paid</p>
-                <p style={{fontSize:'24px', fontWeight:700, color:'#0f172a'}}>{formatCurrency(totalPaid)}</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#0f172a'}}>{formatAED(totalPaid)}</p>
               </div>
               <div style={{background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'12px', padding:'16px'}}>
                 <p style={{color:'#d97706', fontSize:'12px', fontWeight:500, marginBottom:'4px'}}>Total Remaining</p>
-                <p style={{fontSize:'24px', fontWeight:700, color:'#b45309'}}>{formatCurrency(totalRemaining)}</p>
+                <p style={{fontSize:'24px', fontWeight:700, color:'#b45309'}}>{formatAED(totalRemaining)}</p>
               </div>
             </div>
           )}
