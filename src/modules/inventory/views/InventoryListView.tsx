@@ -261,6 +261,11 @@ export function InventoryListView({
     loading: ratesLoading, error: ratesError, lastUpdated,
   } = currency;
 
+  // Default primary currency to AED on first mount
+  React.useEffect(() => {
+    setPrimaryCurrency('AED');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fmtPrimary = (pkr: number) => formatInCurrency(pkr, primaryCurrency, rates);
 
   return (
