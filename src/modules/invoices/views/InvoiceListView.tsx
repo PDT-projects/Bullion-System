@@ -81,7 +81,7 @@ export function InvoiceListView({
   };
 
   const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
-  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('PKR');
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('AED');
 
   const formatDisplay = (pkrAmount: number): string => {
     const converted = convertToDisplay(pkrAmount, displayCurrency);
