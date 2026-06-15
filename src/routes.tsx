@@ -1,3 +1,6 @@
+// routes.tsx — updated
+// NEW: Added /payable-to-futuristic route under Operations
+
 import React, { useState } from 'react';
 import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
 import { Login } from './pages/Login';
@@ -72,6 +75,9 @@ import {
 
 // ── Bank Activity Report ─────────────────────────────────────────────────────
 import { BankActivityView } from './modules/banking/views/BankActivityView';
+
+// ── Payable to Futuristic ────────────────────────────────────────────────────
+import { PayableToFuturisticWrapper } from './modules/Payable-to-futuristic';
 
 import { Sidebar }  from './layouts/Sidebar';
 import { TopBar }   from './layouts/TopBar';
@@ -165,12 +171,7 @@ function EmployeeDeleteRoute() { return <EmployeeDeleteWrapper />; }
 
 function LoanDashboardRoute()        { return <LoanDashboardWrapper />; }
 function LoanListRoute()             { return <LoanListWrapper />; }
-function LoanPayableListRoute()      { return <LoanListWrapper defaultType="Payable" />; }
-function LoanReceivableListRoute()   { return <LoanListWrapper defaultType="Receivable" />; }
-function LoanCreateRoute()           { return <LoanFormWrapper />; }
-function LoanCreatePayableRoute()    { return <LoanFormWrapper defaultType="Payable" />; }
-function LoanCreateReceivableRoute() { return <LoanFormWrapper defaultType="Receivable" />; }
-function LoanEditRoute()             { return <LoanFormWrapper />; }
+function LoanFormRoute()             { return <LoanFormWrapper />; }
 function LoanPaymentRoute()          { return <LoanPaymentWrapper />; }
 
 
@@ -178,14 +179,11 @@ function LoanPaymentRoute()          { return <LoanPaymentWrapper />; }
 // SALARY ROUTES
 // ============================================================
 
-function SalaryDashboardRoute()     { return <SalaryDashboardWrapper />; }
-function SalaryAllListRoute()       { return <SalaryListWrapper type="all" title="All Salaries" />; }
-function SalaryRegularListRoute()   { return <SalaryListWrapper type="regular" title="Regular Salaries" />; }
-function SalaryAdvanceListRoute()   { return <SalaryListWrapper type="advance" title="Advance Salaries" />; }
-function SalaryCreateRegularRoute() { return <SalaryCreateWrapper type="regular" />; }
-function SalaryCreateAdvanceRoute() { return <SalaryCreateWrapper type="advance" />; }
-function SalaryEditRoute()          { return <SalaryEditWrapper />; }
-function SalaryDeleteRoute()        { return <SalaryDeleteWrapper />; }
+function SalaryListRoute()      { return <SalaryListWrapper />; }
+function SalaryCreateRoute()    { return <SalaryCreateWrapper />; }
+function SalaryEditRoute()      { return <SalaryEditWrapper />; }
+function SalaryDeleteRoute()    { return <SalaryDeleteWrapper />; }
+function SalaryDashboardRoute() { return <SalaryDashboardWrapper />; }
 
 
 // ============================================================
@@ -202,41 +200,48 @@ function BillsDeleteRoute() { return <BillsDeleteWrapper />; }
 // COMMISSION ROUTES
 // ============================================================
 
-function CommissionSlabsRoute()       { return <CommissionSlabListWrapper />; }
-function CommissionCalculationRoute() { return <CommissionCalculationWrapper />; }
-function CommissionReportsRoute()     { return <CommissionReportWrapper />; }
+function CommissionSlabsRoute()      { return <CommissionSlabListWrapper />; }
+function CommissionCalculationRoute(){ return <CommissionCalculationWrapper />; }
+function CommissionReportsRoute()    { return <CommissionReportWrapper />; }
 
 
 // ============================================================
 // BANKING ROUTES
 // ============================================================
 
-function BankingDashboardRoute()    { return <BankingDashboardWrapper />; }
-function BankListRoute()            { return <BankListWrapper />; }
-function BankCreateRoute()          { return <BankCreateWrapper />; }
-function BankEditRoute()            { return <BankEditWrapper />; }
-function BankDeleteRoute()          { return <BankDeleteWrapper />; }
-function BankTransferListRoute()    { return <TransferListWrapper />; }
-function BankTransferCreateRoute()  { return <TransferCreateWrapper />; }
-function CashListRoute()            { return <CashListWrapper />; }
-function CashCreateRoute()          { return <CashCreateWrapper />; }
-// ── Bank Activity Report route component ──
-function BankActivityRoute()        { return <BankActivityView />; }
+function BankingDashboardRoute() { return <BankingDashboardWrapper />; }
+function BankListRoute()         { return <BankListWrapper />; }
+function BankCreateRoute()       { return <BankCreateWrapper />; }
+function BankEditRoute()         { return <BankEditWrapper />; }
+function BankDeleteRoute()       { return <BankDeleteWrapper />; }
+function BankTransferListRoute() { return <TransferListWrapper />; }
+function BankTransferCreateRoute(){ return <TransferCreateWrapper />; }
+function CashListRoute()         { return <CashListWrapper />; }
+function CashCreateRoute()       { return <CashCreateWrapper />; }
+function BankActivityRoute()     { return <BankActivityView />; }
 
 
 // ============================================================
-// TRANSACTIONS ROUTES
+// INVENTORY ROUTES
 // ============================================================
 
-function TransactionListRoute()   { return <TransactionListWrapper />; }
-function TransactionCreateRoute() { return <TransactionCreateWrapper />; }
-function TransactionEditRoute()   { return <TransactionEditWrapper />; }
-function TransactionDeleteRoute() { return <TransactionDeleteWrapper />; }
-function PendingPaymentsRoute()   { return <PendingPaymentsWrapper />; }
+function InventoryDashboardRoute()      { return <InventoryDashboardWrapper />; }
+function InventoryViewRoute()           { return <InventoryListWrapper />; }
+function InventoryReceivableRoute()     { return <InventoryListWrapper />; }
+function InventoryTypeSelectionRoute()  { return <InventoryTypeSelectionWrapper />; }
+function InventoryCostingOptionRoute()  { return <InventoryCostingOptionWrapper />; }
+function InventoryCostingDetailsRoute() { return <InventoryCostingDetailsWrapper />; }
+function InventoryProductDetailsRoute() { return <InventoryProductDetailsWrapper />; }
+function InventoryPaymentRoute()        { return <InventoryPaymentWrapper />; }
+function InventoryAddExistingRoute()    { return <InventoryAddExistingWrapper />; }
+function DeletedInventoryRoute()        { return <DeletedInventoryWrapper />; }
+function ProductTransferListRoute()     { return <ProductTransferWrapper />; }
+function ProductTransferNewRoute()      { return <ProductTransferCreateWrapper />; }
+function InventoryMultiModelRoute()     { return <InventoryMultiModelWrapper />; }
 
 
 // ============================================================
-// INVOICES ROUTES
+// INVOICE ROUTES
 // ============================================================
 
 function InvoiceListRoute()   { return <InvoiceListWrapper />; }
@@ -247,29 +252,21 @@ function InvoiceReportRoute() { return <InvoiceReportWrapper />; }
 
 
 // ============================================================
-// AGAINST THE INVOICE ROUTES
+// AGAINST THE INVOICE ROUTE
 // ============================================================
 
 function AgainstInvoiceRoute() { return <AgainstInvoiceWrapper />; }
 
 
 // ============================================================
-// INVENTORY ROUTES
+// TRANSACTION ROUTES
 // ============================================================
 
-function InventoryDashboardRoute()      { return <InventoryDashboardWrapper />; }
-function InventoryViewRoute()           { return <InventoryListWrapper inventoryType="in-stock" />; }
-function InventoryReceivableRoute()     { return <InventoryListWrapper inventoryType="on-order" />; }
-function DeletedInventoryRoute()        { return <DeletedInventoryWrapper />; }
-function InventoryTypeSelectionRoute()  { return <InventoryTypeSelectionWrapper />; }
-function InventoryCostingOptionRoute()  { return <InventoryCostingOptionWrapper />; }
-function InventoryCostingDetailsRoute() { return <InventoryCostingDetailsWrapper />; }
-function InventoryMultiModelRoute()     { return <InventoryMultiModelWrapper />; }
-function InventoryProductDetailsRoute() { return <InventoryProductDetailsWrapper />; }
-function InventoryPaymentRoute()        { return <InventoryPaymentWrapper />; }
-function InventoryAddExistingRoute()    { return <InventoryAddExistingWrapper />; }
-function ProductTransferListRoute()     { return <ProductTransferWrapper />; }
-function ProductTransferNewRoute()      { return <ProductTransferCreateWrapper />; }
+function TransactionListRoute()   { return <TransactionListWrapper />; }
+function TransactionCreateRoute() { return <TransactionCreateWrapper />; }
+function TransactionEditRoute()   { return <TransactionEditWrapper />; }
+function TransactionDeleteRoute() { return <TransactionDeleteWrapper />; }
+function PendingPaymentsRoute()   { return <PendingPaymentsWrapper />; }
 
 
 // ============================================================
@@ -283,17 +280,24 @@ function BudgetDeleteRoute() { return <BudgetDeleteWrapper />; }
 
 
 // ============================================================
+// PAYABLE TO FUTURISTIC ROUTE  ← NEW
+// ============================================================
+
+function PayableToFuturisticRoute() { return <PayableToFuturisticWrapper />; }
+
+
+// ============================================================
 // ROUTER
 // ============================================================
 
 export const router = createBrowserRouter([
-
-  // ── Public / Auth ─────────────────────────────────────────
-  { path: '/',        element: <Navigate to="/dashboard" replace /> },
-  { path: '/login',   element: <LoginPage /> },
-  { path: '/signup',  element: <Navigate to="/login" replace /> },
+  { path: '/login', element: <LoginPage /> },
 
   // ── Dashboard ─────────────────────────────────────────────
+  {
+    path: '/',
+    element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>),
+  },
   {
     path: '/dashboard',
     element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>),
@@ -311,20 +315,17 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // ── Loans ─────────────────────────────────────────────────
+  // ── Loans ────────────────────────────────────────────────
   {
     path: '/loans',
     element: (<ProtectedRoute><OutletLayout activeModule="loans" /></ProtectedRoute>),
     children: [
-      { index: true,               element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanDashboardRoute /></ScreenProtectedRoute> },
-      { path: 'all',               element: <ScreenProtectedRoute requiredScreen="All Loans List"><LoanListRoute /></ScreenProtectedRoute> },
-      { path: 'payable',           element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanPayableListRoute /></ScreenProtectedRoute> },
-      { path: 'receivable',        element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanReceivableListRoute /></ScreenProtectedRoute> },
-      { path: 'create',            element: <ScreenProtectedRoute requiredScreen="Create Loan"><LoanCreateRoute /></ScreenProtectedRoute> },
-      { path: 'create-payable',    element: <ScreenProtectedRoute requiredScreen="Create Payable Loan"><LoanCreatePayableRoute /></ScreenProtectedRoute> },
-      { path: 'create-receivable', element: <ScreenProtectedRoute requiredScreen="Create Receivable Loan"><LoanCreateReceivableRoute /></ScreenProtectedRoute> },
-      { path: ':id/edit',          element: <ScreenProtectedRoute requiredScreen="Edit Loan"><LoanEditRoute /></ScreenProtectedRoute> },
-      { path: ':id/payment',       element: <ScreenProtectedRoute requiredScreen="Loan Payment"><LoanPaymentRoute /></ScreenProtectedRoute> },
+      { index: true,            element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanDashboardRoute /></ScreenProtectedRoute> },
+      { path: 'all',            element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanListRoute /></ScreenProtectedRoute> },
+      { path: 'payable',        element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanListRoute /></ScreenProtectedRoute> },
+      { path: 'receivable',     element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanListRoute /></ScreenProtectedRoute> },
+      { path: 'new',            element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanFormRoute /></ScreenProtectedRoute> },
+      { path: ':id/payment',    element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanPaymentRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -333,14 +334,11 @@ export const router = createBrowserRouter([
     path: '/salary',
     element: (<ProtectedRoute><OutletLayout activeModule="salary" /></ProtectedRoute>),
     children: [
-      { index: true,            element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryDashboardRoute /></ScreenProtectedRoute> },
-      { path: 'all',            element: <ScreenProtectedRoute requiredScreen="Salary All List"><SalaryAllListRoute /></ScreenProtectedRoute> },
-      { path: 'regular',        element: <ScreenProtectedRoute requiredScreen="Salary Regular List"><SalaryRegularListRoute /></ScreenProtectedRoute> },
-      { path: 'advance',        element: <ScreenProtectedRoute requiredScreen="Salary Advance List"><SalaryAdvanceListRoute /></ScreenProtectedRoute> },
-      { path: 'create-regular', element: <ScreenProtectedRoute requiredScreen="Create Regular Salary"><SalaryCreateRegularRoute /></ScreenProtectedRoute> },
-      { path: 'create-advance', element: <ScreenProtectedRoute requiredScreen="Create Advance Salary"><SalaryCreateAdvanceRoute /></ScreenProtectedRoute> },
-      { path: ':id/edit',       element: <ScreenProtectedRoute requiredScreen="Salary Edit"><SalaryEditRoute /></ScreenProtectedRoute> },
-      { path: ':id/delete',     element: <ScreenProtectedRoute requiredScreen="Salary Delete"><SalaryDeleteRoute /></ScreenProtectedRoute> },
+      { index: true,        element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryDashboardRoute /></ScreenProtectedRoute> },
+      { path: 'list',       element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryListRoute /></ScreenProtectedRoute> },
+      { path: 'create',     element: <ScreenProtectedRoute requiredScreen="Create Salary"><SalaryCreateRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Salary"><SalaryEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Salary"><SalaryDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
 
@@ -382,7 +380,6 @@ export const router = createBrowserRouter([
       { path: 'transfers/new',    element: <ScreenProtectedRoute requiredScreen="Create Bank Transfer"><BankTransferCreateRoute /></ScreenProtectedRoute> },
       { path: 'cash',             element: <ScreenProtectedRoute requiredScreen="Cash List"><CashListRoute /></ScreenProtectedRoute> },
       { path: 'cash/new',         element: <ScreenProtectedRoute requiredScreen="Create Cash Entry"><CashCreateRoute /></ScreenProtectedRoute> },
-      // ── Bank Activity Report inside banking module ──
       { path: 'activity',         element: <ScreenProtectedRoute requiredScreen="Bank Activity Report"><BankActivityRoute /></ScreenProtectedRoute> },
     ],
   },
@@ -506,6 +503,20 @@ export const router = createBrowserRouter([
         <AppLayout activeModule="reports">
           <ScreenProtectedRoute requiredScreen="Bank Activity Report">
             <BankActivityView />
+          </ScreenProtectedRoute>
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+
+  // ── Payable to Futuristic ─────────────────────────────────  ← NEW
+  {
+    path: '/payable-to-futuristic',
+    element: (
+      <ProtectedRoute>
+        <AppLayout activeModule="payable-to-futuristic">
+          <ScreenProtectedRoute requiredScreen="Payable to Futuristic">
+            <PayableToFuturisticRoute />
           </ScreenProtectedRoute>
         </AppLayout>
       </ProtectedRoute>

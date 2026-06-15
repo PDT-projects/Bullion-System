@@ -5,6 +5,7 @@
 //   - Uses hasAnyReportPermission from useUserPermissions
 //   - UPDATED: Added "Bank Activity" link under Banking section
 //   - UPDATED: Added "Against Invoice" link under Finance > Transaction section
+//   - UPDATED: Added "Payable to Futuristic" link under Operations section
 
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -34,6 +35,7 @@ import {
   BarChart2,
   Activity,
   Receipt,
+  Landmark,           // ← NEW: icon for Payable to Futuristic
 } from 'lucide-react';
 
 import { useAuth } from '../providers/context/AuthContext';
@@ -41,32 +43,33 @@ import { useUserPermissions } from '../modules/user-management/hooks/useUserPerm
 
 // Map each screen name to its permission key (must match EXACT Screen type in userService.ts)
 const SCREEN_PERMISSIONS: Record<string, Screen> = {
-  'dashboard':              'Dashboard',
-  'reports':                'Sales Report',
-  'add-transaction':        'Add Transaction',
-  'pending-payment':        'Pending Payments',
-  'bills':                  'Bills List',
-  'salary':                 'Salary Dashboard',
-  'banking-overview':       'Banking Dashboard',
-  'bank-accounts':          'Bank Accounts List',
-  'transfers':              'Bank Transfers List',
-  'cash-in-hand':           'Cash List',
-  'bank-activity':          'Bank Activity Report',
-  'against-the-invoice':    'Invoices List',         // ← NEW: reuses invoice permission
-  'budgets':                'Budgets List',
-  'employees':              'Employees List',
+  'dashboard':                  'Dashboard',
+  'reports':                    'Sales Report',
+  'add-transaction':            'Add Transaction',
+  'pending-payment':            'Pending Payments',
+  'bills':                      'Bills List',
+  'salary':                     'Salary Dashboard',
+  'banking-overview':           'Banking Dashboard',
+  'bank-accounts':              'Bank Accounts List',
+  'transfers':                  'Bank Transfers List',
+  'cash-in-hand':               'Cash List',
+  'bank-activity':              'Bank Activity Report',
+  'against-the-invoice':        'Invoices List',
+  'budgets':                    'Budgets List',
+  'employees':                  'Employees List',
+  'payable-to-futuristic':      'Payable to Futuristic', // ← NEW
 
-  'inventory-entry':          'Inventory Dashboard',
-  'invoices':                 'Invoices List',
-  'all-loans':                'Loans Dashboard',
-  'payable':                  'Loans Payable',
-  'receivable':               'Loans Receivable',
-  'commission-overview':      'Commission Slabs',
-  'commission-slabs':         'Commission Slabs',
-  'commission-calculate':     'Commission Calculation',
-  'commission-reports':       'Commission Reports',
-  'user-management':          'User Management',
-  'assets-management':        'Assets Management',
+  'inventory-entry':            'Inventory Dashboard',
+  'invoices':                   'Invoices List',
+  'all-loans':                  'Loans Dashboard',
+  'payable':                    'Loans Payable',
+  'receivable':                 'Loans Receivable',
+  'commission-overview':        'Commission Slabs',
+  'commission-slabs':           'Commission Slabs',
+  'commission-calculate':       'Commission Calculation',
+  'commission-reports':         'Commission Reports',
+  'user-management':            'User Management',
+  'assets-management':          'Assets Management',
 } as const;
 
 import type { Screen } from '../modules/user-management/models/userService';
@@ -121,7 +124,6 @@ export function Sidebar() {
             { id: 'pending-payment',     name: ' Pending Payment',  icon: Clock,        path: '/transactions/pending' },
             { id: 'bills',               name: ' Bills',            icon: FileTextIcon, path: '/bills' },
             { id: 'salary',              name: ' Salary',           icon: DollarSign,   path: '/salary' },
-            // ── NEW: Against the Invoice ──
             { id: 'against-the-invoice', name: ' Against Invoice',  icon: Receipt,      path: '/against-the-invoice' },
           ],
         },
@@ -134,7 +136,6 @@ export function Sidebar() {
             { id: 'bank-accounts',    name: 'Bank Accounts',     icon: Building2,      path: '/banking/banks' },
             { id: 'transfers',        name: 'Bank Transfers',    icon: ArrowRightLeft, path: '/banking/transfers' },
             { id: 'cash-in-hand',     name: 'Cash in Hand',      icon: Wallet,         path: '/banking/cash' },
-            // ── Bank Activity inside Banking section ──
             { id: 'bank-activity',    name: 'Activity Report',   icon: Activity,       path: '/banking/activity' },
           ],
         },
@@ -146,10 +147,12 @@ export function Sidebar() {
       name: 'Operations',
       icon: Package,
       children: [
-        { id: 'employees',         name: 'Employees',          icon: Users,      path: '/employees' },
-        { id: 'inventory-entry',   name: 'Inventory',          icon: Package,    path: '/inventory' },
-        { id: 'invoices',          name: 'Invoices',           icon: FileText,   path: '/invoices' },
-        { id: 'assets-management', name: 'Assets Management',  icon: HardDrive,  path: '/assets-management' },
+        { id: 'employees',               name: 'Employees',              icon: Users,      path: '/employees' },
+        { id: 'inventory-entry',         name: 'Inventory',              icon: Package,    path: '/inventory' },
+        { id: 'invoices',                name: 'Invoices',               icon: FileText,   path: '/invoices' },
+        { id: 'assets-management',       name: 'Assets Management',      icon: HardDrive,  path: '/assets-management' },
+        // ── NEW: Payable to Futuristic ──
+        { id: 'payable-to-futuristic',   name: 'Payable to Futuristic',  icon: Landmark,   path: '/payable-to-futuristic' },
       ],
     },
     {
