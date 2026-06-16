@@ -3,24 +3,34 @@ import { useState, useEffect, useCallback } from 'react';
 import type { CurrencyAmounts } from '../models/payableToFuturistic';
 import {
   fetchPayablesSummaryByInvoice,
+  recordPayment,
+  createManualPayable,
   type InvoicePayableSummary,
   type DerivedPayable,
+  type RecordPaymentPayload,
+  type ManualPayablePayload,
 } from '../models/payableToFuturisticService';
 
 export type { InvoicePayableSummary, DerivedPayable };
 
 export interface UsePayableToFuturisticReturn {
-  summaries: InvoicePayableSummary[];
-  totals: CurrencyAmounts;
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
+  summaries:        InvoicePayableSummary[];
+  totals:           CurrencyAmounts;
+  loading:          boolean;
+  error:            string | null;
+  refresh:          () => Promise<void>;
+  addManualEntry:   (payload: ManualPayablePayload) => Promise<void>;
+  markPayment:      (firestoreId: string, payload: RecordPaymentPayload) => Promise<void>;
+  actionLoading:    boolean;
+  actionError:      string | null;
 }
 
 export function usePayableToFuturistic(): UsePayableToFuturisticReturn {
-  const [summaries, setSummaries] = useState<InvoicePayableSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [summaries,     setSummaries]     = useState<InvoicePayableSummary[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError,   setActionError]   = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -37,7 +47,35 @@ export function usePayableToFuturistic(): UsePayableToFuturisticReturn {
 
   useEffect(() => { load(); }, [load]);
 
-  // Grand totals across all invoices
+  const addManualEntry = useCallback(async (payload: ManualPayablePayload) => {
+    try {
+      setActionLoading(true);
+      setActionError(null);
+      await createManualPayable(payload);
+      await load();
+    } catch (err: any) {
+      setActionError(err?.message ?? 'Failed to create manual entry');
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  }, [load]);
+
+  const markPayment = useCallback(async (firestoreId: string, payload: RecordPaymentPayload) => {
+    try {
+      setActionLoading(true);
+      setActionError(null);
+      await recordPayment(firestoreId, payload);
+      await load();
+    } catch (err: any) {
+      setActionError(err?.message ?? 'Failed to record payment');
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  }, [load]);
+
+  // Grand totals across all invoices (total owed — paid)
   const totals: CurrencyAmounts = summaries.reduce(
     (acc, s) => ({
       aed: acc.aed + s.totalAmounts.aed,
@@ -48,5 +86,5 @@ export function usePayableToFuturistic(): UsePayableToFuturisticReturn {
     { aed: 0, pkr: 0, sar: 0, usd: 0 }
   );
 
-  return { summaries, totals, loading, error, refresh: load };
+  return { summaries, totals, loading, error, refresh: load, addManualEntry, markPayment, actionLoading, actionError };
 }

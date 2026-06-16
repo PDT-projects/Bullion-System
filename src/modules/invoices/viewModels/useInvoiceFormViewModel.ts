@@ -39,6 +39,8 @@ import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseS
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/Commissionautoservice';
 import { createTransactionFromInvoice, TxCompany } from '../../transactions/models/TransactionBridgeService';
+// ── Futuristic payable bridge ─────────────────────────────────────────────────
+import { createFuturisticPayablesFromInvoice } from '../../Payable-to-futuristic/models/futuristicPayableBridge';
 
 // Default branches — always available even before Firestore loads
 export const DEFAULT_BRANCHES = ['Saudia', 'Chad'];
@@ -55,7 +57,7 @@ export function getCurrencyFromBranch(branch: string): InvoiceCurrency {
   switch (branch) {
     case 'Saudia': return 'SAR';
     case 'Chad':   return 'CAD';
-    default:       return 'PKR';
+    default:       return 'AED';
   }
 }
 
@@ -166,7 +168,7 @@ function mapToInvoiceProductRow(ip: InvoiceProduct & { imageUrls?: string[] }): 
     total:         ip.total,
     serialNumbers: ip.serialNumbers || [],
     serialCities:  ip.serialCities  || {},
-    currency:      ip.currency      || 'PKR',
+    currency:      ip.currency      || 'AED',
     // FIX: always include imageUrls — fall back to [] so the PDF service never
     // receives undefined and can safely check `.length`.
     imageUrls:     Array.isArray(ip.imageUrls) && ip.imageUrls.length > 0
@@ -192,7 +194,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [invoiceCompany,   setInvoiceCompany]   = useState<TxCompany>(makeBranchValue(DEFAULT_BRANCHES[0]));
   const [branches,         setBranches]         = useState<string[]>(DEFAULT_BRANCHES);
   const [salespersonLocationsList, setSalespersonLocationsList] = useState<string[]>(salespersonLocations);
-  const [selectedCurrencies, setSelectedCurrencies] = useState<InvoiceCurrency[]>(['PKR']);
+  const [selectedCurrencies, setSelectedCurrencies] = useState<InvoiceCurrency[]>(['AED']);
   const [currencyRates, setCurrencyRates] = useState<Record<InvoiceCurrency, number>>(CURRENCY_RATE_FALLBACK);
 
   // Country/City state (replaces province/city)
@@ -217,8 +219,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     paymentMode: 'Cash', paymentStatus: 'Full', paidAmount: 0,
     remainingAmount: 0, collectionMethod: 'Self Collection',
     deductionCharges: 0,
-    cargoAmount: 0, cargoCurrency: 'PKR', customsAmount: 0, customsCurrency: 'PKR',
-    agentDetails: '', agentAmount: 0, agentCurrency: 'PKR',
+    cargoAmount: 0, cargoCurrency: 'AED', customsAmount: 0, customsCurrency: 'AED',
+    agentDetails: '', agentAmount: 0, agentCurrency: 'AED',
     bankId: '', bankName: '', bankAccountNumber: '',
     chequeNumber: '', chequeBank: '', chequeDate: '',
     digitalStamp: false,
@@ -312,7 +314,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
               };
             });
             setSelectedProducts(hydratedProducts);
-            setSelectedCurrencies(existing.selectedCurrencies || ['PKR']);
+            setSelectedCurrencies(existing.selectedCurrencies || ['AED']);
 
             // Ensure the country this invoice uses is in the saved list
             if (existing.customerProvince && existing.customerCity) {
@@ -652,12 +654,12 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         collectionMethod:       formData.collectionMethod,
         deductionCharges:       formData.deductionCharges || 0,
         cargoAmount:            formData.cargoAmount      || 0,
-        cargoCurrency:          formData.cargoCurrency    || 'PKR',
+        cargoCurrency:          formData.cargoCurrency    || 'AED',
         customsAmount:          formData.customsAmount    || 0,
-        customsCurrency:        formData.customsCurrency  || 'PKR',
+        customsCurrency:        formData.customsCurrency  || 'AED',
         agentDetails:           formData.agentDetails     || '',
         agentAmount:            formData.agentAmount      || 0,
-        agentCurrency:          formData.agentCurrency    || 'PKR',
+        agentCurrency:          formData.agentCurrency    || 'AED',
         digitalStamp:           formData.digitalStamp,
         branch:                 branchFromValue(invoiceCompany),
         selectedCurrencies:     selectedCurrencies,
@@ -698,6 +700,19 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
         const created = await InvoiceFirebaseService.createInvoice(invoiceData);
         savedId = created.id;
+
+        // ── Futuristic payable: auto-create entries for Futuristic brand products ──
+        console.log('[FuturisticPayable] About to call bridge, products:', selectedProducts.map(p => ({ brandName: p.brandName, modelName: p.modelName })));
+        createFuturisticPayablesFromInvoice({
+          invoiceId:     created.id,
+          invoiceNumber: invoiceData.invoiceNumber,
+          saleDate:      invoiceData.date,
+          products:      selectedProducts,
+        }).then(count => {
+          console.log('[FuturisticPayable] Bridge completed, entries created:', count);
+        }).catch(err => {
+          console.error('[FuturisticPayable] BRIDGE ERROR:', err);
+        });
 
         // Auto-persist the country+city for future invoices
         if (invoiceData.customerProvince && invoiceData.customerCity) {
