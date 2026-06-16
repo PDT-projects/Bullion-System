@@ -76,9 +76,9 @@ const currencyMeta: Record<
 
 function formatCurrency(
   amount: number,
-  currency: InvoiceCurrency = 'PKR'
+  currency: InvoiceCurrency = 'AED'
 ): string {
-  const meta = currencyMeta[currency] ?? currencyMeta.PKR;
+  const meta = currencyMeta[currency] ?? currencyMeta.AED;
   try {
     return new Intl.NumberFormat(meta.locale, {
       style: 'currency',
@@ -488,9 +488,9 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     Array.isArray((invoice as any).selectedCurrencies) &&
     (invoice as any).selectedCurrencies.length
       ? ((invoice as any).selectedCurrencies as InvoiceCurrency[])
-      : ['PKR'];
+      : ['AED'];
 
-  const primaryCurrency = selectedCurrencies[0] || 'PKR';
+  const primaryCurrency = selectedCurrencies[0] || 'AED';
   const rates = await fetchCurrencyRates();
 
   const products: any[] = Array.isArray(invoice.products) ? invoice.products : [];

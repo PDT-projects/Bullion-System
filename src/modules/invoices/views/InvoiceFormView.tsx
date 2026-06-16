@@ -264,7 +264,7 @@ function ProductPriceInput({
   currencyRates: Record<InvoiceCurrency, number>;
   updateProduct: (id: string, field: string, value: any) => void;
 }) {
-  const currency: InvoiceCurrency = (product as any).currency || 'PKR';
+  const currency: InvoiceCurrency = (product as any).currency || 'AED';
   const inventoryPricePKR: number = (product as any).pricePKR ?? product.price;
 
   // Local display value — what the <input> shows.
@@ -352,8 +352,8 @@ function ProductPriceInput({
         </select>
       </div>
 
-      {/* Hint lines: only shown in non-PKR mode */}
-      {currency !== 'PKR' && product.price > 0 && (
+      {/* Hint lines: always shown when price is set */}
+      {product.price > 0 && (
         <div className="mt-0.5 space-y-0.5">
           <p className="text-xs text-gray-500">
             ≈ <span className="font-semibold text-gray-700">
@@ -396,7 +396,7 @@ export function InvoiceFormView({
   handleAddSalespersonLocation = async () => {},
   handleAddDeliveryStatus = async () => {},
   handleAddCollectionMethod = async () => {},
-  selectedCurrencies = ['PKR'],
+  selectedCurrencies = ['AED'],
   toggleCurrency = () => {},
   currencyRates,
 }: Props) {
@@ -674,12 +674,12 @@ export function InvoiceFormView({
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-0.5">
                             Unit Price
-                            {product.currency && product.currency !== 'PKR' ? (
+                            {product.currency && product.currency !== 'AED' ? (
                               <span className="ml-1 font-normal text-blue-500">
                                 ({product.currency} · live rate)
                               </span>
                             ) : (
-                              <span className="ml-1 font-normal text-gray-400">(PKR)</span>
+                              <span className="ml-1 font-normal text-gray-400">(AED)</span>
                             )}
                           </label>
                           {/* Currency-aware price input: enter in any currency, stores PKR.
@@ -953,7 +953,7 @@ export function InvoiceFormView({
                     <input type="number" min="0" value={formData.cargoAmount ?? 0}
                       onChange={e => setFormData({ cargoAmount: Number(e.target.value) })}
                       className={`${inp} flex-1`} placeholder="0" />
-                    <select value={formData.cargoCurrency || 'PKR'}
+                    <select value={formData.cargoCurrency || 'AED'}
                       onChange={e => setFormData({ cargoCurrency: e.target.value as InvoiceCurrency })}
                       className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8">
                       {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
@@ -966,7 +966,7 @@ export function InvoiceFormView({
                     <input type="number" min="0" value={formData.customsAmount ?? 0}
                       onChange={e => setFormData({ customsAmount: Number(e.target.value) })}
                       className={`${inp} flex-1`} placeholder="0" />
-                    <select value={formData.customsCurrency || 'PKR'}
+                    <select value={formData.customsCurrency || 'AED'}
                       onChange={e => setFormData({ customsCurrency: e.target.value as InvoiceCurrency })}
                       className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8">
                       {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
@@ -979,7 +979,7 @@ export function InvoiceFormView({
                     <input type="number" min="0" value={formData.agentAmount ?? 0}
                       onChange={e => setFormData({ agentAmount: Number(e.target.value) })}
                       className={`${inp} flex-1`} placeholder="0" />
-                    <select value={formData.agentCurrency || 'PKR'}
+                    <select value={formData.agentCurrency || 'AED'}
                       onChange={e => setFormData({ agentCurrency: e.target.value as InvoiceCurrency })}
                       className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8">
                       {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
@@ -997,9 +997,9 @@ export function InvoiceFormView({
                 <p className="mt-1 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1">
                   Total import charges: <strong>
                     {formatCurrency(
-                      convertCurrency(formData.cargoAmount || 0, formData.cargoCurrency || 'PKR', 'PKR', currencyRates)
-                      + convertCurrency(formData.customsAmount || 0, formData.customsCurrency || 'PKR', 'PKR', currencyRates)
-                      + convertCurrency(formData.agentAmount || 0, formData.agentCurrency || 'PKR', 'PKR', currencyRates)
+                      convertCurrency(formData.cargoAmount || 0, formData.cargoCurrency || 'AED', 'PKR', currencyRates)
+                      + convertCurrency(formData.customsAmount || 0, formData.customsCurrency || 'AED', 'PKR', currencyRates)
+                      + convertCurrency(formData.agentAmount || 0, formData.agentCurrency || 'AED', 'PKR', currencyRates)
                     )}
                   </strong>
                 </p>
@@ -1089,7 +1089,7 @@ export function InvoiceFormView({
                   <input type="number" min="0" value={formData.deductionCharges ?? 0}
                     onChange={e => setFormData({ deductionCharges: Number(e.target.value) })}
                     className={`${inp} flex-1`} placeholder="0" />
-                  <select value={(formData as any).deductionCurrency || 'PKR'}
+                  <select value={(formData as any).deductionCurrency || 'AED'}
                     onChange={e => setFormData({ ...formData, deductionCurrency: e.target.value as InvoiceCurrency } as any)}
                     className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8">
                     {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
@@ -1171,7 +1171,7 @@ export function InvoiceFormView({
                 <span className="text-gray-500">Deduction:</span>
                 <span className="text-red-600 font-medium">
                   − {formatCurrency(formData.deductionCharges || 0)}
-                  {(formData as any).deductionCurrency && (formData as any).deductionCurrency !== 'PKR' && (
+                  {(formData as any).deductionCurrency && (formData as any).deductionCurrency !== 'AED' && (
                     <span className="ml-1 text-gray-400">({(formData as any).deductionCurrency})</span>
                   )}
                 </span>
