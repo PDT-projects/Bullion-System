@@ -1,12 +1,12 @@
 // Employee Module - ViewModel Layer
 // useEmployeeFormViewModel - Business logic for employee form (Create/Edit)
-// UPDATED: salary is saved in native currency (PKR or AED) alongside salaryCurrency field.
-//          On edit, both salary and salaryCurrency are restored from Firestore.
+// UPDATED: salaryCurrency ('PKR' | 'AED') is stored on the employee and
+//          propagated through create/edit flows.
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Employee, CreateEmployeeDTO } from '../models/types';
+import { Employee, CreateEmployeeDTO, UpdateEmployeeDTO } from '../models/types';
 import { EmployeeService } from '../models/employeeService';
 import { EmployeeFirebaseService } from '../models/employeeFirebaseService';
 import type { SalaryCurrency } from '../views/EmployeeFormView';
@@ -52,6 +52,7 @@ export function useEmployeeFormViewModel({ mode }: UseEmployeeFormViewModelProps
   const [formData, setFormData] = useState<Partial<Employee>>(EmployeeService.getDefaultFormData());
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // salaryCurrency mirrors formData.salaryCurrency for convenience; kept in sync
   const [salaryCurrency, setSalaryCurrencyState] = useState<SalaryCurrency>('PKR');
   const [customLocations, setCustomLocations] = useState<string[]>(loadCustomEmployeeLocations);
 
@@ -74,7 +75,6 @@ export function useEmployeeFormViewModel({ mode }: UseEmployeeFormViewModelProps
   const isEditMode = mode === 'edit';
   const validation = EmployeeService.validateEmployee(formData);
 
-  // On edit: restore both salary value and its stored currency
   useEffect(() => {
     if (isEditMode && id) {
       (async () => {
@@ -83,18 +83,12 @@ export function useEmployeeFormViewModel({ mode }: UseEmployeeFormViewModelProps
           const employee = await EmployeeFirebaseService.fetchEmployeeById(id);
           if (employee) {
             setFormData(employee);
-            const storedCurrency: SalaryCurrency = (employee as any).salaryCurrency || 'PKR';
-            setSalaryCurrencyState(storedCurrency);
-          } else {
-            toast.error('Employee not found');
-            navigate('/employees');
+            // Restore the persisted currency
+            setSalaryCurrencyState((employee as any).salaryCurrency || 'PKR');
           }
-        } catch {
-          toast.error('Failed to load employee');
-          navigate('/employees');
-        } finally {
-          setIsLoading(false);
-        }
+          else { toast.error('Employee not found'); navigate('/employees'); }
+        } catch { toast.error('Failed to load employee'); navigate('/employees'); }
+        finally { setIsLoading(false); }
       })();
     }
   }, [isEditMode, id, navigate]);
@@ -103,6 +97,7 @@ export function useEmployeeFormViewModel({ mode }: UseEmployeeFormViewModelProps
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
 
+  // Keep salaryCurrency in formData and in local state in sync
   const onSalaryCurrencyChange = useCallback((currency: SalaryCurrency) => {
     setSalaryCurrencyState(currency);
     setFormData(prev => ({ ...prev, salaryCurrency: currency }));
@@ -113,6 +108,7 @@ export function useEmployeeFormViewModel({ mode }: UseEmployeeFormViewModelProps
     if (!v.isValid) { toast.error(v.error || 'Please fill in all required fields'); return; }
     setIsSaving(true);
     try {
+      // Always persist salaryCurrency alongside the employee record
       const payload = { ...(formData as CreateEmployeeDTO), salaryCurrency };
       if (isEditMode && id) {
         await EmployeeFirebaseService.updateEmployee({ ...payload, id });
@@ -122,28 +118,18 @@ export function useEmployeeFormViewModel({ mode }: UseEmployeeFormViewModelProps
         toast.success('Employee added successfully');
       }
       navigate('/employees');
-    } catch {
-      toast.error('An error occurred while saving the employee');
-    } finally {
-      setIsSaving(false);
-    }
+    } catch { toast.error('An error occurred while saving the employee'); }
+    finally { setIsSaving(false); }
   }, [formData, isEditMode, id, navigate, salaryCurrency]);
 
   return {
-    formData,
-    isValid: validation.isValid,
-    errorMessage: validation.error,
-    isLoading,
-    isSaving,
-    isEditMode,
+    formData, isValid: validation.isValid, errorMessage: validation.error,
+    isLoading, isSaving, isEditMode,
     pageTitle: isEditMode ? 'Edit Employee' : 'Add Employee',
     submitButtonText: isEditMode ? 'Update Employee' : 'Save Employee',
-    allLocations,
-    addCustomLocation,
-    onFieldChange: setField,
-    onSubmit: handleSubmit,
+    allLocations, addCustomLocation,
+    onFieldChange: setField, onSubmit: handleSubmit,
     onCancel: useCallback(() => navigate('/employees'), [navigate]),
-    salaryCurrency,
-    onSalaryCurrencyChange,
+    salaryCurrency, onSalaryCurrencyChange,
   };
 }

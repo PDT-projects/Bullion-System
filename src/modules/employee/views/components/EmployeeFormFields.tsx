@@ -1,14 +1,11 @@
 // Employee Module - View Layer
 // EmployeeFormFields - Reusable form fields for Create/Edit employee
-// UPDATED: salary is stored in whatever currency is selected (PKR or AED).
-//          salaryCurrency is stored alongside salary on the Employee record.
-//          Conversion hint shows the equivalent in the other currency.
 
 import { useState } from 'react';
 import { PlusCircle, MapPin } from 'lucide-react';
 import { Employee } from '../../models/types';
 import type { SalaryCurrency } from '../EmployeeFormView';
-import { AED_TO_PKR, PKR_TO_AED } from '../../utils/CurrencyUtils';
+import { EmployeeService } from '../../models/employeeService';
 
 const ADD_NEW_LOCATION = '__ADD_NEW__';
 
@@ -50,37 +47,34 @@ export function EmployeeFormFields({
     setShowNewCityInput(false);
   };
 
-  // salary is now stored as-is in its native currency — no conversion on save.
-  const displayedSalaryValue = formData.salary ? String(formData.salary) : '';
+  // The salary stored in Employee is always PKR.
+  // If user selected AED, we show the AED equivalent in the input.
+  const displayedSalaryValue = (() => {
+    if (!formData.salary) return '';
+    if (salaryCurrency === 'AED') {
+      return EmployeeService.convertSalary(formData.salary, 'PKR', 'AED').toFixed(2);
+    }
+    return String(formData.salary);
+  })();
 
   const handleSalaryChange = (raw: string) => {
     const num = parseFloat(raw);
-    onFieldChange('salary', isNaN(num) ? 0 : num);
+    if (isNaN(num)) { onFieldChange('salary', 0); return; }
+    // Always store as PKR
+    const inPkr = salaryCurrency === 'AED'
+      ? Math.round(EmployeeService.convertSalary(num, 'AED', 'PKR'))
+      : Math.round(num);
+    onFieldChange('salary', inPkr);
   };
 
-  // When the user switches currency, convert the existing value so the
-  // displayed number stays roughly correct (e.g. 150000 PKR → 1973 AED).
-  const handleCurrencySwitch = (next: SalaryCurrency) => {
-    if (next === salaryCurrency) return;
-    const current = formData.salary || 0;
-    if (current > 0) {
-      const converted = next === 'AED'
-        ? parseFloat((current * PKR_TO_AED).toFixed(2))
-        : Math.round(current * AED_TO_PKR);
-      onFieldChange('salary', converted);
-    }
-    onSalaryCurrencyChange(next);
-  };
-
-  // Show equivalent in the other currency as a hint
   const conversionHint = (() => {
     if (!formData.salary) return null;
     if (salaryCurrency === 'PKR') {
-      const aed = (formData.salary * PKR_TO_AED).toFixed(2);
+      const aed = EmployeeService.convertSalary(formData.salary, 'PKR', 'AED').toFixed(2);
       return `≈ د.إ ${aed} AED`;
     }
-    const pkr = Math.round(formData.salary * AED_TO_PKR).toLocaleString('en-PK');
-    return `≈ ₨ ${pkr} PKR`;
+    const pkr = Math.round(EmployeeService.convertSalary(formData.salary, 'PKR', 'PKR'));
+    return `≈ ₨ ${pkr.toLocaleString('en-PK')} PKR`;
   })();
 
   const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm bg-white';
@@ -114,9 +108,7 @@ export function EmployeeFormFields({
 
       {/* Salary with currency toggle */}
       <div className="md:col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Salary <span className="text-gray-400 font-normal text-xs ml-1">(enter in the employee's payment currency)</span>
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Salary</label>
         <div className="flex gap-2">
           {/* Currency pill toggle */}
           <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1 shrink-0">
@@ -124,10 +116,12 @@ export function EmployeeFormFields({
               <button
                 key={cur}
                 type="button"
-                onClick={() => handleCurrencySwitch(cur)}
+                onClick={() => onSalaryCurrencyChange(cur)}
                 style={salaryCurrency === cur ? { backgroundColor: '#374151', color: '#ffffff' } : {}}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  salaryCurrency === cur ? 'shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                  salaryCurrency === cur
+                    ? 'shadow-sm'
+                    : 'text-gray-500 hover:text-gray-800'
                 }`}
               >
                 {cur === 'PKR' ? '₨ PKR' : 'د.إ AED'}
@@ -145,15 +139,9 @@ export function EmployeeFormFields({
         </div>
         {conversionHint && (
           <p className="text-xs text-gray-400 mt-1.5">
-            {conversionHint} &nbsp;·&nbsp; 1 AED = {AED_TO_PKR} PKR
+            {conversionHint} &nbsp;·&nbsp; 1 AED = {EmployeeService.AED_TO_PKR} PKR
           </p>
         )}
-        {/* Currency context label */}
-        <p className="text-xs mt-1 font-medium" style={{ color: salaryCurrency === 'AED' ? '#0369a1' : '#166534' }}>
-          {salaryCurrency === 'AED'
-            ? '💡 This employee will be paid in AED (Dubai/GCC)'
-            : '💡 This employee will be paid in PKR (Pakistan)'}
-        </p>
       </div>
 
       {/* Join Date */}
