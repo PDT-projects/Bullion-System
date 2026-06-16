@@ -1,5 +1,7 @@
 // Employee Module - View Layer
 // EmployeeListView - Main page for employee list with filters
+// UPDATED: EmployeeTable now receives salaryCurrency per employee and shows it
+//          alongside the salary amount. The header rate badge is still shown.
 
 import { Plus, Filter } from 'lucide-react';
 import { Employee, EmployeeFilters as EmployeeFiltersType } from '../models/types';
@@ -48,7 +50,7 @@ export function EmployeeListView({
         </div>
         <div className="flex items-center gap-3">
 
-          {/* Currency Toggle */}
+          {/* Currency Toggle — controls the LIST-LEVEL display preference */}
           <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
             {(['PKR', 'AED'] as SalaryCurrency[]).map(cur => (
               <button
@@ -95,7 +97,16 @@ export function EmployeeListView({
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <h3 className="text-lg font-medium text-gray-900">All Employees ({employees.length})</h3>
-          <span className="text-xs text-gray-400">Rate: 1 AED = {EmployeeService.AED_TO_PKR} PKR</span>
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            {/* Legend */}
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500" /> PKR employees
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-500" /> AED employees
+            </span>
+            <span>Rate: 1 AED = {EmployeeService.AED_TO_PKR} PKR</span>
+          </div>
         </div>
         <EmployeeTable
           employees={employees}

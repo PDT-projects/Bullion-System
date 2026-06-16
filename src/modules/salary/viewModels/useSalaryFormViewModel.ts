@@ -9,6 +9,13 @@
 //   - On employee select, fetches any active Receivable loans linked to that employee
 //   - Exposes `employeeLoan`, `loanDeduction`, `setLoanDeduction`
 //   - On submit, calls LoanFirebaseService.makePayment() to reduce loan balance
+//
+// DUAL CURRENCY FEATURE:
+//   - Each employee has a `salaryCurrency` field ('PKR' | 'AED')
+//   - The salary form auto-detects the employee's currency and shows the right label
+//   - On save, both `salaryAED` and `salaryPKR` are stored (one is the entered value,
+//     the other is converted at the current exchange rate)
+//   - Exchange rate constant: 1 AED = AED_TO_PKR PKR (same as EmployeeService)
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -28,6 +35,11 @@ import {
   type CommissionAutoResult,
   type CommissionCityBreakdown,
 } from '../../commission/models/Commissionautoservice';
+
+// Keep in sync with EmployeeService.AED_TO_PKR
+const AED_TO_PKR = 76;
+
+export type SalaryCurrency = 'PKR' | 'AED';
 
 interface BankInfo { id: string; name: string; balance: number; }
 
@@ -70,6 +82,9 @@ export interface UseSalaryFormViewModelReturn {
   isCommissionLoading: boolean;
   commissionSummary: string;
   commissionBreakdown: CommissionCityBreakdown[];
+  // ── Dual currency ────────────────────────────────────────────────────────
+  salaryCurrency: SalaryCurrency;      // currency the employee is paid in
+  convertedAmount: number;              // net amount in the OTHER currency (for display)
   // ── Loan deduction ──────────────────────────────────────────────────────
   employeeLoan: Loan | null;
   loanDeduction: number;
@@ -145,6 +160,21 @@ export function useSalaryFormViewModel({
     [employees, formData.employeeId]
   );
 
+  // ── Derive currency from the selected employee ────────────────────────────
+  // Falls back to 'PKR' for legacy employees that don't have the field yet.
+  const salaryCurrency: SalaryCurrency = useMemo(
+    () => (selectedEmployee as any)?.salaryCurrency || 'PKR',
+    [selectedEmployee]
+  );
+
+  // Convert net amount to the opposite currency for secondary display
+  const convertedAmount = useMemo(() => {
+    const net = Math.max(0, formData.baseSalary + formData.commission - formData.deductions);
+    if (salaryCurrency === 'PKR') return parseFloat((net / AED_TO_PKR).toFixed(2));
+    return Math.round(net * AED_TO_PKR);
+  }, [formData.baseSalary, formData.commission, formData.deductions, salaryCurrency]);
+  // ──────────────────────────────────────────────────────────────────────────
+
   const salaryMonth = transactionsList[0]?.salaryMonth || '';
 
   const advancePaidThisMonth = useMemo(() => {
@@ -178,8 +208,6 @@ export function useSalaryFormViewModel({
     [regularPaidRecords]
   );
 
-  // How much more advance is available = full salary minus advance already paid minus regular already paid
-  // Declared AFTER regularAlreadyPaidAmount to avoid TDZ errors
   const advanceAvailableThisMonth = useMemo(() => {
     if (!selectedEmployee || !salaryMonth) return 0;
     const fullSalary  = selectedEmployee.salary || 0;
@@ -233,7 +261,6 @@ export function useSalaryFormViewModel({
   );
 
   // ── Fetch employee's active Receivable loan when employee changes ─────────
-  // Only for regular salary in create mode (edit keeps existing deductions as-is).
   useEffect(() => {
     if (type !== 'regular' || isEditMode || !formData.employeeId) {
       setEmployeeLoan(null);
@@ -249,7 +276,6 @@ export function useSalaryFormViewModel({
         const allLoans = await LoanFirebaseService.fetchAllLoans();
         if (cancelled) return;
 
-        // Find a Partial Receivable loan (company gave money to employee) for this employee
         const activeLoan = allLoans.find(
           (l) =>
             l.type === 'Receivable' &&
@@ -259,7 +285,6 @@ export function useSalaryFormViewModel({
         ) || null;
 
         setEmployeeLoan(activeLoan);
-        // Reset deduction amount and deductions field when employee changes
         setLoanDeductionState(0);
         setFormData(prev => ({ ...prev, deductions: 0 }));
       } catch (err) {
@@ -275,13 +300,11 @@ export function useSalaryFormViewModel({
   }, [formData.employeeId, type, isEditMode]);
   // ──────────────────────────────────────────────────────────────────────────
 
-  // ── Expose setLoanDeduction — clamps to remaining balance, syncs deductions
   const setLoanDeduction = useCallback((amount: number) => {
     const clamped = Math.max(0, Math.min(amount, employeeLoan?.remaining ?? amount));
     setLoanDeductionState(clamped);
     setFormData(prev => ({ ...prev, deductions: clamped }));
   }, [employeeLoan]);
-  // ──────────────────────────────────────────────────────────────────────────
 
   // ── AUTO-COMMISSION CALCULATION ───────────────────────────────────────────
   useEffect(() => {
@@ -295,10 +318,7 @@ export function useSalaryFormViewModel({
     if (commissionManuallyEdited.current) return;
 
     const employeeName = selectedEmployee?.name;
-    if (!employeeName) {
-      console.warn('[CommissionAuto] Employee name not found for ID:', formData.employeeId);
-      return;
-    }
+    if (!employeeName) return;
 
     let cancelled = false;
     setIsCommissionLoading(true);
@@ -408,7 +428,7 @@ export function useSalaryFormViewModel({
     );
   }, [calculatedNetAmount]);
 
-  // Auto-calc remainingAmount: Partial = netAmount - amountPaid; Full = 0
+  // Auto-calc remainingAmount
   useEffect(() => {
     setTransactionsList(prev =>
       prev.map((t, i) => {
@@ -474,7 +494,6 @@ export function useSalaryFormViewModel({
       return;
     }
 
-    // Validate loan deduction is within remaining balance
     if (loanDeduction > 0 && employeeLoan && loanDeduction > employeeLoan.remaining) {
       toast.error(
         `Loan deduction (${loanDeduction.toLocaleString()}) cannot exceed remaining loan balance (${employeeLoan.remaining.toLocaleString()})`
@@ -487,6 +506,13 @@ export function useSalaryFormViewModel({
       const txn      = transactionsList[0];
       const employee = employees.find(e => e.id === formData.employeeId);
       const bank     = txn.mode === 'Bank' ? banks.find(b => b.id === txn.bankId) : null;
+
+      // ── Dual-currency amounts ───────────────────────────────────────────
+      // Store both currencies so the dashboard and list views can show either.
+      const net = calculatedNetAmount;
+      const salaryAED = salaryCurrency === 'AED' ? net : parseFloat((net / AED_TO_PKR).toFixed(2));
+      const salaryPKR = salaryCurrency === 'PKR' ? net : Math.round(net * AED_TO_PKR);
+      // ───────────────────────────────────────────────────────────────────
 
       const salaryPayload: Omit<Salary, 'id'> = {
         transactionId:   `SAL-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
@@ -514,7 +540,12 @@ export function useSalaryFormViewModel({
         imageUrl:        txn.imageUrl || '',
         paymentStatus:   txn.paymentStatus,
         remainingAmount: txn.remainingAmount || 0,
-      };
+        // ── NEW currency fields ─────────────────────────────────────────
+        salaryCurrency,
+        salaryAED,
+        salaryPKR,
+        // ────────────────────────────────────────────────────────────────
+      } as any; // Cast needed until Salary type is updated with new fields
 
       if (isEditMode && id) {
         await SalaryFirebaseService.updateSalary(id, salaryPayload);
@@ -555,6 +586,9 @@ export function useSalaryFormViewModel({
           netAmount:       calculatedNetAmount,
           employeeId:      formData.employeeId,
           employeeName:    employee?.name,
+          salaryCurrency,
+          salaryAED,
+          salaryPKR,
         });
 
         if (txn.mode === 'Bank' && txn.bankId && bank) {
@@ -571,16 +605,12 @@ export function useSalaryFormViewModel({
               {
                 loanId: employeeLoan.id,
                 amount: loanDeduction,
-                mode:   'Cash', // Salary deduction is treated as a cash settlement
+                mode:   'Cash',
                 date:   formData.date,
               },
               employeeLoan
             );
-            console.log(
-              `✅ Loan repayment of ${loanDeduction} recorded for loan ${employeeLoan.id}`
-            );
           } catch (loanErr) {
-            // Salary is already saved; warn but don't fail
             console.error('❌ Failed to update loan balance after salary save:', loanErr);
             toast.warning(
               'Salary saved successfully, but the loan balance could not be updated automatically. Please update the loan manually.'
@@ -603,7 +633,7 @@ export function useSalaryFormViewModel({
     formData, transactionsList, calculatedNetAmount, isEditMode, id,
     employees, banks, navigate, type, regularAlreadyPaid,
     selectedEmployee, salaryMonth, effectiveSubCategory,
-    loanDeduction, employeeLoan,
+    loanDeduction, employeeLoan, salaryCurrency,
   ]);
 
   const handleCancel = useCallback(
@@ -645,6 +675,8 @@ export function useSalaryFormViewModel({
     isCommissionLoading,
     commissionSummary,
     commissionBreakdown:    commissionResult?.breakdown ?? [],
+    salaryCurrency,
+    convertedAmount,
     employeeLoan,
     loanDeduction,
     isLoanLoading,

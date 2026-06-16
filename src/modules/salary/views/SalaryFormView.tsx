@@ -5,11 +5,22 @@
 // UPDATED: Shows employee's active Receivable loan (if any) and allows entering
 //          a deduction amount that reduces both the salary net amount and the
 //          loan's remaining balance on save.
+// UPDATED: Dual-currency support — currency label (PKR/AED) is driven by the
+//          selected employee's `salaryCurrency` field.  The converted amount in
+//          the opposite currency is shown as a secondary hint everywhere.
 
 import { useState } from 'react';
-import { User, Calculator, Wallet, Building2, CreditCard, AlertCircle, CheckCircle, Info, ArrowLeft, Lock, TrendingUp, Sparkles, Landmark, ChevronRight } from 'lucide-react';
+import {
+  User, Calculator, Wallet, Building2, CreditCard, AlertCircle,
+  CheckCircle, Info, ArrowLeft, Lock, TrendingUp, Sparkles, Landmark, ChevronRight,
+} from 'lucide-react';
 import { SalaryService } from '../models/salaryService';
 import type { Loan } from '../../loans/models/types';
+
+export type SalaryCurrency = 'PKR' | 'AED';
+
+// Keep in sync with EmployeeService / useSalaryFormViewModel
+const AED_TO_PKR = 76;
 
 interface SalaryTransaction {
   id: string;
@@ -62,6 +73,9 @@ interface SalaryFormViewProps {
   confirmedCommissionAmount?: number;
   isCommissionAutoFilled?: boolean;
   commissionSource?: string;
+  // Dual currency
+  salaryCurrency?: SalaryCurrency;
+  convertedAmount?: number;
   // Loan deduction props
   employeeLoan?: Loan | null;
   loanDeduction?: number;
@@ -85,6 +99,26 @@ function formatDateDisplay(dateStr: string): string {
   } catch { return dateStr; }
 }
 
+// Helper: format a number with a given currency label
+function fmtCur(amount: number, currency: SalaryCurrency): string {
+  if (currency === 'AED') {
+    return `د.إ ${amount.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `₨ ${Math.round(amount).toLocaleString('en-PK')}`;
+}
+
+// Currency badge component used alongside inputs
+function CurrencyBadge({ currency }: { currency: SalaryCurrency }) {
+  return (
+    <span
+      className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-sm font-semibold whitespace-nowrap select-none"
+      style={{ color: currency === 'AED' ? '#0369a1' : '#166534' }}
+    >
+      {currency === 'AED' ? 'د.إ AED' : '₨ PKR'}
+    </span>
+  );
+}
+
 export function SalaryFormView({
   formData, transactions, isValid, errorMessage, fieldErrors,
   isLoading, isEditMode, pageTitle, submitButtonText,
@@ -94,6 +128,8 @@ export function SalaryFormView({
   confirmedCommissionAmount = 0,
   isCommissionAutoFilled = false,
   commissionSource = '',
+  salaryCurrency = 'PKR',
+  convertedAmount = 0,
   employeeLoan = null,
   loanDeduction = 0,
   isLoanLoading = false,
@@ -118,6 +154,8 @@ export function SalaryFormView({
   const isRegular    = formData.subCategory === 'Employee salary';
   const selectedBank = banks.find(b => b.id === transaction.bankId);
 
+  const oppositeCurrency: SalaryCurrency = salaryCurrency === 'PKR' ? 'AED' : 'PKR';
+
   // Derived loan display values
   const loanAfterDeduction = employeeLoan
     ? Math.max(0, employeeLoan.remaining - loanDeduction)
@@ -139,6 +177,20 @@ export function SalaryFormView({
               {isEditMode ? 'Update salary payment details' : 'Record a new salary payment'}
             </p>
           </div>
+          {/* Currency pill in header */}
+          {selectedEmployee && (
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-gray-500">Employee currency:</span>
+              <span
+                className="px-3 py-1 rounded-full text-xs font-bold border"
+                style={salaryCurrency === 'AED'
+                  ? { backgroundColor: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd' }
+                  : { backgroundColor: '#dcfce7', color: '#166534', borderColor: '#bbf7d0' }}
+              >
+                {salaryCurrency === 'AED' ? 'د.إ AED — Dubai/GCC' : '₨ PKR — Pakistan'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── Banner: Regular salary already fully paid ── */}
@@ -148,7 +200,7 @@ export function SalaryFormView({
             <div>
               <p className="text-red-800 font-semibold">Regular salary already fully paid for this month</p>
               <p className="text-red-700 text-sm mt-0.5">
-                {selectedEmployee?.name} already received {fmt(regularAlreadyPaidAmount)} as regular salary
+                {selectedEmployee?.name} already received {fmtCur(regularAlreadyPaidAmount, salaryCurrency)} as regular salary
                 for <strong>{transaction.salaryMonth}</strong>.
                 Use <em>Advance Salary</em> if you need to pay more.
               </p>
@@ -179,15 +231,15 @@ export function SalaryFormView({
               <div className="mt-2 grid grid-cols-3 gap-3 text-sm">
                 <div className="bg-white rounded-lg p-2.5 border border-blue-100 text-center">
                   <p className="text-xs text-gray-500 mb-0.5">Full Salary</p>
-                  <p className="font-bold text-gray-900">{fmt(selectedEmployee?.salary || 0)}</p>
+                  <p className="font-bold text-gray-900">{fmtCur(selectedEmployee?.salary || 0, salaryCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-lg p-2.5 border border-blue-100 text-center">
                   <p className="text-xs text-gray-500 mb-0.5">Advance Paid</p>
-                  <p className="font-bold text-orange-600">− {fmt(advancePaidThisMonth)}</p>
+                  <p className="font-bold text-orange-600">− {fmtCur(advancePaidThisMonth, salaryCurrency)}</p>
                 </div>
                 <div className="rounded-lg p-2.5 border text-center" style={{ backgroundColor: 'rgba(30,41,59,0.08)', borderColor: 'rgba(30,41,59,0.15)' }}>
                   <p className="text-xs mb-0.5" style={{ color: '#1e293b' }}>Remaining to Pay</p>
-                  <p className="font-bold text-base" style={{ color: '#1e293b' }}>{fmt(remainingSalaryToPay)}</p>
+                  <p className="font-bold text-base" style={{ color: '#1e293b' }}>{fmtCur(remainingSalaryToPay, salaryCurrency)}</p>
                 </div>
               </div>
               <p className="text-blue-600 text-xs mt-2">
@@ -212,7 +264,7 @@ export function SalaryFormView({
                 </span>
               </div>
               <p className="text-green-700 text-sm mt-0.5">
-                A confirmed commission of <strong>{fmt(confirmedCommissionAmount)}</strong> was found
+                A confirmed commission of <strong>{fmtCur(confirmedCommissionAmount, salaryCurrency)}</strong> was found
                 {commissionSource ? <> for <strong>{commissionSource}</strong></> : ''} and has been
                 pre-filled below. You can edit it manually if needed.
               </p>
@@ -231,12 +283,12 @@ export function SalaryFormView({
               <div className="mt-2 grid grid-cols-3 gap-3 text-sm">
                 <div className="bg-white rounded-lg p-2.5 border border-orange-100 text-center">
                   <p className="text-xs text-gray-500 mb-0.5">Full Monthly Salary</p>
-                  <p className="font-bold text-gray-900">{fmt(selectedEmployee.salary || 0)}</p>
+                  <p className="font-bold text-gray-900">{fmtCur(selectedEmployee.salary || 0, salaryCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-lg p-2.5 border border-orange-100 text-center">
                   <p className="text-xs text-gray-500 mb-0.5">Advance Paid So Far</p>
                   <p className="font-bold text-orange-600">
-                    {advancePaidThisMonth > 0 ? `− ${fmt(advancePaidThisMonth)}` : fmt(0)}
+                    {advancePaidThisMonth > 0 ? `− ${fmtCur(advancePaidThisMonth, salaryCurrency)}` : fmtCur(0, salaryCurrency)}
                   </p>
                 </div>
                 <div className={`rounded-lg p-2.5 border text-center ${advanceAvailableThisMonth <= 0 ? 'bg-red-50 border-red-200' : 'bg-orange-100 border-orange-200'}`}>
@@ -244,7 +296,7 @@ export function SalaryFormView({
                     Available to Advance
                   </p>
                   <p className={`font-bold text-base ${advanceAvailableThisMonth <= 0 ? 'text-red-700' : 'text-orange-800'}`}>
-                    {fmt(advanceAvailableThisMonth)}
+                    {fmtCur(advanceAvailableThisMonth, salaryCurrency)}
                   </p>
                 </div>
               </div>
@@ -255,7 +307,7 @@ export function SalaryFormView({
               )}
               {advancePaidThisMonth > 0 && advanceAvailableThisMonth > 0 && (
                 <p className="text-orange-600 text-xs mt-2">
-                  Maximum advance remaining this month: {fmt(advanceAvailableThisMonth)}
+                  Maximum advance remaining this month: {fmtCur(advanceAvailableThisMonth, salaryCurrency)}
                 </p>
               )}
             </div>
@@ -296,15 +348,15 @@ export function SalaryFormView({
                 <div className="grid grid-cols-3 gap-3 p-4 border-b border-amber-200">
                   <div className="bg-white rounded-lg p-3 border border-amber-100 text-center">
                     <p className="text-xs text-gray-400 mb-0.5">Original Loan</p>
-                    <p className="text-sm font-bold text-gray-800">{fmt(employeeLoan.loanAmount)}</p>
+                    <p className="text-sm font-bold text-gray-800">{fmtCur(employeeLoan.loanAmount, salaryCurrency)}</p>
                   </div>
                   <div className="bg-white rounded-lg p-3 border border-amber-100 text-center">
                     <p className="text-xs text-gray-400 mb-0.5">Already Repaid</p>
-                    <p className="text-sm font-bold text-green-600">{fmt(employeeLoan.paid)}</p>
+                    <p className="text-sm font-bold text-green-600">{fmtCur(employeeLoan.paid, salaryCurrency)}</p>
                   </div>
                   <div className="bg-amber-100 rounded-lg p-3 border border-amber-200 text-center">
                     <p className="text-xs text-amber-700 mb-0.5">Remaining Balance</p>
-                    <p className="text-sm font-bold text-amber-800">{fmt(employeeLoan.remaining)}</p>
+                    <p className="text-sm font-bold text-amber-800">{fmtCur(employeeLoan.remaining, salaryCurrency)}</p>
                   </div>
                 </div>
 
@@ -313,13 +365,13 @@ export function SalaryFormView({
                   <label className="block text-sm font-medium text-amber-800 mb-2">
                     Loan Repayment Deduction this Month
                     <span className="ml-1 text-xs font-normal text-amber-600">
-                      (max {fmt(employeeLoan.remaining)})
+                      (max {fmtCur(employeeLoan.remaining, salaryCurrency)})
                     </span>
                   </label>
                   <div className="flex items-center gap-3">
                     <div className="flex flex-1 rounded-lg border border-amber-300 overflow-hidden focus-within:ring-2 focus-within:ring-amber-400">
-                      <span className="flex items-center px-3 bg-amber-50 border-r border-amber-300 text-amber-700 text-sm font-medium whitespace-nowrap select-none">
-                        AED
+                      <span className="flex items-center px-3 bg-amber-50 border-r border-amber-300 text-amber-700 text-sm font-semibold whitespace-nowrap select-none">
+                        {salaryCurrency}
                       </span>
                       <input
                         type="number"
@@ -360,10 +412,10 @@ export function SalaryFormView({
                   {loanDeduction > 0 && (
                     <div className="mt-3 flex items-center gap-2 text-sm bg-white border border-amber-200 rounded-lg px-3 py-2.5">
                       <span className="text-gray-500">Loan after deduction:</span>
-                      <span className="font-bold text-amber-800">{fmt(employeeLoan.remaining)}</span>
+                      <span className="font-bold text-amber-800">{fmtCur(employeeLoan.remaining, salaryCurrency)}</span>
                       <ChevronRight size={14} className="text-gray-400" />
                       <span className={`font-bold ${loanAfterDeduction === 0 ? 'text-green-600' : 'text-amber-700'}`}>
-                        {fmt(loanAfterDeduction)}
+                        {fmtCur(loanAfterDeduction, salaryCurrency)}
                       </span>
                       {loanAfterDeduction === 0 && (
                         <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">
@@ -414,7 +466,7 @@ export function SalaryFormView({
                     <option value="">Choose an employee...</option>
                     {employees.map(emp => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.name} — {emp.position} ({fmt(emp.salary || 0)}/mo)
+                        {emp.name} — {emp.position} ({fmtCur(emp.salary || 0, emp.salaryCurrency || 'PKR')}/mo)
                       </option>
                     ))}
                   </select>
@@ -438,7 +490,7 @@ export function SalaryFormView({
               {selectedEmployee && (
                 <div className="md:col-span-2 bg-gray-50 border border-gray-200 rounded-xl p-4">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Employee Info</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
                       <p className="text-xs text-gray-400 mb-0.5">Name</p>
                       <p className="text-sm font-semibold text-gray-900 truncate">{selectedEmployee.name}</p>
@@ -449,7 +501,18 @@ export function SalaryFormView({
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
                       <p className="text-xs text-gray-400 mb-0.5">Monthly Salary</p>
-                      <p className="text-sm font-semibold" style={{ color: '#1e293b' }}>{fmt(selectedEmployee.salary || 0)}</p>
+                      <p className="text-sm font-semibold" style={{ color: '#1e293b' }}>
+                        {fmtCur(selectedEmployee.salary || 0, salaryCurrency)}
+                      </p>
+                      {/* Show converted amount as secondary hint */}
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        ≈ {fmtCur(
+                          salaryCurrency === 'PKR'
+                            ? parseFloat(((selectedEmployee.salary || 0) / AED_TO_PKR).toFixed(2))
+                            : Math.round((selectedEmployee.salary || 0) * AED_TO_PKR),
+                          oppositeCurrency
+                        )}
+                      </p>
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
                       <p className="text-xs text-gray-400 mb-0.5">Status</p>
@@ -460,6 +523,20 @@ export function SalaryFormView({
                       }`}>
                         {selectedEmployee.status}
                       </span>
+                    </div>
+                    {/* Currency pill */}
+                    <div
+                      className="rounded-lg p-3 border text-center flex flex-col items-center justify-center"
+                      style={salaryCurrency === 'AED'
+                        ? { backgroundColor: '#e0f2fe', borderColor: '#bae6fd' }
+                        : { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' }}
+                    >
+                      <p className="text-xs mb-0.5" style={{ color: salaryCurrency === 'AED' ? '#0369a1' : '#166534' }}>
+                        Salary Currency
+                      </p>
+                      <p className="text-sm font-bold" style={{ color: salaryCurrency === 'AED' ? '#0369a1' : '#166534' }}>
+                        {salaryCurrency === 'AED' ? 'د.إ AED' : '₨ PKR'}
+                      </p>
                     </div>
                   </div>
 
@@ -480,16 +557,16 @@ export function SalaryFormView({
                         <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
                           <Info size={15} />
                           <span>
-                            Advance paid: <strong>{fmt(advancePaidThisMonth)}</strong> ·
-                            Remaining: <strong>{fmt(remainingSalaryToPay)}</strong> for <strong>{transaction.salaryMonth}</strong>
+                            Advance paid: <strong>{fmtCur(advancePaidThisMonth, salaryCurrency)}</strong> ·
+                            Remaining: <strong>{fmtCur(remainingSalaryToPay, salaryCurrency)}</strong> for <strong>{transaction.salaryMonth}</strong>
                           </span>
                         </div>
                       ) : regularAlreadyPaidAmount > 0 ? (
                         <div className="flex items-center gap-2 text-sm text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2">
                           <AlertCircle size={15} />
                           <span>
-                            Partially paid: <strong>{fmt(regularAlreadyPaidAmount)}</strong> of{' '}
-                            <strong>{fmt(selectedEmployee.salary || 0)}</strong> for <strong>{transaction.salaryMonth}</strong>
+                            Partially paid: <strong>{fmtCur(regularAlreadyPaidAmount, salaryCurrency)}</strong> of{' '}
+                            <strong>{fmtCur(selectedEmployee.salary || 0, salaryCurrency)}</strong> for <strong>{transaction.salaryMonth}</strong>
                           </span>
                         </div>
                       ) : (
@@ -509,6 +586,9 @@ export function SalaryFormView({
           <div className="border-b pb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Calculator className="w-5 h-5 text-gray-600" /> Salary Calculation
+              <span className="ml-auto text-xs font-normal text-gray-400">
+                All amounts in {salaryCurrency === 'AED' ? 'AED (د.إ)' : 'PKR (₨)'}
+              </span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -519,9 +599,7 @@ export function SalaryFormView({
                   )}
                 </label>
                 <div className="flex rounded-lg border overflow-hidden focus-within:ring-2 focus-within:ring-slate-400 border-gray-300">
-                  <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
-                    AED
-                  </span>
+                  <CurrencyBadge currency={salaryCurrency} />
                   <input
                     type="number"
                     value={formData.baseSalary}
@@ -549,9 +627,7 @@ export function SalaryFormView({
                       ? 'border-green-400'
                       : 'border-gray-300'
                   }`}>
-                    <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
-                      AED
-                    </span>
+                    <CurrencyBadge currency={salaryCurrency} />
                     <input
                       type="number"
                       value={formData.commission}
@@ -576,19 +652,16 @@ export function SalaryFormView({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Deductions
-                  {/* Show loan deduction hint if active */}
                   {isRegular && loanDeduction > 0 && !isEditMode ? (
                     <span className="ml-1 text-xs text-amber-600 font-normal">
-                      (loan: {fmt(loanDeduction)}{advancePaidThisMonth > 0 ? ` + advance: ${fmt(advancePaidThisMonth)}` : ''})
+                      (loan: {fmtCur(loanDeduction, salaryCurrency)}{advancePaidThisMonth > 0 ? ` + advance: ${fmtCur(advancePaidThisMonth, salaryCurrency)}` : ''})
                     </span>
                   ) : isRegular && advancePaidThisMonth > 0 ? (
-                    <span className="ml-1 text-xs text-orange-600 font-normal">(advance: {fmt(advancePaidThisMonth)})</span>
+                    <span className="ml-1 text-xs text-orange-600 font-normal">(advance: {fmtCur(advancePaidThisMonth, salaryCurrency)})</span>
                   ) : null}
                 </label>
                 <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-slate-400">
-                  <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
-                    AED
-                  </span>
+                  <CurrencyBadge currency={salaryCurrency} />
                   <input
                     type="number"
                     value={formData.deductions}
@@ -597,11 +670,10 @@ export function SalaryFormView({
                     placeholder="0"
                   />
                 </div>
-                {/* Remind user the loan deduction is already included */}
                 {isRegular && loanDeduction > 0 && !isEditMode && (
                   <p className="mt-1 text-xs text-amber-600 flex items-center gap-1">
                     <Landmark size={10} />
-                    Includes {fmt(loanDeduction)} loan repayment
+                    Includes {fmtCur(loanDeduction, salaryCurrency)} loan repayment
                   </p>
                 )}
               </div>
@@ -774,9 +846,7 @@ export function SalaryFormView({
                     <span className="ml-1 text-xs font-normal text-gray-400">(enter how much is paid today)</span>
                   </label>
                   <div className="flex rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-slate-400">
-                    <span className="flex items-center px-3 bg-gray-50 border-r border-gray-300 text-gray-500 text-sm font-medium whitespace-nowrap select-none">
-                      AED
-                    </span>
+                    <CurrencyBadge currency={salaryCurrency} />
                     <input
                       type="number"
                       min={0}
@@ -789,13 +859,13 @@ export function SalaryFormView({
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-sm bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
                     <span className="text-gray-500">Net:</span>
-                    <span className="font-medium">{fmt(calculatedNetAmount)}</span>
+                    <span className="font-medium">{fmtCur(calculatedNetAmount, salaryCurrency)}</span>
                     <span className="text-gray-400">−</span>
                     <span className="text-gray-500">Paid:</span>
-                    <span className="font-medium text-green-700">{fmt(transaction.amount || 0)}</span>
+                    <span className="font-medium text-green-700">{fmtCur(transaction.amount || 0, salaryCurrency)}</span>
                     <span className="text-gray-400">=</span>
                     <span className="font-bold text-orange-600">
-                      Remaining: {fmt(Math.max(0, calculatedNetAmount - (transaction.amount || 0)))}
+                      Remaining: {fmtCur(Math.max(0, calculatedNetAmount - (transaction.amount || 0)), salaryCurrency)}
                     </span>
                   </div>
                 </div>
@@ -818,17 +888,28 @@ export function SalaryFormView({
           <div className="rounded-xl p-5" style={{ backgroundColor: 'rgba(30,41,59,0.08)' }}>
             <div className="flex items-center justify-between mb-3">
               <span className="text-lg font-semibold text-gray-900">Net Amount to Pay:</span>
-              <span className="text-2xl font-bold" style={{ color: '#1e293b' }}>{fmt(calculatedNetAmount)}</span>
+              <div className="text-right">
+                <span className="text-2xl font-bold" style={{ color: '#1e293b' }}>
+                  {fmtCur(calculatedNetAmount, salaryCurrency)}
+                </span>
+                {/* Converted secondary amount */}
+                {calculatedNetAmount > 0 && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    ≈ {fmtCur(convertedAmount, oppositeCurrency)}
+                    <span className="ml-1 text-gray-400">(1 AED = {AED_TO_PKR} PKR)</span>
+                  </p>
+                )}
+              </div>
             </div>
             <div className="text-sm text-gray-600 flex flex-wrap gap-4">
               {formData.baseSalary > 0 && (
                 <span className="flex items-center gap-1">
-                  <span className="text-gray-400">Base:</span> {fmt(formData.baseSalary)}
+                  <span className="text-gray-400">Base:</span> {fmtCur(formData.baseSalary, salaryCurrency)}
                 </span>
               )}
               {formData.commission > 0 && (
                 <span className="flex items-center gap-1 text-green-700">
-                  <span>+</span> Commission: {fmt(formData.commission)}
+                  <span>+</span> Commission: {fmtCur(formData.commission, salaryCurrency)}
                   {isCommissionAutoFilled && !isEditMode && (
                     <span className="text-xs text-green-500">(from commission module)</span>
                   )}
@@ -836,10 +917,10 @@ export function SalaryFormView({
               )}
               {formData.deductions > 0 && (
                 <span className="flex items-center gap-1 text-red-600">
-                  <span>−</span> Deductions: {fmt(formData.deductions)}
+                  <span>−</span> Deductions: {fmtCur(formData.deductions, salaryCurrency)}
                   {isRegular && loanDeduction > 0 && !isEditMode && (
                     <span className="text-xs text-amber-600 ml-1">
-                      (incl. {fmt(loanDeduction)} loan repayment)
+                      (incl. {fmtCur(loanDeduction, salaryCurrency)} loan repayment)
                     </span>
                   )}
                 </span>
@@ -847,16 +928,15 @@ export function SalaryFormView({
             </div>
             {isRegular && advancePaidThisMonth > 0 && !regularAlreadyPaid && (
               <div className="mt-3 pt-3 border-t text-xs" style={{ borderColor: 'rgba(30,41,59,0.15)', color: '#1e293b' }}>
-                ℹ️ Advance already paid this month: {fmt(advancePaidThisMonth)} · 
-                Paying remaining: {fmt(remainingSalaryToPay)}
+                ℹ️ Advance already paid this month: {fmtCur(advancePaidThisMonth, salaryCurrency)} ·
+                Paying remaining: {fmtCur(remainingSalaryToPay, salaryCurrency)}
               </div>
             )}
-            {/* Loan repayment summary line */}
             {isRegular && loanDeduction > 0 && employeeLoan && !isEditMode && (
               <div className="mt-2 pt-2 border-t text-xs text-amber-700 flex items-center gap-1.5" style={{ borderColor: 'rgba(30,41,59,0.15)' }}>
                 <Landmark size={11} />
-                Loan repayment of {fmt(loanDeduction)} will be deducted — loan balance:
-                {' '}{fmt(employeeLoan.remaining)} → {fmt(loanAfterDeduction)}
+                Loan repayment of {fmtCur(loanDeduction, salaryCurrency)} will be deducted — loan balance:
+                {' '}{fmtCur(employeeLoan.remaining, salaryCurrency)} → {fmtCur(loanAfterDeduction, salaryCurrency)}
               </div>
             )}
           </div>
