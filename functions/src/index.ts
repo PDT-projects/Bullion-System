@@ -161,13 +161,13 @@ export const onTransactionCreated = onDocumentCreated(
       const html = `
         <div style="font-family:sans-serif;max-width:600px;
           margin:auto;padding:24px;">
-          <div style="background:#4f46e5;padding:20px 24px;
+          <div style="background:#2d2d2d;padding:20px 24px;
             border-radius:8px 8px 0 0;">
             <h2 style="color:#fff;margin:0;font-size:20px;">
               New Transaction Recorded
             </h2>
-            <p style="color:#c7d2fe;margin:4px 0 0;font-size:14px;">
-              Pakistan Detectors ERP System
+            <p style="color:#b0b0b0;margin:4px 0 0;font-size:14px;">
+              Bullion Electronics ERP System
             </p>
           </div>
           <div style="border:1px solid #e5e7eb;border-top:none;
@@ -196,7 +196,7 @@ export const onTransactionCreated = onDocumentCreated(
 
       try {
         await transporter.sendMail({
-          from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
+          from:    `"Bullion Electronics ERP" <${process.env.GMAIL_USER}>`,
           to:      process.env.GMAIL_TO || "",
           subject: `📥 New ${data.mainCategory}: ${txRef} — ${amount}`,
           html,
@@ -222,12 +222,12 @@ export const onTransactionCreated = onDocumentCreated(
     const html = `
       <div style="font-family:sans-serif;max-width:640px;margin:auto;
         border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
-        <div style="background:#4f46e5;padding:24px 28px;">
+        <div style="background:#2d2d2d;padding:24px 28px;">
           <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">
             ⏳ Transaction Awaiting Your Approval
           </h1>
-          <p style="color:#c7d2fe;margin:6px 0 0;font-size:13px;">
-            Pakistan Detectors ERP System
+          <p style="color:#b0b0b0;margin:6px 0 0;font-size:13px;">
+            Bullion Electronics ERP System
           </p>
         </div>
         <div style="padding:28px;background:#fff;">
@@ -280,14 +280,14 @@ export const onTransactionCreated = onDocumentCreated(
         <div style="padding:16px 28px;background:#f9fafb;
           border-top:1px solid #e5e7eb;">
           <p style="margin:0;font-size:12px;color:#9ca3af;">
-            Automated notification from Pakistan Detectors ERP. Do not reply.
+            Automated notification from Bullion Electronics ERP. Do not reply.
           </p>
         </div>
       </div>`;
 
     try {
       await transporter.sendMail({
-        from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
+        from:    `"Bullion Electronics ERP" <${process.env.GMAIL_USER}>`,
         to:      getApprovers(),
         subject: `🔔 Approval Required: ${txRef} — ${amount} | ${data.mainCategory || ""}`,
         html,
@@ -348,7 +348,7 @@ export const onTransactionUpdated = onDocumentUpdated(
       // 4. Confirmation email to internal team
       try {
         await transporter.sendMail({
-          from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
+          from:    `"Bullion Electronics ERP" <${process.env.GMAIL_USER}>`,
           to:      process.env.GMAIL_TO || "",
           subject: `✅ Approved: ${txRef} — ${amount}`,
           html: `
@@ -516,7 +516,7 @@ export const rejectTransaction = onRequest(async (req, res) => {
     // 3. Confirmation email to internal team
     try {
       await transporter.sendMail({
-        from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
+        from:    `"Bullion Electronics ERP" <${process.env.GMAIL_USER}>`,
         to:      process.env.GMAIL_TO || "",
         subject: `❌ Rejected & Deleted: ${txRef} — ${amount}`,
         html: `
@@ -635,7 +635,7 @@ export const onInvoicePdfReady = onDocumentUpdated(
               📄 New Invoice Created
             </h2>
             <p style="color:#d1fae5;margin:4px 0 0;font-size:14px;">
-              Pakistan Detectors ERP System
+              Bullion Electronics ERP System
             </p>
           </div>
           <div style="border:1px solid #e5e7eb;border-top:none;
@@ -654,14 +654,14 @@ export const onInvoicePdfReady = onDocumentUpdated(
             </table>
             <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;
               padding-top:16px;margin-top:24px;">
-              Automated notification from Pakistan Detectors ERP. PDF attached.
+              Automated notification from Bullion Electronics ERP. PDF attached.
             </p>
           </div>
         </div>`;
 
       // 3. Send email with PDF attached
       await transporter.sendMail({
-        from:    `"Pakistan Detectors ERP" <${process.env.GMAIL_USER}>`,
+        from:    `"Bullion Electronics ERP" <${process.env.GMAIL_USER}>`,
         to:      "acctsdetectors4563@gmail.com",
         subject: `📄 New Invoice: ${invoiceNumber} — ${totalAmount}`,
         html,
