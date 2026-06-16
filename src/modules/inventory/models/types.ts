@@ -12,7 +12,7 @@ export type InventoryEntryStep = 'details' | 'payment' | 'confirmation';
 
 // Canonical location list — single source of truth used across inventory + transfers
 export const INVENTORY_LOCATIONS = [
-  'Dubai',
+  'Dubai', 
   'Chad',
   'Saudia',
   'Sudan',
@@ -65,6 +65,12 @@ export interface Product {
   description: string;
   status: ProductStatus;
   isDamaged?: boolean;
+
+  // Payable configuration (optional)
+  enablePayable?: boolean;
+  fixedPayableAmount?: number;
+  fixedPayableCurrency?: string;
+
   createdAt?: string;
   updatedAt?: string;
   brandId?: string;
@@ -95,7 +101,13 @@ export interface Product {
   costingModelsJson?: string;
 }
 
+
+
+
+
 export interface ReceivableProduct extends Product {
+
+
   billId: string;
   receivableStatus: 'Pending' | 'Received';
   expectedReceiveDate: string;
