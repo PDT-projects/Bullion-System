@@ -18,6 +18,8 @@ import {
 
 import { useDashboardData } from './UseDashboardData';
 import { ReportsHub } from './ReportsHub';
+import { usePayableToFuturistic } from '../../modules/Payable-to-futuristic/viewModels/usePayableToFuturistic';
+import type { CurrencyAmounts } from '../../modules/Payable-to-futuristic/models/payableToFuturistic';
 
 // ─── Currency config ──────────────────────────────────────────────────────────
 
@@ -61,6 +63,22 @@ const fmt = (amount: number, meta: CurrencyMeta): string => {
 const getMeta  = (code: CurrencyCode) => CURRENCIES.find(c => c.code === code)!;
 const pkrMeta  = getMeta('PKR');
 const formatPKR = (n: number) => fmt(n, pkrMeta);
+
+// Resolve a Payable-to-Futuristic CurrencyAmounts object (aed/pkr/sar/usd,
+// computed with that module's own fixed rates) into whichever currency the
+// Dashboard currently has selected. AED/PKR/SAR map 1:1 onto the exact same
+// figures shown on the Payables screen. CAD has no slot in that module, so
+// it's the only case derived via the Dashboard's live USD-based rates —
+// everything else is taken verbatim, with no re-conversion.
+function resolvePayableAmount(amounts: CurrencyAmounts, code: CurrencyCode, rates: RateMap): number {
+  switch (code) {
+    case 'AED': return amounts.aed;
+    case 'PKR': return amounts.pkr;
+    case 'SAR': return amounts.sar;
+    case 'CAD': return amounts.usd * rates.CAD; // rates are USD-based
+    default:    return amounts.aed;
+  }
+}
 
 // ─── useCurrencyRates ─────────────────────────────────────────────────────────
 
@@ -400,6 +418,58 @@ function SmallStatCard({ label, countValue, pkrAmount = 0, primary, extras, rate
   );
 }
 
+// ─── PayableToFuturisticCard ───────────────────────────────────────────────────
+// Same visual style as SmallStatCard, but sourced directly from the Payable to
+// Futuristic module's own `totals` (CurrencyAmounts), not from a PKR base stat.
+// This guarantees the figure shown here is identical to the one on that screen.
+
+function PayableToFuturisticCard({
+  label, amounts, primary, extras, rates, amountColor = 'text-red-500', subtitle,
+}: {
+  label: string;
+  amounts: CurrencyAmounts;
+  primary: CurrencyCode;
+  extras: CurrencyCode[];
+  rates: RateMap;
+  amountColor?: string;
+  subtitle?: string;
+}) {
+  const meta   = getMeta(primary);
+  const amount = resolvePayableAmount(amounts, primary, rates);
+
+  return (
+    <div className="bg-white rounded-2xl p-4 border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200">
+      <p className="text-xs font-semibold text-gray-400 tracking-wide mb-2.5">{label}</p>
+      <p className={`text-xl font-bold tabular-nums leading-none mb-1 ${amountColor}`}>
+        {fmt(amount, meta)}
+      </p>
+      {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+
+      {extras.length > 0 && (
+        <div className="mt-3 pt-2.5 flex flex-col gap-1.5 border-t border-gray-100">
+          {extras.map(code => {
+            const exMeta = getMeta(code);
+            const exAmt  = resolvePayableAmount(amounts, code, rates);
+            return (
+              <div key={code} className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                  <span className="text-[10px] font-bold px-1 py-0.5 rounded leading-none bg-gray-100 text-gray-500">
+                    {code.slice(0, 2)}
+                  </span>
+                  {code}
+                </span>
+                <span className="text-xs font-semibold tabular-nums text-gray-600">
+                  {fmt(exAmt, exMeta)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── IconBadge ────────────────────────────────────────────────────────────────
 
 function IconBadge({ children, bg }: { children: React.ReactNode; bg: string }) {
@@ -428,6 +498,7 @@ export function Dashboard() {
   }, [permissionsLoading, canViewOverview]);
 
   const { transactions, banks, loans, invoices, commissions, products, loading, error, refresh, stats, monthlyChartData } = useDashboardData();
+  const { totals: futuristicTotals, loading: futuristicLoading } = usePayableToFuturistic();
   const currentMonthLabel = new Date().toLocaleDateString('en-PK', { month: 'long', year: 'numeric' });
 
   if (permissionsLoading || activeTab === null || loading) {
@@ -507,8 +578,8 @@ export function Dashboard() {
         <SmallStatCard label="Pending Bills"
           countValue={<span className="text-yellow-500">{stats.pendingBills}</span>}
           pkrAmount={stats.pendingBillsAmount} subtitleSuffix="due" {...cardCurrencyProps} />
-        <SmallStatCard label="Payable to Futuristic"
-          pkrAmount={stats.payableToFuturistic ?? 0} subtitle="Outstanding" amountColor="text-red-500" {...cardCurrencyProps} />
+        <PayableToFuturisticCard label="Payable to Futuristic"
+          amounts={futuristicTotals} subtitle={futuristicLoading ? 'Loading…' : 'Outstanding'} amountColor="text-red-500" {...cardCurrencyProps} />
       </div>
 
       {/* Charts */}
