@@ -1,125 +1,140 @@
-// modules/Payable-to-futuristic/models/futuristicPayableBridge.ts
+// models/futuristicPayableBridge.ts
 //
-// Called right after a new invoice is saved.
-// Scans the invoice products for any with brandName === 'Futuristic',
-// looks up the fixed USD price by modelName, and writes one doc per
-// product to the `payable_to_futuristic` Firestore collection.
+// Called by useInvoiceFormViewModel.ts -> handleSave(), right after a new
+// invoice is created. For each product on the invoice, checks if there is an
+// InventoryPayableConfig entry (inventory_payable_configs collection). If
+// found, auto-writes a payable entry to `payable_to_futuristic` using the
+// fixed AED amount configured for that inventory item.
 //
-// This is intentionally fire-and-forget (non-blocking) — a failure here
-// must never prevent the invoice from being created.
+// This call is fire-and-forget from the invoice side (see .then()/.catch()
+// at the call site) — errors here are logged but never block invoice saving.
+//
+// HARDENED: every product is logged with its productId so a mismatch with
+// inventory_payable_configs is visible in the console instead of failing
+// silently. productId is trimmed before lookup.
 
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
-import { getFuturisticPrice, usdToAllCurrencies, ZERO_AMOUNTS } from './payableToFuturistic';
-// InvoiceProduct type inlined to avoid cross-module import path issues
+import { fetchConfigForProduct } from './inventoryPayableConfigService';
+import { aedToAllCurrencies, ZERO_AMOUNTS } from './payableToFuturistic';
 
 const PAYABLE_COLLECTION = 'payable_to_futuristic';
 
-export interface FuturisticPayableEntry {
-  // Invoice linkage
-  invoiceId: string;
+export interface BridgeInvoiceProduct {
+  productId:   string;
+  productName?: string;
+  brandName?:  string;
+  modelName?:  string;
+  quantity?:   number;
+}
+
+export interface CreateFuturisticPayablesParams {
+  invoiceId:     string;
   invoiceNumber: string;
-  saleDate: string;
-  // Product info
-  productId: string;
-  modelName: string;
-  brandName: string;
-  location?: string;
-  // Amounts (USD is source of truth; others are converted)
-  usdPrice: number;
-  amounts: { usd: number; aed: number; pkr: number; sar: number };
-  paidAmounts: { usd: number; aed: number; pkr: number; sar: number };
-  // Status
-  status: 'pending';
-  dueDate: string;
-  description: string;
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
+  saleDate?:     string;
+  location?:     string;
+  products:      BridgeInvoiceProduct[];
 }
 
 /**
- * Called after invoice creation.
- * For each product in the invoice with brandName === 'Futuristic' (case-insensitive)
- * that has a known fixed USD price, writes a payable entry to Firestore.
+ * Auto-create payable entries for any invoice product that has a configured
+ * fixed AED payable amount (set in the "Configure Inventory" tab).
  *
- * Returns the number of payable entries created (0 if none were Futuristic).
+ * Called as: createFuturisticPayablesFromInvoice({ invoiceId, invoiceNumber, saleDate, products: selectedProducts })
+ *
+ * @returns the number of payable entries created
  */
-export async function createFuturisticPayablesFromInvoice(params: {
-  invoiceId: string;
-  invoiceNumber: string;
-  saleDate: string;
-  products: { productId: string; brandName: string; modelName: string; quantity: number; serialNumbers?: string[]; imageUrls?: string[] }[];
-}): Promise<number> {
-  const { invoiceId, invoiceNumber, saleDate, products } = params;
+export async function createFuturisticPayablesFromInvoice(
+  params: CreateFuturisticPayablesParams
+): Promise<number> {
+  const { invoiceId, invoiceNumber, saleDate, location, products } = params;
 
   console.log(
-    `[FuturisticPayable] Scanning ${products.length} product(s) on invoice ${invoiceNumber}`,
-    products.map(p => ({ brandName: p.brandName, modelName: p.modelName }))
+    `[PayableBridge] START invoice=${invoiceNumber} (${invoiceId}) — ${products?.length ?? 0} product row(s)`
   );
 
-  const futuristicProducts = products.filter(
-    (p) => (p.brandName || '').trim().toLowerCase() === 'futuristic'
-  );
-
-  console.log(`[FuturisticPayable] Found ${futuristicProducts.length} Futuristic product(s)`);
-
-  if (futuristicProducts.length === 0) return 0;
+  if (!products || products.length === 0) {
+    console.log('[PayableBridge] No products on invoice — nothing to do');
+    return 0;
+  }
 
   const now = new Date().toISOString();
-  // Due date: 30 days from sale
-  const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split('T')[0];
+  let createdCount = 0;
 
-  let created = 0;
+  for (const product of products) {
+    const cleanProductId = (product.productId || '').trim();
 
-  for (const product of futuristicProducts) {
-    const modelName  = (product.modelName || '').trim();
-    const usdPrice   = getFuturisticPrice(modelName);
+    console.log(
+      `[PayableBridge] Checking product → productId="${cleanProductId}" brand="${product.brandName}" model="${product.modelName}" qty=${product.quantity}`
+    );
 
-    if (usdPrice === null) {
-      // Model not in price list — skip silently (log for debugging)
-      console.warn(
-        `[FuturisticPayable] Unknown model "${modelName}" — no fixed price, skipping.`
-      );
+    if (!cleanProductId) {
+      console.warn('[PayableBridge] Skipping product row — productId is empty/missing');
       continue;
     }
 
-    // If quantity > 1, create one entry per unit
-    const qty = product.quantity || 1;
+    try {
+      const config = await fetchConfigForProduct(cleanProductId);
 
-    for (let i = 0; i < qty; i++) {
-      const serialSuffix = product.serialNumbers?.[i]
-        ? ` (S/N: ${product.serialNumbers[i]})`
-        : qty > 1 ? ` (unit ${i + 1}/${qty})` : '';
+      if (!config) {
+        console.log(
+          `[PayableBridge] No payable config configured for productId="${cleanProductId}" — skipping (this is normal if you haven't set one up in "Configure Inventory")`
+        );
+        continue;
+      }
 
-      const entry: FuturisticPayableEntry = {
+      const qty      = product.quantity ?? 1;
+      const totalAed = config.fixedAmountAed * qty;
+      const amounts  = aedToAllCurrencies(totalAed);
+
+      const defaultDue = new Date();
+      defaultDue.setDate(defaultDue.getDate() + 30);
+
+      const payableData = {
+        // Link back to invoice
         invoiceId,
         invoiceNumber,
-        saleDate,
-        productId:   product.productId || '',
-        modelName,
-        brandName:   'Futuristic',
-        usdPrice,
-        amounts:     usdToAllCurrencies(usdPrice),
+        saleDate: saleDate ?? now.split('T')[0],
+
+        // Product info
+        productId: cleanProductId,
+        modelName: product.modelName || config.modelName,
+        brandName: product.brandName || config.brandName,
+        location:  location || '',
+
+        // Amounts
+        amounts,
+        usdPrice:    amounts.usd,
         paidAmounts: ZERO_AMOUNTS,
-        status:      'pending',
-        dueDate,
-        description: `${modelName}${serialSuffix} — Invoice #${invoiceNumber}`,
-        notes:       '',
-        createdAt:   now,
-        updatedAt:   now,
+
+        // Metadata
+        description: `${config.modelName} — Invoice #${invoiceNumber}`,
+        status:      'pending' as const,
+        dueDate:     defaultDue.toISOString().split('T')[0],
+        notes:       `Auto-generated from invoice #${invoiceNumber}. Fixed amount: AED ${config.fixedAmountAed}${qty > 1 ? ` × ${qty} units` : ''}.`,
+        isManual:    false,
+        source:      'auto-invoice',
+
+        createdAt: now,
+        updatedAt: now,
       };
 
-      await addDoc(collection(db, PAYABLE_COLLECTION), entry);
-      created++;
+      const ref = await addDoc(collection(db, PAYABLE_COLLECTION), payableData);
+      createdCount += 1;
+
+      console.log(
+        `[PayableBridge] ✅ Created payable doc ${ref.id} — AED ${totalAed} for productId="${cleanProductId}" on invoice ${invoiceNumber}`
+      );
+    } catch (err) {
+      // Never block invoice creation — log and continue with next product
+      console.error(
+        `[PayableBridge] ⚠️ Failed to create payable for productId="${cleanProductId}":`,
+        err
+      );
     }
   }
 
-  console.log(
-    `[FuturisticPayable] Created ${created} payable entr${created === 1 ? 'y' : 'ies'} for invoice ${invoiceNumber}`
-  );
+  console.log(`[PayableBridge] DONE invoice=${invoiceNumber} — created ${createdCount} payable entr${createdCount === 1 ? 'y' : 'ies'}`);
 
-  return created;
+  return createdCount;
 }

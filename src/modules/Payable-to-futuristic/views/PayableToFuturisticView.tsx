@@ -6,6 +6,7 @@ import {
   FileText, MapPin, Plus, X, CreditCard, CheckCircle2,
 } from 'lucide-react';
 import { usePayableToFuturistic } from '../viewModels/usePayableToFuturistic';
+import { InventoryPayableConfigPanel } from './InventoryPayableConfigPanel';
 import type { InvoicePayableSummary, DerivedPayable } from '../viewModels/usePayableToFuturistic';
 import type { Currency } from '../models/payableToFuturistic';
 import { CURRENCY_SYMBOLS, FUTURISTIC_PRICES_USD, aedToAllCurrencies } from '../models/payableToFuturistic';
@@ -516,6 +517,7 @@ export const PayableToFuturisticView: React.FC = () => {
     addManualEntry, markPayment, actionLoading,
   } = usePayableToFuturistic();
 
+  const [activeTab,        setActiveTab]         = useState<'payables' | 'configure'>('payables');
   const [activeCurrency,   setActiveCurrency]   = useState<Currency>('USD');
   const [expandedIds,      setExpandedIds]       = useState<Set<string>>(new Set());
   const [showAddModal,     setShowAddModal]      = useState(false);
@@ -602,21 +604,49 @@ export const PayableToFuturisticView: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAddModal(true)}
-            style={S.charcoal}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl hover:opacity-90 transition shadow-sm"
-          >
-            <Plus size={14} /> Add Entry
-          </button>
-          <button
-            onClick={refresh}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm"
-          >
-            <RefreshCw size={14} /> Refresh
-          </button>
+          {activeTab === 'payables' && (
+            <>
+              <button
+                onClick={() => setShowAddModal(true)}
+                style={S.charcoal}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl hover:opacity-90 transition shadow-sm"
+              >
+                <Plus size={14} /> Add Entry
+              </button>
+              <button
+                onClick={refresh}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm"
+              >
+                <RefreshCw size={14} /> Refresh
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* ── Tab switcher ────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+        <button
+          onClick={() => setActiveTab('payables')}
+          style={activeTab === 'payables' ? S.tabActive : S.tabInactive}
+          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+        >
+          <DollarSign size={13} /> Invoices &amp; Payables
+        </button>
+        <button
+          onClick={() => setActiveTab('configure')}
+          style={activeTab === 'configure' ? S.tabActive : S.tabInactive}
+          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+        >
+          <Package size={13} /> Configure Inventory
+        </button>
+      </div>
+
+      {/* ── Configure tab ───────────────────────────────────────────────────── */}
+      {activeTab === 'configure' && <InventoryPayableConfigPanel />}
+
+      {/* ── Payables tab content ────────────────────────────────────────────── */}
+      {activeTab === 'payables' && <>
 
       {/* ── Summary Cards ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -754,6 +784,8 @@ export const PayableToFuturisticView: React.FC = () => {
           </div>
         </div>
       </details>
+
+      </> /* end activeTab === 'payables' */}
 
     </div>
   );
