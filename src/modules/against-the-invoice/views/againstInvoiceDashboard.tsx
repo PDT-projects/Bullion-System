@@ -248,6 +248,9 @@ export function AgainstInvoiceDashboard() {
       <ATICreateForm
         invoices={vm.availableInvoices}
         isSubmitting={vm.isSubmitting}
+        branches={vm.branches}
+        banks={vm.banks}
+        onAddBranch={vm.onAddBranch}
         onSubmit={vm.handleSubmit}
         onCancel={() => vm.setActiveView('list')}
         onSearchInvoices={vm.searchInvoices}   // ← NEW prop wired here

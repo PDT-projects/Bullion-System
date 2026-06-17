@@ -7,6 +7,8 @@ import { ATIFirebaseService } from '../models/atiFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { Invoice } from '../../invoices/models/types';
 import { BillsFirebaseService, BillBranch } from '../../bills/models/Billsfirebaseservice';
+import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
+import { Bank } from '../../banking/models/types';
 
 export type ATIView = 'list' | 'balances' | 'create';
 
@@ -55,6 +57,7 @@ export function useATIViewModel() {
   const [activeView,       setActiveView]       = useState<ATIView>('list');
   const [selectedEntry,    setSelectedEntry]    = useState<AgainstInvoiceEntry | null>(null);
   const [branches,         setBranches]         = useState<BranchInfo[]>(DEFAULT_BRANCHES);
+  const [banks,            setBanks]            = useState<Bank[]>([]);
 
   const invoicesCacheReady = useRef(false);
 
@@ -63,15 +66,17 @@ export function useATIViewModel() {
     setIsLoading(true);
     invoicesCacheReady.current = false;
     try {
-      const [atiData, invoiceData, summaryData, branchList] = await Promise.all([
+      const [atiData, invoiceData, summaryData, branchList, bankList] = await Promise.all([
         ATIFirebaseService.fetchAll(),
         InvoiceFirebaseService.fetchAllInvoices(),
         ATIFirebaseService.fetchInvoiceBalanceSummaries(),
         BillsFirebaseService.fetchAllBranches().catch(() => [] as BillBranch[]),
+        BankFirebaseService.fetchAllBanks().catch(() => [] as Bank[]),
       ]);
       setEntries(atiData);
       setInvoices(invoiceData);
       setBalanceSummaries(summaryData);
+      setBanks(bankList);
 
       // Merge defaults + Firestore-saved branches, deduplicated by name
       const combined = [...DEFAULT_BRANCHES, ...branchList].filter(
@@ -221,6 +226,7 @@ export function useATIViewModel() {
     activeView,
     selectedEntry,
     branches,
+    banks,
     setFilters,
     resetFilters,
     setActiveView,

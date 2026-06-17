@@ -13,6 +13,7 @@ import { AgainstInvoiceEntry, ATIPaymentMode } from '../models/types';
 import { generateATIId } from '../models/atiFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { SUB_CATEGORIES } from '../../transactions/models/types';
+import { Bank } from '../../banking/models/types';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n);
@@ -39,6 +40,7 @@ interface Props {
   invoices:         Invoice[];
   isSubmitting:     boolean;
   branches?:        BranchInfo[];
+  banks?:           Bank[];
   onAddBranch?:     (name: string) => Promise<string | null>;
   onSubmit:         (dto: Omit<AgainstInvoiceEntry, 'id'>) => Promise<void>;
   onCancel:         () => void;
@@ -89,7 +91,7 @@ const S = {
   row3: { display: 'grid' as const, gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' },
 };
 
-export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_BRANCHES, onAddBranch, onSubmit, onCancel, onSearchInvoices }: Props) {
+export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_BRANCHES, banks = [], onAddBranch, onSubmit, onCancel, onSearchInvoices }: Props) {
 
   // ── Invoice selection ──────────────────────────────────────────────────────
   const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -187,6 +189,9 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
   const newStatus      = remainingAfter <= 0 ? 'Settled' : totalPaidAfter > 0 ? 'Partial' : 'Active';
   const pctAfter       = invoiceTotal > 0 ? Math.min(100, (totalPaidAfter / invoiceTotal) * 100) : 0;
 
+  // ── Selected bank account (for the Bank payment mode dropdown) ──────────
+  const selectedBank = banks.find(b => b.id === bankId) || null;
+
 
 
   // ── Live balance fetch ─────────────────────────────────────────────────────
@@ -248,7 +253,14 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
       return false;
     }
     if (!subCategory.trim())               { setError('Please select a sub-category'); return false; }
-    if (mode === 'Bank'   && !bankName.trim())  { setError('Please enter bank name'); return false; }
+    if (mode === 'Bank') {
+      if (banks.length > 0 && !bankId)       { setError('Please select a bank account'); return false; }
+      if (banks.length === 0 && !bankName.trim()) { setError('Please enter bank name'); return false; }
+      if (bankId && selectedBank && amountNum > selectedBank.balance) {
+        setError(`Amount exceeds available balance in ${selectedBank.name} (${fmt(selectedBank.balance)})`);
+        return false;
+      }
+    }
     if (mode === 'Cheque' && !chequeNum.trim()) { setError('Please enter cheque number'); return false; }
     return true;
   };
@@ -557,17 +569,53 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
               </div>
 
               {mode === 'Bank' && (
-                <div style={S.row2}>
-                  <div>
-                    <label style={S.label}>Bank Name <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="e.g. HBL, MCB, UBL…" style={S.input} />
-                  </div>
-                  <div>
-                    <label style={S.label}>Bank ID (optional)</label>
-                    <input value={bankId} onChange={e => setBankId(e.target.value)} placeholder="Firestore bank doc id" style={S.input} />
-                  </div>
+                <div>
+                  <label style={S.label}>Select Bank Account <span style={{ color: '#ef4444' }}>*</span></label>
+                  {banks.length > 0 ? (
+                    <select
+                      value={bankId}
+                      onChange={e => {
+                        const id = e.target.value;
+                        const bank = banks.find(b => b.id === id);
+                        setBankId(id);
+                        setBankName(bank?.name || '');
+                      }}
+                      style={S.input}
+                    >
+                      <option value="">— Select Bank —</option>
+                      {banks.map(b => (
+                        <option key={b.id} value={b.id}>{b.name} — {fmt(b.balance)}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div>
+                      <input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="e.g. HBL, MCB, UBL…" style={S.input} />
+                      <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                        No saved bank accounts found — enter the bank name manually
+                      </div>
+                    </div>
+                  )}
+                  {selectedBank && (
+                    <div style={{
+                      marginTop: '8px', padding: '10px 12px',
+                      background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px',
+                      fontSize: '12px',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#6b7280' }}>Current balance</span>
+                        <span style={{ fontWeight: 600, color: '#1d4ed8' }}>{fmt(selectedBank.balance)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
+                        <span style={{ color: '#6b7280' }}>After this payment</span>
+                        <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                          {fmt(selectedBank.balance - (amountNum > 0 ? amountNum : 0))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
 
               {mode === 'Cheque' && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
