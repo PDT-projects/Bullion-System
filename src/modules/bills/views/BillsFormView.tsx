@@ -9,6 +9,8 @@ import React, { useState } from 'react';
 import { BillTransaction, BILL_CATEGORIES, COMPANIES } from '../models/types';
 import { BillsService } from '../models/billsService';
 import { Button } from '../../../components/ui/button';
+import { SUPPORTED_CURRENCIES, SupportedCurrency } from '../../transactions/viewModels/useTransactionFormViewModel';
+import { convertCurrency } from '../../invoices/models/invoiceService';
 import {
   Plus, Trash2, Upload, X,
   Zap, Wifi, Droplets, Receipt,
@@ -33,6 +35,7 @@ interface BillsFormViewProps {
   branches: BranchInfo[];
   banks: BankInfo[];
   allBillCategories: string[];
+  currencyRates: Record<string, number>;
   onAddBillCategory: (name: string) => Promise<string | null>;
   onAddBranch: (name: string) => Promise<string | null>;
   setFormField: (field: string, value: any) => void;
@@ -73,12 +76,137 @@ function formatDateDisplay(dateStr: string): string {
   }
 }
 
+// ── CurrencyAmountInput ───────────────────────────────────────────────────────
+// Lets the user type an amount in any supported currency.
+// The AED equivalent is computed on every keystroke and pushed to the parent.
+// On currency switch the display value is immediately re-expressed in the new unit.
+//
+// State contract:
+//   displayValue       — what the <input> shows; always in `inputCurrency` units
+//   txn.amount          — AED authoritative value stored in ViewModel
+//   txn.inputCurrency   — which currency the user typed in (stored as extra field)
+function CurrencyAmountInput({
+  value,          // AED value from ViewModel
+  inputCurrency,  // currently selected input currency
+  currencyRates,
+  placeholder,
+  hasError,
+  label,
+  hint,
+  onAmountChange,     // (aedValue, originalValue, currency) => void
+  onCurrencyChange,   // (newCurrency) => void
+  readOnly,
+}: {
+  value: number;
+  inputCurrency: SupportedCurrency;
+  currencyRates: Record<string, number>;
+  placeholder?: string;
+  hasError?: boolean;
+  label: string;
+  hint?: string;
+  onAmountChange: (aedValue: number, originalValue: number, currency: SupportedCurrency) => void;
+  onCurrencyChange: (c: SupportedCurrency) => void;
+  readOnly?: boolean;
+}) {
+  // Convert AED → display currency for initial render
+  const toDisplay = (aed: number, cur: SupportedCurrency): number => {
+    if (aed === 0) return 0;
+    if (cur === 'AED') return aed;
+    return +convertCurrency(aed, 'AED', cur as any, currencyRates as any).toFixed(2);
+  };
+
+  const [displayValue, setDisplayValue] = React.useState<number>(
+    () => toDisplay(value, inputCurrency)
+  );
+
+  // Sync when AED value changes externally OR currency switches
+  const prevRef = React.useRef<{ aed: number; cur: SupportedCurrency }>({ aed: value, cur: inputCurrency });
+  React.useEffect(() => {
+    const prev = prevRef.current;
+    const currencyChanged = prev.cur !== inputCurrency;
+    const valueChanged    = prev.aed !== value;
+    if (currencyChanged || (valueChanged && !currencyChanged)) {
+      setDisplayValue(toDisplay(value, inputCurrency));
+    }
+    prevRef.current = { aed: value, cur: inputCurrency };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, inputCurrency]);
+
+  const aedPer1Unit = inputCurrency === 'AED'
+    ? 1
+    : +convertCurrency(1, inputCurrency as any, 'AED', currencyRates as any).toFixed(2);
+
+  const handleAmountChange = (raw: number) => {
+    setDisplayValue(raw);
+    const aed = inputCurrency === 'AED'
+      ? raw
+      : +convertCurrency(raw, inputCurrency as any, 'AED', currencyRates as any).toFixed(2);
+    onAmountChange(aed, raw, inputCurrency);
+  };
+
+  const handleCurrencyChange = (newCur: SupportedCurrency) => {
+    // Re-express current AED value in new currency immediately
+    setDisplayValue(toDisplay(value, newCur));
+    onCurrencyChange(newCur);
+  };
+
+  return (
+    <div>
+      <label className={lbl}>
+        {label}
+        {inputCurrency !== 'AED' && (
+          <span className="ml-1 text-xs font-normal text-blue-500">· {inputCurrency}</span>
+        )}
+      </label>
+      <div className="flex gap-1.5">
+        <input
+          type="number"
+          min="0"
+          step="any"
+          value={displayValue || ''}
+          readOnly={readOnly}
+          onChange={e => !readOnly && handleAmountChange(Number(e.target.value))}
+          placeholder={placeholder || '0'}
+          className={`${inp} flex-1 ${hasError ? errCls : ''} ${readOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+        />
+        {!readOnly && (
+          <select
+            value={inputCurrency}
+            onChange={e => handleCurrencyChange(e.target.value as SupportedCurrency)}
+            className="px-1.5 py-1 border border-gray-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 shrink-0"
+            title="Select input currency — amount is always stored in AED"
+          >
+            {SUPPORTED_CURRENCIES.map(c => (
+              <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
+            ))}
+          </select>
+        )}
+      </div>
+      {inputCurrency !== 'AED' && value > 0 && (
+        <div className="mt-1 space-y-0.5">
+          <p className="text-xs text-gray-500">
+            ≈ <span className="font-semibold text-gray-700">
+              AED {value.toLocaleString('en-AE', { maximumFractionDigits: 0 })}
+            </span>
+            <span className="ml-1.5 text-gray-400">
+              · 1 {inputCurrency} = AED {aedPer1Unit.toLocaleString('en-AE', { maximumFractionDigits: 2 })}
+            </span>
+          </p>
+        </div>
+      )}
+      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const BillsFormView: React.FC<BillsFormViewProps> = ({
   formData, billTransactions, isEditing, isSubmitting, errors,
   predefinedVendors, branches = [], banks = [],
   allBillCategories = [], onAddBillCategory, onAddBranch,
   setFormField, addBillTransaction, removeBillTransaction,
   updateBillTransaction, handleImageUpload, handleSubmit, handleCancel, calculateTotal,
+  currencyRates,
 }) => {
   // Always display bill amounts in AED
   const formatAED = (n: number): string =>
@@ -312,28 +440,31 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
 
                   {/* Amounts row */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                      <label className={lbl}>Total Amount (AED) *</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500 pointer-events-none"></span>
-                        <input type="number" min="0" value={txn.amount || ''}
-                          onChange={(e) => updateBillTransaction(txn.id, 'amount', Number(e.target.value))}
-                          className={`${inp} pl-11 ${errors[`transaction_${index}_amount`] ? errCls : ''}`}
-                          placeholder="0.00" />
-                      </div>
-                      {errors[`transaction_${index}_amount`] && (
-                        <p className="text-red-500 text-xs mt-1">{errors[`transaction_${index}_amount`]}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className={lbl}>Amount Paid AED <span className="text-gray-400">(blank=full)</span></label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500 pointer-events-none">AED</span>
-                        <input type="number" min="0" value={txn.amountPaid || ''}
-                          onChange={(e) => updateBillTransaction(txn.id, 'amountPaid', Number(e.target.value))}
-                          className={`${inp} pl-11`} placeholder="Leave blank for full" />
-                      </div>
-                    </div>
+                    <CurrencyAmountInput
+                      label="Total Amount *"
+                      value={txn.amount || 0}
+                      inputCurrency={(txn as any).inputCurrency || 'AED'}
+                      currencyRates={currencyRates}
+                      hasError={!!errors[`transaction_${index}_amount`]}
+                      onAmountChange={(aed, orig, cur) => {
+                        updateBillTransaction(txn.id, 'amount', aed);
+                        updateBillTransaction(txn.id, 'inputCurrency' as any, cur);
+                        updateBillTransaction(txn.id, 'originalAmount' as any, orig);
+                      }}
+                      onCurrencyChange={cur => updateBillTransaction(txn.id, 'inputCurrency' as any, cur)}
+                    />
+                    <CurrencyAmountInput
+                      label="Amount Paid"
+                      hint="Leave blank for full payment"
+                      value={txn.amountPaid || 0}
+                      inputCurrency={(txn as any).inputCurrency || 'AED'}
+                      currencyRates={currencyRates}
+                      onAmountChange={(aed, orig) => {
+                        updateBillTransaction(txn.id, 'amountPaid', aed);
+                        updateBillTransaction(txn.id, 'originalAmountPaid' as any, orig);
+                      }}
+                      onCurrencyChange={cur => updateBillTransaction(txn.id, 'inputCurrency' as any, cur)}
+                    />
                     <div>
                       <label className={lbl}>Status</label>
                       <div className={`px-3 py-2 rounded-lg border text-xs font-medium flex items-center gap-1.5 h-[38px] ${
@@ -353,6 +484,9 @@ export const BillsFormView: React.FC<BillsFormViewProps> = ({
                         className={inp} />
                     </div>
                   </div>
+                  {errors[`transaction_${index}_amount`] && (
+                    <p className="text-red-500 text-xs">{errors[`transaction_${index}_amount`]}</p>
+                  )}
 
                   {txn.paymentStatus === 'Partial' && txn.remainingAmount > 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">

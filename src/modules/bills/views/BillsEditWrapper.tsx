@@ -27,6 +27,7 @@ export const BillsEditWrapper: React.FC = () => {
       handleSubmit={vm.handleSubmit}
       handleCancel={vm.handleCancel}
       calculateTotal={vm.calculateTotal}
+      currencyRates={vm.currencyRates}
     />
   );
 };

@@ -12,6 +12,7 @@ import { BillsService } from '../models/billsService';
 import { BillsFirebaseService } from '../models/Billsfirebaseservice';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { TransactionFirebaseService } from '../../transactions/models/transactionFirebaseService';
+import { fetchCurrencyRates, CURRENCY_RATE_FALLBACK } from '../../invoices/models/invoiceService';
 
 interface BankInfo { id: string; name: string; balance: number; }
 
@@ -59,6 +60,8 @@ interface UseBillsFormViewModelReturn {
   handleSubmit: () => void;
   handleCancel: () => void;
   calculateTotal: () => number;
+  // Currency
+  currencyRates: Record<string, number>;
 }
 
 const BASE_CATEGORIES = Object.keys(BILL_CATEGORIES);
@@ -87,6 +90,7 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
   const [dynamicCategories,  setDynamicCategories]  = useState<DynamicBillCategory[]>([]);
   const [isSubmitting,       setIsSubmitting]       = useState(false);
   const [errors,             setErrors]             = useState<{ [key: string]: string }>({});
+  const [currencyRates,      setCurrencyRates]      = useState<Record<string, number>>(CURRENCY_RATE_FALLBACK as any);
 
   const predefinedVendors = [
     'LESCO', 'IESCO', 'K-Electric', 'PTCL', 'StormFiber', 'Nayatel',
@@ -112,6 +116,12 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
           BillsFirebaseService.fetchAllBranches().catch(() => []),
         ]);
         setBanks(bankList as BankInfo[]);
+
+        // Fetch live currency rates (non-blocking — falls back to static rates on error)
+        fetchCurrencyRates().then(rates => {
+          if (rates) setCurrencyRates(rates as any);
+        }).catch(() => {/* silently use fallback */});
+
         // Filter only bill-category type entries
         const billDynCats = (dynCats as any[])
           .filter(d => d.type === 'billCategory')
@@ -405,5 +415,6 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
     handleSubmit,
     handleCancel,
     calculateTotal,
+    currencyRates,
   };
 }

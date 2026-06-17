@@ -18,22 +18,22 @@ const lbl = 'block text-sm font-medium text-gray-700 mb-1';
 
 // ── CurrencyAmountInput ───────────────────────────────────────────────────────
 // Lets the user type an amount in any supported currency.
-// The PKR equivalent is computed on every keystroke and pushed to the parent.
+// The AED equivalent is computed on every keystroke and pushed to the parent.
 // On currency switch the display value is immediately re-expressed in the new unit.
 //
 // State contract:
 //   displayValue       — what the <input> shows; always in `inputCurrency` units
-//   item.amount        — PKR authoritative value stored in ViewModel
+//   item.amount        — AED authoritative value stored in ViewModel
 //   item.inputCurrency — which currency the user typed in (stored as extra field)
 function CurrencyAmountInput({
-  value,          // PKR value from ViewModel
+  value,          // AED value from ViewModel
   inputCurrency,  // currently selected input currency
   currencyRates,
   placeholder,
   hasError,
   label,
   hint,
-  onAmountChange,     // (pkrValue, originalValue, currency) => void
+  onAmountChange,     // (aedValue, originalValue, currency) => void
   onCurrencyChange,   // (newCurrency) => void
   readOnly,
 }: {
@@ -44,48 +44,48 @@ function CurrencyAmountInput({
   hasError?: boolean;
   label: string;
   hint?: string;
-  onAmountChange: (pkrValue: number, originalValue: number, currency: SupportedCurrency) => void;
+  onAmountChange: (aedValue: number, originalValue: number, currency: SupportedCurrency) => void;
   onCurrencyChange: (c: SupportedCurrency) => void;
   readOnly?: boolean;
 }) {
-  // Convert PKR → display currency for initial render
-  const toDisplay = (pkr: number, cur: SupportedCurrency): number => {
-    if (pkr === 0) return 0;
-    if (cur === 'PKR') return pkr;
-    return +convertCurrency(pkr, 'PKR', cur as any, currencyRates as any).toFixed(2);
+  // Convert AED → display currency for initial render
+  const toDisplay = (aed: number, cur: SupportedCurrency): number => {
+    if (aed === 0) return 0;
+    if (cur === 'AED') return aed;
+    return +convertCurrency(aed, 'AED', cur as any, currencyRates as any).toFixed(2);
   };
 
   const [displayValue, setDisplayValue] = React.useState<number>(
     () => toDisplay(value, inputCurrency)
   );
 
-  // Sync when PKR value changes externally OR currency switches
-  const prevRef = React.useRef<{ pkr: number; cur: SupportedCurrency }>({ pkr: value, cur: inputCurrency });
+  // Sync when AED value changes externally OR currency switches
+  const prevRef = React.useRef<{ aed: number; cur: SupportedCurrency }>({ aed: value, cur: inputCurrency });
   React.useEffect(() => {
     const prev = prevRef.current;
     const currencyChanged = prev.cur !== inputCurrency;
-    const valueChanged    = prev.pkr !== value;
+    const valueChanged    = prev.aed !== value;
     if (currencyChanged || (valueChanged && !currencyChanged)) {
       setDisplayValue(toDisplay(value, inputCurrency));
     }
-    prevRef.current = { pkr: value, cur: inputCurrency };
+    prevRef.current = { aed: value, cur: inputCurrency };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, inputCurrency]);
 
-  const pkrPer1Unit = inputCurrency === 'PKR'
+  const aedPer1Unit = inputCurrency === 'AED'
     ? 1
-    : +convertCurrency(1, inputCurrency as any, 'PKR', currencyRates as any).toFixed(2);
+    : +convertCurrency(1, inputCurrency as any, 'AED', currencyRates as any).toFixed(2);
 
   const handleAmountChange = (raw: number) => {
     setDisplayValue(raw);
-    const pkr = inputCurrency === 'PKR'
+    const aed = inputCurrency === 'AED'
       ? raw
-      : +convertCurrency(raw, inputCurrency as any, 'PKR', currencyRates as any).toFixed(2);
-    onAmountChange(pkr, raw, inputCurrency);
+      : +convertCurrency(raw, inputCurrency as any, 'AED', currencyRates as any).toFixed(2);
+    onAmountChange(aed, raw, inputCurrency);
   };
 
   const handleCurrencyChange = (newCur: SupportedCurrency) => {
-    // Re-express current PKR value in new currency immediately
+    // Re-express current AED value in new currency immediately
     setDisplayValue(toDisplay(value, newCur));
     onCurrencyChange(newCur);
   };
@@ -94,7 +94,7 @@ function CurrencyAmountInput({
     <div>
       <label className={lbl}>
         {label}
-        {inputCurrency !== 'PKR' && (
+        {inputCurrency !== 'AED' && (
           <span className="ml-1 text-xs font-normal text-blue-500">· {inputCurrency}</span>
         )}
       </label>
@@ -114,7 +114,7 @@ function CurrencyAmountInput({
             value={inputCurrency}
             onChange={e => handleCurrencyChange(e.target.value as SupportedCurrency)}
             className="px-1.5 py-1 border border-gray-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 shrink-0"
-            title="Select input currency — amount is always stored in PKR"
+            title="Select input currency — amount is always stored in AED"
           >
             {SUPPORTED_CURRENCIES.map(c => (
               <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
@@ -122,14 +122,14 @@ function CurrencyAmountInput({
           </select>
         )}
       </div>
-      {inputCurrency !== 'PKR' && value > 0 && (
+      {inputCurrency !== 'AED' && value > 0 && (
         <div className="mt-1 space-y-0.5">
           <p className="text-xs text-gray-500">
             ≈ <span className="font-semibold text-gray-700">
-              PKR {value.toLocaleString('en-PK', { maximumFractionDigits: 0 })}
+              AED {value.toLocaleString('en-AE', { maximumFractionDigits: 0 })}
             </span>
             <span className="ml-1.5 text-gray-400">
-              · 1 {inputCurrency} = PKR {pkrPer1Unit.toLocaleString('en-PK', { maximumFractionDigits: 2 })}
+              · 1 {inputCurrency} = AED {aedPer1Unit.toLocaleString('en-AE', { maximumFractionDigits: 2 })}
             </span>
           </p>
         </div>
@@ -196,13 +196,9 @@ export function TransactionFormView({
   const isInflow = transactionType === 'Cash Inflow';
 
   // ── AED summary helpers ────────────────────────────────────────────────────
-  // Items store amounts in PKR internally. Convert to AED for the Summary panel.
-  const toAED = (pkr: number): number =>
-    pkr > 0 ? +convertCurrency(pkr, 'PKR', 'AED' as any, currencyRates as any).toFixed(2) : 0;
-
-  const formatAED = (pkr: number): string => {
-    const aed = toAED(pkr);
-    return `AED ${aed.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Items now store amounts in AED internally, so this is just a display formatter.
+  const formatAED = (aed: number): string => {
+    return `AED ${(aed || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -631,11 +627,11 @@ export function TransactionFormView({
                   <CurrencyAmountInput
                     label="Total Amount *"
                     value={item.amount || 0}
-                    inputCurrency={(item as any).inputCurrency || 'PKR'}
+                    inputCurrency={(item as any).inputCurrency || 'AED'}
                     currencyRates={currencyRates}
                     hasError={saveAttempted && (!item.amount || item.amount <= 0)}
-                    onAmountChange={(pkr, orig, cur) => {
-                      updateItem(item.id, 'amount', pkr);
+                    onAmountChange={(aed, orig, cur) => {
+                      updateItem(item.id, 'amount', aed);
                       updateItem(item.id, 'inputCurrency' as any, cur);
                       updateItem(item.id, 'originalAmount' as any, orig);
                     }}
@@ -645,10 +641,10 @@ export function TransactionFormView({
                     label={`Amount Received`}
                     hint="Leave blank if fully received"
                     value={item.amountPaid || 0}
-                    inputCurrency={(item as any).inputCurrency || 'PKR'}
+                    inputCurrency={(item as any).inputCurrency || 'AED'}
                     currencyRates={currencyRates}
-                    onAmountChange={(pkr, orig) => {
-                      updateItem(item.id, 'amountPaid', pkr);
+                    onAmountChange={(aed, orig) => {
+                      updateItem(item.id, 'amountPaid', aed);
                       updateItem(item.id, 'originalAmountPaid' as any, orig);
                     }}
                     onCurrencyChange={cur => updateItem(item.id, 'inputCurrency' as any, cur)}
@@ -670,11 +666,11 @@ export function TransactionFormView({
                   <CurrencyAmountInput
                     label="Total Amount *"
                     value={item.amount || 0}
-                    inputCurrency={(item as any).inputCurrency || 'PKR'}
+                    inputCurrency={(item as any).inputCurrency || 'AED'}
                     currencyRates={currencyRates}
                     hasError={saveAttempted && (!item.amount || item.amount <= 0)}
-                    onAmountChange={(pkr, orig, cur) => {
-                      updateItem(item.id, 'amount', pkr);
+                    onAmountChange={(aed, orig, cur) => {
+                      updateItem(item.id, 'amount', aed);
                       updateItem(item.id, 'inputCurrency' as any, cur);
                       updateItem(item.id, 'originalAmount' as any, orig);
                     }}
@@ -684,10 +680,10 @@ export function TransactionFormView({
                     label="Amount Paid"
                     hint="Leave blank for full payment"
                     value={item.amountPaid || 0}
-                    inputCurrency={(item as any).inputCurrency || 'PKR'}
+                    inputCurrency={(item as any).inputCurrency || 'AED'}
                     currencyRates={currencyRates}
-                    onAmountChange={(pkr, orig) => {
-                      updateItem(item.id, 'amountPaid', pkr);
+                    onAmountChange={(aed, orig) => {
+                      updateItem(item.id, 'amountPaid', aed);
                       updateItem(item.id, 'originalAmountPaid' as any, orig);
                     }}
                     onCurrencyChange={cur => updateItem(item.id, 'inputCurrency' as any, cur)}
