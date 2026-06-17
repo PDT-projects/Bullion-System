@@ -1,5 +1,8 @@
 // routes.tsx — updated
 // NEW: Added /payable-to-futuristic route under Operations
+// FIX: Salary module routes corrected to match actual navigation calls and
+//      wrapper prop contracts (SalaryCreateWrapper needs `type`,
+//      SalaryListWrapper needs `type` + `title`).
 
 import React, { useState } from 'react';
 import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
@@ -178,9 +181,24 @@ function LoanPaymentRoute()          { return <LoanPaymentWrapper />; }
 // ============================================================
 // SALARY ROUTES
 // ============================================================
+// NOTE on the fix:
+//  - SalaryDashboardWrapper takes no props (reads its own viewModel) — unchanged.
+//  - SalaryListWrapper requires `type: 'regular' | 'advance' | 'all'` and `title`.
+//    The dashboard/list viewmodels navigate to /salary/all, /salary/regular,
+//    and /salary/advance — so those are the three list routes we register.
+//  - SalaryCreateWrapper requires `type: 'regular' | 'advance'`.
+//    Both useSalaryDashboardViewModel and useSalaryListViewModel's handleAdd()
+//    navigate to /salary/create-regular and /salary/create-advance — so those
+//    are the two create routes we register (the old generic '/salary/create'
+//    route never matched what the app actually navigates to, hence the 404).
+//  - SalaryEditWrapper and SalaryDeleteWrapper take no props (read useParams
+//    internally) — unchanged, still under /salary/:id/edit and /salary/:id/delete.
 
-function SalaryListRoute()      { return <SalaryListWrapper />; }
-function SalaryCreateRoute()    { return <SalaryCreateWrapper />; }
+function SalaryListAllRoute()      { return <SalaryListWrapper type="all" title="All Salaries" />; }
+function SalaryListRegularRoute()  { return <SalaryListWrapper type="regular" title="Regular Salaries" />; }
+function SalaryListAdvanceRoute()  { return <SalaryListWrapper type="advance" title="Advance Salaries" />; }
+function SalaryCreateRegularRoute(){ return <SalaryCreateWrapper type="regular" />; }
+function SalaryCreateAdvanceRoute(){ return <SalaryCreateWrapper type="advance" />; }
 function SalaryEditRoute()      { return <SalaryEditWrapper />; }
 function SalaryDeleteRoute()    { return <SalaryDeleteWrapper />; }
 function SalaryDashboardRoute() { return <SalaryDashboardWrapper />; }
@@ -330,15 +348,21 @@ export const router = createBrowserRouter([
   },
 
   // ── Salary ────────────────────────────────────────────────
+  // FIXED: routes now match the actual paths the salary module navigates to
+  // (create-regular / create-advance / all / regular / advance), and pass
+  // the `type` (and `title`) props the wrappers require.
   {
     path: '/salary',
     element: (<ProtectedRoute><OutletLayout activeModule="salary" /></ProtectedRoute>),
     children: [
-      { index: true,        element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryDashboardRoute /></ScreenProtectedRoute> },
-      { path: 'list',       element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryListRoute /></ScreenProtectedRoute> },
-      { path: 'create',     element: <ScreenProtectedRoute requiredScreen="Create Salary"><SalaryCreateRoute /></ScreenProtectedRoute> },
-      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Salary"><SalaryEditRoute /></ScreenProtectedRoute> },
-      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Salary"><SalaryDeleteRoute /></ScreenProtectedRoute> },
+      { index: true,            element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryDashboardRoute /></ScreenProtectedRoute> },
+      { path: 'all',             element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryListAllRoute /></ScreenProtectedRoute> },
+      { path: 'regular',         element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryListRegularRoute /></ScreenProtectedRoute> },
+      { path: 'advance',         element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryListAdvanceRoute /></ScreenProtectedRoute> },
+      { path: 'create-regular',  element: <ScreenProtectedRoute requiredScreen="Create Salary"><SalaryCreateRegularRoute /></ScreenProtectedRoute> },
+      { path: 'create-advance',  element: <ScreenProtectedRoute requiredScreen="Create Salary"><SalaryCreateAdvanceRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',        element: <ScreenProtectedRoute requiredScreen="Edit Salary"><SalaryEditRoute /></ScreenProtectedRoute> },
+      { path: ':id/delete',      element: <ScreenProtectedRoute requiredScreen="Delete Salary"><SalaryDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
 
