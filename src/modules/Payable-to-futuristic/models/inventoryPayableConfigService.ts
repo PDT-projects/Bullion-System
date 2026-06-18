@@ -7,6 +7,10 @@
 // whitespace can never cause a silent match failure. Debug logs added to
 // fetchConfigForProduct so mismatches are visible in the console instead
 // of failing silently.
+//
+// UPDATED: Stores inputCurrency + inputAmount alongside fixedAmountAed
+// (which is always in AED) so the Configure tab can display what the user
+// originally typed (AED or USD).
 
 import {
   collection, doc, getDocs, addDoc,
@@ -31,6 +35,8 @@ function docToConfig(d: any): InventoryPayableConfig {
     brandName:      data.brandName      || '',
     modelName:      data.modelName      || '',
     fixedAmountAed: data.fixedAmountAed ?? 0,
+    inputCurrency:  data.inputCurrency  || 'AED',
+    inputAmount:    data.inputAmount    ?? data.fixedAmountAed ?? 0,
     notes:          data.notes          || '',
     createdAt:      data.createdAt      || '',
     updatedAt:      data.updatedAt      || '',
@@ -78,6 +84,8 @@ export async function createInventoryPayableConfig(
   if (existing) {
     await updateInventoryPayableConfig(existing.id, {
       fixedAmountAed: dto.fixedAmountAed,
+      inputCurrency:  dto.inputCurrency,
+      inputAmount:    dto.inputAmount,
       notes:          dto.notes,
       productName:    dto.productName,
       brandName:      dto.brandName,
@@ -93,6 +101,8 @@ export async function createInventoryPayableConfig(
     brandName:      dto.brandName,
     modelName:      dto.modelName,
     fixedAmountAed: dto.fixedAmountAed,
+    inputCurrency:  dto.inputCurrency,
+    inputAmount:    dto.inputAmount,
     notes:          dto.notes ?? '',
     createdAt:      now,
     updatedAt:      now,

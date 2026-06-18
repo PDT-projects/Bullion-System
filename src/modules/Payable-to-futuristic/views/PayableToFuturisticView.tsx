@@ -1,19 +1,40 @@
 // views/PayableToFuturisticView.tsx
+//
+// CHANGES:
+//  1. ManualEntryModal — fixed model dropdown to always render correctly;
+//     added AED/USD amount toggle; improved form validation messaging.
+//  2. PaymentModal — replaced notes-only form with full Bank / Cash selector.
+//     Shows live account balances fetched from Firestore. On submit, the
+//     chosen account balance is atomically deducted via recordPayment().
+//  3. All bank accounts and cash accounts are loaded by usePayableToFuturistic
+//     and passed down as props so they are shared without duplicate fetches.
+
 import React, { useState } from 'react';
 import {
   Building2, RefreshCw, AlertCircle, Loader2,
   DollarSign, ChevronDown, ChevronRight, Package,
   FileText, MapPin, Plus, X, CreditCard, CheckCircle2,
+  Banknote, Wallet, Info,
 } from 'lucide-react';
 import { usePayableToFuturistic } from '../viewModels/usePayableToFuturistic';
 import { InventoryPayableConfigPanel } from './InventoryPayableConfigPanel';
-import type { InvoicePayableSummary, DerivedPayable } from '../viewModels/usePayableToFuturistic';
+import type {
+  InvoicePayableSummary,
+  DerivedPayable,
+  BankAccount,
+  CashAccount,
+} from '../viewModels/usePayableToFuturistic';
 import type { Currency } from '../models/payableToFuturistic';
-import { CURRENCY_SYMBOLS, FUTURISTIC_PRICES_USD, aedToAllCurrencies } from '../models/payableToFuturistic';
+import {
+  CURRENCY_SYMBOLS,
+  FUTURISTIC_PRICES_USD,
+  aedToAllCurrencies,
+} from '../models/payableToFuturistic';
 
 const ALL_CURRENCIES: Currency[] = ['AED', 'PKR', 'SAR', 'USD'];
 const FUTURISTIC_MODELS = Object.keys(FUTURISTIC_PRICES_USD);
-// AED rate used for display hint (matches payableToFuturistic.ts USD_EXCHANGE_RATES.AED)
+
+// 1 USD = 3.67 AED (matches payableToFuturistic.ts USD_EXCHANGE_RATES.AED)
 const USD_TO_AED = 3.67;
 
 type CurrKey = 'aed' | 'pkr' | 'sar' | 'usd';
@@ -49,12 +70,14 @@ function StatusBadge({ status }: { status: 'pending' | 'partial' | 'paid' }) {
 // ── Overlay backdrop ──────────────────────────────────────────────────────────
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
-      <div className="relative" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+      onClick={onClose}
+    >
+      <div onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
-      {/* click outside to close */}
-      <div className="absolute inset-0 -z-10" onClick={onClose} />
     </div>
   );
 }
@@ -70,11 +93,12 @@ interface ManualEntryModalProps {
 }
 
 function ManualEntryModal({ onClose, onSubmit, loading }: ManualEntryModalProps) {
-  const [modelName,   setModelName]   = useState('');
-  const [customModel, setCustomModel] = useState('');
-  const [amountAed,   setAmountAed]   = useState('');
-  const [description, setDescription] = useState('');
-  const [dueDate,     setDueDate]     = useState(() => {
+  const [modelName,    setModelName]    = useState('');
+  const [customModel,  setCustomModel]  = useState('');
+  const [amountInput,  setAmountInput]  = useState('');
+  const [amountCurr,   setAmountCurr]   = useState<'AED' | 'USD'>('AED');
+  const [description,  setDescription]  = useState('');
+  const [dueDate,      setDueDate]      = useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 30);
     return d.toISOString().split('T')[0];
   });
@@ -84,39 +108,69 @@ function ManualEntryModal({ onClose, onSubmit, loading }: ManualEntryModalProps)
 
   const isCustom     = modelName === '__custom__';
   const resolvedName = isCustom ? customModel.trim() : modelName;
-  // Show suggested AED price if a known model is selected
-  const suggestedUsd = !isCustom && modelName ? FUTURISTIC_PRICES_USD[modelName] : null;
-  const suggestedAed = suggestedUsd ? (suggestedUsd * USD_TO_AED).toFixed(2) : null;
 
-  // Auto-fill description when model changes
+  // Suggested USD price for known models
+  const suggestedUsd = !isCustom && modelName && modelName !== '' ? FUTURISTIC_PRICES_USD[modelName] : null;
+
+  // Computed AED from input
+  const rawInput = parseFloat(amountInput);
+  const computedAed: number | null = (!isNaN(rawInput) && rawInput > 0)
+    ? (amountCurr === 'USD' ? parseFloat((rawInput * USD_TO_AED).toFixed(2)) : rawInput)
+    : null;
+
+  // Auto-fill when model changes
   function handleModelChange(val: string) {
     setModelName(val);
+    setError('');
     if (val && val !== '__custom__') {
       setDescription(`${val} — Futuristic payable`);
       if (FUTURISTIC_PRICES_USD[val]) {
-        setAmountAed((FUTURISTIC_PRICES_USD[val] * USD_TO_AED).toFixed(2));
+        // Auto-fill in whichever currency is selected
+        if (amountCurr === 'USD') {
+          setAmountInput(String(FUTURISTIC_PRICES_USD[val]));
+        } else {
+          setAmountInput((FUTURISTIC_PRICES_USD[val] * USD_TO_AED).toFixed(2));
+        }
       }
     } else if (val === '__custom__') {
       setDescription('');
-      setAmountAed('');
+      setAmountInput('');
     }
+  }
+
+  // When currency toggle changes, convert existing input
+  function handleCurrencyToggle(c: 'AED' | 'USD') {
+    if (c === amountCurr) return;
+    const v = parseFloat(amountInput);
+    if (!isNaN(v) && v > 0) {
+      if (c === 'USD') {
+        // was AED → convert to USD
+        setAmountInput((v / USD_TO_AED).toFixed(2));
+      } else {
+        // was USD → convert to AED
+        setAmountInput((v * USD_TO_AED).toFixed(2));
+      }
+    }
+    setAmountCurr(c);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     if (!resolvedName) { setError('Please select or enter a model name.'); return; }
-    const amt = parseFloat(amountAed);
-    if (!amountAed || isNaN(amt) || amt <= 0) { setError('Enter a valid AED amount.'); return; }
+    if (!computedAed || computedAed <= 0) {
+      setError(`Enter a valid ${amountCurr} amount greater than 0.`);
+      return;
+    }
     if (!dueDate) { setError('Please set a due date.'); return; }
 
     try {
       await onSubmit({
         modelName:   resolvedName,
         description: description.trim() || `${resolvedName} — Futuristic payable`,
-        amountAed:   amt,
+        amountAed:   computedAed,
         dueDate,
-        notes:    notes.trim() || undefined,
+        notes:    notes.trim()    || undefined,
         location: location.trim() || undefined,
       });
       onClose();
@@ -126,9 +180,9 @@ function ManualEntryModal({ onClose, onSubmit, loading }: ManualEntryModalProps)
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" style={{ minWidth: 380 }}>
+    <div className="bg-white rounded-2xl shadow-2xl w-full mx-4 overflow-y-auto" style={{ minWidth: 380, maxWidth: 460, maxHeight: '90vh' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
         <div className="flex items-center gap-3">
           <div style={{ ...S.charcoal, padding: 8, borderRadius: 10 }}>
             <Plus size={16} color="#fff" />
@@ -138,7 +192,7 @@ function ManualEntryModal({ onClose, onSubmit, loading }: ManualEntryModalProps)
             <p className="text-xs text-gray-500">Record a Futuristic product payable</p>
           </div>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
           <X size={18} />
         </button>
       </div>
@@ -153,7 +207,7 @@ function ManualEntryModal({ onClose, onSubmit, loading }: ManualEntryModalProps)
           <select
             value={modelName}
             onChange={(e) => handleModelChange(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400 transition"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
           >
             <option value="">— Select a model —</option>
             {FUTURISTIC_MODELS.map((m) => (
@@ -170,43 +224,74 @@ function ManualEntryModal({ onClose, onSubmit, loading }: ManualEntryModalProps)
               className="mt-2 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
             />
           )}
-          {suggestedAed && (
+          {suggestedUsd && (
             <p className="mt-1.5 text-xs text-blue-600 flex items-center gap-1">
               <CheckCircle2 size={11} />
-              Fixed price: <strong>AED {suggestedAed}</strong> (${suggestedUsd} × {USD_TO_AED})
+              Standard price: <strong>${suggestedUsd}</strong> = <strong>AED {fmt(suggestedUsd * USD_TO_AED)}</strong>
             </p>
           )}
         </div>
 
-        {/* Amount (AED) */}
+        {/* Amount with AED / USD toggle */}
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-            Amount (AED) <span className="text-red-400">*</span>
+            Amount <span className="text-red-400">*</span>
           </label>
+
+          {/* Currency toggle */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-gray-500">Currency:</span>
+            <div className="flex items-center gap-1 p-0.5 bg-gray-100 rounded-lg">
+              {(['AED', 'USD'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => handleCurrencyToggle(c)}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all"
+                  style={
+                    amountCurr === c
+                      ? { backgroundColor: '#1e293b', color: '#fff' }
+                      : { backgroundColor: 'transparent', color: '#64748b' }
+                  }
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Amount input */}
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">AED</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
+              {amountCurr === 'USD' ? '$' : 'AED'}
+            </span>
             <input
               type="number"
               min="0"
               step="0.01"
               placeholder="0.00"
-              value={amountAed}
-              onChange={(e) => setAmountAed(e.target.value)}
+              value={amountInput}
+              onChange={(e) => setAmountInput(e.target.value)}
               className="w-full border border-gray-200 rounded-xl pl-12 pr-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
             />
           </div>
-          {amountAed && !isNaN(parseFloat(amountAed)) && parseFloat(amountAed) > 0 && (() => {
-            const c = aedToAllCurrencies(parseFloat(amountAed));
-            return (
-              <div className="mt-1.5 flex gap-2 flex-wrap">
-                {[['PKR', c.pkr], ['SAR', c.sar], ['USD', c.usd]].map(([sym, val]) => (
-                  <span key={sym as string} className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded px-2 py-0.5">
-                    {sym} {fmt(val as number)}
+
+          {/* Conversion preview */}
+          {computedAed !== null && (
+            <div className="mt-1.5 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 flex flex-wrap gap-3 items-center">
+              <span className="text-xs font-semibold text-slate-700">
+                Stored as: AED {fmt(computedAed)}
+              </span>
+              {(() => {
+                const c = aedToAllCurrencies(computedAed);
+                return (['PKR', 'SAR', 'USD'] as const).map((sym) => (
+                  <span key={sym} className="text-xs text-gray-500 bg-white border border-gray-100 rounded px-2 py-0.5">
+                    {sym} {fmt(c[sym.toLowerCase() as 'pkr' | 'sar' | 'usd'])}
                   </span>
-                ))}
-              </div>
-            );
-          })()}
+                ));
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Description */}
@@ -221,7 +306,7 @@ function ManualEntryModal({ onClose, onSubmit, loading }: ManualEntryModalProps)
           />
         </div>
 
-        {/* Due Date + Location (side by side) */}
+        {/* Due Date + Location */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
@@ -289,26 +374,63 @@ function ManualEntryModal({ onClose, onSubmit, loading }: ManualEntryModalProps)
 
 // ── Record Payment Modal ──────────────────────────────────────────────────────
 interface PaymentModalProps {
-  item:     DerivedPayable;
+  item:         DerivedPayable;
+  bankAccounts: BankAccount[];
+  cashAccounts: CashAccount[];
+  accountsLoading: boolean;
   onClose:  () => void;
-  onSubmit: (firestoreId: string, paidAed: number, notes: string) => Promise<void>;
-  loading:  boolean;
+  onSubmit: (
+    firestoreId:  string,
+    paidAed:      number,
+    notes:        string,
+    paymentMethod: 'bank' | 'cash',
+    bankAccountId?: string,
+    cashAccountId?: string,
+  ) => Promise<void>;
+  loading: boolean;
 }
 
-function PaymentModal({ item, onClose, onSubmit, loading }: PaymentModalProps) {
+function PaymentModal({
+  item, bankAccounts, cashAccounts, accountsLoading,
+  onClose, onSubmit, loading,
+}: PaymentModalProps) {
   const remainingAed = item.amounts.aed - item.paidAmounts.aed;
-  const [paidAed, setPaidAed] = useState(remainingAed.toFixed(2));
-  const [notes,   setNotes]   = useState(item.notes ?? '');
-  const [error,   setError]   = useState('');
+
+  const [paidAed,       setPaidAed]       = useState(remainingAed.toFixed(2));
+  const [notes,         setNotes]         = useState(item.notes ?? '');
+  const [payMethod,     setPayMethod]     = useState<'bank' | 'cash'>('bank');
+  const [bankAccountId, setBankAccountId] = useState('');
+  const [cashAccountId, setCashAccountId] = useState('');
+  const [error,         setError]         = useState('');
+
+  // Selected account balance for sanity check
+  const selectedBank = bankAccounts.find((b) => b.id === bankAccountId);
+  const selectedCash = cashAccounts.find((c) => c.id === cashAccountId);
+  const selectedBalance = payMethod === 'bank' ? selectedBank?.balance : selectedCash?.balance;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     const amt = parseFloat(paidAed);
     if (!paidAed || isNaN(amt) || amt <= 0) { setError('Enter a valid amount.'); return; }
-    if (amt > remainingAed + 0.01) { setError(`Max payable is AED ${fmt(remainingAed)}.`); return; }
+    if (amt > remainingAed + 0.01)           { setError(`Max payable is AED ${fmt(remainingAed)}.`); return; }
+    if (payMethod === 'bank' && !bankAccountId) { setError('Please select a bank account.'); return; }
+    if (payMethod === 'cash' && cashAccounts.length > 0 && !cashAccountId) { setError('Please select a cash account.'); return; }
+
+    if (selectedBalance !== undefined && amt > selectedBalance + 0.01) {
+      setError(`Insufficient balance. ${payMethod === 'bank' ? selectedBank?.accountName : selectedCash?.name} only has AED ${fmt(selectedBalance)}.`);
+      return;
+    }
+
     try {
-      await onSubmit(item.firestoreId, amt, notes.trim());
+      await onSubmit(
+        item.firestoreId,
+        amt,
+        notes.trim(),
+        payMethod,
+        payMethod === 'bank' ? bankAccountId : undefined,
+        payMethod === 'cash' ? (cashAccountId || undefined) : undefined,
+      );
       onClose();
     } catch (err: any) {
       setError(err?.message ?? 'Failed to record payment.');
@@ -316,8 +438,9 @@ function PaymentModal({ item, onClose, onSubmit, loading }: PaymentModalProps) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4" style={{ minWidth: 340 }}>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+    <div className="bg-white rounded-2xl shadow-2xl w-full mx-4 overflow-y-auto" style={{ minWidth: 360, maxWidth: 440, maxHeight: '90vh' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
         <div className="flex items-center gap-3">
           <div style={{ backgroundColor: '#059669', padding: 8, borderRadius: 10 }}>
             <CreditCard size={16} color="#fff" />
@@ -327,10 +450,11 @@ function PaymentModal({ item, onClose, onSubmit, loading }: PaymentModalProps) {
             <p className="text-xs text-gray-500 max-w-xs truncate">{item.description}</p>
           </div>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={18} /></button>
       </div>
 
       <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+
         {/* Summary strip */}
         <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 grid grid-cols-3 gap-2 text-center">
           <div>
@@ -347,6 +471,7 @@ function PaymentModal({ item, onClose, onSubmit, loading }: PaymentModalProps) {
           </div>
         </div>
 
+        {/* Amount paid */}
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
             Amount Paid (AED) <span className="text-red-400">*</span>
@@ -363,13 +488,150 @@ function PaymentModal({ item, onClose, onSubmit, loading }: PaymentModalProps) {
               className="w-full border border-gray-200 rounded-xl pl-12 pr-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 transition"
             />
           </div>
+          {/* Quick-fill buttons */}
+          <div className="flex gap-2 mt-1.5">
+            <button
+              type="button"
+              onClick={() => setPaidAed(remainingAed.toFixed(2))}
+              className="text-xs px-2.5 py-1 rounded-lg border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition"
+            >
+              Full amount
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaidAed((remainingAed / 2).toFixed(2))}
+              className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 bg-gray-50 hover:bg-gray-100 transition"
+            >
+              Half
+            </button>
+          </div>
         </div>
 
+        {/* Payment method toggle */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">
+            Pay From <span className="text-red-400">*</span>
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPayMethod('bank')}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition"
+              style={
+                payMethod === 'bank'
+                  ? { backgroundColor: '#1e293b', color: '#fff', borderColor: '#1e293b' }
+                  : { backgroundColor: '#f8fafc', color: '#475569', borderColor: '#e2e8f0' }
+              }
+            >
+              <Banknote size={15} /> Bank Account
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayMethod('cash')}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition"
+              style={
+                payMethod === 'cash'
+                  ? { backgroundColor: '#1e293b', color: '#fff', borderColor: '#1e293b' }
+                  : { backgroundColor: '#f8fafc', color: '#475569', borderColor: '#e2e8f0' }
+              }
+            >
+              <Wallet size={15} /> Cash
+            </button>
+          </div>
+        </div>
+
+        {/* Bank account selector */}
+        {payMethod === 'bank' && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+              Bank Account <span className="text-red-400">*</span>
+            </label>
+            {accountsLoading ? (
+              <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                <Loader2 size={13} className="animate-spin" /> Loading accounts…
+              </div>
+            ) : bankAccounts.length === 0 ? (
+              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <Info size={13} />
+                No bank accounts found. Add them in the Bank module first.
+              </div>
+            ) : (
+              <>
+                <select
+                  value={bankAccountId}
+                  onChange={(e) => setBankAccountId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
+                >
+                  <option value="">— Select bank account —</option>
+                  {bankAccounts.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.accountName}{b.bankName ? ` · ${b.bankName}` : ''} — {b.currency} {fmt(b.balance)}
+                    </option>
+                  ))}
+                </select>
+                {selectedBank && (
+                  <div className="mt-1.5 flex items-center gap-2 text-xs bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-3 py-1.5">
+                    <Banknote size={12} />
+                    <span>
+                      <strong>{selectedBank.accountName}</strong>
+                      {' '}&mdash; Balance: <strong>{selectedBank.currency} {fmt(selectedBank.balance)}</strong>
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Cash account selector */}
+        {payMethod === 'cash' && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+              Cash Account
+            </label>
+            {accountsLoading ? (
+              <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                <Loader2 size={13} className="animate-spin" /> Loading…
+              </div>
+            ) : cashAccounts.length === 0 ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <Info size={13} />
+                No cash accounts configured — payment will be recorded without balance deduction.
+              </div>
+            ) : (
+              <>
+                <select
+                  value={cashAccountId}
+                  onChange={(e) => setCashAccountId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
+                >
+                  <option value="">— Select cash account —</option>
+                  {cashAccounts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} — {c.currency} {fmt(c.balance)}
+                    </option>
+                  ))}
+                </select>
+                {selectedCash && (
+                  <div className="mt-1.5 flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-lg px-3 py-1.5">
+                    <Wallet size={12} />
+                    <span>
+                      <strong>{selectedCash.name}</strong>
+                      {' '}&mdash; Balance: <strong>{selectedCash.currency} {fmt(selectedCash.balance)}</strong>
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Notes */}
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Notes</label>
           <textarea
             rows={2}
-            placeholder="Payment reference, bank, etc."
+            placeholder="Payment reference, cheque number, etc."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 transition resize-none"
@@ -397,7 +659,7 @@ function PaymentModal({ item, onClose, onSubmit, loading }: PaymentModalProps) {
             style={{ backgroundColor: '#059669', color: '#ffffff' }}
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-            Record
+            Record Payment
           </button>
         </div>
       </form>
@@ -515,13 +777,14 @@ export const PayableToFuturisticView: React.FC = () => {
   const {
     summaries, totals, loading, error, refresh,
     addManualEntry, markPayment, actionLoading,
+    bankAccounts, cashAccounts, accountsLoading,
   } = usePayableToFuturistic();
 
-  const [activeTab,        setActiveTab]         = useState<'payables' | 'configure'>('payables');
-  const [activeCurrency,   setActiveCurrency]   = useState<Currency>('USD');
-  const [expandedIds,      setExpandedIds]       = useState<Set<string>>(new Set());
-  const [showAddModal,     setShowAddModal]      = useState(false);
-  const [payingItem,       setPayingItem]        = useState<DerivedPayable | null>(null);
+  const [activeTab,      setActiveTab]      = useState<'payables' | 'configure'>('payables');
+  const [activeCurrency, setActiveCurrency] = useState<Currency>('USD');
+  const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
+  const [showAddModal,   setShowAddModal]   = useState(false);
+  const [payingItem,     setPayingItem]     = useState<DerivedPayable | null>(null);
 
   const toggle     = (id: string) =>
     setExpandedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -579,12 +842,18 @@ export const PayableToFuturisticView: React.FC = () => {
           />
         </Overlay>
       )}
+
       {payingItem && (
         <Overlay onClose={() => setPayingItem(null)}>
           <PaymentModal
             item={payingItem}
+            bankAccounts={bankAccounts}
+            cashAccounts={cashAccounts}
+            accountsLoading={accountsLoading}
             onClose={() => setPayingItem(null)}
-            onSubmit={async (id, paidAed, notes) => markPayment(id, { paidAed, notes })}
+            onSubmit={async (id, paidAed, notes, paymentMethod, bankAccountId, cashAccountId) =>
+              markPayment(id, { paidAed, notes, paymentMethod, bankAccountId, cashAccountId })
+            }
             loading={actionLoading}
           />
         </Overlay>
@@ -646,146 +915,149 @@ export const PayableToFuturisticView: React.FC = () => {
       {activeTab === 'configure' && <InventoryPayableConfigPanel />}
 
       {/* ── Payables tab content ────────────────────────────────────────────── */}
-      {activeTab === 'payables' && <>
-
-      {/* ── Summary Cards ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div style={{ ...S.charcoalCard, borderRadius: 16, padding: 16 }}>
-          <p style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', marginBottom: 4 }}>Total (USD)</p>
-          <p style={{ fontSize: 18, fontWeight: 700, color: '#ffffff' }}>$ {fmt(totals.usd)}</p>
-          {paidTotals.usd > 0 && (
-            <p style={{ fontSize: 11, color: '#34d399', marginTop: 4 }}>Paid: $ {fmt(paidTotals.usd)}</p>
-          )}
-        </div>
-        {([['AED', totals.aed, paidTotals.aed], ['PKR', totals.pkr, paidTotals.pkr], ['SAR', totals.sar, paidTotals.sar]] as [string, number, number][]).map(([cur, total, paid]) => (
-          <div key={cur} className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
-            <p className="text-xs font-medium mb-1 text-gray-500">Total ({cur})</p>
-            <p className="text-lg font-bold text-gray-800">{fmt(total)}</p>
-            {paid > 0 && <p className="text-xs text-emerald-600 mt-1">Paid: {fmt(paid)}</p>}
-          </div>
-        ))}
-      </div>
-
-      {/* ── Pills ────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3">
-        <span className="inline-flex items-center gap-2 text-sm px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg">
-          <DollarSign size={13} />
-          Outstanding: <strong>{pendingCount} invoice{pendingCount !== 1 ? 's' : ''} pending</strong>
-        </span>
-        <span className="inline-flex items-center gap-2 text-sm px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg">
-          <Package size={13} />
-          {totalItems} Futuristic unit{totalItems !== 1 ? 's' : ''} tracked
-        </span>
-      </div>
-
-      {/* ── Currency Tabs ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl w-fit">
-        {ALL_CURRENCIES.map((c) => (
-          <button
-            key={c}
-            onClick={() => setActiveCurrency(c)}
-            style={activeCurrency === c ? S.tabActive : S.tabInactive}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Table / Empty ─────────────────────────────────────────────────────── */}
-      {summaries.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-white border border-gray-100 rounded-2xl">
-          <Building2 size={48} className="mb-4 opacity-20" />
-          <p className="text-base font-medium text-gray-500">No Futuristic products found</p>
-          <p className="text-sm mt-1 text-gray-400 mb-6">
-            Products with brand "Futuristic" linked to invoices will appear here.
-          </p>
-          <button
-            onClick={() => setShowAddModal(true)}
-            style={S.charcoal}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-xl hover:opacity-90 transition"
-          >
-            <Plus size={14} /> Add Manual Entry
-          </button>
-        </div>
-      ) : (
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Invoices &amp; Products
-            </span>
-            <div className="flex items-center gap-3">
-              <button onClick={expandAll}   className="text-xs font-medium text-gray-700 hover:underline">Expand all</button>
-              <span className="text-gray-300 text-xs">|</span>
-              <button onClick={collapseAll} className="text-xs text-gray-500 hover:underline">Collapse all</button>
+      {activeTab === 'payables' && (
+        <>
+          {/* ── Summary Cards ─────────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div style={{ ...S.charcoalCard, borderRadius: 16, padding: 16 }}>
+              <p style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', marginBottom: 4 }}>Total (USD)</p>
+              <p style={{ fontSize: 18, fontWeight: 700, color: '#ffffff' }}>$ {fmt(totals.usd)}</p>
+              {paidTotals.usd > 0 && (
+                <p style={{ fontSize: 11, color: '#34d399', marginTop: 4 }}>Paid: $ {fmt(paidTotals.usd)}</p>
+              )}
             </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Invoice / Product</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Date</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Amount ({activeCurrency})</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Status</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Sale Date</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {summaries.map((s) => (
-                  <InvoiceGroup
-                    key={s.invoiceId}
-                    summary={s}
-                    currency={activeCurrency}
-                    expanded={expandedIds.has(s.invoiceId)}
-                    onToggle={() => toggle(s.invoiceId)}
-                    onPay={setPayingItem}
-                  />
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-200 bg-gray-50">
-                  <td className="px-5 py-4 font-bold text-gray-800" colSpan={2}>Grand Total</td>
-                  <td className="px-4 py-4 text-right">
-                    <span className="text-lg font-bold text-gray-900">{sym} {fmt(totals[k])}</span>
-                    {paidTotals.aed > 0 && (
-                      <p className="text-xs text-emerald-600 mt-0.5">Paid: {sym} {fmt(paidTotals[k])}</p>
-                    )}
-                  </td>
-                  <td colSpan={3} className="px-4 py-4 text-center text-xs text-gray-500">
-                    {summaries.filter((s) => s.status === 'paid').length} of {summaries.length} invoices paid
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── Price Reference ───────────────────────────────────────────────────── */}
-      <details className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden group">
-        <summary className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 transition-colors list-none flex items-center gap-2 select-none">
-          <ChevronRight size={13} className="group-open:rotate-90 transition-transform" />
-          Futuristic Price Reference
-        </summary>
-        <div className="px-5 pb-4 pt-1">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {(Object.entries(FUTURISTIC_PRICES_USD) as [string, number][]).map(([model, price]) => (
-              <div key={model} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-                <span className="text-xs text-gray-600">{model}</span>
-                <div className="text-right">
-                  <span className="text-xs font-bold text-gray-800">${price}</span>
-                  <p className="text-xs text-gray-400">AED {fmt(price * USD_TO_AED)}</p>
+            {(['AED', 'PKR', 'SAR'] as const).map((cur) => {
+              const ck = cur.toLowerCase() as 'aed' | 'pkr' | 'sar';
+              return (
+                <div key={cur} className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
+                  <p className="text-xs font-medium mb-1 text-gray-500">Total ({cur})</p>
+                  <p className="text-lg font-bold text-gray-800">{fmt(totals[ck])}</p>
+                  {paidTotals[ck] > 0 && <p className="text-xs text-emerald-600 mt-1">Paid: {fmt(paidTotals[ck])}</p>}
                 </div>
-              </div>
+              );
+            })}
+          </div>
+
+          {/* ── Pills ──────────────────────────────────────────────────────────── */}
+          <div className="flex flex-wrap gap-3">
+            <span className="inline-flex items-center gap-2 text-sm px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg">
+              <DollarSign size={13} />
+              Outstanding: <strong>{pendingCount} invoice{pendingCount !== 1 ? 's' : ''} pending</strong>
+            </span>
+            <span className="inline-flex items-center gap-2 text-sm px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg">
+              <Package size={13} />
+              {totalItems} Futuristic unit{totalItems !== 1 ? 's' : ''} tracked
+            </span>
+          </div>
+
+          {/* ── Currency Tabs ──────────────────────────────────────────────────── */}
+          <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+            {ALL_CURRENCIES.map((c) => (
+              <button
+                key={c}
+                onClick={() => setActiveCurrency(c)}
+                style={activeCurrency === c ? S.tabActive : S.tabInactive}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+              >
+                {c}
+              </button>
             ))}
           </div>
-        </div>
-      </details>
 
-      </> /* end activeTab === 'payables' */}
+          {/* ── Table / Empty ──────────────────────────────────────────────────── */}
+          {summaries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-white border border-gray-100 rounded-2xl">
+              <Building2 size={48} className="mb-4 opacity-20" />
+              <p className="text-base font-medium text-gray-500">No Futuristic products found</p>
+              <p className="text-sm mt-1 text-gray-400 mb-6">
+                Products with brand "Futuristic" linked to invoices will appear here.
+              </p>
+              <button
+                onClick={() => setShowAddModal(true)}
+                style={S.charcoal}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-xl hover:opacity-90 transition"
+              >
+                <Plus size={14} /> Add Manual Entry
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Invoices &amp; Products
+                </span>
+                <div className="flex items-center gap-3">
+                  <button onClick={expandAll}   className="text-xs font-medium text-gray-700 hover:underline">Expand all</button>
+                  <span className="text-gray-300 text-xs">|</span>
+                  <button onClick={collapseAll} className="text-xs text-gray-500 hover:underline">Collapse all</button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Invoice / Product</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Date</th>
+                      <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Amount ({activeCurrency})</th>
+                      <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Status</th>
+                      <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Sale Date</th>
+                      <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {summaries.map((s) => (
+                      <InvoiceGroup
+                        key={s.invoiceId}
+                        summary={s}
+                        currency={activeCurrency}
+                        expanded={expandedIds.has(s.invoiceId)}
+                        onToggle={() => toggle(s.invoiceId)}
+                        onPay={setPayingItem}
+                      />
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50">
+                      <td className="px-5 py-4 font-bold text-gray-800" colSpan={2}>Grand Total</td>
+                      <td className="px-4 py-4 text-right">
+                        <span className="text-lg font-bold text-gray-900">{sym} {fmt(totals[k])}</span>
+                        {paidTotals.aed > 0 && (
+                          <p className="text-xs text-emerald-600 mt-0.5">Paid: {sym} {fmt(paidTotals[k])}</p>
+                        )}
+                      </td>
+                      <td colSpan={3} className="px-4 py-4 text-center text-xs text-gray-500">
+                        {summaries.filter((s) => s.status === 'paid').length} of {summaries.length} invoices paid
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Price Reference ────────────────────────────────────────────────── */}
+          <details className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden group">
+            <summary className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 transition-colors list-none flex items-center gap-2 select-none">
+              <ChevronRight size={13} className="group-open:rotate-90 transition-transform" />
+              Futuristic Price Reference
+            </summary>
+            <div className="px-5 pb-4 pt-1">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {(Object.entries(FUTURISTIC_PRICES_USD) as [string, number][]).map(([model, price]) => (
+                  <div key={model} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                    <span className="text-xs text-gray-600">{model}</span>
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-gray-800">${price}</span>
+                      <p className="text-xs text-gray-400">AED {fmt(price * USD_TO_AED)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
+        </>
+      )}
 
     </div>
   );

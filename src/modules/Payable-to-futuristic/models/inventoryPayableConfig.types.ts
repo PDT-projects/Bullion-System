@@ -8,7 +8,9 @@ export interface InventoryPayableConfig {
   productName: string;      // brandName + modelName (display only)
   brandName: string;
   modelName: string;
-  fixedAmountAed: number;   // the fixed AED amount to record per sale
+  fixedAmountAed: number;   // the fixed AED amount to record per sale (always stored in AED)
+  inputCurrency: 'AED' | 'USD'; // which currency the user entered the amount in (display only)
+  inputAmount: number;          // the raw amount the user typed (before conversion)
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -19,6 +21,8 @@ export interface CreateInventoryPayableConfigDTO {
   productName: string;
   brandName: string;
   modelName: string;
-  fixedAmountAed: number;
+  fixedAmountAed: number;   // always AED, regardless of input currency
+  inputCurrency: 'AED' | 'USD';
+  inputAmount: number;
   notes?: string;
 }

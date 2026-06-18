@@ -1,6 +1,9 @@
 // viewModels/useInventoryPayableConfigViewModel.ts
 // Manages state for the "Configure Inventory Payables" panel.
 // Loads all inventory products (for the dropdown) and all existing configs.
+//
+// UPDATED: Supports entering the fixed amount in AED or USD.
+//          The stored value is always fixedAmountAed (converted if needed).
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Product } from '../../inventory/models/types';
@@ -17,6 +20,9 @@ import {
 // We fetch products directly from the inventory Firestore service
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 
+// Exchange rate: 1 USD = 3.67 AED
+const USD_TO_AED = 3.67;
+
 export interface UseInventoryPayableConfigReturn {
   // Inventory dropdown data
   products:        Product[];
@@ -29,11 +35,16 @@ export interface UseInventoryPayableConfigReturn {
 
   // Form state
   selectedProductId: string;
-  fixedAmountAed:    string;
+  inputCurrency:     'AED' | 'USD';
+  inputAmount:       string;
   notes:             string;
   setSelectedProductId: (id: string) => void;
-  setFixedAmountAed:    (v: string) => void;
+  setInputCurrency:     (c: 'AED' | 'USD') => void;
+  setInputAmount:       (v: string) => void;
   setNotes:             (v: string) => void;
+
+  // Computed preview (always in AED + other currencies)
+  previewAed: number | null;
 
   // Actions
   submitConfig:   () => Promise<void>;
@@ -57,13 +68,21 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
 
   // ── Form ──────────────────────────────────────────────────────────────────
   const [selectedProductId, setSelectedProductId] = useState('');
-  const [fixedAmountAed,    setFixedAmountAed]    = useState('');
+  const [inputCurrency,     setInputCurrency]     = useState<'AED' | 'USD'>('AED');
+  const [inputAmount,       setInputAmount]       = useState('');
   const [notes,             setNotes]             = useState('');
 
   // ── Action state ──────────────────────────────────────────────────────────
   const [actionLoading,  setActionLoading]  = useState(false);
   const [actionError,    setActionError]    = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // ── Computed preview ──────────────────────────────────────────────────────
+  const previewAed: number | null = (() => {
+    const v = parseFloat(inputAmount);
+    if (isNaN(v) || v <= 0) return null;
+    return inputCurrency === 'USD' ? parseFloat((v * USD_TO_AED).toFixed(2)) : v;
+  })();
 
   // ── Load products ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -111,9 +130,9 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
       setActionError('Please select an inventory item.');
       return;
     }
-    const amount = parseFloat(fixedAmountAed);
-    if (!fixedAmountAed || isNaN(amount) || amount <= 0) {
-      setActionError('Please enter a valid AED amount greater than 0.');
+    const rawAmount = parseFloat(inputAmount);
+    if (!inputAmount || isNaN(rawAmount) || rawAmount <= 0) {
+      setActionError(`Please enter a valid ${inputCurrency} amount greater than 0.`);
       return;
     }
 
@@ -123,12 +142,19 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
       return;
     }
 
+    // Always store in AED
+    const fixedAmountAed = inputCurrency === 'USD'
+      ? parseFloat((rawAmount * USD_TO_AED).toFixed(2))
+      : rawAmount;
+
     const dto: CreateInventoryPayableConfigDTO = {
       productId:      cleanProductId,
       productName:    `${product.brandName} ${product.modelName}`.trim(),
       brandName:      product.brandName,
       modelName:      product.modelName,
-      fixedAmountAed: amount,
+      fixedAmountAed,
+      inputCurrency,
+      inputAmount:    rawAmount,
       notes:          notes.trim() || undefined,
     };
 
@@ -140,9 +166,12 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
       await loadConfigs();
       // Reset form
       setSelectedProductId('');
-      setFixedAmountAed('');
+      setInputAmount('');
       setNotes('');
-      setSuccessMessage(`Config saved: ${dto.productName} → AED ${amount.toFixed(2)}`);
+      const displayAmount = inputCurrency === 'USD'
+        ? `$${rawAmount.toFixed(2)} → AED ${fixedAmountAed.toFixed(2)}`
+        : `AED ${fixedAmountAed.toFixed(2)}`;
+      setSuccessMessage(`Config saved: ${dto.productName} → ${displayAmount}`);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error('[InventoryPayableConfig] Submit failed:', err);
@@ -150,7 +179,7 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
     } finally {
       setActionLoading(false);
     }
-  }, [selectedProductId, fixedAmountAed, notes, products, loadConfigs]);
+  }, [selectedProductId, inputAmount, inputCurrency, notes, products, loadConfigs]);
 
   // ── Delete ────────────────────────────────────────────────────────────────
   const deleteConfig = useCallback(async (id: string) => {
@@ -173,11 +202,14 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
     configsLoading,
     configsError,
     selectedProductId,
-    fixedAmountAed,
+    inputCurrency,
+    inputAmount,
     notes,
     setSelectedProductId,
-    setFixedAmountAed,
+    setInputCurrency,
+    setInputAmount,
     setNotes,
+    previewAed,
     submitConfig,
     deleteConfig,
     actionLoading,

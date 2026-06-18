@@ -3,14 +3,20 @@
 // Lets users pick an inventory item and set its fixed AED payable amount.
 // When an invoice is created with that product, the amount auto-appears
 // in the Payable to Futuristic module.
+//
+// UPDATED: Amount can be entered in AED or USD. The stored value is always
+//          AED (converted at 1 USD = 3.67 AED). Both currencies are shown
+//          in the configs table.
 
 import React from 'react';
 import {
   Settings, Plus, Trash2, Loader2, AlertCircle,
-  CheckCircle2, Package, ChevronRight,
+  CheckCircle2, Package, ChevronRight, DollarSign,
 } from 'lucide-react';
 import { useInventoryPayableConfigViewModel } from '../viewModels/useInventoryPayableConfigViewModel';
 import { aedToAllCurrencies } from '../models/payableToFuturistic';
+
+const USD_TO_AED = 3.67;
 
 const S = {
   charcoal: { backgroundColor: '#1e293b', color: '#ffffff' } as React.CSSProperties,
@@ -24,18 +30,14 @@ export const InventoryPayableConfigPanel: React.FC = () => {
   const {
     products, productsLoading,
     configs, configsLoading, configsError,
-    selectedProductId, fixedAmountAed, notes,
-    setSelectedProductId, setFixedAmountAed, setNotes,
+    selectedProductId, inputCurrency, inputAmount, notes,
+    setSelectedProductId, setInputCurrency, setInputAmount, setNotes,
+    previewAed,
     submitConfig, deleteConfig,
     actionLoading, actionError, successMessage,
   } = useInventoryPayableConfigViewModel();
 
-  const previewAmounts = (() => {
-    const v = parseFloat(fixedAmountAed);
-    if (!isNaN(v) && v > 0) return aedToAllCurrencies(v);
-    return null;
-  })();
-
+  const previewAmounts = previewAed !== null ? aedToAllCurrencies(previewAed) : null;
   const selectedProduct = products.find((p) => p.id === selectedProductId);
 
   return (
@@ -49,7 +51,7 @@ export const InventoryPayableConfigPanel: React.FC = () => {
         <div>
           <h2 className="text-base font-bold text-gray-800">Configure Inventory Payables</h2>
           <p className="text-xs text-gray-500">
-            Set a fixed AED amount per inventory item. When an invoice is created with that
+            Set a fixed amount per inventory item. When an invoice is created with that
             item, the amount is automatically added to this payable module.
           </p>
         </div>
@@ -103,31 +105,78 @@ export const InventoryPayableConfigPanel: React.FC = () => {
           )}
         </div>
 
-        {/* Fixed AED amount */}
+        {/* Currency toggle + amount */}
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-            Fixed Amount (AED) <span className="text-red-400">*</span>
+            Fixed Amount <span className="text-red-400">*</span>
           </label>
+
+          {/* Currency toggle pills */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-gray-500">Enter in:</span>
+            <div className="flex items-center gap-1 p-0.5 bg-gray-100 rounded-lg">
+              {(['AED', 'USD'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => { setInputCurrency(c); setInputAmount(''); }}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all"
+                  style={
+                    inputCurrency === c
+                      ? { backgroundColor: '#1e293b', color: '#fff' }
+                      : { backgroundColor: 'transparent', color: '#64748b' }
+                  }
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            {inputCurrency === 'USD' && (
+              <span className="text-xs text-gray-400 flex items-center gap-1">
+                <DollarSign size={11} />
+                1 USD = {USD_TO_AED} AED
+              </span>
+            )}
+          </div>
+
+          {/* Amount input */}
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">AED</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
+              {inputCurrency === 'USD' ? '$' : 'AED'}
+            </span>
             <input
               type="number"
               min="0"
               step="0.01"
               placeholder="0.00"
-              value={fixedAmountAed}
-              onChange={(e) => setFixedAmountAed(e.target.value)}
+              value={inputAmount}
+              onChange={(e) => setInputAmount(e.target.value)}
               className="w-full border border-gray-200 rounded-xl pl-12 pr-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
             />
           </div>
+
+          {/* Preview strip */}
           {previewAmounts && (
-            <div className="mt-1.5 flex gap-2 flex-wrap">
-              <span className="text-xs text-gray-400">Equivalent:</span>
-              {([['PKR', previewAmounts.pkr], ['SAR', previewAmounts.sar], ['USD', previewAmounts.usd]] as [string, number][]).map(([sym, val]) => (
-                <span key={sym} className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded px-2 py-0.5">
-                  {sym} {fmt(val)}
-                </span>
-              ))}
+            <div className="mt-2 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5 space-y-1">
+              <p className="text-xs font-semibold text-slate-600">
+                Will be stored as:{' '}
+                <span className="text-slate-900">AED {fmt(previewAmounts.aed)}</span>
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {inputCurrency === 'AED' && (
+                  <span className="text-xs text-slate-500">
+                    ≈ <strong>${fmt(previewAmounts.usd)}</strong> USD
+                  </span>
+                )}
+                {inputCurrency === 'USD' && (
+                  <span className="text-xs text-slate-500">
+                    = <strong>AED {fmt(previewAmounts.aed)}</strong>
+                  </span>
+                )}
+                <span className="text-xs text-gray-400">·</span>
+                <span className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded px-2 py-0.5">PKR {fmt(previewAmounts.pkr)}</span>
+                <span className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded px-2 py-0.5">SAR {fmt(previewAmounts.sar)}</span>
+              </div>
             </div>
           )}
         </div>
@@ -200,7 +249,8 @@ export const InventoryPayableConfigPanel: React.FC = () => {
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Inventory Item</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product ID</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fixed Amount (AED)</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Amount (AED)</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Entered As</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Equiv. USD</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Notes</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</th>
@@ -225,6 +275,16 @@ export const InventoryPayableConfigPanel: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className="text-sm font-bold text-gray-800">AED {fmt(cfg.fixedAmountAed)}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {/* Show what the user originally typed */}
+                        {cfg.inputCurrency === 'USD' ? (
+                          <span className="text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded px-2 py-0.5">
+                            ${fmt(cfg.inputAmount)} USD
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">AED</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className="text-xs text-gray-500">${fmt(equiv.usd)}</span>
@@ -258,24 +318,19 @@ export const InventoryPayableConfigPanel: React.FC = () => {
         </summary>
         <div className="px-5 pb-4 pt-2 space-y-2 text-xs text-gray-500 leading-relaxed">
           <p>
-            <strong className="text-gray-700">1. Configure:</strong> Select an inventory item and set its fixed AED payable amount here.
+            <strong className="text-gray-700">1. Configure:</strong> Select an inventory item and set its fixed payable amount (AED or USD — always stored as AED).
           </p>
           <p>
             <strong className="text-gray-700">2. Invoice:</strong> When any invoice is created that includes this inventory item, the system automatically records the fixed AED amount as a payable entry.
           </p>
           <p>
-            <strong className="text-gray-700">3. Track:</strong> The entry appears in the <strong className="text-gray-700">Invoices & Products</strong> tab, linked to the invoice number, with pending status.
+            <strong className="text-gray-700">3. Track:</strong> The entry appears in the <strong className="text-gray-700">Invoices &amp; Payables</strong> tab, linked to the invoice number, with pending status.
           </p>
           <p>
-            <strong className="text-gray-700">4. Pay:</strong> Use the <em>Pay</em> button on any entry to record full or partial payment.
+            <strong className="text-gray-700">4. Pay:</strong> Use the <em>Pay</em> button on any entry to record full or partial payment via Bank or Cash — the account balance is automatically deducted.
           </p>
           <p className="text-gray-400 italic">
             Updating or removing a config only affects future invoices — existing payable entries are not changed.
-          </p>
-          <p className="text-gray-400 italic">
-            Tip: if an invoiced item isn't showing up here, open the browser console (F12) and look for
-            <code className="bg-gray-100 px-1 rounded mx-1">[PayableBridge]</code> log lines — they show exactly which
-            productId was checked and whether a config was found.
           </p>
         </div>
       </details>

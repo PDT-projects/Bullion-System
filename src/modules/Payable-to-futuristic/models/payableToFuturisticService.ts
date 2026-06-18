@@ -4,20 +4,91 @@
 // (written by futuristicPayableBridge.ts on invoice creation) instead of
 // scanning the products collection. This is simpler, faster, and accurate.
 //
-// NEW: recordPayment() — marks a payable item as partially/fully paid.
+// NEW: recordPayment() — marks a payable item as partially/fully paid,
+//      and optionally deducts from a bank account or cash balance.
 // NEW: createManualPayable() — lets the user add a manual entry from the UI.
+// NEW: fetchBankAccounts() — loads real bank accounts with live balances.
+// NEW: fetchCashBalance() — loads the current cash balance.
 
 import {
   collection, doc, getDocs, getDoc,
-  addDoc, updateDoc, deleteDoc, query, orderBy,
+  addDoc, updateDoc, deleteDoc, query, orderBy, runTransaction,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import type { CurrencyAmounts } from './payableToFuturistic';
 import { ZERO_AMOUNTS, aedToAllCurrencies } from './payableToFuturistic';
 
 const PAYABLE_COLLECTION = 'payable_to_futuristic';
+const BANK_COLLECTION    = 'bank_accounts';     // adjust to your actual collection name
+const CASH_COLLECTION    = 'cash_accounts';     // adjust to your actual collection name
+const TX_COLLECTION      = 'transactions';      // ledger / transaction log collection
 
 function nowISO(): string { return new Date().toISOString(); }
+
+// ── Bank / Cash types ─────────────────────────────────────────────────────────
+export interface BankAccount {
+  id:          string;
+  accountName: string;   // e.g. "Emirates NBD — AED"
+  bankName:    string;
+  currency:    string;   // 'AED' | 'USD' etc.
+  balance:     number;   // current balance in the account's currency
+  isActive:    boolean;
+}
+
+export interface CashAccount {
+  id:       string;
+  name:     string;     // e.g. "Office Cash"
+  currency: string;
+  balance:  number;
+}
+
+// ── Fetch bank accounts ───────────────────────────────────────────────────────
+export async function fetchBankAccounts(): Promise<BankAccount[]> {
+  try {
+    const q    = query(collection(db, BANK_COLLECTION), orderBy('accountName'));
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => {
+        const data = d.data();
+        return {
+          id:          d.id,
+          accountName: data.accountName || data.name || 'Unnamed Account',
+          bankName:    data.bankName    || data.bank || '',
+          currency:    data.currency    || 'AED',
+          balance:     data.balance     ?? data.currentBalance ?? data.liquidity ?? 0,
+          isActive:    data.isActive    !== false,
+        } as BankAccount;
+      })
+      .filter((a) => a.isActive);
+  } catch (err) {
+    console.error('[PayableService] Failed to fetch bank accounts:', err);
+    return [];
+  }
+}
+
+// ── Fetch cash accounts ───────────────────────────────────────────────────────
+export async function fetchCashAccounts(): Promise<CashAccount[]> {
+  try {
+    const q    = query(collection(db, CASH_COLLECTION));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      // Many apps store cash as a single doc — try a known fallback path
+      return [];
+    }
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id:       d.id,
+        name:     data.name || data.accountName || 'Cash',
+        currency: data.currency || 'AED',
+        balance:  data.balance  ?? data.currentBalance ?? 0,
+      } as CashAccount;
+    });
+  } catch (err) {
+    console.error('[PayableService] Failed to fetch cash accounts:', err);
+    return [];
+  }
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface DerivedPayable {
@@ -124,30 +195,83 @@ export interface RecordPaymentPayload {
   /** Amount paid in AED — will be converted to all currencies */
   paidAed: number;
   notes?: string;
+  /** Payment method chosen by the user */
+  paymentMethod: 'bank' | 'cash';
+  /** ID of the bank_account doc (required when paymentMethod === 'bank') */
+  bankAccountId?: string;
+  /** ID of the cash_account doc (required when paymentMethod === 'cash') */
+  cashAccountId?: string;
 }
 
 export async function recordPayment(firestoreId: string, payload: RecordPaymentPayload) {
-  const ref  = doc(db, PAYABLE_COLLECTION, firestoreId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error(`Payable ${firestoreId} not found`);
+  const payableRef = doc(db, PAYABLE_COLLECTION, firestoreId);
 
-  const data       = snap.data();
-  const totalAed   = (data.amounts?.aed  ?? 0) as number;
-  const alreadyAed = (data.paidAmounts?.aed ?? 0) as number;
-  const newPaidAed = Math.min(alreadyAed + payload.paidAed, totalAed);
+  // Use a Firestore transaction so the balance deduction and payable update
+  // are both atomic — either both succeed or neither does.
+  let newPaidAmounts: CurrencyAmounts;
+  let status: 'pending' | 'partial' | 'paid';
 
-  const newPaidAmounts = aedToAllCurrencies(newPaidAed);
-  const status: 'pending' | 'partial' | 'paid' =
-    newPaidAed >= totalAed ? 'paid' : newPaidAed > 0 ? 'partial' : 'pending';
+  await runTransaction(db, async (tx) => {
+    // 1. Read current payable
+    const snap = await tx.get(payableRef);
+    if (!snap.exists()) throw new Error(`Payable ${firestoreId} not found`);
 
-  await updateDoc(ref, {
-    paidAmounts: newPaidAmounts,
-    status,
-    notes:     payload.notes ?? data.notes ?? '',
-    updatedAt: nowISO(),
+    const data       = snap.data();
+    const totalAed   = (data.amounts?.aed   ?? 0) as number;
+    const alreadyAed = (data.paidAmounts?.aed ?? 0) as number;
+    const newPaidAed = Math.min(alreadyAed + payload.paidAed, totalAed);
+
+    newPaidAmounts = aedToAllCurrencies(newPaidAed);
+    status = newPaidAed >= totalAed ? 'paid' : newPaidAed > 0 ? 'partial' : 'pending';
+
+    // 2. Update the payable doc
+    tx.update(payableRef, {
+      paidAmounts: newPaidAmounts,
+      status,
+      notes:     payload.notes ?? data.notes ?? '',
+      updatedAt: nowISO(),
+    });
+
+    // 3. Deduct from bank or cash account
+    if (payload.paymentMethod === 'bank' && payload.bankAccountId) {
+      const bankRef  = doc(db, BANK_COLLECTION, payload.bankAccountId);
+      const bankSnap = await tx.get(bankRef);
+      if (bankSnap.exists()) {
+        const bankData      = bankSnap.data();
+        const currentBal    = bankData.balance ?? bankData.currentBalance ?? bankData.liquidity ?? 0;
+        const newBal        = Math.max(0, currentBal - payload.paidAed);
+        tx.update(bankRef, { balance: newBal, updatedAt: nowISO() });
+      }
+    } else if (payload.paymentMethod === 'cash' && payload.cashAccountId) {
+      const cashRef  = doc(db, CASH_COLLECTION, payload.cashAccountId);
+      const cashSnap = await tx.get(cashRef);
+      if (cashSnap.exists()) {
+        const cashData   = cashSnap.data();
+        const currentBal = cashData.balance ?? cashData.currentBalance ?? 0;
+        const newBal     = Math.max(0, currentBal - payload.paidAed);
+        tx.update(cashRef, { balance: newBal, updatedAt: nowISO() });
+      }
+    }
   });
 
-  return { newPaidAmounts, status };
+  // 4. Write a transaction log entry (outside the atomic tx — non-critical)
+  try {
+    await addDoc(collection(db, TX_COLLECTION), {
+      type:          'payable_payment',
+      payableId:     firestoreId,
+      amountAed:     payload.paidAed,
+      paymentMethod: payload.paymentMethod,
+      bankAccountId: payload.bankAccountId ?? null,
+      cashAccountId: payload.cashAccountId ?? null,
+      notes:         payload.notes ?? '',
+      createdAt:     nowISO(),
+    });
+  } catch (logErr) {
+    // Log failure is non-critical — don't fail the whole operation
+    console.warn('[PayableService] Failed to write transaction log:', logErr);
+  }
+
+  return { newPaidAmounts: newPaidAmounts!, status: status! };
 }
 
 // ── Create a manual payable entry from the UI ─────────────────────────────────
