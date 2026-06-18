@@ -9,7 +9,7 @@ import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { InvoiceCurrency, INVOICE_CURRENCIES, convertCurrency } from '../models/invoiceService';
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
-interface Bank    { id: string; name: string; accountNumber: string; }
+interface Bank    { id: string; name: string; accountNumber: string; balance: number; }
 
 interface Props {
   formData: Partial<Invoice>;
@@ -1158,13 +1158,27 @@ export function InvoiceFormView({
                     setFormData({ bankId: bank?.id, bankName: bank?.name, bankAccountNumber: bank?.accountNumber });
                   }} className={inp}>
                     <option value="">Select bank account</option>
-                    {banks.map(b => <option key={b.id} value={b.id}>{b.name} — {b.accountNumber}</option>)}
+                    {banks.map(b => {
+                      const balanceAed = convertCurrency(b.balance || 0, 'PKR', 'AED', currencyRates);
+                      return (
+                        <option key={b.id} value={b.id}>
+                          {b.name} — {b.accountNumber} (AED {balanceAed.toLocaleString('en-AE', { maximumFractionDigits: 0 })})
+                        </option>
+                      );
+                    })}
                   </select>
-                  {formData.bankName && (
-                    <p className="mt-1 text-xs text-green-700 bg-green-100 px-3 py-1 rounded-lg">
-                      Payment to: <strong>{formData.bankName}</strong> · A/C: {formData.bankAccountNumber}
-                    </p>
-                  )}
+                  {formData.bankName && (() => {
+                    const selectedBank = banks.find(b => b.id === formData.bankId);
+                    const balanceAed = selectedBank ? convertCurrency(selectedBank.balance || 0, 'PKR', 'AED', currencyRates) : null;
+                    return (
+                      <p className="mt-1 text-xs text-green-700 bg-green-100 px-3 py-1 rounded-lg">
+                        Payment to: <strong>{formData.bankName}</strong> · A/C: {formData.bankAccountNumber}
+                        {balanceAed !== null && (
+                          <> · Available: <strong>AED {balanceAed.toLocaleString('en-AE', { maximumFractionDigits: 2 })}</strong></>
+                        )}
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
 

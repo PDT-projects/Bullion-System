@@ -62,7 +62,7 @@ export function getCurrencyFromBranch(branch: string): InvoiceCurrency {
 }
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
-interface Bank    { id: string; name: string; accountNumber: string; }
+interface Bank    { id: string; name: string; accountNumber: string; balance: number; }
 
 export interface UseInvoiceFormViewModelReturn {
   formData: Partial<Invoice>;
