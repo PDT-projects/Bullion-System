@@ -483,12 +483,13 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
   // ── Products ───────────────────────────────────────────────────────────────
   const addProduct = useCallback(() => {
-    const branch   = branchFromValue(invoiceCompany);
-    const currency = getCurrencyFromBranch(branch);
-    const product  = createEmptyInvoiceProduct();
-    product.currency = currency;
+    // Unit price always defaults to AED, regardless of branch/company selected.
+    // (Branch→currency mapping still applies to the invoice-level currency
+    // selector via handleSetInvoiceCompany — just not to the per-product price.)
+    const product = createEmptyInvoiceProduct();
+    product.currency = 'AED';
     setSelectedProducts(p => [...p, product]);
-  }, [invoiceCompany]);
+  }, []);
 
   const removeProduct = useCallback(
     (pid: string) => setSelectedProducts(p => p.filter(x => x.id !== pid)),
@@ -501,13 +502,12 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       switch (field) {
         case 'productId': {
           const updated  = updateProductWithSelection(p, value, allProducts);
-          const branch   = branchFromValue(invoiceCompany);
-          const currency = getCurrencyFromBranch(branch);
+          // Unit price always defaults to AED, regardless of branch/company.
           // Carry imageUrls from inventory so thumbnail appears in PDF
           const pInfo = allProducts.find(x => x.id === value);
           return {
             ...updated,
-            currency,
+            currency: 'AED',
             pricePKR:  updated.price,
             imageUrls: Array.isArray(pInfo?.imageUrls) ? pInfo!.imageUrls : [],
           };
@@ -518,7 +518,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         default:         return { ...p, [field]: value };
       }
     }));
-  }, [allProducts, invoiceCompany]);
+  }, [allProducts]);
 
   const updateSerial = useCallback((productId: string, index: number, value: string) => {
     setSelectedProducts(prev =>

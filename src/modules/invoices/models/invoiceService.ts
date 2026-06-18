@@ -205,8 +205,12 @@ export const calculateInvoiceStats = (invoices: Invoice[]): InvoiceStats => ({
   netAmount:             invoices.reduce((s, i) => s + i.totalAmount - (i.deductionCharges || 0), 0),
 });
 
+// NOTE: formatCurrency formats whatever number it is given — it does NOT convert.
+// The app's display currency is AED, so any PKR-stored value must be converted
+// (e.g. via convertCurrency(pkrValue, 'PKR', 'AED', currencyRates)) BEFORE being
+// passed in here. Changed from PKR -> AED formatting to match the AED-first UI.
 export const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
 
 export const formatDate = (dateString: string): string =>
   dateString ? new Date(dateString).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' }) : '';

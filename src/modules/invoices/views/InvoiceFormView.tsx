@@ -299,15 +299,30 @@ function ProductPriceInput({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id, product.price, currency]);
 
-  // Rate hint: PKR per 1 unit of selected foreign currency
-  const pkrPer1Unit = currency === 'PKR'
+  // A freshly-fetched product is tagged 'PKR' by the ViewModel (updateProductWithSelection).
+  // The app's display currency is AED-first, so re-tag new rows to AED right after selection
+  // without ever showing PKR to the user. This only fires once per product pick.
+  React.useEffect(() => {
+    if (product.productId && currency === 'PKR') {
+      updateProduct(product.id, 'currency', 'AED');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.productId]);
+
+  // Rate hint: AED per 1 unit of selected foreign currency
+  const aedPer1Unit = currency === 'AED'
     ? 1
-    : +convertCurrency(1, currency, 'PKR', currencyRates).toFixed(2);
+    : +convertCurrency(1, currency, 'AED', currencyRates).toFixed(2);
+
+  // Price expressed in AED (the app's primary reference currency), regardless of
+  // which currency is currently selected for data entry.
+  const priceInAed = +convertCurrency(product.price, 'PKR', 'AED', currencyRates).toFixed(2);
 
   // Inventory anchor in display currency
-  const inventoryDisplayPrice = currency === 'PKR'
+  const inventoryDisplayPrice = currency === 'AED'
     ? null
     : +convertCurrency(inventoryPricePKR, 'PKR', currency, currencyRates).toFixed(2);
+  const inventoryDisplayPriceAed = +convertCurrency(inventoryPricePKR, 'PKR', 'AED', currencyRates).toFixed(2);
 
   // User typed a new price in the current display currency → convert to PKR and push up
   const handlePriceChange = (raw: number) => {
@@ -344,7 +359,7 @@ function ProductPriceInput({
           value={currency}
           onChange={e => handleCurrencyChange(e.target.value as InvoiceCurrency)}
           className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8 bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-          title="Price currency — inventory price is in PKR; select any currency to edit in that currency"
+          title="Price currency — displayed primarily in AED; select any currency to edit in that currency"
         >
           {INVOICE_CURRENCIES.map(c => (
             <option key={c.code} value={c.code}>{c.code}</option>
@@ -352,25 +367,31 @@ function ProductPriceInput({
         </select>
       </div>
 
-      {/* Hint lines: always shown when price is set */}
+      {/* Hint lines: always shown when price is set. AED is the primary reference. */}
       {product.price > 0 && (
         <div className="mt-0.5 space-y-0.5">
           <p className="text-xs text-gray-500">
             ≈ <span className="font-semibold text-gray-700">
-              PKR {product.price.toLocaleString('en-PK', { maximumFractionDigits: 0 })}
+              AED {priceInAed.toLocaleString('en-AE', { maximumFractionDigits: 2 })}
             </span>
-            <span className="ml-1.5 text-gray-400">
-              · 1 {currency} = PKR {pkrPer1Unit.toLocaleString('en-PK', { maximumFractionDigits: 2 })}
-            </span>
+            {currency !== 'AED' && (
+              <span className="ml-1.5 text-gray-400">
+                · 1 {currency} = AED {aedPer1Unit.toLocaleString('en-AE', { maximumFractionDigits: 2 })}
+              </span>
+            )}
           </p>
-          {inventoryDisplayPrice !== null && inventoryPricePKR > 0 && (
+          {inventoryPricePKR > 0 && (
             <p className="text-xs text-blue-500">
               Inventory price: <span className="font-semibold">
-                {inventoryDisplayPrice.toLocaleString('en-PK', { maximumFractionDigits: 2 })} {currency}
+                {currency === 'AED'
+                  ? `${inventoryDisplayPriceAed.toLocaleString('en-AE', { maximumFractionDigits: 2 })} AED`
+                  : `${(inventoryDisplayPrice ?? inventoryDisplayPriceAed).toLocaleString('en-AE', { maximumFractionDigits: 2 })} ${currency}`}
               </span>
-              <span className="ml-1 text-blue-400">
-                (PKR {inventoryPricePKR.toLocaleString('en-PK', { maximumFractionDigits: 0 })})
-              </span>
+              {currency !== 'AED' && (
+                <span className="ml-1 text-blue-400">
+                  (AED {inventoryDisplayPriceAed.toLocaleString('en-AE', { maximumFractionDigits: 2 })})
+                </span>
+              )}
             </p>
           )}
         </div>
@@ -741,7 +762,9 @@ export function InvoiceFormView({
                         </div>
                       )}
                       <div className="mt-2 text-right text-xs font-bold" style={{ color: BLACK }}>
-                        Total: <span style={{ color: GOLD }}>{formatCurrency(product.total)}</span>
+                        Total: <span style={{ color: GOLD }}>
+                          {formatCurrency(convertCurrency(product.total, 'PKR', 'AED', currencyRates))}
+                        </span>
                       </div>
                     </div>
                   );
@@ -997,9 +1020,9 @@ export function InvoiceFormView({
                 <p className="mt-1 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1">
                   Total import charges: <strong>
                     {formatCurrency(
-                      convertCurrency(formData.cargoAmount || 0, formData.cargoCurrency || 'AED', 'PKR', currencyRates)
-                      + convertCurrency(formData.customsAmount || 0, formData.customsCurrency || 'AED', 'PKR', currencyRates)
-                      + convertCurrency(formData.agentAmount || 0, formData.agentCurrency || 'AED', 'PKR', currencyRates)
+                      convertCurrency(formData.cargoAmount || 0, formData.cargoCurrency || 'AED', 'AED', currencyRates)
+                      + convertCurrency(formData.customsAmount || 0, formData.customsCurrency || 'AED', 'AED', currencyRates)
+                      + convertCurrency(formData.agentAmount || 0, formData.agentCurrency || 'AED', 'AED', currencyRates)
                     )}
                   </strong>
                 </p>
@@ -1100,14 +1123,29 @@ export function InvoiceFormView({
               {formData.paymentStatus === 'Partial' && (
                 <>
                   <div>
-                    <label className={lbl}>Paid Amount</label>
-                    <input type="number" value={formData.paidAmount || 0}
-                      onChange={e => setFormData({ paidAmount: Number(e.target.value), remainingAmount: total - Number(e.target.value) })}
+                    <label className={lbl}>Paid Amount <span className="font-normal text-gray-400">(AED)</span></label>
+                    <input type="number" value={
+                      formData.paidAmount
+                        ? +convertCurrency(formData.paidAmount, 'PKR', 'AED', currencyRates).toFixed(2)
+                        : 0
+                    }
+                      onChange={e => {
+                        // Field is entered/displayed in AED; convert to PKR before storing,
+                        // since formData.paidAmount/remainingAmount are stored in PKR
+                        // (same unit as `total`/totalAmount) for consistency on save.
+                        const paidAed = Number(e.target.value);
+                        const paidPkr = +convertCurrency(paidAed, 'AED', 'PKR', currencyRates).toFixed(2);
+                        setFormData({ paidAmount: paidPkr, remainingAmount: total - paidPkr });
+                      }}
                       className={inp} />
                   </div>
                   <div>
-                    <label className={lbl}>Remaining</label>
-                    <input type="number" value={formData.remainingAmount || 0} readOnly className={`${inp} bg-gray-50`} />
+                    <label className={lbl}>Remaining <span className="font-normal text-gray-400">(AED)</span></label>
+                    <input type="number" value={
+                      formData.remainingAmount
+                        ? +convertCurrency(formData.remainingAmount, 'PKR', 'AED', currencyRates).toFixed(2)
+                        : 0
+                    } readOnly className={`${inp} bg-gray-50`} />
                   </div>
                 </>
               )}
@@ -1164,13 +1202,22 @@ export function InvoiceFormView({
           <div className="space-y-0.5">
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold text-gray-700">Total:</span>
-              <span className="text-lg font-extrabold" style={{ color: BLACK }}>{formatCurrency(total)}</span>
+              <span className="text-lg font-extrabold" style={{ color: BLACK }}>
+                {formatCurrency(convertCurrency(total, 'PKR', 'AED', currencyRates))}
+              </span>
             </div>
             {(formData.deductionCharges || 0) > 0 && (
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-gray-500">Deduction:</span>
                 <span className="text-red-600 font-medium">
-                  − {formatCurrency(formData.deductionCharges || 0)}
+                  − {formatCurrency(
+                    convertCurrency(
+                      formData.deductionCharges || 0,
+                      (formData as any).deductionCurrency || 'AED',
+                      'AED',
+                      currencyRates,
+                    )
+                  )}
                   {(formData as any).deductionCurrency && (formData as any).deductionCurrency !== 'AED' && (
                     <span className="ml-1 text-gray-400">({(formData as any).deductionCurrency})</span>
                   )}
@@ -1181,7 +1228,11 @@ export function InvoiceFormView({
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-gray-500">Import:</span>
                 <span className="text-orange-600 font-medium">
-                  − {formatCurrency((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0))}
+                  − {formatCurrency(
+                    convertCurrency(formData.cargoAmount || 0, formData.cargoCurrency || 'AED', 'AED', currencyRates)
+                    + convertCurrency(formData.customsAmount || 0, formData.customsCurrency || 'AED', 'AED', currencyRates)
+                    + convertCurrency(formData.agentAmount || 0, formData.agentCurrency || 'AED', 'AED', currencyRates)
+                  )}
                 </span>
               </div>
             )}
