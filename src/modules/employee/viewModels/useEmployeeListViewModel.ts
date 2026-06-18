@@ -39,7 +39,8 @@ export function useEmployeeListViewModel(): UseEmployeeListViewModelReturn {
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [displayCurrency, setDisplayCurrency] = useState<SalaryCurrency>('PKR');
+  // UPDATED: AED is now the primary/default display currency
+  const [displayCurrency, setDisplayCurrency] = useState<SalaryCurrency>('AED');
   const [filters, setFilters] = useState<EmployeeFilters>({
     nameSearch: '',
     positionFilter: '',

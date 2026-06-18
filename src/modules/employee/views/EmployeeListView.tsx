@@ -2,6 +2,7 @@
 // EmployeeListView - Main page for employee list with filters
 // UPDATED: EmployeeTable now receives salaryCurrency per employee and shows it
 //          alongside the salary amount. The header rate badge is still shown.
+// UPDATED: AED is now the primary display currency (shown first in toggle).
 
 import { Plus, Filter } from 'lucide-react';
 import { Employee, EmployeeFilters as EmployeeFiltersType } from '../models/types';
@@ -50,9 +51,9 @@ export function EmployeeListView({
         </div>
         <div className="flex items-center gap-3">
 
-          {/* Currency Toggle — controls the LIST-LEVEL display preference */}
+          {/* Currency Toggle — AED listed first as the primary display currency */}
           <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
-            {(['PKR', 'AED'] as SalaryCurrency[]).map(cur => (
+            {(['AED', 'PKR'] as SalaryCurrency[]).map(cur => (
               <button
                 key={cur}
                 onClick={() => onCurrencyToggle(cur)}
@@ -100,10 +101,10 @@ export function EmployeeListView({
           <div className="flex items-center gap-3 text-xs text-gray-400">
             {/* Legend */}
             <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500" /> PKR employees
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-500" /> AED employees
             </span>
             <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-blue-500" /> AED employees
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500" /> PKR employees
             </span>
             <span>Rate: 1 AED = {EmployeeService.AED_TO_PKR} PKR</span>
           </div>
