@@ -132,28 +132,28 @@ export function CostingGlobalInputs({
 
         {/* ── USD Rate ── */}
         <div>
-          <label htmlFor="usdRate" className={labelCls}>USD Rate (PKR)</label>
+          <label htmlFor="usdRate" className={labelCls}>USD Rate (AED)</label>
           <input id="usdRate" type="number" className={inputCls}
             value={usdRate || ''} onChange={e => onUsdRateChange(Number(e.target.value))}
-            placeholder="e.g., 280" />
-          <p className={helpCls}>1 USD = ? PKR</p>
+            placeholder="e.g., 3.67" />
+          <p className={helpCls}>1 USD = ? AED</p>
         </div>
 
         {/* ── Customs Duty ── */}
         <div>
-          <label htmlFor="customsValue" className={labelCls}>Total Customs Duty (PKR)</label>
+          <label htmlFor="customsValue" className={labelCls}>Total Customs Duty (AED)</label>
           <input id="customsValue" type="number" className={inputCls}
             value={totalCustomsValue || ''} onChange={e => onCustomsChange(Number(e.target.value))}
-            placeholder="e.g., 50000" />
+            placeholder="e.g., 500" />
           <p className={helpCls}>Total customs duty for shipment</p>
         </div>
 
         {/* ── Freight Charges ── */}
         <div>
-          <label htmlFor="freightValue" className={labelCls}>Total Freight Charges (PKR)</label>
+          <label htmlFor="freightValue" className={labelCls}>Total Freight Charges (AED)</label>
           <input id="freightValue" type="number" className={inputCls}
             value={totalFreightValue || ''} onChange={e => onFreightChange(Number(e.target.value))}
-            placeholder="e.g., 25000" />
+            placeholder="e.g., 250" />
           <p className={helpCls}>Total freight/logistics cost</p>
         </div>
 

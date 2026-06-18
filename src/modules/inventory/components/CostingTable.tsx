@@ -31,7 +31,7 @@ export function CostingTable({ models, onAddModel, onUpdateModelField, onRemoveM
     'Custom/Unit',
     'Freight/Model',
     'Freight/Unit',
-    'Cost (PKR)',
+    'Cost (AED)',
     'Total Unit Cost',
     'Inventory Value',
     'Actions',
@@ -206,14 +206,14 @@ export function CostingTable({ models, onAddModel, onUpdateModelField, onRemoveM
                     {fmt(model.freightPerUnit)}
                   </td>
 
-                  {/* Cost PKR */}
+                  {/* Cost AED */}
                   <td style={{ padding: '12px 16px', border: '1px solid #d1d5db', textAlign: 'right', fontWeight: 500 }}>
-                    {fmt(model.unitCostPKR)}
+                    د.إ {fmt(model.unitCostPKR)}
                   </td>
 
                   {/* Total Unit Cost */}
                   <td style={{ padding: '12px 16px', border: '1px solid #d1d5db', textAlign: 'right', fontWeight: 'bold' }}>
-                    {fmt(model.totalLandedUnitCost)}
+                    د.إ {fmt(model.totalLandedUnitCost)}
                   </td>
 
                   {/* Inventory Value */}
@@ -227,7 +227,7 @@ export function CostingTable({ models, onAddModel, onUpdateModelField, onRemoveM
                       backgroundColor: '#eff6ff',
                     }}
                   >
-                    {fmt(model.totalShipmentValuePKR)}
+                    د.إ {fmt(model.totalShipmentValuePKR)}
                   </td>
 
                   {/* Actions */}
@@ -283,7 +283,7 @@ export function CostingTable({ models, onAddModel, onUpdateModelField, onRemoveM
                   <td style={{ padding: '10px 16px', border: '1px solid #d1d5db' }} />
                   <td style={{ padding: '10px 16px', border: '1px solid #d1d5db' }} />
                   <td style={{ padding: '10px 16px', border: '1px solid #d1d5db', textAlign: 'right', color: '#1d4ed8' }}>
-                    {fmt(models.reduce((s, m) => s + m.totalShipmentValuePKR, 0))}
+                    د.إ {fmt(models.reduce((s, m) => s + m.totalShipmentValuePKR, 0))}
                   </td>
                   <td style={{ padding: '10px 16px', border: '1px solid #d1d5db' }} />
                 </tr>

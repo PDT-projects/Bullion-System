@@ -307,7 +307,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const setPaidAmount = useCallback((v: number) => setPaidAmountState(v), []);
 
   const formatCurrency = useCallback((amount: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount)
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount)
   , []);
 
   const validateForm = useCallback((): boolean => {

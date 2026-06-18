@@ -325,7 +325,7 @@ export interface CurrencyPriceInputProps {
   disabled?: boolean;
   required?: boolean;
   placeholder?: string;
-  /** default input currency, falls back to PKR */
+  /** default input currency, falls back to AED */
   defaultInputCurrency?: CurrencyCode;
 }
 
@@ -337,11 +337,18 @@ export function CurrencyPriceInput({
   disabled = false,
   required = false,
   placeholder = '0',
-  defaultInputCurrency = 'PKR',
+  defaultInputCurrency = 'AED',
 }: CurrencyPriceInputProps) {
   const [inputCurrency, setInputCurrency] = useState<CurrencyCode>(defaultInputCurrency);
   const previousDefaultCurrency = useRef<CurrencyCode>(defaultInputCurrency);
   const meta = getCurrencyMeta(inputCurrency);
+
+  // Local raw string while the user is typing — prevents PKR→currency
+  // round-trip from overwriting what the user typed (e.g. "9" → "9.010")
+  const [rawInput, setRawInput] = useState<string>('');
+  const isFocused = useRef(false);
+  // Track the last PKR value we emitted so we can detect external changes
+  const lastEmittedPKR = useRef<number>(pkrValue);
 
   useEffect(() => {
     if (previousDefaultCurrency.current !== defaultInputCurrency && inputCurrency === previousDefaultCurrency.current) {
@@ -350,24 +357,51 @@ export function CurrencyPriceInput({
     previousDefaultCurrency.current = defaultInputCurrency;
   }, [defaultInputCurrency, inputCurrency]);
 
-  // Convert stored PKR value to current inputCurrency for display
-  const displayValue = (() => {
-    if (inputCurrency === 'PKR') return pkrValue || '';
-    const usd = pkrValue / rates.PKR;
-    const converted = usd * rates[inputCurrency];
+  // Sync display when pkrValue changes externally (e.g. model selected from dropdown)
+  // but never while the user is actively typing.
+  useEffect(() => {
+    if (isFocused.current) return;
+    if (Math.abs(lastEmittedPKR.current - pkrValue) < 0.01) return; // our own change, skip
+    lastEmittedPKR.current = pkrValue;
+    if (pkrValue === 0) {
+      setRawInput('');
+    } else {
+      const converted = inputCurrency === 'PKR' ? pkrValue : (pkrValue / rates.PKR) * rates[inputCurrency];
+      const decimals = getCurrencyMeta(inputCurrency).decimals;
+      setRawInput(converted > 0 ? parseFloat(converted.toFixed(decimals)).toString() : '');
+    }
+  }, [pkrValue, inputCurrency, rates]);
+
+  // The value shown in the <input>: rawInput while focused, converted display when blurred
+  const displayValue = isFocused.current ? rawInput : (() => {
+    if (pkrValue === 0) return '';
+    if (inputCurrency === 'PKR') return pkrValue;
+    const converted = (pkrValue / rates.PKR) * rates[inputCurrency];
     return converted > 0 ? parseFloat(converted.toFixed(meta.decimals)) : '';
   })();
 
   const handleChange = (raw: string) => {
+    setRawInput(raw);
     const num = parseFloat(raw);
-    if (isNaN(num) || num < 0) { onChange(0); return; }
+    if (isNaN(num) || num < 0) { lastEmittedPKR.current = 0; onChange(0); return; }
+    let pkr: number;
     if (inputCurrency === 'PKR') {
-      onChange(Math.round(num));
+      pkr = Math.round(num);
     } else {
-      // Convert to PKR for storage
-      const usd = num / rates[inputCurrency];
-      const pkr = usd * rates.PKR;
-      onChange(Math.round(pkr));
+      pkr = Math.round((num / rates[inputCurrency]) * rates.PKR);
+    }
+    lastEmittedPKR.current = pkr;
+    onChange(pkr);
+  };
+
+  const handleCurrencyChange = (newCurrency: CurrencyCode) => {
+    setInputCurrency(newCurrency);
+    if (pkrValue > 0) {
+      const newMeta = getCurrencyMeta(newCurrency);
+      const converted = newCurrency === 'PKR' ? pkrValue : (pkrValue / rates.PKR) * rates[newCurrency];
+      setRawInput(parseFloat(converted.toFixed(newMeta.decimals)).toString());
+    } else {
+      setRawInput('');
     }
   };
 
@@ -395,7 +429,7 @@ export function CurrencyPriceInput({
         {/* Currency selector */}
         <select
           value={inputCurrency}
-          onChange={e => setInputCurrency(e.target.value as CurrencyCode)}
+          onChange={e => handleCurrencyChange(e.target.value as CurrencyCode)}
           disabled={disabled}
           style={{
             padding: '9px 8px',
@@ -426,6 +460,19 @@ export function CurrencyPriceInput({
           type="number"
           value={displayValue}
           onChange={e => handleChange(e.target.value)}
+          onFocus={() => {
+            isFocused.current = true;
+            // Show raw editable value on focus
+            if (pkrValue === 0) { setRawInput(''); return; }
+            const converted = inputCurrency === 'PKR' ? pkrValue : (pkrValue / rates.PKR) * rates[inputCurrency];
+            const decimals = getCurrencyMeta(inputCurrency).decimals;
+            setRawInput(parseFloat(converted.toFixed(decimals)).toString());
+          }}
+          onBlur={() => {
+            isFocused.current = false;
+            // Force re-render to switch to displayValue
+            setRawInput(prev => prev);
+          }}
           disabled={disabled}
           placeholder={placeholder}
           min={0}

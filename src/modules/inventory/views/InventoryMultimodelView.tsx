@@ -241,6 +241,41 @@ function ImageUploadPanel({
   );
 }
 
+// ── Description Field ─────────────────────────────────────────────────────────
+// FULLY UNCONTROLLED: React sets the initial value once via defaultValue and then
+// never touches the DOM node's value again. This makes it immune to parent
+// re-renders — no matter what re-renders upstream while you type, the caret and
+// text stay put. We push the value up to the parent on blur (and on every change
+// too, but since the textarea is uncontrolled, those parent updates can't reset it).
+// `key={entryId}` guarantees the field resets correctly if the row identity changes.
+function DescriptionField({
+  entryId,
+  value,
+  updateEntry,
+}: {
+  entryId: string;
+  value: string;
+  updateEntry: (id: string, patch: Partial<MultiModelEntry>) => void;
+}) {
+  return (
+    <div style={{ gridColumn: '1 / -1' }}>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Description</label>
+      <textarea
+        key={entryId}
+        defaultValue={value}
+        onChange={ev => updateEntry(entryId, { description: ev.target.value })}
+        rows={2}
+        placeholder="Optional notes, specs, or details..."
+        style={{
+          width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8,
+          fontSize: 13, outline: 'none', color: '#111827', backgroundColor: '#fff',
+          boxSizing: 'border-box', resize: 'vertical',
+        }}
+      />
+    </div>
+  );
+}
+
 // ── Model Card ─────────────────────────────────────────────────────────────────
 function ModelCard({
   entry, index, modelOptions, modelOptionsLoading, validationErrors,
@@ -434,17 +469,12 @@ function ModelCard({
           />
         </div>
 
-        {/* Description */}
-        <div style={{ gridColumn: '1 / -1' }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Description</label>
-          <textarea
-            value={e.description}
-            onChange={ev => updateEntry(e.id, { description: ev.target.value })}
-            rows={2}
-            placeholder="Optional notes, specs, or details..."
-            style={{ ...inp, resize: 'vertical' }}
-          />
-        </div>
+        {/* Description — uses local state to avoid losing focus on each keystroke */}
+        <DescriptionField
+          entryId={e.id}
+          value={e.description}
+          updateEntry={updateEntry}
+        />
 
         {/* Serial Numbers */}
         <div style={{ gridColumn: '1 / -1' }}>
@@ -503,6 +533,24 @@ export const InventoryMultiModelView: React.FC<Props> = ({
     setBrand(name, name);
     setAddingBrand(false);
     setNewBrandName('');
+  };
+
+  // ── Grand total in the SELECTED (primary) currency ──────────────────────────
+  // grandTotalCost is stored in PKR. We convert it to `primaryCurrency` using the
+  // same `rates` convention the per-row CurrencyPriceInput uses (pkr * rate), then
+  // render with the 3-letter currency code (e.g. "AED 1,234").
+  // NOTE: this assumes rates[currency] = units of `currency` per 1 PKR — the same
+  // direction CurrencyPriceInput uses. If your rates are inverted, change `*` to `/`.
+  const formatPrimary = (pkrAmount: number) => {
+    const rate = rates?.[primaryCurrency] ?? 1;
+    const converted = primaryCurrency === 'PKR' ? pkrAmount : pkrAmount * rate;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: primaryCurrency,
+      currencyDisplay: 'code',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(converted);
   };
 
   return (
@@ -650,7 +698,7 @@ export const InventoryMultiModelView: React.FC<Props> = ({
             </div>
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
               <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grand Total Cost</div>
-              <div style={{ fontSize: 26, fontWeight: 900, color: '#a5f3fc', marginTop: 2 }}>{formatCurrency(grandTotalCost)}</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: '#a5f3fc', marginTop: 2 }}>{formatPrimary(grandTotalCost)}</div>
             </div>
           </div>
 

@@ -347,7 +347,12 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
   }, [navigate, inventoryType]);
 
   const formatCurrency = useCallback((n: number) =>
-    new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(n)
+    new Intl.NumberFormat('en-PK', {
+      style: 'currency',
+      currency: 'PKR',
+      currencyDisplay: 'code',      // renders "PKR" instead of the locale symbol "Rs"
+      minimumFractionDigits: 0,
+    }).format(n)
   , []);
 
   return {

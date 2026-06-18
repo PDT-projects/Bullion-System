@@ -177,7 +177,7 @@ export interface UseInventoryCurrencyReturn extends UseCurrencyRatesReturn {
 
 export function useInventoryCurrency(): UseInventoryCurrencyReturn {
   const rateState = useCurrencyRates();
-  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('PKR');
+  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('AED');
   const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>([]);
 
   const setPrimaryCurrency = useCallback((c: CurrencyCode) => {
