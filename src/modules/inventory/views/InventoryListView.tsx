@@ -67,11 +67,16 @@ function getDisplayLocation(product: Product): string {
   return Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
 }
 
-/** Returns the most recent In Transit transfer route for a product, or null */
-function getTransitRoute(product: Product, transfers: ProductTransfer[]): { from: string; to: string } | null {
-  if (product.status !== 'In Transit') return null;
-  // Find the latest In Transit or Pending transfer for this product
-  const match = transfers
+/** Returns the most recent transfer route for a product, or null.
+ *  - `received: false` → still In Transit / Pending (amber pill)
+ *  - `received: true`  → already received at destination (shown as completed route)
+ */
+function getTransitRoute(
+  product: Product,
+  transfers: ProductTransfer[],
+): { from: string; to: string; received: boolean } | null {
+  // First: check for any active (In Transit / Pending) transfer
+  const activeMatch = transfers
     .filter(t =>
       t.productId === product.id &&
       (t.status === 'In Transit' || t.status === 'Pending')
@@ -81,8 +86,24 @@ function getTransitRoute(product: Product, transfers: ProductTransfer[]): { from
       const db = new Date(b.transferDate || b.date || 0).getTime();
       return db - da;
     })[0];
-  if (!match) return null;
-  return { from: match.fromLocation, to: match.toLocation };
+  if (activeMatch) {
+    return { from: activeMatch.fromLocation, to: activeMatch.toLocation, received: false };
+  }
+  // Second: check for the most recent Received / Completed transfer
+  const receivedMatch = transfers
+    .filter(t =>
+      t.productId === product.id &&
+      (t.status === 'Received' || t.status === 'Completed')
+    )
+    .sort((a, b) => {
+      const da = new Date(a.transferDate || a.date || 0).getTime();
+      const db = new Date(b.transferDate || b.date || 0).getTime();
+      return db - da;
+    })[0];
+  if (receivedMatch) {
+    return { from: receivedMatch.fromLocation, to: receivedMatch.toLocation, received: true };
+  }
+  return null;
 }
 
 function getStatusColor(status: string): string {
@@ -621,11 +642,11 @@ export function InventoryListView({
                       if (route) {
                         return (
                           <div className="flex items-center gap-1 flex-wrap">
-                            <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${route.received ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-700'}`}>
                               {route.from}
                             </span>
-                            <ArrowRight size={11} className="text-yellow-600 shrink-0" />
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold whitespace-nowrap">
+                            <ArrowRight size={11} className={route.received ? 'text-slate-400 shrink-0' : 'text-yellow-600 shrink-0'} />
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${route.received ? 'bg-green-50 text-green-700' : 'bg-green-100 text-green-700'}`}>
                               {route.to}
                             </span>
                           </div>
@@ -825,10 +846,12 @@ export function InventoryListView({
                       if (route) {
                         return (
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">{route.from}</span>
-                            <ArrowRight size={13} className="text-yellow-600 shrink-0" />
-                            <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">{route.to}</span>
-                            <span className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-full font-medium">In Transit</span>
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${route.received ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-700'}`}>{route.from}</span>
+                            <ArrowRight size={13} className={route.received ? 'text-slate-400 shrink-0' : 'text-yellow-600 shrink-0'} />
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${route.received ? 'bg-green-50 text-green-700' : 'bg-green-100 text-green-700'}`}>{route.to}</span>
+                            {!route.received && (
+                              <span className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-full font-medium">In Transit</span>
+                            )}
                           </div>
                         );
                       }
