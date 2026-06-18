@@ -198,7 +198,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           <p className="text-sm text-red-600 mt-1">{error}</p>
           <button
             onClick={refreshBanks}
-            className="mt-4 flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800"
+            className="mt-4 flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800"
           >
             <RefreshCw size={18} />
             Try Again
@@ -244,7 +244,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           </button>
           <button
             onClick={onAddBank}
-            className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors"
           >
             <Plus size={18} />
             Add Bank
@@ -359,7 +359,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           </p>
           <button
             onClick={onAddBank}
-            className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-700 mx-auto"
+            className="flex items-center gap-2 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 mx-auto"
           >
             <Plus size={20} />
             Add Your First Bank
@@ -638,7 +638,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                 type="button"
                 onClick={onTransferSubmit}
                 disabled={isTransferSaving || !!hasInsufficientFunds}
-                className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isTransferSaving ? (
                   <>

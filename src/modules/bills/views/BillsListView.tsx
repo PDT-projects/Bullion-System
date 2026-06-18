@@ -78,6 +78,12 @@ const fmtAmount = (amount: number, meta: CurrencyMeta): string => {
 const convertFromPKR = (amount: number, target: CurrencyCode, rates: RateMap): number =>
   target === 'PKR' ? amount : (amount / rates.PKR) * rates[target];
 
+// Bills are stored AED-denominated (the Bills form saves `amount` directly in AED
+// and stamps `currency: 'AED'` on the record), unlike other modules that store PKR.
+// This converts an AED-denominated bill amount into any target display currency.
+const convertFromAED = (amount: number, target: CurrencyCode, rates: RateMap): number =>
+  target === 'AED' ? amount : (amount / rates.AED) * rates[target];
+
 function useCurrencyRates() {
   const [rates, setRates]             = useState<RateMap>(FALLBACK_RATES);
   const [loading, setLoading]         = useState(true);
@@ -251,7 +257,7 @@ function CurrencyDropdown({
 
 // ─── Secondary currency rows ──────────────────────────────────────────────────
 
-function CurrencyRows({ extras, pkrAmount, rates }: { extras: CurrencyCode[]; pkrAmount: number; rates: RateMap }) {
+function CurrencyRows({ extras, aedAmount, rates }: { extras: CurrencyCode[]; aedAmount: number; rates: RateMap }) {
   if (extras.length === 0) return null;
   return (
     <div className="mt-1.5 flex flex-col gap-0.5">
@@ -259,7 +265,7 @@ function CurrencyRows({ extras, pkrAmount, rates }: { extras: CurrencyCode[]; pk
         const meta = getMeta(code);
         return (
           <p key={code} className="text-xs text-gray-400 tabular-nums">
-            {fmtAmount(convertFromPKR(pkrAmount, code, rates), meta)}
+            {fmtAmount(convertFromAED(aedAmount, code, rates), meta)}
           </p>
         );
       })}
@@ -303,8 +309,8 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
   const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>(['PKR']);
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated, refresh: refreshRates } = useCurrencyRates();
 
-  const fmtPrimary = (pkr: number) =>
-    fmtAmount(convertFromPKR(pkr, primaryCurrency, rates), getMeta(primaryCurrency));
+  const fmtPrimary = (aed: number) =>
+    fmtAmount(convertFromAED(aed, primaryCurrency, rates), getMeta(primaryCurrency));
 
   const fmtD = BillsService.formatDate;
 
@@ -353,15 +359,15 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Bills',  pkr: stats.totalAmount,       sub: `${stats.totalBills} records`,     icon: <Receipt size={18} style={{ color: CHARCOAL }} /> },
-          { label: 'Electricity',  pkr: stats.electricityTotal,  sub: `${stats.electricityCount} bills`, icon: <Zap size={18} className="text-yellow-600" /> },
-          { label: 'Internet',     pkr: stats.internetTotal,     sub: `${stats.internetCount} bills`,    icon: <Wifi size={18} className="text-blue-600" /> },
-          { label: 'Utilities',    pkr: stats.utilitiesTotal,    sub: `${stats.utilitiesCount} bills`,   icon: <Droplets size={18} className="text-cyan-600" /> },
+          { label: 'Total Bills',  aed: stats.totalAmount,       sub: `${stats.totalBills} records`,     icon: <Receipt size={18} style={{ color: CHARCOAL }} /> },
+          { label: 'Electricity',  aed: stats.electricityTotal,  sub: `${stats.electricityCount} bills`, icon: <Zap size={18} className="text-yellow-600" /> },
+          { label: 'Internet',     aed: stats.internetTotal,     sub: `${stats.internetCount} bills`,    icon: <Wifi size={18} className="text-blue-600" /> },
+          { label: 'Utilities',    aed: stats.utilitiesTotal,    sub: `${stats.utilitiesCount} bills`,   icon: <Droplets size={18} className="text-cyan-600" /> },
         ].map(s => (
           <div key={s.label} className="bg-white p-4 rounded-lg border border-gray-200">
             <div className="flex items-center gap-2 mb-2">{s.icon}<p className="text-sm text-gray-600">{s.label}</p></div>
-            <p className="text-xl font-bold text-gray-900">{fmtPrimary(s.pkr)}</p>
-            <CurrencyRows extras={extraCurrencies} pkrAmount={s.pkr} rates={rates} />
+            <p className="text-xl font-bold text-gray-900">{fmtPrimary(s.aed)}</p>
+            <CurrencyRows extras={extraCurrencies} aedAmount={s.aed} rates={rates} />
             <p className="text-sm text-gray-500 mt-1">{s.sub}</p>
           </div>
         ))}
@@ -478,12 +484,12 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
                     {/* Amount */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="font-semibold text-gray-900 text-sm">{fmtPrimary(bill.amount)}</p>
-                      <CurrencyRows extras={extraCurrencies} pkrAmount={bill.amount} rates={rates} />
+                      <CurrencyRows extras={extraCurrencies} aedAmount={bill.amount} rates={rates} />
                     </td>
                     {/* Paid */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="text-sm text-green-700 font-medium">{fmtPrimary(bill.amountPaid ?? bill.amount)}</p>
-                      <CurrencyRows extras={extraCurrencies} pkrAmount={bill.amountPaid ?? bill.amount} rates={rates} />
+                      <CurrencyRows extras={extraCurrencies} aedAmount={bill.amountPaid ?? bill.amount} rates={rates} />
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
@@ -553,16 +559,16 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
               {/* Amount summary */}
               <div className="grid grid-cols-3 gap-3 border-t pt-4">
                 {[
-                  { label: 'Total Amount', pkr: viewingBill.amount,                           cls: 'bg-blue-50 text-blue-700' },
-                  { label: 'Paid',         pkr: viewingBill.amountPaid ?? viewingBill.amount, cls: 'bg-green-50 text-green-700' },
-                  { label: 'Remaining',    pkr: viewingBill.remainingAmount ?? 0,             cls: 'bg-orange-50 text-orange-700' },
-                ].map(({ label, pkr, cls }) => (
+                  { label: 'Total Amount', aed: viewingBill.amount,                           cls: 'bg-blue-50 text-blue-700' },
+                  { label: 'Paid',         aed: viewingBill.amountPaid ?? viewingBill.amount, cls: 'bg-green-50 text-green-700' },
+                  { label: 'Remaining',    aed: viewingBill.remainingAmount ?? 0,             cls: 'bg-orange-50 text-orange-700' },
+                ].map(({ label, aed, cls }) => (
                   <div key={label} className={`${cls} p-3 rounded-lg text-center`}>
                     <p className="text-xs opacity-70">{label}</p>
-                    <p className="font-bold">{fmtPrimary(pkr)}</p>
+                    <p className="font-bold">{fmtPrimary(aed)}</p>
                     {extraCurrencies.map(code => (
                       <p key={code} className="text-[10px] opacity-60 mt-0.5">
-                        {fmtAmount(convertFromPKR(pkr, code, rates), getMeta(code))}
+                        {fmtAmount(convertFromAED(aed, code, rates), getMeta(code))}
                       </p>
                     ))}
                   </div>
@@ -630,7 +636,7 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
                     <span className="text-2xl font-bold" style={{ color: CHARCOAL }}>{fmtPrimary(viewingSlip.amountPaid ?? viewingSlip.amount)}</span>
                     {extraCurrencies.map(code => (
                       <p key={code} className="text-xs text-gray-500 mt-0.5">
-                        {fmtAmount(convertFromPKR(viewingSlip.amountPaid ?? viewingSlip.amount, code, rates), getMeta(code))}
+                        {fmtAmount(convertFromAED(viewingSlip.amountPaid ?? viewingSlip.amount, code, rates), getMeta(code))}
                       </p>
                     ))}
                   </div>

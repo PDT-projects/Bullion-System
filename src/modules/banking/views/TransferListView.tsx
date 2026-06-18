@@ -88,7 +88,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
           <button
             onClick={onAddTransfer}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
             <Plus size={18} />
             New Transfer
@@ -241,7 +241,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
           <p className="text-sm text-gray-500 mt-1">Record a new bank transfer to get started</p>
           <button
             onClick={onAddTransfer}
-            className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700"
+            className="mt-4 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800"
           >
             New Transfer
           </button>

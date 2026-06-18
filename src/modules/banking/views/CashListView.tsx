@@ -58,7 +58,7 @@ function PageHeader({ onBack, isLoading, onRefresh, onSetBalance }: {
           <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} /> Refresh
         </button>
         <button onClick={onSetBalance}
-          className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] text-sm font-medium transition-colors">
+          className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium transition-colors">
           <Wallet size={14} /> Set Opening Balance
         </button>
       </div>
@@ -107,7 +107,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
       <div className="p-6 space-y-6">
         <PageHeader onBack={onBack} isLoading onRefresh={refreshCashData} onSetBalance={() => setShowModal(true)} />
         <div className="flex flex-col items-center justify-center py-24 bg-white rounded-xl border border-gray-200">
-          <Loader2 className="animate-spin text-[#4f46e5] mb-3" size={36} />
+          <Loader2 className="animate-spin text-gray-700 mb-3" size={36} />
           <p className="text-sm text-gray-500">Loading cash ledger...</p>
         </div>
       </div>
@@ -124,7 +124,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
           <p className="text-sm font-semibold text-red-700 mb-1">Failed to load cash data</p>
           <p className="text-xs text-red-400 mb-4">{error}</p>
           <button onClick={refreshCashData}
-            className="flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] text-sm font-medium">
+            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium">
             <RefreshCw size={14} /> Try Again
           </button>
         </div>
@@ -140,7 +140,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Cash in Hand',    value: formatCurrency(stats.totalCashInHand), color: 'text-[#4f46e5]', bg: 'bg-indigo-50', Icon: Wallet,      ic: 'text-[#4f46e5]' },
+          { label: 'Cash in Hand',    value: formatCurrency(stats.totalCashInHand), color: 'text-gray-700', bg: 'bg-gray-100', Icon: Wallet,      ic: 'text-gray-700' },
           { label: 'Opening Balance', value: formatCurrency(stats.openingBalance),  color: 'text-blue-600',  bg: 'bg-blue-50',   Icon: DollarSign,  ic: 'text-blue-500'  },
           { label: 'Total Inflow',    value: formatCurrency(stats.totalInflow),     color: 'text-green-600', bg: 'bg-green-50',  Icon: TrendingUp,  ic: 'text-green-500' },
           { label: 'Total Outflow',   value: formatCurrency(stats.totalOutflow),    color: 'text-red-600',   bg: 'bg-red-50',    Icon: TrendingDown, ic: 'text-red-500'  },
@@ -158,7 +158,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
       {/* ── Search + Filter ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center gap-3">
-          <div className="flex-1 flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-[#4f46e5] focus-within:border-[#4f46e5] bg-white overflow-hidden">
+          <div className="flex-1 flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-700 focus-within:border-gray-700 bg-white overflow-hidden">
             <span className="pl-3 pr-2 text-gray-400 shrink-0 flex items-center">
               <Search size={15} />
             </span>
@@ -174,7 +174,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
             {(['all', 'inflow', 'outflow'] as const).map(f => (
               <button key={f} onClick={() => setFilterType(f)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  filters.filterType === f ? 'bg-white text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  filters.filterType === f ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}>
                 {f === 'all' ? 'All' : f === 'inflow' ? '↑ Inflow' : '↓ Outflow'}
               </button>
@@ -206,24 +206,24 @@ export const CashListView: React.FC<CashListViewProps> = ({
 
                 {/* Opening Balance Row */}
                 {openingBalance > 0 && (
-                  <tr className="bg-indigo-50/40">
+                  <tr className="bg-gray-50/40">
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700">
                         <Clock size={11} /> Opening Balance
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
                         Opening
                       </span>
                     </td>
                     <td className="px-4 py-4 text-xs text-gray-300">—</td>
                     <td className="px-4 py-4 text-xs text-gray-400 italic">Initial cash on hand</td>
                     <td className="px-4 py-4 text-right">
-                      <span className="text-sm font-semibold text-indigo-700">{formatCurrency(openingBalance)}</span>
+                      <span className="text-sm font-semibold text-gray-700">{formatCurrency(openingBalance)}</span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-bold text-indigo-700">{formatCurrency(openingBalance)}</span>
+                      <span className="text-sm font-bold text-gray-700">{formatCurrency(openingBalance)}</span>
                     </td>
                     <td />
                   </tr>
@@ -321,7 +321,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
                       Current Cash in Hand
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <span className={`text-base font-bold ${stats.totalCashInHand >= 0 ? 'text-[#4f46e5]' : 'text-red-600'}`}>
+                      <span className={`text-base font-bold ${stats.totalCashInHand >= 0 ? 'text-gray-700' : 'text-red-600'}`}>
                         {formatCurrency(stats.totalCashInHand)}
                       </span>
                     </td>
@@ -334,13 +334,13 @@ export const CashListView: React.FC<CashListViewProps> = ({
         ) : (
           /* No opening balance set yet */
           <div className="py-20 text-center">
-            <div className="inline-flex p-4 bg-indigo-50 rounded-full mb-4">
-              <Wallet size={30} className="text-indigo-300" />
+            <div className="inline-flex p-4 bg-gray-100 rounded-full mb-4">
+              <Wallet size={30} className="text-gray-400" />
             </div>
             <p className="text-sm font-semibold text-gray-600 mb-1">No cash ledger yet</p>
             <p className="text-xs text-gray-400 mb-5">Set your opening balance to begin tracking.</p>
             <button onClick={() => setShowModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] text-sm font-medium">
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium">
               <Wallet size={14} /> Set Opening Balance
             </button>
           </div>
@@ -363,7 +363,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
             </div>
             <div className="px-6 py-5">
               <label className="block text-sm font-medium text-gray-700 mb-2">Amount (PKR)</label>
-              <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-[#4f46e5] focus-within:border-[#4f46e5] overflow-hidden">
+              <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-700 focus-within:border-gray-700 overflow-hidden">
                 <span className="pl-3 pr-2 text-gray-400 text-sm font-medium shrink-0">PKR</span>
                 <input
                   type="number"
@@ -386,7 +386,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
               </button>
               <button onClick={handleSaveBalance}
                 disabled={!openingBalanceInput || parseFloat(openingBalanceInput) < 0 || isSavingBalance}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] text-sm font-medium disabled:opacity-50">
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium disabled:opacity-50">
                 {isSavingBalance
                   ? <><Loader2 size={13} className="animate-spin" /> Saving...</>
                   : <><Save size={13} /> Save</>
