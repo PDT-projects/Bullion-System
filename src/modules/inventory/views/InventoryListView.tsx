@@ -9,10 +9,10 @@
 // FIX: onDelete fires after Firebase soft-delete succeeds; item removed from list immediately
 // FIX: toast.success shown on successful delete; toast.error on failure
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
-import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight, Check, ChevronDown, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters, ProductTransfer } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
@@ -206,6 +206,147 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
   );
 }
 
+// ── Location Multi-Select Dropdown ───────────────────────────────────────────
+
+function LocationMultiSelect({
+  uniqueLocations,
+  selectedLocations,
+  onChange,
+}: {
+  uniqueLocations: string[];
+  selectedLocations: string[];
+  onChange: (locs: string[]) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  const toggle = (loc: string) =>
+    onChange(
+      selectedLocations.includes(loc)
+        ? selectedLocations.filter(l => l !== loc)
+        : [...selectedLocations, loc]
+    );
+
+  const label =
+    selectedLocations.length === 0
+      ? 'All Locations'
+      : selectedLocations.length === 1
+      ? selectedLocations[0]
+      : `${selectedLocations.length} Locations`;
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 12px', borderRadius: 8, fontSize: 14, cursor: 'pointer',
+          border: `1px solid ${open || selectedLocations.length > 0 ? '#1e293b' : '#d1d5db'}`,
+          backgroundColor: selectedLocations.length > 0 ? '#f1f5f9' : '#fff',
+          color: selectedLocations.length > 0 ? '#0f172a' : '#374151',
+          fontWeight: selectedLocations.length > 0 ? 600 : 400,
+          boxShadow: open ? '0 0 0 2px rgba(15,23,42,0.15)' : 'none',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+          <MapPin size={13} color={selectedLocations.length > 0 ? '#0f172a' : '#9ca3af'} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 6 }}>
+          {selectedLocations.length > 0 && (
+            <span
+              onClick={e => { e.stopPropagation(); onChange([]); }}
+              style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 2 }}
+              title="Clear"
+            >
+              <X size={12} color="#1e293b" />
+            </span>
+          )}
+          <ChevronDown size={14} color="#9ca3af" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.15s' }} />
+        </span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200,
+          backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden', minWidth: 200,
+        }}>
+          {/* Select All / Clear */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid #f3f4f6' }}>
+            <button
+              type="button"
+              onClick={() => onChange([...uniqueLocations])}
+              style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              style={{ fontSize: 12, fontWeight: 500, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Clear
+            </button>
+          </div>
+
+          {/* Options */}
+          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            {uniqueLocations.length === 0 ? (
+              <div style={{ padding: '12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No locations found</div>
+            ) : uniqueLocations.map(loc => {
+              const selected = selectedLocations.includes(loc);
+              return (
+                <div
+                  key={loc}
+                  onClick={() => toggle(loc)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '9px 12px', cursor: 'pointer',
+                    backgroundColor: selected ? '#f1f5f9' : 'transparent',
+                    transition: 'background-color 0.1s',
+                  }}
+                  onMouseEnter={e => { if (!selected) e.currentTarget.style.backgroundColor = '#f9fafb'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = selected ? '#f1f5f9' : 'transparent'; }}
+                >
+                  <div style={{
+                    width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                    border: `2px solid ${selected ? '#1e293b' : '#d1d5db'}`,
+                    backgroundColor: selected ? '#1e293b' : '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.15s',
+                  }}>
+                    {selected && <Check size={10} color="#fff" strokeWidth={3} />}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: selected ? 600 : 400, color: selected ? '#0f172a' : '#374151' }}>
+                    {loc}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {selectedLocations.length > 0 && (
+            <div style={{ padding: '6px 12px 8px', borderTop: '1px solid #f3f4f6', fontSize: 11, color: '#1e293b', fontWeight: 600 }}>
+              {selectedLocations.length} of {uniqueLocations.length} selected
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main View ─────────────────────────────────────────────────────────────────
 
 export function InventoryListView({
@@ -219,6 +360,12 @@ export function InventoryListView({
   const navigate = useNavigate();
   const [deleteConfirm, setDeleteConfirm] = React.useState<Product | null>(null);
   const [isDeleting,    setIsDeleting]    = React.useState(false);
+
+  // ── Local multi-location filter (client-side, on top of ViewModel filters) ──
+  const [selectedLocations, setSelectedLocations] = React.useState<string[]>([]);
+  const displayProducts = selectedLocations.length === 0
+    ? products
+    : products.filter(p => selectedLocations.includes(getDisplayLocation(p)));
 
   // ── Delete handler ─────────────────────────────────────────────────────────
   // 1. Calls Firebase — waits for confirmation
@@ -409,15 +556,11 @@ export function InventoryListView({
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-              <select value={filters.locationFilter}
-                onChange={e => setFilter('locationFilter', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">All Locations</option>
-                {uniqueLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-              </select>
-            </div>
+            <LocationMultiSelect
+              uniqueLocations={uniqueLocations}
+              selectedLocations={selectedLocations}
+              onChange={setSelectedLocations}
+            />
             <div className="flex items-end">
               <button onClick={clearFilters}
                 className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm">
@@ -437,7 +580,7 @@ export function InventoryListView({
               <span className="text-sm">Loading inventory...</span>
             </div>
           </div>
-        ) : products.length === 0 ? (
+        ) : displayProducts.length === 0 ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-3 text-gray-400">
               <Package size={40} className="opacity-40" />
@@ -457,7 +600,7 @@ export function InventoryListView({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {products.map(product => (
+              {displayProducts.map(product => (
                 <tr
                   key={product.id}
                   className="transition-colors"
