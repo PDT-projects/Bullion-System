@@ -161,6 +161,23 @@ export function InventoryReport({ products }: InventoryReportProps) {
     return Array.from(s).sort();
   }, [products]);
 
+  // ── Cities derived from actual product data (not hardcoded) ─────────────────
+  // Collects every distinct city that appears in any product's serialCities map,
+  // so locations beyond the default three are never silently dropped.
+  const cities = useMemo(() => {
+    const s = new Set<string>();
+    products.forEach(p => {
+      const sc = p.serialCities || {};
+      Object.values(sc).forEach(c => {
+        if (c && String(c).trim()) s.add(String(c).trim());
+      });
+    });
+    // Preserve preferred ordering for known cities, then append the rest A→Z.
+    const known = CITIES.filter(c => s.has(c));
+    const extras = Array.from(s).filter(c => !CITIES.includes(c)).sort();
+    return [...known, ...extras];
+  }, [products]);
+
   // ── Date-filtered base products ────────────────────────────────────────────
   const dateFilteredProducts = useMemo(() => {
     if (!startDate && !endDate) return products;
@@ -175,7 +192,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
 
   // ── City-wise inventory ────────────────────────────────────────────────────
   const cityInventory = useMemo(() => {
-    const citiesToShow = selectedCities.length > 0 ? selectedCities : CITIES;
+    const citiesToShow = selectedCities.length > 0 ? selectedCities : cities;
 
     return citiesToShow.map(city => {
       const cityProducts = dateFilteredProducts.map(product => {
@@ -183,7 +200,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
 
         const serialsInCity = product.serialNumbers.filter(serial => {
           const status = serialStatus[serial] || 'Available';
-          return product.serialCities[serial] === city && status !== 'In Transit';
+          return (product.serialCities || {})[serial] === city && status !== 'In Transit';
         });
 
         const availableInCity = serialsInCity.filter(s => (serialStatus[s] || 'Available') === 'Available');
@@ -213,7 +230,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
 
       return { city, products: cityProducts, totalStock, totalValue, totalInTransit };
     });
-  }, [dateFilteredProducts, selectedCities, selectedBrands, selectedModels, selectedCategory]);
+  }, [dateFilteredProducts, selectedCities, selectedBrands, selectedModels, selectedCategory, cities]);
 
   // ── Overall totals ─────────────────────────────────────────────────────────
   const overallTotals = useMemo(() => {
@@ -344,7 +361,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
             <p className="text-sm font-semibold text-gray-700">Cities / In Transit</p>
           </div>
           <p className="text-2xl font-bold text-gray-900">
-            {selectedCities.length > 0 ? selectedCities.length : CITIES.length} cities
+            {selectedCities.length > 0 ? selectedCities.length : cities.length} cities
           </p>
           <p className="text-sm text-gray-500 mt-2">In Transit: {overallTotals.totalInTransit} units</p>
         </div>
@@ -489,7 +506,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MultiSelect
             label="Location"
-            options={CITIES}
+            options={cities}
             selected={selectedCities}
             onChange={setSelectedCities}
             placeholder="All Locations"
@@ -757,10 +774,19 @@ export function InventoryReport({ products }: InventoryReportProps) {
               <div className="bg-white border border-gray-200 rounded-lg p-4">
                 <h5 className="font-semibold text-gray-900 mb-4">Serial Numbers by City</h5>
                 <div className="space-y-4">
-                  {CITIES.map(city => {
+                  {(() => {
+                    const productCities = Array.from(
+                      new Set(Object.values(viewProduct.serialCities || {}).map(c => String(c).trim()).filter(Boolean))
+                    );
+                    const ordered = [
+                      ...CITIES.filter(c => productCities.includes(c)),
+                      ...productCities.filter(c => !CITIES.includes(c)).sort(),
+                    ];
+                    return ordered;
+                  })().map(city => {
                     const citySerials = viewProduct.serialNumbers.filter(serial => {
                       const status = (viewProduct.serialStatus || {})[serial] || 'Available';
-                      return viewProduct.serialCities[serial] === city && status !== 'In Transit';
+                      return (viewProduct.serialCities || {})[serial] === city && status !== 'In Transit';
                     });
                     const available = citySerials.filter(s => ((viewProduct.serialStatus || {})[s] || 'Available') === 'Available');
                     const returned = citySerials.filter(s => (viewProduct.serialStatus || {})[s] === 'Returned');
