@@ -805,7 +805,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
             <div className="be-brand">
               <div className="be-brand-logo">
                 <img
-                  src="/BullionLogo.jpeg"
+                  src="/bullionlogo.jpeg"
                   alt="Bullion Electronics logo"
                 />
               </div>

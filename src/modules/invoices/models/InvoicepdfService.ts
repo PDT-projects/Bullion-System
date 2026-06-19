@@ -39,7 +39,7 @@ import {
   convertCurrency,
 } from './invoiceService';
 
-const logoAsset  = '/BullionLogo.jpeg';
+const logoAsset  = '/bullionlogo.jpeg';
 const stampAsset = '/BullionStamp.jpeg';
 
 const PW = 210,
@@ -355,13 +355,13 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
   st(doc, BLACK);
-  doc.text('Bullion Electronics', TEXT_X, LOGO_Y + 7);
+  doc.text('Bullion Specialized Electronics', TEXT_X, LOGO_Y + 7);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   st(doc, GRAY);
   const branchName = (invoice as any).branch || 'Islamabad';
-  doc.text(`${branchName}  ·  Abu Dhabi, UAE  ·  +971 56 985 2213`, TEXT_X, LOGO_Y + 12.5);
+  doc.text(`  ·  Abu Dhabi  `, TEXT_X, LOGO_Y + 12.5);
 
   // Large muted INVOICE wordmark + number on the right
   doc.setFont('helvetica', 'bold');
