@@ -16,7 +16,7 @@ import {
   ALL_SCREEN_GROUPS
 } from '../models/userService';
 
-const BRANCHES = ['Lahore', 'Karachi', 'Islamabad', 'Bullion', 'R&D', 'Asif'] as const;
+const BRANCHES = ['Saudia', 'Dubai', 'Chad', 'Sudan'] as const;
 
 interface FormState {
   email: string;
@@ -178,7 +178,7 @@ export function UserManagement() {
                   checked={allSelected}
                   ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
                   onChange={() => onGroupToggle(group.screens)}
-                  className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                  className="w-4 h-4 accent-slate-700 cursor-pointer"
                 />
                 <span className="font-semibold text-gray-800 text-sm">{group.title}</span>
                 <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
@@ -193,15 +193,15 @@ export function UserManagement() {
                   key={screen}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-all text-sm ${
                     selectedPermissions.includes(screen)
-                      ? 'bg-indigo-50 border-indigo-300 text-indigo-800'
-                      : 'bg-white border-gray-200 text-gray-700 hover:border-indigo-200 hover:bg-indigo-50/40'
+                      ? 'bg-slate-100 border-slate-400 text-slate-800'
+                      : 'bg-white border-gray-200 text-gray-700 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={selectedPermissions.includes(screen)}
                     onChange={() => onToggle(screen)}
-                    className="w-3.5 h-3.5 accent-indigo-600 flex-shrink-0"
+                    className="w-3.5 h-3.5 accent-slate-700 flex-shrink-0"
                   />
                   <span className="leading-tight">{screen}</span>
                 </label>
@@ -221,7 +221,7 @@ export function UserManagement() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Shield size={24} className="text-indigo-600" />
+              <Shield size={24} className="text-slate-700" />
               User Management
             </h1>
             <p className="text-gray-500 text-sm mt-1">Create and manage branch users with role-based access control</p>
@@ -236,8 +236,8 @@ export function UserManagement() {
 
         {/* Create User Card */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-blue-50 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-slate-100 to-slate-50 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center">
               <UserPlus size={16} className="text-white" />
             </div>
             <div>
@@ -273,7 +273,7 @@ export function UserManagement() {
                     borderRadius: '10px', padding: '0 14px', fontSize: '14px',
                     outline: 'none', backgroundColor: 'white', boxSizing: 'border-box',
                   }}
-                  onFocus={e => (e.target.style.borderColor = '#6366f1')}
+                  onFocus={e => (e.target.style.borderColor = '#374151')}
                   onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
                 />
               </div>
@@ -293,7 +293,7 @@ export function UserManagement() {
                       borderRadius: '10px', paddingLeft: '14px', paddingRight: '42px',
                       fontSize: '14px', outline: 'none', backgroundColor: 'white', boxSizing: 'border-box',
                     }}
-                    onFocus={e => (e.target.style.borderColor = '#6366f1')}
+                    onFocus={e => (e.target.style.borderColor = '#374151')}
                     onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
                   />
                   <button
@@ -324,7 +324,7 @@ export function UserManagement() {
                       outline: 'none', backgroundColor: '#f9fafb', color: formData.branch ? '#111827' : '#6b7280',
                       boxSizing: 'border-box', appearance: 'none', cursor: 'pointer',
                     }}
-                    onFocus={e => (e.target.style.borderColor = '#6366f1')}
+                    onFocus={e => (e.target.style.borderColor = '#374151')}
                     onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
                   >
                     <option value="" disabled>Select branch</option>
@@ -345,7 +345,7 @@ export function UserManagement() {
                 <label className="text-sm font-semibold text-gray-700">
                   Screen Permissions
                   {permissions.length > 0 && (
-                    <span className="ml-2 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium">
+                    <span className="ml-2 px-2 py-0.5 bg-slate-200 text-slate-800 text-xs rounded-full font-medium">
                       {permissions.length} selected
                     </span>
                   )}
@@ -370,10 +370,10 @@ export function UserManagement() {
                 disabled={isSubmitting}
                 style={{
                   height: '44px', padding: '0 32px',
-                  background: isSubmitting ? '#a5b4fc' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg, #374151, #1f2937)',
                   color: 'white', fontWeight: '600', fontSize: '14px',
                   border: 'none', borderRadius: '10px', cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 8px rgba(79,70,229,0.3)',
+                  display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 8px rgba(31,41,55,0.3)',
                 }}
               >
                 {isSubmitting ? (
@@ -404,7 +404,7 @@ export function UserManagement() {
           <div className="p-6">
             {isLoadingUsers ? (
               <div className="flex items-center justify-center py-12 gap-3 text-gray-500">
-                <div style={{ width: '20px', height: '20px', border: '2px solid #e5e7eb', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <div style={{ width: '20px', height: '20px', border: '2px solid #e5e7eb', borderTopColor: '#374151', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                 Loading users...
               </div>
             ) : users.length === 0 ? (
@@ -418,14 +418,14 @@ export function UserManagement() {
             ) : (
               <div className="space-y-3">
                 {users.map((user) => (
-                  <div key={user.uid} className="border border-gray-200 rounded-xl overflow-hidden hover:border-indigo-200 transition-colors">
+                  <div key={user.uid} className="border border-gray-200 rounded-xl overflow-hidden hover:border-slate-300 transition-colors">
                     {/* User Row */}
                     <div
                       className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
                       onClick={() => setExpandedUser(expandedUser === user.uid ? null : user.uid)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm flex-shrink-0">
+                        <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-800 font-semibold text-sm flex-shrink-0">
                           {user.email[0].toUpperCase()}
                         </div>
                         <div>
@@ -572,7 +572,7 @@ export function UserManagement() {
                           <div className="flex flex-wrap gap-1.5">
                             {user.permissions.length > 0
                               ? user.permissions.map(s => (
-                                <span key={s} className="px-2.5 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded-lg">{s}</span>
+                                <span key={s} className="px-2.5 py-1 bg-slate-200 text-slate-800 text-xs font-medium rounded-lg">{s}</span>
                               ))
                               : <span className="text-gray-400 text-sm italic">No permissions assigned</span>
                             }

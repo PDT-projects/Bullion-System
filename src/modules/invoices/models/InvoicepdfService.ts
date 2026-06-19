@@ -206,7 +206,7 @@ function pArray(p: any, ...keys: string[]): string[] {
   return [];
 }
 
-// ── Table header cell ──────────────────────────────────────────────────────────
+// ── Table header cell (minimal: text + bottom rule, no heavy fill) ─────────────
 function thCell(
   doc: jsPDF,
   x: number,
@@ -215,18 +215,14 @@ function thCell(
   label: string,
   align: 'left' | 'center' | 'right' = 'left'
 ) {
-  sf(doc, BLACK);
-  doc.setLineWidth(0);
-  doc.rect(x, y, w, ROW_H, 'F');
-
-  if (x === ML) {
-    sf(doc, GOLD);
-    doc.rect(x, y, 1.2, ROW_H, 'F');
-  }
+  // Bottom rule spanning the column (drawn per-cell so the full header underlines)
+  sd(doc, BLACK);
+  doc.setLineWidth(0.4);
+  doc.line(x, y + ROW_H, x + w, y + ROW_H);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
-  st(doc, GOLD_RICH);
+  st(doc, BLACK);
 
   const tx =
     align === 'center' ? x + w / 2 :
@@ -263,17 +259,17 @@ function tdCell(
   const textBlockH = lines.length * LH + Math.max(0, lines.length - 1) * 0.5;
   const h = Math.max(minH, textBlockH + PAD * 2);
 
-  // Alternating row background
+  // Subtle alternating row background (very light, optional)
   if (alt) {
-    sf(doc, YELLOW_BG);
+    sf(doc, [250, 249, 245] as RGB);
     doc.setLineWidth(0);
     doc.rect(x, y, w, h, 'F');
   }
 
-  // Cell border
-  sd(doc, GOLD);
+  // Thin bottom separator only (no full border box)
+  sd(doc, LIGHT_GRAY);
   doc.setLineWidth(0.12);
-  doc.rect(x, y, w, h, 'S');
+  doc.line(x, y + h, x + w, y + h);
 
   // Text
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
@@ -336,74 +332,62 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
 
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-  // ── HEADER ──────────────────────────────────────────────────────────────────
-  const HEADER_H = 42;
+  // ── HEADER (minimal & clean) ─────────────────────────────────────────────────
+  // Thin gold accent line across the very top, then a light header with a small
+  // logo + brand on the left and a large muted "INVOICE" wordmark on the right.
+  const HEADER_H = 40;
 
-  sf(doc, [0, 0, 0] as RGB);
-  doc.setLineWidth(0);
-  doc.rect(0, 0, PW, HEADER_H, 'F');
-
+  // Top gold accent line
   sf(doc, YELLOW);
-  doc.rect(0, HEADER_H - 1.8, PW, 1.8, 'F');
+  doc.setLineWidth(0);
+  doc.rect(0, 0, PW, 2.2, 'F');
 
-  const LOGO_D  = 36;
-  const LOGO_R  = LOGO_D / 2;
-  const LOGO_CY = HEADER_H / 2;
-  const LOGO_Y  = LOGO_CY - LOGO_R;
+  // Logo (small, on a black rounded tile to keep brand visible on white)
+  const LOGO_D  = 18;
+  const LOGO_Y  = 9;
 
   if (logoImg) {
     doc.addImage(logoImg.dataUrl, logoImg.format, ML, LOGO_Y, LOGO_D, LOGO_D);
-    const cr = LOGO_R * 0.29;
-    sf(doc, [0, 0, 0] as RGB);
-    doc.setLineWidth(0);
-    doc.rect(ML,               LOGO_Y,              cr, cr, 'F');
-    doc.rect(ML + LOGO_D - cr, LOGO_Y,              cr, cr, 'F');
-    doc.rect(ML,               LOGO_Y + LOGO_D - cr, cr, cr, 'F');
-    doc.rect(ML + LOGO_D - cr, LOGO_Y + LOGO_D - cr, cr, cr, 'F');
   }
 
-  const TEXT_X = logoImg ? ML + LOGO_D + 6 : ML;
+  const TEXT_X = logoImg ? ML + LOGO_D + 5 : ML;
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  st(doc, WHITE);
-  doc.text('Bullion Electronics', TEXT_X, HEADER_H / 2 - 2);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  st(doc, GOLD_RICH);
-  const branchName = (invoice as any).branch || 'Islamabad';
-  doc.text(branchName, TEXT_X, HEADER_H / 2 + 5);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  st(doc, LIGHT_GRAY);
-  doc.text('+971 56 985 2213', PW - MR, 13, { align: 'right' });
-  doc.text('C108 Building 936 - M-04, Plot - Mohamed Bin Zayed City - ME9', PW - MR, 19, { align: 'right' });
-  doc.text('Abu Dhabi, United Arab Emirates', PW - MR, 25, { align: 'right' });
-
-  sf(doc, GOLD);
-  doc.roundedRect(PW - MR - 26, HEADER_H - 11, 26, 8, 1, 1, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(15);
   st(doc, BLACK);
-  doc.text('INVOICE', PW - MR - 13, HEADER_H - 5.5, { align: 'center' });
+  doc.text('Bullion Electronics', TEXT_X, LOGO_Y + 7);
 
-  let y = HEADER_H + 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  st(doc, GRAY);
+  const branchName = (invoice as any).branch || 'Islamabad';
+  doc.text(`${branchName}  ·  Abu Dhabi, UAE  ·  +971 56 985 2213`, TEXT_X, LOGO_Y + 12.5);
+
+  // Large muted INVOICE wordmark + number on the right
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  st(doc, LIGHT_GRAY);
+  doc.text('INVOICE', PW - MR, LOGO_Y + 6, { align: 'right' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  st(doc, GRAY);
+  doc.text(invoice.invoiceNumber || '', PW - MR, LOGO_Y + 12, { align: 'right' });
+
+  let y = HEADER_H + 6;
+
+  // Thin gold separator under the header
+  goldRule(doc, ML, y - 4, CW);
 
   // ── BILL TO + META ───────────────────────────────────────────────────────────
   const COL_MID = ML + CW / 2 + 4;
-  const LEFT_W  = COL_MID - ML - 4;
-  const RIGHT_W = PW - MR - COL_MID;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
-  st(doc, GRAY);
-  doc.text('BILL TO', ML, y);
-  goldRule(doc, ML, y + 1.5, LEFT_W);
+  st(doc, LIGHT_GRAY);
+  doc.text('BILLED TO', ML, y);
   doc.text('INVOICE DETAILS', COL_MID, y);
-  goldRule(doc, COL_MID, y + 1.5, RIGHT_W);
-  y += 5;
+  y += 5.5;
 
   let lY = y;
 
@@ -456,18 +440,19 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   ];
 
   let rY = y;
-  metaRows.forEach(([label, value], idx) => {
-    if (idx % 2 === 0) {
-      sf(doc, YELLOW_BG);
-      doc.rect(COL_MID - 1, rY - 3.5, RIGHT_W + 1, 5, 'F');
-    }
-    doc.setFont('helvetica', 'bold');
+  metaRows.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     st(doc, GRAY);
     doc.text(label, COL_MID, rY);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    st(doc, BLACK);
+    // Colour the status value red when unpaid, otherwise black
+    if (label === 'Status' && /unpaid/i.test(value)) {
+      st(doc, [163, 45, 45] as RGB);
+    } else {
+      st(doc, BLACK);
+    }
     doc.text(value, PW - MR, rY, { align: 'right' });
     rY += 5.5;
   });
@@ -659,7 +644,7 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
 
   y += 4;
 
-  // ── TOTAL BOX ────────────────────────────────────────────────────────────────
+  // ── TOTAL (clean right-aligned summary) ──────────────────────────────────────
   y = pb(doc, y, 18);
 
   const TOT_W = 75;
@@ -672,41 +657,38 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     )
   );
 
-  const totalBoxH = Math.max(11, totalLines.length * 5.5 + 5);
+  // Subtotal row (uses the primary/first currency total)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  st(doc, GRAY);
+  doc.text('Subtotal', TOT_X, y + 3);
+  st(doc, BLACK);
+  doc.text(totalLines[0] || '', PW - MR, y + 3, { align: 'right' });
 
-  sd(doc, GOLD);
-  doc.rect(TOT_X - 0.5, y - 0.5, TOT_W + 1, totalBoxH + 1, 'S');
+  // Black rule above the grand total
+  sd(doc, BLACK);
+  doc.setLineWidth(0.5);
+  doc.line(TOT_X, y + 6.5, PW - MR, y + 6.5);
 
-  sf(doc, BLACK);
-  doc.rect(TOT_X, y, TOT_W, totalBoxH, 'F');
-
-  sf(doc, YELLOW);
-  doc.rect(TOT_X, y, 3, totalBoxH, 'F');
-
+  // Grand total (bold, gold value). Extra currencies stack beneath.
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(10);
+  st(doc, BLACK);
+  doc.text('Total', TOT_X, y + 12);
   st(doc, GOLD_RICH);
-  doc.text('TOTAL', TOT_X + 6, y + 7);
+  doc.text(totalLines, PW - MR, y + 12, { align: 'right' });
 
-  st(doc, WHITE);
-  doc.text(totalLines, PW - MR - 2, y + 6, { align: 'right' });
-
-  y += totalBoxH + 3;
+  y += 12 + Math.max(0, totalLines.length - 1) * 5.5 + 4;
 
   // ── TERMS & CONDITIONS ───────────────────────────────────────────────────────
   y = pb(doc, y, 18);
 
-  sf(doc, BLACK);
-  doc.rect(ML, y - 2, CW, 7.5, 'F');
-
-  sf(doc, GOLD);
-  doc.rect(ML, y - 2, 2.5, 7.5, 'F');
-
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  st(doc, GOLD_RICH);
-  doc.text('Terms & Conditions', ML + 5, y + 3);
-  y += 8;
+  st(doc, BLACK);
+  doc.text('Terms & Conditions', ML, y + 3);
+  goldRule(doc, ML, y + 5, CW);
+  y += 9;
 
   const TX = ML + 5;
   doc.setFont('helvetica', 'normal');
@@ -727,23 +709,22 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
   y += 4;
 
   // ── THANK YOU ────────────────────────────────────────────────────────────────
-  y = pb(doc, y, 18);
+  y = pb(doc, y, 16);
 
-  sf(doc, YELLOW_BG);
-  sd(doc, GOLD);
-  doc.rect(ML, y, CW, 14, 'FD');
+  goldRule(doc, ML, y, CW);
+  y += 5;
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11.5);
+  doc.setFontSize(10.5);
   st(doc, BLACK);
-  doc.text('Thank you for your purchase!', PW / 2, y + 6, { align: 'center' });
+  doc.text('Thank you for your purchase!', PW / 2, y, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
-  st(doc, GOLD);
-  doc.text('We value your trust in Bullion Electronics.', PW / 2, y + 11.5, { align: 'center' });
+  st(doc, GRAY);
+  doc.text('We value your trust in Bullion Electronics.', PW / 2, y + 5, { align: 'center' });
 
-  y += 16;
+  y += 9;
 
   // ── SIGNATURE ────────────────────────────────────────────────────────────────
   const SIG_W  = 60;
@@ -791,19 +772,16 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
     } catch { /* non-blocking — if stamp fails the rest of the PDF is intact */ }
   }
 
-  // ── FOOTER ───────────────────────────────────────────────────────────────────
+  // ── FOOTER (light) ───────────────────────────────────────────────────────────
   sf(doc, GOLD);
-  doc.rect(0, PH - 13, PW, 0.8, 'F');
-
-  sf(doc, BLACK);
-  doc.rect(0, PH - 12.2, PW, 12.2, 'F');
+  doc.rect(0, PH - 11, PW, 0.5, 'F');
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.5);
-  st(doc, LIGHT_GRAY);
+  st(doc, GRAY);
   doc.text(
     'Bullion Electronics  ·  C108 Building 936 M-04, Plot- Mohammed Bin Zayed City, ME9, Abu Dhabi, United Arab Emirates  ·  +971 56 985 2213',
-    PW / 2, PH - 4.5, { align: 'center' }
+    PW / 2, PH - 6, { align: 'center' }
   );
 
   return doc.output('blob');
