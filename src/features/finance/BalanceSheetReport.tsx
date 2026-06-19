@@ -126,9 +126,9 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     border: '1px solid',
     cursor: 'pointer',
     transition: 'all 0.15s',
-    background: filterMode === mode ? '#4f46e5' : '#ffffff',
+    background: filterMode === mode ? '#1e293b' : '#ffffff',
     color: filterMode === mode ? '#ffffff' : '#4b5563',
-    borderColor: filterMode === mode ? '#4f46e5' : '#d1d5db',
+    borderColor: filterMode === mode ? '#1e293b' : '#d1d5db',
     boxShadow: filterMode === mode ? '0 1px 3px rgba(79,70,229,0.3)' : 'none',
   });
 
@@ -327,7 +327,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               <span className="ml-2 text-purple-600 font-medium">· {selectedLocations.join(', ')}</span>
             )}
             {bsClassifiedCount > 0 && (
-              <span className="ml-2 inline-flex items-center gap-1 text-indigo-600">
+              <span className="ml-2 inline-flex items-center gap-1 text-slate-800">
                 <Tag size={12} /> {bsClassifiedCount} manually classified
               </span>
             )}
@@ -343,10 +343,10 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Filter size={16} className="text-indigo-600" />
+            <Filter size={16} className="text-slate-800" />
             <h2 className="font-semibold text-gray-900">Filters</h2>
             {hasActiveFilter && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Active</span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-slate-800">Active</span>
             )}
           </div>
           {hasActiveFilter && (
@@ -366,11 +366,11 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             )}
           </div>
           <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-            <button onClick={() => setSelectedLocations([])} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',background:selectedLocations.length===0?'#4f46e5':'#ffffff',color:selectedLocations.length===0?'#ffffff':'#374151',borderColor:selectedLocations.length===0?'#4f46e5':'#d1d5db'}}>
+            <button onClick={() => setSelectedLocations([])} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',background:selectedLocations.length===0?'#1e293b':'#ffffff',color:selectedLocations.length===0?'#ffffff':'#374151',borderColor:selectedLocations.length===0?'#1e293b':'#d1d5db'}}>
               All Locations
             </button>
             {LOCATIONS.map(loc => (
-              <button key={loc} onClick={() => toggleLocation(loc)} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',background:selectedLocations.includes(loc)?'#4f46e5':'#ffffff',color:selectedLocations.includes(loc)?'#ffffff':'#374151',borderColor:selectedLocations.includes(loc)?'#4f46e5':'#d1d5db'}}>
+              <button key={loc} onClick={() => toggleLocation(loc)} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',background:selectedLocations.includes(loc)?'#1e293b':'#ffffff',color:selectedLocations.includes(loc)?'#ffffff':'#374151',borderColor:selectedLocations.includes(loc)?'#1e293b':'#d1d5db'}}>
                 <MapPin size={11} style={{color:'inherit'}} />
                 <span>{loc}</span>
               </button>
@@ -383,7 +383,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         {/* ── Period filter ── */}
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <Calendar size={13} className="text-indigo-500" />
+            <Calendar size={13} className="text-slate-600" />
             <span className="text-xs font-semibold text-gray-700">Period</span>
           </div>
           <div className="flex gap-2 flex-wrap mb-3">
@@ -403,7 +403,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                 {availableYears.map(y => (
                   <button key={y} onClick={() => toggleYear(y)}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                      selectedYears.includes(y) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+                      selectedYears.includes(y) ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-700 border-gray-300 hover:border-slate-600'
                     }`}>{y}</button>
                 ))}
                 {availableYears.length === 0 && <p className="text-xs text-gray-400 italic">No data available</p>}
@@ -411,7 +411,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               {selectedYears.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {[...selectedYears].sort().map(y => (
-                    <span key={y} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">
+                    <span key={y} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-slate-800 text-xs rounded-full">
                       {y}<button onClick={() => toggleYear(y)}><X size={9} /></button>
                     </span>
                   ))}
@@ -430,7 +430,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                 {availableMonths.map(ym => (
                   <button key={ym} onClick={() => toggleMonth(ym)}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                      selectedMonths.includes(ym) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+                      selectedMonths.includes(ym) ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-700 border-gray-300 hover:border-slate-600'
                     }`}>{monthLabel(ym)}</button>
                 ))}
                 {availableMonths.length === 0 && <p className="text-xs text-gray-400 italic">No data available</p>}
@@ -438,7 +438,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               {selectedMonths.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {[...selectedMonths].sort().map(ym => (
-                    <span key={ym} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">
+                    <span key={ym} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-slate-800 text-xs rounded-full">
                       {monthLabel(ym)}<button onClick={() => toggleMonth(ym)}><X size={9} /></button>
                     </span>
                   ))}
@@ -452,12 +452,12 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">From</label>
                 <input type="date" value={customFrom} max={customTo || undefined} onChange={e => setCustomFrom(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-600 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">To</label>
                 <input type="date" value={customTo} min={customFrom || undefined} onChange={e => setCustomTo(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-600 text-sm" />
               </div>
             </div>
           )}
@@ -465,7 +465,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
         {/* Active filter summary */}
         <div className="pt-3 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500">
-          <Calendar size={11} className="text-indigo-400 flex-shrink-0" />
+          <Calendar size={11} className="text-slate-500 flex-shrink-0" />
           <span>
             Period: <strong className="text-gray-700">{activePeriodLabel()}</strong>
             {selectedLocations.length > 0 && (
@@ -543,7 +543,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           <SubTotal label="Total Fixed Assets" value={bs.assets.totalFixedAssets} colorClass="bg-blue-50" />
 
           <div className="border-t-2 border-gray-300 pt-4 mt-4">
-            <div className="flex justify-between items-center py-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg px-4">
+            <div className="flex justify-between items-center py-4 bg-gradient-to-r from-blue-50 to-gray-50 rounded-lg px-4">
               <span className="text-xl font-bold text-gray-900">Total Assets</span>
               <span className="text-2xl font-bold text-blue-600">{formatCurrency(bs.assets.totalAssets)}</span>
             </div>
@@ -638,7 +638,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                       </div>
                       <button
                         onClick={() => toggleSub(key)}
-                        className="text-xs text-indigo-500 hover:text-indigo-700 mb-2 flex items-center gap-1"
+                        className="text-xs text-slate-600 hover:text-slate-800 mb-2 flex items-center gap-1"
                       >
                         {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                         {txns.length} transaction{txns.length !== 1 ? 's' : ''}

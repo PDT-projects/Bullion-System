@@ -60,8 +60,8 @@ function MultiSelect({
         disabled={disabled}
         onClick={() => !disabled && setOpen(o => !o)}
         className={`w-full border rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between gap-2 transition-colors
-          ${disabled ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300 hover:border-indigo-400 cursor-pointer'}
-          ${open ? 'border-indigo-500 ring-1 ring-indigo-300' : ''}`}
+          ${disabled ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300 hover:border-slate-600 cursor-pointer'}
+          ${open ? 'border-slate-700 ring-1 ring-slate-400' : ''}`}
       >
         <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-900 font-medium'}>
           {displayText}
@@ -75,10 +75,10 @@ function MultiSelect({
           {selected.map(v => (
             <span
               key={v}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full"
+              className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-slate-800 text-xs rounded-full"
             >
               {v}
-              <button onClick={() => toggle(v)} className="hover:text-indigo-900">
+              <button onClick={() => toggle(v)} className="hover:text-slate-900">
                 <X size={10} />
               </button>
             </span>
@@ -101,13 +101,13 @@ function MultiSelect({
               {options.map(opt => (
                 <label
                   key={opt}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm"
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
                 >
                   <input
                     type="checkbox"
                     checked={selected.includes(opt)}
                     onChange={() => toggle(opt)}
-                    className="accent-indigo-600 w-4 h-4 rounded"
+                    className="accent-slate-800 w-4 h-4 rounded"
                   />
                   <span className="text-gray-800">{opt}</span>
                 </label>
@@ -329,7 +329,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
             <div className="p-2 bg-blue-100 rounded-lg"><Package size={20} className="text-blue-600" /></div>
             <p className="text-sm font-semibold text-gray-700">Total Available/Returned</p>
           </div>
-          <p className="text-3xl font-bold text-[#4f46e5]">{overallTotals.totalStock} units</p>
+          <p className="text-3xl font-bold text-[#1e293b]">{overallTotals.totalStock} units</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-3">
@@ -340,7 +340,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-purple-100 rounded-lg"><MapPin size={20} className="text-purple-600" /></div>
+            <div className="p-2 bg-slate-100 rounded-lg"><MapPin size={20} className="text-slate-700" /></div>
             <p className="text-sm font-semibold text-gray-700">Cities / In Transit</p>
           </div>
           <p className="text-2xl font-bold text-gray-900">
@@ -354,7 +354,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
       {showVisualization && (
         <div className="bg-white rounded-xl border border-gray-200 p-8 mb-8 shadow-sm">
           <div className="flex items-center gap-3 mb-8">
-            <div className="p-3 bg-purple-100 rounded-xl"><BarChart3 size={24} className="text-purple-600" /></div>
+            <div className="p-3 bg-slate-100 rounded-xl"><BarChart3 size={24} className="text-slate-700" /></div>
             <h3 className="text-2xl font-bold text-gray-900">Inventory Analytics</h3>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -400,7 +400,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="category" /><YAxis />
                   <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} units`, 'Stock']} />
-                  <Bar dataKey="stock" fill="#8b5cf6" />
+                  <Bar dataKey="stock" fill="#334155" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -424,7 +424,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
                 <PieChart>
                   <Pie data={visualizationData.statusData} cx="50%" cy="50%" outerRadius={80} dataKey="count">
                     {visualizationData.statusData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                      <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#334155'][index % 5]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -442,7 +442,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
             <Filter size={18} className="text-gray-600" />
             <h3 className="font-semibold text-gray-900">Filters</h3>
             {hasActiveFilters && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-slate-800">
                 Active
               </span>
             )}
@@ -468,7 +468,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
               value={startDate}
               max={endDate || undefined}
               onChange={e => setStartDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-500 focus:border-slate-600"
             />
           </div>
           <div>
@@ -480,7 +480,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
               value={endDate}
               min={startDate || undefined}
               onChange={e => setEndDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-500 focus:border-slate-600"
             />
           </div>
         </div>
@@ -514,7 +514,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
             <select
               value={selectedCategory}
               onChange={e => setSelectedCategory(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-500 focus:border-slate-600"
             >
               <option value="">All Categories</option>
               {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
@@ -538,7 +538,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
               </span>
             )}
             {selectedCities.map(c => (
-              <span key={c} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full">
+              <span key={c} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 text-slate-700 text-xs rounded-full">
                 📍 {c}
                 <button onClick={() => setSelectedCities(selectedCities.filter(v => v !== c))}><X size={10} /></button>
               </span>
@@ -550,7 +550,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
               </span>
             ))}
             {selectedModels.map(m => (
-              <span key={m} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full">
+              <span key={m} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 text-slate-800 text-xs rounded-full">
                 {m}
                 <button onClick={() => setSelectedModels(selectedModels.filter(v => v !== m))}><X size={10} /></button>
               </span>
@@ -579,7 +579,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
       <div className="space-y-8">
         {cityInventory.map(inv => (
           <div key={inv.city} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] p-6">
+            <div className="p-6" style={{ background: 'linear-gradient(to right, #1e293b, #334155)' }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-white/20 rounded-xl"><MapPin size={28} className="text-white" /></div>
@@ -641,7 +641,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{formatCurrency(product.costPrice)}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">{formatCurrency(product.sellPrice)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-[#4f46e5]">{formatCurrency(product.cityStock * product.costPrice)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-[#1e293b]">{formatCurrency(product.cityStock * product.costPrice)}</td>
                         <td className="px-6 py-4 text-sm text-gray-600 flex items-center justify-between">
                           <div className="max-w-xs">
                             {product.citySerials.slice(0, 3).map(serial => (
@@ -661,9 +661,9 @@ export function InventoryReport({ products }: InventoryReportProps) {
                   <tfoot className="bg-gray-100 border-t-2 border-gray-300">
                     <tr>
                       <td colSpan={2} className="px-6 py-3 text-sm font-bold text-gray-900">{inv.city} Total</td>
-                      <td className="px-6 py-3 text-sm font-bold text-[#4f46e5]">{inv.totalStock} units</td>
+                      <td className="px-6 py-3 text-sm font-bold text-[#1e293b]">{inv.totalStock} units</td>
                       <td colSpan={2}></td>
-                      <td className="px-6 py-3 text-sm font-bold text-[#4f46e5]">{formatCurrency(inv.totalValue)}</td>
+                      <td className="px-6 py-3 text-sm font-bold text-[#1e293b]">{formatCurrency(inv.totalValue)}</td>
                       <td></td>
                     </tr>
                   </tfoot>
@@ -676,7 +676,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
 
       {/* Overall Summary */}
       {cityInventory.length > 1 && (
-        <div className="mt-6 bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] rounded-lg p-6 text-white">
+        <div className="mt-6 rounded-lg p-6 text-white" style={{ background: 'linear-gradient(to right, #1e293b, #334155)' }}>
           <h3 className="text-lg font-bold mb-4">Overall Summary</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -706,7 +706,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
               </button>
             </div>
             <div className="p-6 space-y-6">
-              <div className="bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] text-white rounded-lg p-6">
+              <div className="text-white rounded-lg p-6" style={{ background: 'linear-gradient(to right, #1e293b, #334155)' }}>
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-2xl font-bold">{viewProduct.brandName} {viewProduct.modelName}</h4>
@@ -748,7 +748,7 @@ export function InventoryReport({ products }: InventoryReportProps) {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Total Value:</span>
-                      <span className="font-semibold text-[#4f46e5]">{formatCurrency(viewProduct.serialNumbers.length * viewProduct.costPrice)}</span>
+                      <span className="font-semibold text-[#1e293b]">{formatCurrency(viewProduct.serialNumbers.length * viewProduct.costPrice)}</span>
                     </div>
                   </div>
                 </div>

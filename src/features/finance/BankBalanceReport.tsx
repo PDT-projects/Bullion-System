@@ -52,7 +52,7 @@ function MultiSelectDropdown({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between text-sm focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between text-sm focus:outline-none focus:ring-2 focus:ring-[#1e293b] focus:border-transparent"
       >
         <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-900'}>{label}</span>
         <ChevronDown size={15} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -61,7 +61,7 @@ function MultiSelectDropdown({
       {open && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
-            <button type="button" onClick={() => onChange([...options])} className="text-xs text-[#4f46e5] font-medium hover:underline">
+            <button type="button" onClick={() => onChange([...options])} className="text-xs text-[#1e293b] font-medium hover:underline">
               Select all
             </button>
             <button type="button" onClick={() => onChange([])} className="text-xs text-gray-500 hover:underline">
@@ -75,7 +75,7 @@ function MultiSelectDropdown({
                   type="checkbox"
                   checked={selected.includes(opt)}
                   onChange={() => toggle(opt)}
-                  className="accent-[#4f46e5] w-4 h-4 rounded"
+                  className="accent-[#1e293b] w-4 h-4 rounded"
                 />
                 <span className="text-gray-800">{opt}</span>
               </label>
@@ -88,7 +88,7 @@ function MultiSelectDropdown({
 }
 
 // ─── Pill ─────────────────────────────────────────────────────────────────────
-function Pill({ label, onRemove, colorClass = 'bg-[#4f46e5]/10 text-[#4f46e5]' }: {
+function Pill({ label, onRemove, colorClass = 'bg-[#1e293b]/10 text-[#1e293b]' }: {
   label: string; onRemove: () => void; colorClass?: string;
 }) {
   return (
@@ -198,7 +198,7 @@ export function BankBalanceReport() {
 
   if (isLoading) return (
     <div className="flex items-center justify-center py-20 gap-3">
-      <Loader2 size={26} className="text-[#4f46e5] animate-spin" />
+      <Loader2 size={26} className="text-[#1e293b] animate-spin" />
       <span className="text-gray-500 text-sm">Loading bank data…</span>
     </div>
   );
@@ -209,7 +209,7 @@ export function BankBalanceReport() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#4f46e5] rounded-lg flex items-center justify-center">
+          <div className="w-10 h-10 bg-[#1e293b] rounded-lg flex items-center justify-center">
             <Building2 size={20} className="text-white" />
           </div>
           <div>
@@ -233,8 +233,8 @@ export function BankBalanceReport() {
               <p className="text-sm text-gray-600 mb-1">Total Banks</p>
               <p className="text-3xl font-bold text-gray-900">{filteredData.length}</p>
             </div>
-            <div className="w-12 h-12 bg-[#4f46e5]/10 rounded-lg flex items-center justify-center">
-              <Building2 size={24} className="text-[#4f46e5]" />
+            <div className="w-12 h-12 bg-[#1e293b]/10 rounded-lg flex items-center justify-center">
+              <Building2 size={24} className="text-[#1e293b]" />
             </div>
           </div>
         </div>
@@ -269,7 +269,7 @@ export function BankBalanceReport() {
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex items-center gap-2 mb-4">
-          <Filter size={18} className="text-[#4f46e5]" />
+          <Filter size={18} className="text-[#1e293b]" />
           <h2 className="font-semibold text-gray-900">Filters</h2>
           {hasActiveFilters && (
             <button onClick={clearAll} className="ml-auto text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1">
@@ -289,7 +289,7 @@ export function BankBalanceReport() {
               placeholder="Search by bank name…"
               value={filters.search}
               onChange={e => setFilters({ ...filters, search: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e293b] focus:border-transparent"
             />
           </div>
 
@@ -325,7 +325,7 @@ export function BankBalanceReport() {
             <select
               value={filters.sortBy}
               onChange={e => setFilters({ ...filters, sortBy: e.target.value as 'balance' | 'name' })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e293b] focus:border-transparent"
             >
               <option value="balance">Balance (High → Low)</option>
               <option value="name">Name (A → Z)</option>
@@ -341,14 +341,14 @@ export function BankBalanceReport() {
               <Pill
                 label={`"${filters.search}"`}
                 onRemove={() => setFilters({ ...filters, search: '' })}
-                colorClass="bg-[#4f46e5]/10 text-[#4f46e5]"
+                colorClass="bg-[#1e293b]/10 text-[#1e293b]"
               />
             )}
             {filters.banks.map(b => (
               <Pill
                 key={b} label={b}
                 onRemove={() => setFilters({ ...filters, banks: filters.banks.filter(x => x !== b) })}
-                colorClass="bg-[#4f46e5]/10 text-[#4f46e5]"
+                colorClass="bg-[#1e293b]/10 text-[#1e293b]"
               />
             ))}
             {filters.balanceStatus.map(s => (
@@ -425,7 +425,7 @@ export function BankBalanceReport() {
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <button
                         onClick={() => setViewBank(bank)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#4f46e5] bg-[#4f46e5]/10 rounded-lg hover:bg-[#4f46e5]/20 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#1e293b] bg-[#1e293b]/10 rounded-lg hover:bg-[#1e293b]/20 transition-colors"
                       >
                         <Eye size={13} /> View
                       </button>
@@ -439,15 +439,15 @@ export function BankBalanceReport() {
 
         {/* Footer total */}
         {filteredData.length > 0 && (
-          <div className="bg-gray-50 border-t-2 border-[#4f46e5] px-6 py-4">
+          <div className="bg-gray-50 border-t-2 border-[#1e293b] px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <DollarSign size={18} className="text-[#4f46e5]" />
+                <DollarSign size={18} className="text-[#1e293b]" />
                 <span className="font-semibold text-gray-900">Total Balance</span>
               </div>
               <div className="text-right">
                 <p className="text-xs text-gray-500">{filteredData.length} bank{filteredData.length !== 1 ? 's' : ''}</p>
-                <p className={`text-2xl font-bold ${totalBalance >= 0 ? 'text-[#4f46e5]' : 'text-red-600'}`}>
+                <p className={`text-2xl font-bold ${totalBalance >= 0 ? 'text-[#1e293b]' : 'text-red-600'}`}>
                   {formatCurrency(totalBalance)}
                 </p>
               </div>
@@ -462,8 +462,8 @@ export function BankBalanceReport() {
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-[#4f46e5]/10 rounded-lg flex items-center justify-center">
-                  <Building2 size={18} className="text-[#4f46e5]" />
+                <div className="w-9 h-9 bg-[#1e293b]/10 rounded-lg flex items-center justify-center">
+                  <Building2 size={18} className="text-[#1e293b]" />
                 </div>
                 <h3 className="text-lg font-bold text-gray-900">{viewBank.name}</h3>
               </div>
@@ -491,7 +491,7 @@ export function BankBalanceReport() {
 
               <div className="pt-2 border-t border-gray-100">
                 <p className="text-xs text-gray-500 mb-1">Balance</p>
-                <p className={`text-3xl font-bold ${viewBank.balance >= 0 ? 'text-[#4f46e5]' : 'text-red-600'}`}>
+                <p className={`text-3xl font-bold ${viewBank.balance >= 0 ? 'text-[#1e293b]' : 'text-red-600'}`}>
                   {formatCurrency(viewBank.balance)}
                 </p>
               </div>
