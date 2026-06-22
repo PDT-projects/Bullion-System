@@ -423,10 +423,13 @@ const getSuggestedClassification = (
 
   const remainingBalanceAfter = useMemo(() => {
     if (paymentMode !== 'Bank' || !selectedBank) return currentBankBalance;
+    // totals.totalAmount is AED (item.amount is always AED-denominated);
+    // currentBankBalance is PKR-canonical — convert before combining.
+    const totalAmountPKR = +convertCurrency(totals.totalAmount, 'AED', 'PKR', currencyRates as any).toFixed(2);
     return transactionType === 'Cash Inflow'
-      ? currentBankBalance + totals.totalAmount
-      : currentBankBalance - totals.totalAmount;
-  }, [currentBankBalance, totals.totalAmount, transactionType, paymentMode, selectedBank]);
+      ? currentBankBalance + totalAmountPKR
+      : currentBankBalance - totalAmountPKR;
+  }, [currentBankBalance, totals.totalAmount, transactionType, paymentMode, selectedBank, currencyRates]);
 
   // ── Currency-aware formatter ────────────────────────────────────────────────
   const formatCurrencyLocal = useCallback(
@@ -484,14 +487,23 @@ const getSuggestedClassification = (
         // ── Edit mode ─────────────────────────────────────────────────────
         const item = transactionItems[0];
         const effectiveDate = manualDate.trim() || date;
+
+        // CurrencyAmountInput in the View always stores AED in item.amount /
+        // item.amountPaid, regardless of which currency the user typed in.
+        // Firestore's `amount` field is PKR-canonical (used by dashboards,
+        // reports, etc.), so it must be converted here — not stored as-is.
+        const amountPKR     = +convertCurrency(item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
+        const amountPaidPKR = +convertCurrency(item.amountPaid || 0, 'AED', 'PKR', currencyRates as any).toFixed(2);
+        const remainingPKR  = Math.max(0, amountPKR - amountPaidPKR);
+
         const updatedData: Partial<Transaction> = {
           date:            effectiveDate,
           mainCategory:    transactionType,
           subCategory:     item.subCategory,
           detailCategory:  item.detailCategory,
-          amount:          item.amount,
-          amountPaid:      item.amountPaid,
-          remainingAmount: item.remainingAmount,
+          amount:          amountPKR,
+          amountPaid:      amountPaidPKR,
+          remainingAmount: remainingPKR,
           paymentStatus:   item.paymentStatus,
           paidBy:          item.paidBy,
           paidTo:          item.paidTo,
@@ -506,12 +518,16 @@ const getSuggestedClassification = (
           bsMainCategory:  bsMainCategory || undefined,
           bsSubCategory:   bsSubCategory  || undefined,
           currency,
-        };
+          // ── Original (AED, pre-conversion) fields for display fidelity ──
+          originalCurrency:    (item as any).inputCurrency || 'AED',
+          originalAmount:      item.amount,
+          originalAmountPaid:  item.amountPaid || item.amount,
+        } as any;
         await TransactionFirebaseService.updateTransaction(editingTx.id, updatedData);
         firstTxId = editingTx.transactionId || editingTx.id;
 
         if (paymentMode === 'Bank') {
-          await updateBankBalance(selectedBank, item.amount, isInflow);
+          await updateBankBalance(selectedBank, amountPKR, isInflow);
         }
       } else {
         // ── Create mode ───────────────────────────────────────────────────
@@ -541,6 +557,18 @@ const getSuggestedClassification = (
           const officeObj      = companies.find(c => c.id === office);
           const companyName    = officeObj ? officeObj.name : office;
 
+          // CurrencyAmountInput in the View always stores AED in item.amount /
+          // item.amountPaid, regardless of which currency the user typed in.
+          // Firestore's `amount` field is PKR-canonical (used by dashboards,
+          // reports, etc.), so it must be converted here before saving —
+          // otherwise an AED value gets saved as if it were already PKR.
+          const inputCurrency  = (item as any).inputCurrency || 'AED';
+          const amountPKR      = +convertCurrency(item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
+          const amountPaidPKR  = +convertCurrency(item.amountPaid || item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
+          const remainingPKR   = item.remainingAmount
+            ? +convertCurrency(item.remainingAmount, 'AED', 'PKR', currencyRates as any).toFixed(2)
+            : Math.max(0, amountPKR - amountPaidPKR);
+
           const effectiveDate = manualDate.trim() || date;
           const txData: Omit<Transaction, 'id'> = {
             transactionId:   resolvedId,
@@ -549,10 +577,11 @@ const getSuggestedClassification = (
             mainCategory:    transactionType,
             subCategory:     item.subCategory,
             detailCategory:  item.detailCategory,
-            // Store PKR-converted amounts as authoritative values; preserve originals
-            amount:          item.amount,
-            amountPaid:      item.amountPaid || item.amount,
-            remainingAmount: item.remainingAmount,
+            // PKR-converted amounts are the authoritative stored values;
+            // originals (as typed, in inputCurrency) are preserved below.
+            amount:          amountPKR,
+            amountPaid:      amountPaidPKR,
+            remainingAmount: remainingPKR,
             paymentStatus:   item.paymentStatus,
             paidBy:          item.paidBy,
             paidTo:          item.paidTo,
@@ -571,16 +600,16 @@ const getSuggestedClassification = (
             bsSubCategory:   bsSubCategory  || undefined,
             currency,
             // ── Original (pre-conversion) currency fields ──────────────────
-            originalCurrency:    (item as any).inputCurrency || currency,
-            originalAmount:      (item as any).originalAmount ?? item.amount,
-            originalAmountPaid:  (item as any).originalAmountPaid ?? (item.amountPaid || item.amount),
+            originalCurrency:    inputCurrency,
+            originalAmount:      item.amount,
+            originalAmountPaid:  item.amountPaid || item.amount,
           } as any;
 
           await TransactionFirebaseService.createTransaction(txData);
           if (idx === 0) firstTxId = resolvedId;
 
           if (paymentMode === 'Bank' && selectedBank) {
-            await updateBankBalance(selectedBank, item.amount, isInflow);
+            await updateBankBalance(selectedBank, amountPKR, isInflow);
           }
         }
       }
@@ -616,7 +645,7 @@ const getSuggestedClassification = (
     transactionType, paymentMode, selectedBank, banks,
     navigate, transactionId, chequeNumber, chequeDate, chequeBank,
     updateBankBalance, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory,
-    currency, companies,
+    currency, companies, currencyRates,
   ]);
 
   const handleCancel = useCallback(() => navigate('/transactions'), [navigate]);

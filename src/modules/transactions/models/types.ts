@@ -46,6 +46,12 @@ export interface Transaction {
   amount: number;
   mode: 'Cash' | 'Bank' | 'Cheque';
   currency?: string;
+  // Original (pre-conversion) currency the user actually typed the amount in
+  // (e.g. 'AED'), preserved for display fidelity. `amount`/`amountPaid` above
+  // are always PKR-canonical regardless of this field.
+  originalCurrency?: string;
+  originalAmount?: number;
+  originalAmountPaid?: number;
   bankName?: string;
   bankId?: string;
   chequeNumber?: string;
