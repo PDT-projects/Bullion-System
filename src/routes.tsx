@@ -174,7 +174,11 @@ function EmployeeDeleteRoute() { return <EmployeeDeleteWrapper />; }
 
 function LoanDashboardRoute()        { return <LoanDashboardWrapper />; }
 function LoanListRoute()             { return <LoanListWrapper />; }
+function LoanListPayableRoute()      { return <LoanListWrapper defaultType="Payable" />; }
+function LoanListReceivableRoute()   { return <LoanListWrapper defaultType="Receivable" />; }
 function LoanFormRoute()             { return <LoanFormWrapper />; }
+function LoanFormPayableRoute()      { return <LoanFormWrapper defaultType="Payable" />; }
+function LoanFormReceivableRoute()   { return <LoanFormWrapper defaultType="Receivable" />; }
 function LoanPaymentRoute()          { return <LoanPaymentWrapper />; }
 
 
@@ -340,9 +344,11 @@ export const router = createBrowserRouter([
     children: [
       { index: true,            element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanDashboardRoute /></ScreenProtectedRoute> },
       { path: 'all',            element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanListRoute /></ScreenProtectedRoute> },
-      { path: 'payable',        element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanListRoute /></ScreenProtectedRoute> },
-      { path: 'receivable',     element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanListRoute /></ScreenProtectedRoute> },
+      { path: 'payable',        element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanListPayableRoute /></ScreenProtectedRoute> },
+      { path: 'receivable',     element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanListReceivableRoute /></ScreenProtectedRoute> },
       { path: 'new',            element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanFormRoute /></ScreenProtectedRoute> },
+      { path: 'create-payable',    element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanFormPayableRoute /></ScreenProtectedRoute> },
+      { path: 'create-receivable', element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanFormReceivableRoute /></ScreenProtectedRoute> },
       { path: ':id/payment',    element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanPaymentRoute /></ScreenProtectedRoute> },
     ],
   },

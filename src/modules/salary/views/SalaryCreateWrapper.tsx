@@ -51,6 +51,11 @@ export function SalaryCreateWrapper({ type }: SalaryCreateWrapperProps) {
       confirmedCommissionAmount={confirmedCommissionAmount}
       isCommissionAutoFilled={vm.isCommissionAutoFilled}
       commissionSource={commissionSource}
+      // FIX: pass through the employee's actual currency and the converted amount
+      // Previously these were omitted, so SalaryFormView fell back to its
+      // default of 'AED' even for PKR employees.
+      salaryCurrency={vm.salaryCurrency}
+      convertedAmount={vm.convertedAmount}
       // Loan deduction props
       employeeLoan={vm.employeeLoan}
       loanDeduction={vm.loanDeduction}

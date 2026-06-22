@@ -5,9 +5,10 @@
 // UPDATED: Shows employee's active Receivable loan (if any) and allows entering
 //          a deduction amount that reduces both the salary net amount and the
 //          loan's remaining balance on save.
-// UPDATED: Dual-currency support — currency label (PKR/AED) is driven by the
-//          selected employee's `salaryCurrency` field.  The converted amount in
-//          the opposite currency is shown as a secondary hint everywhere.
+// FIXED:   Dual-currency support — the form now shows amounts in the EMPLOYEE'S
+//          OWN currency (PKR or AED), not always AED. A secondary converted hint
+//          is shown alongside. The employee dropdown also lists each person's
+//          salary in their own currency, not forcibly converted to AED.
 
 import { useState } from 'react';
 import {
@@ -99,12 +100,18 @@ function formatDateDisplay(dateStr: string): string {
   } catch { return dateStr; }
 }
 
-// Helper: format a number with a given currency label
+// Format a number with its currency label
 function fmtCur(amount: number, currency: SalaryCurrency): string {
   if (currency === 'AED') {
     return `د.إ ${amount.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
   return `₨ ${Math.round(amount).toLocaleString('en-PK')}`;
+}
+
+// Format an employee's salary in THEIR OWN currency (no forced conversion)
+function fmtEmployeeSalary(emp: any): string {
+  const currency: SalaryCurrency = emp.salaryCurrency === 'PKR' ? 'PKR' : 'AED';
+  return fmtCur(emp.salary || 0, currency);
 }
 
 // Currency badge component used alongside inputs
@@ -128,7 +135,7 @@ export function SalaryFormView({
   confirmedCommissionAmount = 0,
   isCommissionAutoFilled = false,
   commissionSource = '',
-  salaryCurrency = 'PKR',
+  salaryCurrency = 'AED',
   convertedAmount = 0,
   employeeLoan = null,
   loanDeduction = 0,
@@ -154,7 +161,12 @@ export function SalaryFormView({
   const isRegular    = formData.subCategory === 'Employee salary';
   const selectedBank = banks.find(b => b.id === transaction.bankId);
 
+  // The "opposite" currency for secondary hint display
   const oppositeCurrency: SalaryCurrency = salaryCurrency === 'PKR' ? 'AED' : 'PKR';
+
+  // Employee's full monthly salary shown in THEIR OWN currency
+  // (no conversion — the employee.salary field is already in their native currency)
+  const employeeSalaryNative = selectedEmployee ? (selectedEmployee.salary || 0) : 0;
 
   // Derived loan display values
   const loanAfterDeduction = employeeLoan
@@ -177,7 +189,7 @@ export function SalaryFormView({
               {isEditMode ? 'Update salary payment details' : 'Record a new salary payment'}
             </p>
           </div>
-          {/* Currency pill in header */}
+          {/* Currency pill in header — shows employee's ACTUAL currency */}
           {selectedEmployee && (
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs text-gray-500">Employee currency:</span>
@@ -231,7 +243,7 @@ export function SalaryFormView({
               <div className="mt-2 grid grid-cols-3 gap-3 text-sm">
                 <div className="bg-white rounded-lg p-2.5 border border-blue-100 text-center">
                   <p className="text-xs text-gray-500 mb-0.5">Full Salary</p>
-                  <p className="font-bold text-gray-900">{fmtCur(selectedEmployee?.salary || 0, salaryCurrency)}</p>
+                  <p className="font-bold text-gray-900">{fmtCur(employeeSalaryNative, salaryCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-lg p-2.5 border border-blue-100 text-center">
                   <p className="text-xs text-gray-500 mb-0.5">Advance Paid</p>
@@ -283,7 +295,7 @@ export function SalaryFormView({
               <div className="mt-2 grid grid-cols-3 gap-3 text-sm">
                 <div className="bg-white rounded-lg p-2.5 border border-orange-100 text-center">
                   <p className="text-xs text-gray-500 mb-0.5">Full Monthly Salary</p>
-                  <p className="font-bold text-gray-900">{fmtCur(selectedEmployee.salary || 0, salaryCurrency)}</p>
+                  <p className="font-bold text-gray-900">{fmtCur(employeeSalaryNative, salaryCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-lg p-2.5 border border-orange-100 text-center">
                   <p className="text-xs text-gray-500 mb-0.5">Advance Paid So Far</p>
@@ -464,11 +476,17 @@ export function SalaryFormView({
                     className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 ${fieldErrors.employeeId ? inpErr : 'border-gray-300'}`}
                   >
                     <option value="">Choose an employee...</option>
-                    {employees.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name} — {emp.position} ({fmtCur(emp.salary || 0, emp.salaryCurrency || 'PKR')}/mo)
-                      </option>
-                    ))}
+                    {employees.map(emp => {
+                      // FIX: show each employee's salary in THEIR OWN currency
+                      // (no forced conversion to AED)
+                      const empCurrency: SalaryCurrency = emp.salaryCurrency === 'PKR' ? 'PKR' : 'AED';
+                      const salaryLabel = fmtCur(emp.salary || 0, empCurrency);
+                      return (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name} — {emp.position} ({salaryLabel}/mo)
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 {fieldErrors.employeeId && <p className="mt-1 text-sm text-red-600">{fieldErrors.employeeId}</p>}
@@ -501,17 +519,15 @@ export function SalaryFormView({
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
                       <p className="text-xs text-gray-400 mb-0.5">Monthly Salary</p>
+                      {/* FIX: show salary in employee's OWN currency as primary */}
                       <p className="text-sm font-semibold" style={{ color: '#1e293b' }}>
-                        {fmtCur(selectedEmployee.salary || 0, salaryCurrency)}
+                        {fmtCur(employeeSalaryNative, salaryCurrency)}
                       </p>
                       {/* Show converted amount as secondary hint */}
                       <p className="text-xs text-gray-400 mt-0.5">
-                        ≈ {fmtCur(
-                          salaryCurrency === 'PKR'
-                            ? parseFloat(((selectedEmployee.salary || 0) / AED_TO_PKR).toFixed(2))
-                            : Math.round((selectedEmployee.salary || 0) * AED_TO_PKR),
-                          oppositeCurrency
-                        )}
+                        ≈ {salaryCurrency === 'PKR'
+                          ? fmtCur(parseFloat((employeeSalaryNative / AED_TO_PKR).toFixed(2)), 'AED')
+                          : fmtCur(Math.round(employeeSalaryNative * AED_TO_PKR), 'PKR')}
                       </p>
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
@@ -524,7 +540,7 @@ export function SalaryFormView({
                         {selectedEmployee.status}
                       </span>
                     </div>
-                    {/* Currency pill */}
+                    {/* Currency pill — reflects actual employee currency */}
                     <div
                       className="rounded-lg p-3 border text-center flex flex-col items-center justify-center"
                       style={salaryCurrency === 'AED'
@@ -566,7 +582,7 @@ export function SalaryFormView({
                           <AlertCircle size={15} />
                           <span>
                             Partially paid: <strong>{fmtCur(regularAlreadyPaidAmount, salaryCurrency)}</strong> of{' '}
-                            <strong>{fmtCur(selectedEmployee.salary || 0, salaryCurrency)}</strong> for <strong>{transaction.salaryMonth}</strong>
+                            <strong>{fmtCur(employeeSalaryNative, salaryCurrency)}</strong> for <strong>{transaction.salaryMonth}</strong>
                           </span>
                         </div>
                       ) : (

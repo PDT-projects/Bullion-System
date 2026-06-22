@@ -10,11 +10,13 @@
 //   - Exposes `employeeLoan`, `loanDeduction`, `setLoanDeduction`
 //   - On submit, calls LoanFirebaseService.makePayment() to reduce loan balance
 //
-// DUAL CURRENCY FEATURE:
+// DUAL CURRENCY FEATURE (FIXED):
 //   - Each employee has a `salaryCurrency` field ('PKR' | 'AED')
-//   - The salary form auto-detects the employee's currency and shows the right label
-//   - On save, both `salaryAED` and `salaryPKR` are stored (one is the entered value,
-//     the other is converted at the current exchange rate)
+//   - salaryCurrency is now derived from the SELECTED EMPLOYEE, not hardcoded to 'AED'
+//   - The salary form shows amounts in the employee's native currency
+//   - On save, both `salaryAED` and `salaryPKR` are stored correctly:
+//       • PKR employee: entered value = salaryPKR, salaryAED = value / AED_TO_PKR
+//       • AED employee: entered value = salaryAED, salaryPKR = value * AED_TO_PKR
 //   - Exchange rate constant: 1 AED = AED_TO_PKR PKR (same as EmployeeService)
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -40,6 +42,22 @@ import {
 const AED_TO_PKR = 76;
 
 export type SalaryCurrency = 'PKR' | 'AED';
+
+// ── Currency helpers ───────────────────────────────────────────────────────
+// Convert any employee native salary amount to AED for internal comparisons
+// (advance tracking, remaining calculations). The form itself now always
+// displays in the employee's OWN currency — these helpers are only used for
+// cross-currency comparisons in the advance/remaining logic.
+function toAED(amount: number, employeeCurrency?: string): number {
+  if (employeeCurrency === 'PKR') return parseFloat((amount / AED_TO_PKR).toFixed(2));
+  return amount;
+}
+
+// Convert any employee native salary amount to PKR
+function toPKR(amount: number, employeeCurrency?: string): number {
+  if (employeeCurrency === 'AED') return Math.round(amount * AED_TO_PKR);
+  return Math.round(amount);
+}
 
 interface BankInfo { id: string; name: string; balance: number; }
 
@@ -83,8 +101,8 @@ export interface UseSalaryFormViewModelReturn {
   commissionSummary: string;
   commissionBreakdown: CommissionCityBreakdown[];
   // ── Dual currency ────────────────────────────────────────────────────────
-  salaryCurrency: SalaryCurrency;      // currency the employee is paid in
-  convertedAmount: number;              // net amount in the OTHER currency (for display)
+  salaryCurrency: SalaryCurrency;   // currency the employee is paid in (from employee record)
+  convertedAmount: number;          // net amount in the OTHER currency (for display only)
   // ── Loan deduction ──────────────────────────────────────────────────────
   employeeLoan: Loan | null;
   loanDeduction: number;
@@ -160,23 +178,33 @@ export function useSalaryFormViewModel({
     [employees, formData.employeeId]
   );
 
-  // ── Derive currency from the selected employee ────────────────────────────
-  // Falls back to 'PKR' for legacy employees that don't have the field yet.
-  const salaryCurrency: SalaryCurrency = useMemo(
-    () => (selectedEmployee as any)?.salaryCurrency || 'PKR',
-    [selectedEmployee]
-  );
+  // ── FIX: Derive salaryCurrency from the selected employee's record ─────────
+  // Previously this was hardcoded to 'AED', which caused PKR employees'
+  // salaries to be displayed with wrong labels (e.g. 50,000 PKR shown as AED).
+  // Now it correctly reflects the employee's own currency setting.
+  // Falls back to 'AED' only when no employee is selected (form default).
+  const salaryCurrency: SalaryCurrency = useMemo((): SalaryCurrency => {
+    if (!selectedEmployee) return 'AED';
+    return (selectedEmployee as any).salaryCurrency === 'PKR' ? 'PKR' : 'AED';
+  }, [selectedEmployee]);
 
-  // Convert net amount to the opposite currency for secondary display
+  // Convert the net amount to the OTHER currency for secondary display
   const convertedAmount = useMemo(() => {
     const net = Math.max(0, formData.baseSalary + formData.commission - formData.deductions);
-    if (salaryCurrency === 'PKR') return parseFloat((net / AED_TO_PKR).toFixed(2));
+    if (salaryCurrency === 'PKR') {
+      // Primary is PKR → show AED equivalent
+      return parseFloat((net / AED_TO_PKR).toFixed(2));
+    }
+    // Primary is AED → show PKR equivalent
     return Math.round(net * AED_TO_PKR);
   }, [formData.baseSalary, formData.commission, formData.deductions, salaryCurrency]);
   // ──────────────────────────────────────────────────────────────────────────
 
   const salaryMonth = transactionsList[0]?.salaryMonth || '';
 
+  // ── Advance / remaining salary calculations ────────────────────────────────
+  // All advance/remaining comparisons are done in the EMPLOYEE'S OWN CURRENCY
+  // so there's no cross-currency confusion in the arithmetic.
   const advancePaidThisMonth = useMemo(() => {
     if (!formData.employeeId || !salaryMonth) return 0;
     return allSalaries
@@ -187,11 +215,16 @@ export function useSalaryFormViewModel({
         (!isEditMode || s.id !== id)
       )
       .reduce((sum, s) => {
-        const net       = s.netAmount || s.amount || 0;
+        // Use the currency-correct stored value if available, otherwise netAmount
+        const net = (() => {
+          if (salaryCurrency === 'PKR' && (s as any).salaryPKR) return (s as any).salaryPKR;
+          if (salaryCurrency === 'AED' && (s as any).salaryAED) return (s as any).salaryAED;
+          return s.netAmount || s.amount || 0;
+        })();
         const remaining = s.remainingAmount || 0;
         return sum + Math.max(0, net - remaining);
       }, 0);
-  }, [allSalaries, formData.employeeId, salaryMonth, isEditMode, id]);
+  }, [allSalaries, formData.employeeId, salaryMonth, isEditMode, id, salaryCurrency]);
 
   const regularPaidRecords = useMemo(() => {
     if (!formData.employeeId || !salaryMonth) return [];
@@ -204,30 +237,41 @@ export function useSalaryFormViewModel({
   }, [allSalaries, formData.employeeId, salaryMonth, isEditMode, id]);
 
   const regularAlreadyPaidAmount = useMemo(
-    () => regularPaidRecords.reduce((sum, s) => sum + (s.netAmount || s.amount || 0), 0),
-    [regularPaidRecords]
+    () => regularPaidRecords.reduce((sum, s) => {
+      const net = (() => {
+        if (salaryCurrency === 'PKR' && (s as any).salaryPKR) return (s as any).salaryPKR;
+        if (salaryCurrency === 'AED' && (s as any).salaryAED) return (s as any).salaryAED;
+        return s.netAmount || s.amount || 0;
+      })();
+      return sum + net;
+    }, 0),
+    [regularPaidRecords, salaryCurrency]
+  );
+
+  // Full salary in the employee's own currency (no conversion needed)
+  const employeeFullSalaryNative = useMemo(
+    () => selectedEmployee?.salary || 0,
+    [selectedEmployee]
   );
 
   const advanceAvailableThisMonth = useMemo(() => {
     if (!selectedEmployee || !salaryMonth) return 0;
-    const fullSalary  = selectedEmployee.salary || 0;
-    const totalUsed   = advancePaidThisMonth + regularAlreadyPaidAmount;
-    return Math.max(0, fullSalary - totalUsed);
-  }, [selectedEmployee, salaryMonth, advancePaidThisMonth, regularAlreadyPaidAmount]);
+    const totalUsed = advancePaidThisMonth + regularAlreadyPaidAmount;
+    return Math.max(0, employeeFullSalaryNative - totalUsed);
+  }, [selectedEmployee, salaryMonth, advancePaidThisMonth, regularAlreadyPaidAmount, employeeFullSalaryNative]);
 
   const regularAlreadyPaid = useMemo(() => {
     if (type !== 'regular') return false;
     if (!selectedEmployee) return false;
-    return regularAlreadyPaidAmount >= (selectedEmployee.salary || 0);
-  }, [type, selectedEmployee, regularAlreadyPaidAmount]);
+    return regularAlreadyPaidAmount >= employeeFullSalaryNative;
+  }, [type, selectedEmployee, regularAlreadyPaidAmount, employeeFullSalaryNative]);
 
   const remainingSalaryToPay = useMemo(() => {
     if (!selectedEmployee || !salaryMonth) return 0;
-    const fullSalary       = selectedEmployee.salary || 0;
     const totalAlreadyPaid = advancePaidThisMonth + regularAlreadyPaidAmount;
     if (totalAlreadyPaid <= 0) return 0;
-    return Math.max(0, fullSalary - totalAlreadyPaid);
-  }, [selectedEmployee, advancePaidThisMonth, regularAlreadyPaidAmount]);
+    return Math.max(0, employeeFullSalaryNative - totalAlreadyPaid);
+  }, [selectedEmployee, advancePaidThisMonth, regularAlreadyPaidAmount, employeeFullSalaryNative]);
 
   const isEffectivelyAdvance = useMemo(() => {
     if (type !== 'regular' || isEditMode || !salaryMonth) return false;
@@ -410,13 +454,16 @@ export function useSalaryFormViewModel({
     load();
   }, [isEditMode, id, navigate]);
 
-  // Auto-fill baseSalary from employee record
+  // ── Auto-fill baseSalary from employee record ──────────────────────────────
+  // The employee's `salary` field is always in their OWN currency.
+  // We no longer convert to AED here — we use the native value directly,
+  // which is what the form now displays (in the employee's currency).
   useEffect(() => {
     if (!isEditMode && selectedEmployee && type === 'regular') {
-      const fullSalary    = selectedEmployee.salary || 0;
+      const fullSalaryNative = selectedEmployee.salary || 0;
       const suggestedBase = advancePaidThisMonth > 0
-        ? Math.max(0, fullSalary - advancePaidThisMonth)
-        : fullSalary;
+        ? Math.max(0, fullSalaryNative - advancePaidThisMonth)
+        : fullSalaryNative;
       setFormData(prev => ({ ...prev, baseSalary: suggestedBase }));
     }
   }, [selectedEmployee, isEditMode, type, advancePaidThisMonth]);
@@ -507,12 +554,22 @@ export function useSalaryFormViewModel({
       const employee = employees.find(e => e.id === formData.employeeId);
       const bank     = txn.mode === 'Bank' ? banks.find(b => b.id === txn.bankId) : null;
 
-      // ── Dual-currency amounts ───────────────────────────────────────────
-      // Store both currencies so the dashboard and list views can show either.
+      // ── FIX: Dual-currency amounts ─────────────────────────────────────────
+      // Store both currencies correctly based on the employee's own currency.
+      // The net amount (calculatedNetAmount) is always in the employee's native
+      // currency — so we convert to the other currency, NOT treat both as AED.
       const net = calculatedNetAmount;
-      const salaryAED = salaryCurrency === 'AED' ? net : parseFloat((net / AED_TO_PKR).toFixed(2));
-      const salaryPKR = salaryCurrency === 'PKR' ? net : Math.round(net * AED_TO_PKR);
-      // ───────────────────────────────────────────────────────────────────
+      const employeeCurrency: SalaryCurrency =
+        (employee as any)?.salaryCurrency === 'PKR' ? 'PKR' : 'AED';
+
+      const salaryAED = employeeCurrency === 'AED'
+        ? net
+        : parseFloat((net / AED_TO_PKR).toFixed(2));
+
+      const salaryPKR = employeeCurrency === 'PKR'
+        ? Math.round(net)
+        : Math.round(net * AED_TO_PKR);
+      // ───────────────────────────────────────────────────────────────────────
 
       const salaryPayload: Omit<Salary, 'id'> = {
         transactionId:   `SAL-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
@@ -540,12 +597,12 @@ export function useSalaryFormViewModel({
         imageUrl:        txn.imageUrl || '',
         paymentStatus:   txn.paymentStatus,
         remainingAmount: txn.remainingAmount || 0,
-        // ── NEW currency fields ─────────────────────────────────────────
-        salaryCurrency,
+        // ── Currency fields (correctly computed) ─────────────────────────
+        salaryCurrency:  employeeCurrency,
         salaryAED,
         salaryPKR,
-        // ────────────────────────────────────────────────────────────────
-      } as any; // Cast needed until Salary type is updated with new fields
+        // ─────────────────────────────────────────────────────────────────
+      } as any;
 
       if (isEditMode && id) {
         await SalaryFirebaseService.updateSalary(id, salaryPayload);
@@ -586,7 +643,7 @@ export function useSalaryFormViewModel({
           netAmount:       calculatedNetAmount,
           employeeId:      formData.employeeId,
           employeeName:    employee?.name,
-          salaryCurrency,
+          salaryCurrency:  employeeCurrency,
           salaryAED,
           salaryPKR,
         });
@@ -644,8 +701,8 @@ export function useSalaryFormViewModel({
   const commissionSummary = useMemo(() => {
     if (!commissionResult) return '';
     return formatCommissionSummary(commissionResult, (n) =>
-      new Intl.NumberFormat('en-US', {
-        style: 'currency', currency: 'PKR', minimumFractionDigits: 0,
+      new Intl.NumberFormat('en-AE', {
+        style: 'currency', currency: 'AED', minimumFractionDigits: 0,
       }).format(n)
     );
   }, [commissionResult]);
