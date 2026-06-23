@@ -23,7 +23,7 @@ export function EmployeeFormFields({
   onFieldChange,
   allLocations = [],
   addCustomLocation = () => {},
-  salaryCurrency = 'PKR',
+  salaryCurrency = 'AED',
   onSalaryCurrencyChange = () => {},
 }: EmployeeFormFieldsProps) {
   const [newCityInput, setNewCityInput] = useState('');
@@ -47,33 +47,28 @@ export function EmployeeFormFields({
     setShowNewCityInput(false);
   };
 
-  // The salary stored in Employee is always PKR.
-  // If user selected AED, we show the AED equivalent in the input.
-  const displayedSalaryValue = (() => {
-    if (!formData.salary) return '';
-    if (salaryCurrency === 'AED') {
-      return EmployeeService.convertSalary(formData.salary, 'PKR', 'AED').toFixed(2);
-    }
-    return String(formData.salary);
-  })();
+  // Salary is stored in the employee's OWN currency — no conversion.
+  // Whatever the user types is saved as-is. salaryCurrency tells us which unit it is.
+  const displayedSalaryValue = formData.salary ? String(formData.salary) : '';
 
   const handleSalaryChange = (raw: string) => {
     const num = parseFloat(raw);
     if (isNaN(num)) { onFieldChange('salary', 0); return; }
-    // Always store as PKR
-    const inPkr = salaryCurrency === 'AED'
-      ? Math.round(EmployeeService.convertSalary(num, 'AED', 'PKR'))
-      : Math.round(num);
-    onFieldChange('salary', inPkr);
+    // Store exactly what the user typed — in their chosen currency.
+    // No conversion here. salaryCurrency on the employee record tells
+    // every other module which unit this number is in.
+    onFieldChange('salary', num);
   };
 
   const conversionHint = (() => {
     if (!formData.salary) return null;
     if (salaryCurrency === 'PKR') {
+      // salary is PKR → show AED equivalent
       const aed = EmployeeService.convertSalary(formData.salary, 'PKR', 'AED').toFixed(2);
       return `≈ د.إ ${aed} AED`;
     }
-    const pkr = Math.round(EmployeeService.convertSalary(formData.salary, 'PKR', 'PKR'));
+    // salary is AED → show PKR equivalent
+    const pkr = Math.round(EmployeeService.convertSalary(formData.salary, 'AED', 'PKR'));
     return `≈ ₨ ${pkr.toLocaleString('en-PK')} PKR`;
   })();
 

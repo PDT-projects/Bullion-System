@@ -17,6 +17,7 @@ export interface Employee {
   accountNumber: string;
   bankName: string;
   accountTitle: string;
+  salaryCurrency?: 'PKR' | 'AED';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -38,6 +39,7 @@ export interface CreateEmployeeDTO {
   accountNumber: string;
   bankName: string;
   accountTitle: string;
+  salaryCurrency?: 'PKR' | 'AED';
 }
 
 

@@ -44,6 +44,10 @@ export interface Salary {
   imageUrl: string;
   paymentStatus: 'Full' | 'Partial';
   remainingAmount: number;
+  // Dual-currency fields
+  salaryCurrency?: 'PKR' | 'AED';
+  salaryAED?: number;
+  salaryPKR?: number;
   createdAt?: string;
   updatedAt?: string;
 }

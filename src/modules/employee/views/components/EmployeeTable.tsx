@@ -33,8 +33,14 @@ export function EmployeeTable({
     );
   }
 
-  const displaySalary = (salary: number) => {
-    const converted = convertSalary(salary, 'PKR', displayCurrency);
+  // Convert each employee's salary FROM their own currency TO the display currency.
+  // employee.salaryCurrency tells us what unit salary is stored in.
+  // If not set, fall back to 'AED' (system default for all old records).
+  const displaySalary = (employee: Employee) => {
+    const empCurrency: SalaryCurrency = (employee as any).salaryCurrency || 'AED';
+    const converted = empCurrency === displayCurrency
+      ? employee.salary
+      : convertSalary(employee.salary, empCurrency, displayCurrency);
     return formatCurrency(converted, displayCurrency);
   };
 
@@ -56,7 +62,7 @@ export function EmployeeTable({
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee.name}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{employee.position}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                {displaySalary(employee.salary)}
+                {displaySalary(employee)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{employee.phone}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{employee.email}</td>

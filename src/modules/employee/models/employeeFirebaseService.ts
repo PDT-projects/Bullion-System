@@ -38,6 +38,9 @@ function transformDocToEmployee(docSnap: any): Employee {
     accountNumber: data.accountNumber || '',
     bankName: data.bankName || '',
     accountTitle: data.accountTitle || '',
+    // Dual-currency: must be read back or salary module can't know which currency
+    // Fallback to 'AED' — system default; old records without this field are AED
+    salaryCurrency: data.salaryCurrency || 'AED',
   };
 }
 

@@ -53,7 +53,7 @@ export function useEmployeeFormViewModel({ mode }: UseEmployeeFormViewModelProps
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   // salaryCurrency mirrors formData.salaryCurrency for convenience; kept in sync
-  const [salaryCurrency, setSalaryCurrencyState] = useState<SalaryCurrency>('PKR');
+  const [salaryCurrency, setSalaryCurrencyState] = useState<SalaryCurrency>('AED');
   const [customLocations, setCustomLocations] = useState<string[]>(loadCustomEmployeeLocations);
 
   const allLocations: string[] = [
@@ -84,7 +84,7 @@ export function useEmployeeFormViewModel({ mode }: UseEmployeeFormViewModelProps
           if (employee) {
             setFormData(employee);
             // Restore the persisted currency
-            setSalaryCurrencyState((employee as any).salaryCurrency || 'PKR');
+            setSalaryCurrencyState((employee as any).salaryCurrency || 'AED');
           }
           else { toast.error('Employee not found'); navigate('/employees'); }
         } catch { toast.error('Failed to load employee'); navigate('/employees'); }

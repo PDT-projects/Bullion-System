@@ -80,16 +80,29 @@ const modeBadge = (mode: string) => {
   return 'bg-gray-100 text-gray-700';
 };
 
-// Resolve the salary's currency — falls back to 'PKR' for legacy records
+// Resolve the salary's currency.
+// Falls back to 'AED' — AED is the system default. Old records saved before
+// the dual-currency feature have no salaryCurrency field; those were always
+// entered as AED amounts, so AED is the correct fallback.
 function getSalaryCurrency(salary: Salary): SalaryCurrency {
-  return (salary as any).salaryCurrency || 'PKR';
+  const stored = (salary as any).salaryCurrency;
+  if (stored === 'PKR' || stored === 'AED') return stored;
+  return 'AED'; // safe default — original system was AED-only
 }
 
-// Return the net amount in the salary's own currency
+// Return the net amount in the salary's own currency.
+// Priority: use the dedicated salaryAED/salaryPKR field if present (set by
+// the form on save). Fall back to netAmount/amount which is always stored
+// in the employee's native currency and should NEVER be converted here —
+// the value is already correct, only the label differs.
 function getNetInCurrency(salary: Salary): number {
   const currency = getSalaryCurrency(salary);
-  const net = salary.netAmount || salary.amount || 0;
-  if (currency === 'AED') return (salary as any).salaryAED ?? net;
+  const net = salary.netAmount ?? salary.amount ?? 0;
+  if (currency === 'AED') {
+    // Use salaryAED if explicitly stored, otherwise net IS the AED figure
+    return (salary as any).salaryAED ?? net;
+  }
+  // PKR: use salaryPKR if explicitly stored, otherwise net IS the PKR figure
   return (salary as any).salaryPKR ?? net;
 }
 
@@ -107,7 +120,7 @@ export function SalaryListView({
   const getAdvancePaidForMonth = (employeeId: string, month: string) =>
     allSalaries
       .filter(s => s.employeeId === employeeId && s.salaryMonth === month && s.subCategory === 'Advance salary')
-      .reduce((sum, s) => sum + (s.netAmount || s.amount || 0), 0);
+      .reduce((sum, s) => sum + getNetInCurrency(s), 0);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
