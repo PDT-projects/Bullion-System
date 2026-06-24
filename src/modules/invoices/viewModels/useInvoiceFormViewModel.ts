@@ -44,7 +44,7 @@ import { createFuturisticPayablesFromInvoice } from '../../Payable-to-futuristic
 
 // Default branches — always available even before Firestore loads
 export const DEFAULT_BRANCHES = ['Saudia', 'Chad'];
-const COMPANY_PREFIX = 'Pakistan Detector Technologies Pvt. Ltd - ';
+const COMPANY_PREFIX = 'Bullion Electronics - ';
 
 export function makeBranchValue(branch: string): TxCompany {
   return `${COMPANY_PREFIX}${branch}` as TxCompany;

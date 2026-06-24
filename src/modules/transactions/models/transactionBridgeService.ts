@@ -11,10 +11,11 @@ import { TransactionFirebaseService } from '../../transactions/models/transactio
 import { Transaction } from '../../transactions/models/types';
 
 export type TxCompany =
-  | 'Pakistan Detector Technologies Pvt. Ltd - Islamabad'
-  | 'Pakistan Detector Technologies Pvt. Ltd - Rawalpindi'
-  | 'Pakistan Detector Technologies Pvt. Ltd - Lahore'
-  | 'Pakistan Detector Technologies Pvt. Ltd - Other';
+  | 'Bullion Electronics - Saudia'
+  | 'Bullion Electronics - Dubai'
+  | 'Bullion Electronics - Chad'
+  | 'Bullion Electronics - Sudan'
+  | 'Bullion Electronics - Other';
 
 export interface InvoiceTxPayload {
   invoiceNumber:  string;

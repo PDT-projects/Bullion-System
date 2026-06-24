@@ -201,12 +201,12 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [plSubCategory,        setPlSubCategory]        = useState('');
   const [bsMainCategory,       setBsMainCategoryState]  = useState<BSMainCategory | ''>('');
   const [bsSubCategory,        setBsSubCategory]        = useState('');
-  // Locations — default seed (Saudi Arabia, Dubai, Chad, Sudan) + Firestore user-added
+  // Locations — default seed (Saudia, Dubai, Chad, Sudan) + Firestore user-added
   const DEFAULT_LOCATIONS: Company[] = [
-    { id: 'loc-sa', name: 'Saudi Arabia', createdAt: 'static' },
-    { id: 'loc-ae', name: 'Dubai',        createdAt: 'static' },
-    { id: 'loc-td', name: 'Chad',         createdAt: 'static' },
-    { id: 'loc-sd', name: 'Sudan',        createdAt: 'static' },
+    { id: 'loc-sa', name: 'Bullion Electronics - Saudia', createdAt: 'static' },
+    { id: 'loc-ae', name: 'Bullion Electronics - Dubai',  createdAt: 'static' },
+    { id: 'loc-td', name: 'Bullion Electronics - Chad',   createdAt: 'static' },
+    { id: 'loc-sd', name: 'Bullion Electronics - Sudan',  createdAt: 'static' },
   ];
   const [companies, setCompanies] = useState<Company[]>(DEFAULT_LOCATIONS);
 
@@ -247,7 +247,9 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
             setEditingTx(tx);
             setTransactionId(tx.transactionId || '');
             setIsGeneratingId(false);
-            const officeId = DEFAULT_LOCATIONS.find(o => tx.company?.includes(o.name))?.id || DEFAULT_LOCATIONS[0].id;
+            const officeId = DEFAULT_LOCATIONS.find(o => o.name === tx.company)?.id
+                          || DEFAULT_LOCATIONS.find(o => tx.company?.includes(o.name))?.id
+                          || DEFAULT_LOCATIONS[0].id;
             setOffice(officeId);
             setDate(tx.date);
             setManualDate(tx.date);

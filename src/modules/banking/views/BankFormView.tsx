@@ -1,6 +1,7 @@
 // Banking Module - Bank Form View
 // UI component for create/edit bank account
 // Updated with loading states for Firebase integration
+// Updated: multi-currency support (AED / PKR) + slate-700 color fix for buttons
 
 import React from 'react';
 import { 
@@ -9,7 +10,8 @@ import {
   Landmark,
   Save,
   Loader2,
-  Database
+  Database,
+  Coins
 } from 'lucide-react';
 import { BankFormData } from '../models/types';
 
@@ -32,9 +34,11 @@ interface BankFormViewProps {
   handleCancel: () => void;
   
   // Utils
-  formatCurrency: (amount: number) => string;
+  formatCurrency: (amount: number, currency?: 'AED' | 'PKR') => string;
   isValid: boolean;
 }
+
+const CURRENCIES: Array<'AED' | 'PKR'> = ['AED', 'PKR'];
 
 export const BankFormView: React.FC<BankFormViewProps> = ({
   formData,
@@ -56,13 +60,15 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
     handleSubmit();
   };
 
+  const currentCurrency = formData.currency || 'AED';
+
   // Loading State (for edit mode when fetching data)
   if (isLoading && isEditMode) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="p-4 bg-gray-700/10 rounded-full inline-block mb-4">
-            <Loader2 className="animate-spin text-gray-700" size={48} />
+          <div className="p-4 bg-slate-700/10 rounded-full inline-block mb-4">
+            <Loader2 className="animate-spin text-slate-700" size={48} />
           </div>
           <p className="text-lg font-medium text-gray-900">Loading bank details...</p>
           <p className="text-sm text-gray-500 mt-1">Fetching data from database</p>
@@ -96,7 +102,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
           <form onSubmit={onSubmit} className="space-y-6">
             {/* Bank Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Bank Name *
               </label>
               <div className="relative">
@@ -112,7 +118,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.name 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-gray-700/20 focus:border-gray-700'
+                      : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
                   }`}
                   placeholder="e.g., Habib Bank Limited"
                 />
@@ -124,7 +130,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
 
             {/* Account Number */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Account Number *
               </label>
               <div className="relative">
@@ -140,7 +146,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.accountNumber 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-gray-700/20 focus:border-gray-700'
+                      : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
                   }`}
                   placeholder="e.g., HBL-1234567890"
                 />
@@ -153,13 +159,50 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
               </p>
             </div>
 
+            {/* Currency */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Account Currency *
+              </label>
+              <div className="relative">
+                <Coins className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <select
+                  value={currentCurrency}
+                  onChange={(e) => {
+                    setFormField('currency', e.target.value as 'AED' | 'PKR');
+                    clearFieldError('currency');
+                  }}
+                  disabled={isSaving || isEditMode}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 appearance-none bg-white disabled:bg-gray-50 disabled:cursor-not-allowed ${
+                    errors.currency
+                      ? 'border-red-300 focus:ring-red-200'
+                      : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
+                  }`}
+                >
+                  {CURRENCIES.map((cur) => (
+                    <option key={cur} value={cur}>{cur}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.currency && (
+                <p className="mt-1 text-sm text-red-600">{errors.currency}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                {isEditMode
+                  ? 'Currency cannot be changed after the account is created'
+                  : 'Choose the currency this account holds and transacts in (e.g. PKR for local accounts, AED for UAE accounts)'}
+              </p>
+            </div>
+
             {/* Initial Balance */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 {isEditMode ? 'Current Balance' : 'Initial Balance'}
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">AED</span>
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
+                  {currentCurrency}
+                </span>
                 <input
                   type="number"
                   value={formData.balance || ''}
@@ -168,10 +211,10 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                     clearFieldError('balance');
                   }}
                   disabled={isSaving}
-                  className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
+                  className={`w-full pl-14 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
                     errors.balance 
                       ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-gray-700/20 focus:border-gray-700'
+                      : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
                   }`}
                   placeholder="0"
                   min="0"
@@ -184,7 +227,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
               <p className="mt-1 text-xs text-gray-500">
                 {isEditMode 
                   ? 'Balance is updated automatically through transactions and transfers' 
-                  : 'Starting balance for this account (can be 0)'}
+                  : `Starting balance for this account in ${currentCurrency} (can be 0)`}
               </p>
             </div>
 
@@ -202,7 +245,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
             </div>
 
             {/* Summary Preview */}
-            <div className="bg-gray-700/10 border border-gray-700/20 rounded-lg p-4">
+            <div className="bg-slate-700/10 border border-slate-700/20 rounded-lg p-4">
               <h4 className="font-semibold text-gray-900 mb-3">Account Preview</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -217,10 +260,14 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                     {formData.accountNumber || 'Not specified'}
                   </span>
                 </div>
-                <div className="flex justify-between border-t border-gray-700/20 pt-2 mt-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Currency:</span>
+                  <span className="font-medium text-gray-900">{currentCurrency}</span>
+                </div>
+                <div className="flex justify-between border-t border-slate-700/20 pt-2 mt-2">
                   <span className="text-gray-600">{isEditMode ? 'Current' : 'Initial'} Balance:</span>
-                  <span className="font-bold text-gray-700">
-                    {formatCurrency(formData.balance)}
+                  <span className="font-bold text-slate-700">
+                    {formatCurrency(formData.balance, currentCurrency)}
                   </span>
                 </div>
               </div>
@@ -232,14 +279,14 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                 type="button"
                 onClick={handleCancel}
                 disabled={isSaving}
-                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
+                className="px-6 py-3 text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!isValid || isSaving}
-                className="flex items-center gap-2 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
                   <>

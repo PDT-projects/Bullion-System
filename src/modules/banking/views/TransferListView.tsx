@@ -79,7 +79,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
             <button
               onClick={refreshTransfers}
               disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
               title="Refresh transfers"
             >
               <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
@@ -88,7 +88,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
           <button
             onClick={onAddTransfer}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
           >
             <Plus size={18} />
             New Transfer
@@ -107,17 +107,17 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
-            <ArrowRightLeft size={18} className="text-gray-700" />
+            <ArrowRightLeft size={18} className="text-slate-700" />
             <p className="text-sm text-gray-600">Total Transfers</p>
           </div>
           <p className="text-2xl font-bold text-gray-900">{stats.totalTransfers}</p>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingUp size={18} className="text-gray-700" />
+            <TrendingUp size={18} className="text-slate-700" />
             <p className="text-sm text-gray-600">Total Amount</p>
           </div>
-          <p className="text-2xl font-bold text-gray-700">{formatCurrency(stats.totalAmount)}</p>
+          <p className="text-2xl font-bold text-slate-700">{formatCurrency(stats.totalAmount)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
@@ -138,7 +138,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
               placeholder="Search by bank name or amount..."
               value={filters.searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-700"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-700"
             />
           </div>
         </div>
@@ -151,19 +151,19 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
             type="date"
             value={filters.startDate || ''}
             onChange={(e) => setDateRange(e.target.value || null, filters.endDate)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-700 text-sm"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-700 text-sm"
           />
           <span className="text-gray-400">to</span>
           <input
             type="date"
             value={filters.endDate || ''}
             onChange={(e) => setDateRange(filters.startDate, e.target.value || null)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-700 text-sm"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-700 text-sm"
           />
           {(filters.startDate || filters.endDate) && (
             <button
               onClick={() => setDateRange(null, null)}
-              className="text-sm text-gray-700 hover:underline"
+              className="text-sm text-slate-700 hover:underline"
             >
               Clear dates
             </button>
@@ -174,7 +174,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
       {/* Loading State */}
       {isLoading && (
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="animate-spin text-gray-700" size={32} />
+          <Loader2 className="animate-spin text-slate-700" size={32} />
           <span className="ml-2 text-gray-600">Loading transfers...</span>
         </div>
       )}
@@ -186,11 +186,11 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">From Bank</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">To Bank</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Date</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">From Bank</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">To Bank</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Amount</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -212,7 +212,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="text-sm font-semibold text-gray-700">
+                      <span className="text-sm font-semibold text-slate-700">
                         {formatCurrency(transfer.amount)}
                       </span>
                     </td>
@@ -241,7 +241,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
           <p className="text-sm text-gray-500 mt-1">Record a new bank transfer to get started</p>
           <button
             onClick={onAddTransfer}
-            className="mt-4 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800"
+            className="mt-4 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800"
           >
             New Transfer
           </button>

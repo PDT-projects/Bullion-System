@@ -16,9 +16,9 @@ import type { InvoiceReference } from '../models/types';
 
 // Strip the full company prefix from a branch string.
 const COMPANY_PREFIXES = [
-  'Pakistan Detector Technologies Pvt. Ltd — ', // em-dash U+2014 (most common)
-  'Pakistan Detector Technologies Pvt. Ltd – ', // en-dash U+2013
-  'Pakistan Detector Technologies Pvt. Ltd - ', // plain hyphen-space
+  'Bullion Electronics — ', // em-dash U+2014 (most common)
+  'Bullion Electronics – ', // en-dash U+2013
+  'Bullion Electronics - ', // plain hyphen-space
 ];
 function extractBranch(raw: string | undefined): string {
   if (!raw) return '';
@@ -26,9 +26,9 @@ function extractBranch(raw: string | undefined): string {
   for (const prefix of COMPANY_PREFIXES) {
     if (t.startsWith(prefix)) return t.slice(prefix.length).trim();
   }
-  const genericMatch = t.match(/^Pakistan Detector Technologies[^—–-]*[—–-]\s*(.+)$/);
+  const genericMatch = t.match(/^Bullion Electronics[^—–-]*[—–-]\s*(.+)$/);
   if (genericMatch) return genericMatch[1].trim();
-  const bareCompanyPrefix = t.match(/^Pakistan Detector Technologies[^—–-]*$/i);
+  const bareCompanyPrefix = t.match(/^Bullion Electronics[^—–-]*$/i);
   if (bareCompanyPrefix) return '';
   return t;
 }

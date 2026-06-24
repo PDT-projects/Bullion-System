@@ -16,7 +16,7 @@ import autoTable from 'jspdf-autotable';
 import { ProductTransfer } from '../models/types';
 
 const COMPANY = {
-  name:    'Pakistan Detector Technologies Pvt. Ltd',
+  name:    'Bullion Electronics',
   branch:  'Islamabad',
   address: 'Office#5, 4th floor, Gulberg Trade center, Gulberg Green Islamabad',
   phone:   '03111444615',
@@ -30,7 +30,7 @@ const TERMS = [
   'This transfer document is an official record of goods movement between company locations.',
   'The receiving party must verify serial numbers and quantities upon receipt.',
   'Any discrepancies must be reported within 24 hours of receipt.',
-  'Products in transit remain the property of Pakistan Detector Technologies Pvt. Ltd.',
+  'Products in transit remain the property of Bullion Electronics.',
   'The transferring party is responsible for safe packaging and handover.',
   'This document must be retained for audit and warranty purposes.',
 ];

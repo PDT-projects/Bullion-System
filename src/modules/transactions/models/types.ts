@@ -183,12 +183,11 @@ export interface Company {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 export const COMPANIES = [
-  { id: 'isb', name: 'Pakistan Detectors Technologies: Islamabad' },
-  { id: 'khi', name: 'Pakistan Detectors Technologies: Karachi' },
-  { id: 'lhr', name: 'Pakistan Detectors Technologies: Lahore' },
-  { id: 'bul', name: 'Pakistan Detectors Technologies: Bullion' },
-  { id: 'rnd', name: 'Pakistan Detectors Technologies: RND/SITE Office' },
-  { id: 'asf', name: 'Pakistan Detectors Technologies: Asif' },
+  { id: 'sau', name: 'Bullion Electronics - Saudia' },
+  { id: 'dxb', name: 'Bullion Electronics - Dubai' },
+  { id: 'cad', name: 'Bullion Electronics - Chad' },
+  { id: 'sdn', name: 'Bullion Electronics - Sudan' },
+  { id: 'oth', name: 'Bullion Electronics - Other' },
 ];
 
 export const MAIN_CATEGORIES = ['Cash Inflow', 'Cash Outflow', 'Loan'];

@@ -23,7 +23,7 @@ import { Bank } from '../../banking/models/types';
 import { createTransactionFromInventory, TxCompany } from '../../transactions/models/TransactionBridgeService';
 
 export const DEFAULT_INVENTORY_BRANCHES: string[] = [];
-const COMPANY_PREFIX = 'Pakistan Detector Technologies Pvt. Ltd - ';
+const COMPANY_PREFIX = 'Bullion Electronics - ';
 export function makeInventoryBranchValue(branch: string): TxCompany {
   return `${COMPANY_PREFIX}${branch}` as TxCompany;
 }

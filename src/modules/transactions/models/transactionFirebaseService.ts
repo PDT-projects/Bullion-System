@@ -144,7 +144,10 @@ export class TransactionFirebaseService {
       list.sort((a, b) => {
         const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
         if (dateCompare !== 0) return dateCompare;
-        return (b.time || '').localeCompare(a.time || '');
+        const timeCompare = (b.time || '').localeCompare(a.time || '');
+        if (timeCompare !== 0) return timeCompare;
+        // Final tiebreaker: createdAt timestamp (newest first)
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
       });
       console.log(`✅ Fetched ${list.length} transactions`);
       return list;

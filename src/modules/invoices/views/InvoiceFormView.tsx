@@ -129,7 +129,7 @@ function BranchSelector({
         )}
       </div>
       <p className="text-xs text-gray-400 mt-1">
-        PDF header: <span className="text-gray-600 font-medium">Pakistan Detector Technologies Pvt. Ltd — {branchFromValue(invoiceCompany)}</span>
+        PDF header: <span className="text-gray-600 font-medium">Bullion Electronics — {branchFromValue(invoiceCompany)}</span>
       </p>
     </div>
   );

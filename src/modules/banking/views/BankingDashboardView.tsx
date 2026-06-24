@@ -81,7 +81,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
           <button
             onClick={refreshData}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
             title="Refresh data"
           >
             <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
@@ -104,7 +104,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
             <div className="p-2 bg-white/20 rounded-lg">
               <Building2 size={24} />
             </div>
-            <span className="text-gray-700">Total Bank Balance</span>
+            <span className="text-slate-700">Total Bank Balance</span>
           </div>
           <div className="flex items-center gap-2">
             <p className="text-3xl font-bold">{formatCurrency(stats.totalBankBalance)}</p>
@@ -118,7 +118,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
             <div className="p-2 bg-white/20 rounded-lg">
               <Wallet size={24} />
             </div>
-            <span className="text-gray-700">Cash in Hand</span>
+            <span className="text-slate-700">Cash in Hand</span>
           </div>
           <div className="flex items-center gap-2">
             <p className="text-3xl font-bold">{formatCurrency(stats.totalCashInHand)}</p>
@@ -132,7 +132,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
             <div className="p-2 bg-white/20 rounded-lg">
               <TrendingUp size={24} />
             </div>
-            <span className="text-gray-700">Total Liquidity</span>
+            <span className="text-slate-700">Total Liquidity</span>
           </div>
           <p className="text-3xl font-bold">{formatCurrency(stats.totalLiquidity)}</p>
           <p className="text-sm text-gray-500 mt-1">Combined bank + cash</p>
@@ -144,19 +144,19 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-gray-900">Bank Accounts</h3>
-            <Building2 size={20} className="text-gray-700" />
+            <Building2 size={20} className="text-slate-700" />
           </div>
           <p className="text-sm text-gray-600 mb-3">Manage your bank accounts and balances</p>
           <div className="flex gap-2">
             <button
               onClick={onViewBanks}
-              className="flex-1 py-2 text-sm text-gray-700 bg-gray-700/10 rounded hover:bg-gray-700/20"
+              className="flex-1 py-2 text-sm text-slate-700 bg-slate-700/10 rounded hover:bg-slate-700/20"
             >
               View All
             </button>
             <button
               onClick={onAddBank}
-              className="flex-1 py-2 text-sm text-white bg-gray-700 rounded hover:bg-gray-800"
+              className="flex-1 py-2 text-sm text-white bg-slate-700 rounded hover:bg-slate-800"
             >
               Add New
             </button>
@@ -216,7 +216,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
             <h3 className="font-semibold text-gray-900">Recent Transfers</h3>
             <button
               onClick={onViewTransfers}
-              className="text-sm text-gray-700 hover:underline"
+              className="text-sm text-slate-700 hover:underline"
             >
               View All
             </button>
@@ -228,8 +228,8 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
               recentTransfers.map((transfer) => (
                 <div key={transfer.id} className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gray-700/10 rounded">
-                      <ArrowLeftRight size={16} className="text-gray-700" />
+                    <div className="p-2 bg-slate-700/10 rounded">
+                      <ArrowLeftRight size={16} className="text-slate-700" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
@@ -238,7 +238,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
                       <p className="text-xs text-gray-500">{formatDate(transfer.date)}</p>
                     </div>
                   </div>
-                  <span className="font-semibold text-gray-700">
+                  <span className="font-semibold text-slate-700">
                     {formatCurrency(transfer.amount)}
                   </span>
                 </div>
@@ -253,7 +253,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
             <h3 className="font-semibold text-gray-900">Recent Cash Activity</h3>
             <button
               onClick={onViewCash}
-              className="text-sm text-gray-700 hover:underline"
+              className="text-sm text-slate-700 hover:underline"
             >
               View All
             </button>
@@ -302,7 +302,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
           ))}
           {banks.length === 0 && (
             <p className="col-span-full text-sm text-gray-500 text-center py-4">
-              No bank accounts. <button onClick={onAddBank} className="text-gray-700 hover:underline">Add one</button>
+              No bank accounts. <button onClick={onAddBank} className="text-slate-700 hover:underline">Add one</button>
             </p>
           )}
         </div>

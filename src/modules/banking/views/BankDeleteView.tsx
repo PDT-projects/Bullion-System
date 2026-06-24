@@ -37,7 +37,7 @@ export const BankDeleteView: React.FC<BankDeleteViewProps> = ({
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4f46e5] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-700 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading bank details...</p>
         </div>
       </div>
@@ -54,7 +54,7 @@ export const BankDeleteView: React.FC<BankDeleteViewProps> = ({
             <p className="text-red-600 mb-4">{error || 'Bank account not found'}</p>
             <button
               onClick={handleCancel}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              className="px-4 py-2 bg-gray-100 text-slate-700 rounded-lg hover:bg-gray-200"
             >
               Go Back
             </button>
@@ -101,8 +101,8 @@ export const BankDeleteView: React.FC<BankDeleteViewProps> = ({
           {/* Bank Details */}
           <div className="p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-[#4f46e5]/10 rounded-lg">
-                <Building2 size={20} className="text-[#4f46e5]" />
+              <div className="p-2 bg-slate-700/10 rounded-lg">
+                <Building2 size={20} className="text-slate-700" />
               </div>
               <div>
                 <h4 className="font-semibold text-gray-900">{bank.name}</h4>
@@ -113,7 +113,7 @@ export const BankDeleteView: React.FC<BankDeleteViewProps> = ({
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Current Balance:</span>
-                <span className={`text-xl font-bold ${hasBalance ? 'text-[#4f46e5]' : 'text-gray-500'}`}>
+                <span className={`text-xl font-bold ${hasBalance ? 'text-slate-700' : 'text-gray-500'}`}>
                   {formatCurrency(bank.balance)}
                 </span>
               </div>
@@ -142,7 +142,7 @@ export const BankDeleteView: React.FC<BankDeleteViewProps> = ({
             <div className="flex items-center gap-3">
               <button
                 onClick={handleCancel}
-                className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                className="flex-1 px-4 py-3 text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
               >
                 Cancel
               </button>

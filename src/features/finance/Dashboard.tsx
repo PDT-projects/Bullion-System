@@ -382,11 +382,13 @@ interface SmallStatCardProps {
   amountColor?: string;
   subtitle?: string;
   subtitleSuffix?: string;
+  rawAed?: boolean; // true = value is already an exact AED amount; skip PKR conversion
 }
 
-function SmallStatCard({ label, countValue, pkrAmount = 0, primary, extras, rates, amountColor = 'text-gray-900', subtitle, subtitleSuffix }: SmallStatCardProps) {
-  const meta   = getMeta(primary);
-  const amount = convertFromPKR(pkrAmount, primary, rates);
+function SmallStatCard({ label, countValue, pkrAmount = 0, primary, extras, rates, amountColor = 'text-gray-900', subtitle, subtitleSuffix, rawAed = false }: SmallStatCardProps) {
+  const meta   = rawAed ? getMeta('AED') : getMeta(primary);
+  const amount = rawAed ? pkrAmount : convertFromPKR(pkrAmount, primary, rates);
+  const rowExtras = rawAed ? [] : extras;
 
   return (
     <div className="bg-white rounded-2xl p-4 border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200">
@@ -409,7 +411,7 @@ function SmallStatCard({ label, countValue, pkrAmount = 0, primary, extras, rate
       )}
 
       <CurrencyRows
-        extras={pkrAmount !== 0 ? extras : []}
+        extras={pkrAmount !== 0 ? rowExtras : []}
         pkrAmount={pkrAmount}
         rates={rates}
         subtitleSuffix={subtitleSuffix}
@@ -572,9 +574,9 @@ export function Dashboard() {
           countValue={<span className="text-orange-500">{stats.pendingTransactions}</span>}
           pkrAmount={stats.pendingAmount} subtitleSuffix="outstanding" {...cardCurrencyProps} />
         <SmallStatCard label="Loans Receivable"
-          pkrAmount={stats.totalLoansReceivable} subtitle="Outstanding" amountColor="text-blue-600" {...cardCurrencyProps} />
+          pkrAmount={stats.totalLoansReceivable} subtitle="Outstanding" amountColor="text-blue-600" rawAed {...cardCurrencyProps} />
         <SmallStatCard label="Loans Payable"
-          pkrAmount={stats.totalLoansPayable} subtitle="Outstanding" amountColor="text-red-500" {...cardCurrencyProps} />
+          pkrAmount={stats.totalLoansPayable} subtitle="Outstanding" amountColor="text-red-500" rawAed {...cardCurrencyProps} />
         <SmallStatCard label="Pending Bills"
           countValue={<span className="text-yellow-500">{stats.pendingBills}</span>}
           pkrAmount={stats.pendingBillsAmount} subtitleSuffix="due" {...cardCurrencyProps} />

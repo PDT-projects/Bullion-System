@@ -164,7 +164,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           </div>
         </div>
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-lg border border-gray-200">
-          <Loader2 className="animate-spin text-gray-700 mb-4" size={48} />
+          <Loader2 className="animate-spin text-slate-700 mb-4" size={48} />
           <p className="text-lg font-medium text-gray-900">Loading banks...</p>
           <p className="text-sm text-gray-500 mt-1">Fetching data from database</p>
         </div>
@@ -198,7 +198,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           <p className="text-sm text-red-600 mt-1">{error}</p>
           <button
             onClick={refreshBanks}
-            className="mt-4 flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800"
+            className="mt-4 flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800"
           >
             <RefreshCw size={18} />
             Try Again
@@ -228,7 +228,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           <button
             onClick={refreshBanks}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
             title="Refresh data"
           >
             <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
@@ -244,7 +244,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           </button>
           <button
             onClick={onAddBank}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors"
           >
             <Plus size={18} />
             Add Bank
@@ -256,17 +256,17 @@ export const BankListView: React.FC<BankListViewProps> = ({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
-            <Building2 size={18} className="text-gray-700" />
+            <Building2 size={18} className="text-slate-700" />
             <p className="text-sm text-gray-600">Total Banks</p>
           </div>
           <p className="text-2xl font-bold text-gray-900">{stats.totalBanks}</p>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
-            <Landmark size={18} className="text-gray-700" />
+            <Landmark size={18} className="text-slate-700" />
             <p className="text-sm text-gray-600">Total Balance</p>
           </div>
-          <p className="text-2xl font-bold text-gray-700">{formatCurrency(stats.totalBalance)}</p>
+          <p className="text-2xl font-bold text-slate-700">{formatCurrency(stats.totalBalance)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
@@ -293,7 +293,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
             placeholder="Search by bank name or account number..."
             value={filters.searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-700"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-700"
           />
         </div>
       </div>
@@ -306,7 +306,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-gray-900/10 rounded-lg">
-                    <Building2 size={20} className="text-gray-700" />
+                    <Building2 size={20} className="text-slate-700" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">{bank.name}</h3>
@@ -316,7 +316,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                 <div className="flex gap-1">
                   <button
                     onClick={() => onEditBank(bank.id)}
-                    className="p-1.5 text-gray-700 hover:bg-gray-900/10 rounded"
+                    className="p-1.5 text-slate-700 hover:bg-gray-900/10 rounded"
                     title="Edit"
                   >
                     <Edit size={16} />
@@ -339,7 +339,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
               <div className="mt-4 flex gap-2">
                 <button
                   onClick={() => setViewingBank(bank)}
-                  className="flex-1 py-2 text-sm text-gray-700 bg-gray-900/10 rounded-lg hover:bg-gray-900/20 transition-colors"
+                  className="flex-1 py-2 text-sm text-slate-700 bg-gray-900/10 rounded-lg hover:bg-gray-900/20 transition-colors"
                 >
                   <Eye size={14} className="inline mr-1" />
                   View Details
@@ -359,7 +359,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           </p>
           <button
             onClick={onAddBank}
-            className="flex items-center gap-2 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 mx-auto"
+            className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-800 mx-auto"
           >
             <Plus size={20} />
             Add Your First Bank
@@ -375,7 +375,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
               <h3 className="text-xl font-bold">Bank Account Details</h3>
               <button
                 onClick={() => setViewingBank(null)}
-                className="p-2 text-gray-500 hover:text-gray-700"
+                className="p-2 text-gray-500 hover:text-slate-700"
               >
                 <X size={24} />
               </button>
@@ -383,7 +383,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
             <div className="p-6 space-y-4">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-3 bg-gray-900/10 rounded-lg">
-                  <Building2 size={24} className="text-gray-700" />
+                  <Building2 size={24} className="text-slate-700" />
                 </div>
                 <div>
                   <h4 className="font-semibold text-lg">{viewingBank.name}</h4>
@@ -393,7 +393,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
               
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Current Balance</p>
-                <p className="text-3xl font-bold text-gray-700">{formatCurrency(viewingBank.balance)}</p>
+                <p className="text-3xl font-bold text-slate-700">{formatCurrency(viewingBank.balance)}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -402,7 +402,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                     setViewingBank(null);
                     onEditBank(viewingBank.id);
                   }}
-                  className="py-2 text-gray-700 bg-gray-900/10 rounded-lg hover:bg-gray-900/20"
+                  className="py-2 text-slate-700 bg-gray-900/10 rounded-lg hover:bg-gray-900/20"
                 >
                   Edit Account
                 </button>
@@ -447,7 +447,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
 
                 {/* From Bank */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     From Bank *
                   </label>
                   <div className="relative">
@@ -462,7 +462,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                       className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                         transferErrors.fromBankId
                           ? 'border-red-300 focus:ring-red-200'
-                          : 'border-gray-300 focus:ring-gray-700/20 focus:border-gray-700'
+                          : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
                       } ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     >
                       <option value="">Select source bank</option>
@@ -480,7 +480,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
 
                 {/* To Bank */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     To Bank *
                   </label>
                   <div className="relative">
@@ -495,7 +495,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                       className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                         transferErrors.toBankId
                           ? 'border-red-300 focus:ring-red-200'
-                          : 'border-gray-300 focus:ring-gray-700/20 focus:border-gray-700'
+                          : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
                       } ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     >
                       <option value="">Select destination bank</option>
@@ -513,7 +513,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
 
                 {/* Amount */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     Transfer Amount *
                   </label>
                   <div className="relative">
@@ -529,7 +529,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                       className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                         transferErrors.amount || hasInsufficientFunds
                           ? 'border-red-300 focus:ring-red-200'
-                          : 'border-gray-300 focus:ring-gray-700/20 focus:border-gray-700'
+                          : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
                       } ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       placeholder="0"
                       min="1"
@@ -549,7 +549,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
 
                 {/* Date */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     Transfer Date *
                   </label>
                   <div className="relative">
@@ -565,7 +565,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                       className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
                         transferErrors.date
                           ? 'border-red-300 focus:ring-red-200'
-                          : 'border-gray-300 focus:ring-gray-700/20 focus:border-gray-700'
+                          : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
                       } ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
                   </div>
@@ -576,7 +576,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
 
                 {/* Note */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     Note (Optional)
                   </label>
                   <textarea
@@ -584,16 +584,16 @@ export const BankListView: React.FC<BankListViewProps> = ({
                     onChange={(e) => setTransferData(prev => ({ ...prev, note: e.target.value }))}
                     disabled={isTransferSaving}
                     rows={3}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-700/20 focus:border-gray-700 ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-700/20 focus:border-slate-700 ${isTransferSaving ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     placeholder="Add any additional notes about this transfer..."
                   />
                 </div>
 
                 {/* Transfer Preview */}
                 {(fromBank && toBank && transferData.amount > 0) && (
-                  <div className="bg-gray-900/10 border border-gray-700/20 rounded-lg p-4">
+                  <div className="bg-gray-900/10 border border-slate-700/20 rounded-lg p-4">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <ArrowRightLeft size={18} className="text-gray-700" />
+                      <ArrowRightLeft size={18} className="text-slate-700" />
                       Transfer Preview
                     </h4>
                     <div className="space-y-2 text-sm">
@@ -605,9 +605,9 @@ export const BankListView: React.FC<BankListViewProps> = ({
                         <span className="text-gray-600">To:</span>
                         <span className="font-medium text-green-600">{toBank.name}</span>
                       </div>
-                      <div className="flex justify-between border-t border-gray-700/20 pt-2 mt-2">
+                      <div className="flex justify-between border-t border-slate-700/20 pt-2 mt-2">
                         <span className="text-gray-600">Amount:</span>
-                        <span className="font-bold text-gray-700">{formatCurrency(transferData.amount)}</span>
+                        <span className="font-bold text-slate-700">{formatCurrency(transferData.amount)}</span>
                       </div>
                       <div className="flex justify-between text-xs text-gray-500">
                         <span>From bank balance after:</span>
@@ -630,7 +630,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                 type="button"
                 onClick={handleCloseTransferModal}
                 disabled={isTransferSaving}
-                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -638,7 +638,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                 type="button"
                 onClick={onTransferSubmit}
                 disabled={isTransferSaving || !!hasInsufficientFunds}
-                className="flex items-center gap-2 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isTransferSaving ? (
                   <>
