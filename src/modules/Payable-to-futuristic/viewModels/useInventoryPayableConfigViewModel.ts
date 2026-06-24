@@ -10,6 +10,7 @@ import type { Product } from '../../inventory/models/types';
 import type {
   InventoryPayableConfig,
   CreateInventoryPayableConfigDTO,
+  PayableSlab,
 } from '../models/inventoryPayableConfig.types';
 import {
   fetchAllInventoryPayableConfigs,
@@ -43,6 +44,14 @@ export interface UseInventoryPayableConfigReturn {
   setInputAmount:       (v: string) => void;
   setNotes:             (v: string) => void;
 
+  // Slab editing (price-based commission bands)
+  useSlabs:    boolean;
+  setUseSlabs: (v: boolean) => void;
+  slabs:       PayableSlab[];
+  addSlab:     () => void;
+  updateSlab:  (index: number, patch: Partial<PayableSlab>) => void;
+  removeSlab:  (index: number) => void;
+
   // Computed preview (always in AED + other currencies)
   previewAed: number | null;
 
@@ -71,6 +80,26 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
   const [inputCurrency,     setInputCurrency]     = useState<'AED' | 'USD'>('AED');
   const [inputAmount,       setInputAmount]       = useState('');
   const [notes,             setNotes]             = useState('');
+
+  // ── Slabs ───────────────────────────────────────────────────────────────────
+  const [useSlabs, setUseSlabs] = useState(false);
+  const [slabs,    setSlabs]    = useState<PayableSlab[]>([]);
+
+  const addSlab = useCallback(() => {
+    setSlabs((prev) => {
+      const lastMax = prev.length > 0 ? prev[prev.length - 1].maxSalePrice : null;
+      const nextMin = lastMax != null ? lastMax + 1 : 0;
+      return [...prev, { minSalePrice: nextMin, maxSalePrice: null, payableAmountAed: 0 }];
+    });
+  }, []);
+
+  const updateSlab = useCallback((index: number, patch: Partial<PayableSlab>) => {
+    setSlabs((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  }, []);
+
+  const removeSlab = useCallback((index: number) => {
+    setSlabs((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   // ── Action state ──────────────────────────────────────────────────────────
   const [actionLoading,  setActionLoading]  = useState(false);
@@ -130,22 +159,66 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
       setActionError('Please select an inventory item.');
       return;
     }
-    const rawAmount = parseFloat(inputAmount);
-    if (!inputAmount || isNaN(rawAmount) || rawAmount <= 0) {
-      setActionError(`Please enter a valid ${inputCurrency} amount greater than 0.`);
-      return;
-    }
-
     const product = products.find((p) => p.id === cleanProductId);
     if (!product) {
       setActionError('Selected product not found.');
       return;
     }
 
-    // Always store in AED
-    const fixedAmountAed = inputCurrency === 'USD'
-      ? parseFloat((rawAmount * USD_TO_AED).toFixed(2))
-      : rawAmount;
+    // Validate slabs if enabled
+    const cleanSlabs: PayableSlab[] = useSlabs
+      ? slabs
+          .map((s) => ({
+            minSalePrice:     Number(s.minSalePrice) || 0,
+            maxSalePrice:     s.maxSalePrice === null ? null : (Number(s.maxSalePrice) || 0),
+            payableAmountAed: Number(s.payableAmountAed) || 0,
+          }))
+          .sort((a, b) => a.minSalePrice - b.minSalePrice)
+      : [];
+
+    if (useSlabs) {
+      if (cleanSlabs.length === 0) {
+        setActionError('Add at least one slab, or turn off price-based slabs.');
+        return;
+      }
+      for (let i = 0; i < cleanSlabs.length; i++) {
+        const s = cleanSlabs[i];
+        if (s.maxSalePrice != null && s.maxSalePrice < s.minSalePrice) {
+          setActionError(`Slab ${i + 1}: max sale price cannot be less than min.`);
+          return;
+        }
+        if (s.payableAmountAed <= 0) {
+          setActionError(`Slab ${i + 1}: enter a payable amount greater than 0.`);
+          return;
+        }
+        if (i > 0) {
+          const prev = cleanSlabs[i - 1];
+          if (prev.maxSalePrice == null) {
+            setActionError(`Slab ${i}: an open-ended band must be the last slab.`);
+            return;
+          }
+          if (s.minSalePrice <= prev.maxSalePrice) {
+            setActionError(`Slab ${i + 1} overlaps the previous band. Bands must not overlap.`);
+            return;
+          }
+        }
+      }
+    }
+
+    const rawAmount = parseFloat(inputAmount);
+    const hasFlat   = !!inputAmount && !isNaN(rawAmount) && rawAmount > 0;
+
+    // Flat amount required only when slabs are off; when slabs are on it's an
+    // optional fallback (used if a sale price matches no band).
+    if (!useSlabs && !hasFlat) {
+      setActionError(`Please enter a valid ${inputCurrency} amount greater than 0.`);
+      return;
+    }
+
+    // Always store flat fallback in AED (0 if none provided while using slabs)
+    const fixedAmountAed = hasFlat
+      ? (inputCurrency === 'USD' ? parseFloat((rawAmount * USD_TO_AED).toFixed(2)) : rawAmount)
+      : 0;
 
     const dto: CreateInventoryPayableConfigDTO = {
       productId:      cleanProductId,
@@ -154,7 +227,8 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
       modelName:      product.modelName,
       fixedAmountAed,
       inputCurrency,
-      inputAmount:    rawAmount,
+      inputAmount:    hasFlat ? rawAmount : 0,
+      slabs:          cleanSlabs,
       notes:          notes.trim() || undefined,
     };
 
@@ -168,9 +242,13 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
       setSelectedProductId('');
       setInputAmount('');
       setNotes('');
-      const displayAmount = inputCurrency === 'USD'
-        ? `$${rawAmount.toFixed(2)} → AED ${fixedAmountAed.toFixed(2)}`
-        : `AED ${fixedAmountAed.toFixed(2)}`;
+      setSlabs([]);
+      setUseSlabs(false);
+      const displayAmount = useSlabs
+        ? `${cleanSlabs.length} slab${cleanSlabs.length !== 1 ? 's' : ''}`
+        : inputCurrency === 'USD'
+          ? `$${rawAmount.toFixed(2)} → AED ${fixedAmountAed.toFixed(2)}`
+          : `AED ${fixedAmountAed.toFixed(2)}`;
       setSuccessMessage(`Config saved: ${dto.productName} → ${displayAmount}`);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
@@ -179,7 +257,7 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
     } finally {
       setActionLoading(false);
     }
-  }, [selectedProductId, inputAmount, inputCurrency, notes, products, loadConfigs]);
+  }, [selectedProductId, inputAmount, inputCurrency, notes, products, loadConfigs, useSlabs, slabs]);
 
   // ── Delete ────────────────────────────────────────────────────────────────
   const deleteConfig = useCallback(async (id: string) => {
@@ -209,6 +287,12 @@ export function useInventoryPayableConfigViewModel(): UseInventoryPayableConfigR
     setInputCurrency,
     setInputAmount,
     setNotes,
+    useSlabs,
+    setUseSlabs,
+    slabs,
+    addSlab,
+    updateSlab,
+    removeSlab,
     previewAed,
     submitConfig,
     deleteConfig,

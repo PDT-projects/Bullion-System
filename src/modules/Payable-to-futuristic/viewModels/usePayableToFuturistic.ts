@@ -5,6 +5,7 @@ import {
   fetchPayablesSummaryByInvoice,
   recordPayment,
   createManualPayable,
+  updatePayableAmount,
   fetchBankAccounts,
   fetchCashAccounts,
   type InvoicePayableSummary,
@@ -25,6 +26,7 @@ export interface UsePayableToFuturisticReturn {
   refresh:          () => Promise<void>;
   addManualEntry:   (payload: ManualPayablePayload) => Promise<void>;
   markPayment:      (firestoreId: string, payload: RecordPaymentPayload) => Promise<void>;
+  editAmount:       (firestoreId: string, newAmountAed: number) => Promise<void>;
   actionLoading:    boolean;
   actionError:      string | null;
 
@@ -104,6 +106,20 @@ export function usePayableToFuturistic(): UsePayableToFuturisticReturn {
     }
   }, [load, loadAccounts]);
 
+  const editAmount = useCallback(async (firestoreId: string, newAmountAed: number) => {
+    try {
+      setActionLoading(true);
+      setActionError(null);
+      await updatePayableAmount(firestoreId, newAmountAed);
+      await load();
+    } catch (err: any) {
+      setActionError(err?.message ?? 'Failed to update amount');
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  }, [load]);
+
   // Grand totals across all invoices
   const totals: CurrencyAmounts = summaries.reduce(
     (acc, s) => ({
@@ -117,7 +133,7 @@ export function usePayableToFuturistic(): UsePayableToFuturisticReturn {
 
   return {
     summaries, totals, loading, error, refresh: load,
-    addManualEntry, markPayment, actionLoading, actionError,
+    addManualEntry, markPayment, editAmount, actionLoading, actionError,
     bankAccounts, cashAccounts, accountsLoading,
     refreshAccounts: loadAccounts,
   };

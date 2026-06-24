@@ -11,7 +11,7 @@
 import React from 'react';
 import {
   Settings, Plus, Trash2, Loader2, AlertCircle,
-  CheckCircle2, Package, ChevronRight, DollarSign,
+  CheckCircle2, Package, ChevronRight, DollarSign, Layers,
 } from 'lucide-react';
 import { useInventoryPayableConfigViewModel } from '../viewModels/useInventoryPayableConfigViewModel';
 import { aedToAllCurrencies } from '../models/payableToFuturistic';
@@ -32,6 +32,7 @@ export const InventoryPayableConfigPanel: React.FC = () => {
     configs, configsLoading, configsError,
     selectedProductId, inputCurrency, inputAmount, notes,
     setSelectedProductId, setInputCurrency, setInputAmount, setNotes,
+    useSlabs, setUseSlabs, slabs, addSlab, updateSlab, removeSlab,
     previewAed,
     submitConfig, deleteConfig,
     actionLoading, actionError, successMessage,
@@ -105,11 +106,42 @@ export const InventoryPayableConfigPanel: React.FC = () => {
           )}
         </div>
 
+        {/* Pricing mode toggle: flat vs price-based slabs */}
+        <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <Layers size={14} className="text-gray-500" />
+            <div>
+              <p className="text-xs font-semibold text-gray-700">Price-based slabs</p>
+              <p className="text-[11px] text-gray-400">
+                Set different payable amounts by invoice sale price instead of one flat amount.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={useSlabs}
+            onClick={() => setUseSlabs(!useSlabs)}
+            className="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors"
+            style={{ backgroundColor: useSlabs ? '#1e293b' : '#cbd5e1' }}
+          >
+            <span
+              className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+              style={{ transform: useSlabs ? 'translateX(24px)' : 'translateX(4px)' }}
+            />
+          </button>
+        </div>
+
         {/* Currency toggle + amount */}
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-            Fixed Amount <span className="text-red-400">*</span>
+            {useSlabs ? 'Fallback Amount (optional)' : <>Fixed Amount <span className="text-red-400">*</span></>}
           </label>
+          {useSlabs && (
+            <p className="text-[11px] text-gray-400 mb-2">
+              Used only when an invoice's sale price matches none of the slabs below. Leave blank to skip those sales.
+            </p>
+          )}
 
           {/* Currency toggle pills */}
           <div className="flex items-center gap-2 mb-2">
@@ -180,6 +212,97 @@ export const InventoryPayableConfigPanel: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Slab editor */}
+        {useSlabs && (
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
+              <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                <Layers size={12} /> Sale Price Slabs (AED)
+              </span>
+              <button
+                type="button"
+                onClick={addSlab}
+                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 transition"
+              >
+                <Plus size={11} /> Add slab
+              </button>
+            </div>
+
+            {slabs.length === 0 ? (
+              <div className="px-3 py-5 text-center text-xs text-gray-400">
+                No slabs yet. Add a band like “sale price 0–1000 → AED 100”.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {/* header row */}
+                <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 px-3 py-1.5 bg-white">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Sale price from</span>
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Sale price to</span>
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Payable (AED)</span>
+                  <span className="w-6" />
+                </div>
+                {slabs.map((slab, i) => {
+                  const openEnded = slab.maxSalePrice === null;
+                  return (
+                    <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 px-3 py-2 items-center">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={slab.minSalePrice}
+                        onChange={(e) => updateSlab(i, { minSalePrice: parseFloat(e.target.value) || 0 })}
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
+                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          disabled={openEnded}
+                          placeholder={openEnded ? '∞' : ''}
+                          value={openEnded || slab.maxSalePrice == null ? '' : slab.maxSalePrice}
+                          onChange={(e) => updateSlab(i, { maxSalePrice: parseFloat(e.target.value) || 0 })}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition disabled:bg-gray-50 disabled:text-gray-400"
+                        />
+                        <button
+                          type="button"
+                          title={openEnded ? 'Set an upper limit' : 'Make open-ended (and above)'}
+                          onClick={() => updateSlab(i, { maxSalePrice: openEnded ? slab.minSalePrice : null })}
+                          className="text-[10px] px-1.5 py-1 rounded border transition flex-shrink-0"
+                          style={openEnded
+                            ? { backgroundColor: '#1e293b', color: '#fff', borderColor: '#1e293b' }
+                            : { backgroundColor: '#fff', color: '#64748b', borderColor: '#e5e7eb' }}
+                        >
+                          ∞
+                        </button>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={slab.payableAmountAed}
+                        onChange={(e) => updateSlab(i, { payableAmountAed: parseFloat(e.target.value) || 0 })}
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeSlab(i)}
+                        className="text-red-500 hover:text-red-700 transition p-1"
+                        title="Remove slab"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="px-3 py-2 text-[11px] text-gray-400 bg-gray-50 border-t border-gray-100">
+              Toggle <span className="font-semibold">∞</span> on the last slab for an open-ended “and above” band. Bands must not overlap.
+            </p>
+          </div>
+        )}
 
         {/* Notes */}
         <div>
@@ -274,7 +397,23 @@ export const InventoryPayableConfigPanel: React.FC = () => {
                         <code className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{cfg.productId}</code>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className="text-sm font-bold text-gray-800">AED {fmt(cfg.fixedAmountAed)}</span>
+                        {cfg.slabs && cfg.slabs.length > 0 ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded px-2 py-0.5">
+                              <Layers size={10} /> {cfg.slabs.length} slab{cfg.slabs.length !== 1 ? 's' : ''}
+                            </span>
+                            {cfg.slabs.map((s, i) => (
+                              <span key={i} className="text-[10px] text-gray-500 whitespace-nowrap">
+                                {fmt(s.minSalePrice)}–{s.maxSalePrice == null ? '∞' : fmt(s.maxSalePrice)} → AED {fmt(s.payableAmountAed)}
+                              </span>
+                            ))}
+                            {cfg.fixedAmountAed > 0 && (
+                              <span className="text-[10px] text-gray-400">fallback AED {fmt(cfg.fixedAmountAed)}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm font-bold text-gray-800">AED {fmt(cfg.fixedAmountAed)}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {/* Show what the user originally typed */}

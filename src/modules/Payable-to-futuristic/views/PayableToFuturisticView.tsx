@@ -14,7 +14,7 @@ import {
   Building2, RefreshCw, AlertCircle, Loader2,
   DollarSign, ChevronDown, ChevronRight, Package,
   FileText, MapPin, Plus, X, CreditCard, CheckCircle2,
-  Banknote, Wallet, Info,
+  Banknote, Wallet, Info, Pencil,
 } from 'lucide-react';
 import { usePayableToFuturistic } from '../viewModels/usePayableToFuturistic';
 import { InventoryPayableConfigPanel } from './InventoryPayableConfigPanel';
@@ -667,13 +667,166 @@ function PaymentModal({
   );
 }
 
+// ── Edit Amount Modal ─────────────────────────────────────────────────────────
+interface EditAmountModalProps {
+  item:     DerivedPayable;
+  onClose:  () => void;
+  onSubmit: (firestoreId: string, newAmountAed: number) => Promise<void>;
+  loading:  boolean;
+}
+
+function EditAmountModal({ item, onClose, onSubmit, loading }: EditAmountModalProps) {
+  const [amountCurr, setAmountCurr] = useState<'AED' | 'USD'>('AED');
+  const [amountInput, setAmountInput] = useState(item.amounts.aed.toFixed(2));
+  const [error, setError] = useState('');
+
+  const rawInput = parseFloat(amountInput);
+  const computedAed: number | null = (!isNaN(rawInput) && rawInput > 0)
+    ? (amountCurr === 'USD' ? parseFloat((rawInput * USD_TO_AED).toFixed(2)) : rawInput)
+    : null;
+
+  const paidAed = item.paidAmounts.aed;
+
+  function handleCurrencyToggle(c: 'AED' | 'USD') {
+    if (c === amountCurr) return;
+    const v = parseFloat(amountInput);
+    if (!isNaN(v) && v > 0) {
+      setAmountInput(c === 'USD' ? (v / USD_TO_AED).toFixed(2) : (v * USD_TO_AED).toFixed(2));
+    }
+    setAmountCurr(c);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (!computedAed || computedAed <= 0) {
+      setError(`Enter a valid ${amountCurr} amount greater than 0.`);
+      return;
+    }
+    try {
+      await onSubmit(item.firestoreId, computedAed);
+      onClose();
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to update amount.');
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-2xl w-full mx-4 overflow-y-auto" style={{ minWidth: 360, maxWidth: 440, maxHeight: '90vh' }}>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <div style={{ ...S.charcoal, padding: 8, borderRadius: 10 }}>
+            <Pencil size={16} color="#fff" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-800">Edit Payable Amount</h2>
+            <p className="text-xs text-gray-500">{item.modelName}</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+          <X size={18} />
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+            New Amount <span className="text-red-400">*</span>
+          </label>
+
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-gray-500">Currency:</span>
+            <div className="flex items-center gap-1 p-0.5 bg-gray-100 rounded-lg">
+              {(['AED', 'USD'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => handleCurrencyToggle(c)}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-all"
+                  style={amountCurr === c ? { backgroundColor: '#1e293b', color: '#fff' } : { backgroundColor: 'transparent', color: '#64748b' }}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
+              {amountCurr === 'USD' ? '$' : 'AED'}
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={amountInput}
+              onChange={(e) => setAmountInput(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl pl-12 pr-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
+            />
+          </div>
+
+          {computedAed !== null && (
+            <div className="mt-1.5 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 flex flex-wrap gap-3 items-center">
+              <span className="text-xs font-semibold text-slate-700">Stored as: AED {fmt(computedAed)}</span>
+              {(() => {
+                const c = aedToAllCurrencies(computedAed);
+                return (['PKR', 'SAR', 'USD'] as const).map((s) => (
+                  <span key={s} className="text-xs text-gray-500 bg-white border border-gray-100 rounded px-2 py-0.5">
+                    {s} {fmt(c[s.toLowerCase() as 'pkr' | 'sar' | 'usd'])}
+                  </span>
+                ));
+              })()}
+            </div>
+          )}
+        </div>
+
+        {paidAed > 0 && computedAed !== null && computedAed < paidAed && (
+          <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <Info size={13} className="mt-0.5 flex-shrink-0" />
+            <span>
+              AED {fmt(paidAed)} is already paid on this item. Lowering the total below that will
+              cap the paid amount to the new total and mark it fully paid.
+            </span>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <AlertCircle size={13} /> {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            style={S.charcoal}
+            className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-60"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            Save Amount
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ── Product sub-row ───────────────────────────────────────────────────────────
 function ProductRow({
-  item, currency, onPay,
+  item, currency, onPay, onEdit,
 }: {
   item: DerivedPayable;
   currency: Currency;
   onPay: (item: DerivedPayable) => void;
+  onEdit: (item: DerivedPayable) => void;
 }) {
   const k   = currKey(currency);
   const sym = CURRENCY_SYMBOLS[currency];
@@ -699,7 +852,16 @@ function ProductRow({
           : <span className="text-gray-300 text-xs">—</span>}
       </td>
       <td className="px-4 py-3 text-right">
-        <span className="text-sm font-semibold text-gray-800">{sym} {fmt(item.amounts[k])}</span>
+        <div className="inline-flex items-center gap-1.5 justify-end">
+          <span className="text-sm font-semibold text-gray-800">{sym} {fmt(item.amounts[k])}</span>
+          <button
+            onClick={() => onEdit(item)}
+            title="Edit amount"
+            className="text-gray-300 hover:text-slate-600 transition p-0.5"
+          >
+            <Pencil size={12} />
+          </button>
+        </div>
         {item.paidAmounts.aed > 0 && (
           <p className="text-xs text-emerald-600 mt-0.5">Paid: {sym} {fmt(item.paidAmounts[k])}</p>
         )}
@@ -723,13 +885,14 @@ function ProductRow({
 
 // ── Invoice group row ─────────────────────────────────────────────────────────
 function InvoiceGroup({
-  summary, currency, expanded, onToggle, onPay,
+  summary, currency, expanded, onToggle, onPay, onEdit,
 }: {
   summary:  InvoicePayableSummary;
   currency: Currency;
   expanded: boolean;
   onToggle: () => void;
   onPay:    (item: DerivedPayable) => void;
+  onEdit:   (item: DerivedPayable) => void;
 }) {
   const k   = currKey(currency);
   const sym = CURRENCY_SYMBOLS[currency];
@@ -766,7 +929,7 @@ function InvoiceGroup({
         <td className="px-4 py-4" />
       </tr>
       {expanded && summary.items.map((item) => (
-        <ProductRow key={item.firestoreId} item={item} currency={currency} onPay={onPay} />
+        <ProductRow key={item.firestoreId} item={item} currency={currency} onPay={onPay} onEdit={onEdit} />
       ))}
     </>
   );
@@ -776,7 +939,7 @@ function InvoiceGroup({
 export const PayableToFuturisticView: React.FC = () => {
   const {
     summaries, totals, loading, error, refresh,
-    addManualEntry, markPayment, actionLoading,
+    addManualEntry, markPayment, editAmount, actionLoading,
     bankAccounts, cashAccounts, accountsLoading,
   } = usePayableToFuturistic();
 
@@ -785,6 +948,7 @@ export const PayableToFuturisticView: React.FC = () => {
   const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
   const [showAddModal,   setShowAddModal]   = useState(false);
   const [payingItem,     setPayingItem]     = useState<DerivedPayable | null>(null);
+  const [editingItem,    setEditingItem]    = useState<DerivedPayable | null>(null);
 
   const toggle     = (id: string) =>
     setExpandedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -854,6 +1018,17 @@ export const PayableToFuturisticView: React.FC = () => {
             onSubmit={async (id, paidAed, notes, paymentMethod, bankAccountId, cashAccountId) =>
               markPayment(id, { paidAed, notes, paymentMethod, bankAccountId, cashAccountId })
             }
+            loading={actionLoading}
+          />
+        </Overlay>
+      )}
+
+      {editingItem && (
+        <Overlay onClose={() => setEditingItem(null)}>
+          <EditAmountModal
+            item={editingItem}
+            onClose={() => setEditingItem(null)}
+            onSubmit={editAmount}
             loading={actionLoading}
           />
         </Overlay>
@@ -1014,6 +1189,7 @@ export const PayableToFuturisticView: React.FC = () => {
                         expanded={expandedIds.has(s.invoiceId)}
                         onToggle={() => toggle(s.invoiceId)}
                         onPay={setPayingItem}
+                        onEdit={setEditingItem}
                       />
                     ))}
                   </tbody>

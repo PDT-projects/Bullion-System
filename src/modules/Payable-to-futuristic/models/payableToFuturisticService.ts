@@ -274,6 +274,39 @@ export async function recordPayment(firestoreId: string, payload: RecordPaymentP
   return { newPaidAmounts: newPaidAmounts!, status: status! };
 }
 
+// ── Edit the amount of an existing payable (inline row edit) ──────────────────
+// Recalculates all currency amounts from a new AED figure. Clamps any existing
+// paid amount so it never exceeds the new total, and recomputes status.
+export async function updatePayableAmount(firestoreId: string, newAmountAed: number) {
+  const ref  = doc(db, PAYABLE_COLLECTION, firestoreId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error(`Payable ${firestoreId} not found`);
+
+  const data       = snap.data();
+  const amounts    = aedToAllCurrencies(newAmountAed);
+  const paidAed    = (data.paidAmounts?.aed ?? 0) as number;
+  const clampedAed = Math.min(paidAed, newAmountAed);
+  const paidAmounts = clampedAed === paidAed
+    ? (data.paidAmounts ?? ZERO_AMOUNTS)
+    : aedToAllCurrencies(clampedAed);
+
+  const status: 'pending' | 'partial' | 'paid' =
+    clampedAed >= newAmountAed && newAmountAed > 0 ? 'paid'
+    : clampedAed > 0 ? 'partial'
+    : 'pending';
+
+  await updateDoc(ref, {
+    amounts,
+    usdPrice: amounts.usd,
+    paidAmounts,
+    status,
+    amountEdited: true,
+    updatedAt: nowISO(),
+  });
+
+  return { amounts, paidAmounts, status };
+}
+
 // ── Create a manual payable entry from the UI ─────────────────────────────────
 export interface ManualPayablePayload {
   modelName:   string;

@@ -4,7 +4,7 @@
 
 // Models
 export * from './models/types';
-export { LoanFirebaseService } from './models/loanFirebaseService';
+export { LoanFirebaseService } from './models/Loanfirebaseservice';
 export { formatCurrency, formatDate, calculateProgress, calculateStatistics, filterLoans, sortLoans, validateLoan, exportLoansToCSV, downloadCSV, getTotalReceivable, getTotalPayable, getNetLoanPosition, getOverdueLoans, getUpcomingPayments } from './models/loanService';
 
 // ViewModels
