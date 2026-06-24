@@ -52,6 +52,7 @@ export type Screen =
   | 'Edit Invoice'
   | 'Delete Invoice'
   | 'Invoice Reports'
+  | 'Against Invoice'
   // Inventory
   | 'Inventory Dashboard'
   | 'Inventory View'
@@ -146,7 +147,7 @@ export const ALL_SCREEN_GROUPS: ScreenGroup[] = [
   },
   {
     title: 'Invoices',
-    screens: ['Invoices List', 'Create Invoice', 'Edit Invoice', 'Delete Invoice', 'Invoice Reports']
+    screens: ['Invoices List', 'Create Invoice', 'Edit Invoice', 'Delete Invoice', 'Invoice Reports', 'Against Invoice']
   },
   {
     title: 'Inventory',

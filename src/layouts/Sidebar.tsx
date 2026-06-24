@@ -54,7 +54,7 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'transfers':                  'Bank Transfers List',
   'cash-in-hand':               'Cash List',
   'bank-activity':              'Bank Activity Report',
-  'against-the-invoice':        'Invoices List',
+  'against-the-invoice':        'Against Invoice',
   'budgets':                    'Budgets List',
   'employees':                  'Employees List',
   'payable-to-futuristic':      'Payable to Futuristic', // ← NEW
