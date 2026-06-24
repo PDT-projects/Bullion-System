@@ -199,10 +199,6 @@ export const LoanDashboardView: React.FC<LoanDashboardViewProps> = ({
             <p className="text-2xl font-bold text-green-900">{statistics.fullCount}</p>
             <p className="text-sm text-green-600">Fully Paid</p>
           </div>
-          <div className="text-center p-4 bg-orange-50 rounded-lg">
-            <p className="text-2xl font-bold text-orange-900">{statistics.partialCount}</p>
-            <p className="text-sm text-orange-600">Partially Paid</p>
-          </div>
         </div>
       </div>
     </div>
