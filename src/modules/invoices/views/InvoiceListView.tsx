@@ -331,7 +331,7 @@ export function InvoiceListView({
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${deliveryBadge(invoice.deliveryStatus)}`}>
                       {invoice.deliveryStatus}
                     </span>
-                    {invoice.deliveryReceivedStatus && (
+                    {invoice.deliveryReceivedStatus && invoice.deliveryReceivedStatus !== 'Pending' && (
                       <span className={`block mt-1 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${receivedBadge(invoice.deliveryReceivedStatus)}`}>
                         {invoice.deliveryReceivedStatus}
                       </span>
