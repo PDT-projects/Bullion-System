@@ -663,7 +663,7 @@ export function CreateInventoryView({
                     <option value="">— Select bank account —</option>
                     {banks.map(b => (
                       <option key={b.id} value={b.id}>
-                        {b.name}{b.balance !== undefined ? ` — PKR ${b.balance.toLocaleString()}` : ''}
+                        {b.name}{b.balance !== undefined ? ` — AED ${b.balance.toLocaleString()}` : ''}
                       </option>
                     ))}
                   </select>
@@ -684,7 +684,7 @@ export function CreateInventoryView({
 
         {/* ── Amount Paid ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (PKR)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (AED)</label>
           <input
             type="number"
             value={formData.paidAmount ?? ''}

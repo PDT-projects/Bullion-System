@@ -458,7 +458,7 @@ function ModelCard({
 
         {/* Dealer Price */}
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Dealer Price (PKR) <span style={{ color: '#9ca3af', fontWeight: 400 }}>(Optional)</span></label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Dealer Price (AED) <span style={{ color: '#9ca3af', fontWeight: 400 }}>(Optional)</span></label>
           <input
             type="number"
             value={e.dealerPrice || ''}
@@ -535,23 +535,18 @@ export const InventoryMultiModelView: React.FC<Props> = ({
     setNewBrandName('');
   };
 
-  // ── Grand total in the SELECTED (primary) currency ──────────────────────────
-  // grandTotalCost is stored in PKR. We convert it to `primaryCurrency` using the
-  // same `rates` convention the per-row CurrencyPriceInput uses (pkr * rate), then
-  // render with the 3-letter currency code (e.g. "AED 1,234").
-  // NOTE: this assumes rates[currency] = units of `currency` per 1 PKR — the same
-  // direction CurrencyPriceInput uses. If your rates are inverted, change `*` to `/`.
-  const formatPrimary = (pkrAmount: number) => {
-    const rate = rates?.[primaryCurrency] ?? 1;
-    const converted = primaryCurrency === 'PKR' ? pkrAmount : pkrAmount * rate;
-    return new Intl.NumberFormat('en-US', {
+  // ── Grand total ──────────────────────────────────────────────────────────────
+  // Amounts are stored in AED (what the user typed). Render directly as AED with
+  // no conversion — the previous version multiplied by the FX rate, which turned
+  // e.g. 499.99 into ~1,835 and mislabelled it. No math now: store == display.
+  const formatPrimary = (amount: number) =>
+    new Intl.NumberFormat('en-AE', {
       style: 'currency',
-      currency: primaryCurrency,
+      currency: 'AED',
       currencyDisplay: 'code',
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
-    }).format(converted);
-  };
+    }).format(amount);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>

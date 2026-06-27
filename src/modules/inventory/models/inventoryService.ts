@@ -291,7 +291,7 @@ export class InventoryService {
   }
 
   static formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
+    return new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
   }
 
   static formatDate(dateString: string): string {

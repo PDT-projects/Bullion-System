@@ -1,7 +1,7 @@
 // Inventory Module - View Layer
 // InventoryProductDetailsView - Step 4: Product Details
 // Changes:
-//   - Added optional "Dealer Price (PKR)" field for both with-costing and without-costing paths
+//   - Added optional "Dealer Price (AED)" field for both with-costing and without-costing paths
 //   - Location dropdown (required) retained for both paths
 //   - Fixed "Next: Payment" button text color to black in without-costing flow
 //   - ⚠️ TEMPORARY: forceReseed button added — remove after brands are fixed
@@ -185,7 +185,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
         <Tag className="w-4 h-4 text-emerald-500" />
-        Dealer Price (PKR)
+        Dealer Price (AED)
         <span className="ml-1 text-xs text-gray-400 font-normal">(Optional)</span>
       </label>
       <input
@@ -477,7 +477,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
                   <Tag className="w-4 h-4 text-emerald-500" />
-                  Dealer Price (PKR)
+                  Dealer Price (AED)
                   <span className="ml-1 text-xs text-gray-400 font-normal">(Optional)</span>
                 </label>
                 <input
@@ -645,7 +645,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                     <div>
                       <p className="font-semibold text-gray-900">{model.modelName}</p>
                       <p className="text-xs text-gray-500">
-                        Cost: PKR {model.costPrice.toLocaleString()}
+                        Cost: AED {model.costPrice.toLocaleString()}
                       </p>
                     </div>
                   </div>

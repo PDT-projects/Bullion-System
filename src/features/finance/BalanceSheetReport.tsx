@@ -308,11 +308,15 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     };
   }, [liquid, banks, loans, products, bills]);
 
+  // Stored amounts are already in AED. Show AED as-is; convert only for other currencies.
+  const convertFromAED = (aed: number, code: CurrencyCode) =>
+    code === 'AED' ? aed : convertFromPKR(aed, code, rates);
+
   const currencyMetrics = useMemo(() => reportCurrencyCodes.map(code => ({
     code,
-    totalAssets: convertFromPKR(bs.assets.totalAssets, code, rates),
-    totalLiabilities: convertFromPKR(bs.liabilities.totalLiabilities, code, rates),
-    totalEquity: convertFromPKR(bs.equity.totalEquity, code, rates),
+    totalAssets: convertFromAED(bs.assets.totalAssets, code),
+    totalLiabilities: convertFromAED(bs.liabilities.totalLiabilities, code),
+    totalEquity: convertFromAED(bs.equity.totalEquity, code),
   })), [rates, reportCurrencyCodes, bs.assets.totalAssets, bs.liabilities.totalLiabilities, bs.equity.totalEquity]);
 
   return (

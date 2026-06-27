@@ -157,7 +157,13 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
   const displayCurrencyCodes = [primaryCurrency, ...extraCurrencies];
 
-  const fmtPrimary = (value: number) => fmtCurrency(convertFromPKR(value, primaryCurrency, rates), primaryCurrency);
+  // Stored amounts are already in AED. Show them as-is for AED; convert only for other currencies.
+  // NOTE: convertFromAED expects an AED base. If your rates table is still PKR-based,
+  // update currencyUtils accordingly — for AED primary no conversion happens here.
+  const convertFromAED = (aed: number, code: CurrencyCode) =>
+    code === 'AED' ? aed : convertFromPKR(aed, code, rates);
+  const fmtPrimary = (value: number) =>
+    fmtCurrency(convertFromAED(value, primaryCurrency), primaryCurrency);
 
   const today    = new Date().toISOString().split('T')[0];
   const thisYear = new Date().getFullYear();
@@ -379,9 +385,9 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
 
   const currencyMetrics = useMemo(() => displayCurrencyCodes.map(code => ({
     code,
-    revenue: convertFromPKR(totalRevenue, code, rates),
-    grossProfit: convertFromPKR(grossProfit, code, rates),
-    netProfit: convertFromPKR(netProfit, code, rates),
+    revenue: convertFromAED(totalRevenue, code),
+    grossProfit: convertFromAED(grossProfit, code),
+    netProfit: convertFromAED(netProfit, code),
   })), [rates, displayCurrencyCodes, totalRevenue, grossProfit, netProfit]);
 
   // Cash collections from transactions (informational — not counted in Revenue)

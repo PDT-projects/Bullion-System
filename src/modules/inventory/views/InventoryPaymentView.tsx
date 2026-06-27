@@ -111,7 +111,7 @@ function BankSelector({ banks, value, onChange, error, isBanksLoading }: {
           <option value="">— Choose bank account —</option>
           {banks.map(b => (
             <option key={b.id} value={b.id}>
-              {b.name} {b.balance !== undefined ? `(Balance: PKR ${b.balance.toLocaleString()})` : ''}
+              {b.name} {b.balance !== undefined ? `(Balance: AED ${b.balance.toLocaleString()})` : ''}
             </option>
           ))}
         </select>
@@ -460,7 +460,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
               {paymentStatus === 'partial' && installments.length === 0 && (
                 <div style={{ marginTop: 14 }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                    Paid Amount (PKR) *
+                    Paid Amount (AED) *
                     <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#6b7280' }}>
                       out of {formatCurrency(totalAmount)}
                     </span>
@@ -511,7 +511,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                             onChange={m => updateInstallment(inst.id, { mode: m, bankId: undefined, bankName: undefined })} />
                         </div>
                         <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Amount (PKR) *</label>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Amount (AED) *</label>
                           <input type="number" min="0" value={inst.amount || ''}
                             onChange={e => updateInstallment(inst.id, { amount: Number(e.target.value) })}
                             style={{ ...inp }} placeholder="0.00" />

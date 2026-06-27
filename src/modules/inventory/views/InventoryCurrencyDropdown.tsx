@@ -265,30 +265,41 @@ export function CurrencyExtraRows({
   rates,
 }: {
   extras: CurrencyCode[];
+  /** Base amount in the canonical stored unit (AED). Name kept for compatibility. */
   pkrAmount: number;
   rates: Record<CurrencyCode, number>;
 }) {
   if (extras.length === 0) return null;
 
   const formatInCurrency = (amount: number, meta: CurrencyMeta): string => {
+    // Round to the currency's decimal precision first to eliminate floating-point
+    // drift (e.g. 699.9999999 → 700, or 700.0000001 → 700).
+    const factor = Math.pow(10, meta.decimals);
+    const rounded = Math.round(amount * factor) / factor;
     try {
       return new Intl.NumberFormat(meta.locale, {
         style: 'currency', currency: meta.code,
         minimumFractionDigits: meta.decimals,
         maximumFractionDigits: meta.decimals,
-      }).format(amount);
+      }).format(rounded);
     } catch {
-      return `${meta.symbol}${amount.toFixed(meta.decimals)}`;
+      return `${meta.symbol}${rounded.toFixed(meta.decimals)}`;
     }
   };
+
+  // Base amount is AED. AED shows as-is; other currencies convert from the AED base.
+  const aedAmount = pkrAmount;
 
   return (
     <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: 3 }}>
       {extras.map(code => {
         const meta = getCurrencyMeta(code);
-        // PKR → USD → target
-        const usdAmount = pkrAmount / rates.PKR;
-        const converted = code === 'PKR' ? pkrAmount : usdAmount * rates[code];
+        const converted =
+          code === 'AED'
+            ? aedAmount
+            : rates?.AED
+              ? (aedAmount / rates.AED) * rates[code]
+              : aedAmount;
         return (
           <div key={code} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#9ca3af' }}>
@@ -308,18 +319,27 @@ export function CurrencyExtraRows({
 }
 
 // ── CurrencyPriceInput ────────────────────────────────────────────────────────
-// Price input that lets the user pick an input currency, then stores PKR value
+// AED is the single source of truth. The value typed is stored verbatim — no
+// PKR round-trip, no toFixed() drift. Typing 700 stores exactly 700.
+//
+// The prop is still named `pkrValue`/`onChange(pkrEquivalent)` for backwards
+// compatibility with every caller, but the number now represents the AED amount
+// (i.e. the canonical stored unit). The currency <select> is retained only as a
+// non-converting label so the UI looks unchanged.
+//
 // Usage:
 //   <CurrencyPriceInput
-//     pkrValue={product.sellPrice}          // always PKR stored value
-//     onChange={(pkr) => setPKRField(pkr)}   // called with PKR equivalent
+//     pkrValue={product.sellPrice}   // canonical stored value (AED)
+//     onChange={(v) => setField(v)}  // called with the exact typed value
 //     rates={rates}
 //     label="Sell Price"
 //   />
 
 export interface CurrencyPriceInputProps {
+  /** Canonical stored value (AED). Name kept for backwards compatibility. */
   pkrValue: number;
-  onChange: (pkrEquivalent: number) => void;
+  /** Called with the exact value the user typed (AED). No conversion applied. */
+  onChange: (value: number) => void;
   rates: Record<CurrencyCode, number>;
   label?: string;
   disabled?: boolean;
@@ -332,7 +352,7 @@ export interface CurrencyPriceInputProps {
 export function CurrencyPriceInput({
   pkrValue,
   onChange,
-  rates,
+  rates: _rates, // intentionally unused — no conversion is performed
   label,
   disabled = false,
   required = false,
@@ -341,14 +361,12 @@ export function CurrencyPriceInput({
 }: CurrencyPriceInputProps) {
   const [inputCurrency, setInputCurrency] = useState<CurrencyCode>(defaultInputCurrency);
   const previousDefaultCurrency = useRef<CurrencyCode>(defaultInputCurrency);
-  const meta = getCurrencyMeta(inputCurrency);
 
-  // Local raw string while the user is typing — prevents PKR→currency
-  // round-trip from overwriting what the user typed (e.g. "9" → "9.010")
-  const [rawInput, setRawInput] = useState<string>('');
+  // Raw editable string. Stored value is used verbatim — values like 700 or
+  // 499.99 are preserved exactly as typed, with no rounding or back-conversion.
+  const [rawInput, setRawInput] = useState<string>(pkrValue > 0 ? String(pkrValue) : '');
   const isFocused = useRef(false);
-  // Track the last PKR value we emitted so we can detect external changes
-  const lastEmittedPKR = useRef<number>(pkrValue);
+  const lastEmitted = useRef<number>(pkrValue);
 
   useEffect(() => {
     if (previousDefaultCurrency.current !== defaultInputCurrency && inputCurrency === previousDefaultCurrency.current) {
@@ -357,52 +375,31 @@ export function CurrencyPriceInput({
     previousDefaultCurrency.current = defaultInputCurrency;
   }, [defaultInputCurrency, inputCurrency]);
 
-  // Sync display when pkrValue changes externally (e.g. model selected from dropdown)
-  // but never while the user is actively typing.
+  // Sync display when the stored value changes externally (e.g. model picked
+  // from a dropdown), but never while the user is actively typing.
   useEffect(() => {
     if (isFocused.current) return;
-    if (Math.abs(lastEmittedPKR.current - pkrValue) < 0.01) return; // our own change, skip
-    lastEmittedPKR.current = pkrValue;
-    if (pkrValue === 0) {
-      setRawInput('');
-    } else {
-      const converted = inputCurrency === 'PKR' ? pkrValue : (pkrValue / rates.PKR) * rates[inputCurrency];
-      const decimals = getCurrencyMeta(inputCurrency).decimals;
-      setRawInput(converted > 0 ? parseFloat(converted.toFixed(decimals)).toString() : '');
-    }
-  }, [pkrValue, inputCurrency, rates]);
+    if (Math.abs(lastEmitted.current - pkrValue) < 0.0001) return; // our own change
+    lastEmitted.current = pkrValue;
+    setRawInput(pkrValue > 0 ? String(pkrValue) : '');
+  }, [pkrValue]);
 
-  // The value shown in the <input>: rawInput while focused, converted display when blurred
-  const displayValue = isFocused.current ? rawInput : (() => {
-    if (pkrValue === 0) return '';
-    if (inputCurrency === 'PKR') return pkrValue;
-    const converted = (pkrValue / rates.PKR) * rates[inputCurrency];
-    return converted > 0 ? parseFloat(converted.toFixed(meta.decimals)) : '';
-  })();
+  const displayValue = isFocused.current ? rawInput : (pkrValue > 0 ? pkrValue : '');
 
   const handleChange = (raw: string) => {
     setRawInput(raw);
+    if (raw === '') { lastEmitted.current = 0; onChange(0); return; }
     const num = parseFloat(raw);
-    if (isNaN(num) || num < 0) { lastEmittedPKR.current = 0; onChange(0); return; }
-    let pkr: number;
-    if (inputCurrency === 'PKR') {
-      pkr = Math.round(num);
-    } else {
-      pkr = Math.round((num / rates[inputCurrency]) * rates.PKR);
-    }
-    lastEmittedPKR.current = pkr;
-    onChange(pkr);
+    if (isNaN(num) || num < 0) { lastEmitted.current = 0; onChange(0); return; }
+    // Store exactly what was typed — no conversion, no rounding.
+    lastEmitted.current = num;
+    onChange(num);
   };
 
   const handleCurrencyChange = (newCurrency: CurrencyCode) => {
+    // Label-only change. The stored value is not re-scaled, so the amount the
+    // user entered stays intact regardless of the selector.
     setInputCurrency(newCurrency);
-    if (pkrValue > 0) {
-      const newMeta = getCurrencyMeta(newCurrency);
-      const converted = newCurrency === 'PKR' ? pkrValue : (pkrValue / rates.PKR) * rates[newCurrency];
-      setRawInput(parseFloat(converted.toFixed(newMeta.decimals)).toString());
-    } else {
-      setRawInput('');
-    }
   };
 
   const inp: React.CSSProperties = {
@@ -426,7 +423,7 @@ export function CurrencyPriceInput({
         </label>
       )}
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
-        {/* Currency selector */}
+        {/* Currency selector — label only, does not convert the stored value */}
         <select
           value={inputCurrency}
           onChange={e => handleCurrencyChange(e.target.value as CurrencyCode)}
@@ -455,42 +452,26 @@ export function CurrencyPriceInput({
           ))}
         </select>
 
-        {/* Number input */}
+        {/* Number input — value stored exactly as typed */}
         <input
           type="number"
           value={displayValue}
           onChange={e => handleChange(e.target.value)}
           onFocus={() => {
             isFocused.current = true;
-            // Show raw editable value on focus
-            if (pkrValue === 0) { setRawInput(''); return; }
-            const converted = inputCurrency === 'PKR' ? pkrValue : (pkrValue / rates.PKR) * rates[inputCurrency];
-            const decimals = getCurrencyMeta(inputCurrency).decimals;
-            setRawInput(parseFloat(converted.toFixed(decimals)).toString());
+            setRawInput(pkrValue > 0 ? String(pkrValue) : '');
           }}
           onBlur={() => {
             isFocused.current = false;
-            // Force re-render to switch to displayValue
             setRawInput(prev => prev);
           }}
           disabled={disabled}
           placeholder={placeholder}
           min={0}
-          step={inputCurrency === 'PKR' ? 1 : 0.01}
+          step="any"
           style={inp}
         />
       </div>
-
-      {/* Show PKR equivalent when not in PKR mode */}
-      {inputCurrency !== 'PKR' && pkrValue > 0 && (
-        <p style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-          ≈{' '}
-          {new Intl.NumberFormat('en-PK', {
-            style: 'currency', currency: 'PKR', minimumFractionDigits: 0,
-          }).format(pkrValue)}{' '}
-          PKR
-        </p>
-      )}
     </div>
   );
 }

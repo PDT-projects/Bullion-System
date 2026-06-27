@@ -52,41 +52,36 @@ export function getCurrencyMeta(code: CurrencyCode): CurrencyMeta {
 }
 
 /**
- * Convert a PKR amount to any target currency.
- * All amounts are stored as PKR internally.
+ * AED is the canonical stored unit. No conversion is applied — the amount is
+ * returned as-is. (Kept for backwards compatibility with existing callers.)
  */
-export function convertFromPKR(pkrAmount: number, target: CurrencyCode, rates: RateMap): number {
-  if (target === 'PKR') return pkrAmount;
-  // PKR → USD → target
-  const usdAmount = pkrAmount / rates.PKR;
-  return usdAmount * rates[target];
+export function convertFromPKR(amount: number, _target: CurrencyCode, _rates: RateMap): number {
+  return amount;
 }
 
 /**
- * Convert an amount in any source currency to PKR for storage.
+ * AED is the canonical stored unit. No conversion is applied — the amount is
+ * stored exactly as typed. (Kept for backwards compatibility with existing callers.)
  */
-export function convertToPKR(amount: number, source: CurrencyCode, rates: RateMap): number {
-  if (source === 'PKR') return amount;
-  // source → USD → PKR
-  const usdAmount = amount / rates[source];
-  return usdAmount * rates.PKR;
+export function convertToPKR(amount: number, _source: CurrencyCode, _rates: RateMap): number {
+  return amount;
 }
 
 /**
- * Format a PKR base amount in any display currency.
+ * Format an AED-stored base amount. AED is canonical, so the amount is shown
+ * as AED with no conversion regardless of the requested display currency.
  */
-export function formatInCurrency(pkrAmount: number, currency: CurrencyCode, rates: RateMap): string {
-  const meta = getCurrencyMeta(currency);
-  const converted = convertFromPKR(pkrAmount, currency, rates);
+export function formatInCurrency(amount: number, _currency: CurrencyCode, _rates: RateMap): string {
+  const meta = getCurrencyMeta('AED');
   try {
     return new Intl.NumberFormat(meta.locale, {
       style: 'currency',
-      currency: meta.code,
+      currency: 'AED',
       minimumFractionDigits: meta.decimals,
       maximumFractionDigits: meta.decimals,
-    }).format(converted);
+    }).format(amount);
   } catch {
-    return `${meta.symbol}${converted.toFixed(meta.decimals)}`;
+    return `${meta.symbol}${amount.toFixed(meta.decimals)}`;
   }
 }
 
