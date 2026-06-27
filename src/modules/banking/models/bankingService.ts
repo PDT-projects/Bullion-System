@@ -15,7 +15,14 @@ import {
 
 export class BankingService {
 
-  static formatCurrency(amount: number): string {
+  static formatCurrency(amount: number, currency: 'AED' | 'PKR' = 'AED'): string {
+    if (currency === 'PKR') {
+      return new Intl.NumberFormat('en-PK', {
+        style: 'currency',
+        currency: 'PKR',
+        minimumFractionDigits: 0
+      }).format(amount);
+    }
     return new Intl.NumberFormat('en-AE', {
       style: 'currency',
       currency: 'AED',
@@ -170,7 +177,7 @@ export class BankingService {
   // ==================== DEFAULTS ====================
 
   static getDefaultBankFormData(): BankFormData {
-    return { name: '', accountNumber: '', balance: 0 };
+    return { name: '', accountNumber: '', balance: 0, currency: 'AED' };
   }
 
   static getDefaultTransferFormData(): TransferFormData {

@@ -34,7 +34,8 @@ export class BankFirebaseService {
         id: d.id,
         name: d.data().name || '',
         accountNumber: d.data().accountNumber || '',
-        balance: d.data().balance || 0
+        balance: d.data().balance || 0,
+        currency: (d.data().currency as 'AED' | 'PKR') || 'AED',
       } as Bank));
       console.log(`✅ Fetched ${banks.length} banks`);
       return banks;
@@ -74,6 +75,7 @@ export class BankFirebaseService {
         name: bank.name,
         accountNumber: bank.accountNumber,
         balance: bank.balance,
+        currency: bank.currency || 'AED',
         updatedAt: new Date().toISOString()
       });
       console.log('✅ Bank updated:', bank.id);
@@ -154,4 +156,3 @@ export class BankFirebaseService {
     }
   }
 }
-

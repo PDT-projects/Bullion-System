@@ -42,7 +42,7 @@ function PageHeader({ onBack, isLoading, onRefresh, onSetBalance }: {
   onBack: () => void; isLoading: boolean; onRefresh: () => void; onSetBalance: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between gap-2 flex-wrap">
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">
           <ArrowLeft size={20} />
@@ -52,13 +52,13 @@ function PageHeader({ onBack, isLoading, onRefresh, onSetBalance }: {
           <p className="text-sm text-gray-500 mt-0.5">Live cash ledger — all movements tracked</p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-shrink-0">
         <button onClick={onRefresh} disabled={isLoading}
           className="flex items-center gap-2 px-3 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm transition-colors disabled:opacity-50">
           <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} /> Refresh
         </button>
         <button onClick={onSetBalance}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium transition-colors">
+          style={{backgroundColor:"#374151",color:"#ffffff"}} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex-shrink-0">
           <Wallet size={14} /> Set Opening Balance
         </button>
       </div>
@@ -124,7 +124,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
           <p className="text-sm font-semibold text-red-700 mb-1">Failed to load cash data</p>
           <p className="text-xs text-red-400 mb-4">{error}</p>
           <button onClick={refreshCashData}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium">
+            style={{backgroundColor:"#374151",color:"#ffffff"}} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium">
             <RefreshCw size={14} /> Try Again
           </button>
         </div>
@@ -340,7 +340,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
             <p className="text-sm font-semibold text-gray-600 mb-1">No cash ledger yet</p>
             <p className="text-xs text-gray-400 mb-5">Set your opening balance to begin tracking.</p>
             <button onClick={() => setShowModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium">
+              style={{backgroundColor:"#374151",color:"#ffffff"}} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium">
               <Wallet size={14} /> Set Opening Balance
             </button>
           </div>
@@ -386,7 +386,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
               </button>
               <button onClick={handleSaveBalance}
                 disabled={!openingBalanceInput || parseFloat(openingBalanceInput) < 0 || isSavingBalance}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium disabled:opacity-50">
+                style={{backgroundColor:"#374151",color:"#ffffff"}} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50">
                 {isSavingBalance
                   ? <><Loader2 size={13} className="animate-spin" /> Saving...</>
                   : <><Save size={13} /> Save</>

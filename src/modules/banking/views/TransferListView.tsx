@@ -74,7 +74,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
             <p className="text-gray-600">View and manage inter-bank transfers</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {refreshTransfers && (
             <button
               onClick={refreshTransfers}
@@ -88,7 +88,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
           <button
             onClick={onAddTransfer}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
+            style={{backgroundColor:"#334155",color:"#fff"}} className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             <Plus size={18} />
             New Transfer
@@ -241,7 +241,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
           <p className="text-sm text-gray-500 mt-1">Record a new bank transfer to get started</p>
           <button
             onClick={onAddTransfer}
-            className="mt-4 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800"
+            style={{backgroundColor:"#334155",color:"#fff"}} className="mt-4 px-4 py-2 rounded-lg"
           >
             New Transfer
           </button>

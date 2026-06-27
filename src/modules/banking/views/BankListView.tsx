@@ -149,7 +149,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
   if (isLoading && filteredBanks.length === 0) {
     return (
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <button
               onClick={onBack}
@@ -176,7 +176,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
   if (error && filteredBanks.length === 0) {
     return (
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <button
               onClick={onBack}
@@ -198,7 +198,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           <p className="text-sm text-red-600 mt-1">{error}</p>
           <button
             onClick={refreshBanks}
-            className="mt-4 flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800"
+            style={{backgroundColor:"#334155",color:"#fff"}} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg"
           >
             <RefreshCw size={18} />
             Try Again
@@ -211,7 +211,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
@@ -224,7 +224,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
             <p className="text-gray-600">Manage all bank accounts and balances</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <button
             onClick={refreshBanks}
             disabled={isLoading}
@@ -244,7 +244,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           </button>
           <button
             onClick={onAddBank}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors"
+            style={{backgroundColor:"#334155",color:"#fff"}} className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors"
           >
             <Plus size={18} />
             Add Bank
@@ -333,13 +333,19 @@ export const BankListView: React.FC<BankListViewProps> = ({
               
               <div className="border-t border-gray-100 pt-4">
                 <p className="text-sm text-gray-600 mb-1">Current Balance</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(bank.balance)}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {new Intl.NumberFormat(bank.currency === 'PKR' ? 'en-PK' : 'en-AE', {
+                    style: 'currency', currency: bank.currency || 'AED', minimumFractionDigits: 0
+                  }).format(bank.balance)}
+                </p>
+                {bank.currency && <span className="text-xs text-gray-400">{bank.currency} Account</span>}
               </div>
 
               <div className="mt-4 flex gap-2">
                 <button
                   onClick={() => setViewingBank(bank)}
-                  className="flex-1 py-2 text-sm text-slate-700 bg-gray-900/10 rounded-lg hover:bg-gray-900/20 transition-colors"
+                  style={{ color: '#111827' }}
+                  className="flex-1 py-2 text-sm font-medium bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   <Eye size={14} className="inline mr-1" />
                   View Details
@@ -359,7 +365,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
           </p>
           <button
             onClick={onAddBank}
-            className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-800 mx-auto"
+            style={{backgroundColor:"#334155",color:"#fff"}} className="flex items-center gap-2 px-6 py-3 rounded-lg mx-auto"
           >
             <Plus size={20} />
             Add Your First Bank
@@ -393,7 +399,12 @@ export const BankListView: React.FC<BankListViewProps> = ({
               
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Current Balance</p>
-                <p className="text-3xl font-bold text-slate-700">{formatCurrency(viewingBank.balance)}</p>
+                <p className="text-3xl font-bold text-slate-700">
+                  {new Intl.NumberFormat(viewingBank.currency === 'PKR' ? 'en-PK' : 'en-AE', {
+                    style: 'currency', currency: viewingBank.currency || 'AED', minimumFractionDigits: 0
+                  }).format(viewingBank.balance)}
+                </p>
+                {viewingBank.currency && <p className="text-xs text-gray-400 mt-1">{viewingBank.currency} Account</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -402,7 +413,8 @@ export const BankListView: React.FC<BankListViewProps> = ({
                     setViewingBank(null);
                     onEditBank(viewingBank.id);
                   }}
-                  className="py-2 text-slate-700 bg-gray-900/10 rounded-lg hover:bg-gray-900/20"
+                  style={{ color: '#111827' }}
+                  className="py-2 font-medium bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200"
                 >
                   Edit Account
                 </button>
@@ -638,7 +650,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
                 type="button"
                 onClick={onTransferSubmit}
                 disabled={isTransferSaving || !!hasInsufficientFunds}
-                className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{backgroundColor:"#334155",color:"#fff"}} className="flex items-center gap-2 px-6 py-3 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isTransferSaving ? (
                   <>

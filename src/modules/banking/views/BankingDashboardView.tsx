@@ -289,23 +289,59 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Bank Balances Summary */}
+      {/* Bank Balances Summary — grouped by currency */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <h3 className="font-semibold text-gray-900 mb-4">Bank Account Balances</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {banks.map((bank) => (
-            <div key={bank.id} className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">{bank.name}</p>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(bank.balance)}</p>
-              <p className="text-xs text-gray-500">{bank.accountNumber}</p>
+        {banks.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-4">
+            No bank accounts. <button onClick={onAddBank} className="text-slate-700 hover:underline">Add one</button>
+          </p>
+        ) : (() => {
+          const aedBanks = banks.filter(b => !b.currency || b.currency === 'AED');
+          const pkrBanks = banks.filter(b => b.currency === 'PKR');
+          const aedTotal = aedBanks.reduce((s, b) => s + b.balance, 0);
+          const pkrTotal = pkrBanks.reduce((s, b) => s + b.balance, 0);
+          const fmt = (amt: number, cur: 'AED' | 'PKR') =>
+            new Intl.NumberFormat(cur === 'PKR' ? 'en-PK' : 'en-AE', { style: 'currency', currency: cur, minimumFractionDigits: 0 }).format(amt);
+          return (
+            <div className="space-y-4">
+              {aedBanks.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">AED Accounts</span>
+                    <span className="text-sm font-bold text-slate-700">Total: {fmt(aedTotal, 'AED')}</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {aedBanks.map(bank => (
+                      <div key={bank.id} className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                        <p className="text-sm text-gray-600 mb-1 truncate">{bank.name}</p>
+                        <p className="text-lg font-bold text-blue-800">{fmt(bank.balance, 'AED')}</p>
+                        <p className="text-xs text-gray-400 truncate">{bank.accountNumber}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {pkrBanks.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">PKR Accounts</span>
+                    <span className="text-sm font-bold text-emerald-700">Total: {fmt(pkrTotal, 'PKR')}</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {pkrBanks.map(bank => (
+                      <div key={bank.id} className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
+                        <p className="text-sm text-gray-600 mb-1 truncate">{bank.name}</p>
+                        <p className="text-lg font-bold text-emerald-800">{fmt(bank.balance, 'PKR')}</p>
+                        <p className="text-xs text-gray-400 truncate">{bank.accountNumber}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
-          {banks.length === 0 && (
-            <p className="col-span-full text-sm text-gray-500 text-center py-4">
-              No bank accounts. <button onClick={onAddBank} className="text-slate-700 hover:underline">Add one</button>
-            </p>
-          )}
-        </div>
+          );
+        })()}
       </div>
     </div>
   );

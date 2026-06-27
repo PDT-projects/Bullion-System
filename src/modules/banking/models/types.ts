@@ -5,6 +5,7 @@ export interface Bank {
   name: string;
   accountNumber: string;
   balance: number;
+  currency?: 'AED' | 'PKR';
 }
 
 export interface BankTransfer {
@@ -66,6 +67,7 @@ export interface BankFormData {
   name: string;
   accountNumber: string;
   balance: number;
+  currency: 'AED' | 'PKR';
 }
 
 export interface TransferFormData {

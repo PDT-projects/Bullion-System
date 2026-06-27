@@ -30,7 +30,7 @@ export function useBankFormViewModel({ mode }: Props) {
         if (isEditMode && id) {
           const bank = banks.find(b => b.id === id);
           if (bank) {
-            setFormData({ name: bank.name, accountNumber: bank.accountNumber, balance: bank.balance });
+            setFormData({ name: bank.name, accountNumber: bank.accountNumber, balance: bank.balance, currency: bank.currency || 'AED' });
           } else {
             toast.error('Bank not found');
             navigate('/banking/banks');
