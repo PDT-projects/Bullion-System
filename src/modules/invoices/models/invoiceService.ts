@@ -213,7 +213,7 @@ export const formatCurrency = (amount: number): string =>
   new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
 
 export const formatDate = (dateString: string): string =>
-  dateString ? new Date(dateString).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  dateString ? new Date(dateString).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
 
 export const exportInvoicesToCSV = (invoices: Invoice[]): string => {
   const headers = ['Date', 'Invoice #', 'Customer Name', 'City', 'Total Amount', 'Deduction Charges', 'Net Amount', 'Status', 'Salesperson', 'Delivery Status'];

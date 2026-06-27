@@ -23,6 +23,17 @@ const COLLECTION         = 'invoices';
 const COUNTER_COLLECTION = 'invoiceCounters';
 const PDF_STORAGE_PATH   = 'invoices/pdfs';
 
+// ── Legacy currency normalization ─────────────────────────────────────────────
+// The app is AED-first. Older invoices were stored with PKR amounts (and a
+// product `currency` of 'PKR'). We convert those to AED on read using the
+// fixed fallback rates so historical totals display correctly in the AED UI,
+// without needing a Firestore migration. New invoices already store AED and
+// pass through untouched.
+const PKR_PER_USD = 279.5;
+const AED_PER_USD = 3.67;
+const PKR_TO_AED  = AED_PER_USD / PKR_PER_USD; // AED = pkrAmount * PKR_TO_AED
+const pkrToAed = (n: number) => Math.round((n || 0) * PKR_TO_AED * 100) / 100;
+
 const storage = getStorage();
 
 function stripUndefined<T extends object>(obj: T): Partial<T> {
@@ -36,6 +47,11 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
 // present on the returned object, even for invoices saved before imageUrls was
 // added to the InvoiceProduct type.
 function docToInvoiceProduct(raw: any): InvoiceProduct {
+  // Detect legacy PKR by magnitude: a real AED unit price is small (tens/hundreds),
+  // a PKR-era one is huge. Label is unreliable (old rows were mis-tagged 'AED').
+  const isLegacyPKR = (raw.total ?? raw.price ?? 0) > 50000;
+  const price = isLegacyPKR ? pkrToAed(raw.price ?? 0) : (raw.price ?? 0);
+  const total = isLegacyPKR ? pkrToAed(raw.total ?? 0) : (raw.total ?? 0);
   return {
     id:            raw.id            || '',
     productId:     raw.productId     || '',
@@ -45,20 +61,24 @@ function docToInvoiceProduct(raw: any): InvoiceProduct {
     category:      raw.category      || '',
     description:   raw.description   || '',
     quantity:      raw.quantity      ?? 1,
-    price:         raw.price         ?? 0,
-    total:         raw.total         ?? 0,
+    price,
+    total,
     serialNumbers: raw.serialNumbers || [],
     serialCities:  raw.serialCities  || {},
-    currency:      raw.currency      || 'PKR',
+    // Everything is AED after normalization.
+    currency:      'AED',
     // FIX: explicitly read imageUrls so it is never lost.
-    // Older invoices that were saved without this field get an empty array,
-    // which the PDF service handles gracefully (no thumbnail shown).
     imageUrls:     Array.isArray(raw.imageUrls) ? raw.imageUrls : [],
   };
 }
 
 function docToInvoice(d: any): Invoice {
   const data = d.data ? d.data() : d;
+  // An invoice is "legacy PKR" if any stored product row is missing currency or
+  // marked 'PKR'. Such invoices have all amounts in PKR and must be converted.
+  // Legacy PKR invoices have huge totals; real AED invoices are small.
+  const isLegacyPKR = (data.totalAmount || 0) > 50000;
+  const amt = (n: number) => (isLegacyPKR ? pkrToAed(n) : (n || 0));
   return {
     id:                     d.id,
     invoiceNumber:          data.invoiceNumber          || '',
@@ -77,7 +97,7 @@ function docToInvoice(d: any): Invoice {
     exchangeWarrantyNote:   data.exchangeWarrantyNote   || '',
     deliveryStatus:         data.deliveryStatus         || 'Self-collect',
     deliveryReceivedStatus: data.deliveryReceivedStatus || 'Pending',
-    totalAmount:            data.totalAmount            || 0,
+    totalAmount:            amt(data.totalAmount),
     status:                 data.status                 || 'Unpaid',
     salesperson:            data.salesperson,
     salespersonLocation:    data.salespersonLocation,
@@ -92,11 +112,11 @@ function docToInvoice(d: any): Invoice {
     chequeBank:             data.chequeBank,
     chequeDate:             data.chequeDate,
     paymentStatus:          data.paymentStatus,
-    paidAmount:             data.paidAmount,
-    remainingAmount:        data.remainingAmount,
+    paidAmount:             data.paidAmount == null ? data.paidAmount : amt(data.paidAmount),
+    remainingAmount:        data.remainingAmount == null ? data.remainingAmount : amt(data.remainingAmount),
     collectionMethod:       data.collectionMethod,
     branch:                 data.branch,
-    deductionCharges:       data.deductionCharges       || 0,
+    deductionCharges:       amt(data.deductionCharges || 0),
     deductionCurrency:      data.deductionCurrency      || 'PKR',
     cargoAmount:            data.cargoAmount            || 0,
     cargoCurrency:          data.cargoCurrency          || 'PKR',

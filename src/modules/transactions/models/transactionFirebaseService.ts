@@ -28,8 +28,17 @@ function deepStripUndefined(value: any): any {
   return value;
 }
 
+// ── Legacy currency normalization (AED-first) ─────────────────────────────────
+// Transactions saved before the AED switch hold PKR amounts and no `currency`
+// field. Convert those to AED on read using fixed fallback rates. New
+// transactions carry currency:'AED' and pass through untouched.
+const PKR_TO_AED = 3.67 / 279.5;
+const pkrToAed = (n: number) => Math.round((n || 0) * PKR_TO_AED * 100) / 100;
+
 function docToTransaction(d: any): Transaction {
   const data = d.data ? d.data() : d;
+  const legacy = (data.amount || 0) > 50000;
+  const amt = (n: any) => (n == null ? n : (legacy ? pkrToAed(n) : n));
   return {
     id:                   d.id,
     transactionId:        data.transactionId        || '',
@@ -39,7 +48,7 @@ function docToTransaction(d: any): Transaction {
     mainCategory:         data.mainCategory         || '',
     subCategory:          data.subCategory          || '',
     detailCategory:       data.detailCategory,
-    amount:               data.amount               || 0,
+    amount:               amt(data.amount           || 0),
     mode:                 data.mode                 || 'Cash',
     bankName:             data.bankName,
     bankId:               data.bankId,
@@ -50,11 +59,11 @@ function docToTransaction(d: any): Transaction {
     note:                 data.note                 || '',
     paidBy:               data.paidBy,
     paidTo:               data.paidTo,
-    amountPaid:           data.amountPaid,
+    amountPaid:           amt(data.amountPaid),
     paymentStatus:        data.paymentStatus,
-    remainingAmount:      data.remainingAmount,
-    partialPayments:      data.partialPayments      || [],
-    totalPaid:            data.totalPaid,
+    remainingAmount:      amt(data.remainingAmount),
+    partialPayments:      (data.partialPayments || []).map((p: any) => ({ ...p, amount: amt(p.amount) })),
+    totalPaid:            amt(data.totalPaid),
     isFullyCleared:       data.isFullyCleared,
     linkedType:           data.linkedType,
     linkedId:             data.linkedId,
@@ -172,7 +181,7 @@ export class TransactionFirebaseService {
   static async createTransaction(data: Omit<Transaction, 'id'>): Promise<Transaction> {
     try {
       const now  = new Date().toISOString();
-      const body = deepStripUndefined({ ...data, createdAt: now, updatedAt: now });
+      const body = deepStripUndefined({ ...data, currency: (data as any).currency || 'AED', createdAt: now, updatedAt: now });
 
       // Debug: confirm classification fields reach Firestore (remove once confirmed working)
       console.log('📊 Saving classification:', {

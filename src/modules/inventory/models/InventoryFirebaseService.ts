@@ -186,15 +186,28 @@ export async function generateInventoryTransactionId(): Promise<string> {
 
 // ==================== TRANSFORMS ====================
 
+// ── Legacy currency normalization ─────────────────────────────────────────────
+// The app is AED-first. Products created before the AED switch were stored with
+// PKR prices and no `currency` field. On read we convert those PKR prices to AED
+// using fixed fallback rates so old inventory shows correct AED values without a
+// Firestore migration. Products created after the switch carry currency:'AED'
+// and pass through untouched (no double conversion).
+const PKR_PER_USD = 279.5;
+const AED_PER_USD = 3.67;
+const PKR_TO_AED  = AED_PER_USD / PKR_PER_USD;
+const pkrToAed = (n: number) => Math.round((n || 0) * PKR_TO_AED * 100) / 100;
+
 function transformDocToProduct(docSnap: any): Product {
   const d = docSnap.data();
+  const isLegacyPKR = (d.sellPrice ?? d.costPrice ?? 0) > 50000;
+  const conv = (n: number) => (isLegacyPKR ? pkrToAed(n) : (n ?? 0));
   return {
     id:            docSnap.id,
     brandName:     d.brandName     || '',
     modelName:     d.modelName     || '',
     category:      d.category      || '',
-    costPrice:     d.costPrice     ?? 0,
-    sellPrice:     d.sellPrice     ?? 0,
+    costPrice:     conv(d.costPrice ?? 0),
+    sellPrice:     conv(d.sellPrice ?? 0),
     buyType:       d.buyType       || 'Import',
     warrantyYears: d.warrantyYears ?? 0,
     stock:         d.stock         ?? 0,
@@ -464,6 +477,7 @@ export class InventoryFirebaseService {
         category:      dto.category,
         costPrice:     dto.costPrice ?? 0,   // FIX 3 — guaranteed non-undefined
         sellPrice:     dto.sellPrice,
+        currency:      'AED',   // AED-first: marks this product as already-AED (no legacy PKR conversion on read)
         buyType:       dto.buyType,
         warrantyYears: dto.warrantyYears,
         stock:         dto.stock,

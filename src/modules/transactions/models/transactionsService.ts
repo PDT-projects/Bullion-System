@@ -117,10 +117,10 @@ export const calculateStats = (transactions: Transaction[]): TransactionStats =>
 };
 
 export const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
 
 export const formatDate = (d: string): string =>
-  d ? new Date(d).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  d ? new Date(d).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
 
 export const formatDateTime = (date: string, time?: string): string => {
   const dateStr = formatDate(date);

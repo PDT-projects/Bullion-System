@@ -17,8 +17,8 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getTransactionTotals } from '../../modules/transactions/models/transactionsService';
-import { CurrencyCode, useCurrencyRates, convertFromPKR, fmtCurrency } from './currencyUtils';
-import { CurrencyDropdown, CurrencyRows } from './CurrencyPicker';
+import { CurrencyCode, useCurrencyRates } from './currencyUtils';
+import { CurrencyDropdown } from './CurrencyPicker';
 
 // ─── SubCategory lookup tables (must match Firestore exactly) ─────────────────
 
@@ -155,15 +155,9 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
   const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('AED');
   const [extraCurrencies, setExtraCurrencies]   = useState<CurrencyCode[]>([]);
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
-  const displayCurrencyCodes = [primaryCurrency, ...extraCurrencies];
 
-  // Stored amounts are already in AED. Show them as-is for AED; convert only for other currencies.
-  // NOTE: convertFromAED expects an AED base. If your rates table is still PKR-based,
-  // update currencyUtils accordingly — for AED primary no conversion happens here.
-  const convertFromAED = (aed: number, code: CurrencyCode) =>
-    code === 'AED' ? aed : convertFromPKR(aed, code, rates);
   const fmtPrimary = (value: number) =>
-    fmtCurrency(convertFromAED(value, primaryCurrency), primaryCurrency);
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(value);
 
   const today    = new Date().toISOString().split('T')[0];
   const thisYear = new Date().getFullYear();
@@ -382,13 +376,6 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
   const totalExpenses = sectionTotal('Operating Expenses');
   const netProfit     = grossProfit - totalExpenses;
   const isProfit      = netProfit >= 0;
-
-  const currencyMetrics = useMemo(() => displayCurrencyCodes.map(code => ({
-    code,
-    revenue: convertFromAED(totalRevenue, code),
-    grossProfit: convertFromAED(grossProfit, code),
-    netProfit: convertFromAED(netProfit, code),
-  })), [rates, displayCurrencyCodes, totalRevenue, grossProfit, netProfit]);
 
   // Cash collections from transactions (informational — not counted in Revenue)
   const cashCollected = filtered
@@ -984,7 +971,6 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
             <div key={label} className={`${bg} border ${border} rounded-xl p-5 text-center`}>
               <p className="text-sm text-gray-600 mb-1">{label}</p>
               <p className={`text-2xl font-bold ${color}`}>{fmtPrimary(value)}</p>
-              <CurrencyRows extras={extraCurrencies} pkrAmount={value} rates={rates} />
             </div>
           ))}
         </div>

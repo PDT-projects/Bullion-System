@@ -6,6 +6,42 @@ import type { TransactionStats } from '../../modules/transactions/models/types';
 import { db } from '../../api/firebase/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
+// ── Legacy PKR → AED normalization (AED-first app) ────────────────────────────
+// This hook reads Firestore directly, so it must convert old PKR-stored amounts
+// to AED itself. Detection is by magnitude: legacy PKR values are huge, real AED
+// values are small. Threshold 50,000 separates them safely.
+const PKR_TO_AED = 3.67 / 279.5;
+const toAed = (n: number) => Math.round((n || 0) * PKR_TO_AED * 100) / 100;
+const isPkr = (n: number) => (n || 0) > 50000;
+
+function normTransaction(t: any): any {
+  if (!isPkr(t.amount)) return t;
+  return {
+    ...t,
+    amount:          toAed(t.amount),
+    amountPaid:      t.amountPaid      != null ? toAed(t.amountPaid)      : t.amountPaid,
+    remainingAmount: t.remainingAmount != null ? toAed(t.remainingAmount) : t.remainingAmount,
+    totalPaid:       t.totalPaid       != null ? toAed(t.totalPaid)       : t.totalPaid,
+    partialPayments: (t.partialPayments || []).map((p: any) => ({ ...p, amount: toAed(p.amount) })),
+  };
+}
+function normInvoice(inv: any): any {
+  if (!isPkr(inv.totalAmount)) return inv;
+  return {
+    ...inv,
+    totalAmount:      toAed(inv.totalAmount),
+    paidAmount:       inv.paidAmount       != null ? toAed(inv.paidAmount)       : inv.paidAmount,
+    remainingAmount:  inv.remainingAmount  != null ? toAed(inv.remainingAmount)  : inv.remainingAmount,
+    deductionCharges: inv.deductionCharges != null ? toAed(inv.deductionCharges) : inv.deductionCharges,
+    products: (inv.products || []).map((p: any) =>
+      isPkr(p.total ?? p.price) ? { ...p, price: toAed(p.price), total: toAed(p.total) } : p),
+  };
+}
+function normProduct(p: any): any {
+  if (!isPkr(p.sellPrice ?? p.costPrice)) return p;
+  return { ...p, costPrice: toAed(p.costPrice), sellPrice: toAed(p.sellPrice) };
+}
+
 interface DashboardData {
   transactions: Transaction[];
   banks: any[];
@@ -67,7 +103,7 @@ export function useDashboardData(): DashboardData {
     const unsubTransactions = onSnapshot(
       collection(db, 'transactions'),
       (snap) => {
-        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+        const data = snap.docs.map(doc => normTransaction({ id: doc.id, ...doc.data() })) as Transaction[];
         setTransactions(data);
         markLoaded();
       },
@@ -82,13 +118,13 @@ export function useDashboardData(): DashboardData {
         (snap) => { setLoans(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
         () => markLoaded()),
       onSnapshot(collection(db, 'invoices'),
-        (snap) => { setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
+        (snap) => { setInvoices(snap.docs.map(d => normInvoice({ id: d.id, ...d.data() }))); markLoaded(); },
         () => markLoaded()),
       onSnapshot(collection(db, 'commissions'),
         (snap) => { setCommissions(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
         () => markLoaded()),
       onSnapshot(collection(db, 'products'),
-        (snap) => { setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); markLoaded(); },
+        (snap) => { setProducts(snap.docs.map(d => normProduct({ id: d.id, ...d.data() }))); markLoaded(); },
         () => markLoaded()),
     ];
 
