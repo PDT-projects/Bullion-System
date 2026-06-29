@@ -502,18 +502,17 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       switch (field) {
         case 'productId': {
           const updated  = updateProductWithSelection(p, value, allProducts);
-          // Unit price always defaults to AED, regardless of branch/company.
-          // Carry imageUrls from inventory so thumbnail appears in PDF
+          // AED-native: inventory sellPrice is already in AED; tag the row AED
+          // and carry imageUrls for the PDF thumbnail.
           const pInfo = allProducts.find(x => x.id === value);
           return {
             ...updated,
             currency: 'AED',
-            pricePKR:  updated.price,
             imageUrls: Array.isArray(pInfo?.imageUrls) ? pInfo!.imageUrls : [],
           };
         }
         case 'quantity': return updateProductQuantity(p, value);
-        case 'price':    return { ...updateProductPrice(p, value), pricePKR: (p as any).pricePKR ?? value };
+        case 'price':    return updateProductPrice(p, value);
         case 'currency': return { ...p, currency: value };
         default:         return { ...p, [field]: value };
       }

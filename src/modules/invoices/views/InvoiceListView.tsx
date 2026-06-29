@@ -6,8 +6,8 @@ import React, { useState } from 'react';
 type DisplayCurrency = 'PKR' | 'AED';
 const AED_TO_PKR = 76.03;
 
-function convertToDisplay(pkrAmount: number, currency: DisplayCurrency): number {
-  return currency === 'AED' ? pkrAmount / AED_TO_PKR : pkrAmount;
+function convertToDisplay(aedAmount: number, currency: DisplayCurrency): number {
+  return currency === 'PKR' ? aedAmount * AED_TO_PKR : aedAmount;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 import {
@@ -83,12 +83,12 @@ export function InvoiceListView({
   const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('AED');
 
-  const formatDisplay = (pkrAmount: number): string => {
-    const converted = convertToDisplay(pkrAmount, displayCurrency);
+  const formatDisplay = (aedAmount: number): string => {
+    const converted = convertToDisplay(aedAmount, displayCurrency);
     if (displayCurrency === 'AED') {
       return `د.إ ${new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(converted)} AED`;
     }
-    return formatCurrency(pkrAmount);
+    return `₨ ${Math.round(converted).toLocaleString('en-PK')} PKR`;
   };
 
   // FIX: Added toast.error() so the user sees feedback when PDF generation
@@ -595,7 +595,7 @@ export function InvoiceListView({
                     </span>
                     <p className="text-xs text-gray-400 mt-0.5">
                       ≈ {displayCurrency === 'PKR'
-                        ? `د.إ ${((viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0)) / AED_TO_PKR).toFixed(2)} AED`
+                        ? `د.إ ${(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0)).toFixed(2)} AED`
                         : `₨ ${Math.round((viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0)) * AED_TO_PKR).toLocaleString('en-PK')} PKR`
                       }
                     </p>

@@ -243,18 +243,16 @@ function CustomerHistoryDropdown({
 }
 
 // ── ProductPriceInput ─────────────────────────────────────────────────────────
-// product.price is ALWAYS stored in PKR in the ViewModel.
-// This component owns a LOCAL `inputValue` (the number the user actually sees)
-// so that switching currency immediately re-expresses the amount in the new
-// unit without waiting for a round-trip through the parent state.
+// AED-native: product.price is stored DIRECTLY in the row's selected currency.
+// What the user types is what is saved (1:1, no hidden conversion master). This
+// keeps editing and persistence consistent with how invoices are read back.
 //
 // State contract:
-//   inputValue  — what is shown in the <input>; always in `currency` units
-//   product.price — PKR master value stored in ViewModel
-//   product.pricePKR — original inventory PKR price, anchored on product select
+//   inputValue    — what is shown in the <input>; equals product.price (in `currency`)
+//   product.price — the authoritative value, expressed in `currency`
 //
-// On currency change:  convert product.price (PKR) → new currency → set inputValue
-// On price type:       convert typed value → PKR → push to ViewModel
+// On currency change: convert product.price into the new currency and store that.
+// On price type:      store the typed value as-is.
 function ProductPriceInput({
   product,
   currencyRates,
@@ -264,83 +262,17 @@ function ProductPriceInput({
   currencyRates: Record<InvoiceCurrency, number>;
   updateProduct: (id: string, field: string, value: any) => void;
 }) {
-  const currency: InvoiceCurrency = (product as any).currency || 'AED';
-  const inventoryPricePKR: number = (product as any).pricePKR ?? product.price;
+  // Pure AED. docToInvoice already normalises stored amounts to AED on read,
+  // so product.price is AED — edit and save it 1:1 with no conversion.
+  const [inputValue, setInputValue] = React.useState<number>(() => product.price || 0);
 
-  // Local display value — what the <input> shows.
-  // Initialise from product.price converted to current currency.
-  const toDisplay = (pkr: number, cur: InvoiceCurrency): number =>
-    cur === 'PKR' ? pkr : +convertCurrency(pkr, 'PKR', cur, currencyRates).toFixed(2);
-
-  const [inputValue, setInputValue] = React.useState<number>(
-    () => toDisplay(product.price, currency)
-  );
-
-  // Sync inputValue when the product row is replaced (different product selected)
-  // or when the ViewModel pushes a new price from outside (e.g. load existing invoice).
-  // We track the product identity + currency to know when to re-sync.
-  const prevProductRef = React.useRef<{ id: string; price: number; currency: string }>({
-    id: product.id,
-    price: product.price,
-    currency,
-  });
   React.useEffect(() => {
-    const prev = prevProductRef.current;
-    const productChanged  = prev.id !== product.id;
-    const currencyChanged = prev.currency !== currency;
-    const priceChanged    = prev.price !== product.price;
+    setInputValue(product.price || 0);
+  }, [product.id, product.price]);
 
-    if (productChanged || currencyChanged || (priceChanged && !currencyChanged)) {
-      // External change — re-derive display value from the stored PKR price.
-      setInputValue(toDisplay(product.price, currency));
-    }
-
-    prevProductRef.current = { id: product.id, price: product.price, currency };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product.id, product.price, currency]);
-
-  // A freshly-fetched product is tagged 'PKR' by the ViewModel (updateProductWithSelection).
-  // The app's display currency is AED-first, so re-tag new rows to AED right after selection
-  // without ever showing PKR to the user. This only fires once per product pick.
-  React.useEffect(() => {
-    if (product.productId && currency === 'PKR') {
-      updateProduct(product.id, 'currency', 'AED');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product.productId]);
-
-  // Rate hint: AED per 1 unit of selected foreign currency
-  const aedPer1Unit = currency === 'AED'
-    ? 1
-    : +convertCurrency(1, currency, 'AED', currencyRates).toFixed(2);
-
-  // Price expressed in AED (the app's primary reference currency), regardless of
-  // which currency is currently selected for data entry.
-  const priceInAed = +convertCurrency(product.price, 'PKR', 'AED', currencyRates).toFixed(2);
-
-  // Inventory anchor in display currency
-  const inventoryDisplayPrice = currency === 'AED'
-    ? null
-    : +convertCurrency(inventoryPricePKR, 'PKR', currency, currencyRates).toFixed(2);
-  const inventoryDisplayPriceAed = +convertCurrency(inventoryPricePKR, 'PKR', 'AED', currencyRates).toFixed(2);
-
-  // User typed a new price in the current display currency → convert to PKR and push up
   const handlePriceChange = (raw: number) => {
     setInputValue(raw);
-    const pkrValue = currency === 'PKR'
-      ? raw
-      : +convertCurrency(raw, currency, 'PKR', currencyRates).toFixed(2);
-    updateProduct(product.id, 'price', pkrValue);
-  };
-
-  // User changed currency → convert CURRENT product.price (PKR) to new currency,
-  // update local display immediately, then push both currency tag and new PKR to ViewModel.
-  const handleCurrencyChange = (newCurrency: InvoiceCurrency) => {
-    const newDisplay = toDisplay(product.price, newCurrency);
-    setInputValue(newDisplay);                                      // <-- immediate visual update
-    updateProduct(product.id, 'currency', newCurrency);            // tag the row
-    // price in PKR is unchanged — product.price stays the same; no need to push 'price' again.
-    // (The ViewModel already stores the authoritative PKR value.)
+    updateProduct(product.id, 'price', raw);
   };
 
   return (
@@ -355,47 +287,10 @@ function ProductPriceInput({
           className={`${inp} flex-1`}
           placeholder="0"
         />
-        <select
-          value={currency}
-          onChange={e => handleCurrencyChange(e.target.value as InvoiceCurrency)}
-          className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8 bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-          title="Price currency — displayed primarily in AED; select any currency to edit in that currency"
-        >
-          {INVOICE_CURRENCIES.map(c => (
-            <option key={c.code} value={c.code}>{c.code}</option>
-          ))}
-        </select>
+        <span className="px-2 flex items-center border border-gray-300 rounded-md text-xs h-8 bg-gray-50 text-gray-600">
+          AED
+        </span>
       </div>
-
-      {/* Hint lines: always shown when price is set. AED is the primary reference. */}
-      {product.price > 0 && (
-        <div className="mt-0.5 space-y-0.5">
-          <p className="text-xs text-gray-500">
-            ≈ <span className="font-semibold text-gray-700">
-              AED {priceInAed.toLocaleString('en-AE', { maximumFractionDigits: 2 })}
-            </span>
-            {currency !== 'AED' && (
-              <span className="ml-1.5 text-gray-400">
-                · 1 {currency} = AED {aedPer1Unit.toLocaleString('en-AE', { maximumFractionDigits: 2 })}
-              </span>
-            )}
-          </p>
-          {inventoryPricePKR > 0 && (
-            <p className="text-xs text-blue-500">
-              Inventory price: <span className="font-semibold">
-                {currency === 'AED'
-                  ? `${inventoryDisplayPriceAed.toLocaleString('en-AE', { maximumFractionDigits: 2 })} AED`
-                  : `${(inventoryDisplayPrice ?? inventoryDisplayPriceAed).toLocaleString('en-AE', { maximumFractionDigits: 2 })} ${currency}`}
-              </span>
-              {currency !== 'AED' && (
-                <span className="ml-1 text-blue-400">
-                  (AED {inventoryDisplayPriceAed.toLocaleString('en-AE', { maximumFractionDigits: 2 })})
-                </span>
-              )}
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -422,6 +317,10 @@ export function InvoiceFormView({
   currencyRates,
 }: Props) {
   const total = calculateTotal();
+
+  // Amounts are AED (normalised on read). Display 1:1.
+  const AED_RATE = 1;
+  const fmtAed = (aed: number) => formatCurrency(aed || 0);
 
   const [addingSpLoc, setAddingSpLoc] = useState(false);
   const [newSpLoc,    setNewSpLoc]    = useState('');
@@ -677,8 +576,9 @@ export function InvoiceFormView({
                             <option value="">— Select product —</option>
                             {availableProducts.map(p => {
                               const availCount = getAvailableSerialsForProduct(p.id, product.id).length;
+                              const isCurrent  = p.id === product.productId;
                               const label = [p.brandName, p.modelName, p.category ? `[${p.category}]` : '', `(${availCount} avail)`].filter(Boolean).join(' ');
-                              return <option key={p.id} value={p.id} disabled={availCount === 0}>{label}</option>;
+                              return <option key={p.id} value={p.id} disabled={availCount === 0 && !isCurrent}>{label}</option>;
                             })}
                           </select>
                         </div>
@@ -694,17 +594,8 @@ export function InvoiceFormView({
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-0.5">
-                            Unit Price
-                            {product.currency && product.currency !== 'AED' ? (
-                              <span className="ml-1 font-normal text-blue-500">
-                                ({product.currency} · live rate)
-                              </span>
-                            ) : (
-                              <span className="ml-1 font-normal text-gray-400">(AED)</span>
-                            )}
+                            Unit Price <span className="ml-1 font-normal text-gray-400">(AED)</span>
                           </label>
-                          {/* Currency-aware price input: enter in any currency, stores PKR.
-                              Rates are fetched live from open.er-api.com and refresh every 30 min. */}
                           <ProductPriceInput
                             product={product}
                             currencyRates={currencyRates}
@@ -763,7 +654,7 @@ export function InvoiceFormView({
                       )}
                       <div className="mt-2 text-right text-xs font-bold" style={{ color: BLACK }}>
                         Total: <span style={{ color: GOLD }}>
-                          {formatCurrency(convertCurrency(product.total, 'PKR', 'AED', currencyRates))}
+                          {fmtAed(product.total)}
                         </span>
                       </div>
                     </div>
@@ -1124,28 +1015,16 @@ export function InvoiceFormView({
                 <>
                   <div>
                     <label className={lbl}>Paid Amount <span className="font-normal text-gray-400">(AED)</span></label>
-                    <input type="number" value={
-                      formData.paidAmount
-                        ? +convertCurrency(formData.paidAmount, 'PKR', 'AED', currencyRates).toFixed(2)
-                        : 0
-                    }
+                    <input type="number" value={+((formData.paidAmount || 0) / AED_RATE).toFixed(2)}
                       onChange={e => {
-                        // Field is entered/displayed in AED; convert to PKR before storing,
-                        // since formData.paidAmount/remainingAmount are stored in PKR
-                        // (same unit as `total`/totalAmount) for consistency on save.
-                        const paidAed = Number(e.target.value);
-                        const paidPkr = +convertCurrency(paidAed, 'AED', 'PKR', currencyRates).toFixed(2);
+                        const paidPkr = +(Number(e.target.value) * AED_RATE).toFixed(2);
                         setFormData({ paidAmount: paidPkr, remainingAmount: total - paidPkr });
                       }}
                       className={inp} />
                   </div>
                   <div>
                     <label className={lbl}>Remaining <span className="font-normal text-gray-400">(AED)</span></label>
-                    <input type="number" value={
-                      formData.remainingAmount
-                        ? +convertCurrency(formData.remainingAmount, 'PKR', 'AED', currencyRates).toFixed(2)
-                        : 0
-                    } readOnly className={`${inp} bg-gray-50`} />
+                    <input type="number" value={+((formData.remainingAmount || 0) / AED_RATE).toFixed(2)} readOnly className={`${inp} bg-gray-50`} />
                   </div>
                 </>
               )}
@@ -1217,7 +1096,7 @@ export function InvoiceFormView({
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold text-gray-700">Total:</span>
               <span className="text-lg font-extrabold" style={{ color: BLACK }}>
-                {formatCurrency(convertCurrency(total, 'PKR', 'AED', currencyRates))}
+                {fmtAed(total)}
               </span>
             </div>
             {(formData.deductionCharges || 0) > 0 && (
