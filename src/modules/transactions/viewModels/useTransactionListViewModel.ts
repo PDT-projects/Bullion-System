@@ -3,6 +3,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
 import { Transaction, TransactionFilters, TransactionStats } from '../models/types';
 import {
   filterTransactions, calculateStats, formatCurrency, formatDate,
@@ -44,6 +46,31 @@ export function useTransactionListViewModel(): UseTransactionListViewModelReturn
   const [filters,      setFiltersState] = useState<TransactionFilters>(DEFAULT_FILTERS);
   const [viewTransaction, setViewTransaction] = useState<Transaction | null>(null);
 
+  // ── Live subscription ─────────────────────────────────────────────────────
+  // Previously this loaded transactions ONCE on mount via fetchAllTransactions()
+  // and never updated again. Editing an invoice correctly wrote the new amount
+  // to Firestore, but this list (and anything reading `transactions` from it)
+  // kept showing the stale snapshot from page load. onSnapshot keeps it live.
+  useEffect(() => {
+    setIsLoading(true);
+    const unsub = onSnapshot(
+      collection(db, 'transactions'),
+      (snap) => {
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Transaction[];
+        setTransactions(data);
+        setIsLoading(false);
+      },
+      () => {
+        toast.error('Failed to load transactions');
+        setIsLoading(false);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Kept for callers that still expect a manual refresh function (e.g. after
+  // a local optimistic update); onSnapshot already keeps data live, so this
+  // just re-reads once on demand without needing a separate code path.
   const loadTransactions = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -55,8 +82,6 @@ export function useTransactionListViewModel(): UseTransactionListViewModelReturn
       setIsLoading(false);
     }
   }, []);
-
-  useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
   const filteredTransactions = useMemo(
     () => filterTransactions(transactions, filters),

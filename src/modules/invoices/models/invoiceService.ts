@@ -127,7 +127,12 @@ export const updateProductWithSelection = (product: InvoiceProduct, productId: s
     price: p.sellPrice,
     total: product.quantity * p.sellPrice,
     serialNumbers: [],
-    currency: 'PKR', // TODO: set based on branch or product
+    // FIX: sellPrice is stored in AED, not PKR. Tagging it 'PKR' here caused
+    // downstream code that checks currency === 'PKR' to multiply this
+    // already-correct AED price by ~76x on display/save, corrupting the
+    // invoice total. This was the actual source of invoices showing wildly
+    // inflated amounts after selecting/re-selecting a product.
+    currency: 'AED',
     imageUrls: p.imageUrls || [],
   };
 };

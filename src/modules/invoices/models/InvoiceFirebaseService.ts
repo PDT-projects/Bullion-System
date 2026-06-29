@@ -19,9 +19,86 @@ import {
 import { db } from '../../../api/firebase/firebase';
 import { Invoice, InvoiceProduct, CreateInvoiceDTO } from './types';
 
-const COLLECTION         = 'invoices';
-const COUNTER_COLLECTION = 'invoiceCounters';
-const PDF_STORAGE_PATH   = 'invoices/pdfs';
+const COLLECTION             = 'invoices';
+const COUNTER_COLLECTION     = 'invoiceCounters';
+const PDF_STORAGE_PATH       = 'invoices/pdfs';
+const TRANSACTIONS_COLLECTION = 'transactions';
+
+// ── Invoice ↔ Transaction sync ────────────────────────────────────────────────
+// The Dashboard's Total Inflow / Total Outflow cards and the Transactions list
+// are both driven entirely off the `transactions` collection (see
+// useDashboardData / calculateStats). Invoices used to only write liquidity
+// fields onto the invoice doc itself, so a paid invoice never showed up as
+// inflow anywhere. The helpers below create/update a single linked
+// `transactions` doc per invoice (id stored on the invoice as
+// `linkedTransactionId`) so payments are reflected the moment they're saved,
+// and editing an invoice's payment updates that same transaction doc in
+// place rather than creating a duplicate.
+function buildInvoiceTransactionPayload(invoiceId: string, dto: any) {
+  const paidAmount: number = dto.paidAmount ?? dto.totalAmount ?? 0;
+  const mode: 'Cash' | 'Bank' | 'Cheque' =
+    dto.paymentMode === 'Online' ? 'Bank'   :
+    dto.paymentMode === 'Cheque' ? 'Cheque' : 'Cash';
+  const isFull = paidAmount >= (dto.totalAmount || 0);
+
+  return stripUndefined({
+    date:            dto.date || new Date().toISOString(),
+    company:         dto.branch || '',
+    mainCategory:    'Cash Inflow',
+    subCategory:     'Product sale received',
+    amount:          paidAmount,
+    amountPaid:      paidAmount,
+    remainingAmount: Math.max(0, (dto.totalAmount || 0) - paidAmount),
+    paymentStatus:   isFull ? 'Full' : 'Partial',
+    mode,
+    bankId:          dto.bankId,
+    bankName:        dto.bankName,
+    chequeNumber:    dto.chequeNumber,
+    chequeDate:      dto.chequeDate,
+    chequeBank:      dto.chequeBank,
+    note:            `Invoice ${dto.invoiceNumber || ''} — ${dto.customerName || ''}`.trim(),
+    paidBy:          dto.customerName,
+    paidTo:          dto.paidTo,
+    linkedType:      'invoice' as const,
+    linkedId:        invoiceId,
+    linkedRef:       dto.invoiceNumber,
+    updatedAt:       new Date().toISOString(),
+  });
+}
+
+/** Create or update the single transaction doc linked to an invoice. */
+async function syncInvoiceTransaction(invoiceId: string, dto: any, existingTransactionId?: string): Promise<string | undefined> {
+  const paidAmount: number = dto.paidAmount ?? 0;
+  console.log('🔄 syncInvoiceTransaction:', { invoiceId, paidAmount, totalAmount: dto.totalAmount, existingTransactionId });
+
+  // Nothing paid yet — don't create a phantom AED 0 inflow row.
+  if (!paidAmount || paidAmount <= 0) {
+    console.log('⏭️ Skipping transaction sync — paidAmount is 0/falsy:', paidAmount);
+    return existingTransactionId;
+  }
+
+  const payload = buildInvoiceTransactionPayload(invoiceId, dto);
+
+  try {
+    if (existingTransactionId) {
+      await updateDoc(doc(db, TRANSACTIONS_COLLECTION, existingTransactionId), payload);
+      console.log('✅ Linked transaction updated for invoice:', invoiceId, existingTransactionId);
+      return existingTransactionId;
+    } else {
+      const ref = await addDoc(collection(db, TRANSACTIONS_COLLECTION), {
+        ...payload,
+        transactionId: `TXN-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      });
+      console.log('✅ Linked transaction created for invoice:', invoiceId, ref.id);
+      return ref.id;
+    }
+  } catch (error) {
+    // Don't let a transaction-sync failure block the invoice save itself.
+    console.error('❌ Error syncing invoice transaction:', error);
+    return existingTransactionId;
+  }
+}
 
 // ── Legacy currency normalization ─────────────────────────────────────────────
 // The app is AED-first. Older invoices were stored with PKR amounts (and a
@@ -47,11 +124,6 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
 // present on the returned object, even for invoices saved before imageUrls was
 // added to the InvoiceProduct type.
 function docToInvoiceProduct(raw: any): InvoiceProduct {
-  // Detect legacy PKR by magnitude: a real AED unit price is small (tens/hundreds),
-  // a PKR-era one is huge. Label is unreliable (old rows were mis-tagged 'AED').
-  const isLegacyPKR = (raw.total ?? raw.price ?? 0) > 50000;
-  const price = isLegacyPKR ? pkrToAed(raw.price ?? 0) : (raw.price ?? 0);
-  const total = isLegacyPKR ? pkrToAed(raw.total ?? 0) : (raw.total ?? 0);
   return {
     id:            raw.id            || '',
     productId:     raw.productId     || '',
@@ -61,24 +133,17 @@ function docToInvoiceProduct(raw: any): InvoiceProduct {
     category:      raw.category      || '',
     description:   raw.description   || '',
     quantity:      raw.quantity      ?? 1,
-    price,
-    total,
+    price:         raw.price ?? 0,
+    total:         raw.total ?? 0,
     serialNumbers: raw.serialNumbers || [],
     serialCities:  raw.serialCities  || {},
-    // Everything is AED after normalization.
     currency:      'AED',
-    // FIX: explicitly read imageUrls so it is never lost.
     imageUrls:     Array.isArray(raw.imageUrls) ? raw.imageUrls : [],
   };
 }
 
 function docToInvoice(d: any): Invoice {
   const data = d.data ? d.data() : d;
-  // An invoice is "legacy PKR" if any stored product row is missing currency or
-  // marked 'PKR'. Such invoices have all amounts in PKR and must be converted.
-  // Legacy PKR invoices have huge totals; real AED invoices are small.
-  const isLegacyPKR = (data.totalAmount || 0) > 50000;
-  const amt = (n: number) => (isLegacyPKR ? pkrToAed(n) : (n || 0));
   return {
     id:                     d.id,
     invoiceNumber:          data.invoiceNumber          || '',
@@ -91,13 +156,11 @@ function docToInvoice(d: any): Invoice {
     customerCity:           data.customerCity           || '',
     customerAddress:        data.customerAddress,
     warrantyLocation:       data.warrantyLocation,
-    // FIX: map each product through docToInvoiceProduct so imageUrls is always
-    // present; previously this was a raw pass-through `data.products || []`.
     products:               (data.products || []).map(docToInvoiceProduct),
     exchangeWarrantyNote:   data.exchangeWarrantyNote   || '',
     deliveryStatus:         data.deliveryStatus         || 'Self-collect',
     deliveryReceivedStatus: data.deliveryReceivedStatus || 'Pending',
-    totalAmount:            amt(data.totalAmount),
+    totalAmount:            data.totalAmount || 0,
     status:                 data.status                 || 'Unpaid',
     salesperson:            data.salesperson,
     salespersonLocation:    data.salespersonLocation,
@@ -112,19 +175,19 @@ function docToInvoice(d: any): Invoice {
     chequeBank:             data.chequeBank,
     chequeDate:             data.chequeDate,
     paymentStatus:          data.paymentStatus,
-    paidAmount:             data.paidAmount == null ? data.paidAmount : amt(data.paidAmount),
-    remainingAmount:        data.remainingAmount == null ? data.remainingAmount : amt(data.remainingAmount),
+    paidAmount:             data.paidAmount,
+    remainingAmount:        data.remainingAmount,
     collectionMethod:       data.collectionMethod,
     branch:                 data.branch,
-    deductionCharges:       amt(data.deductionCharges || 0),
-    deductionCurrency:      data.deductionCurrency      || 'PKR',
+    deductionCharges:       data.deductionCharges || 0,
+    deductionCurrency:      data.deductionCurrency      || 'AED',
     cargoAmount:            data.cargoAmount            || 0,
-    cargoCurrency:          data.cargoCurrency          || 'PKR',
+    cargoCurrency:          data.cargoCurrency          || 'AED',
     customsAmount:          data.customsAmount          || 0,
-    customsCurrency:        data.customsCurrency        || 'PKR',
+    customsCurrency:        data.customsCurrency        || 'AED',
     agentDetails:           data.agentDetails           || '',
     agentAmount:            data.agentAmount            || 0,
-    agentCurrency:          data.agentCurrency          || 'PKR',
+    agentCurrency:          data.agentCurrency          || 'AED',
     digitalStamp:           data.digitalStamp,
     imageUrl:               data.imageUrl,
     pdfUrl:                 data.pdfUrl,
@@ -254,10 +317,17 @@ export class InvoiceFirebaseService {
       const ref = await addDoc(collection(db, COLLECTION), data);
       console.log('✅ Invoice created:', ref.id, 'with liquidity:', liquidityFields);
 
+      // Sync linked transaction so paid amount shows in Total Inflow + Transactions list.
+      const linkedTransactionId = await syncInvoiceTransaction(ref.id, dto);
+      if (linkedTransactionId) {
+        await updateDoc(ref, { linkedTransactionId });
+      }
+
       return {
         ...dto,
         id: ref.id,
         ...liquidityFields,
+        linkedTransactionId,
         createdAt: now,
         updatedAt: now,
       };
@@ -270,9 +340,39 @@ export class InvoiceFirebaseService {
   // ── Update invoice ───────────────────────────────────────────────────────
   static async updateInvoice(id: string, dto: Partial<Omit<Invoice, 'id'>>): Promise<void> {
     try {
+      // Read the existing doc FIRST (before writing) — gives us prior
+      // linkedTransactionId, and lets us fill in any field `dto` doesn't
+      // include (handleSave always sends a full object, but this is also
+      // safe for true partial updates).
+      const beforeSnap = await getDoc(doc(db, COLLECTION, id));
+      const before = beforeSnap.exists() ? (beforeSnap.data() as any) : {};
+
       const data = stripUndefined({ ...dto, updatedAt: new Date().toISOString() });
       await updateDoc(doc(db, COLLECTION, id), data);
       console.log('✅ Invoice updated:', id);
+
+      // ── Keep the linked transaction (and therefore Total Inflow on the
+      //    Dashboard) in sync with payment-relevant edits. Without this, an
+      //    edited paidAmount/totalAmount/bankId never reaches `transactions`
+      //    and the dashboard card silently goes stale.
+      // IMPORTANT: build the merged record from `before` + `dto` directly —
+      // do NOT re-fetch with getDoc after updateDoc. Firestore's SDK can
+      // resolve updateDoc before the local cache reflects it, so a
+      // post-write getDoc can return stale (pre-update) data, silently
+      // syncing the transaction to the OLD amount. Using before+dto avoids
+      // that race entirely.
+      const paymentFields = ['paidAmount', 'totalAmount', 'bankId', 'bankName',
+        'paymentMode', 'chequeNumber', 'chequeDate', 'chequeBank', 'invoiceNumber', 'customerName'];
+      const touchesPayment = paymentFields.some(f => f in dto);
+      console.log('🔍 touchesPayment:', touchesPayment, 'dto keys:', Object.keys(dto));
+
+      if (touchesPayment) {
+        const merged = { ...before, ...dto };
+        const linkedTransactionId = await syncInvoiceTransaction(id, merged, before.linkedTransactionId);
+        if (linkedTransactionId && linkedTransactionId !== before.linkedTransactionId) {
+          await updateDoc(doc(db, COLLECTION, id), { linkedTransactionId });
+        }
+      }
     } catch (error) {
       console.error('❌ Error updating invoice:', error);
       throw new Error('Failed to update invoice in Firestore');
@@ -282,6 +382,16 @@ export class InvoiceFirebaseService {
   // ── Delete invoice ───────────────────────────────────────────────────────
   static async deleteInvoice(id: string): Promise<void> {
     try {
+      try {
+        const snap = await getDoc(doc(db, COLLECTION, id));
+        const linkedTransactionId = snap.exists() ? (snap.data() as any).linkedTransactionId : undefined;
+        if (linkedTransactionId) {
+          await deleteDoc(doc(db, TRANSACTIONS_COLLECTION, linkedTransactionId));
+          console.log('✅ Linked transaction deleted:', linkedTransactionId);
+        }
+      } catch {
+        // Linked transaction may not exist — ignore
+      }
       try {
         const pdfRef = storageRef(storage, `${PDF_STORAGE_PATH}/${id}.pdf`);
         await deleteObject(pdfRef);

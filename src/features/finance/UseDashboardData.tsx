@@ -136,6 +136,11 @@ export function useDashboardData(): DashboardData {
 
   // ── Current-month transactions only (for the stat cards) ─────────────────
   const currentMonthTransactions = transactions.filter(t => isCurrentMonth(t.date));
+  console.log('🔎 DEBUG dashboard:', {
+    totalTransactions: transactions.length,
+    currentMonthCount: currentMonthTransactions.length,
+    allDates: transactions.map(t => ({ date: t.date, amount: t.amount, cat: t.mainCategory })),
+  });
 
   // Stats cards show current month figures only
   const rawStats = calculateStats(currentMonthTransactions);
