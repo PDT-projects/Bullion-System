@@ -6,41 +6,16 @@ import type { TransactionStats } from '../../modules/transactions/models/types';
 import { db } from '../../api/firebase/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
-// ── Legacy PKR → AED normalization (AED-first app) ────────────────────────────
-// This hook reads Firestore directly, so it must convert old PKR-stored amounts
-// to AED itself. Detection is by magnitude: legacy PKR values are huge, real AED
-// values are small. Threshold 50,000 separates them safely.
-const PKR_TO_AED = 3.67 / 279.5;
-const toAed = (n: number) => Math.round((n || 0) * PKR_TO_AED * 100) / 100;
-const isPkr = (n: number) => (n || 0) > 50000;
-
-function normTransaction(t: any): any {
-  if (!isPkr(t.amount)) return t;
-  return {
-    ...t,
-    amount:          toAed(t.amount),
-    amountPaid:      t.amountPaid      != null ? toAed(t.amountPaid)      : t.amountPaid,
-    remainingAmount: t.remainingAmount != null ? toAed(t.remainingAmount) : t.remainingAmount,
-    totalPaid:       t.totalPaid       != null ? toAed(t.totalPaid)       : t.totalPaid,
-    partialPayments: (t.partialPayments || []).map((p: any) => ({ ...p, amount: toAed(p.amount) })),
-  };
-}
-function normInvoice(inv: any): any {
-  if (!isPkr(inv.totalAmount)) return inv;
-  return {
-    ...inv,
-    totalAmount:      toAed(inv.totalAmount),
-    paidAmount:       inv.paidAmount       != null ? toAed(inv.paidAmount)       : inv.paidAmount,
-    remainingAmount:  inv.remainingAmount  != null ? toAed(inv.remainingAmount)  : inv.remainingAmount,
-    deductionCharges: inv.deductionCharges != null ? toAed(inv.deductionCharges) : inv.deductionCharges,
-    products: (inv.products || []).map((p: any) =>
-      isPkr(p.total ?? p.price) ? { ...p, price: toAed(p.price), total: toAed(p.total) } : p),
-  };
-}
-function normProduct(p: any): any {
-  if (!isPkr(p.sellPrice ?? p.costPrice)) return p;
-  return { ...p, costPrice: toAed(p.costPrice), sellPrice: toAed(p.sellPrice) };
-}
+// ── Legacy data passthrough ────────────────────────────────────────────────
+// Magnitude-based PKR detection (amount > 50000) was unreliable and caused
+// real corruption: it could mis-tag a genuinely large AED transaction, or
+// (combined with other parts of the app double-converting) produce wildly
+// wrong totals. All transactions are written in AED already — pass through
+// untouched. If truly old PKR-era docs ever need conversion, do it via a
+// one-time migration script, not on every read.
+function normTransaction(t: any): any { return t; }
+function normInvoice(inv: any): any { return inv; }
+function normProduct(p: any): any { return p; }
 
 interface DashboardData {
   transactions: Transaction[];
@@ -136,11 +111,6 @@ export function useDashboardData(): DashboardData {
 
   // ── Current-month transactions only (for the stat cards) ─────────────────
   const currentMonthTransactions = transactions.filter(t => isCurrentMonth(t.date));
-  console.log('🔎 DEBUG dashboard:', {
-    totalTransactions: transactions.length,
-    currentMonthCount: currentMonthTransactions.length,
-    allDates: transactions.map(t => ({ date: t.date, amount: t.amount, cat: t.mainCategory })),
-  });
 
   // Stats cards show current month figures only
   const rawStats = calculateStats(currentMonthTransactions);

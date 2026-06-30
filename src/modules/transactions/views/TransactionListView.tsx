@@ -52,8 +52,13 @@ const fmtAmount = (amount: number, meta: CurrencyMeta): string => {
   }
 };
 
-const convertFromPKR = (amount: number, target: CurrencyCode, rates: RateMap): number =>
-  target === 'PKR' ? amount : (amount / rates.PKR) * rates[target];
+// FIX: transactions.amount is stored in AED (the app's canonical currency),
+// not PKR. The old name/logic assumed PKR storage and divided by rates.PKR
+// before multiplying by the target rate — for target='AED' this silently
+// shrank every amount by ~76x (e.g. 9940.32 AED rendered as 131.31).
+// Convert FROM AED to the target display currency instead.
+const convertFromAed = (amount: number, target: CurrencyCode, rates: RateMap): number =>
+  target === 'AED' ? amount : (amount / rates.AED) * rates[target];
 
 function useCurrencyRates() {
   const [rates, setRates]             = useState<RateMap>(FALLBACK_RATES);
@@ -247,7 +252,7 @@ function CurrencyRows({
     >
       {extras.map(code => {
         const meta = getMeta(code);
-        const amt  = convertFromPKR(pkrAmount, code, rates);
+        const amt  = convertFromAed(pkrAmount, code, rates);
         return (
           <div key={code} className="flex items-center justify-between gap-2">
             <span
@@ -293,7 +298,7 @@ function StatCard({
   countValue?: React.ReactNode;
 }) {
   const meta   = getMeta(primary);
-  const amount = convertFromPKR(pkrAmount, primary, rates);
+  const amount = convertFromAed(pkrAmount, primary, rates);
 
   if (dark) {
     return (
@@ -393,7 +398,7 @@ export function TransactionListView({
   const cardProps = { primary: primaryCurrency, extras: extraCurrencies, rates };
 
   // Convert a PKR amount for display in the chosen primary currency
-  const fmtPrimary = (pkr: number) => fmtAmount(convertFromPKR(pkr, primaryCurrency, rates), getMeta(primaryCurrency));
+  const fmtPrimary = (aedAmount: number) => fmtAmount(convertFromAed(aedAmount, primaryCurrency, rates), getMeta(primaryCurrency));
 
   const modeBadge = (mode: string) => {
     const colors: Record<string, string> = {
@@ -998,7 +1003,7 @@ export function TransactionListView({
                     <div className="flex flex-wrap gap-3 mt-2">
                       {extraCurrencies.map(code => {
                         const meta = getMeta(code);
-                        const amt  = convertFromPKR(viewTransaction.amount || 0, code, rates);
+                        const amt  = convertFromAed(viewTransaction.amount || 0, code, rates);
                         return (
                           <span key={code} className="flex items-center gap-1 text-sm"
                             style={{ color: 'rgba(255,255,255,0.55)' }}>
@@ -1103,7 +1108,7 @@ export function TransactionListView({
                       <p className="text-sm font-bold text-slate-700">{fmtPrimary(viewTransaction.amount || 0)}</p>
                       {extraCurrencies.map(code => (
                         <p key={code} className="text-[10px] text-slate-500 mt-0.5">
-                          {fmtAmount(convertFromPKR(viewTransaction.amount || 0, code, rates), getMeta(code))}
+                          {fmtAmount(convertFromAed(viewTransaction.amount || 0, code, rates), getMeta(code))}
                         </p>
                       ))}
                     </div>
@@ -1112,7 +1117,7 @@ export function TransactionListView({
                       <p className="text-sm font-bold text-emerald-700">{fmtPrimary(totalPaid)}</p>
                       {extraCurrencies.map(code => (
                         <p key={code} className="text-[10px] text-emerald-400 mt-0.5">
-                          {fmtAmount(convertFromPKR(totalPaid, code, rates), getMeta(code))}
+                          {fmtAmount(convertFromAed(totalPaid, code, rates), getMeta(code))}
                         </p>
                       ))}
                     </div>
@@ -1125,7 +1130,7 @@ export function TransactionListView({
                       </p>
                       {remainingAmount > 0 && extraCurrencies.map(code => (
                         <p key={code} className="text-[10px] text-orange-300 mt-0.5">
-                          {fmtAmount(convertFromPKR(remainingAmount, code, rates), getMeta(code))}
+                          {fmtAmount(convertFromAed(remainingAmount, code, rates), getMeta(code))}
                         </p>
                       ))}
                     </div>
@@ -1171,7 +1176,7 @@ export function TransactionListView({
                               <span className="text-sm font-semibold text-gray-800">{fmtPrimary(p.amount)}</span>
                               {extraCurrencies.map(code => (
                                 <span key={code} className="text-xs text-gray-400">
-                                  · {fmtAmount(convertFromPKR(p.amount, code, rates), getMeta(code))}
+                                  · {fmtAmount(convertFromAed(p.amount, code, rates), getMeta(code))}
                                 </span>
                               ))}
                               <span className="text-xs text-gray-400">· {p.method}</span>
