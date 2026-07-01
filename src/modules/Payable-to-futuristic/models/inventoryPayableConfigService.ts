@@ -88,7 +88,7 @@ export async function createInventoryPayableConfig(
       inputCurrency:  dto.inputCurrency,
       inputAmount:    dto.inputAmount,
       slabs:          dto.slabs ?? [],
-      notes:          dto.notes,
+      notes:          dto.notes ?? '',
       productName:    dto.productName,
       brandName:      dto.brandName,
       modelName:      dto.modelName,
@@ -120,7 +120,11 @@ export async function updateInventoryPayableConfig(
   id: string,
   updates: Partial<Omit<InventoryPayableConfig, 'id' | 'createdAt'>>
 ): Promise<void> {
-  await updateDoc(doc(db, COLLECTION, id), { ...updates, updatedAt: nowISO() });
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(updates)) {
+    if (v !== undefined) clean[k] = v;
+  }
+  await updateDoc(doc(db, COLLECTION, id), { ...clean, updatedAt: nowISO() });
 }
 
 // ── Delete a config ───────────────────────────────────────────────────────────
