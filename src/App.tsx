@@ -1,3 +1,8 @@
+// import { repairInflatedTransactions } from './utils/repairTransactions';
+// // inside any useEffect:
+// useEffect(() => { repairInflatedTransactions(); }, []);
+
+
 import { RouterProvider } from 'react-router-dom';
 import { router } from './routes';
 import { Toaster } from './components/ui/sonner';

@@ -2,6 +2,7 @@
 // UI component for create/edit bank account
 // Updated with loading states for Firebase integration
 // Updated: multi-currency support (AED / PKR) + slate-700 color fix for buttons
+// FIX: balance input no longer overlaps currency prefix; Create button contrast fixed
 
 import React from 'react';
 import { 
@@ -195,12 +196,27 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
             </div>
 
             {/* Initial Balance */}
+            {/*
+              FIX: Previously the currency code was absolutely positioned on top of
+              the input with a fixed left padding (pl-14). Larger numbers rendered
+              flush against/under the "AED"/"PKR" label and visually overlapped it.
+              This now uses a real flex "input group": the currency badge sits in
+              its own bordered box to the left of the input, so there is no
+              possibility of the typed value ever overlapping the currency code,
+              no matter how many digits are entered.
+            */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 {isEditMode ? 'Current Balance' : 'Initial Balance'}
               </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
+              <div
+                className={`flex w-full rounded-lg border overflow-hidden focus-within:ring-2 ${
+                  errors.balance
+                    ? 'border-red-300 focus-within:ring-red-200'
+                    : 'border-gray-300 focus-within:ring-slate-700/20 focus-within:border-slate-700'
+                } ${isSaving ? 'bg-gray-50' : 'bg-white'}`}
+              >
+                <span className="flex items-center px-3 bg-gray-100 border-r border-gray-300 text-gray-600 font-medium text-sm shrink-0">
                   {currentCurrency}
                 </span>
                 <input
@@ -211,11 +227,7 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
                     clearFieldError('balance');
                   }}
                   disabled={isSaving}
-                  className={`w-full pl-14 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
-                    errors.balance 
-                      ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-slate-700/20 focus:border-slate-700'
-                  }`}
+                  className="w-full min-w-0 px-4 py-3 border-0 focus:outline-none focus:ring-0 disabled:bg-gray-50 disabled:cursor-not-allowed bg-transparent"
                   placeholder="0"
                   min="0"
                   step="0.01"
@@ -274,6 +286,15 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
             </div>
 
             {/* Action Buttons */}
+            {/*
+              FIX: The submit button previously relied on `disabled:opacity-50`
+              applied to a dark bg-slate-700 + text-white button. Depending on the
+              browser/rendering, the reduced-opacity dark background combined with
+              white text at 50% opacity read as low/near-identical contrast
+              ("foreground and background look the same"). We now use explicit,
+              distinct solid colors for the enabled vs. disabled states instead of
+              opacity, guaranteeing readable contrast in both states.
+            */}
             <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200">
               <button
                 type="button"
@@ -286,7 +307,11 @@ export const BankFormView: React.FC<BankFormViewProps> = ({
               <button
                 type="submit"
                 disabled={!isValid || isSaving}
-                className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  !isValid || isSaving
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : 'bg-slate-700 text-white hover:bg-slate-800'
+                }`}
               >
                 {isSaving ? (
                   <>
