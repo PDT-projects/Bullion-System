@@ -104,6 +104,31 @@ export const BankListView: React.FC<BankListViewProps> = ({
   const toBank = banks.find(b => b.id === transferData.toBankId);
   const hasInsufficientFunds = fromBank && transferData.amount > 0 && transferData.amount > fromBank.balance;
 
+  // FIX: The "Total Balance" / "Highest Balance" / "Lowest Balance" stat cards
+  // were formatting raw summed/compared numbers with a single hardcoded AED
+  // formatter, even though accounts can be AED or PKR. Mixing currencies into
+  // one total (or labeling a PKR account's balance as "AED") is misleading, so
+  // balances are now grouped and formatted per-currency using each bank's own
+  // `currency`, computed directly from the `banks` list.
+  const formatByCurrency = (amount: number, currency?: 'AED' | 'PKR') =>
+    new Intl.NumberFormat(currency === 'PKR' ? 'en-PK' : 'en-AE', {
+      style: 'currency', currency: currency || 'AED', minimumFractionDigits: 0
+    }).format(amount);
+
+  const totalsByCurrency = banks.reduce((acc, bank) => {
+    const cur = bank.currency || 'AED';
+    acc[cur] = (acc[cur] || 0) + (bank.balance || 0);
+    return acc;
+  }, {} as Record<string, number>);
+  const currencyKeys = Object.keys(totalsByCurrency);
+
+  const highestBank = banks.length
+    ? banks.reduce((max, b) => (b.balance > max.balance ? b : max), banks[0])
+    : null;
+  const lowestBank = banks.length
+    ? banks.reduce((min, b) => (b.balance < min.balance ? b : min), banks[0])
+    : null;
+
   const validateTransfer = (): boolean => {
     const errs: Record<string, string> = {};
     if (!transferData.fromBankId) errs.fromBankId = 'Please select source bank';
@@ -266,23 +291,44 @@ export const BankListView: React.FC<BankListViewProps> = ({
             <Landmark size={18} className="text-slate-700" />
             <p className="text-sm text-gray-600">Total Balance</p>
           </div>
-          <p className="text-2xl font-bold text-slate-700">{formatCurrency(stats.totalBalance)}</p>
+          {currencyKeys.length > 0 ? (
+            <div className="space-y-0.5">
+              {currencyKeys.map((cur) => (
+                <p key={cur} className="text-xl font-bold text-slate-700 leading-tight">
+                  {formatByCurrency(totalsByCurrency[cur], cur as 'AED' | 'PKR')}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-2xl font-bold text-slate-700">{formatByCurrency(0)}</p>
+          )}
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp size={18} className="text-green-600" />
             <p className="text-sm text-gray-600">Highest Balance</p>
           </div>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(stats.highestBalance)}</p>
+          <p className="text-2xl font-bold text-green-600">
+            {highestBank ? formatByCurrency(highestBank.balance, highestBank.currency as 'AED' | 'PKR') : formatByCurrency(0)}
+          </p>
+          {highestBank && <p className="text-xs text-gray-400 mt-1 truncate">{highestBank.name}</p>}
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center gap-2 mb-2">
             <TrendingDown size={18} className="text-orange-500" />
             <p className="text-sm text-gray-600">Lowest Balance</p>
           </div>
-          <p className="text-2xl font-bold text-orange-500">{formatCurrency(stats.lowestBalance)}</p>
+          <p className="text-2xl font-bold text-orange-500">
+            {lowestBank ? formatByCurrency(lowestBank.balance, lowestBank.currency as 'AED' | 'PKR') : formatByCurrency(0)}
+          </p>
+          {lowestBank && <p className="text-xs text-gray-400 mt-1 truncate">{lowestBank.name}</p>}
         </div>
       </div>
+      {currencyKeys.length > 1 && (
+        <p className="text-xs text-gray-400 -mt-3">
+          Note: Highest/Lowest Balance compares raw account balances and is not currency-converted, since accounts use different currencies (AED / PKR).
+        </p>
+      )}
 
       {/* Search */}
       <div className="bg-white p-4 rounded-lg border border-gray-200">
