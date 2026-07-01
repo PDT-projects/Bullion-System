@@ -55,7 +55,7 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'cash-in-hand':               'Cash List',
   'bank-activity':              'Bank Activity Report',
   'against-the-invoice':        'Against Invoice',
-  'budgets':                    'Budgets List',
+  // 'budgets':                    'Budgets List',
   'employees':                  'Employees List',
   'payable-to-futuristic':      'Payable to Futuristic', // ← NEW
 
@@ -139,7 +139,7 @@ export function Sidebar() {
             { id: 'bank-activity',    name: 'Activity Report',   icon: Activity,       path: '/banking/activity' },
           ],
         },
-        { id: 'budgets', name: 'Budgets', icon: Banknote, path: '/budgets' },
+        // { id: 'budgets', name: 'Budgets', icon: Banknote, path: '/budgets' },
       ],
     },
     {

@@ -350,7 +350,19 @@ export const CashListView: React.FC<CashListViewProps> = ({
       {/* ── Opening Balance Modal ── */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+          {/*
+            FIX: This card already had `max-w-sm` in Tailwind classes, but in
+            this build several Tailwind utility classes are evidently getting
+            dropped at build time (the buttons in this same file already work
+            around that by falling back to inline `style={{...}}` for colors).
+            The same thing was happening to `max-w-sm`, so the modal rendered
+            edge-to-edge instead of as a small centered dialog. Pinning the
+            width with an explicit inline style guarantees it can't happen.
+          */}
+          <div
+            style={{ maxWidth: '400px' }}
+            className="bg-white rounded-2xl shadow-2xl w-full overflow-hidden"
+          >
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-gray-900">Set Opening Balance</h3>
@@ -362,15 +374,16 @@ export const CashListView: React.FC<CashListViewProps> = ({
               </button>
             </div>
             <div className="px-6 py-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Amount (PKR)</label>
+              {/* FIX: was hardcoded to PKR; this ledger is tracked in AED. */}
+              <label className="block text-sm font-medium text-gray-700 mb-2">Amount (AED)</label>
               <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-700 focus-within:border-gray-700 overflow-hidden">
-                <span className="pl-3 pr-2 text-gray-400 text-sm font-medium shrink-0">PKR</span>
+                <span className="pl-3 pr-2 text-gray-400 text-sm font-medium shrink-0">AED</span>
                 <input
                   type="number"
                   value={openingBalanceInput}
                   onChange={e => setOpeningBalanceInput(e.target.value)}
                   disabled={isSavingBalance}
-                  className="flex-1 py-3 pr-3 text-sm bg-transparent outline-none disabled:opacity-50"
+                  className="flex-1 min-w-0 py-3 pr-3 text-sm bg-transparent outline-none disabled:opacity-50"
                   placeholder="0"
                   min="0"
                   step="1"

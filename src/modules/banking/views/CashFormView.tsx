@@ -273,8 +273,22 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Amount *
               </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">AED</span>
+              {/*
+                FIX: The "AED" currency label was absolutely positioned over
+                the input, so larger amounts overlapped the label. Switched to
+                a flex input group where the currency badge has its own
+                bordered box, so the value can never overlap it.
+              */}
+              <div
+                className={`flex w-full rounded-lg border overflow-hidden focus-within:ring-2 ${
+                  errors.amount
+                    ? 'border-red-300 focus-within:ring-red-200'
+                    : 'border-gray-300 focus-within:ring-gray-700/20 focus-within:border-gray-700'
+                } ${isSaving ? 'bg-gray-50' : 'bg-white'}`}
+              >
+                <span className="flex items-center px-3 bg-gray-100 border-r border-gray-300 text-gray-600 font-medium text-sm shrink-0">
+                  AED
+                </span>
                 <input
                   type="number"
                   value={formData.amount || ''}
@@ -283,11 +297,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                     clearFieldError('amount');
                   }}
                   disabled={isSaving}
-                  className={`w-full pl-12 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:cursor-not-allowed ${
-                    errors.amount 
-                      ? 'border-red-300 focus:ring-red-200' 
-                      : 'border-gray-300 focus:ring-gray-700/20 focus:border-gray-700'
-                  }`}
+                  className={`w-full min-w-0 px-4 py-3 border-0 focus:outline-none focus:ring-0 bg-transparent ${isSaving ? 'cursor-not-allowed' : ''}`}
                   placeholder="0"
                   min="1"
                   step="0.01"
@@ -391,7 +401,11 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
               <button
                 type="submit"
                 disabled={!isValid || isSaving}
-                className="flex items-center gap-2 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  !isValid || isSaving
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-700 text-white hover:bg-gray-800'
+                }`}
               >
                 {isSaving ? (
                   <>
