@@ -45,8 +45,8 @@ const FALLBACK_RATES: RateMap = { PKR: 279.5, CAD: 1.38, AED: 3.67, SAR: 3.75 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const convertFromPKR = (amount: number, target: CurrencyCode, rates: RateMap): number =>
-  target === 'PKR' ? amount : (amount / rates.PKR) * rates[target];
+const convertFromAed = (amount: number, target: CurrencyCode, rates: RateMap): number =>
+  target === 'AED' ? amount : (amount / rates.AED) * rates[target];
 
 const fmt = (amount: number, meta: CurrencyMeta): string => {
   try {
@@ -299,7 +299,7 @@ function CurrencyRows({
       style={dark ? { borderTop: '1px solid rgba(255,255,255,0.1)' } : {}}>
       {extras.map(code => {
         const meta = getMeta(code);
-        const amt  = convertFromPKR(pkrAmount, code, rates);
+        const amt  = convertFromAed(pkrAmount, code, rates);
         return (
           <div key={code} className="flex items-center justify-between gap-2">
             <span className={`flex items-center gap-1.5 text-xs ${dark ? '' : 'text-gray-400'}`}
@@ -336,7 +336,7 @@ interface AmountCardProps {
 
 function AmountCard({ label, icon, pkrAmount, primary, extras, rates, subtitle, amountColor, dark = false }: AmountCardProps) {
   const meta   = getMeta(primary);
-  const amount = convertFromPKR(pkrAmount, primary, rates);
+  const amount = convertFromAed(pkrAmount, primary, rates);
 
   if (dark) {
     return (
@@ -387,7 +387,7 @@ interface SmallStatCardProps {
 
 function SmallStatCard({ label, countValue, pkrAmount = 0, primary, extras, rates, amountColor = 'text-gray-900', subtitle, subtitleSuffix, rawAed = false }: SmallStatCardProps) {
   const meta   = rawAed ? getMeta('AED') : getMeta(primary);
-  const amount = rawAed ? pkrAmount : convertFromPKR(pkrAmount, primary, rates);
+  const amount = rawAed ? pkrAmount : convertFromAed(pkrAmount, primary, rates);
   const rowExtras = rawAed ? [] : extras;
 
   return (
@@ -597,7 +597,7 @@ export function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number, n: string) => [fmt(convertFromPKR(v, primaryCurrency, rates), getMeta(primaryCurrency)), n]} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                <Tooltip formatter={(v: number, n: string) => [fmt(convertFromAed(v, primaryCurrency, rates), getMeta(primaryCurrency)), n]} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
                 <Line type="monotone" dataKey="inflow"  stroke="#10b981" strokeWidth={2} name="Inflow"  dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
                 <Line type="monotone" dataKey="outflow" stroke="#f87171" strokeWidth={2} name="Outflow" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
@@ -620,7 +620,7 @@ export function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number, n: string) => [fmt(convertFromPKR(v, primaryCurrency, rates), getMeta(primaryCurrency)), n]} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                <Tooltip formatter={(v: number, n: string) => [fmt(convertFromAed(v, primaryCurrency, rates), getMeta(primaryCurrency)), n]} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
                 <Bar dataKey="inflow"  fill="#10b981" name="Inflow"  radius={[3, 3, 0, 0]} />
                 <Bar dataKey="outflow" fill="#f87171" name="Outflow" radius={[3, 3, 0, 0]} />
@@ -663,7 +663,7 @@ export function Dashboard() {
                       }`}>{t.mainCategory}</span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{t.subCategory}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs font-semibold text-gray-800 tabular-nums">{fmt(convertFromPKR(t.amount, primaryCurrency, rates), getMeta(primaryCurrency))}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs font-semibold text-gray-800 tabular-nums">{fmt(convertFromAed(t.amount, primaryCurrency, rates), getMeta(primaryCurrency))}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-md ${
                         t.mode === 'Cash' ? 'bg-blue-50 text-blue-700'

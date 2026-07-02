@@ -159,8 +159,8 @@ export function useDashboardData(): DashboardData {
 
   const stats = {
     ...rawStats,
-    cashInflow: cashStats.totalInflow,
-    cashOutflow: cashStats.totalOutflow,
+    cashInflow: rawStats.totalInflow,
+    cashOutflow: rawStats.totalOutflow,
     cashBalance: realCashBalance,
     totalBankBalance,
     // Overall balance = actual cash-in-hand balance + current bank balances

@@ -1,14 +1,15 @@
-/** 1 PKR = PKR_TO_AED AED  (update this constant whenever the rate changes) */
-export const PKR_TO_AED = 0.013;
+// Amounts in this app are stored in AED — no PKR conversion needed.
+// These functions now treat all inputs as AED directly.
 
-/** Convert a PKR amount to AED */
-export function pkrToAed(pkr: number): number {
-  return pkr * PKR_TO_AED;
+export const PKR_TO_AED = 1; // kept for any remaining references; no-op multiplier
+
+/** No-op: amount is already AED */
+export function pkrToAed(aed: number): number {
+  return aed;
 }
 
-/** Format an amount (stored in PKR) as "AED X,XXX.XX" */
-export function formatAED(pkr: number): string {
-  const aed = pkrToAed(pkr);
+/** Format an AED amount */
+export function formatAED(aed: number): string {
   return new Intl.NumberFormat('en-AE', {
     style:                 'currency',
     currency:              'AED',
@@ -17,17 +18,17 @@ export function formatAED(pkr: number): string {
   }).format(aed);
 }
 
-/** Format an amount as "PKR X,XX,XXX" */
-export function formatPKR(pkr: number): string {
-  return new Intl.NumberFormat('en-PK', {
+/** Format an amount as AED (previously PKR — kept for compatibility) */
+export function formatPKR(aed: number): string {
+  return new Intl.NumberFormat('en-AE', {
     style:                 'currency',
-    currency:              'PKR',
+    currency:              'AED',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(pkr);
+  }).format(aed);
 }
 
-/** AED first, PKR second: "AED 1,234.56  /  PKR 1,50,000" */
-export function formatDual(pkr: number): string {
-  return `${formatAED(pkr)}  /  ${formatPKR(pkr)}`;
+/** AED display (previously dual PKR/AED — now just AED) */
+export function formatDual(aed: number): string {
+  return formatAED(aed);
 }
