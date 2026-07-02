@@ -355,15 +355,19 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   }, []);
 
   const isEditing = !!editingInvoice;
-  const TODAY = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const setFormData = useCallback((data: Partial<Invoice>) => {
+    // FIX: this used to force `date` back to TODAY on every single
+    // setFormData call while creating a new invoice, which silently
+    // reverted any date the user picked in the Date field back to today.
+    // Date now behaves like any other editable field — it defaults to
+    // today (set in the initial useState above) but stays whatever the
+    // user sets it to afterwards, for both create and edit.
     setFormDataState(prev => ({
       ...prev,
       ...data,
-      ...(!isEditing ? { date: TODAY } : {}),
     }));
-  }, [isEditing, TODAY]);
+  }, []);
 
   // ── Add country+city and persist ──────────────────────────────────────────
   const handleAddCountryCity = useCallback(async (country: string, city: string) => {

@@ -3,6 +3,8 @@ import { TransactionFirebaseService } from '../../modules/transactions/models/tr
 import { calculateStats } from '../../modules/transactions/models/transactionsService';
 import { Transaction } from '../../modules/transactions/models/types';
 import type { TransactionStats } from '../../modules/transactions/models/types';
+import { CashFirebaseService } from '../../modules/banking/models/cashFirebaseService';
+import { BankingService } from '../../modules/banking/models/bankingService';
 import { db } from '../../api/firebase/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
@@ -68,6 +70,31 @@ export function useDashboardData(): DashboardData {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // FIX: Cash Balance card was computed from the generic `transactions`
+  // collection (current month only) — a totally different dataset from the
+  // real Cash-in-Hand ledger, which is opening balance + cash_transactions +
+  // any 'transactions' docs with mode === 'Cash', all-time (not month-bound).
+  // That mismatch made the Dashboard show a wrong, much smaller balance than
+  // the actual Cash in Hand page. These now mirror that same source.
+  const [cashLedgerTxns, setCashLedgerTxns] = useState<any[]>([]);
+  const [cashOpeningBalance, setCashOpeningBalance] = useState(0);
+
+  const loadCashLedger = useCallback(async () => {
+    try {
+      const [cashTxns, records] = await Promise.all([
+        CashFirebaseService.fetchAllCashTransactions(),
+        CashFirebaseService.fetchAllCashRecords(),
+      ]);
+      setCashLedgerTxns(cashTxns);
+      setCashOpeningBalance(records[0]?.balance || 0);
+    } catch (err) {
+      console.error('Failed to load cash ledger for dashboard:', err);
+    }
+  }, []);
+
+  useEffect(() => { loadCashLedger(); }, [loadCashLedger]);
+
+
   useEffect(() => {
     // Track how many collections have received their first snapshot.
     // Only clear loading once ALL 6 have arrived.
@@ -117,14 +144,27 @@ export function useDashboardData(): DashboardData {
 
   const totalBankBalance = banks.reduce((sum, b: any) => sum + (b.balance || 0), 0);
 
+  // Merge cash_transactions with any 'transactions' docs paid via Cash mode
+  // (dedup by id) — this mirrors useCashListViewModel exactly, then hands off
+  // to the SAME BankingService.calculateCashStats function it uses, so the
+  // two screens can no longer drift apart with a subtly different formula.
+  const cashModeTxns = transactions.filter((t: any) => t.mode === 'Cash');
+  const seenCashIds = new Set<string>();
+  const mergedCashTxns: any[] = [];
+  for (const t of [...cashLedgerTxns, ...cashModeTxns]) {
+    if (!seenCashIds.has(t.id)) { seenCashIds.add(t.id); mergedCashTxns.push(t); }
+  }
+  const cashStats = BankingService.calculateCashStats(mergedCashTxns, cashOpeningBalance);
+  const realCashBalance = cashStats.totalCashInHand;
+
   const stats = {
     ...rawStats,
-    cashInflow: rawStats.totalInflow,
-    cashOutflow: rawStats.totalOutflow,
-    cashBalance: rawStats.netBalance,
+    cashInflow: cashStats.totalInflow,
+    cashOutflow: cashStats.totalOutflow,
+    cashBalance: realCashBalance,
     totalBankBalance,
-    // Overall balance = this month's net cash movement + current bank balances
-    overallBalance: rawStats.netBalance + totalBankBalance,
+    // Overall balance = actual cash-in-hand balance + current bank balances
+    overallBalance: realCashBalance + totalBankBalance,
     pendingTransactions: rawStats.pendingCount,
     pendingAmount: rawStats.totalPending,
     // Loans are running totals (not time-bound), so still use all loans
@@ -166,12 +206,13 @@ export function useDashboardData(): DashboardData {
     try {
       const txns = await TransactionFirebaseService.fetchAllTransactions();
       setTransactions(txns);
+      await loadCashLedger();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadCashLedger]);
 
   return {
     transactions, banks, loans, invoices, commissions, products,

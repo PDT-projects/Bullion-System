@@ -440,15 +440,16 @@ export function InvoiceFormView({
               {/* Date */}
               <div>
                 <label className={lbl}>Date</label>
-                {isEditing ? (
-                  <input type="date" value={formData.date || ''}
-                    onChange={e => setFormData({ date: e.target.value })} className={inp} />
-                ) : (
-                  <div className={`${inp} flex items-center gap-1.5 bg-gray-50 text-gray-600 cursor-not-allowed select-none`}>
-                    <span className="text-xs">🔒</span>
-                    <span className="text-xs">{formData.date || new Date().toISOString().split('T')[0]}</span>
-                  </div>
-                )}
+                {/*
+                  FIX: this used to lock the date as a read-only "today" value
+                  whenever creating a new invoice (isEditing === false), and
+                  only allowed editing when updating an existing invoice. The
+                  field now always renders as an editable date input — it
+                  still defaults to today's date, but can be changed before
+                  saving, for both new and existing invoices.
+                */}
+                <input type="date" value={formData.date || ''}
+                  onChange={e => setFormData({ date: e.target.value })} className={inp} />
               </div>
 
               {/* Customer Name — with history dropdown */}
