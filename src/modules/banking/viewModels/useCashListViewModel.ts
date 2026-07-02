@@ -55,11 +55,21 @@ export function useCashListViewModel() {
         fetchCashModeTransactions(),
       ]);
 
-      // Merge + deduplicate by id
+      // Merge + deduplicate.
+      // NOTE: the same sale can land in BOTH the 'cash_transactions' collection
+      // and the 'transactions' collection (mode === 'Cash'), as two different
+      // docs with different ids ("Invoice / Sale" + "Product sale received").
+      // Deduping by id alone misses this, so dedupe by a business key
+      // (invoice/note reference + amount), falling back to id if no note.
+      const keyOf = (t: CashTransaction) => {
+        const ref = (t.note || '').trim().toLowerCase();
+        return ref ? `${ref}__${t.amount}` : `id__${t.id}`;
+      };
       const seen   = new Set<string>();
       const merged: CashTransaction[] = [];
       for (const t of [...cashTxns, ...txnCash]) {
-        if (!seen.has(t.id)) { seen.add(t.id); merged.push(t); }
+        const key = keyOf(t);
+        if (!seen.has(key)) { seen.add(key); merged.push(t); }
       }
 
       // Sort newest first

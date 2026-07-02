@@ -379,7 +379,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={visualizationData.salesTrend}>
                   <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={v => [`Rs ${Number(v).toLocaleString()}`, 'Net Amount']} />
+                  <Tooltip formatter={v => [formatCurrency(Number(v)), 'Net Amount']} />
                   <Line type="monotone" dataKey="amount" stroke="#4f46e5" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -389,7 +389,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={visualizationData.branchSales}>
                   <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="branch" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={v => [`Rs ${Number(v).toLocaleString()}`, 'Net Amount']} />
+                  <Tooltip formatter={v => [formatCurrency(Number(v)), 'Net Amount']} />
                   <Bar dataKey="amount" radius={[4,4,0,0]}>
                     {visualizationData.branchSales.map((_, idx) => <Cell key={idx} fill={BRANCH_CHART_COLORS[idx % 3]} />)}
                   </Bar>
@@ -403,7 +403,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={visualizationData.salespersonSales}>
                   <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="salesperson" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={v => [`Rs ${Number(v).toLocaleString()}`, 'Net']} />
+                  <Tooltip formatter={v => [formatCurrency(Number(v)), 'Net']} />
                   <Bar dataKey="amount" fill="#f59e0b" radius={[4,4,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -484,12 +484,12 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
                     </td>
                     <td className="px-3 py-2.5"><p className="text-gray-800 text-xs">{item.salesperson}</p>{item.clientDealBy && <p className="text-xs text-gray-400">Deal: {item.clientDealBy}</p>}</td>
                     <td className="px-3 py-2.5 max-w-[160px]"><p className="text-gray-700 truncate text-xs" title={item.productSummary}>{item.productSummary}</p><p className="text-xs text-gray-400">{item.productCount} item(s)</p></td>
-                    <td className="px-3 py-2.5 text-right font-medium text-gray-900 whitespace-nowrap text-xs">Rs {item.invoiceTotal.toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right font-medium text-gray-900 whitespace-nowrap text-xs">{formatCurrency(item.invoiceTotal)}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${item.collectionMethod === 'Self Collection' ? 'bg-green-100 text-green-800' : item.collectionMethod === 'TCS' ? 'bg-blue-100 text-blue-800' : item.collectionMethod === 'LCS' ? 'bg-yellow-100 text-yellow-800' : item.collectionMethod === 'Daewoo' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>{item.collectionMethod}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-right whitespace-nowrap text-xs">{item.deductionCharges > 0 ? <span className="text-red-600 font-medium">- Rs {item.deductionCharges.toLocaleString()}</span> : <span className="text-gray-300">—</span>}</td>
-                    <td className="px-3 py-2.5 text-right font-bold text-[#4f46e5] whitespace-nowrap text-xs">Rs {item.netAmount.toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap text-xs">{item.deductionCharges > 0 ? <span className="text-red-600 font-medium">- {formatCurrency(item.deductionCharges)}</span> : <span className="text-gray-300">—</span>}</td>
+                    <td className="px-3 py-2.5 text-right font-bold text-[#4f46e5] whitespace-nowrap text-xs">{formatCurrency(item.netAmount)}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${item.deliveryStatus === 'Delivered' ? 'bg-green-100 text-green-800' : item.deliveryStatus === 'Self-collect' ? 'bg-blue-100 text-blue-800' : item.deliveryStatus === 'LCS' ? 'bg-yellow-100 text-yellow-800' : 'bg-purple-100 text-purple-800'}`}>{item.deliveryStatus}</span>
                     </td>
@@ -500,7 +500,7 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${item.payStatus === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{item.payStatus}</span>
-                      {item.paymentStatus === 'Partial' && <p className="text-xs text-orange-600 mt-0.5">Partial · Rs {item.paidAmount.toLocaleString()}</p>}
+                      {item.paymentStatus === 'Partial' && <p className="text-xs text-orange-600 mt-0.5">Partial · {formatCurrency(item.paidAmount)}</p>}
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       {item.paymentMode ? (
@@ -518,10 +518,10 @@ export function SalesReport({ invoices, products }: SalesReportProps) {
               <tfoot className="bg-gray-100 border-t-2 border-gray-300">
                 <tr>
                   <td colSpan={6} className="px-3 py-3 text-sm font-bold text-gray-900">TOTALS — {filteredData.length} invoices{selectedBranches.length > 0 ? ` · ${selectedBranches.join(', ')}` : ''}</td>
-                  <td className="px-3 py-3 text-xs font-bold text-gray-900 text-right">Rs {totals.invoiceTotal.toLocaleString()}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-gray-900 text-right">{formatCurrency(totals.invoiceTotal)}</td>
                   <td></td>
-                  <td className="px-3 py-3 text-xs font-bold text-red-600 text-right">- Rs {totals.deductionCharges.toLocaleString()}</td>
-                  <td className="px-3 py-3 text-xs font-bold text-[#4f46e5] text-right">Rs {totals.netAmount.toLocaleString()}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-red-600 text-right">- {formatCurrency(totals.deductionCharges)}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-[#4f46e5] text-right">{formatCurrency(totals.netAmount)}</td>
                   <td colSpan={4}></td>
                 </tr>
               </tfoot>

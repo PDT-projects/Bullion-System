@@ -64,6 +64,19 @@ const getMeta  = (code: CurrencyCode) => CURRENCIES.find(c => c.code === code)!;
 const pkrMeta  = getMeta('PKR');
 const formatPKR = (n: number) => fmt(n, pkrMeta);
 
+// Group raw bank balances by their own native currency — NO conversion.
+// Mirrors the Bank Accounts page's "Total Balance" card, which intentionally
+// keeps PKR and AED (etc.) separate since converting them with a rough rate
+// mixes real money with an approximation and misrepresents the total.
+function groupBankBalancesByCurrency(banks: any[]): Partial<Record<CurrencyCode, number>> {
+  const totals: Partial<Record<CurrencyCode, number>> = {};
+  for (const b of banks) {
+    const code = ((b.currency || b.accountCurrency || 'AED') as CurrencyCode);
+    totals[code] = (totals[code] || 0) + (b.balance || 0);
+  }
+  return totals;
+}
+
 // Resolve a Payable-to-Futuristic CurrencyAmounts object (aed/pkr/sar/usd,
 // computed with that module's own fixed rates) into whichever currency the
 // Dashboard currently has selected. AED/PKR/SAR map 1:1 onto the exact same
@@ -370,6 +383,45 @@ function AmountCard({ label, icon, pkrAmount, primary, extras, rates, subtitle, 
   );
 }
 
+// ─── BankBalanceCard ──────────────────────────────────────────────────────────
+// Unlike AmountCard, this never converts between currencies — it shows each
+// bank's balance in its own currency, stacked, exactly like the Bank Accounts
+// page's Total Balance card (e.g. "Rs 438,846" + "AED 5,000").
+
+function BankBalanceCard({ label, icon, banks, subtitle, dark = false }: {
+  label: string; icon: React.ReactNode; banks: any[]; subtitle?: string; dark?: boolean;
+}) {
+  const totals = groupBankBalancesByCurrency(banks);
+  const codes  = Object.keys(totals) as CurrencyCode[];
+
+  const wrapCls  = dark ? '' : 'bg-white border border-gray-100 hover:shadow-md hover:border-gray-200';
+  const labelCol = dark ? 'rgba(255,255,255,0.45)' : undefined;
+  const subCol   = dark ? 'rgba(255,255,255,0.35)' : undefined;
+  const amtCls   = dark ? 'text-white' : 'text-gray-900';
+
+  return (
+    <div
+      className={`rounded-2xl p-5 flex flex-col transition-all duration-200 ${wrapCls}`}
+      style={dark ? { background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%)', boxShadow: '0 4px 16px rgba(15,23,42,0.25)' } : undefined}
+    >
+      <div className="flex items-center justify-between mb-2.5">
+        <span className={`text-xs font-semibold tracking-wide ${dark ? '' : 'text-gray-400'}`} style={{ color: labelCol }}>{label}</span>
+        {icon}
+      </div>
+      {codes.length === 0 ? (
+        <p className={`text-2xl font-bold tabular-nums leading-none mb-1.5 ${amtCls}`}>{fmt(0, getMeta('AED'))}</p>
+      ) : (
+        codes.map((code, i) => (
+          <p key={code} className={`font-bold tabular-nums leading-tight ${i === 0 ? `text-2xl mb-0.5 ${amtCls}` : `text-base ${dark ? 'text-white/70' : 'text-gray-500'}`}`}>
+            {fmt(totals[code]!, getMeta(code))}
+          </p>
+        ))
+      )}
+      {subtitle && <p className={`text-xs font-medium mt-1 ${dark ? '' : 'text-gray-400'}`} style={{ color: subCol }}>{subtitle}</p>}
+    </div>
+  );
+}
+
 // ─── SmallStatCard ────────────────────────────────────────────────────────────
 
 interface SmallStatCardProps {
@@ -556,10 +608,10 @@ export function Dashboard() {
           pkrAmount={stats.cashBalance}
           amountColor={stats.cashBalance < 0 ? 'text-red-500' : 'text-gray-900'}
           subtitle={`Inflow − Outflow · ${currentMonthLabel}`} {...cardCurrencyProps} />
-        <AmountCard label="Bank Balance"
+        <BankBalanceCard label="Bank Balance"
           icon={<IconBadge bg="bg-indigo-50"><Building2 size={15} className="text-indigo-400" /></IconBadge>}
-          pkrAmount={stats.totalBankBalance}
-          subtitle={`${banks.length} account${banks.length !== 1 ? 's' : ''}`} {...cardCurrencyProps} />
+          banks={banks}
+          subtitle={`${banks.length} account${banks.length !== 1 ? 's' : ''}`} />
         <AmountCard label="Overall Balance"
           icon={<div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#f1f5f9' }}>
             <DollarSign size={15} style={{ color: '#334155' }} /></div>}

@@ -142,17 +142,28 @@ export function useDashboardData(): DashboardData {
   // Stats cards show current month figures only
   const rawStats = calculateStats(currentMonthTransactions);
 
-  const totalBankBalance = banks.reduce((sum, b: any) => sum + (b.balance || 0), 0);
+  const PKR_RATE = 279.5; const AED_RATE = 3.67;
+  const totalBankBalance = banks.reduce((sum, b: any) => {
+    const bal = b.balance || 0;
+    const inAed = (b.currency === "PKR" || b.accountCurrency === "PKR") ? (bal / PKR_RATE * AED_RATE) : bal;
+    return sum + inAed;
+  }, 0);
 
-  // Merge cash_transactions with any 'transactions' docs paid via Cash mode
-  // (dedup by id) — this mirrors useCashListViewModel exactly, then hands off
-  // to the SAME BankingService.calculateCashStats function it uses, so the
-  // two screens can no longer drift apart with a subtly different formula.
+  // Merge cash_transactions with any 'transactions' docs paid via Cash mode.
+  // NOTE: the same sale can create a doc in BOTH collections with DIFFERENT
+  // ids ("Invoice / Sale" + "Product sale received"), so dedup must key on
+  // the invoice reference (note) + amount, not on id — dedup-by-id lets both
+  // duplicates through. This mirrors useCashListViewModel's fix exactly.
   const cashModeTxns = transactions.filter((t: any) => t.mode === 'Cash');
-  const seenCashIds = new Set<string>();
+  const cashKeyOf = (t: any) => {
+    const ref = (t.note || '').trim().toLowerCase();
+    return ref ? `${ref}__${t.amount}` : `id__${t.id}`;
+  };
+  const seenCashKeys = new Set<string>();
   const mergedCashTxns: any[] = [];
   for (const t of [...cashLedgerTxns, ...cashModeTxns]) {
-    if (!seenCashIds.has(t.id)) { seenCashIds.add(t.id); mergedCashTxns.push(t); }
+    const key = cashKeyOf(t);
+    if (!seenCashKeys.has(key)) { seenCashKeys.add(key); mergedCashTxns.push(t); }
   }
   const cashStats = BankingService.calculateCashStats(mergedCashTxns, cashOpeningBalance);
   const realCashBalance = cashStats.totalCashInHand;
