@@ -9,8 +9,7 @@ import React from 'react';
 import { Search, Package, ArrowLeft, Loader2, Plus, Hash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UseInventoryAddExistingViewModelReturn } from '../viewModels/useInventoryAddExistingViewModel';
-import { useInventoryCurrency, formatInCurrency } from '../viewModels/useInventoryCurrency';
-import { InventoryCurrencyDropdown, CurrencyPriceInput, CurrencyExtraRows } from './InventoryCurrencyDropdown';
+import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 import { SerialLocationSelector } from './LocationSelector';
 
 interface Props extends UseInventoryAddExistingViewModelReturn {}
@@ -26,13 +25,15 @@ export const InventoryAddExistingView: React.FC<Props> = ({
   const navigate = useNavigate();
 
   // ── Currency ──────────────────────────────────────────────────────────────
-  const {
-    primaryCurrency, extraCurrencies, rates,
-    setPrimaryCurrency, setExtraCurrencies,
-    loading: ratesLoading, error: ratesError, lastUpdated,
-  } = useInventoryCurrency();
+  const ratesLoading = false;
+  const ratesError = false;
+  const lastUpdated = null;
 
-  const fmtPrimary = (pkr: number) => formatInCurrency(pkr, primaryCurrency, rates);
+  const fmtPrimary = (amount: number) => {
+    return new Intl.NumberFormat('en-AE', {
+      style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 2,
+    }).format(amount);
+  };
 
   const grouped = filteredProducts.reduce<Record<string, typeof filteredProducts>>((acc, p) => {
     const key = p.brandName || 'Unknown';
@@ -87,10 +88,6 @@ export const InventoryAddExistingView: React.FC<Props> = ({
 
           {/* ── Currency Dropdown ── */}
           <InventoryCurrencyDropdown
-            primaryCurrency={primaryCurrency}
-            extraCurrencies={extraCurrencies}
-            setPrimaryCurrency={setPrimaryCurrency}
-            setExtraCurrencies={setExtraCurrencies}
             loading={ratesLoading}
             error={ratesError}
             lastUpdated={lastUpdated}
@@ -152,11 +149,6 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                           {product.location && <span style={{ fontSize: 11, color: '#334155' }}>📍 {product.location}</span>}
                           <span style={{ fontSize: 11, color: '#9ca3af' }}>{fmtPrimary(product.sellPrice)}</span>
                         </div>
-                        {extraCurrencies.length > 0 && (
-                          <div style={{ marginTop: 2 }}>
-                            <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.sellPrice} rates={rates} />
-                          </div>
-                        )}
                       </button>
                     );
                   })}
@@ -196,16 +188,12 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                     label="Updated Sell Price"
                     pkrValue={entry.newSellPrice}
                     onChange={setNewSellPrice}
-                    rates={rates}
-                    defaultInputCurrency={primaryCurrency}
                     required
                   />
                   <CurrencyPriceInput
                     label="Updated Cost Price"
                     pkrValue={entry.newCostPrice}
                     onChange={setNewCostPrice}
-                    rates={rates}
-                    defaultInputCurrency={primaryCurrency}
                     required
                   />
                 </div>

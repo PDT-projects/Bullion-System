@@ -4,10 +4,17 @@
 
 export type ProductStatus = 'New' | 'In Transit' | 'On-Order' | 'Receivable' | 'Available' | 'Sold' | 'Damaged' | 'Returned' | 'Used';
 export type BuyType = 'Import' | 'Export';
-export type SerialStatus = 'Available' | 'In Transit' | 'Damaged' | 'Returned';
+export type SerialStatus = 'Available' | 'In Transit' | 'Damaged' | 'Returned' | 'Sold';
 export type PaymentStatus = 'Pending' | 'Partial' | 'Complete';
+
+// Whether a product batch is owned outright or held on credit from a supplier
+export type OwnershipType = 'Credit' | 'Owned';
+// Supplier payment status for credit tracking (distinct from ProductFormData.paymentStatus)
+export type SupplierPaymentStatus = 'Unpaid' | 'Partial' | 'Cleared';
+export type PaymentChannel = 'Cash' | 'Bank' | 'Cheque' | 'Credit';
 export type CostingOption = 'with' | 'without';
-export type InventoryEntryType = 'in-stock' | 'on-order';
+// How new inventory is being added: paid for now, or bought on supplier credit
+export type InventoryEntryType = 'credit' | 'payment';
 export type InventoryEntryStep = 'details' | 'payment' | 'confirmation';
 
 // Canonical location list — single source of truth used across inventory + transfers
@@ -65,6 +72,21 @@ export interface Product {
   description: string;
   status: ProductStatus;
   isDamaged?: boolean;
+
+  // ── Report / ownership tracking ──────────────────────────────────────────
+  ownershipType?: OwnershipType;            // 'Credit' or 'Owned' — set once at entry, per product
+  supplierCost?: number;                    // fixed at entry when ownershipType === 'Credit'
+  supplierPaymentStatus?: SupplierPaymentStatus;
+  supplierPaidAmount?: number;
+  supplierRemainingAmount?: number;
+  supplierPaymentChannel?: PaymentChannel;
+  // Per-serial tracking maps (keyed by serial number)
+  serialStockInDates?: { [serialNumber: string]: string };
+  serialSoldDates?: { [serialNumber: string]: string };
+  serialInvoiceNumbers?: { [serialNumber: string]: string };
+  // True when the stock-in date was typed in manually at entry instead of
+  // auto-filled with the creation timestamp — shown as a badge in reports.
+  stockInDateIsManual?: boolean;
 
   // Payable configuration (optional)
   enablePayable?: boolean;
@@ -146,6 +168,13 @@ export interface CreateProductDTO {
   expectedReceiveDate?: string;
   costingOption?: CostingOption;
   costing?: CostingInfo;
+  ownershipType?: OwnershipType;
+  supplierCost?: number;
+  supplierPaymentStatus?: SupplierPaymentStatus;
+  supplierPaidAmount?: number;
+  supplierPaymentChannel?: PaymentChannel;
+  serialStockInDates?: { [serialNumber: string]: string };
+  stockInDateIsManual?: boolean;
 }
 
 export interface ProductFormData {
@@ -166,6 +195,8 @@ export interface ProductFormData {
   serialNumbers: string[];
   serialCities: { [serialNumber: string]: string };
   costing?: CostingInfo;
+  ownershipType?: OwnershipType;
+  manualStockInDate?: string;
   paymentStatus?: 'paid' | 'unpaid' | 'partial';
   transactionId?: string;
   paidAmount?: number;
@@ -208,11 +239,21 @@ export interface UpdateProductDTO {
   location?: string;           // ← new
   serialNumbers?: string[];
   serialCities?: { [serialNumber: string]: string };
+  serialStatus?: { [serialNumber: string]: SerialStatus };
   description?: string;
   status?: ProductStatus;
   isDamaged?: boolean;
   costingOption?: CostingOption;
   costing?: CostingInfo;
+  ownershipType?: OwnershipType;
+  supplierCost?: number;
+  supplierPaymentStatus?: SupplierPaymentStatus;
+  supplierPaidAmount?: number;
+  supplierPaymentChannel?: PaymentChannel;
+  serialStockInDates?: { [serialNumber: string]: string };
+  serialSoldDates?: { [serialNumber: string]: string };
+  serialInvoiceNumbers?: { [serialNumber: string]: string };
+  stockInDateIsManual?: boolean;
 }
 
 export interface CreateTransferDTO {
@@ -268,6 +309,39 @@ export interface ValidationResult {
   isValid: boolean;
   error?: string;
   fieldErrors?: { [key: string]: string };
+}
+
+// ── Inventory Report (one row per serial number) ─────────────────────────────
+export interface InventoryReportRow {
+  productId: string;
+  brandName: string;
+  modelName: string;
+  serialNumber: string;
+  stockInDate: string;
+  stockInDateIsManual?: boolean;
+  location: string;
+  ownershipType: OwnershipType | '';
+  currentStatus: string;   // SerialStatus, falls back to product.status
+  soldDate?: string;
+  invoiceNumber?: string;
+  supplierCost?: number;
+  supplierPaymentStatus?: SupplierPaymentStatus;
+  supplierPaidAmount?: number;
+  supplierRemainingAmount?: number;
+  supplierPaymentChannel?: PaymentChannel;
+}
+
+// ── Damaged Inventory (returned items marked damaged) ────────────────────────
+export interface DamagedProduct {
+  id: string;
+  productId: string;         // originating product id
+  brandName: string;
+  modelName: string;
+  serialNumber: string;
+  location: string;
+  reason?: string;
+  damagedAt: string;
+  damagedBy?: string;
 }
 
 export interface CreatePaymentDTO {

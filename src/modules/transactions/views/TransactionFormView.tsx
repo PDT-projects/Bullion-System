@@ -14,9 +14,9 @@ import { convertCurrency } from '../../invoices/models/invoiceService';
 interface Props extends UseTransactionFormViewModelReturn {}
 
 function fallbackFormatBankCurrency(n: number, bankCurrency?: SupportedCurrency): string {
-  const opt = SUPPORTED_CURRENCIES.find(c => c.code === (bankCurrency ?? 'PKR'));
+  const opt = SUPPORTED_CURRENCIES.find(c => c.code === (bankCurrency ?? 'AED'));
   const sym = opt?.symbol ?? (bankCurrency ?? 'PKR');
-  return `${sym} ${new Intl.NumberFormat('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`;
+  return `${sym} ${new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`;
 }
 
 const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm';
@@ -146,26 +146,29 @@ function CurrencyAmountInput({
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function TransactionFormView({
-  office, date, manualDate, transactionType, paymentMode, selectedBank,
-  chequeNumber, chequeDate, chequeBank,
-  setChequeNumber, setChequeDate, setChequeBank,
-  setManualDate, enableMultiple, transactionItems,
-  transactionId, isGeneratingId, isEditingId, setTransactionId, setIsEditingId,
-  duplicateIdError, setDuplicateIdError,
-  totalAmount, totalPaid, totalRemaining, currentBankBalance, remainingBalanceAfter,
-  banks, isLoading, isSaving, isEditing,
-  setOffice, setDate, setTransactionType, setPaymentMode, setSelectedBank,
-  setEnableMultiple, updateItem, addItem, removeItem,
-  handleSave, handleCancel, formatCurrency, formatBankCurrency: _formatBankCurrency, formatDateDisplay,
-  plMainCategory, plSubCategory, setPlMainCategory, setPlSubCategory,
-  dynamicSubCategories, onAddSubCategory,
-  dynamicPLCategories, onAddPLMainCategory, onAddPLSubCategory, onDeletePLCategory,
-  dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
-  bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
-  companies, onAddCompany,
-  currencyRates,
-}: Props) {
+export function TransactionFormView(props: Props) {
+  const {
+    office, date, manualDate, transactionType, paymentMode, selectedBank,
+    chequeNumber, chequeDate, chequeBank,
+    setChequeNumber, setChequeDate, setChequeBank,
+    setManualDate, enableMultiple, transactionItems,
+    transactionId, isGeneratingId, isEditingId, setTransactionId, setIsEditingId,
+    duplicateIdError, setDuplicateIdError,
+    totalAmount, totalPaid, totalRemaining, currentBankBalance, remainingBalanceAfter,
+    banks, isLoading, isSaving, isEditing,
+    setOffice, setDate, setTransactionType, setPaymentMode, setSelectedBank,
+    setEnableMultiple, updateItem, addItem, removeItem,
+    handleSave, handleCancel, formatCurrency, formatDateDisplay,
+    plMainCategory, plSubCategory, setPlMainCategory, setPlSubCategory,
+    dynamicSubCategories, onAddSubCategory,
+    dynamicPLCategories, onAddPLMainCategory, onAddPLSubCategory, onDeletePLCategory,
+    dynamicBSCategories, onAddBSMainCategory, onAddBSSubCategory, onDeleteBSCategory,
+    bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
+    companies, onAddCompany,
+    currencyRates,
+  } = props;
+
+  const formatBankCurrency = (props as any).formatBankCurrency ?? fallbackFormatBankCurrency;
   const [saveAttempted,    setSaveAttempted]    = useState(false);
   const [addingSubCatFor,  setAddingSubCatFor]  = useState<string | null>(null);
   const [newSubCatName,    setNewSubCatName]    = useState('');
@@ -198,7 +201,6 @@ export function TransactionFormView({
   }
 
   const selectedBankData = banks.find(b => b.id === selectedBank);
-  const formatBankCurrency = _formatBankCurrency ?? fallbackFormatBankCurrency;
   const isPreviewId = transactionId?.includes('###');
   const isInflow = transactionType === 'Cash Inflow';
 
@@ -456,15 +458,15 @@ export function TransactionFormView({
                 <select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}
                   className={`${inp} ${saveAttempted && !selectedBank ? 'border-red-400 ring-1 ring-red-300' : ''}`}>
                   <option value="">Select a bank</option>
-                  {banks.map(b => (
-                    <option key={b.id} value={b.id}>{b.name} — {formatBankCurrency(b.balance, b.currency)}</option>
+                  {banks.filter(b => (b as any).currency !== 'PKR').map(b => (
+                    <option key={b.id} value={b.id}>{b.name} — {formatBankCurrency(b.balance, (b as any).currency)}</option>
                   ))}
                 </select>
               </div>
               {selectedBankData && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-xs text-gray-500 mb-0.5">Current Balance</p>
-                  <p className="text-xl font-bold text-blue-700">{formatBankCurrency(currentBankBalance, selectedBankData.currency)}</p>
+                  <p className="text-xl font-bold text-blue-700">{formatBankCurrency(currentBankBalance, (selectedBankData as any)?.currency)}</p>
                 </div>
               )}
             </div>
@@ -509,7 +511,7 @@ export function TransactionFormView({
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Balance After Transaction</h4>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Current Balance:</span>
-                <span className="font-medium">{formatBankCurrency(currentBankBalance, selectedBankData?.currency)}</span>
+                <span className="font-medium">{formatBankCurrency(currentBankBalance, (selectedBankData as any)?.currency)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">{isInflow ? '+ Inflow:' : '− Deducting:'}</span>
@@ -520,7 +522,7 @@ export function TransactionFormView({
               <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2">
                 <span>Balance After:</span>
                 <span className={remainingBalanceAfter < 0 ? 'text-red-600' : 'text-slate-800'}>
-                  {formatBankCurrency(remainingBalanceAfter, selectedBankData?.currency)}
+                  {formatBankCurrency(remainingBalanceAfter, (selectedBankData as any)?.currency)}
                 </span>
               </div>
               {remainingBalanceAfter < 0 && (

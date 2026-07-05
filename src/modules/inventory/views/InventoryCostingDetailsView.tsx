@@ -63,7 +63,7 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
 
   useEffect(() => {
     if (!showCostingFields) {
-      const type = searchParams.get('type') || 'in-stock';
+      const type = searchParams.get('type') || 'payment';
       navigate(`/inventory/create-new/details?type=${type}&costing=without`, { replace: true });
     }
   }, [showCostingFields, navigate, searchParams]);

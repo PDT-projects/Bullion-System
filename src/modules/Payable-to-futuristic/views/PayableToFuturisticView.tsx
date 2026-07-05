@@ -31,7 +31,7 @@ import {
   aedToAllCurrencies,
 } from '../models/payableToFuturistic';
 
-const ALL_CURRENCIES: Currency[] = ['AED', 'PKR', 'SAR', 'USD'];
+const ALL_CURRENCIES: Currency[] = ['AED'];
 const FUTURISTIC_MODELS = Object.keys(FUTURISTIC_PRICES_USD);
 
 // 1 USD = 3.67 AED (matches payableToFuturistic.ts USD_EXCHANGE_RATES.AED)
@@ -1101,16 +1101,11 @@ export const PayableToFuturisticView: React.FC = () => {
                 <p style={{ fontSize: 11, color: '#34d399', marginTop: 4 }}>Paid: $ {fmt(paidTotals.usd)}</p>
               )}
             </div>
-            {(['AED', 'PKR', 'SAR'] as const).map((cur) => {
-              const ck = cur.toLowerCase() as 'aed' | 'pkr' | 'sar';
-              return (
-                <div key={cur} className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
-                  <p className="text-xs font-medium mb-1 text-gray-500">Total ({cur})</p>
-                  <p className="text-lg font-bold text-gray-800">{fmt(totals[ck])}</p>
-                  {paidTotals[ck] > 0 && <p className="text-xs text-emerald-600 mt-1">Paid: {fmt(paidTotals[ck])}</p>}
-                </div>
-              );
-            })}
+            <div className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
+              <p className="text-xs font-medium mb-1 text-gray-500">Total (AED)</p>
+              <p className="text-lg font-bold text-gray-800">{fmt(totals.aed)}</p>
+              {paidTotals.aed > 0 && <p className="text-xs text-emerald-600 mt-1">Paid: {fmt(paidTotals.aed)}</p>}
+            </div>
           </div>
 
           {/* ── Pills ──────────────────────────────────────────────────────────── */}

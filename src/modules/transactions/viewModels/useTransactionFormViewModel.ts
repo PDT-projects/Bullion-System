@@ -17,7 +17,7 @@ import { fetchCurrencyRates, convertCurrency, CURRENCY_RATE_FALLBACK } from '../
 interface BankInfo { id: string; name: string; balance: number; }
 
 // ── Currency support ─────────────────────────────────────────────────────────
-export type SupportedCurrency = 'PKR' | 'AED' | 'CAD' | 'SAR';
+export type SupportedCurrency = 'AED';
 
 export interface CurrencyOption {
   code: SupportedCurrency;
@@ -27,16 +27,13 @@ export interface CurrencyOption {
 }
 
 export const SUPPORTED_CURRENCIES: CurrencyOption[] = [
-  { code: 'PKR', name: 'Pakistani Rupee',   symbol: '₨',  flag: '🇵🇰' },
-  { code: 'AED', name: 'UAE Dirham',         symbol: 'د.إ', flag: '🇦🇪' },
-  { code: 'CAD', name: 'Canadian Dollar',    symbol: 'C$', flag: '🇨🇦' },
-  { code: 'SAR', name: 'Saudi Riyal',        symbol: '﷼',  flag: '🇸🇦' },
+  { code: 'AED', name: 'UAE Dirham', symbol: 'د.إ', flag: '🇦🇪' },
 ];
 
 export function formatCurrencyWithCode(amount: number, currency: SupportedCurrency): string {
   const opt = SUPPORTED_CURRENCIES.find(c => c.code === currency);
   const sym = opt?.symbol ?? currency;
-  const formatted = new Intl.NumberFormat('en-PK', {
+  const formatted = new Intl.NumberFormat('en-AE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -188,8 +185,8 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [chequeDate,   setChequeDate]   = useState('');
   const [chequeBank,   setChequeBank]   = useState('');
 
-  // Currency state — default to PKR
-  const [currency, setCurrency] = useState<SupportedCurrency>('PKR');
+  // Currency state — default to AED
+  const [currency, setCurrency] = useState<SupportedCurrency>('AED');
   const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(CURRENCY_RATE_FALLBACK as any);
 
   const [enableMultiple,       setEnableMultiple]       = useState(false);

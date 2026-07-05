@@ -33,6 +33,7 @@ export function branchFromInventoryValue(value: string): string {
 
 export type PaymentStatusType = 'paid' | 'unpaid' | 'partial';
 export type PaymentMode = 'cash' | 'bank';
+export type OwnershipType = 'Owned' | 'Credit';
 
 export interface InstallmentEntry {
   id: string;
@@ -73,6 +74,10 @@ export interface UseInventoryPaymentViewModelReturn {
   validationErrors: { [key: string]: string };
   isValid: boolean;
   isSaving: boolean;
+
+  ownershipType: OwnershipType;
+  manualStockInDate: string;
+  setManualStockInDate: (v: string) => void;
 
   paymentMode: PaymentMode;
   setPaymentMode: (mode: PaymentMode) => void;
@@ -210,7 +215,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
 
   // ── Parse URL params ────────────────────────────────────────────────────────
   const costingOption   = (searchParams.get('costing') as CostingOption)      || 'without';
-  const inventoryType   = (searchParams.get('type')    as InventoryEntryType) || 'in-stock';
+  const inventoryType   = (searchParams.get('type')    as InventoryEntryType) || 'payment';
   const brandName       = searchParams.get('brandName')    || '';
   const modelName       = searchParams.get('modelName')    || '';
   const category        = searchParams.get('category')     || '';
@@ -278,6 +283,14 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     generate();
   }, []);
 
+  // Decided in Step 1 (Type Selection) — 'credit' or 'payment' — not re-asked here.
+  const ownershipType: OwnershipType = inventoryType === 'credit' ? 'Credit' : 'Owned';
+  const isCredit = ownershipType === 'Credit';
+
+  // Optional manual stock-in date — if left blank, each serial gets the
+  // creation timestamp automatically (existing service default behavior).
+  const [manualStockInDate, setManualStockInDate] = useState<string>('');
+
   const [paymentStatus, setPaymentStatusState] = useState<PaymentStatusType>('paid');
   const [paidAmount, setPaidAmountState]       = useState(0);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
@@ -313,32 +326,37 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const validateForm = useCallback((): boolean => {
     const errors: { [key: string]: string } = {};
     if (!transactionId.trim()) errors.transactionId = 'Transaction ID is required';
-    if (paymentStatus !== 'unpaid' && paymentMode === 'bank' && !selectedBankId)
-      errors.bankId = 'Please select a bank account';
-    if (paymentStatus === 'partial') {
-      if (installments.length > 0) {
-        installments.forEach((inst, i) => {
-          if (inst.amount <= 0) errors[`inst_${i}`] = 'Amount must be > 0';
-          if (inst.mode === 'bank' && !inst.bankId) errors[`inst_bank_${i}`] = 'Select a bank';
-        });
-      } else if (paidAmount <= 0) {
-        errors.paidAmount = 'Paid amount must be greater than 0 for partial payments';
+    // Supplier-credit inventory has no payment yet — cost is settled later,
+    // once the stock is sold — so payment-method/amount fields don't apply.
+    if (!isCredit) {
+      if (paymentStatus !== 'unpaid' && paymentMode === 'bank' && !selectedBankId)
+        errors.bankId = 'Please select a bank account';
+      if (paymentStatus === 'partial') {
+        if (installments.length > 0) {
+          installments.forEach((inst, i) => {
+            if (inst.amount <= 0) errors[`inst_${i}`] = 'Amount must be > 0';
+            if (inst.mode === 'bank' && !inst.bankId) errors[`inst_bank_${i}`] = 'Select a bank';
+          });
+        } else if (paidAmount <= 0) {
+          errors.paidAmount = 'Paid amount must be greater than 0 for partial payments';
+        }
       }
     }
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [paymentStatus, paidAmount, transactionId, paymentMode, selectedBankId, installments]);
+  }, [isCredit, paymentStatus, paidAmount, transactionId, paymentMode, selectedBankId, installments]);
 
   const isValid = useMemo(() => {
     if (isGeneratingId) return false;
     if (!transactionId.trim()) return false;
+    if (isCredit) return true;
     if (paymentStatus !== 'unpaid' && paymentMode === 'bank' && !selectedBankId) return false;
     if (paymentStatus === 'partial') {
       if (installments.length > 0) return installments.every(i => i.amount > 0 && (i.mode === 'cash' || !!i.bankId));
       return paidAmount > 0;
     }
     return true;
-  }, [paymentStatus, paidAmount, isGeneratingId, transactionId, paymentMode, selectedBankId, installments]);
+  }, [isCredit, paymentStatus, paidAmount, isGeneratingId, transactionId, paymentMode, selectedBankId, installments]);
 
   // ── Record payment activity ────────────────────────────────────────────────
   const modelDisplayName = isMultiModel
@@ -426,20 +444,29 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     setIsSaving(true);
 
     try {
-      const isOnOrder     = inventoryType === 'on-order';
-      const entries       = buildPaymentEntries();
-      const effectivePaid = entries.reduce((s, e) => s + e.amount, 0);
+      // Supplier-credit inventory: nothing is paid at entry time, so there are
+      // no cash/bank entries to record — the cost is settled later, once the
+      // stock sells out, via the Inventory Payables screen.
+      const entries       = isCredit ? [] : buildPaymentEntries();
+      const effectivePaid = isCredit ? 0 : entries.reduce((s, e) => s + e.amount, 0);
       const selectedBank  = banks.find(b => b.id === selectedBankId);
-      const paymentInfo   = {
-        paymentStatus,
-        transactionId:   paymentStatus !== 'unpaid' ? transactionId : undefined,
-        paidAmount:      effectivePaid || undefined,
-        totalAmount,
-        paymentMode:     paymentStatus !== 'unpaid' ? paymentMode     : undefined,
-        bankId:          (paymentMode === 'bank' && paymentStatus !== 'unpaid') ? selectedBankId   : undefined,
-        bankName:        (paymentMode === 'bank' && paymentStatus !== 'unpaid') ? selectedBank?.name : undefined,
-        installments:    installments.length > 0 ? installments : undefined,
-      };
+      // Manual stock-in date override — blank means "auto" (service defaults
+      // every serial to the creation timestamp).
+      const manualDateIso = manualStockInDate ? new Date(manualStockInDate).toISOString() : undefined;
+      const buildStockInDates = (serials: string[]) =>
+        manualDateIso ? Object.fromEntries(serials.map(s => [s, manualDateIso])) : undefined;
+      const paymentInfo   = isCredit
+        ? { paymentStatus: 'unpaid' as const, transactionId, totalAmount }
+        : {
+            paymentStatus,
+            transactionId:   paymentStatus !== 'unpaid' ? transactionId : undefined,
+            paidAmount:      effectivePaid || undefined,
+            totalAmount,
+            paymentMode:     paymentStatus !== 'unpaid' ? paymentMode     : undefined,
+            bankId:          (paymentMode === 'bank' && paymentStatus !== 'unpaid') ? selectedBankId   : undefined,
+            bankName:        (paymentMode === 'bank' && paymentStatus !== 'unpaid') ? selectedBank?.name : undefined,
+            installments:    installments.length > 0 ? installments : undefined,
+          };
 
       // ── MULTI-MODEL PATH (without costing — multiple models at once) ────────
       if (isMultiModel) {
@@ -462,12 +489,15 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             serialNumbers: validSerials,
             serialCities:  smCities,
             description:   me.description || '',
-            status:        isOnOrder ? 'On-Order' : (me.status as ProductStatus) || 'New',
+            status:        (me.status as ProductStatus) || 'New',
             isDamaged:     false,
             costingOption: 'without',
             costing:       undefined,
-            receivableStatus:    isOnOrder ? 'Pending' : undefined,
-            expectedReceiveDate: undefined,
+            ownershipType:         ownershipType,
+            supplierCost:          isCredit ? me.costPrice * me.quantity : undefined,
+            supplierPaymentStatus: isCredit ? 'Unpaid' : undefined,
+            serialStockInDates:    buildStockInDates(validSerials),
+            stockInDateIsManual:   !!manualDateIso,
             // Store dealer price in custom field if supported
             ...(me.dealerPrice ? { dealerPrice: me.dealerPrice } : {}),
           };
@@ -496,10 +526,13 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             costPrice: sm.costPrice, sellPrice: sm.salePrice, buyType, warrantyYears,
             stock: sm.quantity, location,
             serialNumbers: validSerials, serialCities: smSerialCities,
-            description, status: isOnOrder ? 'On-Order' : status, isDamaged,
+            description, status, isDamaged,
             costingOption: 'with', costing,
-            receivableStatus:    isOnOrder ? 'Pending' : undefined,
-            expectedReceiveDate: undefined,
+            ownershipType:         ownershipType,
+            supplierCost:          isCredit ? sm.costPrice * sm.quantity : undefined,
+            supplierPaymentStatus: isCredit ? 'Unpaid' : undefined,
+            serialStockInDates:    buildStockInDates(validSerials),
+            stockInDateIsManual:   !!manualDateIso,
           };
           try {
             await InventoryFirebaseService.createProduct(dto, paymentInfo);
@@ -521,22 +554,27 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         const dto: CreateProductDTO = {
           brandName, modelName, category, costPrice, sellPrice, buyType, warrantyYears,
           stock, location, serialNumbers, serialCities: seededCities,
-          description, status: isOnOrder ? 'On-Order' : status, isDamaged,
+          description, status, isDamaged,
           costingOption: costingOption === 'with' ? 'with' : 'without',
           costing:       costingOption === 'with' ? costing : undefined,
-          receivableStatus:    isOnOrder ? 'Pending' : undefined,
-          expectedReceiveDate: undefined,
+          ownershipType:         ownershipType,
+          supplierCost:          isCredit ? costPrice * stock : undefined,
+          supplierPaymentStatus: isCredit ? 'Unpaid' : undefined,
+          serialStockInDates:    buildStockInDates(serialNumbers),
+          stockInDateIsManual:   !!manualDateIso,
         };
         await InventoryFirebaseService.createProduct(dto, paymentInfo);
       }
 
-      // ── Record payment transactions ──────────────────────────────────────
-      if (entries.length > 0) {
+      // ── Record payment transactions — supplier-credit inventory has no
+      // cash/bank movement at entry time, so skip entirely ──────────────────
+      if (!isCredit && entries.length > 0) {
         await recordPaymentActivity(effectivePaid, entries);
       }
 
-      // ── Save pending payment record if partial/unpaid ─────────────────────
-      if (paymentStatus !== 'paid') {
+      // ── Save pending payment record if partial/unpaid (not applicable to
+      // supplier-credit inventory — that's tracked via Inventory Payables) ──
+      if (!isCredit && paymentStatus !== 'paid') {
         await savePendingPayment({
           transactionId,
           brandName,
@@ -553,8 +591,9 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         });
       }
 
-      // ── Create transaction record (non-blocking) ──────────────────────────
-      if (!isOnOrder) {
+      // ── Create transaction record (non-blocking) — skipped for supplier
+      // credit since no cash/bank transaction actually happened ─────────────
+      if (!isCredit) {
         createTransactionFromInventory({
           transactionId,
           brandName,
@@ -571,8 +610,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
         }).catch(err => console.warn('[TxBridge] Inventory transaction failed (non-blocking):', err));
       }
 
-      const successMsg = isOnOrder
-        ? `✅ Saved to Receivable Stock — ${transactionId}`
+      const successMsg = isCredit
+        ? `✅ Inventory added on supplier credit — payable once sold out — ${transactionId}`
         : paymentStatus === 'partial'
           ? `✅ Inventory added — ${formatCurrency(totalAmount - effectivePaid)} pending — ${transactionId}`
           : paymentStatus === 'unpaid'
@@ -580,7 +619,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             : `✅ Inventory added — ${transactionId}`;
 
       toast.success(successMsg);
-      navigate(isOnOrder ? '/inventory/receivable' : '/inventory/view');
+      navigate('/inventory/view');
 
     } catch (error) {
       console.error('Error saving product:', error);
@@ -629,11 +668,12 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
     }
   }, [
     validateForm, isMultiModel, multiModelEntries, costingOption, selectedModels,
-    brandName, modelName, category, sellPrice, buyType, warrantyYears, stock,
+    brandName, modelName, category, costPrice, sellPrice, buyType, warrantyYears, stock,
     description, status, isDamaged, serialNumbers, serialCities, inventoryType, costing,
     paymentStatus, transactionId, paidAmount, totalAmount, navigate, location,
     paymentMode, selectedBankId, banks, installments, buildPaymentEntries,
     recordPaymentActivity, inventoryCompany, modelDisplayName, formatCurrency, costingBrandId,
+    isCredit, ownershipType, manualStockInDate,
   ]);
 
   const handleBack = useCallback(() => {
@@ -718,6 +758,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
 
   return {
     formData, costingOption, inventoryType, totalAmount,
+    ownershipType,
+    manualStockInDate, setManualStockInDate,
     paymentStatus, transactionId, isGeneratingId,
     isEditingTransactionId, setIsEditingTransactionId,
     paidAmount, remainingAmount,

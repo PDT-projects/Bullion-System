@@ -286,6 +286,8 @@ function PendingPaymentBanner({
 // ── Main View ──────────────────────────────────────────────────────────────────
 export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
   costingOption, inventoryType, totalAmount,
+  ownershipType,
+  manualStockInDate, setManualStockInDate,
   paymentStatus, transactionId, isGeneratingId, isEditingTransactionId,
   paidAmount, remainingAmount, validationErrors, isValid, isSaving,
   duplicateDialogOpen, setDuplicateDialogOpen, duplicateDialogMessage, setDuplicateDialogMessage,
@@ -313,8 +315,9 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
     if (!open) setDuplicateDialogMessage('');
   };
 
-  const showPaymentDetails = paymentStatus !== 'unpaid';
-  const showInstallments   = paymentStatus === 'partial';
+  const isCredit = ownershipType === 'Credit';
+  const showPaymentDetails = !isCredit && paymentStatus !== 'unpaid';
+  const showInstallments   = !isCredit && paymentStatus === 'partial';
 
   // Effective paid amount (from installments or field)
   const effectivePaid = installments.length > 0
@@ -407,40 +410,96 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
             {validationErrors.transactionId && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 5 }}>{validationErrors.transactionId}</p>}
           </div>
 
-          {/* Payment Status */}
-          <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 14 }}>Payment Status *</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              {([
-                { value: 'paid',    icon: CheckCircle, label: 'Paid',    desc: 'Full payment received',    activeColor: '#16a34a', activeBg: '#f0fdf4', activeBorder: '#22c55e' },
-                { value: 'unpaid',  icon: X,           label: 'Unpaid',  desc: 'No payment yet',           activeColor: '#dc2626', activeBg: '#fef2f2', activeBorder: '#f87171' },
-                { value: 'partial', icon: AlertCircle, label: 'Partial', desc: 'Partial / installments',   activeColor: '#d97706', activeBg: '#fffbeb', activeBorder: '#fbbf24' },
-              ] as const).map(({ value, icon: Icon, label, desc, activeColor, activeBg, activeBorder }) => {
-                const sel = paymentStatus === value;
-                return (
-                  <button key={value} onClick={() => setPaymentStatus(value)} style={{
-                    padding: '14px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
-                    border: `2px solid ${sel ? activeBorder : '#e2e8f0'}`,
-                    backgroundColor: sel ? activeBg : '#fff', transition: 'all 0.15s',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
-                      <Icon size={22} color={sel ? activeColor : '#9ca3af'} />
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: sel ? activeColor : '#374151' }}>{label}</div>
-                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{desc}</div>
-                  </button>
-                );
-              })}
+          {/* Ownership — decided in Step 1, shown here read-only */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, borderRadius: 12, padding: '14px 20px',
+            backgroundColor: isCredit ? '#fffbeb' : '#f0fdf4',
+            border: `1px solid ${isCredit ? '#fde68a' : '#bbf7d0'}`,
+          }}>
+            {isCredit ? <Clock size={18} color="#d97706" /> : <CheckCircle size={18} color="#16a34a" />}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: isCredit ? '#92400e' : '#166534' }}>
+                {isCredit ? 'On Supplier Credit' : 'Owned — Paid Now'}
+              </div>
+              <div style={{ fontSize: 11, color: isCredit ? '#92400e' : '#166534' }}>
+                Chosen in Step 1 — go back to change it.
+              </div>
             </div>
           </div>
 
-          {/* Pending payment banner */}
-          <PendingPaymentBanner
-            totalAmount={totalAmount}
-            paidAmount={effectivePaid}
-            paymentStatus={paymentStatus}
-            formatCurrency={formatCurrency}
-          />
+          {/* Stock-In Date — optional manual override */}
+          <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+              Stock-In Date
+              <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#6b7280' }}>
+                Leave blank to auto-use today's date
+              </span>
+            </label>
+            <input
+              type="date"
+              value={manualStockInDate}
+              onChange={e => setManualStockInDate(e.target.value)}
+              style={{ padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, outline: 'none', maxWidth: 220 }}
+            />
+            {manualStockInDate && (
+              <p style={{ fontSize: 11, color: '#d97706', marginTop: 6 }}>
+                Manual date entered — will be flagged as "manual" in the Inventory Report.
+              </p>
+            )}
+          </div>
+
+          {isCredit ? (
+            /* Supplier-credit notice — no payment fields; cost becomes payable once sold out */
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '16px 20px' }}>
+              <Clock size={20} color="#d97706" style={{ flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#92400e' }}>
+                  Purchasing cost: {formatCurrency(totalAmount)}
+                </div>
+                <div style={{ fontSize: 12, color: '#92400e', marginTop: 4, lineHeight: 1.6 }}>
+                  No payment is recorded now. This amount is fixed as the supplier cost and will
+                  appear under <strong>Inventory Payables</strong> on the dashboard once this stock is sold out.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Payment Status */}
+              <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 14 }}>Payment Status *</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  {([
+                    { value: 'paid',    icon: CheckCircle, label: 'Paid',    desc: 'Full payment received',    activeColor: '#16a34a', activeBg: '#f0fdf4', activeBorder: '#22c55e' },
+                    { value: 'unpaid',  icon: X,           label: 'Unpaid',  desc: 'No payment yet',           activeColor: '#dc2626', activeBg: '#fef2f2', activeBorder: '#f87171' },
+                    { value: 'partial', icon: AlertCircle, label: 'Partial', desc: 'Partial / installments',   activeColor: '#d97706', activeBg: '#fffbeb', activeBorder: '#fbbf24' },
+                  ] as const).map(({ value, icon: Icon, label, desc, activeColor, activeBg, activeBorder }) => {
+                    const sel = paymentStatus === value;
+                    return (
+                      <button key={value} onClick={() => setPaymentStatus(value)} style={{
+                        padding: '14px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                        border: `2px solid ${sel ? activeBorder : '#e2e8f0'}`,
+                        backgroundColor: sel ? activeBg : '#fff', transition: 'all 0.15s',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
+                          <Icon size={22} color={sel ? activeColor : '#9ca3af'} />
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: sel ? activeColor : '#374151' }}>{label}</div>
+                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Pending payment banner */}
+              <PendingPaymentBanner
+                totalAmount={totalAmount}
+                paidAmount={effectivePaid}
+                paymentStatus={paymentStatus}
+                formatCurrency={formatCurrency}
+              />
+            </>
+          )}
 
           {/* Payment Method (not unpaid) */}
           {showPaymentDetails && (
@@ -566,13 +625,16 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
 
             {/* Payment summary */}
             <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14 }}>Payment Summary</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14 }}>{isCredit ? 'Supplier Credit Summary' : 'Payment Summary'}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
+                {(isCredit ? [
+                  { label: 'Total Shipment Amount', value: formatCurrency(totalAmount), color: '#111827', bold: true },
+                  { label: 'Supplier Payable',      value: formatCurrency(totalAmount), color: '#d97706', bold: true, border: true },
+                ] : [
                   { label: 'Total Shipment Amount', value: formatCurrency(totalAmount), color: '#111827', bold: true },
                   { label: 'Amount Paid',           value: formatCurrency(effectivePaid), color: '#16a34a', bold: false },
                   { label: 'Pending Balance',       value: formatCurrency(Math.max(0, totalAmount - effectivePaid)), color: Math.max(0, totalAmount - effectivePaid) > 0 ? '#dc2626' : '#9ca3af', bold: true, border: true },
-                ].map(({ label, value, color, bold, border }) => (
+                ]).map(({ label, value, color, bold, border }) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: border ? '10px 0 0 0' : '3px 0', borderTop: border ? '2px solid #f1f5f9' : 'none', marginTop: border ? 4 : 0 }}>
                     <span style={{ fontSize: 12, color: '#6b7280' }}>{label}:</span>
                     <span style={{ fontSize: bold ? 15 : 13, fontWeight: bold ? 800 : 600, color }}>{value}</span>
@@ -610,7 +672,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                     ['Sell Price', formatCurrency(productSummary.sellPrice)],
                     ['Status',   productSummary.status],
                     ['Costing',  costingOption === 'with' ? 'With Costing' : 'Without Costing'],
-                    ['Type',     inventoryType === 'in-stock' ? 'In-Stock' : 'On-Order'],
+                    ['Type',     isCredit ? 'On Credit' : 'Payment'],
                   ].map(([l, v]) => (
                     <div key={l}>
                       <span style={{ fontSize: 10, fontWeight: 600, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</span>

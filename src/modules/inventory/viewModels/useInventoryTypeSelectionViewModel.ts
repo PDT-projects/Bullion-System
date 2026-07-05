@@ -1,5 +1,8 @@
 // Inventory Module - ViewModel Layer
-// useInventoryTypeSelectionViewModel - Step 1: Choose inventory entry type
+// useInventoryTypeSelectionViewModel - Step 1: Credit vs Payment
+// CHANGED: was "in-stock vs on-order" — now asks whether this batch is being
+// added on supplier credit or paid for now. Generic over InventoryEntryType,
+// so no logic changes were needed here — only the type's possible values.
 
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';

@@ -163,7 +163,7 @@ export function CommissionSlabFormView({
   const employees    = employeesProp    ?? [];
   const allLocations = allLocationsProp ?? [];
 
-  const currency       = formData?.inputCurrency ?? 'PKR';
+  const currency       = formData?.inputCurrency ?? 'AED';
   const salesperson    = formData?.salesperson    ?? '';
   const location       = formData?.location       ?? '';
   const newLocInput    = formData?.newLocationInput ?? '';
@@ -192,32 +192,43 @@ export function CommissionSlabFormView({
         style={isFullScreen ? {} : { maxHeight: '90vh' }}
       >
         {/* ── Header ── */}
-        <div className="flex-none flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white rounded-t-xl">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">
-              {editingSlab ? 'Edit Commission Slab' : 'Add Commission Slab'}
-            </h2>
-            <RatesBadge isFetchingRates={isFetchingRates} lastRatesFetchAt={lastRatesFetchAt} />
-          </div>
-          <div className="flex items-center gap-1">
+        <div className="flex-none flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">
+            {editingSlab ? 'Edit Commission Slab' : 'Add Commission Slab'}
+          </h2>
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setIsFullScreen(!isFullScreen)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
-              title={isFullScreen ? 'Restore' : 'Fullscreen'}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
             >
-              {isFullScreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+              {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
             <button
+              type="button"
               onClick={() => setIsModalOpen(false)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
             >
-              <X size={17} />
+              <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* ── Scrollable body ── */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        {/* ── Body ── */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Amount Currency
+              <span className="ml-2 text-xs font-normal text-gray-400">(displayed in AED, stored in PKR)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="px-3 py-1.5 rounded-lg border bg-white text-xs font-semibold inline-flex items-center gap-2">
+                <span className="opacity-70">د.إ</span>
+                AED
+              </div>
+              <div className="text-xs text-gray-500">Values entered are shown in AED and saved as PKR behind the scenes.</div>
+            </div>
+          </div>
 
           {/* Errors */}
           {errors.length > 0 && (

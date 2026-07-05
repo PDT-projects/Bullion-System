@@ -15,6 +15,7 @@ import {
   Activity, FileText, AlertCircle, RefreshCw, Loader2, BarChart2,
   ChevronDown, Check,
 } from 'lucide-react';
+import { CurrencyDropdown, CurrencyRows } from './CurrencyPicker';
 
 import { useDashboardData } from './UseDashboardData';
 import { ReportsHub } from './ReportsHub';
@@ -124,215 +125,7 @@ function useCurrencyRates() {
   return { rates, loading, error, lastUpdated };
 }
 
-// ─── CurrencyDropdown ─────────────────────────────────────────────────────────
-
-interface CurrencyDropdownProps {
-  primary: CurrencyCode;
-  extras: CurrencyCode[];
-  onPrimaryChange: (c: CurrencyCode) => void;
-  onExtrasChange:  (c: CurrencyCode[]) => void;
-  loading: boolean;
-  error: boolean;
-  lastUpdated: Date | null;
-}
-
-function CurrencyDropdown({
-  primary, extras, onPrimaryChange, onExtrasChange, loading, error, lastUpdated,
-}: CurrencyDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const primaryMeta = getMeta(primary);
-
-  const toggleExtra = (code: CurrencyCode) => {
-    if (code === primary) return;
-    onExtrasChange(extras.includes(code) ? extras.filter(c => c !== code) : [...extras, code]);
-  };
-
-  const selectPrimary = (code: CurrencyCode) => {
-    onPrimaryChange(code);
-    onExtrasChange(extras.filter(c => c !== code));
-    setOpen(false);
-  };
-
-  return (
-    <div className="flex items-center gap-3 flex-wrap">
-      {/* Trigger */}
-      <div className="relative" ref={ref}>
-        <button
-          onClick={() => setOpen(v => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            height: 38, padding: '0 14px',
-            background: '#fff', border: '2px solid #94a3b8',
-            borderRadius: 10, cursor: 'pointer',
-            fontSize: 14, color: '#334155',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            outline: 'none', whiteSpace: 'nowrap',
-          }}
-        >
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', background: '#f1f5f9', padding: '2px 5px', borderRadius: 4, letterSpacing: '0.05em', lineHeight: 1 }}>
-            {primaryMeta.code.slice(0, 2).toUpperCase()}
-          </span>
-          <span style={{ fontWeight: 600, color: '#334155' }}>{primaryMeta.code}</span>
-          {extras.length > 0 && (
-            <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#1e293b', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-              +{extras.length}
-            </span>
-          )}
-          <ChevronDown size={13} style={{ color: '#94a3b8', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-        </button>
-
-        {open && (
-          <div className="absolute top-full left-0 mt-2 w-[260px] bg-white border border-gray-100 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 overflow-hidden">
-
-            {/* Primary section */}
-            <div className="px-4 pt-4 pb-1.5">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Primary Currency</p>
-            </div>
-            {CURRENCIES.map(cur => {
-              const sel = primary === cur.code;
-              return (
-                <button
-                  key={cur.code}
-                  onClick={() => selectPrimary(cur.code)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                    sel ? 'bg-slate-50' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md leading-none tracking-wide ${
-                    sel ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {cur.code.slice(0, 2)}
-                  </span>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className={`text-sm font-semibold ${sel ? 'text-slate-800' : 'text-gray-700'}`}>{cur.code}</p>
-                    <p className="text-[11px] text-gray-400 truncate">{cur.label}</p>
-                  </div>
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all ${
-                    sel ? 'bg-slate-800' : 'bg-transparent'
-                  }`}>
-                    {sel && <Check size={11} className="text-white" strokeWidth={3} />}
-                  </div>
-                </button>
-              );
-            })}
-
-            {/* Also show section */}
-            <div className="border-t border-gray-100 mx-4 mt-1" />
-            <div className="px-4 pt-3 pb-1.5">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Also Show on Cards</p>
-            </div>
-            {CURRENCIES.filter(c => c.code !== primary).map(cur => {
-              const chk = extras.includes(cur.code);
-              return (
-                <button
-                  key={cur.code}
-                  onClick={() => toggleExtra(cur.code)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left transition-colors"
-                >
-                  <span className="text-[10px] font-extrabold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md leading-none tracking-wide shrink-0">
-                    {cur.code.slice(0, 2)}
-                  </span>
-                  <span className="text-sm text-gray-700 flex-1 truncate">
-                    {cur.code}<span className="text-gray-400 font-normal"> · {cur.label}</span>
-                  </span>
-                  {/* Square checkbox - using explicit rendering */}
-                  <div
-                    className="shrink-0 transition-all"
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 4,
-                      border: chk ? '2px solid #1e293b' : '2px solid #d1d5db',
-                      background: chk ? '#1e293b' : '#fff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {chk && (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-            <div className="h-3" />
-          </div>
-        )}
-      </div>
-
-      {/* Rate status */}
-      {loading && (
-        <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-          <Loader2 size={11} className="animate-spin" /> Updating…
-        </span>
-      )}
-      {error && !loading && (
-        <span className="flex items-center gap-1.5 text-xs text-amber-500 font-medium">
-          <AlertCircle size={11} /> Estimated rates
-        </span>
-      )}
-      {lastUpdated && !loading && !error && (
-        <span className="flex items-center gap-1.5 text-sm text-slate-500 font-semibold">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
-          Live · {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ─── Currency rows helper (shared by cards) ───────────────────────────────────
-
-function CurrencyRows({
-  extras, pkrAmount, rates, dark = false, subtitleSuffix,
-}: {
-  extras: CurrencyCode[];
-  pkrAmount: number;
-  rates: RateMap;
-  dark?: boolean;
-  subtitleSuffix?: string;
-}) {
-  if (extras.length === 0) return null;
-  return (
-    <div className={`mt-3 pt-2.5 flex flex-col gap-1.5 ${dark ? '' : 'border-t border-gray-100'}`}
-      style={dark ? { borderTop: '1px solid rgba(255,255,255,0.1)' } : {}}>
-      {extras.map(code => {
-        const meta = getMeta(code);
-        const amt  = convertFromAed(pkrAmount, code, rates);
-        return (
-          <div key={code} className="flex items-center justify-between gap-2">
-            <span className={`flex items-center gap-1.5 text-xs ${dark ? '' : 'text-gray-400'}`}
-              style={dark ? { color: 'rgba(255,255,255,0.45)' } : {}}>
-              <span className={`text-[10px] font-bold px-1 py-0.5 rounded leading-none ${dark ? 'bg-white/10 text-white/60' : 'bg-gray-100 text-gray-500'}`}>
-                {code.slice(0, 2)}
-              </span>
-              {code}
-            </span>
-            <span className={`text-xs font-semibold tabular-nums ${dark ? '' : 'text-gray-600'}`}
-              style={dark ? { color: 'rgba(255,255,255,0.75)' } : {}}>
-              {fmt(amt, meta)}{subtitleSuffix ? ` ${subtitleSuffix}` : ''}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
+// Using the shared `CurrencyDropdown` from CurrencyPicker (imported above).
 // ─── AmountCard ───────────────────────────────────────────────────────────────
 
 interface AmountCardProps {
@@ -541,8 +334,8 @@ export function Dashboard() {
   const canViewOverview = hasPermission('Dashboard');
 
   const [activeTab, setActiveTab]     = useState<string | null>(null);
-  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('AED');
-  const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>([]);
+  const primaryCurrency: CurrencyCode = 'AED';
+  const extraCurrencies: CurrencyCode[] = [];
 
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
 
@@ -760,11 +553,7 @@ export function Dashboard() {
         {/* Currency + Refresh — only show on Overview tab */}
         {activeTab !== 'reports' && (
           <div className="flex items-center gap-3">
-            <CurrencyDropdown
-              primary={primaryCurrency} extras={extraCurrencies}
-              onPrimaryChange={setPrimary} onExtrasChange={setExtras}
-              loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated}
-            />
+            <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
             <button onClick={refresh} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors bg-white border border-gray-200 rounded-xl px-3 py-2 hover:shadow-sm">
               <RefreshCw size={13} /> Refresh
             </button>

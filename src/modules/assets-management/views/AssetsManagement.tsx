@@ -49,7 +49,7 @@ export function AssetsManagement() {
   const [editingAsset, setEditingAsset]       = useState<Asset | null>(null);
   const [expandedId, setExpandedId]           = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('PKR');
+  // Assets display is AED-only
 
   useEffect(() => { loadAssets(); }, []);
 
@@ -134,23 +134,8 @@ export function AssetsManagement() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Currency Toggle */}
-            <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
-              {(['PKR', 'AED'] as DisplayCurrency[]).map(cur => (
-                <button
-                  key={cur}
-                  type="button"
-                  onClick={() => setDisplayCurrency(cur)}
-                  style={displayCurrency === cur ? { backgroundColor: CHARCOAL, color: '#ffffff' } : {}}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    displayCurrency === cur ? 'shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {cur === 'PKR' ? '₨ PKR' : 'د.إ AED'}
-                </button>
-              ))}
-            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-gray-600">Amounts shown in AED</div>
 
             <button
               onClick={() => navigate(-1)}
@@ -311,13 +296,10 @@ export function AssetsManagement() {
                         </div>
                         <div className="min-w-0">
                           <h3 className="text-sm font-bold text-gray-900 truncate">{asset.assetName}</h3>
-                          <span className="text-xs font-semibold" style={{ color: CHARCOAL }}>
-                            {formatPrice(asset.price, displayCurrency)}
-                          </span>
-                          {/* Secondary currency hint */}
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            ≈ {displayCurrency === 'PKR' ? formatAED(asset.price) : formatPKR(asset.price)}
-                          </p>
+                            <span className="text-xs font-semibold" style={{ color: CHARCOAL }}>
+                              {AssetsService.formatPriceAED(asset.price)}
+                            </span>
+                            <p className="text-xs text-gray-400 mt-0.5">Stored amounts are in PKR; displayed in AED.</p>
                         </div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2">
@@ -420,12 +402,9 @@ export function AssetsManagement() {
                 <span className="text-xs text-gray-400">
                   Total value:{' '}
                   <span className="font-semibold" style={{ color: CHARCOAL }}>
-                    {formatPrice(totalValue, displayCurrency)}
+                    {AssetsService.formatPriceAED(totalValue)}
                   </span>
                 </span>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  ≈ {displayCurrency === 'PKR' ? formatAED(totalValue) : formatPKR(totalValue)}
-                </p>
               </div>
             </div>
           )}

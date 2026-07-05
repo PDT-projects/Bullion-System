@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { Invoice } from '../../App';
 import { Calendar, MapPin, User, Filter, Download, UserPlus, BarChart3, ChevronDown, X } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { fmtCurrency } from '../finance/currencyUtils';
 
 type ReferralReportProps = {
   invoices: Invoice[];
@@ -256,8 +257,8 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
                 <div className="flex items-center gap-2 mb-2"><User size={16} className="text-[#4f46e5]" /><p className="font-medium text-gray-900">{item.person}</p></div>
                 <div className="space-y-1 text-sm">
                   <p className="text-gray-600">Referrals: <span className="font-medium text-gray-900">{item.count}</span></p>
-                  <p className="text-gray-600">Total Sales: <span className="font-medium text-[#4f46e5]">Rs {item.totalSales.toLocaleString()}</span></p>
-                  <p className="text-gray-600">Referral Amount: <span className="font-medium text-[#10b981]">Rs {item.totalReferral.toLocaleString()}</span></p>
+                  <p className="text-gray-600">Total Sales: <span className="font-medium text-[#4f46e5]">{fmtCurrency(item.totalSales, 'AED')}</span></p>
+                  <p className="text-gray-600">Referral Amount: <span className="font-medium text-[#10b981]">{fmtCurrency(item.totalReferral, 'AED')}</span></p>
                 </div>
               </div>
             ))}
@@ -268,8 +269,8 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-lg border border-gray-200 p-4"><p className="text-sm text-gray-600 mb-1">Total Referrals</p><p className="text-2xl font-bold text-gray-900">{filteredData.length}</p></div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4"><p className="text-sm text-gray-600 mb-1">Total Sell Price</p><p className="text-2xl font-bold text-[#4f46e5]">Rs {totals.sellPrice.toLocaleString()}</p></div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4"><p className="text-sm text-gray-600 mb-1">Total Referral Amount</p><p className="text-2xl font-bold text-[#10b981]">Rs {totals.referralAmount.toLocaleString()}</p></div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4"><p className="text-sm text-gray-600 mb-1">Total Sell Price</p><p className="text-2xl font-bold text-[#4f46e5]">{fmtCurrency(totals.sellPrice, 'AED')}</p></div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4"><p className="text-sm text-gray-600 mb-1">Total Referral Amount</p><p className="text-2xl font-bold text-[#10b981]">{fmtCurrency(totals.referralAmount, 'AED')}</p></div>
       </div>
 
       {/* Visualization */}
@@ -282,7 +283,7 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={visualizationData.referralTrend}>
                   <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis />
-                  <Tooltip formatter={(v) => [`Rs ${Number(v).toLocaleString()}`, 'Referral Amount']} />
+                  <Tooltip formatter={(v) => [fmtCurrency(Number(v), 'AED'), 'Referral Amount']} />
                   <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
@@ -292,7 +293,7 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={visualizationData.cityReferrals}>
                   <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="city" /><YAxis />
-                  <Tooltip formatter={(v) => [`Rs ${Number(v).toLocaleString()}`, 'Referral Amount']} />
+                  <Tooltip formatter={(v) => [fmtCurrency(Number(v), 'AED'), 'Referral Amount']} />
                   <Bar dataKey="amount" fill="#10b981" />
                 </BarChart>
               </ResponsiveContainer>
@@ -304,7 +305,7 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={visualizationData.salespersonReferrals}>
                   <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="salesperson" /><YAxis />
-                  <Tooltip formatter={(v) => [`Rs ${Number(v).toLocaleString()}`, 'Referral Amount']} />
+                  <Tooltip formatter={(v) => [fmtCurrency(Number(v), 'AED'), 'Referral Amount']} />
                   <Bar dataKey="amount" fill="#f59e0b" />
                 </BarChart>
               </ResponsiveContainer>
@@ -314,7 +315,7 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={visualizationData.productReferrals} layout="horizontal">
                   <CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis dataKey="product" type="category" width={100} />
-                  <Tooltip formatter={(v) => [`Rs ${Number(v).toLocaleString()}`, 'Referral Amount']} />
+                  <Tooltip formatter={(v) => [fmtCurrency(Number(v), 'AED'), 'Referral Amount']} />
                   <Bar dataKey="amount" fill="#8b5cf6" />
                 </BarChart>
               </ResponsiveContainer>
@@ -339,7 +340,7 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
                   <Pie data={visualizationData.referralAmountData} cx="50%" cy="50%" labelLine={false} label={({ salesperson, amount }) => `${salesperson}: Rs ${amount.toLocaleString()}`} outerRadius={80} dataKey="amount">
                     {visualizationData.referralAmountData.map((_, i) => <Cell key={i} fill={['#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6'][i % 5]} />)}
                   </Pie>
-                  <Tooltip formatter={(v) => [`Rs ${Number(v).toLocaleString()}`, 'Referral Amount']} />
+                  <Tooltip formatter={(v) => [fmtCurrency(Number(v), 'AED'), 'Referral Amount']} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -367,9 +368,9 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
                   <td className="px-4 py-3 text-sm text-gray-900">{item.clientName}</td>
                   <td className="px-4 py-3 text-sm text-gray-900">{item.city}</td>
                   <td className="px-4 py-3 text-sm text-gray-900">{item.product} / {item.brand}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">Rs {item.salePriceBeforeReferral.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm text-[#10b981] text-right font-semibold">Rs {item.referralShare.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">Rs {item.salePriceAfterReferral.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">{fmtCurrency(item.salePriceBeforeReferral, 'AED')}</td>
+                  <td className="px-4 py-3 text-sm text-[#10b981] text-right font-semibold">{fmtCurrency(item.referralShare, 'AED')}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">{fmtCurrency(item.salePriceAfterReferral, 'AED')}</td>
                   <td className="px-4 py-3 text-sm"><span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800"><User size={12} />{item.salesperson}</span></td>
                   <td className="px-4 py-3 text-sm">{item.referBy && <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800"><User size={12} />{item.referBy}</span>}</td>
                 </tr>
@@ -379,9 +380,9 @@ export function ReferralReport({ invoices }: ReferralReportProps) {
               <tfoot className="bg-gray-100 border-t-2 border-gray-300">
                 <tr>
                   <td colSpan={4} className="px-4 py-3 text-sm font-bold text-gray-900">TOTALS</td>
-                  <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">Rs {totals.sellPrice.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm font-bold text-[#10b981] text-right">Rs {totals.referralAmount.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">Rs {totals.referralAmount.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">{fmtCurrency(totals.sellPrice, 'AED')}</td>
+                  <td className="px-4 py-3 text-sm font-bold text-[#10b981] text-right">{fmtCurrency(totals.referralAmount, 'AED')}</td>
+                  <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">{fmtCurrency(totals.referralAmount, 'AED')}</td>
                   <td></td><td></td>
                 </tr>
               </tfoot>

@@ -44,7 +44,7 @@ export function InventoryCharts({ products }: InventoryChartsProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
-      currency: 'PKR',
+      currency: 'AED',
       minimumFractionDigits: 0
     }).format(amount);
   };

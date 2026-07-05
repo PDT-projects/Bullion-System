@@ -15,7 +15,6 @@ import {
   UseInventoryProductDetailsViewModelReturn,
   SelectedModel,
 } from '../viewModels/useInventoryProductDetailsViewModel';
-import { useInventoryCurrency } from '../viewModels/useInventoryCurrency';
 import { BrandModelSelector } from '../components/BrandModelSelector';
 import { forceReseed } from '../models/BrandModelService';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
@@ -57,16 +56,9 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [expandedModel, setExpandedModel]   = useState<string | null>(null);
 
-  const {
-    primaryCurrency,
-    extraCurrencies,
-    rates,
-    setPrimaryCurrency,
-    setExtraCurrencies,
-    loading: ratesLoading,
-    error: ratesError,
-    lastUpdated,
-  } = useInventoryCurrency();
+  const ratesLoading = false;
+  const ratesError = false;
+  const lastUpdated = null;
 
   useEffect(() => {
     if (preloadedModels.length > 0) {
@@ -335,10 +327,6 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
             </div>
             <div style={{ marginLeft: 'auto' }}>
               <InventoryCurrencyDropdown
-                primaryCurrency={primaryCurrency}
-                extraCurrencies={extraCurrencies}
-                setPrimaryCurrency={setPrimaryCurrency}
-                setExtraCurrencies={setExtraCurrencies}
                 loading={ratesLoading}
                 error={ratesError}
                 lastUpdated={lastUpdated}
@@ -394,8 +382,6 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                     setSingleModelField('costPrice', value);
                     setCostPrice(value);
                   }}
-                  rates={rates}
-                  defaultInputCurrency={primaryCurrency}
                   required={false}
                 />
               </div>
@@ -407,8 +393,6 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                     setSingleModelField('sellPrice', value);
                     setSellPrice(value);
                   }}
-                  rates={rates}
-                  defaultInputCurrency={primaryCurrency}
                   required
                 />
               </div>

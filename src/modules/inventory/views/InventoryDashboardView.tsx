@@ -2,20 +2,19 @@
 // InventoryDashboardView - Main entry page for inventory operations
 // UPDATED: Shows recent inventory payment activity panel
 
-import { Plus, Package, ArrowRight, Boxes, PackagePlus, PackageSearch, ArrowRightLeft, Trash2 } from 'lucide-react';
+import { Plus, Package, ArrowRight, Boxes, Undo2, FileBarChart, Trash2, Wallet } from 'lucide-react';
 
 interface InventoryDashboardViewProps {
   onAddNewInventory: () => void;
-  onAddToExisting: () => void;
-  onViewReceivable: () => void;
+  onAddReturnedInventory: () => void;
   onViewInventory: () => void;
-  onProductTransfer: () => void;
+  onViewReport: () => void;
   onViewDeleted: () => void;
+  onViewPayables: () => void;
 }
 
 export function InventoryDashboardView({
-  onAddNewInventory, onAddToExisting, onViewReceivable, onViewInventory, onProductTransfer,
-  onViewDeleted,
+  onAddNewInventory, onAddReturnedInventory, onViewInventory, onViewReport, onViewDeleted, onViewPayables,
 }: InventoryDashboardViewProps) {
   const cards = [
     {
@@ -26,39 +25,39 @@ export function InventoryDashboardView({
       onClick: onAddNewInventory,
     },
     {
-      title: 'Add to Existing',
-      description: 'Add more units to an existing product in inventory',
-      icon: PackagePlus,
-      iconColor: '#16a34a', iconBg: '#f0fdf4', borderColor: '#bbf7d0', hoverBorder: '#22c55e', hoverBg: '#f0fdf4',
-      onClick: onAddToExisting,
+      title: 'Add Returned Inventory',
+      description: 'Process a customer return — damaged items go to Damaged Inventory, good items return to stock',
+      icon: Undo2,
+      iconColor: '#d97706', iconBg: '#fffbeb', borderColor: '#fde68a', hoverBorder: '#f59e0b', hoverBg: '#fffbeb',
+      onClick: onAddReturnedInventory,
     },
     {
-      title: 'Receivable Stock',
-      description: 'View shipments on the way but not yet received',
-      icon: PackageSearch,
-      iconColor: '#d97706', iconBg: '#fffbeb', borderColor: '#fde68a', hoverBorder: '#f59e0b', hoverBg: '#fffbeb',
-      onClick: onViewReceivable,
+      title: 'Deleted Inventory',
+      description: 'View archived records of deleted inventory items — items here cannot be deleted again',
+      icon: Trash2,
+      iconColor: '#b91c1c', iconBg: '#fef2f2', borderColor: '#fecaca', hoverBorder: '#ef4444', hoverBg: '#fef2f2',
+      onClick: onViewDeleted,
+    },
+    {
+      title: 'Inventory Payables',
+      description: 'Supplier-credit stock that has sold out — pay off what you owe the supplier',
+      icon: Wallet,
+      iconColor: '#b45309', iconBg: '#fffbeb', borderColor: '#fde68a', hoverBorder: '#d97706', hoverBg: '#fffbeb',
+      onClick: onViewPayables,
+    },
+    {
+      title: 'View Inventory Report',
+      description: 'Full per-serial breakdown: model, location, stock-in date, status, invoice, supplier cost & payment',
+      icon: FileBarChart,
+      iconColor: '#7c3aed', iconBg: '#f5f3ff', borderColor: '#e2e8f0', hoverBorder: '#8b5cf6', hoverBg: '#f5f3ff',
+      onClick: onViewReport,
     },
     {
       title: 'View Inventory',
       description: 'Browse and manage all existing inventory items',
       icon: Boxes,
-      iconColor: '#7c3aed', iconBg: '#f5f3ff', borderColor: '#e2e8f0', hoverBorder: '#8b5cf6', hoverBg: '#f5f3ff',
-      onClick: onViewInventory,
-    },
-    {
-      title: 'Product Transfer',
-      description: 'Transfer products between locations or warehouses',
-      icon: ArrowRightLeft,
       iconColor: '#0f766e', iconBg: '#f0fdfa', borderColor: '#99f6e4', hoverBorder: '#14b8a6', hoverBg: '#f0fdfa',
-      onClick: onProductTransfer,
-    },
-    {
-      title: 'Deleted Inventory',
-      description: 'View archived records of deleted inventory items with deletion history',
-      icon: Trash2,
-      iconColor: '#b91c1c', iconBg: '#fef2f2', borderColor: '#fecaca', hoverBorder: '#ef4444', hoverBg: '#fef2f2',
-      onClick: onViewDeleted,
+      onClick: onViewInventory,
     },
   ];
 

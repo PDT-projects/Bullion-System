@@ -25,7 +25,6 @@ import {
 } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { BrandModelSelector } from '../components/BrandModelSelector';
-import { useInventoryCurrency } from '../viewModels/useInventoryCurrency';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 // ── Shared location components (load from Firestore, support Add New) ─────────
 import { LocationSelector, SerialLocationSelector } from './LocationSelector';
@@ -258,16 +257,9 @@ export function CreateInventoryView({
   const selectedMode = PAYMENT_MODES.find(m => m.value === formData.paymentMethod) || null;
   const needsBank    = selectedMode?.needsBank ?? false;
 
-  const {
-    primaryCurrency,
-    extraCurrencies,
-    rates,
-    setPrimaryCurrency,
-    setExtraCurrencies,
-    loading: ratesLoading,
-    error: ratesError,
-    lastUpdated,
-  } = useInventoryCurrency();
+  const ratesLoading = false;
+  const ratesError = false;
+  const lastUpdated = null;
 
   // ── Stepper config ────────────────────────────────────────────────────────
   const steps = [
@@ -337,10 +329,6 @@ export function CreateInventoryView({
             </div>
             <div className="min-w-[220px]">
               <InventoryCurrencyDropdown
-                primaryCurrency={primaryCurrency}
-                extraCurrencies={extraCurrencies}
-                setPrimaryCurrency={setPrimaryCurrency}
-                setExtraCurrencies={setExtraCurrencies}
                 loading={ratesLoading}
                 error={ratesError}
                 lastUpdated={lastUpdated}
@@ -404,8 +392,6 @@ export function CreateInventoryView({
             label="Cost Price"
             pkrValue={formData.costPrice ?? 0}
             onChange={value => setField('costPrice', value)}
-            rates={rates}
-            defaultInputCurrency={primaryCurrency}
             required
           />
           {validation.fieldErrors?.costPrice && (
@@ -419,8 +405,6 @@ export function CreateInventoryView({
             label="Sell Price"
             pkrValue={formData.sellPrice ?? 0}
             onChange={value => setField('sellPrice', value)}
-            rates={rates}
-            defaultInputCurrency={primaryCurrency}
             required
           />
           {validation.fieldErrors?.sellPrice && (

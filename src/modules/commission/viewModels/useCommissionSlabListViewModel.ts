@@ -13,14 +13,15 @@ import {
   convertCommissionCurrency,
 } from './useCommissionSlabFormViewModel';
 
-export const LIST_DISPLAY_CURRENCIES: CommissionCurrency[] = ['PKR', 'USD', 'SAR', 'AED', 'CAD'];
+export const LIST_DISPLAY_CURRENCIES: CommissionCurrency[] = ['AED'];
 
 export function formatCommissionCurrency(amount: number, currency: CommissionCurrency): string {
-  const def = COMMISSION_CURRENCIES.find(c => c.code === currency);
-  const sym = def?.symbol ?? currency;
+  const def = COMMISSION_CURRENCIES.find(c => c.code === currency) || { symbol: 'د.إ' };
+  const sym = def.symbol ?? 'د.إ';
+  // Use UAE locale for AED formatting
   if (amount >= 1_000_000) return `${sym}${(amount / 1_000_000).toFixed(2)}M`;
   if (amount >= 1_000)     return `${sym}${(amount / 1_000).toFixed(1)}K`;
-  return `${sym}${amount.toLocaleString('en-PK', { maximumFractionDigits: 2 })}`;
+  return `${sym}${amount.toLocaleString('en-AE', { maximumFractionDigits: 2 })}`;
 }
 
 interface UseCommissionSlabListViewModelReturn {

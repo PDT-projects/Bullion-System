@@ -2,7 +2,7 @@
 // InventoryTypeSelectionView - Step 1: Choose inventory entry type
 
 import React from 'react';
-import { Package, Truck, ArrowLeft, Check } from 'lucide-react';
+import { CreditCard, Wallet, ArrowLeft, Check } from 'lucide-react';
 import { UseInventoryTypeSelectionViewModelReturn } from '../viewModels/useInventoryTypeSelectionViewModel';
 
 interface InventoryTypeSelectionViewProps extends UseInventoryTypeSelectionViewModelReturn {}
@@ -59,11 +59,11 @@ export const InventoryTypeSelectionView: React.FC<InventoryTypeSelectionViewProp
           <ArrowLeft size={17} />
         </button>
         <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Package size={17} color="#fff" />
+          <Wallet size={17} color="#fff" />
         </div>
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Add New Inventory</div>
-          <div style={{ fontSize: 11, color: '#64748b' }}>Step 1 of 4 — Select inventory type</div>
+          <div style={{ fontSize: 11, color: '#64748b' }}>Step 1 of 4 — Is this against credit or payment?</div>
         </div>
       </div>
     </div>
@@ -72,23 +72,23 @@ export const InventoryTypeSelectionView: React.FC<InventoryTypeSelectionViewProp
 
     {/* Content */}
     <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
-      <p style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 20 }}>What type of inventory are you adding?</p>
+      <p style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 20 }}>How is this inventory being added?</p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, maxWidth: 900 }}>
         {[
           {
-            type: 'in-stock' as const,
-            icon: Package, iconColor: '#16a34a', activeBorder: '#22c55e', activeBg: '#f0fdf4', activeIconBg: '#dcfce7', activeGlow: 'rgba(34,197,94,0.15)',
-            activeCheck: '#22c55e', title: 'In-Stock / Received', sub: 'Physically in warehouse',
-            desc: 'Products already in your warehouse or physically received and ready for sale.',
-            badge: '● Available Now', badgeBg: '#dcfce7', badgeColor: '#15803d',
+            type: 'payment' as const,
+            icon: Wallet, iconColor: '#16a34a', activeBorder: '#22c55e', activeBg: '#f0fdf4', activeIconBg: '#dcfce7', activeGlow: 'rgba(34,197,94,0.15)',
+            activeCheck: '#22c55e', title: 'Add Inventory Against Payment', sub: 'Paid for now',
+            desc: 'You are paying the supplier now — record the payment method, amount, and status on the next steps.',
+            badge: '● Paid Now', badgeBg: '#dcfce7', badgeColor: '#15803d',
           },
           {
-            type: 'on-order' as const,
-            icon: Truck, iconColor: '#ea580c', activeBorder: '#f97316', activeBg: '#fff7ed', activeIconBg: '#ffedd5', activeGlow: 'rgba(249,115,22,0.15)',
-            activeCheck: '#f97316', title: 'On-Order / Pending', sub: 'Ordered, not yet received',
-            desc: 'Products ordered from a supplier but not yet received or in transit.',
-            badge: '● Expected Soon', badgeBg: '#ffedd5', badgeColor: '#c2410c',
+            type: 'credit' as const,
+            icon: CreditCard, iconColor: '#d97706', activeBorder: '#f97316', activeBg: '#fff7ed', activeIconBg: '#ffedd5', activeGlow: 'rgba(249,115,22,0.15)',
+            activeCheck: '#f97316', title: 'Add Inventory Against Credit', sub: 'Pay supplier later',
+            desc: 'No payment is made now. Only the purchasing cost is fixed — it becomes payable once this stock sells out.',
+            badge: '● Supplier Credit', badgeBg: '#ffedd5', badgeColor: '#c2410c',
           },
         ].map(({ type, icon: Icon, iconColor, activeBorder, activeBg, activeIconBg, activeGlow, activeCheck, title, sub, desc, badge, badgeBg, badgeColor }) => {
           const sel = selectedType === type;

@@ -16,11 +16,7 @@ import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Buildin
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters, ProductTransfer } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
-import { useInventoryCurrency, formatInCurrency } from '../viewModels/useInventoryCurrency';
-import { InventoryCurrencyDropdown, CurrencyExtraRows } from './InventoryCurrencyDropdown';
-
-// ── Re-export so pages that import this file don't need an extra import ───────
-export { useInventoryCurrency };
+import { InventoryCurrencyDropdown } from './InventoryCurrencyDropdown';
 
 interface InventoryListViewProps {
   products: Product[];
@@ -422,19 +418,15 @@ export function InventoryListView({
   const handleBack = () => onBack ? onBack() : navigate('/inventory');
 
   // ── Currency state ────────────────────────────────────────────────────────
-  const currency = useInventoryCurrency();
-  const {
-    primaryCurrency, extraCurrencies, rates,
-    setPrimaryCurrency, setExtraCurrencies,
-    loading: ratesLoading, error: ratesError, lastUpdated,
-  } = currency;
+  const ratesLoading = false;
+  const ratesError = false;
+  const lastUpdated = null;
 
-  // Default primary currency to AED on first mount
-  React.useEffect(() => {
-    setPrimaryCurrency('AED');
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fmtPrimary = (pkr: number) => formatInCurrency(pkr, primaryCurrency, rates);
+  const fmtPrimary = (amount: number) => {
+    return new Intl.NumberFormat('en-AE', {
+      style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 2,
+    }).format(amount);
+  };
 
   return (
     <div className="p-6">
@@ -458,10 +450,6 @@ export function InventoryListView({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <InventoryCurrencyDropdown
-            primaryCurrency={primaryCurrency}
-            extraCurrencies={extraCurrencies}
-            setPrimaryCurrency={setPrimaryCurrency}
-            setExtraCurrencies={setExtraCurrencies}
             loading={ratesLoading}
             error={ratesError}
             lastUpdated={lastUpdated}
@@ -530,7 +518,7 @@ export function InventoryListView({
             <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
               {fmtPrimary(stats.totalValue)}
             </div>
-            <CurrencyExtraRows extras={extraCurrencies} pkrAmount={stats.totalValue} rates={rates} />
+            {/* AED-only display; no extra currency rows */}
           </div>
           <div style={{ fontSize: 12, color: '#9ca3af', textAlign: 'right' }}>
             <div>Cost Price basis</div>
@@ -612,9 +600,10 @@ export function InventoryListView({
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Brand', 'Model', 'Category', 'Location', 'Stock',
-                  `Cost (${primaryCurrency})`,
-                  `Sell (${primaryCurrency})`,
+                {['Brand', 'Model', 'Type', 'Location', 'Stock-In Date', 'Category', 'Stock',
+                  'Cost (AED)',
+                  'Sell (AED)',
+                  'Supplier Cost', 'Supplier Payment',
                   'Status', 'Payment', 'Actions'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
@@ -662,6 +651,20 @@ export function InventoryListView({
                       );
                     })()}
                   </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                    {(() => {
+                      const dates = Object.values(product.serialStockInDates || {});
+                      const earliest = dates.length ? dates.sort()[0] : product.createdAt;
+                      return earliest ? new Date(earliest).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+                    })()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      product.ownershipType === 'Credit' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {product.ownershipType || '—'}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       product.stock === 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
@@ -673,13 +676,27 @@ export function InventoryListView({
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.costPrice)}
                     </div>
-                    <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.costPrice} rates={rates} />
+                    {/* AED-only display; extras removed */}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.sellPrice)}
                     </div>
-                    <CurrencyExtraRows extras={extraCurrencies} pkrAmount={product.sellPrice} rates={rates} />
+                    {/* AED-only display; extras removed */}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {product.ownershipType === 'Credit' ? fmtPrimary(product.supplierCost || 0) : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    {product.ownershipType === 'Credit' ? (
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        product.supplierPaymentStatus === 'Cleared' ? 'bg-green-100 text-green-700' :
+                        product.supplierPaymentStatus === 'Partial' ? 'bg-amber-100 text-amber-800' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {product.supplierPaymentStatus || 'Unpaid'}
+                      </span>
+                    ) : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
@@ -830,12 +847,10 @@ export function InventoryListView({
                 <div>
                   <p className="text-xs text-gray-500">Cost Price</p>
                   <p className="font-semibold text-gray-900">{fmtPrimary(viewProduct.costPrice)}</p>
-                  <CurrencyExtraRows extras={extraCurrencies} pkrAmount={viewProduct.costPrice} rates={rates} />
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Sell Price</p>
                   <p className="font-semibold text-gray-900">{fmtPrimary(viewProduct.sellPrice)}</p>
-                  <CurrencyExtraRows extras={extraCurrencies} pkrAmount={viewProduct.sellPrice} rates={rates} />
                 </div>
                 <div className="col-span-2 flex items-center gap-2 pt-2 border-t border-gray-100">
                   <MapPin className="w-4 h-4 text-[#334155] flex-shrink-0" />

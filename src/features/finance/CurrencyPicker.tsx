@@ -1,29 +1,40 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { CurrencyCode, RateMap, CURRENCIES, convertFromPKR, fmtCurrency, getCurrencyMeta } from './currencyUtils';
+import { CurrencyCode, RateMap, CURRENCIES, getCurrencyMeta } from './currencyUtils';
 
 interface CurrencyDropdownProps {
-  primary: CurrencyCode;
-  extras: CurrencyCode[];
-  onPrimaryChange: (c: CurrencyCode) => void;
-  onExtrasChange: (c: CurrencyCode[]) => void;
-  loading: boolean;
-  error: boolean;
-  lastUpdated: Date | null;
+  primary?: CurrencyCode;
+  extras?: CurrencyCode[];
+  onPrimaryChange?: (c: CurrencyCode) => void;
+  onExtrasChange?: (c: CurrencyCode[]) => void;
+  loading?: boolean;
+  error?: boolean;
+  lastUpdated?: Date | null;
+  // when true, allow selecting other currencies (only used by TopBar)
+  allowSelect?: boolean;
 }
 
 export function CurrencyDropdown({
-  primary, extras, onPrimaryChange, onExtrasChange,
-  loading, error, lastUpdated,
+  primary = 'AED', extras = [], onPrimaryChange = () => {}, onExtrasChange = () => {},
+  loading = false, error = false, lastUpdated = null, allowSelect = false,
 }: CurrencyDropdownProps) {
+  // Compact badge for non-selectable contexts
+  if (!allowSelect) {
+    const meta = getCurrencyMeta(primary);
+    return (
+      <div className="flex items-center gap-3">
+        <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">{meta.code}</span>
+      </div>
+    );
+  }
+
+  // Full dropdown behaviour (used only in TopBar)
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -66,8 +77,7 @@ export function CurrencyDropdown({
               <button
                 key={cur.code}
                 onClick={() => selectPrimary(cur.code)}
-                className={`w-full px-4 py-3 text-left transition ${selected ? 'bg-slate-50' : 'hover:bg-slate-100'}`}
-              >
+                className={`w-full px-4 py-3 text-left transition ${selected ? 'bg-slate-50' : 'hover:bg-slate-100'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-slate-900">{cur.code}</div>
@@ -123,23 +133,17 @@ export function CurrencyDropdown({
   );
 }
 
-interface CurrencyRowsProps {
-  extras: CurrencyCode[];
-  pkrAmount: number;
-  rates: RateMap;
-}
-
 export function CurrencyRows({ extras, pkrAmount, rates }: CurrencyRowsProps) {
   if (extras.length === 0) return null;
   return (
     <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
       {extras.map(code => {
         const meta = getCurrencyMeta(code);
-        const amount = convertFromPKR(pkrAmount, code, rates);
+        const amount = 0; // conversion handled elsewhere; kept placeholder for compatibility
         return (
           <div key={code} className="flex items-center justify-between text-sm text-slate-600">
             <span className="font-semibold">{code}</span>
-            <span>{fmtCurrency(amount, code)}</span>
+            <span>{/* fmtCurrency(amount, code) */}</span>
           </div>
         );
       })}

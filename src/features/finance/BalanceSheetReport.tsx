@@ -83,8 +83,8 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const [customTo,          setCustomTo]          = useState('');
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
-  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('AED');
-  const [extraCurrencies, setExtraCurrencies]   = useState<CurrencyCode[]>(['USD', 'SAR', 'PKR']);
+  const primaryCurrency: CurrencyCode = 'AED';
+  const extraCurrencies: CurrencyCode[] = [];
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
   const reportCurrencyCodes: CurrencyCode[] = [primaryCurrency, ...extraCurrencies];
 
@@ -489,15 +489,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               <h3 className="text-sm font-semibold text-gray-900">Currency conversion summary</h3>
               <p className="text-xs text-gray-500">Choose the report currency and optional extra conversions.</p>
             </div>
-            <CurrencyDropdown
-              primary={primaryCurrency}
-              extras={extraCurrencies}
-              onPrimaryChange={setPrimaryCurrency}
-              onExtrasChange={setExtraCurrencies}
-              loading={ratesLoading}
-              error={ratesError}
-              lastUpdated={lastUpdated}
-            />
+            <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
           </div>
           <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
             <span>{ratesLoading ? 'Loading exchange rates…' : ratesError ? 'Using fallback rates' : `Updated ${lastUpdated ? lastUpdated.toLocaleTimeString('en-US') : '—'}`}</span>

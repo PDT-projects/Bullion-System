@@ -206,7 +206,7 @@ export const InventoryPayableConfigPanel: React.FC = () => {
                   </span>
                 )}
                 <span className="text-xs text-gray-400">·</span>
-                <span className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded px-2 py-0.5">PKR {fmt(previewAmounts.pkr)}</span>
+                <span className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded px-2 py-0.5">AED {fmt(previewAmounts.aed)}</span>
                 <span className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded px-2 py-0.5">SAR {fmt(previewAmounts.sar)}</span>
               </div>
             </div>

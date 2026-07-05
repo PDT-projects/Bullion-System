@@ -65,7 +65,7 @@ export function useInventoryCostingDetailsViewModel(): UseInventoryCostingDetail
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const costingOption = (searchParams.get('costing') as CostingOption) || 'without';
-  const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
+  const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'payment';
 
   const [costingInfo, setCostingInfo] = useState<CostingInfo | undefined>(() =>
     costingOption === 'with' ? createInitialCostingInfo() : undefined

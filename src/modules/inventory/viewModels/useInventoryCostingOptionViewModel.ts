@@ -20,7 +20,7 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedOption, setSelectedOption] = useState<CostingOption | null>(null);
-  const inventoryType = searchParams.get('type') || 'in-stock';
+  const inventoryType = searchParams.get('type') || 'payment';
 
   const selectOption = useCallback((option: CostingOption) => setSelectedOption(option), []);
 

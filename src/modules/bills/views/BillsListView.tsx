@@ -10,6 +10,8 @@ import {
   Zap, Wifi, Droplets, Receipt, CreditCard,
   ChevronDown, Check, Loader2, AlertCircle, RefreshCw,
 } from 'lucide-react';
+import { CurrencyDropdown } from '../../../features/finance/CurrencyPicker';
+import { RateMap, useCurrencyRates, fmtCurrency, getCurrencyMeta } from '../../../features/finance/currencyUtils';
 
 interface BillsListViewProps {
   bills: Bill[];
@@ -39,236 +41,25 @@ interface BillsListViewProps {
   getCategoryIconName: (category: string) => 'Zap' | 'Wifi' | 'Droplets' | 'Receipt';
 }
 
-// ─── Currency System ──────────────────────────────────────────────────────────
+// Use shared currency utilities (AED primary display). Rates and formatting
+// are provided by `useCurrencyRates` and `fmtCurrency` from currencyUtils.
 
-type CurrencyCode = 'PKR' | 'CAD' | 'AED' | 'SAR';
+const convertFromAED = (amount: number, target: string, rates: RateMap): number =>
+  target === 'AED' ? amount : (amount / rates.AED) * (rates as any)[target];
 
-interface CurrencyMeta {
-  code: CurrencyCode;
-  label: string;
-  countryCode: string;
-  locale: string;
-  decimals: number;
-}
-
-const CURRENCIES: CurrencyMeta[] = [
-  { code: 'AED', label: 'UAE Dirham',      countryCode: 'AE', locale: 'en-AE', decimals: 2 },
-  { code: 'PKR', label: 'Pakistani Rupee', countryCode: 'PK', locale: 'en-PK', decimals: 0 },
-  { code: 'CAD', label: 'Canadian Dollar', countryCode: 'CA', locale: 'en-CA', decimals: 2 },
-  { code: 'SAR', label: 'Saudi Riyal',     countryCode: 'SA', locale: 'en-US', decimals: 2 },
-];
-
-type RateMap = Record<CurrencyCode, number>;
-const FALLBACK_RATES: RateMap = { PKR: 279.5, CAD: 1.38, AED: 3.67, SAR: 3.75 };
-
-const getMeta = (code: CurrencyCode) => CURRENCIES.find(c => c.code === code)!;
-
-const fmtAmount = (amount: number, meta: CurrencyMeta): string => {
-  try {
-    return new Intl.NumberFormat(meta.locale, {
-      style: 'currency', currency: meta.code,
-      minimumFractionDigits: meta.decimals,
-      maximumFractionDigits: meta.decimals,
-    }).format(amount);
-  } catch {
-    return `${meta.code} ${amount.toFixed(meta.decimals)}`;
-  }
-};
-
-const convertFromPKR = (amount: number, target: CurrencyCode, rates: RateMap): number =>
-  target === 'PKR' ? amount : (amount / rates.PKR) * rates[target];
-
-// Bills are stored AED-denominated (the Bills form saves `amount` directly in AED
-// and stamps `currency: 'AED'` on the record), unlike other modules that store PKR.
-// This converts an AED-denominated bill amount into any target display currency.
-const convertFromAED = (amount: number, target: CurrencyCode, rates: RateMap): number =>
-  target === 'AED' ? amount : (amount / rates.AED) * rates[target];
-
-function useCurrencyRates() {
-  const [rates, setRates]             = useState<RateMap>(FALLBACK_RATES);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  const fetch_ = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res  = await fetch('https://open.er-api.com/v6/latest/USD');
-      const data = await res.json();
-      if (data.result === 'success') {
-        setRates({ PKR: data.rates.PKR, CAD: data.rates.CAD, AED: data.rates.AED, SAR: data.rates.SAR });
-        setLastUpdated(new Date());
-        setError(false);
-      } else throw new Error();
-    } catch { setError(true); }
-    finally   { setLoading(false); }
-  }, []);
-
-  useEffect(() => {
-    fetch_();
-    const id = setInterval(fetch_, 30 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [fetch_]);
-
-  return { rates, loading, error, lastUpdated, refresh: fetch_ };
-}
-
-// ─── Currency Dropdown ────────────────────────────────────────────────────────
-
-function CurrencyDropdown({
-  primary, extras, onPrimaryChange, onExtrasChange, loading, error, lastUpdated,
-}: {
-  primary: CurrencyCode;
-  extras: CurrencyCode[];
-  onPrimaryChange: (c: CurrencyCode) => void;
-  onExtrasChange:  (c: CurrencyCode[]) => void;
-  loading: boolean;
-  error: boolean;
-  lastUpdated: Date | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const primaryMeta = getMeta(primary);
-
-  const toggleExtra = (code: CurrencyCode) => {
-    if (code === primary) return;
-    onExtrasChange(extras.includes(code) ? extras.filter(c => c !== code) : [...extras, code]);
-  };
-
-  const selectPrimary = (code: CurrencyCode) => {
-    onPrimaryChange(code);
-    onExtrasChange(extras.filter(c => c !== code));
-    setOpen(false);
-  };
-
-  return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <div className="relative" ref={ref}>
-        <button
-          onClick={() => setOpen(v => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            height: 38, padding: '0 14px',
-            background: '#fff', border: '2px solid #94a3b8',
-            borderRadius: 10, cursor: 'pointer',
-            fontSize: 14, color: '#334155',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            outline: 'none', whiteSpace: 'nowrap',
-          }}
-        >
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', background: '#f1f5f9', padding: '2px 5px', borderRadius: 4, letterSpacing: '0.05em', lineHeight: 1 }}>
-            {primaryMeta.countryCode}
-          </span>
-          <span style={{ fontWeight: 600, color: '#334155' }}>{primaryMeta.code}</span>
-          {extras.length > 0 && (
-            <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#1e293b', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-              +{extras.length}
-            </span>
-          )}
-          <ChevronDown size={13} style={{ color: '#94a3b8', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-        </button>
-
-        {open && (
-          <div className="absolute top-full right-0 mt-2 w-[268px] bg-white border border-gray-100 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.13)] z-50 overflow-hidden">
-            <div className="px-4 pt-4 pb-1.5">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Primary Currency</p>
-            </div>
-            {CURRENCIES.map(cur => {
-              const sel = primary === cur.code;
-              return (
-                <button key={cur.code} onClick={() => selectPrimary(cur.code)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${sel ? 'bg-slate-50' : 'hover:bg-gray-50'}`}>
-                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded leading-none tracking-wide ${sel ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                    {cur.countryCode}
-                  </span>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className={`text-sm font-semibold ${sel ? 'text-slate-800' : 'text-gray-700'}`}>{cur.code}</p>
-                    <p className="text-[11px] text-gray-400 truncate">{cur.label}</p>
-                  </div>
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all ${sel ? 'bg-slate-800' : 'bg-transparent'}`}>
-                    {sel && <Check size={11} className="text-white" strokeWidth={3} />}
-                  </div>
-                </button>
-              );
-            })}
-            <div className="border-t border-gray-100 mx-4 mt-1" />
-            <div className="px-4 pt-3 pb-1.5">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Also Show on Cards</p>
-            </div>
-            {CURRENCIES.filter(c => c.code !== primary).map(cur => {
-              const chk = extras.includes(cur.code);
-              return (
-                <button key={cur.code} onClick={() => toggleExtra(cur.code)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left transition-colors">
-                  <span className="text-[10px] font-extrabold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded leading-none tracking-wide shrink-0">
-                    {cur.countryCode}
-                  </span>
-                  <span className="text-sm text-gray-700 flex-1 truncate">
-                    {cur.code}<span className="text-gray-400 font-normal"> · {cur.label}</span>
-                  </span>
-                  <div style={{
-                    width: 18, height: 18, borderRadius: 4,
-                    border: chk ? '2px solid #1e293b' : '2px solid #d1d5db',
-                    background: chk ? '#1e293b' : '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    {chk && (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-            <div className="h-3" />
-          </div>
-        )}
-      </div>
-
-      {loading && (
-        <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-          <Loader2 size={11} className="animate-spin" /> Updating…
-        </span>
-      )}
-      {error && !loading && (
-        <span className="flex items-center gap-1.5 text-xs text-amber-500 font-medium">
-          <AlertCircle size={11} /> Estimated rates
-        </span>
-      )}
-      {lastUpdated && !loading && !error && (
-        <span className="flex items-center gap-1.5 text-sm text-slate-500 font-semibold">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
-          Live · {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      )}
-    </div>
-  );
-}
+// Local dropdown removed — uses shared CurrencyDropdown imported above.
 
 // ─── Secondary currency rows ──────────────────────────────────────────────────
 
-function CurrencyRows({ extras, aedAmount, rates }: { extras: CurrencyCode[]; aedAmount: number; rates: RateMap }) {
+function CurrencyRows({ extras, aedAmount, rates }: { extras: string[]; aedAmount: number; rates: RateMap }) {
   if (extras.length === 0) return null;
   return (
     <div className="mt-1.5 flex flex-col gap-0.5">
-      {extras.map(code => {
-        const meta = getMeta(code);
-        return (
-          <p key={code} className="text-xs text-gray-400 tabular-nums">
-            {fmtAmount(convertFromAED(aedAmount, code, rates), meta)}
-          </p>
-        );
-      })}
+      {extras.map(code => (
+        <p key={code} className="text-xs text-gray-400 tabular-nums">
+          {fmtCurrency(convertFromAED(aedAmount, code, rates), code)}
+        </p>
+      ))}
     </div>
   );
 }
@@ -305,12 +96,12 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
   getCategoryColor, getCategoryIconName,
 }) => {
   // ── Currency state — AED primary, PKR secondary by default ──
-  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('AED');
-  const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>(['PKR']);
-  const { rates, loading: ratesLoading, error: ratesError, lastUpdated, refresh: refreshRates } = useCurrencyRates();
+  const primaryCurrency: string = 'AED';
+  const extraCurrencies: string[] = [];
+  const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
 
   const fmtPrimary = (aed: number) =>
-    fmtAmount(convertFromAED(aed, primaryCurrency, rates), getMeta(primaryCurrency));
+    fmtCurrency(convertFromAED(aed, primaryCurrency, rates), primaryCurrency);
 
   const fmtD = BillsService.formatDate;
 
@@ -324,17 +115,7 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
           <p className="text-gray-600">Manage utility bills and recurring payments</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <CurrencyDropdown
-            primary={primaryCurrency} extras={extraCurrencies}
-            onPrimaryChange={setPrimary} onExtrasChange={setExtras}
-            loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated}
-          />
-          <button
-            onClick={refreshRates}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors bg-white border border-gray-200 rounded-xl px-3 py-2 hover:shadow-sm"
-          >
-            <RefreshCw size={13} /> Refresh
-          </button>
+          <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
           <button onClick={toggleFilters}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors"
             style={showFilters

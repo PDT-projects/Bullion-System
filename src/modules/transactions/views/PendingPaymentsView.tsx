@@ -8,251 +8,33 @@ import {
   DollarSign, ReceiptText, Filter,
   ChevronDown, RefreshCw,
 } from 'lucide-react';
+import { CurrencyDropdown } from '../../../features/finance/CurrencyPicker';
+import { CurrencyCode, RateMap, convertFromPKR, fmtCurrency, getCurrencyMeta, useCurrencyRates } from '../../../features/finance/currencyUtils';
 import { Transaction } from '../models/types';
 import { UsePendingPaymentsViewModelReturn } from '../viewModels/usePendingPaymentsViewModel';
 
 interface Props extends UsePendingPaymentsViewModelReturn {}
 
-// ─── Currency System (mirrored from TransactionListView) ─────────────────────
+// Use shared currency utilities and the shared picker (renders AED badge by default)
 
-type CurrencyCode = 'PKR' | 'CAD' | 'AED' | 'SAR';
-
-interface CurrencyMeta {
-  code: CurrencyCode;
-  label: string;
-  countryCode: string;
-  locale: string;
-  decimals: number;
-}
-
-const CURRENCIES: CurrencyMeta[] = [
-  { code: 'AED', label: 'UAE Dirham',       countryCode: 'AE', locale: 'en-AE', decimals: 2 },
-  { code: 'PKR', label: 'Pakistani Rupee',  countryCode: 'PK', locale: 'en-PK', decimals: 0 },
-  { code: 'CAD', label: 'Canadian Dollar',  countryCode: 'CA', locale: 'en-CA', decimals: 2 },
-  { code: 'SAR', label: 'Saudi Riyal',      countryCode: 'SA', locale: 'en-US', decimals: 2 },
-];
-
-type RateMap = Record<CurrencyCode, number>;
-const FALLBACK_RATES: RateMap = { PKR: 279.5, CAD: 1.38, AED: 3.67, SAR: 3.75 };
-
-const getMeta = (code: CurrencyCode) => CURRENCIES.find(c => c.code === code)!;
-
-const fmtAmount = (amount: number, meta: CurrencyMeta): string => {
-  try {
-    return new Intl.NumberFormat(meta.locale, {
-      style: 'currency', currency: meta.code,
-      minimumFractionDigits: meta.decimals,
-      maximumFractionDigits: meta.decimals,
-    }).format(amount);
-  } catch {
-    return `${meta.code} ${amount.toFixed(meta.decimals)}`;
-  }
-};
-
-const convertFromPKR = (amount: number, target: CurrencyCode, rates: RateMap): number =>
-  target === 'PKR' ? amount : (amount / rates.PKR) * rates[target];
-
-function useCurrencyRates() {
-  const [rates, setRates]             = useState<RateMap>(FALLBACK_RATES);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  const fetch_ = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res  = await fetch('https://open.er-api.com/v6/latest/USD');
-      const data = await res.json();
-      if (data.result === 'success') {
-        setRates({ PKR: data.rates.PKR, CAD: data.rates.CAD, AED: data.rates.AED, SAR: data.rates.SAR });
-        setLastUpdated(new Date());
-        setError(false);
-      } else throw new Error();
-    } catch { setError(true); }
-    finally   { setLoading(false); }
-  }, []);
-
-  useEffect(() => {
-    fetch_();
-    const id = setInterval(fetch_, 30 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [fetch_]);
-
-  return { rates, loading, error, lastUpdated, refresh: fetch_ };
-}
-
-// ─── Currency Dropdown ────────────────────────────────────────────────────────
-
-function CurrencyDropdown({
-  primary, extras, onPrimaryChange, onExtrasChange, loading, error, lastUpdated,
-}: {
-  primary: CurrencyCode;
-  extras: CurrencyCode[];
-  onPrimaryChange: (c: CurrencyCode) => void;
-  onExtrasChange:  (c: CurrencyCode[]) => void;
-  loading: boolean;
-  error: boolean;
-  lastUpdated: Date | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const primaryMeta = getMeta(primary);
-
-  const toggleExtra = (code: CurrencyCode) => {
-    if (code === primary) return;
-    onExtrasChange(extras.includes(code) ? extras.filter(c => c !== code) : [...extras, code]);
-  };
-
-  const selectPrimary = (code: CurrencyCode) => {
-    onPrimaryChange(code);
-    onExtrasChange(extras.filter(c => c !== code));
-    setOpen(false);
-  };
-
-  return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <div className="relative" ref={ref}>
-        <button
-          onClick={() => setOpen(v => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            height: 38, padding: '0 14px',
-            background: '#fff', border: '2px solid #94a3b8',
-            borderRadius: 10, cursor: 'pointer',
-            fontSize: 14, color: '#334155',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            outline: 'none', whiteSpace: 'nowrap',
-          }}
-        >
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', background: '#f1f5f9', padding: '2px 5px', borderRadius: 4, letterSpacing: '0.05em', lineHeight: 1 }}>
-            {primaryMeta.countryCode}
-          </span>
-          <span style={{ fontWeight: 600, color: '#334155' }}>{primaryMeta.code}</span>
-          {extras.length > 0 && (
-            <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#1e293b', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-              +{extras.length}
-            </span>
-          )}
-          <ChevronDown size={13} style={{ color: '#94a3b8', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-        </button>
-
-        {open && (
-          <div className="absolute top-full right-0 mt-2 w-[268px] bg-white border border-gray-100 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.13)] z-50 overflow-hidden">
-            <div className="px-4 pt-4 pb-1.5">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Primary Currency</p>
-            </div>
-            {CURRENCIES.map(cur => {
-              const sel = primary === cur.code;
-              return (
-                <button key={cur.code} onClick={() => selectPrimary(cur.code)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${sel ? 'bg-slate-50' : 'hover:bg-gray-50'}`}>
-                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded leading-none tracking-wide ${sel ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                    {cur.countryCode}
-                  </span>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className={`text-sm font-semibold ${sel ? 'text-slate-800' : 'text-gray-700'}`}>{cur.code}</p>
-                    <p className="text-[11px] text-gray-400 truncate">{cur.label}</p>
-                  </div>
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all ${sel ? 'bg-slate-800' : 'bg-transparent'}`}>
-                    {sel && <Check size={11} className="text-white" strokeWidth={3} />}
-                  </div>
-                </button>
-              );
-            })}
-
-            <div className="border-t border-gray-100 mx-4 mt-1" />
-            <div className="px-4 pt-3 pb-1.5">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Also Show on Cards</p>
-            </div>
-            {CURRENCIES.filter(c => c.code !== primary).map(cur => {
-              const chk = extras.includes(cur.code);
-              return (
-                <button key={cur.code} onClick={() => toggleExtra(cur.code)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left transition-colors">
-                  <span className="text-[10px] font-extrabold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded leading-none tracking-wide shrink-0">
-                    {cur.countryCode}
-                  </span>
-                  <span className="text-sm text-gray-700 flex-1 truncate">
-                    {cur.code}<span className="text-gray-400 font-normal"> · {cur.label}</span>
-                  </span>
-                  <div style={{
-                    width: 18, height: 18, borderRadius: 4,
-                    border: chk ? '2px solid #1e293b' : '2px solid #d1d5db',
-                    background: chk ? '#1e293b' : '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    {chk && (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-            <div className="h-3" />
-          </div>
-        )}
-      </div>
-
-      {loading && (
-        <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-          <Loader2 size={11} className="animate-spin" /> Updating…
-        </span>
-      )}
-      {error && !loading && (
-        <span className="flex items-center gap-1.5 text-xs text-amber-500 font-medium">
-          <AlertCircle size={11} /> Estimated rates
-        </span>
-      )}
-      {lastUpdated && !loading && !error && (
-        <span className="flex items-center gap-1.5 text-sm text-slate-500 font-semibold">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
-          Live · {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ─── Secondary currency rows shown below main value ───────────────────────────
-
-function CurrencyRows({
-  extras, pkrAmount, rates,
-}: {
-  extras: CurrencyCode[];
-  pkrAmount: number;
-  rates: RateMap;
-}) {
+// CurrencyRows: show extras below main value using shared utils
+function CurrencyRows({ extras, pkrAmount, rates }: { extras: CurrencyCode[]; pkrAmount: number; rates: RateMap; }) {
   if (extras.length === 0) return null;
   return (
     <div className="mt-2 pt-2 border-t border-gray-100 flex flex-col gap-1">
-      {extras.map(code => {
-        const meta = getMeta(code);
-        const amt  = convertFromPKR(pkrAmount, code, rates);
-        return (
-          <div key={code} className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1 text-xs text-gray-400">
-              <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-1 py-0.5 rounded leading-none">
-                {meta.countryCode}
-              </span>
-              {code}
+      {extras.map(code => (
+        <div key={code} className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1 text-xs text-gray-400">
+            <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-1 py-0.5 rounded leading-none">
+              {getCurrencyMeta(code).countryCode}
             </span>
-            <span className="text-xs font-semibold tabular-nums text-gray-500">
-              {fmtAmount(amt, meta)}
-            </span>
-          </div>
-        );
-      })}
+            {code}
+          </span>
+          <span className="text-xs font-semibold tabular-nums text-gray-500">
+            {fmtCurrency(convertFromPKR(pkrAmount, code, rates), code)}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -323,7 +105,7 @@ function ViewModal({
                 <p className="text-base font-bold">{fmtPrimary(pkr)}</p>
                 {extraCurrencies.map(code => (
                   <p key={code} className="text-[10px] opacity-60 mt-0.5">
-                    {fmtAmount(convertFromPKR(pkr, code, rates), getMeta(code))}
+                    {fmtCurrency(convertFromPKR(pkr, code, rates), code)}
                   </p>
                 ))}
               </div>
@@ -388,7 +170,7 @@ function ViewModal({
                         <span className="text-xs font-normal text-gray-500 ml-1.5">via {p.method}</span>
                         {extraCurrencies.map(code => (
                           <span key={code} className="text-xs text-gray-400 ml-1.5">
-                            · {fmtAmount(convertFromPKR(p.amount, code, rates), getMeta(code))}
+                            · {fmtCurrency(convertFromPKR(p.amount, code, rates), code)}
                           </span>
                         ))}
                       </div>
@@ -439,12 +221,12 @@ export function PendingPaymentsView({
 }: Props) {
 
   // ── Currency state — AED primary, PKR as secondary by default ──
-  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('AED');
-  const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>(['PKR']);
-  const { rates, loading: ratesLoading, error: ratesError, lastUpdated, refresh: refreshRates } = useCurrencyRates();
+  const primaryCurrency: CurrencyCode = 'AED';
+  const extraCurrencies: CurrencyCode[] = [];
+  const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
 
   const fmtPrimary = (pkr: number) =>
-    fmtAmount(convertFromPKR(pkr, primaryCurrency, rates), getMeta(primaryCurrency));
+    fmtCurrency(convertFromPKR(pkr, primaryCurrency, rates), primaryCurrency);
 
   if (isLoading) {
     return (
@@ -471,17 +253,7 @@ export function PendingPaymentsView({
           <p className="text-gray-500 text-sm mt-1">Unpaid outflows, partially received inflows, and uncleared cheques</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <CurrencyDropdown
-            primary={primaryCurrency} extras={extraCurrencies}
-            onPrimaryChange={setPrimary} onExtrasChange={setExtras}
-            loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated}
-          />
-          <button
-            onClick={refreshRates}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors bg-white border border-gray-200 rounded-xl px-3 py-2 hover:shadow-sm"
-          >
-            <RefreshCw size={13} /> Refresh
-          </button>
+          <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
           <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Filter size={16} />
             Filters
@@ -641,7 +413,7 @@ export function PendingPaymentsView({
                         <p className="text-sm font-semibold text-gray-900">{fmtPrimary(t.amount)}</p>
                         {extraCurrencies.map(code => (
                           <p key={code} className="text-xs text-gray-400 mt-0.5">
-                            {fmtAmount(convertFromPKR(t.amount, code, rates), getMeta(code))}
+                            {fmtCurrency(convertFromPKR(t.amount, code, rates), code)}
                           </p>
                         ))}
                       </td>
@@ -651,7 +423,7 @@ export function PendingPaymentsView({
                         <p className="text-sm font-medium text-green-600">{fmtPrimary(totalPaid)}</p>
                         {extraCurrencies.map(code => (
                           <p key={code} className="text-xs text-gray-400 mt-0.5">
-                            {fmtAmount(convertFromPKR(totalPaid, code, rates), getMeta(code))}
+                            {fmtCurrency(convertFromPKR(totalPaid, code, rates), code)}
                           </p>
                         ))}
                       </td>
@@ -663,7 +435,7 @@ export function PendingPaymentsView({
                         </p>
                         {extraCurrencies.map(code => (
                           <p key={code} className="text-xs text-gray-400 mt-0.5">
-                            {fmtAmount(convertFromPKR(remainingAmount, code, rates), getMeta(code))}
+                            {fmtCurrency(convertFromPKR(remainingAmount, code, rates), code)}
                           </p>
                         ))}
                       </td>
@@ -782,7 +554,7 @@ export function PendingPaymentsView({
                     </p>
                     {extraCurrencies.map(code => (
                       <p key={code} className="text-xs text-gray-400 mt-0.5">
-                        {fmtAmount(convertFromPKR(remainingAmount, code, rates), getMeta(code))}
+                        {fmtCurrency(convertFromPKR(remainingAmount, code, rates), code)}
                       </p>
                     ))}
                     <p className="text-xs text-gray-400 mt-0.5">{tx.transactionId} · {tx.subCategory}</p>
@@ -802,7 +574,7 @@ export function PendingPaymentsView({
                     ≈ {fmtPrimary(paymentData.amount)}
                     {extraCurrencies.map(code => (
                       <span key={code} className="ml-2">
-                        · {fmtAmount(convertFromPKR(paymentData.amount, code, rates), getMeta(code))}
+                        · {fmtCurrency(convertFromPKR(paymentData.amount, code, rates), code)}
                       </span>
                     ))}
                   </p>
@@ -831,7 +603,7 @@ export function PendingPaymentsView({
                   <select value={paymentData.bankId} onChange={e => setPaymentData({ bankId: e.target.value })}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f46e5]/30 focus:border-[#4f46e5] focus:outline-none text-sm">
                     <option value="">— Select Bank —</option>
-                    {banks.map(b => <option key={b.id} value={b.id}>{b.name} — {fmtPrimary(b.balance)}</option>)}
+                    {banks.filter(b => (b as any).currency !== 'PKR').map(b => <option key={b.id} value={b.id}>{b.name} — {fmtPrimary(b.balance)}</option>)}
                   </select>
                 </div>
               )}

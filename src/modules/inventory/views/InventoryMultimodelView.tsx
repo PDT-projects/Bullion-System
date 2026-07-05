@@ -7,7 +7,6 @@ import {
   ArrowLeft, ArrowRight, Package, Plus, Trash2, ChevronDown,
   Hash, Loader2, Check, AlertCircle, ImagePlus, X,
 } from 'lucide-react';
-import { useInventoryCurrency, CurrencyCode } from '../viewModels/useInventoryCurrency';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 import {
   UseInventoryMultiModelViewModelReturn,
@@ -281,7 +280,6 @@ function ModelCard({
   entry, index, modelOptions, modelOptionsLoading, validationErrors,
   updateEntry, removeEntry, setEntrySerial, setEntrySerialCity,
   setEntryImages, removeEntryImage, canRemove,
-  rates, defaultInputCurrency,
 }: {
   entry: MultiModelEntry;
   index: number;
@@ -295,8 +293,6 @@ function ModelCard({
   setEntryImages: (entryId: string, files: File[]) => void;
   removeEntryImage: (entryId: string, index: number) => void;
   canRemove: boolean;
-  rates: Record<CurrencyCode, number>;
-  defaultInputCurrency: CurrencyCode;
 }) {
   const e = entry;
   const hasErr = (key: string) => !!validationErrors[`${key}_${index}`];
@@ -384,8 +380,6 @@ function ModelCard({
             label="Cost Price"
             pkrValue={e.costPrice ?? 0}
             onChange={value => updateEntry(e.id, { costPrice: value })}
-            rates={rates}
-            defaultInputCurrency={defaultInputCurrency}
             placeholder="0"
             required
           />
@@ -398,8 +392,6 @@ function ModelCard({
             label="Sell Price"
             pkrValue={e.sellPrice ?? 0}
             onChange={value => updateEntry(e.id, { sellPrice: value })}
-            rates={rates}
-            defaultInputCurrency={defaultInputCurrency}
             placeholder="0"
             required
           />
@@ -516,16 +508,9 @@ export const InventoryMultiModelView: React.FC<Props> = ({
   const [addingBrand, setAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState('');
 
-  const {
-    primaryCurrency,
-    extraCurrencies,
-    rates,
-    setPrimaryCurrency,
-    setExtraCurrencies,
-    loading: ratesLoading,
-    error: ratesError,
-    lastUpdated,
-  } = useInventoryCurrency();
+  const ratesLoading = false;
+  const ratesError = false;
+  const lastUpdated = null;
 
   const applyNewBrand = () => {
     const name = newBrandName.trim();
@@ -566,10 +551,6 @@ export const InventoryMultiModelView: React.FC<Props> = ({
           </div>
           <div style={{ marginLeft: 'auto' }}>
             <InventoryCurrencyDropdown
-              primaryCurrency={primaryCurrency}
-              extraCurrencies={extraCurrencies}
-              setPrimaryCurrency={setPrimaryCurrency}
-              setExtraCurrencies={setExtraCurrencies}
               loading={ratesLoading}
               error={ratesError}
               lastUpdated={lastUpdated}
@@ -663,8 +644,6 @@ export const InventoryMultiModelView: React.FC<Props> = ({
               setEntryImages={setEntryImages}
               removeEntryImage={removeEntryImage}
               canRemove={entries.length > 1}
-              rates={rates}
-              defaultInputCurrency={primaryCurrency}
             />
           ))}
 

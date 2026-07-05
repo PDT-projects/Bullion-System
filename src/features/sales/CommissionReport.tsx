@@ -137,7 +137,7 @@ export function CommissionReport({ commissions }: CommissionReportProps) {
   });
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
   const formatMonth = (monthStr: string) => {
     const [year, month] = monthStr.split('-');

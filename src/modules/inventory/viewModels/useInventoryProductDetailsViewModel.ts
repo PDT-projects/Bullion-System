@@ -83,7 +83,7 @@ export function useInventoryProductDetailsViewModel(): UseInventoryProductDetail
   const [searchParams] = useSearchParams();
 
   const costingOption    = (searchParams.get('costing') as CostingOption)    || 'without';
-  const inventoryType    = (searchParams.get('type') as InventoryEntryType)  || 'in-stock';
+  const inventoryType    = (searchParams.get('type') as InventoryEntryType)  || 'payment';
   const costingBrandId   = searchParams.get('costingBrandId')   || '';
   const costingBrandName = searchParams.get('costingBrandName') || '';
   const costingModelIds: string[] = JSON.parse(searchParams.get('costingModelIds') || '[]');

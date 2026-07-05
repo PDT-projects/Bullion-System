@@ -122,7 +122,7 @@ export interface UseInventoryMultiModelViewModelReturn {
 export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewModelReturn {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'in-stock';
+  const inventoryType = (searchParams.get('type') as InventoryEntryType) || 'payment';
 
   // ── Brand list ────────────────────────────────────────────────────────────
   const [brands, setBrands] = useState<BrandOption[]>([]);

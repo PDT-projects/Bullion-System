@@ -131,6 +131,8 @@ import type {
   ProductStatus,
   SerialStatus,
   CostingInfo,
+  DamagedProduct,
+  InventoryReportRow,
 } from './types';
 
 const PRODUCTS_COLLECTION  = 'products';
@@ -139,6 +141,7 @@ const BRANDS_COLLECTION    = 'brands';
 const MODELS_COLLECTION    = 'brandModels';
 const COUNTERS_COLLECTION          = 'inv_counters';
 const DELETED_PRODUCTS_COLLECTION  = 'deleted_products';
+const DAMAGED_PRODUCTS_COLLECTION  = 'damaged_products';
 
 // ==================== TYPES ====================
 
@@ -234,8 +237,32 @@ function transformDocToProduct(docSnap: any): Product {
     costingTotalValueOfBrand: d.costingTotalValueOfBrand ?? undefined,
     costingModelsJson:        d.costingModelsJson        || undefined,
     imageUrls:     d.imageUrls     || [],
+    ownershipType:            d.ownershipType            || undefined,
+    supplierCost:             d.supplierCost             ?? undefined,
+    supplierPaymentStatus:    d.supplierPaymentStatus    || undefined,
+    supplierPaidAmount:       d.supplierPaidAmount       ?? undefined,
+    supplierRemainingAmount:  d.supplierRemainingAmount  ?? undefined,
+    supplierPaymentChannel:   d.supplierPaymentChannel   || undefined,
+    serialStockInDates:       d.serialStockInDates       || {},
+    serialSoldDates:          d.serialSoldDates          || {},
+    serialInvoiceNumbers:     d.serialInvoiceNumbers     || {},
     createdAt: d.createdAt || '',
     updatedAt: d.updatedAt || '',
+  };
+}
+
+function transformDocToDamaged(docSnap: any): DamagedProduct {
+  const d = docSnap.data();
+  return {
+    id:            docSnap.id,
+    productId:     d.productId     || '',
+    brandName:     d.brandName     || '',
+    modelName:     d.modelName     || '',
+    serialNumber:  d.serialNumber  || '',
+    location:      d.location      || '',
+    reason:        d.reason        || '',
+    damagedAt:     d.damagedAt     || '',
+    damagedBy:     d.damagedBy     || '',
   };
 }
 
@@ -434,6 +461,13 @@ export class InventoryFirebaseService {
         });
       }
 
+      // Seed stock-in date for every serial at entry time
+      const now0 = new Date().toISOString();
+      const serialStockInDates = { ...(dto.serialStockInDates || {}) };
+      dto.serialNumbers.forEach(s => {
+        if (!serialStockInDates[s]) serialStockInDates[s] = now0;
+      });
+
       let costingFields = {};
       if (dto.costingOption === 'with' && dto.costing) {
         const c = dto.costing;
@@ -485,11 +519,18 @@ export class InventoryFirebaseService {
         serialNumbers: dto.serialNumbers,
         serialCities,
         serialStatus,
+        serialStockInDates,
+        stockInDateIsManual: dto.stockInDateIsManual || false,
         description:   dto.description ?? '', // FIX 1 — explicit, never dropped
         status:        dto.status,
         isDamaged:     dto.isDamaged,
         costingOption: dto.costingOption,
         imageUrls:     dto.imageUrls     || [],
+        ownershipType:           dto.ownershipType,
+        supplierCost:            dto.ownershipType === 'Credit' ? (dto.supplierCost ?? 0) : undefined,
+        supplierPaymentStatus:   dto.ownershipType === 'Credit' ? (dto.supplierPaymentStatus || 'Unpaid') : undefined,
+        supplierPaidAmount:      dto.supplierPaidAmount,
+        supplierPaymentChannel:  dto.supplierPaymentChannel,
         billId:              dto.billId,
         receivableStatus:    dto.receivableStatus,
         expectedReceiveDate: dto.expectedReceiveDate,
@@ -566,10 +607,19 @@ export class InventoryFirebaseService {
       if (dto.location      !== undefined) updateData.location      = dto.location;
       if (dto.serialNumbers !== undefined) updateData.serialNumbers = dto.serialNumbers;
       if (dto.serialCities  !== undefined) updateData.serialCities  = dto.serialCities;
+      if (dto.serialStatus  !== undefined) updateData.serialStatus  = dto.serialStatus;
       if (dto.status        !== undefined) updateData.status        = dto.status;
       if (dto.isDamaged     !== undefined) updateData.isDamaged     = dto.isDamaged;
       if (dto.costingOption !== undefined) updateData.costingOption = dto.costingOption;
       if (dto.imageUrls     !== undefined) updateData.imageUrls     = dto.imageUrls;
+      if (dto.ownershipType           !== undefined) updateData.ownershipType           = dto.ownershipType;
+      if (dto.supplierCost            !== undefined) updateData.supplierCost            = dto.supplierCost;
+      if (dto.supplierPaymentStatus   !== undefined) updateData.supplierPaymentStatus   = dto.supplierPaymentStatus;
+      if (dto.supplierPaidAmount      !== undefined) updateData.supplierPaidAmount      = dto.supplierPaidAmount;
+      if (dto.supplierPaymentChannel  !== undefined) updateData.supplierPaymentChannel  = dto.supplierPaymentChannel;
+      if (dto.serialStockInDates      !== undefined) updateData.serialStockInDates      = dto.serialStockInDates;
+      if (dto.serialSoldDates         !== undefined) updateData.serialSoldDates         = dto.serialSoldDates;
+      if (dto.serialInvoiceNumbers    !== undefined) updateData.serialInvoiceNumbers    = dto.serialInvoiceNumbers;
 
       // Merge costing flat fields if present
       Object.assign(updateData, costingFields);
@@ -666,6 +716,213 @@ export class InventoryFirebaseService {
     } catch (error) {
       console.error('❌ Error fetching deleted products:', error);
       throw new Error('Failed to fetch deleted products');
+    }
+  }
+
+  /**
+   * Find the live (non-deleted) product that currently holds the given serial number.
+   * Uses an array-contains query on `serialNumbers` — indexed, no full scan needed.
+   */
+  static async findProductBySerial(serial: string): Promise<Product | null> {
+    try {
+      const trimmed = serial.trim();
+      if (!trimmed) return null;
+      const q = query(collection(db, PRODUCTS_COLLECTION), where('serialNumbers', 'array-contains', trimmed));
+      const snap = await getDocs(q);
+      const match = snap.docs.find(d => !(d.data() as any).isDeleted);
+      if (!match) return null;
+      return transformDocToProduct(match);
+    } catch (error) {
+      console.error(`❌ Error finding product by serial ${serial}:`, error);
+      throw new Error('Failed to search for serial number');
+    }
+  }
+
+  /**
+   * Return-to-stock flow (non-damaged return): keeps the same serial number,
+   * marks it Available again with a fresh stock-in date, and — per business
+   * rule — flips the product's ownership from Credit to Owned since a
+   * returned unit is no longer tied to the original supplier credit terms.
+   */
+  static async returnSerialToStock(productId: string, serial: string): Promise<void> {
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Product not found');
+      const d = snap.data() as any;
+      const now = new Date().toISOString();
+
+      const serialStatus: Record<string, string> = { ...(d.serialStatus || {}), [serial]: 'Available' };
+      const serialStockInDates: Record<string, string> = { ...(d.serialStockInDates || {}), [serial]: now };
+      const serialSoldDates: Record<string, string> = { ...(d.serialSoldDates || {}) };
+      delete serialSoldDates[serial];
+
+      const wasNotInStock = !(d.serialNumbers || []).includes(serial) || d.status === 'Sold';
+      const serialNumbers: string[] = (d.serialNumbers || []).includes(serial)
+        ? d.serialNumbers
+        : [...(d.serialNumbers || []), serial];
+
+      await updateDoc(ref, stripUndefined({
+        serialNumbers,
+        serialStatus,
+        serialStockInDates,
+        serialSoldDates,
+        stock: wasNotInStock ? (d.stock || 0) + 1 : d.stock,
+        ownershipType: d.ownershipType === 'Credit' ? 'Owned' : d.ownershipType,
+        updatedAt: now,
+      }));
+      console.log(`✅ Serial ${serial} returned to stock on product ${productId}`);
+    } catch (error) {
+      console.error(`❌ Error returning serial ${serial}:`, error);
+      throw new Error('Failed to return serial to stock');
+    }
+  }
+
+  /**
+   * Damaged-return flow: removes the serial entirely from the live product
+   * and archives it in the `damaged_products` collection.
+   */
+  static async moveSerialToDamaged(
+    productId: string,
+    serial: string,
+    damagedBy?: { uid: string; email: string },
+    reason?: string
+  ): Promise<void> {
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Product not found');
+      const d = snap.data() as any;
+      const now = new Date().toISOString();
+
+      const serialNumbers: string[] = (d.serialNumbers || []).filter((s: string) => s !== serial);
+      const serialStatus  = { ...(d.serialStatus || {}) };  delete serialStatus[serial];
+      const serialCities  = { ...(d.serialCities || {}) };
+      const location      = serialCities[serial] || d.location || '';
+      delete serialCities[serial];
+      const serialStockInDates = { ...(d.serialStockInDates || {}) }; delete serialStockInDates[serial];
+
+      await addDoc(collection(db, DAMAGED_PRODUCTS_COLLECTION), stripUndefined({
+        productId,
+        brandName: d.brandName || '',
+        modelName: d.modelName || '',
+        serialNumber: serial,
+        location,
+        reason,
+        damagedAt: now,
+        damagedBy: damagedBy?.email || '',
+      }));
+
+      await updateDoc(ref, stripUndefined({
+        serialNumbers,
+        serialStatus,
+        serialCities,
+        serialStockInDates,
+        stock: Math.max(0, (d.stock || 0) - 1),
+        updatedAt: now,
+      }));
+      console.log(`✅ Serial ${serial} moved to damaged inventory from product ${productId}`);
+    } catch (error) {
+      console.error(`❌ Error moving serial ${serial} to damaged:`, error);
+      throw new Error('Failed to move serial to damaged inventory');
+    }
+  }
+
+  static async fetchDamagedProducts(): Promise<DamagedProduct[]> {
+    try {
+      const q = query(collection(db, DAMAGED_PRODUCTS_COLLECTION), orderBy('damagedAt', 'desc'));
+      const snap = await getDocs(q);
+      const results: DamagedProduct[] = [];
+      snap.forEach(d => results.push(transformDocToDamaged(d)));
+      return results;
+    } catch (error) {
+      console.error('❌ Error fetching damaged products:', error);
+      throw new Error('Failed to fetch damaged inventory');
+    }
+  }
+
+  /**
+   * Flattens all live products into one row per serial number for the
+   * Inventory Report. Falls back to the product's own status when a serial
+   * has no explicit serialStatus entry.
+   */
+  static async fetchInventoryReportRows(): Promise<InventoryReportRow[]> {
+    const products = await InventoryFirebaseService.fetchAllProducts();
+    const rows: InventoryReportRow[] = [];
+    for (const p of products) {
+      const serials = p.serialNumbers && p.serialNumbers.length > 0 ? p.serialNumbers : [''];
+      for (const serial of serials) {
+        rows.push({
+          productId: p.id,
+          brandName: p.brandName,
+          modelName: p.modelName,
+          serialNumber: serial,
+          stockInDate: (serial && p.serialStockInDates?.[serial]) || p.createdAt || '',
+          stockInDateIsManual: p.stockInDateIsManual || false,
+          location: (serial && p.serialCities?.[serial]) || p.location || '',
+          ownershipType: p.ownershipType || '',
+          currentStatus: (serial && p.serialStatus?.[serial]) || p.status,
+          soldDate: serial ? p.serialSoldDates?.[serial] : undefined,
+          invoiceNumber: serial ? p.serialInvoiceNumbers?.[serial] : undefined,
+          supplierCost: p.ownershipType === 'Credit' ? p.supplierCost : undefined,
+          supplierPaymentStatus: p.ownershipType === 'Credit' ? p.supplierPaymentStatus : undefined,
+          supplierPaidAmount: p.ownershipType === 'Credit' ? p.supplierPaidAmount : undefined,
+          supplierRemainingAmount:
+            p.ownershipType === 'Credit' && p.supplierCost !== undefined
+              ? Math.max(0, (p.supplierCost || 0) - (p.supplierPaidAmount || 0))
+              : undefined,
+          supplierPaymentChannel: p.ownershipType === 'Credit' ? p.supplierPaymentChannel : undefined,
+        });
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Inventory Payables: all supplier-credit products with an outstanding
+   * balance. Includes stock still on shelf (not yet due) and stock that has
+   * fully sold out (stock === 0, due now) — the view distinguishes the two.
+   */
+  static async fetchPayableProducts(): Promise<Product[]> {
+    const products = await InventoryFirebaseService.fetchAllProducts();
+    return products.filter(p =>
+      p.ownershipType === 'Credit' &&
+      p.supplierPaymentStatus !== 'Cleared'
+    );
+  }
+
+  /**
+   * Record a payment made toward a supplier-credit product's purchase cost.
+   * Recomputes supplierPaymentStatus from the new paid total automatically.
+   */
+  static async recordSupplierPayment(
+    productId: string,
+    amount: number,
+    channel: 'Cash' | 'Bank'
+  ): Promise<void> {
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Product not found');
+      const d = snap.data() as any;
+
+      const supplierCost      = d.supplierCost ?? 0;
+      const previouslyPaid    = d.supplierPaidAmount ?? 0;
+      const newPaidAmount     = Math.min(supplierCost, previouslyPaid + amount);
+      const supplierPaymentStatus =
+        newPaidAmount >= supplierCost ? 'Cleared' :
+        newPaidAmount > 0             ? 'Partial'  : 'Unpaid';
+
+      await updateDoc(ref, {
+        supplierPaidAmount:     newPaidAmount,
+        supplierPaymentStatus,
+        supplierPaymentChannel: channel,
+        updatedAt: new Date().toISOString(),
+      });
+      console.log(`✅ Recorded supplier payment of ${amount} on product ${productId} (status: ${supplierPaymentStatus})`);
+    } catch (error) {
+      console.error(`❌ Error recording supplier payment on ${productId}:`, error);
+      throw new Error('Failed to record supplier payment');
     }
   }
 

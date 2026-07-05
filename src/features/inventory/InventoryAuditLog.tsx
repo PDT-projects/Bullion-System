@@ -81,7 +81,7 @@ export function ProductTransferReport({ transferLogs }: ProductTransferReportPro
 
     filteredLogs.forEach(log => {
       rows.push([
-        new Date(log.timestamp).toLocaleString('en-PK'),
+        new Date(log.timestamp).toLocaleString('en-AE'),
         log.action,
         log.productName,
         log.brandName,

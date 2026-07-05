@@ -29,9 +29,9 @@ const getApprovers = (): string =>
     : process.env.GMAIL_TO || "";
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat("en-PK", {
+  new Intl.NumberFormat("en-AE", {
     style: "currency",
-    currency: "PKR",
+    currency: "AED",
     minimumFractionDigits: 0,
   }).format(n);
 

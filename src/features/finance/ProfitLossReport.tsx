@@ -152,8 +152,8 @@ function SectionTotal({ label, value, colorClass }: { label: string; value: numb
 export function ProfitLossReport({ transactions, invoices = [], onBack }: ProfitLossReportProps) {
   const reportRef = useRef<HTMLDivElement>(null);
 
-  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>('AED');
-  const [extraCurrencies, setExtraCurrencies]   = useState<CurrencyCode[]>([]);
+  const primaryCurrency: CurrencyCode = 'AED';
+  const extraCurrencies: CurrencyCode[] = [];
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
 
   const fmtPrimary = (value: number) =>
@@ -944,15 +944,7 @@ export function ProfitLossReport({ transactions, invoices = [], onBack }: Profit
               <p className="text-xs text-gray-500">Pick the primary report currency and optional extra conversions.</p>
             </div>
           </div>
-          <CurrencyDropdown
-            primary={primaryCurrency}
-            extras={extraCurrencies}
-            onPrimaryChange={setPrimaryCurrency}
-            onExtrasChange={setExtraCurrencies}
-            loading={ratesLoading}
-            error={ratesError}
-            lastUpdated={lastUpdated}
-          />
+          <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
           {ratesError && <p className="text-sm text-red-600">Failed to load live rates. Showing AED values only.</p>}
         </div>
 

@@ -1,12 +1,14 @@
-// Inventory Module - Wrapper Layer
+// Inventory Module - Wrapper
 // DeletedInventoryWrapper
-// Route wrapper — same pattern as every other wrapper in this module.
-// routes.tsx imports this from './modules/inventory' and renders it at
-// /inventory/deleted
+// FIX: was rendering a nonexistent `../pages/DeletedInventoryPage`, which is why
+//      the Deleted Inventory card failed to open. Now wired the same way as
+//      every other wrapper in this module (Damaged, Report, etc.).
 
 import React from 'react';
-import { DeletedInventoryPage } from '../pages/DeletedInventoryPage';
+import { useDeletedInventoryViewModel } from '../viewModels/useDeletedInventoryViewModel';
+import { DeletedInventoryView } from './DeletedInventoryView';
 
-export function DeletedInventoryWrapper() {
-  return <DeletedInventoryPage />;
-}
+export const DeletedInventoryWrapper: React.FC = () => {
+  const vm = useDeletedInventoryViewModel();
+  return <DeletedInventoryView {...vm} />;
+};
