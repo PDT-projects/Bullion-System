@@ -1,18 +1,16 @@
 // Invoice Module - List View
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-// ── Currency helpers ──────────────────────────────────────────────────────────
-type DisplayCurrency = 'PKR' | 'AED';
-const AED_TO_PKR = 76.03;
-
-function convertToDisplay(aedAmount: number, currency: DisplayCurrency): number {
-  return currency === 'PKR' ? aedAmount * AED_TO_PKR : aedAmount;
+// ── Currency helper — AED only (PKR toggle removed) ────────────────────────
+function formatAed(amount: number): string {
+  return `د.إ ${new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} AED`;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 import {
-  FileText, Plus, Search, Eye, Edit, X, Loader2, FileDown,
-  Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin,
+  FileText, Plus, Search, Eye, X, Loader2, FileDown,
+  Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Invoice, InvoiceStats, InvoiceFilters } from '../models/types';
@@ -68,7 +66,7 @@ export function InvoiceListView({
   onDateFromFilter, onDateToFilter, onClearFilters,
   availableCities, availableSalespersons,
   salespersonMap = {},
-  onViewInvoice, onCloseView, onEditInvoice, onCreateInvoice,
+  onViewInvoice, onCloseView, onCreateInvoice,
   formatCurrency, formatDate,
 }: Props) {
 
@@ -81,15 +79,9 @@ export function InvoiceListView({
   };
 
   const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
-  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('AED');
+  const navigate = useNavigate();
 
-  const formatDisplay = (aedAmount: number): string => {
-    const converted = convertToDisplay(aedAmount, displayCurrency);
-    if (displayCurrency === 'AED') {
-      return `د.إ ${new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(converted)} AED`;
-    }
-    return `₨ ${Math.round(converted).toLocaleString('en-PK')} PKR`;
-  };
+  const formatDisplay = (aedAmount: number): string => formatAed(aedAmount);
 
   // FIX: Added toast.error() so the user sees feedback when PDF generation
   // fails, instead of the error being silently swallowed in the catch block.
@@ -131,21 +123,13 @@ export function InvoiceListView({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Currency Toggle */}
-          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
-            {(['PKR', 'AED'] as DisplayCurrency[]).map(cur => (
-              <button
-                key={cur}
-                onClick={() => setDisplayCurrency(cur)}
-                style={displayCurrency === cur ? { backgroundColor: '#374151', color: '#ffffff' } : {}}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  displayCurrency === cur ? 'shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {cur === 'PKR' ? '₨ PKR' : 'د.إ AED'}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => navigate('/invoices/deleted')}
+            title="Deleted Invoices"
+            style={{ borderColor: '#fecaca', color: '#b91c1c' }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-white font-semibold text-sm whitespace-nowrap flex-shrink-0 hover:bg-red-50 transition-colors">
+            <Trash2 size={16} /> Deleted Invoices
+          </button>
           <button
             onClick={onCreateInvoice}
             style={{ backgroundColor: '#1f2937', color: '#ffffff', border: '1px solid #374151' }}
@@ -253,7 +237,7 @@ export function InvoiceListView({
               <tr>
                 {[
                   'Invoice #', 'Date', 'Customer', 'Branch / City',
-                  'Salesperson', 'Products', `Amount (${displayCurrency})`, 'Delivery',
+                  'Salesperson', 'Products', 'Amount (AED)', 'Delivery',
                   'Payment', 'Status', 'Actions',
                 ].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
@@ -374,9 +358,9 @@ export function InvoiceListView({
                         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View">
                         <Eye size={15} />
                       </button>
-                      <button onClick={() => onEditInvoice(invoice.id)}
-                        className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Edit">
-                        <Edit size={15} />
+                      <button onClick={() => navigate(`/invoices/${invoice.id}/delete`)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                        <Trash2 size={15} />
                       </button>
                       <button
                         onClick={() => handleDownloadPdf(invoice)}
@@ -589,19 +573,10 @@ export function InvoiceListView({
                 )}
                 <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-1">
                   <span className="text-base font-bold text-gray-900">Net Total</span>
-                  <div className="text-right">
-                    <span className="text-2xl font-bold text-gray-800">
-                      {formatDisplay(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
-                    </span>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      ≈ {displayCurrency === 'PKR'
-                        ? `د.إ ${(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0)).toFixed(2)} AED`
-                        : `₨ ${Math.round((viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0)) * AED_TO_PKR).toLocaleString('en-PK')} PKR`
-                      }
-                    </p>
-                  </div>
+                  <span className="text-2xl font-bold text-gray-800">
+                    {formatDisplay(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
+                  </span>
                 </div>
-                <p className="text-xs text-gray-400 text-right">Rate: 1 AED = {AED_TO_PKR} PKR</p>
               </div>
 
               {viewingInvoice.exchangeWarrantyNote && (

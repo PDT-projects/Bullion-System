@@ -37,7 +37,7 @@ export interface Invoice {
   deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered';
   deliveryReceivedStatus: 'Pending' | 'In Process' | 'Received';
   totalAmount: number;
-  status: 'Paid' | 'Unpaid';
+  status: 'Paid' | 'Unpaid' | 'Returned';
   salesperson?: string;
   salespersonLocation?: string;
   clientDealBy?: string;
@@ -85,6 +85,16 @@ export interface Invoice {
   
   createdAt?: string;
   updatedAt?: string;
+
+  // ── Return tracking (set when a sold serial is returned via Inventory) ──
+  returnedSerials?: string[];
+  returnedAt?: string;
+}
+
+export interface DeletedInvoice extends Invoice {
+  deletedAt: string;
+  deletedBy?: string;
+  deletedByEmail?: string;
 }
 
 export interface CreateInvoiceDTO {

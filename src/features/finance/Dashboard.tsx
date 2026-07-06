@@ -5,15 +5,13 @@
 // - Clean extra-currency rows on cards
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUserPermissions } from '../../modules/user-management/hooks/useUserPermissions';
-import {
-  LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from 'recharts';
 import {
   TrendingUp, TrendingDown, Wallet, Building2, DollarSign,
   Activity, FileText, AlertCircle, RefreshCw, Loader2, BarChart2,
-  ChevronDown, Check,
+  ChevronDown, Check, Package, Percent, ArrowLeftRight,
+  type LucideIcon,
 } from 'lucide-react';
 import { CurrencyDropdown, CurrencyRows } from './CurrencyPicker';
 
@@ -138,9 +136,10 @@ interface AmountCardProps {
   subtitle?: string;
   amountColor?: string;
   dark?: boolean;
+  accentColor?: string; // inline hex — sets a colored border (Tailwind color utilities aren't reliably generated in this build)
 }
 
-function AmountCard({ label, icon, pkrAmount, primary, extras, rates, subtitle, amountColor, dark = false }: AmountCardProps) {
+function AmountCard({ label, icon, pkrAmount, primary, extras, rates, subtitle, amountColor, dark = false, accentColor }: AmountCardProps) {
   const meta   = getMeta(primary);
   const amount = convertFromAed(pkrAmount, primary, rates);
 
@@ -162,7 +161,8 @@ function AmountCard({ label, icon, pkrAmount, primary, extras, rates, subtitle, 
   }
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-gray-100 flex flex-col hover:shadow-md hover:border-gray-200 transition-all duration-200">
+    <div className="bg-white rounded-2xl p-5 border flex flex-col hover:shadow-md transition-all duration-200"
+      style={{ borderColor: accentColor || '#f1f5f9', borderWidth: accentColor ? 1.5 : 1 }}>
       <div className="flex items-center justify-between mb-2.5">
         <span className="text-xs font-semibold text-gray-400 tracking-wide">{label}</span>
         {icon}
@@ -181,13 +181,13 @@ function AmountCard({ label, icon, pkrAmount, primary, extras, rates, subtitle, 
 // bank's balance in its own currency, stacked, exactly like the Bank Accounts
 // page's Total Balance card (e.g. "Rs 438,846" + "AED 5,000").
 
-function BankBalanceCard({ label, icon, banks, subtitle, dark = false }: {
-  label: string; icon: React.ReactNode; banks: any[]; subtitle?: string; dark?: boolean;
+function BankBalanceCard({ label, icon, banks, subtitle, dark = false, accentColor }: {
+  label: string; icon: React.ReactNode; banks: any[]; subtitle?: string; dark?: boolean; accentColor?: string;
 }) {
   const totals = groupBankBalancesByCurrency(banks);
   const codes  = Object.keys(totals) as CurrencyCode[];
 
-  const wrapCls  = dark ? '' : 'bg-white border border-gray-100 hover:shadow-md hover:border-gray-200';
+  const wrapCls  = dark ? '' : 'bg-white border hover:shadow-md';
   const labelCol = dark ? 'rgba(255,255,255,0.45)' : undefined;
   const subCol   = dark ? 'rgba(255,255,255,0.35)' : undefined;
   const amtCls   = dark ? 'text-white' : 'text-gray-900';
@@ -195,7 +195,9 @@ function BankBalanceCard({ label, icon, banks, subtitle, dark = false }: {
   return (
     <div
       className={`rounded-2xl p-5 flex flex-col transition-all duration-200 ${wrapCls}`}
-      style={dark ? { background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%)', boxShadow: '0 4px 16px rgba(15,23,42,0.25)' } : undefined}
+      style={dark
+        ? { background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%)', boxShadow: '0 4px 16px rgba(15,23,42,0.25)' }
+        : { borderColor: accentColor || '#f1f5f9', borderWidth: accentColor ? 1.5 : 1 }}
     >
       <div className="flex items-center justify-between mb-2.5">
         <span className={`text-xs font-semibold tracking-wide ${dark ? '' : 'text-gray-400'}`} style={{ color: labelCol }}>{label}</span>
@@ -265,6 +267,51 @@ function SmallStatCard({ label, countValue, pkrAmount = 0, primary, extras, rate
   );
 }
 
+// ─── QuickAccessCard ──────────────────────────────────────────────────────────
+// Clickable tile that navigates to a module screen. Uses inline styles +
+// onMouseEnter/Leave (not Tailwind color utilities) to match the pattern in
+// InventoryDashboardView.tsx — this codebase's Tailwind build doesn't reliably
+// generate arbitrary color-utility classes, so inline styles are the robust choice.
+
+function QuickAccessCard({ label, icon: Icon, iconColor, iconBg, borderColor, hoverBorder, hoverBg, onClick }: {
+  label: string; icon: LucideIcon; iconColor: string; iconBg: string;
+  borderColor: string; hoverBorder: string; hoverBg: string; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
+        padding: '24px 16px', minHeight: 140,
+        border: `1.5px solid ${borderColor}`,
+        borderRadius: 16, backgroundColor: '#fff',
+        cursor: 'pointer', textAlign: 'center', width: '100%',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        transition: 'all 0.2s',
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget;
+        el.style.borderColor = hoverBorder;
+        el.style.backgroundColor = hoverBg;
+        el.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)';
+        el.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget;
+        el.style.borderColor = borderColor;
+        el.style.backgroundColor = '#fff';
+        el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)';
+        el.style.transform = 'translateY(0)';
+      }}
+    >
+      <div style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={22} color={iconColor} />
+      </div>
+      <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{label}</span>
+    </button>
+  );
+}
+
 // ─── PayableToFuturisticCard ───────────────────────────────────────────────────
 // Same visual style as SmallStatCard, but sourced directly from the Payable to
 // Futuristic module's own `totals` (CurrencyAmounts), not from a PKR base stat.
@@ -330,6 +377,7 @@ function IconBadge({ children, bg }: { children: React.ReactNode; bg: string }) 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const { hasPermission, hasAnyReportPermission, isLoading: permissionsLoading } = useUserPermissions();
   const canViewOverview = hasPermission('Dashboard');
 
@@ -344,8 +392,7 @@ export function Dashboard() {
       setActiveTab(prev => prev === null ? (canViewOverview ? 'overview' : 'reports') : prev);
   }, [permissionsLoading, canViewOverview]);
 
-  const { transactions, banks, loans, invoices, commissions, products, loading, error, refresh, stats, monthlyChartData } = useDashboardData();
-  const { totals: futuristicTotals, loading: futuristicLoading } = usePayableToFuturistic();
+  const { transactions, banks, loans, invoices, commissions, products, loading, error, refresh, stats } = useDashboardData();
   const currentMonthLabel = new Date().toLocaleDateString('en-PK', { month: 'long', year: 'numeric' });
 
   if (permissionsLoading || activeTab === null || loading) {
@@ -388,141 +435,56 @@ export function Dashboard() {
 
   const overviewContent = (
     <>
-      {/* Primary balance cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 items-start">
-        <AmountCard label="Total Inflow"
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-500">Cash &amp; bank position</h2>
+        <span className="text-xs text-gray-400">{currentMonthLabel}</span>
+      </div>
+      <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <AmountCard label="Cash Inflow"
           icon={<IconBadge bg="bg-emerald-50"><TrendingUp size={15} className="text-emerald-500" /></IconBadge>}
-          pkrAmount={stats.cashInflow} subtitle={currentMonthLabel} {...cardCurrencyProps} />
-        <AmountCard label="Total Outflow"
+          pkrAmount={stats.cashInflow} subtitle={currentMonthLabel} accentColor="#a7f3d0" {...cardCurrencyProps} />
+        <AmountCard label="Cash Outflow"
           icon={<IconBadge bg="bg-red-50"><TrendingDown size={15} className="text-red-400" /></IconBadge>}
-          pkrAmount={stats.cashOutflow} subtitle={currentMonthLabel} {...cardCurrencyProps} />
+          pkrAmount={stats.cashOutflow} subtitle={currentMonthLabel} accentColor="#fecaca" {...cardCurrencyProps} />
         <AmountCard label="Cash Balance"
           icon={<IconBadge bg="bg-slate-50"><Wallet size={15} className="text-slate-500" /></IconBadge>}
           pkrAmount={stats.cashBalance}
           amountColor={stats.cashBalance < 0 ? 'text-red-500' : 'text-gray-900'}
-          subtitle={`Inflow − Outflow · ${currentMonthLabel}`} {...cardCurrencyProps} />
+          subtitle={`Inflow − Outflow · ${currentMonthLabel}`} accentColor="#e2e8f0" {...cardCurrencyProps} />
         <BankBalanceCard label="Bank Balance"
           icon={<IconBadge bg="bg-indigo-50"><Building2 size={15} className="text-indigo-400" /></IconBadge>}
-          banks={banks}
+          banks={banks} accentColor="#c7d2fe"
           subtitle={`${banks.length} account${banks.length !== 1 ? 's' : ''}`} />
-        <AmountCard label="Overall Balance"
-          icon={<div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#f1f5f9' }}>
-            <DollarSign size={15} style={{ color: '#334155' }} /></div>}
-          pkrAmount={stats.overallBalance}
-          amountColor={stats.overallBalance < 0 ? 'text-red-500' : 'text-gray-900'}
-          subtitle="Cash + Banks" {...cardCurrencyProps} />
       </div>
 
-      {/* Secondary stats — 5 cards, uniform style */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-5">
-        <SmallStatCard label="Pending Transactions"
-          countValue={<span className="text-orange-500">{stats.pendingTransactions}</span>}
-          pkrAmount={stats.pendingAmount} subtitleSuffix="outstanding" {...cardCurrencyProps} />
-        <SmallStatCard label="Loans Receivable"
-          pkrAmount={stats.totalLoansReceivable} subtitle="Outstanding" amountColor="text-blue-600" rawAed {...cardCurrencyProps} />
-        <SmallStatCard label="Loans Payable"
-          pkrAmount={stats.totalLoansPayable} subtitle="Outstanding" amountColor="text-red-500" rawAed {...cardCurrencyProps} />
-        <SmallStatCard label="Pending Bills"
-          countValue={<span className="text-yellow-500">{stats.pendingBills}</span>}
-          pkrAmount={stats.pendingBillsAmount} subtitleSuffix="due" {...cardCurrencyProps} />
-        <PayableToFuturisticCard label="Payable to Futuristic"
-          amounts={futuristicTotals} subtitle={futuristicLoading ? 'Loading…' : 'Outstanding'} amountColor="text-red-500" {...cardCurrencyProps} />
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-500">Quick access</h2>
       </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-700">Cashflow Over Time</h3>
-            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">{primaryCurrency}</span>
-          </div>
-          {monthlyChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={monthlyChartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number, n: string) => [fmt(convertFromAed(v, primaryCurrency, rates), getMeta(primaryCurrency)), n]} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Line type="monotone" dataKey="inflow"  stroke="#10b981" strokeWidth={2} name="Inflow"  dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-                <Line type="monotone" dataKey="outflow" stroke="#f87171" strokeWidth={2} name="Outflow" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-                <Line type="monotone" dataKey="net"     stroke="#6366f1" strokeWidth={1.5} name="Net" dot={false} strokeDasharray="4 3" />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[240px] text-sm text-gray-300">No transaction data yet</div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-700">Inflow vs Outflow</h3>
-            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">{primaryCurrency}</span>
-          </div>
-          {monthlyChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={monthlyChartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number, n: string) => [fmt(convertFromAed(v, primaryCurrency, rates), getMeta(primaryCurrency)), n]} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar dataKey="inflow"  fill="#10b981" name="Inflow"  radius={[3, 3, 0, 0]} />
-                <Bar dataKey="outflow" fill="#f87171" name="Outflow" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[240px] text-sm text-gray-300">No transaction data yet</div>
-          )}
-        </div>
-      </div>
-
-      {/* Recent Transactions */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-700">Recent Transactions</h3>
-          <span className="text-xs text-gray-400 font-semibold bg-gray-100 px-2.5 py-1 rounded-lg">{transactions.length} total</span>
-        </div>
-        {transactions.length === 0 ? (
-          <div className="flex items-center justify-center h-28 text-sm text-gray-300">No transactions found</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  {['Date', 'ID', 'Category', 'Sub Category', 'Amount', 'Mode', 'Bank'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {transactions.slice(0, 10).map(t => (
-                  <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">{new Date(t.date).toLocaleDateString('en-PK')}</td>
-                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-400">{t.transactionId || t.id.slice(0, 8)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-md ${
-                        t.mainCategory === 'Cash Inflow' ? 'bg-emerald-50 text-emerald-700'
-                        : t.mainCategory === 'Cash Outflow' ? 'bg-red-50 text-red-600'
-                        : 'bg-blue-50 text-blue-700'
-                      }`}>{t.mainCategory}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{t.subCategory}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs font-semibold text-gray-800 tabular-nums">{fmt(convertFromAed(t.amount, primaryCurrency, rates), getMeta(primaryCurrency))}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-md ${
-                        t.mode === 'Cash' ? 'bg-blue-50 text-blue-700'
-                        : t.mode === 'Bank' ? 'bg-purple-50 text-purple-700'
-                        : 'bg-yellow-50 text-yellow-700'
-                      }`}>{t.mode}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{t.bankName || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <div className="grid gap-4 mb-5" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <QuickAccessCard label="Invoices"
+          icon={FileText} iconColor="#7c3aed" iconBg="#f5f3ff"
+          borderColor="#e2e8f0" hoverBorder="#8b5cf6" hoverBg="#f5f3ff"
+          onClick={() => navigate('/invoices')} />
+        <QuickAccessCard label="Inventory"
+          icon={Package} iconColor="#d97706" iconBg="#fffbeb"
+          borderColor="#fde68a" hoverBorder="#f59e0b" hoverBg="#fffbeb"
+          onClick={() => navigate('/inventory')} />
+        <QuickAccessCard label="Salaries"
+          icon={DollarSign} iconColor="#0f766e" iconBg="#f0fdfa"
+          borderColor="#99f6e4" hoverBorder="#14b8a6" hoverBg="#f0fdfa"
+          onClick={() => navigate('/salaries')} />
+        <QuickAccessCard label="Commission"
+          icon={Percent} iconColor="#4338ca" iconBg="#eef2ff"
+          borderColor="#c7d2fe" hoverBorder="#6366f1" hoverBg="#eef2ff"
+          onClick={() => navigate('/commission')} />
+        <QuickAccessCard label="Reports"
+          icon={BarChart2} iconColor="#1d4ed8" iconBg="#eff6ff"
+          borderColor="#bfdbfe" hoverBorder="#3b82f6" hoverBg="#eff6ff"
+          onClick={() => navigate('/reports')} />
+        <QuickAccessCard label="Transactions"
+          icon={ArrowLeftRight} iconColor="#b91c1c" iconBg="#fef2f2"
+          borderColor="#fecaca" hoverBorder="#ef4444" hoverBg="#fef2f2"
+          onClick={() => navigate('/transactions')} />
       </div>
     </>
   );

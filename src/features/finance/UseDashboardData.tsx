@@ -38,6 +38,9 @@ interface DashboardData {
     totalLoansPayable: number;
     pendingBills: number;
     pendingBillsAmount: number;
+    transactionsCount: number;
+    invoicesCount: number;
+    productsInStockCount: number;
   };
   monthlyChartData: Array<{
     month: string;
@@ -187,6 +190,11 @@ export function useDashboardData(): DashboardData {
       .reduce((sum: number, l: any) => sum + (l.remaining || 0), 0),
     pendingBills: 0,
     pendingBillsAmount: 0,
+    // Current-month counts
+    transactionsCount: currentMonthTransactions.length,
+    invoicesCount: invoices.filter((inv: any) => isCurrentMonth(inv.date || inv.invoiceDate || inv.createdAt)).length,
+    // Products in stock is all-time (not month-bound)
+    productsInStockCount: products.filter((p: any) => (p.stock ?? p.quantity ?? 0) > 0).length,
   };
 
   // ── Chart data uses ALL transactions (last 12 months) ────────────────────

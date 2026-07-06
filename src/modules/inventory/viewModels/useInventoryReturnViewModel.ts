@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../../../providers/context/AuthContext';
 import { Product } from '../models/types';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
+import { InvoiceLifecycleService } from '../../invoices/models/InvoiceLifecycleService';
 
 export interface UseInventoryReturnViewModelReturn {
   serialInput: string;
@@ -85,6 +86,16 @@ export function useInventoryReturnViewModel(): UseInventoryReturnViewModelReturn
         toast.success(`Serial ${serial} moved to Damaged Inventory`);
       } else {
         await InventoryFirebaseService.returnSerialToStock(foundProduct.id, serial);
+        const linkedInvoiceNumber = foundProduct.serialInvoiceNumbers?.[serial];
+        if (linkedInvoiceNumber) {
+          try {
+            await InvoiceLifecycleService.markInvoiceReturnedBySerial(
+              linkedInvoiceNumber, serial, foundProduct.sellPrice
+            );
+          } catch {
+            // non-blocking — stock return already succeeded; invoice flag can be fixed manually
+          }
+        }
         toast.success(`Serial ${serial} returned to stock`);
       }
       reset();

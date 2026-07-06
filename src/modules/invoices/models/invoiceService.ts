@@ -3,6 +3,8 @@
 // Changes:
 //   - Added 'Federal' province with Islamabad
 //   - Deduction charges are now manually entered (auto-calc removed from useEffect)
+//   - INVOICE_CURRENCIES restricted to AED only (PKR/CAD/SAR removed from all
+//     pickers: Invoice Currencies pills, Cargo/Customs/Agent/Deduction dropdowns)
 
 import {
   Invoice, InvoiceProduct, InvoiceFilters, InvoiceStats,
@@ -21,13 +23,16 @@ export const provinceCities: ProvinceCities = {
 
 export const salespersonLocations = ['Saudia', 'Chad'];
 
-// Supported invoice currencies
+// Supported invoice currencies — type kept broad for backward-compat with
+// stored data, but the selectable list below is AED-only per business rule.
 export type InvoiceCurrency = 'PKR' | 'CAD' | 'SAR' | 'AED';
+
+// AED-only: this is the single source every currency dropdown/pill in the
+// Invoice module renders from (Invoice Currencies pills, Cargo/Customs/
+// Agent/Deduction currency selects). Restricting this one array removes
+// PKR/CAD/SAR everywhere without touching each component.
 export const INVOICE_CURRENCIES: { code: InvoiceCurrency; label: string; symbol: string }[] = [
-  { code: 'PKR', label: 'Pakistani Rupee', symbol: '₨' },
-  { code: 'CAD', label: 'Canadian Dollar', symbol: 'CA$' },
-  { code: 'SAR', label: 'Saudi Riyal',     symbol: 'SAR' },
-  { code: 'AED', label: 'UAE Dirham',      symbol: 'AED' },
+  { code: 'AED', label: 'UAE Dirham', symbol: 'AED' },
 ];
 
 // NOTE: These are the *default* seed values only.
@@ -127,11 +132,6 @@ export const updateProductWithSelection = (product: InvoiceProduct, productId: s
     price: p.sellPrice,
     total: product.quantity * p.sellPrice,
     serialNumbers: [],
-    // FIX: sellPrice is stored in AED, not PKR. Tagging it 'PKR' here caused
-    // downstream code that checks currency === 'PKR' to multiply this
-    // already-correct AED price by ~76x on display/save, corrupting the
-    // invoice total. This was the actual source of invoices showing wildly
-    // inflated amounts after selecting/re-selecting a product.
     currency: 'AED',
     imageUrls: p.imageUrls || [],
   };
@@ -210,10 +210,6 @@ export const calculateInvoiceStats = (invoices: Invoice[]): InvoiceStats => ({
   netAmount:             invoices.reduce((s, i) => s + i.totalAmount - (i.deductionCharges || 0), 0),
 });
 
-// NOTE: formatCurrency formats whatever number it is given — it does NOT convert.
-// The app's display currency is AED, so any PKR-stored value must be converted
-// (e.g. via convertCurrency(pkrValue, 'PKR', 'AED', currencyRates)) BEFORE being
-// passed in here. Changed from PKR -> AED formatting to match the AED-first UI.
 export const formatCurrency = (amount: number): string =>
   new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
 

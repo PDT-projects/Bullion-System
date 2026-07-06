@@ -1,10 +1,7 @@
 // routes.tsx — updated
-// NEW: Added /payable-to-futuristic route under Operations
-// NEW: Added /inventory/add-returned and /inventory/report routes (404 fix)
-// NEW: Added /inventory/payables route (Inventory Payables dashboard card)
-// FIX: Salary module routes corrected to match actual navigation calls and
-//      wrapper prop contracts (SalaryCreateWrapper needs `type`,
-//      SalaryListWrapper needs `type` + `title`).
+// FIX: Added missing Inventory routes — Add Returned Inventory, Damaged
+//      Inventory, and Inventory Report — dashboard linked to these but no
+//      matching route existed (hence "page not opening up").
 
 import React, { useState } from 'react';
 import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
@@ -12,92 +9,36 @@ import { Login } from './pages/Login';
 import { Dashboard } from './features/finance/Dashboard';
 import { ReportsPage } from './features/finance/ReportsPage';
 
-// ── Module imports ──────────────────────────────────────────────────────────
-
 import { EmployeeListWrapper, EmployeeCreateWrapper, EmployeeEditWrapper, EmployeeDeleteWrapper } from './modules/employee';
-
 import { LoanDashboardWrapper, LoanListWrapper, LoanFormWrapper, LoanPaymentWrapper } from './modules/loans';
-
 import { SalaryListWrapper, SalaryCreateWrapper, SalaryEditWrapper, SalaryDeleteWrapper, SalaryDashboardWrapper } from './modules/salary';
-
 import { BillsListWrapper, BillsCreateWrapper, BillsEditWrapper, BillsDeleteWrapper } from './modules/bills';
-
 import { CommissionSlabListWrapper, CommissionCalculationWrapper, CommissionReportWrapper } from './modules/commission';
-
 import {
-  BankingDashboardWrapper,
-  BankListWrapper,
-  BankCreateWrapper,
-  BankEditWrapper,
-  BankDeleteWrapper,
-  TransferListWrapper,
-  TransferCreateWrapper,
-  CashListWrapper,
-  CashCreateWrapper,
+  BankingDashboardWrapper, BankListWrapper, BankCreateWrapper, BankEditWrapper, BankDeleteWrapper,
+  TransferListWrapper, TransferCreateWrapper, CashListWrapper, CashCreateWrapper,
 } from './modules/banking';
-
 import {
-  InventoryDashboardWrapper,
-  InventoryListWrapper,
-  InventoryTypeSelectionWrapper,
-  InventoryCostingOptionWrapper,
-  InventoryCostingDetailsWrapper,
-  InventoryProductDetailsWrapper,
-  InventoryPaymentWrapper,
-  InventoryAddExistingWrapper,
-  DeletedInventoryWrapper,
-  ProductTransferWrapper,
-  ProductTransferCreateWrapper,
-  InventoryMultiModelWrapper,
-  InventoryReturnWrapper,     // ← "Add Returned Inventory"
-  InventoryReportWrapper,     // ← "View Inventory Report"
-  InventoryPayablesWrapper,   // ← NEW: "Inventory Payables"
+  InventoryDashboardWrapper, InventoryListWrapper, InventoryTypeSelectionWrapper,
+  InventoryCostingOptionWrapper, InventoryCostingDetailsWrapper, InventoryProductDetailsWrapper,
+  InventoryPaymentWrapper, InventoryAddExistingWrapper, DeletedInventoryWrapper,
+  ProductTransferWrapper, ProductTransferCreateWrapper, InventoryEditWrapper, InventoryMultiModelWrapper,
+  InventoryReturnWrapper, DamagedInventoryWrapper, InventoryReportWrapper,
 } from './modules/inventory';
-
-import {
-  InvoiceListWrapper,
-  InvoiceFormWrapper,
-  InvoiceDeleteWrapper,
-  InvoiceReportWrapper,
-} from './modules/invoices';
-
-// ── Against the Invoice — standalone module ──────────────────────────────────
+import { InvoiceListWrapper, InvoiceFormWrapper, InvoiceDeleteWrapper, InvoiceReportWrapper, DeletedInvoicesWrapper } from './modules/invoices';
 import { AgainstInvoiceWrapper } from './modules/against-the-invoice';
-
 import {
-  TransactionListWrapper,
-  TransactionCreateWrapper,
-  TransactionEditWrapper,
-  TransactionDeleteWrapper,
-  PendingPaymentsWrapper,
+  TransactionListWrapper, TransactionCreateWrapper, TransactionEditWrapper,
+  TransactionDeleteWrapper, PendingPaymentsWrapper,
 } from './modules/transactions';
-
-// ── Budget imports ───────────────────────────────────────────────────────────
-import {
-  BudgetListWrapper,
-  BudgetCreateWrapper,
-  BudgetEditWrapper,
-  BudgetDeleteWrapper,
-} from './modules/budget';
-
-// ── Bank Activity Report ─────────────────────────────────────────────────────
+import { BudgetListWrapper, BudgetCreateWrapper, BudgetEditWrapper, BudgetDeleteWrapper } from './modules/budget';
 import { BankActivityView } from './modules/banking/views/BankActivityView';
-
-// ── Payable to Futuristic ────────────────────────────────────────────────────
 import { PayableToFuturisticWrapper } from './modules/Payable-to-futuristic';
-
 import { Sidebar }  from './layouts/Sidebar';
 import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
 import { UserManagement } from './modules/user-management';
 import { AssetsManagement } from './modules/assets-management';
-
-
-
-// ============================================================
-// PROTECTED ROUTE
-// ============================================================
-
 import { ProtectedRoute as ScreenProtectedRoute } from './modules/user-management/components/protectedroute';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -106,29 +47,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-
-// ============================================================
-// AUTH PAGES
-// ============================================================
-
 function LoginPage() {
   const navigate = useNavigate();
   const { setUser, setRole } = useAuth();
   return (
     <Login
-      onLoginSuccess={(user: any, role: 'super_admin' | 'user') => { 
-        setUser(user); 
-        setRole(role);
-        navigate('/dashboard'); 
+      onLoginSuccess={(user: any, role: 'super_admin' | 'user') => {
+        setUser(user); setRole(role); navigate('/dashboard');
       }}
     />
   );
 }
-
-
-// ============================================================
-// LAYOUT COMPONENTS
-// ============================================================
 
 function AppLayout({ activeModule, children }: { activeModule: string; children: React.ReactNode }) {
   const { user } = useAuth();
@@ -146,35 +75,17 @@ function AppLayout({ activeModule, children }: { activeModule: string; children:
 }
 
 function OutletLayout({ activeModule }: { activeModule: string }) {
-  return (
-    <AppLayout activeModule={activeModule}>
-      <Outlet />
-    </AppLayout>
-  );
+  return (<AppLayout activeModule={activeModule}><Outlet /></AppLayout>);
 }
 
 function DashboardLayout() {
-  return (
-    <AppLayout activeModule="dashboard">
-      <Dashboard />
-    </AppLayout>
-  );
+  return (<AppLayout activeModule="dashboard"><Dashboard /></AppLayout>);
 }
-
-
-// ============================================================
-// EMPLOYEE ROUTES
-// ============================================================
 
 function EmployeeListRoute()   { return <EmployeeListWrapper />; }
 function EmployeeCreateRoute() { return <EmployeeCreateWrapper />; }
 function EmployeeEditRoute()   { return <EmployeeEditWrapper />; }
 function EmployeeDeleteRoute() { return <EmployeeDeleteWrapper />; }
-
-
-// ============================================================
-// LOAN ROUTES
-// ============================================================
 
 function LoanDashboardRoute()        { return <LoanDashboardWrapper />; }
 function LoanListRoute()             { return <LoanListWrapper />; }
@@ -185,11 +96,6 @@ function LoanFormPayableRoute()      { return <LoanFormWrapper defaultType="Paya
 function LoanFormReceivableRoute()   { return <LoanFormWrapper defaultType="Receivable" />; }
 function LoanPaymentRoute()          { return <LoanPaymentWrapper />; }
 
-
-// ============================================================
-// SALARY ROUTES
-// ============================================================
-
 function SalaryListAllRoute()      { return <SalaryListWrapper type="all" title="All Salaries" />; }
 function SalaryListRegularRoute()  { return <SalaryListWrapper type="regular" title="Regular Salaries" />; }
 function SalaryListAdvanceRoute()  { return <SalaryListWrapper type="advance" title="Advance Salaries" />; }
@@ -199,29 +105,14 @@ function SalaryEditRoute()      { return <SalaryEditWrapper />; }
 function SalaryDeleteRoute()    { return <SalaryDeleteWrapper />; }
 function SalaryDashboardRoute() { return <SalaryDashboardWrapper />; }
 
-
-// ============================================================
-// BILLS ROUTES
-// ============================================================
-
 function BillsListRoute()   { return <BillsListWrapper />; }
 function BillsCreateRoute() { return <BillsCreateWrapper />; }
 function BillsEditRoute()   { return <BillsEditWrapper />; }
 function BillsDeleteRoute() { return <BillsDeleteWrapper />; }
 
-
-// ============================================================
-// COMMISSION ROUTES
-// ============================================================
-
 function CommissionSlabsRoute()      { return <CommissionSlabListWrapper />; }
 function CommissionCalculationRoute(){ return <CommissionCalculationWrapper />; }
 function CommissionReportsRoute()    { return <CommissionReportWrapper />; }
-
-
-// ============================================================
-// BANKING ROUTES
-// ============================================================
 
 function BankingDashboardRoute() { return <BankingDashboardWrapper />; }
 function BankListRoute()         { return <BankListWrapper />; }
@@ -233,11 +124,6 @@ function BankTransferCreateRoute(){ return <TransferCreateWrapper />; }
 function CashListRoute()         { return <CashListWrapper />; }
 function CashCreateRoute()       { return <CashCreateWrapper />; }
 function BankActivityRoute()     { return <BankActivityView />; }
-
-
-// ============================================================
-// INVENTORY ROUTES
-// ============================================================
 
 function InventoryDashboardRoute()      { return <InventoryDashboardWrapper />; }
 function InventoryViewRoute()           { return <InventoryListWrapper />; }
@@ -253,31 +139,17 @@ function ProductTransferListRoute()     { return <ProductTransferWrapper />; }
 function ProductTransferNewRoute()      { return <ProductTransferCreateWrapper />; }
 function InventoryMultiModelRoute()     { return <InventoryMultiModelWrapper />; }
 function InventoryAddReturnedRoute()    { return <InventoryReturnWrapper />; }
+function DamagedInventoryRoute()        { return <DamagedInventoryWrapper />; }
 function InventoryReportRoute()         { return <InventoryReportWrapper />; }
-function InventoryPayablesRoute()       { return <InventoryPayablesWrapper />; }  // ← NEW
-
-
-// ============================================================
-// INVOICE ROUTES
-// ============================================================
 
 function InvoiceListRoute()   { return <InvoiceListWrapper />; }
 function InvoiceFormRoute()   { return <InvoiceFormWrapper />; }
 function InvoiceEditRoute()   { return <InvoiceFormWrapper />; }
 function InvoiceDeleteRoute() { return <InvoiceDeleteWrapper />; }
 function InvoiceReportRoute() { return <InvoiceReportWrapper />; }
-
-
-// ============================================================
-// AGAINST THE INVOICE ROUTE
-// ============================================================
+function DeletedInvoicesRoute() { return <DeletedInvoicesWrapper />; }
 
 function AgainstInvoiceRoute() { return <AgainstInvoiceWrapper />; }
-
-
-// ============================================================
-// TRANSACTION ROUTES
-// ============================================================
 
 function TransactionListRoute()   { return <TransactionListWrapper />; }
 function TransactionCreateRoute() { return <TransactionCreateWrapper />; }
@@ -285,36 +157,18 @@ function TransactionEditRoute()   { return <TransactionEditWrapper />; }
 function TransactionDeleteRoute() { return <TransactionDeleteWrapper />; }
 function PendingPaymentsRoute()   { return <PendingPaymentsWrapper />; }
 
-
-// ============================================================
-// BUDGET ROUTES
-// ============================================================
-
 function BudgetListRoute()   { return <BudgetListWrapper />; }
 function BudgetCreateRoute() { return <BudgetCreateWrapper />; }
 function BudgetEditRoute()   { return <BudgetEditWrapper />; }
 function BudgetDeleteRoute() { return <BudgetDeleteWrapper />; }
 
-
-// ============================================================
-// PAYABLE TO FUTURISTIC ROUTE
-// ============================================================
-
 function PayableToFuturisticRoute() { return <PayableToFuturisticWrapper />; }
-
-
-// ============================================================
-// ROUTER
-// ============================================================
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
-
-  // ── Dashboard ─────────────────────────────────────────────
-  { path: '/',          element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>) },
+  { path: '/', element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>) },
   { path: '/dashboard', element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>) },
 
-  // ── Employees ─────────────────────────────────────────────
   {
     path: '/employees',
     element: (<ProtectedRoute><OutletLayout activeModule="employees" /></ProtectedRoute>),
@@ -325,8 +179,6 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Employee"><EmployeeDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Loans ────────────────────────────────────────────────
   {
     path: '/loans',
     element: (<ProtectedRoute><OutletLayout activeModule="loans" /></ProtectedRoute>),
@@ -342,8 +194,6 @@ export const router = createBrowserRouter([
       { path: ':id/payment',        element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanPaymentRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Salary ────────────────────────────────────────────────
   {
     path: '/salary',
     element: (<ProtectedRoute><OutletLayout activeModule="salary" /></ProtectedRoute>),
@@ -358,8 +208,6 @@ export const router = createBrowserRouter([
       { path: ':id/delete',       element: <ScreenProtectedRoute requiredScreen="Delete Salary"><SalaryDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Bills ─────────────────────────────────────────────────
   {
     path: '/bills',
     element: (<ProtectedRoute><OutletLayout activeModule="bills" /></ProtectedRoute>),
@@ -370,8 +218,6 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Bill"><BillsDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Commission ────────────────────────────────────────────
   {
     path: '/commission',
     element: (<ProtectedRoute><OutletLayout activeModule="commission" /></ProtectedRoute>),
@@ -382,8 +228,6 @@ export const router = createBrowserRouter([
       { path: 'reports',   element: <ScreenProtectedRoute requiredScreen="Commission Reports"><CommissionReportsRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Banking ───────────────────────────────────────────────
   {
     path: '/banking',
     element: (<ProtectedRoute><OutletLayout activeModule="banking" /></ProtectedRoute>),
@@ -400,8 +244,6 @@ export const router = createBrowserRouter([
       { path: 'activity',         element: <ScreenProtectedRoute requiredScreen="Bank Activity Report"><BankActivityRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Transactions ──────────────────────────────────────────
   {
     path: '/transactions',
     element: (<ProtectedRoute><OutletLayout activeModule="transactions" /></ProtectedRoute>),
@@ -413,8 +255,6 @@ export const router = createBrowserRouter([
       { path: 'pending',    element: <ScreenProtectedRoute requiredScreen="Pending Payments"><PendingPaymentsRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Invoices ──────────────────────────────────────────────
   {
     path: '/invoices',
     element: (<ProtectedRoute><OutletLayout activeModule="invoices" /></ProtectedRoute>),
@@ -424,18 +264,15 @@ export const router = createBrowserRouter([
       { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Invoice"><InvoiceEditRoute /></ScreenProtectedRoute> },
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Invoice"><InvoiceDeleteRoute /></ScreenProtectedRoute> },
       { path: 'reports',    element: <ScreenProtectedRoute requiredScreen="Invoice Reports"><InvoiceReportRoute /></ScreenProtectedRoute> },
+      { path: 'deleted',    element: <ScreenProtectedRoute requiredScreen="Deleted Invoices"><DeletedInvoicesRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Against the Invoice (standalone module) ───────────────
   {
     path: '/against-the-invoice',
     element: (
       <ProtectedRoute>
         <AppLayout activeModule="against-the-invoice">
-          <ScreenProtectedRoute requiredScreen="Invoices List">
-            <AgainstInvoiceRoute />
-          </ScreenProtectedRoute>
+          <ScreenProtectedRoute requiredScreen="Invoices List"><AgainstInvoiceRoute /></ScreenProtectedRoute>
         </AppLayout>
       </ProtectedRoute>
     ),
@@ -449,6 +286,9 @@ export const router = createBrowserRouter([
       { index: true,                        element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><InventoryDashboardRoute /></ScreenProtectedRoute> },
       { path: 'view',                       element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryViewRoute /></ScreenProtectedRoute> },
       { path: 'receivable',                 element: <ScreenProtectedRoute requiredScreen="Inventory Receivable"><InventoryReceivableRoute /></ScreenProtectedRoute> },
+      { path: 'report',                     element: <ScreenProtectedRoute requiredScreen="Inventory Report"><InventoryReportRoute /></ScreenProtectedRoute> },
+      { path: 'add-returned',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Returned"><InventoryAddReturnedRoute /></ScreenProtectedRoute> },
+      { path: 'damaged',                    element: <ScreenProtectedRoute requiredScreen="Damaged Inventory"><DamagedInventoryRoute /></ScreenProtectedRoute> },
       { path: 'create-new',                 element: <ScreenProtectedRoute requiredScreen="Inventory Type Selection"><InventoryTypeSelectionRoute /></ScreenProtectedRoute> },
       { path: 'create-new/costing',         element: <ScreenProtectedRoute requiredScreen="Inventory Costing Option"><InventoryCostingOptionRoute /></ScreenProtectedRoute> },
       { path: 'create-new/costing-details', element: <ScreenProtectedRoute requiredScreen="Inventory Costing Details"><InventoryCostingDetailsRoute /></ScreenProtectedRoute> },
@@ -456,14 +296,10 @@ export const router = createBrowserRouter([
       { path: 'create-new/details',         element: <ScreenProtectedRoute requiredScreen="Inventory Product Details"><InventoryProductDetailsRoute /></ScreenProtectedRoute> },
       { path: 'create-new/payment',         element: <ScreenProtectedRoute requiredScreen="Inventory Payment"><InventoryPaymentRoute /></ScreenProtectedRoute> },
       { path: 'add-existing',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Existing"><InventoryAddExistingRoute /></ScreenProtectedRoute> },
-      { path: 'add-returned',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Existing"><InventoryAddReturnedRoute /></ScreenProtectedRoute> },
-      { path: 'report',                     element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><InventoryReportRoute /></ScreenProtectedRoute> },
-      { path: 'payables',                   element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><InventoryPayablesRoute /></ScreenProtectedRoute> },
       { path: 'deleted',                    element: <ScreenProtectedRoute requiredScreen="Deleted Inventory"><DeletedInventoryRoute /></ScreenProtectedRoute> },
+      { path: ':id/edit',                   element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryEditWrapper /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Product Transfer ──────────────────────────────────────
   {
     path: '/product-transfer',
     element: (<ProtectedRoute><OutletLayout activeModule="inventory" /></ProtectedRoute>),
@@ -472,8 +308,6 @@ export const router = createBrowserRouter([
       { path: 'new', element: <ScreenProtectedRoute requiredScreen="Create Product Transfer"><ProductTransferNewRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Budgets ───────────────────────────────────────────────
   {
     path: '/budgets',
     element: (<ProtectedRoute><OutletLayout activeModule="budgets" /></ProtectedRoute>),
@@ -484,58 +318,36 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Budget"><BudgetDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
-
-  // ── Assets Management ──────────────────────────────────────
   {
     path: '/assets-management',
     element: (<ProtectedRoute><OutletLayout activeModule="assets-management" /></ProtectedRoute>),
-    children: [
-      { index: true, element: <ScreenProtectedRoute requiredScreen="Assets Management"><AssetsManagement /></ScreenProtectedRoute> },
-    ],
+    children: [{ index: true, element: <ScreenProtectedRoute requiredScreen="Assets Management"><AssetsManagement /></ScreenProtectedRoute> }],
   },
-
-  // ── User Management ──────────────────────────────────────
   {
     path: '/user-management',
     element: (<ProtectedRoute><OutletLayout activeModule="user-management" /></ProtectedRoute>),
-    children: [
-      { index: true, element: <ScreenProtectedRoute requiredScreen="User Management"><UserManagement /></ScreenProtectedRoute> },
-    ],
+    children: [{ index: true, element: <ScreenProtectedRoute requiredScreen="User Management"><UserManagement /></ScreenProtectedRoute> }],
   },
-
-  // ── Reports ───────────────────────────────────────────────
   {
     path: '/reports',
-    element: (
-      <ProtectedRoute>
-        <AppLayout activeModule="reports">
-          <ReportsPage />
-        </AppLayout>
-      </ProtectedRoute>
-    ),
+    element: (<ProtectedRoute><AppLayout activeModule="reports"><ReportsPage /></AppLayout></ProtectedRoute>),
   },
   {
     path: '/reports/bank-activity',
     element: (
       <ProtectedRoute>
         <AppLayout activeModule="reports">
-          <ScreenProtectedRoute requiredScreen="Bank Activity Report">
-            <BankActivityView />
-          </ScreenProtectedRoute>
+          <ScreenProtectedRoute requiredScreen="Bank Activity Report"><BankActivityView /></ScreenProtectedRoute>
         </AppLayout>
       </ProtectedRoute>
     ),
   },
-
-  // ── Payable to Futuristic ─────────────────────────────────
   {
     path: '/payable-to-futuristic',
     element: (
       <ProtectedRoute>
         <AppLayout activeModule="payable-to-futuristic">
-          <ScreenProtectedRoute requiredScreen="Payable to Futuristic">
-            <PayableToFuturisticRoute />
-          </ScreenProtectedRoute>
+          <ScreenProtectedRoute requiredScreen="Payable to Futuristic"><PayableToFuturisticRoute /></ScreenProtectedRoute>
         </AppLayout>
       </ProtectedRoute>
     ),

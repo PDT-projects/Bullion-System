@@ -38,3 +38,8 @@ export { InvoiceReportWrapper } from './views/InvoiceReportWrapper';
 
 // ── Against the Invoice ───────────────────────────────────────
 export { AgainstInvoiceWrapper } from '../against-the-invoice/index';
+
+export { useDeletedInvoicesViewModel } from './viewModels/useDeletedInvoicesViewModel';
+export { DeletedInvoicesView } from './views/DeletedInvoicesView';
+export { DeletedInvoicesWrapper } from './views/DeletedInvoicesWrapper';
+export { InvoiceLifecycleService } from './models/InvoiceLifecycleService';
