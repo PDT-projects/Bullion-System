@@ -3,7 +3,7 @@
 // UPDATED: "without costing" now routes to the multi-model entry page
 //          instead of jumping straight to single-product details.
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CostingOption } from '../models/types';
 
@@ -21,6 +21,13 @@ export function useInventoryCostingOptionViewModel(): UseInventoryCostingOptionV
   const [searchParams] = useSearchParams();
   const [selectedOption, setSelectedOption] = useState<CostingOption | null>(null);
   const inventoryType = searchParams.get('type') || 'payment';
+
+  // Credit inventory never gets a with/without costing choice — always "without".
+  useEffect(() => {
+    if (inventoryType === 'credit') {
+      navigate(`/inventory/create-new/multi-models?type=${inventoryType}&costing=without`, { replace: true });
+    }
+  }, [inventoryType, navigate]);
 
   const selectOption = useCallback((option: CostingOption) => setSelectedOption(option), []);
 

@@ -343,7 +343,14 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
   }, [validateForm, selectedBrandName, selectedBrandId, entries, grandTotalCost, grandTotalUnits, inventoryType, navigate]);
 
   const handleBack = useCallback(() => {
-    navigate(`/inventory/create-new/costing?type=${inventoryType}`);
+    // Credit inventory skips the costing-option screen entirely (always "without"),
+    // so going back from here must return to the Type step, not the Costing step —
+    // otherwise the Costing step immediately redirects back here, looping in place.
+    if (inventoryType === 'credit') {
+      navigate(`/inventory/create-new?type=${inventoryType}`);
+    } else {
+      navigate(`/inventory/create-new/costing?type=${inventoryType}`);
+    }
   }, [navigate, inventoryType]);
 
   const formatCurrency = useCallback((n: number) =>
