@@ -12,7 +12,7 @@
 import React, { useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
-import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Edit2, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight, Check, ChevronDown, X } from 'lucide-react';
+import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight, Check, ChevronDown, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters, ProductTransfer } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
@@ -581,7 +581,7 @@ export function InventoryListView({
       )}
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -721,11 +721,6 @@ export function InventoryListView({
                         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#334155'; }}
                       >
                         <Eye size={15} />
-                      </button>
-                      <button onClick={() => onEdit?.(product.id)}
-                        className="p-1.5 text-gray-500 hover:text-[#0f172a] hover:bg-slate-100 rounded-lg transition-colors"
-                        title="Edit product">
-                        <Edit2 size={16} />
                       </button>
                       {/* Delete — solid red, always visible */}
                       <button
@@ -923,19 +918,6 @@ export function InventoryListView({
               <button onClick={() => setViewProduct(null)}
                 className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                 Close
-              </button>
-              <button
-                onClick={() => { setViewProduct(null); onEdit?.(viewProduct.id); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  backgroundColor: '#f1f5f9', color: '#0f172a',
-                  fontWeight: 700, fontSize: 14,
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#e2e8f0'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f1f5f9'; }}
-              >
-                <Edit2 size={16} /> Edit Product
               </button>
               <button onClick={() => { setViewProduct(null); setDeleteConfirm(viewProduct); }}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors shadow-sm"

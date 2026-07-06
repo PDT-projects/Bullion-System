@@ -37,7 +37,6 @@ interface UseInventoryListViewModelReturn {
   onAddToExisting: () => void;
   onTransfer: (id: string) => void;
   onReceiveProduct?: (id: string) => void;
-  onEdit: (id: string) => void;
   onDelete: (id: string) => void; // ← FIX: now exposed so View can trigger local removal
 }
 
@@ -93,7 +92,6 @@ export function useInventoryListViewModel(
   const onAddNew      = useCallback(() => navigate('/inventory/create-new'), [navigate]);
   const onAddToExisting = useCallback(() => navigate('/inventory/add-existing'), [navigate]);
   const onTransfer    = useCallback((id: string) => navigate(`/product-transfer?productId=${id}`), [navigate]);
-  const onEdit        = useCallback((id: string) => navigate(`/inventory/${id}/edit`), [navigate]);
 
   // FIX: onDelete removes the product from local state immediately so the UI
   // reflects the soft-delete without requiring a page refresh.
@@ -128,7 +126,6 @@ export function useInventoryListViewModel(
     setFilter, clearFilters, toggleFilters, setViewProduct,
     onAddNew, onAddToExisting, onTransfer,
     onReceiveProduct: inventoryType === 'on-order' ? onReceiveProduct : undefined,
-    onEdit,
     onDelete, // ← FIX: now returned
   };
 }

@@ -48,7 +48,6 @@ import {
   DeletedInventoryWrapper,
   ProductTransferWrapper,
   ProductTransferCreateWrapper,
-  InventoryEditWrapper,
   InventoryMultiModelWrapper,
   InventoryReturnWrapper,     // ← "Add Returned Inventory"
   InventoryReportWrapper,     // ← "View Inventory Report"
@@ -461,7 +460,6 @@ export const router = createBrowserRouter([
       { path: 'report',                     element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><InventoryReportRoute /></ScreenProtectedRoute> },
       { path: 'payables',                   element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><InventoryPayablesRoute /></ScreenProtectedRoute> },
       { path: 'deleted',                    element: <ScreenProtectedRoute requiredScreen="Deleted Inventory"><DeletedInventoryRoute /></ScreenProtectedRoute> },
-      { path: ':id/edit',                   element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryEditWrapper /></ScreenProtectedRoute> },
     ],
   },
 

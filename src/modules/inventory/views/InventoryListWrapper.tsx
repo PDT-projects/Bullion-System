@@ -31,7 +31,6 @@ export const InventoryListWrapper: React.FC<Props> = ({ inventoryType = 'in-stoc
       onAddToExisting={viewModel.onAddToExisting}
       onTransfer={viewModel.onTransfer}
       onReceiveProduct={viewModel.onReceiveProduct}
-      onEdit={viewModel.onEdit}
       onDelete={viewModel.onDelete}
       currentUser={user}
       transfers={transfers}
