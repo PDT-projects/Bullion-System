@@ -12,7 +12,7 @@
 import React, { useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
-import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight, Check, ChevronDown, X } from 'lucide-react';
+import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight, Check, ChevronDown, X, Search, Tag, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters, ProductTransfer } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
@@ -223,16 +223,26 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
   );
 }
 
-// ── Location Multi-Select Dropdown ───────────────────────────────────────────
 
-function LocationMultiSelect({
-  uniqueLocations,
-  selectedLocations,
+
+// ── Generic Multi-Select Dropdown (Location / Category / Status) ────────────
+
+function MultiSelectFilter({
+  label,
+  pluralLabel,
+  icon: FilterIcon,
+  options,
+  selected,
   onChange,
+  allLabel,
 }: {
-  uniqueLocations: string[];
-  selectedLocations: string[];
-  onChange: (locs: string[]) => void;
+  label: string;
+  pluralLabel?: string;
+  icon: React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>;
+  options: string[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+  allLabel: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -245,42 +255,42 @@ function LocationMultiSelect({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  const toggle = (loc: string) =>
+  const toggle = (val: string) =>
     onChange(
-      selectedLocations.includes(loc)
-        ? selectedLocations.filter(l => l !== loc)
-        : [...selectedLocations, loc]
+      selected.includes(val)
+        ? selected.filter(v => v !== val)
+        : [...selected, val]
     );
 
-  const label =
-    selectedLocations.length === 0
-      ? 'All Locations'
-      : selectedLocations.length === 1
-      ? selectedLocations[0]
-      : `${selectedLocations.length} Locations`;
+  const displayLabel =
+    selected.length === 0
+      ? allLabel
+      : selected.length === 1
+      ? selected[0]
+      : `${selected.length} ${pluralLabel || `${label}s`}`;
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '8px 12px', borderRadius: 8, fontSize: 14, cursor: 'pointer',
-          border: `1px solid ${open || selectedLocations.length > 0 ? '#1e293b' : '#d1d5db'}`,
-          backgroundColor: selectedLocations.length > 0 ? '#f1f5f9' : '#fff',
-          color: selectedLocations.length > 0 ? '#0f172a' : '#374151',
-          fontWeight: selectedLocations.length > 0 ? 600 : 400,
+          border: `1px solid ${open || selected.length > 0 ? '#1e293b' : '#d1d5db'}`,
+          backgroundColor: selected.length > 0 ? '#f1f5f9' : '#fff',
+          color: selected.length > 0 ? '#0f172a' : '#374151',
+          fontWeight: selected.length > 0 ? 600 : 400,
           boxShadow: open ? '0 0 0 2px rgba(15,23,42,0.15)' : 'none',
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-          <MapPin size={13} color={selectedLocations.length > 0 ? '#0f172a' : '#9ca3af'} style={{ flexShrink: 0 }} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+          <FilterIcon size={13} color={selected.length > 0 ? '#0f172a' : '#9ca3af'} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayLabel}</span>
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 6 }}>
-          {selectedLocations.length > 0 && (
+          {selected.length > 0 && (
             <span
               onClick={e => { e.stopPropagation(); onChange([]); }}
               style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 2 }}
@@ -303,7 +313,7 @@ function LocationMultiSelect({
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid #f3f4f6' }}>
             <button
               type="button"
-              onClick={() => onChange([...uniqueLocations])}
+              onClick={() => onChange([...options])}
               style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
             >
               Select All
@@ -319,43 +329,43 @@ function LocationMultiSelect({
 
           {/* Options */}
           <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-            {uniqueLocations.length === 0 ? (
-              <div style={{ padding: '12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No locations found</div>
-            ) : uniqueLocations.map(loc => {
-              const selected = selectedLocations.includes(loc);
+            {options.length === 0 ? (
+              <div style={{ padding: '12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No options found</div>
+            ) : options.map(opt => {
+              const isSelected = selected.includes(opt);
               return (
                 <div
-                  key={loc}
-                  onClick={() => toggle(loc)}
+                  key={opt}
+                  onClick={() => toggle(opt)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '9px 12px', cursor: 'pointer',
-                    backgroundColor: selected ? '#f1f5f9' : 'transparent',
+                    backgroundColor: isSelected ? '#f1f5f9' : 'transparent',
                     transition: 'background-color 0.1s',
                   }}
-                  onMouseEnter={e => { if (!selected) e.currentTarget.style.backgroundColor = '#f9fafb'; }}
-                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = selected ? '#f1f5f9' : 'transparent'; }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.backgroundColor = '#f9fafb'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = isSelected ? '#f1f5f9' : 'transparent'; }}
                 >
                   <div style={{
                     width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                    border: `2px solid ${selected ? '#1e293b' : '#d1d5db'}`,
-                    backgroundColor: selected ? '#1e293b' : '#fff',
+                    border: `2px solid ${isSelected ? '#1e293b' : '#d1d5db'}`,
+                    backgroundColor: isSelected ? '#1e293b' : '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     transition: 'all 0.15s',
                   }}>
-                    {selected && <Check size={10} color="#fff" strokeWidth={3} />}
+                    {isSelected && <Check size={10} color="#fff" strokeWidth={3} />}
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: selected ? 600 : 400, color: selected ? '#0f172a' : '#374151' }}>
-                    {loc}
+                  <span style={{ fontSize: 13, fontWeight: isSelected ? 600 : 400, color: isSelected ? '#0f172a' : '#374151' }}>
+                    {opt}
                   </span>
                 </div>
               );
             })}
           </div>
 
-          {selectedLocations.length > 0 && (
+          {selected.length > 0 && (
             <div style={{ padding: '6px 12px 8px', borderTop: '1px solid #f3f4f6', fontSize: 11, color: '#1e293b', fontWeight: 600 }}>
-              {selectedLocations.length} of {uniqueLocations.length} selected
+              {selected.length} of {options.length} selected
             </div>
           )}
         </div>
@@ -378,11 +388,47 @@ export function InventoryListView({
   const [deleteConfirm, setDeleteConfirm] = React.useState<Product | null>(null);
   const [isDeleting,    setIsDeleting]    = React.useState(false);
 
-  // ── Local multi-location filter (client-side, on top of ViewModel filters) ──
+  // ── Local multi-select filters (client-side, on top of ViewModel filters) ──
   const [selectedLocations, setSelectedLocations] = React.useState<string[]>([]);
-  const displayProducts = selectedLocations.length === 0
-    ? products
-    : products.filter(p => selectedLocations.includes(getDisplayLocation(p)));
+  const [selectedCategories, setSelectedCategories] = React.useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = React.useState<string[]>([]);
+
+  // ── Global search — matches against brand, model, category, status, location, ownership ──
+  const [searchQuery, setSearchQuery] = React.useState('');
+
+  const statusOptions = ['New', 'Available', 'In Transit', 'Damaged', 'Returned', 'On-Order'];
+
+  const displayProducts = React.useMemo(() => {
+    let result = products;
+
+    if (selectedLocations.length > 0) {
+      result = result.filter(p => selectedLocations.includes(getDisplayLocation(p)));
+    }
+    if (selectedCategories.length > 0) {
+      result = result.filter(p => selectedCategories.includes(p.category));
+    }
+    if (selectedStatuses.length > 0) {
+      result = result.filter(p => selectedStatuses.includes(p.status));
+    }
+
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter(p => {
+        const haystack = [
+          p.brandName, p.modelName, p.category, p.status,
+          getDisplayLocation(p), p.ownershipType, p.supplierPaymentStatus,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    return result;
+  }, [products, selectedLocations, selectedCategories, selectedStatuses, searchQuery]);
+
+  const activeLocalFilterCount =
+    (selectedLocations.length > 0 ? 1 : 0) +
+    (selectedCategories.length > 0 ? 1 : 0) +
+    (selectedStatuses.length > 0 ? 1 : 0);
 
   // ── Delete handler ─────────────────────────────────────────────────────────
   // 1. Calls Firebase — waits for confirmation
@@ -466,7 +512,7 @@ export function InventoryListView({
             }}
           >
             <Filter size={16} />
-            Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+            Filters {(activeFilterCount + activeLocalFilterCount) > 0 && `(${activeFilterCount + activeLocalFilterCount})`}
           </button>
           <button
             onClick={onAddToExisting}
@@ -495,35 +541,57 @@ export function InventoryListView({
         </div>
       </div>
 
-      {/* ── Stats ── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Total Products', value: stats.totalProducts, color: 'text-[#0f172a]' },
-          { label: 'Total Stock',    value: stats.totalStock,    color: 'text-green-600'  },
-          { label: 'In Transit',     value: stats.inTransit,     color: 'text-yellow-600' },
-          { label: 'Available',      value: stats.available,     color: 'text-[#334155]'  },
-        ].map(s => (
-          <div key={s.label} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-            <div className="text-sm text-gray-600">{s.label}</div>
-          </div>
-        ))}
+      {/* ── Global Search ── */}
+      <div style={{ position: 'relative', marginBottom: 16 }}>
+        <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search brand, model, category, status, location…"
+          style={{
+            width: '100%', padding: '10px 14px 10px 38px', borderRadius: 10, fontSize: 14,
+            border: `1.5px solid ${searchQuery ? '#1e293b' : '#e2e8f0'}`,
+            backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            outline: 'none', transition: 'border-color 0.15s',
+          }}
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            style={{
+              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer',
+              backgroundColor: '#f1f5f9', color: '#64748b',
+            }}
+            title="Clear search"
+          >
+            <X size={12} />
+          </button>
+        )}
       </div>
 
-      {/* ── Total Value card with multi-currency ── */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>Total Inventory Value</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
-              {fmtPrimary(stats.totalValue)}
-            </div>
-            {/* AED-only display; no extra currency rows */}
+      {/* ── Stats (compact, fixed-size squares) ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+        {[
+          { label: 'Products',   value: stats.totalProducts, color: '#0f172a' },
+          { label: 'Stock',      value: stats.totalStock,    color: '#16a34a' },
+          { label: 'In Transit', value: stats.inTransit,     color: '#d97706' },
+          { label: 'Available',  value: stats.available,     color: '#334155' },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-lg shadow-sm border border-gray-200"
+            style={{ width: 104, height: 76, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.2 }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>{s.label}</div>
           </div>
-          <div style={{ fontSize: 12, color: '#9ca3af', textAlign: 'right' }}>
-            <div>Cost Price basis</div>
-            <div>{stats.totalProducts} products</div>
+        ))}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200"
+          style={{ width: 140, height: 76, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>
+            {fmtPrimary(stats.totalValue)}
           </div>
+          <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>Total Value</div>
         </div>
       </div>
 
@@ -545,33 +613,41 @@ export function InventoryListView({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Search model..." />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-              <select value={filters.categoryFilter}
-                onChange={e => setFilter('categoryFilter', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">All Categories</option>
-                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select value={filters.statusFilter}
-                onChange={e => setFilter('statusFilter', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">All Statuses</option>
-                {['New','Available','In Transit','Damaged','Returned','On-Order'].map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <LocationMultiSelect
-              uniqueLocations={uniqueLocations}
-              selectedLocations={selectedLocations}
+            <MultiSelectFilter
+              label="Category"
+              pluralLabel="Categories"
+              icon={Layers}
+              options={categories}
+              selected={selectedCategories}
+              onChange={setSelectedCategories}
+              allLabel="All Categories"
+            />
+            <MultiSelectFilter
+              label="Status"
+              pluralLabel="Statuses"
+              icon={Tag}
+              options={statusOptions}
+              selected={selectedStatuses}
+              onChange={setSelectedStatuses}
+              allLabel="All Statuses"
+            />
+            <MultiSelectFilter
+              label="Location"
+              icon={MapPin}
+              options={uniqueLocations}
+              selected={selectedLocations}
               onChange={setSelectedLocations}
+              allLabel="All Locations"
             />
             <div className="flex items-end">
-              <button onClick={clearFilters}
+              <button
+                onClick={() => {
+                  clearFilters();
+                  setSelectedLocations([]);
+                  setSelectedCategories([]);
+                  setSelectedStatuses([]);
+                  setSearchQuery('');
+                }}
                 className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm">
                 Clear Filters
               </button>
@@ -580,8 +656,14 @@ export function InventoryListView({
         </div>
       )}
 
+      {!isLoading && (
+        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+          Showing {displayProducts.length} of {products.length} products
+        </div>
+      )}
+
       {/* ── Table ── */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -598,33 +680,33 @@ export function InventoryListView({
           </div>
         ) : (
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 border-b border-gray-200" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
                 {['Brand', 'Model', 'Type', 'Location', 'Stock-In Date', 'Category', 'Stock',
                   'Cost (AED)',
                   'Sell (AED)',
                   'Supplier Cost', 'Supplier Payment',
                   'Status', 'Payment', 'Actions'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {displayProducts.map(product => (
+              {displayProducts.map((product, idx) => (
                 <tr
                   key={product.id}
                   className="transition-colors"
                   style={
                     product.status === 'In Transit'
                       ? { backgroundColor: '#fffbeb', borderLeft: '3px solid #f59e0b' }
-                      : { borderLeft: '3px solid transparent' }
+                      : { backgroundColor: idx % 2 === 1 ? '#fafafa' : '#fff', borderLeft: '3px solid transparent' }
                   }
-                  onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fef3c7' : '#f9fafb'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fffbeb' : ''; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fef3c7' : '#f1f5f9'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fffbeb' : (idx % 2 === 1 ? '#fafafa' : '#fff'); }}
                 >
-                  <td className="px-4 py-3 font-semibold text-gray-900 text-sm">{product.brandName}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{product.modelName}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{product.category}</td>
+                  <td className="px-4 py-2.5 font-semibold text-gray-900 text-sm">{product.brandName}</td>
+                  <td className="px-4 py-2.5 text-sm text-gray-700">{product.modelName}</td>
+                  <td className="px-4 py-2.5 text-sm text-gray-600">{product.category}</td>
                   <td className="px-4 py-3">
                     {(() => {
                       const route = getTransitRoute(product, transfers);

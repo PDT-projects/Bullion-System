@@ -2,7 +2,7 @@
 // InventoryDashboardView - Main entry page for inventory operations
 // UPDATED: Shows recent inventory payment activity panel
 
-import { Plus, Package, ArrowRight, Boxes, Undo2, FileBarChart, Trash2, Wallet } from 'lucide-react';
+import { Plus, Package, ArrowRight, Boxes, Undo2, FileBarChart, Trash2, ArrowLeftRight } from 'lucide-react';
 
 interface InventoryDashboardViewProps {
   onAddNewInventory: () => void;
@@ -10,11 +10,11 @@ interface InventoryDashboardViewProps {
   onViewInventory: () => void;
   onViewReport: () => void;
   onViewDeleted: () => void;
-  onViewPayables: () => void;
+  onViewTransfer: () => void;
 }
 
 export function InventoryDashboardView({
-  onAddNewInventory, onAddReturnedInventory, onViewInventory, onViewReport, onViewDeleted, onViewPayables,
+  onAddNewInventory, onAddReturnedInventory, onViewInventory, onViewReport, onViewDeleted, onViewTransfer,
 }: InventoryDashboardViewProps) {
   const cards = [
     {
@@ -39,11 +39,11 @@ export function InventoryDashboardView({
       onClick: onViewDeleted,
     },
     {
-      title: 'Inventory Payables',
-      description: 'Supplier-credit stock that has sold out — pay off what you owe the supplier',
-      icon: Wallet,
-      iconColor: '#b45309', iconBg: '#fffbeb', borderColor: '#fde68a', hoverBorder: '#d97706', hoverBg: '#fffbeb',
-      onClick: onViewPayables,
+      title: 'Inventory Transfer',
+      description: 'Move stock between locations or warehouses and keep records in sync',
+      icon: ArrowLeftRight,
+      iconColor: '#1d4ed8', iconBg: '#eff6ff', borderColor: '#bfdbfe', hoverBorder: '#3b82f6', hoverBg: '#eff6ff',
+      onClick: onViewTransfer,
     },
     {
       title: 'View Inventory Report',
