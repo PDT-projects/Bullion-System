@@ -208,10 +208,10 @@ export const InventoryReturnView: React.FC<UseInventoryReturnViewModelReturn> = 
                       <span style={{ fontWeight: 600, color: '#334155' }}>AED {inv.totalAmount?.toLocaleString()}</span>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                      {(inv.products || []).flatMap(p => (p.serialNumbers || []).filter(Boolean)).map(serial => (
+                      {(inv.products || []).flatMap(p => (p.serialNumbers || []).filter(Boolean).map(serial => ({ serial, productId: p.productId }))).map(({ serial, productId }) => (
                         <button
                           key={serial}
-                          onClick={() => selectInvoiceSerial(serial)}
+                          onClick={() => selectInvoiceSerial(serial, productId)}
                           title="Click to select this serial and process the return"
                           style={{
                             display: 'flex', alignItems: 'center', gap: 6,

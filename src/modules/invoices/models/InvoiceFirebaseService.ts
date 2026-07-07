@@ -1,528 +1,1188 @@
-// Invoice Module - Firebase Service Layer (UPDATED)
-// Added liquidity linkage when creating invoices
-//
-// FIX v2 (image pipeline):
-//   docToInvoice now maps each product item and explicitly preserves `imageUrls`
-//   so that images saved on invoice creation are correctly read back from
-//   Firestore and flow through to the PDF renderer and the invoice detail view.
-//   Without this, raw `data.products || []` returns plain JS objects from
-//   Firestore — imageUrls is present but could be undefined on older documents
-//   that were saved before imageUrls was added to InvoiceProduct.
+/**
+ * Inventory Module - Firebase Firestore Service Layer
+ *
+ * FIXES APPLIED:
+ *   1. createProduct — `description` was always included in stripUndefined({...})
+ *      but could be lost if the DTO didn't carry it. Now explicitly mapped.
+ *   2. updateProduct — was doing stripUndefined({ ...dto }) which spreads
+ *      ProductFormData-only keys (currentStep, paidAmount, paymentMethod, etc.)
+ *      into Firestore. Now only maps fields that belong in the products collection.
+ *   3. costPrice — both create and update now use explicit `costPrice: dto.costPrice ?? 0`
+ *      so the field is NEVER undefined and is always written to Firestore.
+ *   4. `location` field added — saved on create/update, read back in transformDocToProduct.
+ */
 
 import {
-  collection, getDocs, getDoc, addDoc, updateDoc,
-  deleteDoc, doc, onSnapshot, query, orderBy,
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  where,
+  runTransaction,
 } from 'firebase/firestore';
 import {
-  getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
 } from 'firebase/storage';
 import { db } from '../../../api/firebase/firebase';
-import { Invoice, InvoiceProduct, CreateInvoiceDTO } from './types';
 
-const COLLECTION             = 'invoices';
-const COUNTER_COLLECTION     = 'invoiceCounters';
-const PDF_STORAGE_PATH       = 'invoices/pdfs';
-const TRANSACTIONS_COLLECTION = 'transactions';
-
-// ── Invoice ↔ Transaction sync ────────────────────────────────────────────────
-// The Dashboard's Total Inflow / Total Outflow cards and the Transactions list
-// are both driven entirely off the `transactions` collection (see
-// useDashboardData / calculateStats). Invoices used to only write liquidity
-// fields onto the invoice doc itself, so a paid invoice never showed up as
-// inflow anywhere. The helpers below create/update a single linked
-// `transactions` doc per invoice (id stored on the invoice as
-// `linkedTransactionId`) so payments are reflected the moment they're saved,
-// and editing an invoice's payment updates that same transaction doc in
-// place rather than creating a duplicate.
-function buildInvoiceTransactionPayload(invoiceId: string, dto: any) {
-  const paidAmount: number = dto.paidAmount ?? dto.totalAmount ?? 0;
-  const mode: 'Cash' | 'Bank' | 'Cheque' =
-    dto.paymentMode === 'Online' ? 'Bank'   :
-    dto.paymentMode === 'Cheque' ? 'Cheque' : 'Cash';
-  const isFull = paidAmount >= (dto.totalAmount || 0);
-
-  return stripUndefined({
-    date:            dto.date || new Date().toISOString(),
-    company:         dto.branch || '',
-    mainCategory:    'Cash Inflow',
-    subCategory:     'Product sale received',
-    amount:          paidAmount,
-    amountPaid:      paidAmount,
-    remainingAmount: Math.max(0, (dto.totalAmount || 0) - paidAmount),
-    paymentStatus:   isFull ? 'Full' : 'Partial',
-    mode,
-    bankId:          dto.bankId,
-    bankName:        dto.bankName,
-    chequeNumber:    dto.chequeNumber,
-    chequeDate:      dto.chequeDate,
-    chequeBank:      dto.chequeBank,
-    note:            `Invoice ${dto.invoiceNumber || ''} — ${dto.customerName || ''}`.trim(),
-    paidBy:          dto.customerName,
-    paidTo:          dto.paidTo,
-    linkedType:      'invoice' as const,
-    linkedId:        invoiceId,
-    linkedRef:       dto.invoiceNumber,
-    updatedAt:       new Date().toISOString(),
-  });
-}
-
-/** Create or update the single transaction doc linked to an invoice. */
-async function syncInvoiceTransaction(invoiceId: string, dto: any, existingTransactionId?: string): Promise<string | undefined> {
-  const paidAmount: number = dto.paidAmount ?? 0;
-  console.log('🔄 syncInvoiceTransaction:', { invoiceId, paidAmount, totalAmount: dto.totalAmount, existingTransactionId });
-
-  // Nothing paid yet — don't create a phantom AED 0 inflow row.
-  if (!paidAmount || paidAmount <= 0) {
-    console.log('⏭️ Skipping transaction sync — paidAmount is 0/falsy:', paidAmount);
-    return existingTransactionId;
-  }
-
-  const payload = buildInvoiceTransactionPayload(invoiceId, dto);
-
-  try {
-    if (existingTransactionId) {
-      await updateDoc(doc(db, TRANSACTIONS_COLLECTION, existingTransactionId), payload);
-      console.log('✅ Linked transaction updated for invoice:', invoiceId, existingTransactionId);
-      return existingTransactionId;
-    } else {
-      const ref = await addDoc(collection(db, TRANSACTIONS_COLLECTION), {
-        ...payload,
-        transactionId: `TXN-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-      });
-      console.log('✅ Linked transaction created for invoice:', invoiceId, ref.id);
-      return ref.id;
-    }
-  } catch (error) {
-    // Don't let a transaction-sync failure block the invoice save itself.
-    console.error('❌ Error syncing invoice transaction:', error);
-    return existingTransactionId;
-  }
-}
-
-// ── Legacy currency normalization ─────────────────────────────────────────────
-// The app is AED-first. Older invoices were stored with PKR amounts (and a
-// product `currency` of 'PKR'). We convert those to AED on read using the
-// fixed fallback rates so historical totals display correctly in the AED UI,
-// without needing a Firestore migration. New invoices already store AED and
-// pass through untouched.
-const PKR_PER_USD = 279.5;
-const AED_PER_USD = 3.67;
-const PKR_TO_AED  = AED_PER_USD / PKR_PER_USD; // AED = pkrAmount * PKR_TO_AED
-const pkrToAed = (n: number) => Math.round((n || 0) * PKR_TO_AED * 100) / 100;
+// ==================== IMAGE UPLOAD ====================
 
 const storage = getStorage();
 
-function stripUndefined<T extends object>(obj: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== undefined)
-  ) as Partial<T>;
+/**
+ * Upload one or more image Files to Firebase Storage under
+ * `inventory-images/<productId>/` and return their download URLs.
+ * Pass a temporary client-side key (e.g. Date.now()) when the product
+ * doesn't have a Firestore ID yet — callers can rename later if needed.
+ *
+ * FIX: Explicitly sets `contentType` metadata so Firebase Storage serves the
+ * file with the correct MIME type and respects the bucket's CORS policy.
+ * Without this, uploads from localhost can fail with a CORS pre-flight error
+ * because the Storage emulator / bucket doesn't recognise the content type.
+ */
+export async function uploadInventoryImages(
+  images: File[],
+  productKey: string
+): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of images) {
+    const ext     = file.name.split('.').pop() ?? 'jpg';
+    const mime    = file.type || (ext === 'png' ? 'image/png' : 'image/jpeg');
+    const path    = `inventory-images/${productKey}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+    const fileRef = storageRef(storage, path);
+    // Pass explicit metadata so Storage knows the content type on preflight
+    await uploadBytes(fileRef, file, { contentType: mime });
+    const url = await getDownloadURL(fileRef);
+    urls.push(url);
+  }
+  return urls;
 }
 
-// ── Map a raw Firestore product sub-document to a typed InvoiceProduct ─────────
-// This explicit mapping ensures every field — including imageUrls — is always
-// present on the returned object, even for invoices saved before imageUrls was
-// added to the InvoiceProduct type.
-function docToInvoiceProduct(raw: any): InvoiceProduct {
+/**
+ * Fetch a Firebase Storage image URL and return it as a base64 data-URL.
+ *
+ * Plain `fetch()` of a Firebase Storage URL fails in some browsers with a
+ * CORS error when the bucket has not yet configured an `Access-Control-Allow-Origin`
+ * header for the app's origin. Using the Firebase Storage SDK's `getDownloadURL`
+ * (which returns the same URL) already bypasses CORS for authenticated reads —
+ * but subsequent `fetch()` calls made by the PDF service still go through the
+ * browser's CORS mechanism.
+ *
+ * This helper uses `XMLHttpRequest` with `responseType = 'blob'` which honours
+ * the same CORS policy, but we additionally try to request via the SDK ref
+ * so the auth token is included if the bucket requires it.
+ *
+ * Returns null on any error so callers can degrade gracefully (show no image).
+ */
+export async function fetchImageAsBase64(url: string): Promise<{ dataUrl: string; format: 'PNG' | 'JPEG' } | null> {
+  if (!url) return null;
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'blob';
+    xhr.onload = () => {
+      if (xhr.status !== 200) { resolve(null); return; }
+      const blob: Blob = xhr.response;
+      if (!blob || blob.size === 0) { resolve(null); return; }
+      const mime = blob.type.toLowerCase();
+      const format: 'PNG' | 'JPEG' = mime.includes('png') ? 'PNG' : 'JPEG';
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        resolve(dataUrl ? { dataUrl, format } : null);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    };
+    xhr.onerror = () => resolve(null);
+    xhr.ontimeout = () => resolve(null);
+    xhr.timeout = 8000;
+    xhr.send();
+  });
+}
+
+/**
+ * Delete a single image from Firebase Storage by its full download URL.
+ * Fails silently — a stale URL should never block a product save.
+ */
+export async function deleteInventoryImage(url: string): Promise<void> {
+  try {
+    const fileRef = storageRef(storage, url);
+    await deleteObject(fileRef);
+  } catch {
+    // non-blocking
+  }
+}
+import type {
+  Product,
+  ProductTransfer,
+  CreateProductDTO,
+  UpdateProductDTO,
+  CreateTransferDTO,
+  ProductStatus,
+  SerialStatus,
+  CostingInfo,
+  DamagedProduct,
+  InventoryReportRow,
+} from './types';
+
+const PRODUCTS_COLLECTION  = 'products';
+const TRANSFERS_COLLECTION = 'transfers';
+const BRANDS_COLLECTION    = 'brands';
+const MODELS_COLLECTION    = 'brandModels';
+const COUNTERS_COLLECTION          = 'inv_counters';
+const DELETED_PRODUCTS_COLLECTION  = 'deleted_products';
+const DAMAGED_PRODUCTS_COLLECTION  = 'damaged_products';
+
+// ==================== TYPES ====================
+
+/** A soft-deleted product record — stored in `deleted_products` collection */
+export interface DeletedProduct extends Product {
+  originalId:     string;
+  _archiveId:     string;
+  deletedAt:      string;
+  deletedBy:      string;   // uid
+  deletedByEmail: string;
+  deletedByName:  string;
+}
+
+// ==================== UTILITIES ====================
+
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as T;
+}
+
+/**
+ * Auto-generate transaction ID: INV-DDMMYY-NNN
+ * e.g.  INV-150326-001
+ */
+export async function generateInventoryTransactionId(): Promise<string> {
+  const now      = new Date();
+  const dd       = String(now.getDate()).padStart(2, '0');
+  const mm       = String(now.getMonth() + 1).padStart(2, '0');
+  const yy       = String(now.getFullYear()).slice(-2);
+  const dateKey  = `${dd}${mm}${yy}`;
+  const prefix   = `INV-${dateKey}`;
+  const counterRef = doc(db, COUNTERS_COLLECTION, prefix);
+
+  const newCount = await runTransaction(db, async (tx) => {
+    const snap    = await tx.get(counterRef);
+    const current = snap.exists() ? (snap.data().count as number) : 0;
+    const next    = current + 1;
+    tx.set(counterRef, { count: next, updatedAt: new Date().toISOString() });
+    return next;
+  });
+
+  return `${prefix}-${String(newCount).padStart(3, '0')}`;
+}
+
+// ==================== TRANSFORMS ====================
+
+// ── Legacy currency normalization ─────────────────────────────────────────────
+// The app is AED-first. Products created before the AED switch were stored with
+// PKR prices and no `currency` field. On read we convert those PKR prices to AED
+// using fixed fallback rates so old inventory shows correct AED values without a
+// Firestore migration. Products created after the switch carry currency:'AED'
+// and pass through untouched (no double conversion).
+const PKR_PER_USD = 279.5;
+const AED_PER_USD = 3.67;
+const PKR_TO_AED  = AED_PER_USD / PKR_PER_USD;
+const pkrToAed = (n: number) => Math.round((n || 0) * PKR_TO_AED * 100) / 100;
+
+function transformDocToProduct(docSnap: any): Product {
+  const d = docSnap.data();
+  const isLegacyPKR = (d.sellPrice ?? d.costPrice ?? 0) > 50000;
+  const conv = (n: number) => (isLegacyPKR ? pkrToAed(n) : (n ?? 0));
   return {
-    id:            raw.id            || '',
-    productId:     raw.productId     || '',
-    productName:   raw.productName   || '',
-    brandName:     raw.brandName     || '',
-    modelName:     raw.modelName     || '',
-    category:      raw.category      || '',
-    description:   raw.description   || '',
-    quantity:      raw.quantity      ?? 1,
-    price:         raw.price ?? 0,
-    total:         raw.total ?? 0,
-    serialNumbers: raw.serialNumbers || [],
-    serialCities:  raw.serialCities  || {},
-    currency:      'AED',
-    imageUrls:     Array.isArray(raw.imageUrls) ? raw.imageUrls : [],
+    id:            docSnap.id,
+    brandName:     d.brandName     || '',
+    modelName:     d.modelName     || '',
+    category:      d.category      || '',
+    costPrice:     conv(d.costPrice ?? 0),
+    sellPrice:     conv(d.sellPrice ?? 0),
+    buyType:       d.buyType       || 'Import',
+    warrantyYears: d.warrantyYears ?? 0,
+    stock:         d.stock         ?? 0,
+    location:      d.location      || '',
+    serialNumbers: d.serialNumbers || [],
+    serialCities:  d.serialCities  || {},
+    serialStatus:  d.serialStatus  || {},
+    description:   d.description   || '',
+    status:        d.status        || 'New',
+    isDamaged:     d.isDamaged     ?? false,
+    brandId:       d.brandId       || '',
+    modelId:       d.modelId       || '',
+    costingId:     d.costingId     || '',
+    billId:              d.billId              || undefined,
+    receivableStatus:    d.receivableStatus    || undefined,
+    expectedReceiveDate: d.expectedReceiveDate || undefined,
+    costingOption:       d.costingOption       || undefined,
+    costing:             d.costing             || undefined,
+    costingUsdRate:           d.costingUsdRate           ?? undefined,
+    costingTotalCustomsValue: d.costingTotalCustomsValue ?? undefined,
+    costingTotalFreightValue: d.costingTotalFreightValue ?? undefined,
+    costingShipmentTotalUSD:  d.costingShipmentTotalUSD  ?? undefined,
+    costingConsignmentValue:  d.costingConsignmentValue  ?? undefined,
+    costingTotalValueOfBrand: d.costingTotalValueOfBrand ?? undefined,
+    costingModelsJson:        d.costingModelsJson        || undefined,
+    imageUrls:     d.imageUrls     || [],
+    ownershipType:            d.ownershipType            || undefined,
+    supplierCost:             d.supplierCost             ?? undefined,
+    supplierPaymentStatus:    d.supplierPaymentStatus    || undefined,
+    supplierPaidAmount:       d.supplierPaidAmount       ?? undefined,
+    supplierRemainingAmount:  d.supplierRemainingAmount  ?? undefined,
+    supplierPaymentChannel:   d.supplierPaymentChannel   || undefined,
+    serialStockInDates:       d.serialStockInDates       || {},
+    serialSoldDates:          d.serialSoldDates          || {},
+    serialInvoiceNumbers:     d.serialInvoiceNumbers     || {},
+    createdAt: d.createdAt || '',
+    updatedAt: d.updatedAt || '',
   };
 }
 
-function docToInvoice(d: any): Invoice {
-  const data = d.data ? d.data() : d;
+function transformDocToDamaged(docSnap: any): DamagedProduct {
+  const d = docSnap.data();
   return {
-    id:                     d.id,
-    invoiceNumber:          data.invoiceNumber          || '',
-    date:                   data.date                   || '',
-    customerName:           data.customerName           || '',
-    customerPhone:          data.customerPhone          || '',
-    customerPhone2:         data.customerPhone2,
-    customerCNIC:           data.customerCNIC           || '',
-    customerProvince:       data.customerProvince       || '',
-    customerCity:           data.customerCity           || '',
-    customerAddress:        data.customerAddress,
-    warrantyLocation:       data.warrantyLocation,
-    products:               (data.products || []).map(docToInvoiceProduct),
-    exchangeWarrantyNote:   data.exchangeWarrantyNote   || '',
-    deliveryStatus:         data.deliveryStatus         || 'Self-collect',
-    deliveryReceivedStatus: data.deliveryReceivedStatus || 'Pending',
-    totalAmount:            data.totalAmount || 0,
-    status:                 data.status                 || 'Unpaid',
-    salesperson:            data.salesperson,
-    salespersonLocation:    data.salespersonLocation,
-    clientDealBy:           data.clientDealBy,
-    referralBy:             data.referralBy,
-    createdBy:              data.createdBy,
-    paymentMode:            data.paymentMode,
-    bankId:                 data.bankId,
-    bankName:               data.bankName,
-    bankAccountNumber:      data.bankAccountNumber,
-    chequeNumber:           data.chequeNumber,
-    chequeBank:             data.chequeBank,
-    chequeDate:             data.chequeDate,
-    paymentStatus:          data.paymentStatus,
-    paidAmount:             data.paidAmount,
-    remainingAmount:        data.remainingAmount,
-    collectionMethod:       data.collectionMethod,
-    branch:                 data.branch,
-    deductionCharges:       data.deductionCharges || 0,
-    deductionCurrency:      data.deductionCurrency      || 'AED',
-    cargoAmount:            data.cargoAmount            || 0,
-    cargoCurrency:          data.cargoCurrency          || 'AED',
-    customsAmount:          data.customsAmount          || 0,
-    customsCurrency:        data.customsCurrency        || 'AED',
-    agentDetails:           data.agentDetails           || '',
-    agentAmount:            data.agentAmount            || 0,
-    agentCurrency:          data.agentCurrency          || 'AED',
-    digitalStamp:           data.digitalStamp,
-    imageUrl:               data.imageUrl,
-    pdfUrl:                 data.pdfUrl,
-    paidBy:                 data.paidBy,
-    paidTo:                 data.paidTo,
-    productLocation:        data.productLocation,
-    selectedCurrencies:     data.selectedCurrencies,
-
-    // ✨ Liquidity linkage fields
-    originalLiquiditySource:  data.originalLiquiditySource,
-    originalLiquidityDocId:   data.originalLiquidityDocId,
-    originalLiquidityAmount:  data.originalLiquidityAmount,
-    remainingLiquidityAmount: data.remainingLiquidityAmount,
-    originalBankTxnId:        data.originalBankTxnId,
-
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-  } as Invoice;
+    id:            docSnap.id,
+    productId:     d.productId     || '',
+    brandName:     d.brandName     || '',
+    modelName:     d.modelName     || '',
+    serialNumber:  d.serialNumber  || '',
+    location:      d.location      || '',
+    reason:        d.reason        || '',
+    damagedAt:     d.damagedAt     || '',
+    damagedBy:     d.damagedBy     || '',
+  };
 }
 
-export class InvoiceFirebaseService {
+function transformDocToTransfer(docSnap: any): ProductTransfer {
+  const d = docSnap.data();
+  return {
+    id:             docSnap.id,
+    productId:      d.productId      || '',
+    productName:    d.productName    || '',
+    brandName:      d.brandName      || '',
+    modelName:      d.modelName      || '',
+    fromLocation:   d.fromLocation   || '',
+    toLocation:     d.toLocation     || '',
+    quantity:       d.quantity       ?? 0,
+    serialNumbers:  d.serialNumbers  || [],
+    date:           d.date           || '',
+    transferDate:   d.transferDate   || '',
+    status:         d.status         || 'Pending',
+    transferredBy:  d.transferredBy  || '',
+    note:           d.note           || '',
+    notes:          d.notes          || '',
+    receiptName:    d.receiptName    || undefined,
+    receiptType:    d.receiptType    || undefined,
+    receiptDataUrl: d.receiptDataUrl || undefined,
+    createdAt:      d.createdAt      || '',
+    receivedAt:     d.receivedAt     || undefined,
+  };
+}
 
-  // ── Generate unique invoice number (INV-DDMMYY-NNN) ──────────────────────
-  static async generateInvoiceNumber(): Promise<string> {
-    const now = new Date();
-    const dd  = String(now.getDate()).padStart(2, '0');
-    const mm  = String(now.getMonth() + 1).padStart(2, '0');
-    const yy  = String(now.getFullYear()).slice(-2);
-    const key = `${dd}${mm}${yy}`;
-    const ref = doc(db, COUNTER_COLLECTION, key);
+export interface BrandDoc  { id: string; name: string; createdAt?: string; }
+export interface ModelDoc  { id: string; name: string; brandId: string; costPrice?: number; sellPrice?: number; createdAt?: string; }
 
+function transformDocToBrand(docSnap: any): BrandDoc {
+  const d = docSnap.data();
+  return { id: docSnap.id, name: d.name || '', createdAt: d.createdAt || '' };
+}
+
+function transformDocToModel(docSnap: any): ModelDoc {
+  const d = docSnap.data();
+  return {
+    id:        docSnap.id,
+    name:      d.name      || '',
+    brandId:   d.brandId   || '',
+    costPrice: d.costPrice ?? undefined,
+    sellPrice: d.sellPrice ?? undefined,
+    createdAt: d.createdAt || '',
+  };
+}
+
+// ==================== PRODUCT SERVICE ====================
+
+export class InventoryFirebaseService {
+
+  static async fetchAllProducts(): Promise<Product[]> {
     try {
-      const snap = await getDoc(ref);
-      const next = snap.exists() ? (snap.data().count || 0) + 1 : 1;
-      await (snap.exists()
-        ? updateDoc(ref, { count: next })
-        : (await addDoc(collection(db, COUNTER_COLLECTION), {}),
-           updateDoc(ref, { count: next }))
-      );
-      return `INV-${key}-${String(next).padStart(3, '0')}`;
-    } catch {
-      return `INV-${key}-${String(Date.now()).slice(-3)}`;
+      console.log('🔥 Fetching all products...');
+      const q = query(collection(db, PRODUCTS_COLLECTION), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      const products: Product[] = [];
+      snapshot.forEach(d => {
+        const p = transformDocToProduct(d);
+        if ((d.data() as any).isDeleted) return; // skip soft-deleted
+        products.push(p);
+      });
+      console.log(`✅ Fetched ${products.length} products (soft-deleted excluded)`);
+      return products;
+    } catch (error) {
+      console.error('❌ Error fetching products:', error);
+      throw new Error('Failed to fetch products from Firestore');
     }
   }
 
-  // ── Subscribe to live invoice updates ────────────────────────────────────
-  static subscribeToInvoices(
-    onData:  (invoices: Invoice[]) => void,
-    onError: (error: Error) => void
-  ): () => void {
-    const q = query(collection(db, COLLECTION), orderBy('date', 'desc'));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const invoices = snapshot.docs.map(docToInvoice);
-        console.log(`[onSnapshot] ${invoices.length} invoices`);
-        onData(invoices);
-      },
-      (error) => {
-        console.error('[onSnapshot] Invoice listener error:', error);
-        onError(error);
+  static async fetchProductsByType(inventoryType: 'in-stock' | 'on-order'): Promise<Product[]> {
+    try {
+      console.log(`🔥 Fetching ${inventoryType} products...`);
+      const ref = collection(db, PRODUCTS_COLLECTION);
+      let snapshot;
+
+      if (inventoryType === 'on-order') {
+        const q = query(ref, where('receivableStatus', '==', 'Pending'));
+        snapshot = await getDocs(q);
+      } else {
+        const q = query(ref, orderBy('createdAt', 'desc'));
+        snapshot = await getDocs(q);
       }
-    );
-    return unsubscribe;
-  }
 
-  static async fetchAllInvoices(): Promise<Invoice[]> {
-    try {
-      const snapshot = await getDocs(collection(db, COLLECTION));
-      const invoices = snapshot.docs.map(docToInvoice);
-      invoices.sort((a, b) =>
-        new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
-      );
-      console.log(`✅ Fetched ${invoices.length} invoices`);
-      return invoices;
+      const products: Product[] = [];
+      snapshot.forEach(d => {
+        if ((d.data() as any).isDeleted) return; // skip soft-deleted
+        const p = transformDocToProduct(d);
+        if (inventoryType === 'in-stock' && p.receivableStatus === 'Pending') return;
+        products.push(p);
+      });
+
+      if (inventoryType === 'on-order') {
+        products.sort((a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+      }
+
+      console.log(`✅ Fetched ${products.length} ${inventoryType} products`);
+      return products;
     } catch (error) {
-      console.error('❌ Error fetching invoices:', error);
-      throw new Error('Failed to fetch invoices from Firestore');
+      console.error(`❌ Error fetching ${inventoryType} products:`, error);
+      throw new Error('Failed to fetch products from Firestore');
     }
   }
 
-  // ── Fetch single invoice ─────────────────────────────────────────────────
-  static async fetchInvoiceById(id: string): Promise<Invoice | null> {
+  static async fetchProductById(id: string): Promise<Product | null> {
     try {
-      const snap = await getDoc(doc(db, COLLECTION, id));
+      const snap = await getDoc(doc(db, PRODUCTS_COLLECTION, id));
       if (!snap.exists()) return null;
-      return docToInvoice(snap);
+      return transformDocToProduct(snap);
     } catch (error) {
-      console.error('❌ Error fetching invoice:', error);
-      throw new Error('Failed to fetch invoice from Firestore');
+      console.error(`❌ Error fetching product ${id}:`, error);
+      throw new Error('Failed to fetch product from Firestore');
     }
   }
 
-  // ── Create invoice (with liquidity linkage) ───────────────────────────────
-  static async createInvoice(dto: Omit<Invoice, 'id'>): Promise<Invoice> {
+  private static arraysEqual(a: string[], b: string[]) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  static async findDuplicateInventory(criteria: {
+    brandName: string;
+    modelName: string;
+    costPrice: number;
+    sellPrice: number;
+    location: string;
+    serialNumbers: string[];
+  }, ignoreId?: string) {
+    const products = await InventoryFirebaseService.fetchAllProducts();
+    const incomingSerials = criteria.serialNumbers
+      .map(s => s.trim())
+      .filter(s => s !== '');
+
+    if (incomingSerials.length > 0) {
+      const duplicates = new Set<string>();
+      for (const product of products) {
+        if (product.id === ignoreId) continue;
+        (product.serialNumbers || []).forEach(serial => {
+          if (incomingSerials.includes(serial)) duplicates.add(serial);
+        });
+      }
+      if (duplicates.size > 0) {
+        return { type: 'serial', serials: Array.from(duplicates) } as const;
+      }
+    }
+
+    const normalizedSerials = [...incomingSerials].sort();
+    const exactMatch = products.find(product => {
+      if (product.id === ignoreId) return false;
+      if (
+        product.brandName !== criteria.brandName ||
+        product.modelName !== criteria.modelName ||
+        product.costPrice !== criteria.costPrice ||
+        product.sellPrice !== criteria.sellPrice ||
+        product.location !== criteria.location
+      ) return false;
+      const existingSerials = (product.serialNumbers || []).map(s => s.trim()).filter(s => s !== '').sort();
+      return InventoryFirebaseService.arraysEqual(existingSerials, normalizedSerials);
+    });
+
+    if (exactMatch) {
+      return { type: 'product', existingProduct: exactMatch } as const;
+    }
+
+    return null;
+  }
+
+  static async createProduct(
+    dto: CreateProductDTO,
+    paymentInfo?: {
+      paymentStatus: 'paid' | 'unpaid' | 'partial';
+      transactionId?: string;
+      paidAmount?: number;
+      totalAmount?: number;
+    }
+  ): Promise<Product> {
     try {
+      console.log('🔥 Creating product:', dto.brandName, dto.modelName, '| costPrice:', dto.costPrice, '| description:', dto.description);
       const now = new Date().toISOString();
 
-      // ✨ Compute liquidity linkage fields based on payment mode
-      let liquidityFields: Record<string, any> = {};
+      const serialStatus: { [key: string]: SerialStatus } = {};
+      dto.serialNumbers.forEach(s => { serialStatus[s] = 'Available'; });
 
-      if (dto.paymentMode === 'Bank' || dto.paymentMode === 'Cheque') {
-        liquidityFields = {
-          originalLiquiditySource:  'bank',
-          originalLiquidityDocId:   dto.bankId,
-          originalLiquidityAmount:  dto.totalAmount || 0,
-          remainingLiquidityAmount: dto.totalAmount || 0,
-        };
-        console.log(`📌 Invoice will track Bank liquidity: ${dto.bankId} (${dto.bankName})`);
-      } else if (dto.paymentMode === 'Cash') {
-        liquidityFields = {
-          originalLiquiditySource:  'cash',
-          originalLiquidityDocId:   dto.productLocation || 'Head Office - Islamabad',
-          originalLiquidityAmount:  dto.totalAmount || 0,
-          remainingLiquidityAmount: dto.totalAmount || 0,
-        };
-        console.log(`📌 Invoice will track Cash liquidity from: ${liquidityFields.originalLiquidityDocId}`);
+      // Seed per-serial cities from product's primary location if not individually set
+      const serialCities = { ...dto.serialCities };
+      if (dto.location) {
+        dto.serialNumbers.forEach(s => {
+          if (!serialCities[s]) serialCities[s] = dto.location!;
+        });
       }
 
+      // Seed stock-in date for every serial at entry time
+      const now0 = new Date().toISOString();
+      const serialStockInDates = { ...(dto.serialStockInDates || {}) };
+      dto.serialNumbers.forEach(s => {
+        if (!serialStockInDates[s]) serialStockInDates[s] = now0;
+      });
+
+      let costingFields = {};
+      if (dto.costingOption === 'with' && dto.costing) {
+        const c = dto.costing;
+        costingFields = stripUndefined({
+          costingUsdRate:           c.usdRate,
+          costingTotalCustomsValue: c.totalCustomsValue,
+          costingTotalFreightValue: c.totalFreightValue,
+          costingShipmentTotalUSD:  c.shipmentTotalUSD,
+          costingConsignmentValue:  c.consignmentValue,
+          costingTotalValueOfBrand: c.totalValueOfBrand,
+          costingModelsJson:        JSON.stringify(c.models),
+          costing:                  c,
+        });
+      }
+
+      const remainingAmount = paymentInfo
+        ? (paymentInfo.totalAmount || 0) - (paymentInfo.paidAmount || 0)
+        : undefined;
+
+      const duplicateCheck = await InventoryFirebaseService.findDuplicateInventory({
+        brandName: dto.brandName,
+        modelName: dto.modelName,
+        costPrice: dto.costPrice ?? 0,
+        sellPrice: dto.sellPrice,
+        location: dto.location || '',
+        serialNumbers: dto.serialNumbers || [],
+      });
+
+      if (duplicateCheck) {
+        if (duplicateCheck.type === 'serial' && duplicateCheck.serials?.length > 0) {
+          throw new Error(`Duplicate serial number${duplicateCheck.serials.length > 1 ? 's' : ''}: ${duplicateCheck.serials.join(', ')}`);
+        }
+        throw new Error('Duplicate inventory already exists with the same product, price, location and serial numbers.');
+      }
+
+      // FIX 3 — costPrice and description are explicitly included so they are
+      // NEVER lost to stripUndefined or type mismatch.
       const data = stripUndefined({
-        ...dto,
-        ...liquidityFields,
+        brandName:     dto.brandName,
+        modelName:     dto.modelName,
+        category:      dto.category,
+        costPrice:     dto.costPrice ?? 0,   // FIX 3 — guaranteed non-undefined
+        sellPrice:     dto.sellPrice,
+        currency:      'AED',   // AED-first: marks this product as already-AED (no legacy PKR conversion on read)
+        buyType:       dto.buyType,
+        warrantyYears: dto.warrantyYears,
+        stock:         dto.stock,
+        location:      dto.location,
+        serialNumbers: dto.serialNumbers,
+        serialCities,
+        serialStatus,
+        serialStockInDates,
+        stockInDateIsManual: dto.stockInDateIsManual || false,
+        description:   dto.description ?? '', // FIX 1 — explicit, never dropped
+        status:        dto.status,
+        isDamaged:     dto.isDamaged,
+        costingOption: dto.costingOption,
+        imageUrls:     dto.imageUrls     || [],
+        ownershipType:           dto.ownershipType,
+        supplierCost:            dto.ownershipType === 'Credit' ? (dto.supplierCost ?? 0) : undefined,
+        supplierPaymentStatus:   dto.ownershipType === 'Credit' ? (dto.supplierPaymentStatus || 'Unpaid') : undefined,
+        supplierPaidAmount:      dto.supplierPaidAmount,
+        supplierPaymentChannel:  dto.supplierPaymentChannel,
+        billId:              dto.billId,
+        receivableStatus:    dto.receivableStatus,
+        expectedReceiveDate: dto.expectedReceiveDate,
+        paymentStatus:  paymentInfo?.paymentStatus,
+        transactionId:  paymentInfo?.transactionId,
+        paidAmount:     paymentInfo?.paidAmount,
+        totalAmount:    paymentInfo?.totalAmount,
+        remainingAmount,
+        ...costingFields,
         createdAt: now,
         updatedAt: now,
       });
 
-      const ref = await addDoc(collection(db, COLLECTION), data);
-      console.log('✅ Invoice created:', ref.id, 'with liquidity:', liquidityFields);
+      const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), data);
+      console.log('✅ Product created:', docRef.id);
+      const newDoc = await getDoc(docRef);
+      return transformDocToProduct(newDoc);
+    } catch (error) {
+      console.error('❌ Error creating product:', error);
+      // Re-throw duplicate errors with their original message intact so the
+      // ViewModel can detect them and show the user a specific dialog.
+      if (error instanceof Error && error.message.toLowerCase().includes('duplicate')) {
+        throw error;
+      }
+      throw new Error('Failed to create product in Firestore');
+    }
+  }
 
-      // Sync linked transaction so paid amount shows in Total Inflow + Transactions list.
-      const linkedTransactionId = await syncInvoiceTransaction(ref.id, dto);
-      if (linkedTransactionId) {
-        await updateDoc(ref, { linkedTransactionId });
+  // FIX 2 — updateProduct now builds an EXPLICIT field map instead of
+  // spreading the entire dto object. This prevents stray keys from
+  // ProductFormData (currentStep, paidAmount, paymentMethod, brandId, modelId)
+  // from leaking into the Firestore document, and ensures costPrice and
+  // description are always written even when they are 0 or empty string.
+  static async updateProduct(id: string, dto: UpdateProductDTO): Promise<Product> {
+    try {
+      console.log('🔥 Updating product:', id, '| costPrice:', dto.costPrice, '| description:', dto.description);
+      const now = new Date().toISOString();
+
+      let costingFields = {};
+      if (dto.costingOption === 'with' && dto.costing) {
+        const c = dto.costing;
+        costingFields = stripUndefined({
+          costingUsdRate:           c.usdRate,
+          costingTotalCustomsValue: c.totalCustomsValue,
+          costingTotalFreightValue: c.totalFreightValue,
+          costingShipmentTotalUSD:  c.shipmentTotalUSD,
+          costingConsignmentValue:  c.consignmentValue,
+          costingTotalValueOfBrand: c.totalValueOfBrand,
+          costingModelsJson:        JSON.stringify(c.models),
+          costing:                  c,
+        });
       }
 
-      return {
-        ...dto,
-        id: ref.id,
-        ...liquidityFields,
-        linkedTransactionId,
-        createdAt: now,
+      // Build the update payload with ONLY fields that belong in the products
+      // collection. This is the key fix — previously { ...dto } would spread
+      // whatever object was passed in (often a ProductFormData), which has
+      // extra keys that pollute Firestore and can cause silent type errors.
+      const updateData: Record<string, any> = {
         updatedAt: now,
+        // FIX 3 — costPrice explicitly mapped, guaranteed non-undefined
+        costPrice: dto.costPrice ?? 0,
+        // FIX 1 — description explicitly mapped, guaranteed non-null
+        description: dto.description ?? '',
       };
+
+      // Only include optional fields if they are present in the DTO
+      if (dto.brandName     !== undefined) updateData.brandName     = dto.brandName;
+      if (dto.modelName     !== undefined) updateData.modelName     = dto.modelName;
+      if (dto.category      !== undefined) updateData.category      = dto.category;
+      if (dto.sellPrice     !== undefined) updateData.sellPrice     = dto.sellPrice;
+      if (dto.buyType       !== undefined) updateData.buyType       = dto.buyType;
+      if (dto.warrantyYears !== undefined) updateData.warrantyYears = dto.warrantyYears;
+      if (dto.stock         !== undefined) updateData.stock         = dto.stock;
+      if (dto.location      !== undefined) updateData.location      = dto.location;
+      if (dto.serialNumbers !== undefined) updateData.serialNumbers = dto.serialNumbers;
+      if (dto.serialCities  !== undefined) updateData.serialCities  = dto.serialCities;
+      if (dto.serialStatus  !== undefined) updateData.serialStatus  = dto.serialStatus;
+      if (dto.status        !== undefined) updateData.status        = dto.status;
+      if (dto.isDamaged     !== undefined) updateData.isDamaged     = dto.isDamaged;
+      if (dto.costingOption !== undefined) updateData.costingOption = dto.costingOption;
+      if (dto.imageUrls     !== undefined) updateData.imageUrls     = dto.imageUrls;
+      if (dto.ownershipType           !== undefined) updateData.ownershipType           = dto.ownershipType;
+      if (dto.supplierCost            !== undefined) updateData.supplierCost            = dto.supplierCost;
+      if (dto.supplierPaymentStatus   !== undefined) updateData.supplierPaymentStatus   = dto.supplierPaymentStatus;
+      if (dto.supplierPaidAmount      !== undefined) updateData.supplierPaidAmount      = dto.supplierPaidAmount;
+      if (dto.supplierPaymentChannel  !== undefined) updateData.supplierPaymentChannel  = dto.supplierPaymentChannel;
+      if (dto.serialStockInDates      !== undefined) updateData.serialStockInDates      = dto.serialStockInDates;
+      if (dto.serialSoldDates         !== undefined) updateData.serialSoldDates         = dto.serialSoldDates;
+      if (dto.serialInvoiceNumbers    !== undefined) updateData.serialInvoiceNumbers    = dto.serialInvoiceNumbers;
+
+      // Merge costing flat fields if present
+      Object.assign(updateData, costingFields);
+
+      const ref = doc(db, PRODUCTS_COLLECTION, id);
+      await updateDoc(ref, updateData);
+      console.log('✅ Product updated:', id);
+      return transformDocToProduct(await getDoc(ref));
     } catch (error) {
-      console.error('❌ Error creating invoice:', error);
-      throw new Error('Failed to create invoice in Firestore');
+      console.error(`❌ Error updating product ${id}:`, error);
+      throw new Error('Failed to update product in Firestore');
     }
   }
 
-  // ── Update invoice ───────────────────────────────────────────────────────
-  static async updateInvoice(id: string, dto: Partial<Omit<Invoice, 'id'>>): Promise<void> {
+  static async receiveProduct(id: string): Promise<void> {
     try {
-      // Read the existing doc FIRST (before writing) — gives us prior
-      // linkedTransactionId, and lets us fill in any field `dto` doesn't
-      // include (handleSave always sends a full object, but this is also
-      // safe for true partial updates).
-      const beforeSnap = await getDoc(doc(db, COLLECTION, id));
-      const before = beforeSnap.exists() ? (beforeSnap.data() as any) : {};
-
-      const data = stripUndefined({ ...dto, updatedAt: new Date().toISOString() });
-      await updateDoc(doc(db, COLLECTION, id), data);
-      console.log('✅ Invoice updated:', id);
-
-      // ── Keep the linked transaction (and therefore Total Inflow on the
-      //    Dashboard) in sync with payment-relevant edits. Without this, an
-      //    edited paidAmount/totalAmount/bankId never reaches `transactions`
-      //    and the dashboard card silently goes stale.
-      // IMPORTANT: build the merged record from `before` + `dto` directly —
-      // do NOT re-fetch with getDoc after updateDoc. Firestore's SDK can
-      // resolve updateDoc before the local cache reflects it, so a
-      // post-write getDoc can return stale (pre-update) data, silently
-      // syncing the transaction to the OLD amount. Using before+dto avoids
-      // that race entirely.
-      const paymentFields = ['paidAmount', 'totalAmount', 'bankId', 'bankName',
-        'paymentMode', 'chequeNumber', 'chequeDate', 'chequeBank', 'invoiceNumber', 'customerName'];
-      const touchesPayment = paymentFields.some(f => f in dto);
-      console.log('🔍 touchesPayment:', touchesPayment, 'dto keys:', Object.keys(dto));
-
-      if (touchesPayment) {
-        const merged = { ...before, ...dto };
-        const linkedTransactionId = await syncInvoiceTransaction(id, merged, before.linkedTransactionId);
-        if (linkedTransactionId && linkedTransactionId !== before.linkedTransactionId) {
-          await updateDoc(doc(db, COLLECTION, id), { linkedTransactionId });
-        }
-      }
+      console.log(`🔥 Receiving product ${id}...`);
+      await updateDoc(doc(db, PRODUCTS_COLLECTION, id), {
+        receivableStatus: 'Received',
+        status:     'Available' as ProductStatus,
+        receivedAt: new Date().toISOString(),
+        updatedAt:  new Date().toISOString(),
+      });
+      console.log('✅ Product moved to inventory:', id);
     } catch (error) {
-      console.error('❌ Error updating invoice:', error);
-      throw new Error('Failed to update invoice in Firestore');
+      console.error(`❌ Error receiving product ${id}:`, error);
+      throw new Error('Failed to receive product in Firestore');
     }
   }
 
-  // ── Delete invoice ───────────────────────────────────────────────────────
-  static async deleteInvoice(id: string): Promise<void> {
+  /**
+   * Soft-delete: copies the product to `deleted_products` with deletedBy/deletedAt
+   * metadata, then removes it from the live `products` collection.
+   */
+  static async deleteProduct(
+    id: string,
+    deletedBy: { uid: string; email: string; displayName?: string }
+  ): Promise<void> {
     try {
-      try {
-        const snap = await getDoc(doc(db, COLLECTION, id));
-        const linkedTransactionId = snap.exists() ? (snap.data() as any).linkedTransactionId : undefined;
-        if (linkedTransactionId) {
-          await deleteDoc(doc(db, TRANSACTIONS_COLLECTION, linkedTransactionId));
-          console.log('✅ Linked transaction deleted:', linkedTransactionId);
-        }
-      } catch {
-        // Linked transaction may not exist — ignore
-      }
-      try {
-        const pdfRef = storageRef(storage, `${PDF_STORAGE_PATH}/${id}.pdf`);
-        await deleteObject(pdfRef);
-        console.log('✅ PDF deleted from Storage:', id);
-      } catch {
-        // PDF may not exist — ignore
-      }
-      await deleteDoc(doc(db, COLLECTION, id));
-      console.log('✅ Invoice deleted:', id);
+      console.log(`🔥 Soft-deleting product ${id} by ${deletedBy.email}...`);
+      const productRef  = doc(db, PRODUCTS_COLLECTION, id);
+      const productSnap = await getDoc(productRef);
+      if (!productSnap.exists()) throw new Error(`Product ${id} not found`);
+      const now = new Date().toISOString();
+      // Write archived copy to deleted_products collection
+      await addDoc(collection(db, DELETED_PRODUCTS_COLLECTION), {
+        ...productSnap.data(),
+        originalId:     id,
+        deletedAt:      now,
+        deletedBy:      deletedBy.uid,
+        deletedByEmail: deletedBy.email,
+        deletedByName:  deletedBy.displayName || deletedBy.email,
+      });
+      // Mark original as deleted — NOT removed from Firebase, just hidden from live views
+      await updateDoc(productRef, {
+        isDeleted:  true,
+        deletedAt:  now,
+        deletedBy:  deletedBy.uid,
+        deletedByEmail: deletedBy.email,
+        deletedByName:  deletedBy.displayName || deletedBy.email,
+        updatedAt:  now,
+      });
+      console.log(`✅ Product ${id} marked as deleted by ${deletedBy.email} — original preserved in Firebase`);
     } catch (error) {
-      console.error('❌ Error deleting invoice:', error);
-      throw new Error('Failed to delete invoice from Firestore');
+      console.error(`❌ Error soft-deleting product ${id}:`, error);
+      throw new Error('Failed to delete product');
     }
   }
 
-  // ── Upload PDF to Firebase Storage ──────────────────────────────────────
-  static async uploadInvoicePdf(invoiceId: string, pdfBlob: Blob): Promise<string> {
+  /** Fetch all soft-deleted products (for Deleted Inventory view) */
+  static async fetchDeletedProducts(): Promise<DeletedProduct[]> {
     try {
-      console.log('🔥 Uploading invoice PDF to Storage:', invoiceId);
-      const ref  = storageRef(storage, `${PDF_STORAGE_PATH}/${invoiceId}.pdf`);
-      const snap = await uploadBytes(ref, pdfBlob, { contentType: 'application/pdf' });
-      const url  = await getDownloadURL(snap.ref);
-      console.log('✅ PDF uploaded:', url);
-      return url;
-    } catch (error) {
-      console.error('❌ Error uploading PDF:', error);
-      throw new Error('Failed to upload PDF to Firebase Storage');
-    }
-  }
-
-  // ── Custom Delivery Statuses (persisted in Firestore) ────────────────────
-  static async fetchDeliveryStatuses(defaults: string[]): Promise<string[]> {
-    try {
-      const snap = await getDoc(doc(db, 'invoiceSettings', 'deliveryStatuses'));
-      if (snap.exists()) return snap.data().list as string[];
-    } catch (e) { console.warn('[InvoiceFirebase] fetchDeliveryStatuses:', e); }
-    return defaults;
-  }
-
-  static async addDeliveryStatus(name: string, current: string[]): Promise<string[]> {
-    const trimmed = name.trim();
-    if (!trimmed || current.includes(trimmed)) return current;
-    const updated = [...current, trimmed];
-    await updateDoc(doc(db, 'invoiceSettings', 'deliveryStatuses'), { list: updated })
-      .catch(async () => {
-        await addDoc(collection(db, 'invoiceSettings'), {}).catch(() => {});
-        const ref = doc(db, 'invoiceSettings', 'deliveryStatuses');
-        await updateDoc(ref, { list: updated }).catch(async () => {
-          const { setDoc } = await import('firebase/firestore');
-          await setDoc(ref, { list: updated });
+      const q = query(
+        collection(db, DELETED_PRODUCTS_COLLECTION),
+        orderBy('deletedAt', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      const results: DeletedProduct[] = [];
+      snapshot.forEach(d => {
+        const data = d.data() as any;
+        const fakeSnap = { id: data.originalId || d.id, data: () => data };
+        results.push({
+          ...transformDocToProduct(fakeSnap),
+          deletedAt:      data.deletedAt      || '',
+          deletedBy:      data.deletedBy      || '',
+          deletedByEmail: data.deletedByEmail || '',
+          deletedByName:  data.deletedByName  || '',
+          originalId:     data.originalId     || d.id,
+          _archiveId:     d.id,
         });
       });
-    return updated;
-  }
-
-  // ── Custom Collection Methods (persisted in Firestore) ────────────────────
-  static async fetchCollectionMethods(defaults: string[]): Promise<string[]> {
-    try {
-      const snap = await getDoc(doc(db, 'invoiceSettings', 'collectionMethods'));
-      if (snap.exists()) return snap.data().list as string[];
-    } catch (e) { console.warn('[InvoiceFirebase] fetchCollectionMethods:', e); }
-    return defaults;
-  }
-
-  static async addCollectionMethod(name: string, current: string[]): Promise<string[]> {
-    const trimmed = name.trim();
-    if (!trimmed || current.includes(trimmed)) return current;
-    const updated = [...current, trimmed];
-    const ref = doc(db, 'invoiceSettings', 'collectionMethods');
-    try {
-      await updateDoc(ref, { list: updated });
-    } catch {
-      const { setDoc } = await import('firebase/firestore');
-      await setDoc(ref, { list: updated });
+      console.log(`✅ Fetched ${results.length} deleted products`);
+      return results;
+    } catch (error) {
+      console.error('❌ Error fetching deleted products:', error);
+      throw new Error('Failed to fetch deleted products');
     }
-    return updated;
   }
 
-  // ── Save PDF URL back to Firestore invoice doc ───────────────────────────
-  static async savePdfUrl(invoiceId: string, pdfUrl: string): Promise<void> {
+  /**
+   * Find the live (non-deleted) product that currently holds the given serial number.
+   * Uses an array-contains query on `serialNumbers` — indexed, no full scan needed.
+   */
+  static async findProductBySerial(serial: string): Promise<Product | null> {
     try {
-      await updateDoc(doc(db, COLLECTION, invoiceId), {
-        pdfUrl,
+      const trimmed = serial.trim();
+      if (!trimmed) return null;
+      const q = query(collection(db, PRODUCTS_COLLECTION), where('serialNumbers', 'array-contains', trimmed));
+      const snap = await getDocs(q);
+      const match = snap.docs.find(d => !(d.data() as any).isDeleted);
+      if (!match) return null;
+      return transformDocToProduct(match);
+    } catch (error) {
+      console.error(`❌ Error finding product by serial ${serial}:`, error);
+      throw new Error('Failed to search for serial number');
+    }
+  }
+
+  /**
+   * Return-to-stock flow (non-damaged return): keeps the same serial number,
+   * marks it Available again with a fresh stock-in date, and — per business
+   * rule — flips the product's ownership from Credit to Owned since a
+   * returned unit is no longer tied to the original supplier credit terms.
+   */
+  static async returnSerialToStock(productId: string, serial: string): Promise<void> {
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Product not found');
+      const d = snap.data() as any;
+      const now = new Date().toISOString();
+
+      const serialStatus: Record<string, string> = { ...(d.serialStatus || {}), [serial]: 'Available' };
+      const serialStockInDates: Record<string, string> = { ...(d.serialStockInDates || {}), [serial]: now };
+      const serialSoldDates: Record<string, string> = { ...(d.serialSoldDates || {}) };
+      delete serialSoldDates[serial];
+      const serialInvoiceNumbers: Record<string, string> = { ...(d.serialInvoiceNumbers || {}) };
+      delete serialInvoiceNumbers[serial]; // linked invoice is deleted as part of this return — clear the stale link
+
+      const serialNumbers: string[] = (d.serialNumbers || []).includes(serial)
+        ? d.serialNumbers
+        : [...(d.serialNumbers || []), serial];
+
+      await updateDoc(ref, stripUndefined({
+        serialNumbers,
+        serialStatus,
+        serialStockInDates,
+        serialSoldDates,
+        serialInvoiceNumbers,
+        stock: serialNumbers.length,
+        ownershipType: d.ownershipType === 'Credit' ? 'Owned' : d.ownershipType,
+        updatedAt: now,
+      }));
+      console.log(`✅ Serial ${serial} returned to stock on product ${productId}`);
+    } catch (error) {
+      console.error(`❌ Error returning serial ${serial}:`, error);
+      throw new Error('Failed to return serial to stock');
+    }
+  }
+
+  /**
+   * Damaged-return flow: removes the serial entirely from the live product
+   * and archives it in the `damaged_products` collection.
+   */
+  static async moveSerialToDamaged(
+    productId: string,
+    serial: string,
+    damagedBy?: { uid: string; email: string },
+    reason?: string
+  ): Promise<void> {
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Product not found');
+      const d = snap.data() as any;
+      const now = new Date().toISOString();
+
+      const serialNumbers: string[] = (d.serialNumbers || []).filter((s: string) => s !== serial);
+      const serialStatus  = { ...(d.serialStatus || {}) };  delete serialStatus[serial];
+      const serialCities  = { ...(d.serialCities || {}) };
+      const location      = serialCities[serial] || d.location || '';
+      delete serialCities[serial];
+      const serialStockInDates = { ...(d.serialStockInDates || {}) }; delete serialStockInDates[serial];
+      const serialInvoiceNumbers = { ...(d.serialInvoiceNumbers || {}) }; delete serialInvoiceNumbers[serial];
+
+      await addDoc(collection(db, DAMAGED_PRODUCTS_COLLECTION), stripUndefined({
+        productId,
+        brandName: d.brandName || '',
+        modelName: d.modelName || '',
+        serialNumber: serial,
+        location,
+        reason,
+        damagedAt: now,
+        damagedBy: damagedBy?.email || '',
+      }));
+
+      await updateDoc(ref, stripUndefined({
+        serialNumbers,
+        serialStatus,
+        serialCities,
+        serialStockInDates,
+        serialInvoiceNumbers,
+        stock: serialNumbers.length,
+        updatedAt: now,
+      }));
+      console.log(`✅ Serial ${serial} moved to damaged inventory from product ${productId}`);
+    } catch (error) {
+      console.error(`❌ Error moving serial ${serial} to damaged:`, error);
+      throw new Error('Failed to move serial to damaged inventory');
+    }
+  }
+
+  static async fetchDamagedProducts(): Promise<DamagedProduct[]> {
+    try {
+      const q = query(collection(db, DAMAGED_PRODUCTS_COLLECTION), orderBy('damagedAt', 'desc'));
+      const snap = await getDocs(q);
+      const results: DamagedProduct[] = [];
+      snap.forEach(d => results.push(transformDocToDamaged(d)));
+      return results;
+    } catch (error) {
+      console.error('❌ Error fetching damaged products:', error);
+      throw new Error('Failed to fetch damaged inventory');
+    }
+  }
+
+  /**
+   * Flattens all live products into one row per serial number for the
+   * Inventory Report. Falls back to the product's own status when a serial
+   * has no explicit serialStatus entry.
+   */
+  static async fetchInventoryReportRows(): Promise<InventoryReportRow[]> {
+    const products = await InventoryFirebaseService.fetchAllProducts();
+    const rows: InventoryReportRow[] = [];
+    for (const p of products) {
+      const serials = p.serialNumbers && p.serialNumbers.length > 0 ? p.serialNumbers : [''];
+      for (const serial of serials) {
+        rows.push({
+          productId: p.id,
+          brandName: p.brandName,
+          modelName: p.modelName,
+          serialNumber: serial,
+          stockInDate: (serial && p.serialStockInDates?.[serial]) || p.createdAt || '',
+          stockInDateIsManual: p.stockInDateIsManual || false,
+          location: (serial && p.serialCities?.[serial]) || p.location || '',
+          ownershipType: p.ownershipType || '',
+          currentStatus: (serial && p.serialStatus?.[serial]) || p.status,
+          soldDate: serial ? p.serialSoldDates?.[serial] : undefined,
+          invoiceNumber: serial ? p.serialInvoiceNumbers?.[serial] : undefined,
+          supplierCost: p.ownershipType === 'Credit' ? p.supplierCost : undefined,
+          supplierPaymentStatus: p.ownershipType === 'Credit' ? p.supplierPaymentStatus : undefined,
+          supplierPaidAmount: p.ownershipType === 'Credit' ? p.supplierPaidAmount : undefined,
+          supplierRemainingAmount:
+            p.ownershipType === 'Credit' && p.supplierCost !== undefined
+              ? Math.max(0, (p.supplierCost || 0) - (p.supplierPaidAmount || 0))
+              : undefined,
+          supplierPaymentChannel: p.ownershipType === 'Credit' ? p.supplierPaymentChannel : undefined,
+        });
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Inventory Payables: all supplier-credit products with an outstanding
+   * balance. Includes stock still on shelf (not yet due) and stock that has
+   * fully sold out (stock === 0, due now) — the view distinguishes the two.
+   */
+  static async fetchPayableProducts(): Promise<Product[]> {
+    const products = await InventoryFirebaseService.fetchAllProducts();
+    return products.filter(p =>
+      p.ownershipType === 'Credit' &&
+      p.supplierPaymentStatus !== 'Cleared'
+    );
+  }
+
+  /**
+   * Record a payment made toward a supplier-credit product's purchase cost.
+   * Recomputes supplierPaymentStatus from the new paid total automatically.
+   */
+  static async recordSupplierPayment(
+    productId: string,
+    amount: number,
+    channel: 'Cash' | 'Bank'
+  ): Promise<void> {
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error('Product not found');
+      const d = snap.data() as any;
+
+      const supplierCost      = d.supplierCost ?? 0;
+      const previouslyPaid    = d.supplierPaidAmount ?? 0;
+      const newPaidAmount     = Math.min(supplierCost, previouslyPaid + amount);
+      const supplierPaymentStatus =
+        newPaidAmount >= supplierCost ? 'Cleared' :
+        newPaidAmount > 0             ? 'Partial'  : 'Unpaid';
+
+      await updateDoc(ref, {
+        supplierPaidAmount:     newPaidAmount,
+        supplierPaymentStatus,
+        supplierPaymentChannel: channel,
         updatedAt: new Date().toISOString(),
       });
-      console.log('✅ PDF URL saved to Firestore:', invoiceId);
+      console.log(`✅ Recorded supplier payment of ${amount} on product ${productId} (status: ${supplierPaymentStatus})`);
     } catch (error) {
-      console.error('❌ Error saving PDF URL:', error);
-      throw new Error('Failed to save PDF URL to Firestore');
+      console.error(`❌ Error recording supplier payment on ${productId}:`, error);
+      throw new Error('Failed to record supplier payment');
     }
   }
 
-  // ── ONE-TIME MIGRATION: Backfill existing invoices with liquidity fields ──
-  static async backfillInvoiceLiquidity(): Promise<void> {
+  static isConnected(): boolean { return !!db; }
+}
+
+// ==================== TRANSFER SERVICE ====================
+
+export class TransferFirebaseService {
+
+  static async fetchAllTransfers(): Promise<ProductTransfer[]> {
     try {
-      console.log('🔄 Starting invoice liquidity backfill...');
-      const invoices = await this.fetchAllInvoices();
-      let updated = 0;
+      const q = query(collection(db, TRANSFERS_COLLECTION), orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      const transfers: ProductTransfer[] = [];
+      snapshot.forEach(d => transfers.push(transformDocToTransfer(d)));
+      console.log(`✅ Fetched ${transfers.length} transfers`);
+      return transfers;
+    } catch (error) {
+      console.error('❌ Error fetching transfers:', error);
+      throw new Error('Failed to fetch transfers from Firestore');
+    }
+  }
 
-      for (const inv of invoices) {
-        if (inv.originalLiquiditySource) continue; // already backfilled
+  static async fetchTransferById(id: string): Promise<ProductTransfer | null> {
+    try {
+      const snap = await getDoc(doc(db, TRANSFERS_COLLECTION, id));
+      if (!snap.exists()) return null;
+      return transformDocToTransfer(snap);
+    } catch (error) {
+      throw new Error('Failed to fetch transfer from Firestore');
+    }
+  }
 
-        let liquidityFields: Record<string, any> = {};
+  static async createTransfer(dto: CreateTransferDTO & {
+    productName: string;
+    brandName?: string;
+    modelName?: string;
+    transferredBy?: string;
+    note?: string;
+    receiptName?: string;
+    receiptType?: string;
+    receiptDataUrl?: string;
+  }): Promise<ProductTransfer> {
+    try {
+      const now = new Date().toISOString();
+      const data = stripUndefined({
+        productId:      dto.productId,
+        productName:    dto.productName,
+        brandName:      dto.brandName,
+        modelName:      dto.modelName,
+        fromLocation:   dto.fromLocation,
+        toLocation:     dto.toLocation,
+        quantity:       dto.quantity,
+        serialNumbers:  dto.serialNumbers,
+        date:           dto.transferDate,
+        transferDate:   dto.transferDate,
+        status:         'In Transit' as const,
+        transferredBy:  dto.transferredBy,
+        note:           dto.note,
+        notes:          dto.notes,
+        receiptName:    dto.receiptName,
+        receiptType:    dto.receiptType,
+        receiptDataUrl: dto.receiptDataUrl,
+        createdAt:      now,
+      });
+      const docRef = await addDoc(collection(db, TRANSFERS_COLLECTION), data);
+      console.log('✅ Transfer created:', docRef.id);
+      return transformDocToTransfer(await getDoc(docRef));
+    } catch (error) {
+      console.error('❌ Error creating transfer:', error);
+      throw new Error('Failed to create transfer in Firestore');
+    }
+  }
 
-        if (inv.paymentMode === 'Bank' || inv.paymentMode === 'Cheque') {
-          liquidityFields = {
-            originalLiquiditySource:  'bank',
-            originalLiquidityDocId:   inv.bankId || 'unknown',
-            originalLiquidityAmount:  inv.totalAmount,
-            remainingLiquidityAmount: Math.max(0, inv.totalAmount - (inv.paidAmount || 0)),
-          };
-        } else if (inv.paymentMode === 'Cash') {
-          liquidityFields = {
-            originalLiquiditySource:  'cash',
-            originalLiquidityDocId:   inv.productLocation || 'Head Office - Islamabad',
-            originalLiquidityAmount:  inv.totalAmount,
-            remainingLiquidityAmount: Math.max(0, inv.totalAmount - (inv.paidAmount || 0)),
-          };
-        }
+  static async updateTransferStatus(id: string, status: ProductTransfer['status'], receivedAt?: string): Promise<void> {
+    try {
+      await updateDoc(doc(db, TRANSFERS_COLLECTION, id),
+        stripUndefined({ status, receivedAt, updatedAt: new Date().toISOString() })
+      );
+      console.log('✅ Transfer status updated:', id, status);
+    } catch (error) {
+      throw new Error('Failed to update transfer status in Firestore');
+    }
+  }
 
-        if (Object.keys(liquidityFields).length > 0) {
-          await this.updateInvoice(inv.id, liquidityFields);
-          updated++;
-          console.log(`  ✅ Updated invoice ${inv.invoiceNumber} (${inv.id})`);
+  static async deleteTransfer(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, TRANSFERS_COLLECTION, id));
+      console.log('✅ Transfer deleted:', id);
+    } catch (error) {
+      throw new Error('Failed to delete transfer from Firestore');
+    }
+  }
+}
+
+// ==================== BRAND / MODEL SERVICE ====================
+
+export class BrandModelFirebaseService {
+
+  static async fetchAllBrands(): Promise<BrandDoc[]> {
+    try {
+      const q = query(collection(db, BRANDS_COLLECTION), orderBy('name', 'asc'));
+      const snapshot = await getDocs(q);
+      const brands: BrandDoc[] = [];
+      snapshot.forEach(d => brands.push(transformDocToBrand(d)));
+      console.log(`✅ Fetched ${brands.length} brands`);
+      return brands;
+    } catch (error) {
+      console.error('❌ Error fetching brands:', error);
+      throw new Error('Failed to fetch brands from Firestore');
+    }
+  }
+
+  static async fetchModelsByBrand(brandId: string): Promise<ModelDoc[]> {
+    try {
+      const q = query(collection(db, MODELS_COLLECTION), where('brandId', '==', brandId));
+      const snapshot = await getDocs(q);
+      const models: ModelDoc[] = [];
+      snapshot.forEach(d => models.push(transformDocToModel(d)));
+      models.sort((a, b) => a.name.localeCompare(b.name));
+      console.log(`✅ Fetched ${models.length} models for brand ${brandId}`);
+      return models;
+    } catch (error) {
+      console.error(`❌ Error fetching models for brand ${brandId}:`, error);
+      throw new Error('Failed to fetch models from Firestore');
+    }
+  }
+
+  static async createBrand(name: string): Promise<BrandDoc> {
+    try {
+      const now = new Date().toISOString();
+      const docRef = await addDoc(collection(db, BRANDS_COLLECTION), { name, createdAt: now });
+      console.log('✅ Brand created:', docRef.id);
+      return { id: docRef.id, name, createdAt: now };
+    } catch (error) {
+      console.error('❌ Error creating brand:', error);
+      throw new Error('Failed to create brand in Firestore');
+    }
+  }
+
+  static async createModel(brandId: string, name: string, costPrice?: number, sellPrice?: number): Promise<ModelDoc> {
+    try {
+      const now = new Date().toISOString();
+      const data = stripUndefined({ name, brandId, costPrice, sellPrice, createdAt: now });
+      const docRef = await addDoc(collection(db, MODELS_COLLECTION), data);
+      console.log('✅ Model created:', docRef.id);
+      return { id: docRef.id, name, brandId, costPrice, sellPrice, createdAt: now };
+    } catch (error) {
+      console.error('❌ Error creating model:', error);
+      throw new Error('Failed to create model in Firestore');
+    }
+  }
+
+  static async saveCostingBrandAndModels(
+    brandName: string,
+    models: Array<{ modelName: string; costPrice?: number }>
+  ): Promise<{ brandId: string; modelIds: string[] }> {
+    try {
+      console.log('🔥 Saving costing brand/models to Firestore:', brandName);
+      const bq = query(collection(db, BRANDS_COLLECTION), where('name', '==', brandName));
+      const bSnap = await getDocs(bq);
+      let brandId: string;
+      if (!bSnap.empty) {
+        brandId = bSnap.docs[0].id;
+      } else {
+        const b = await BrandModelFirebaseService.createBrand(brandName);
+        brandId = b.id;
+      }
+
+      const modelIds: string[] = [];
+      for (const m of models) {
+        if (!m.modelName.trim()) continue;
+        const mq = query(
+          collection(db, MODELS_COLLECTION),
+          where('brandId', '==', brandId),
+          where('name', '==', m.modelName)
+        );
+        const mSnap = await getDocs(mq);
+        if (!mSnap.empty) {
+          modelIds.push(mSnap.docs[0].id);
+        } else {
+          const created = await BrandModelFirebaseService.createModel(brandId, m.modelName, m.costPrice);
+          modelIds.push(created.id);
         }
       }
 
-      console.log(`🎉 Backfill complete: ${updated} invoices updated`);
+      console.log(`✅ Brand ${brandId} saved with ${modelIds.length} models`);
+      return { brandId, modelIds };
     } catch (error) {
-      console.error('❌ Error during liquidity backfill:', error);
-      throw new Error('Failed to backfill invoice liquidity');
+      console.error('❌ Error saving costing brand/models:', error);
+      throw new Error('Failed to save brand and models to Firestore');
     }
   }
+  
+  /**
+   * Fetch models for a given brand name.
+   * Looks up the brand by name first, then queries brandModels by brandId.
+   * Returns [] gracefully if brand not found — no crash.
+   */
+  static async fetchModelsByBrandName(
+    brandName: string
+  ): Promise<Array<{ id: string; modelName: string; costPrice?: number; sellPrice?: number }>> {
+    try {
+      if (!brandName.trim()) return [];
+
+      // 1. Find brand document by name
+      const bq    = query(collection(db, BRANDS_COLLECTION), where('name', '==', brandName.trim()));
+      const bSnap = await getDocs(bq);
+      if (bSnap.empty) return [];
+
+      const brandId = bSnap.docs[0].id;
+
+      // 2. Fetch all models for that brandId from the flat brandModels collection
+      const mq    = query(collection(db, MODELS_COLLECTION), where('brandId', '==', brandId));
+      const mSnap = await getDocs(mq);
+
+      const models: Array<{ id: string; modelName: string; costPrice?: number; sellPrice?: number }> = [];
+      mSnap.forEach(d => {
+        const data = d.data() as any;
+        models.push({
+          id:        d.id,
+          modelName: data.name || '',
+          costPrice: data.costPrice ?? undefined,
+          sellPrice: data.sellPrice ?? undefined,
+        });
+      });
+
+      models.sort((a, b) => a.modelName.localeCompare(b.modelName));
+      console.log(`✅ fetchModelsByBrandName: ${models.length} models for "${brandName}"`);
+      return models;
+    } catch (error) {
+      console.error(`❌ fetchModelsByBrandName error for "${brandName}":`, error);
+      return []; // fail gracefully — don't crash the page
+    }
+  }
+
+  static async generateTransactionId(): Promise<string> {
+  const now      = new Date();
+  const dd       = String(now.getDate()).padStart(2, '0');
+  const mm       = String(now.getMonth() + 1).padStart(2, '0');
+  const yy       = String(now.getFullYear()).slice(-2);
+  const datePart = `${dd}${mm}${yy}`;                         // e.g. "220426"
+ 
+  const counterRef = doc(db, 'counters', `inventory_txn_${datePart}`);
+ 
+  const nextCount = await runTransaction(db, async (txn) => {
+    const snap    = await txn.get(counterRef);
+    const current = snap.exists() ? (snap.data().count as number) : 0;
+    const next    = current + 1;
+    txn.set(counterRef, { count: next, date: datePart }, { merge: true });
+    return next;
+  });
+ 
+  const counter = String(nextCount).padStart(3, '0');          // "001", "002", ...
+  return `TXN-${datePart}-${counter}`;                         // "TXN-220426-001"
+}
+ 
 }

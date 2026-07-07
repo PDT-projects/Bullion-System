@@ -756,8 +756,9 @@ export class InventoryFirebaseService {
       const serialStockInDates: Record<string, string> = { ...(d.serialStockInDates || {}), [serial]: now };
       const serialSoldDates: Record<string, string> = { ...(d.serialSoldDates || {}) };
       delete serialSoldDates[serial];
+      const serialInvoiceNumbers: Record<string, string> = { ...(d.serialInvoiceNumbers || {}) };
+      delete serialInvoiceNumbers[serial]; // linked invoice is deleted as part of this return — clear the stale link
 
-      const wasNotInStock = !(d.serialNumbers || []).includes(serial) || d.status === 'Sold';
       const serialNumbers: string[] = (d.serialNumbers || []).includes(serial)
         ? d.serialNumbers
         : [...(d.serialNumbers || []), serial];
@@ -767,7 +768,8 @@ export class InventoryFirebaseService {
         serialStatus,
         serialStockInDates,
         serialSoldDates,
-        stock: wasNotInStock ? (d.stock || 0) + 1 : d.stock,
+        serialInvoiceNumbers,
+        stock: serialNumbers.length,
         ownershipType: d.ownershipType === 'Credit' ? 'Owned' : d.ownershipType,
         updatedAt: now,
       }));
@@ -801,6 +803,7 @@ export class InventoryFirebaseService {
       const location      = serialCities[serial] || d.location || '';
       delete serialCities[serial];
       const serialStockInDates = { ...(d.serialStockInDates || {}) }; delete serialStockInDates[serial];
+      const serialInvoiceNumbers = { ...(d.serialInvoiceNumbers || {}) }; delete serialInvoiceNumbers[serial];
 
       await addDoc(collection(db, DAMAGED_PRODUCTS_COLLECTION), stripUndefined({
         productId,
@@ -818,7 +821,8 @@ export class InventoryFirebaseService {
         serialStatus,
         serialCities,
         serialStockInDates,
-        stock: Math.max(0, (d.stock || 0) - 1),
+        serialInvoiceNumbers,
+        stock: serialNumbers.length,
         updatedAt: now,
       }));
       console.log(`✅ Serial ${serial} moved to damaged inventory from product ${productId}`);
@@ -1180,5 +1184,6 @@ export class BrandModelFirebaseService {
   const counter = String(nextCount).padStart(3, '0');          // "001", "002", ...
   return `TXN-${datePart}-${counter}`;                         // "TXN-220426-001"
 }
- 
+
+
 }

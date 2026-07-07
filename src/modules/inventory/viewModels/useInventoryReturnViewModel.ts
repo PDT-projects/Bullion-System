@@ -29,7 +29,7 @@ export interface UseInventoryReturnViewModelReturn {
   linkedInvoice: Invoice | null;
   notFound: boolean;
   handleSearch: () => void;
-  selectInvoiceSerial: (serial: string) => void;
+  selectInvoiceSerial: (serial: string, productId?: string) => void;
   isDamaged: boolean;
   damageReason: string;
   setDamageReason: (v: string) => void;
@@ -72,7 +72,7 @@ export function useInventoryReturnViewModel(): UseInventoryReturnViewModelReturn
     if (isDamaged) loadDamagedRecords();
   }, [step, isDamaged, loadDamagedRecords]);
 
-  const runSearch = useCallback(async (serial: string) => {
+  const runSearch = useCallback(async (serial: string, productId?: string) => {
     const trimmed = serial.trim();
     if (!trimmed) { toast.error('Enter a serial number to search'); return; }
     setIsSearching(true);
@@ -80,7 +80,12 @@ export function useInventoryReturnViewModel(): UseInventoryReturnViewModelReturn
     setFoundProduct(null);
     setLinkedInvoice(null);
     try {
-      const product = await InventoryFirebaseService.findProductBySerial(trimmed);
+      // Sold serials are removed from the product's live serialNumbers array,
+      // so an array-contains lookup won't find them. When we already know the
+      // productId (e.g. clicked from Recent Invoices), fetch it directly instead.
+      const product = productId
+        ? await InventoryFirebaseService.fetchProductById(productId)
+        : await InventoryFirebaseService.findProductBySerial(trimmed);
       if (!product) {
         setNotFound(true);
       } else {
@@ -102,10 +107,12 @@ export function useInventoryReturnViewModel(): UseInventoryReturnViewModelReturn
 
   const handleSearch = useCallback(() => runSearch(serialInput), [runSearch, serialInput]);
 
-  /** Click a serial chip inside a Recent Invoice row — fills + runs search immediately. */
-  const selectInvoiceSerial = useCallback((serial: string) => {
+  /** Click a serial chip inside a Recent Invoice row — fills + runs search immediately.
+   *  productId comes from the invoice line item so the product is fetched directly
+   *  (works even though the sold serial is no longer in the product's live serialNumbers array). */
+  const selectInvoiceSerial = useCallback((serial: string, productId?: string) => {
     setSerialInput(serial);
-    runSearch(serial);
+    runSearch(serial, productId);
   }, [runSearch]);
 
   const chooseCondition = useCallback((damaged: boolean) => {
@@ -135,7 +142,6 @@ export function useInventoryReturnViewModel(): UseInventoryReturnViewModelReturn
   const handleSubmit = useCallback(async () => {
     if (!foundProduct) return;
     const serial = serialInput.trim();
-    const invoiceNumber = foundProduct.serialInvoiceNumbers?.[serial];
     const deletedBy = user ? { uid: user.uid, email: user.email || '' } : undefined;
     setIsSubmitting(true);
     try {
@@ -150,12 +156,18 @@ export function useInventoryReturnViewModel(): UseInventoryReturnViewModelReturn
       }
 
       // Both branches: linked invoice (if any) moves to Deleted Invoices.
-      if (invoiceNumber) {
+      // Use the already-loaded linkedInvoice object directly (delete by doc id) —
+      // this is the invoice actually shown on screen, so it's the reliable source.
+      console.log('[InventoryReturn] linkedInvoice at submit time:', linkedInvoice);
+      if (linkedInvoice) {
         try {
-          await InvoiceLifecycleService.deleteInvoiceBySerialReturn(invoiceNumber, serial, deletedBy);
-        } catch {
-          // non-blocking — inventory action already succeeded
+          await InvoiceLifecycleService.deleteInvoiceByReturn(linkedInvoice, serial, deletedBy);
+        } catch (err) {
+          console.error('[InventoryReturn] Failed to move linked invoice to Deleted Invoices:', err);
+          toast.error(`Serial processed, but linked invoice ${linkedInvoice.invoiceNumber} could not be moved to Deleted Invoices — please delete it manually`);
         }
+      } else {
+        console.log('[InventoryReturn] No linkedInvoice was loaded for this serial — nothing to delete.');
       }
 
       if (isDamaged) {
@@ -171,7 +183,7 @@ export function useInventoryReturnViewModel(): UseInventoryReturnViewModelReturn
     } finally {
       setIsSubmitting(false);
     }
-  }, [foundProduct, serialInput, isDamaged, damageReason, user, navigate, reset, loadDamagedRecords]);
+  }, [foundProduct, serialInput, linkedInvoice, isDamaged, damageReason, user, navigate, reset, loadDamagedRecords]);
 
   const onBack = useCallback(() => navigate('/inventory'), [navigate]);
 
