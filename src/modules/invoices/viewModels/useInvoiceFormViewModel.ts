@@ -679,23 +679,31 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         catch { toast.error('Invoice updated but PDF download failed'); }
         generateAndSavePdf(saved);
       } else {
-        // Deduct inventory serials
+        // Deduct inventory serials — keep the serial in the array but mark it
+        // Sold (was previously deleted entirely, which broke the "Add Returned
+        // Inventory" lookup since it queries array-contains on serialNumbers).
+        const invoiceNumberForLink = formData.invoiceNumber!;
+        const soldNow = new Date().toISOString();
         for (const ip of selectedProducts) {
           if (!ip.productId || !ip.serialNumbers?.length) continue;
           try {
             const product = await InventoryFirebaseService.fetchProductById(ip.productId);
             if (!product) continue;
-            const soldSerials = ip.serialNumbers.filter(s => s.trim() !== '');
-            const remaining   = (product.serialNumbers || []).filter(s => !soldSerials.includes(s));
-            const newCities   = { ...product.serialCities };
-            const newStatus   = { ...product.serialStatus };
-            soldSerials.forEach(s => { delete newCities[s]; delete newStatus[s]; });
-            await InventoryFirebaseService.updateProduct(ip.productId, {
-              stock:         Math.max(0, product.stock - ip.quantity),
-              serialNumbers: remaining,
-              serialCities:  newCities,
-              serialStatus:  newStatus as any,
+            const soldSerials  = ip.serialNumbers.filter(s => s.trim() !== '');
+            const newStatus    = { ...product.serialStatus };
+            const newSoldDates = { ...(product as any).serialSoldDates };
+            const newInvoiceNos = { ...(product as any).serialInvoiceNumbers };
+            soldSerials.forEach(s => {
+              newStatus[s] = 'Sold';
+              newSoldDates[s] = soldNow;
+              newInvoiceNos[s] = invoiceNumberForLink;
             });
+            await InventoryFirebaseService.updateProduct(ip.productId, {
+              stock:                Math.max(0, product.stock - ip.quantity),
+              serialStatus:         newStatus as any,
+              serialSoldDates:      newSoldDates,
+              serialInvoiceNumbers: newInvoiceNos,
+            } as any);
           } catch (err) {
             console.error('Inventory update failed for', ip.productId, err);
           }
