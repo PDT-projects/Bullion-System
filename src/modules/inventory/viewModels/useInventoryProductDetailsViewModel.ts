@@ -3,6 +3,7 @@
 // Change: `location` field added to formData, passed through URL to payment step.
 // With costing: location applies to the whole shipment (shared across models).
 // Without costing: location is a required field for the single product.
+// Change: `stockInDateManual` field added to formData, passed through URL to payment step.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -32,7 +33,7 @@ export interface SelectedModel {
 }
 
 export interface UseInventoryProductDetailsViewModelReturn {
-  singleModel: { brandId?: string; modelId?: string; brandName: string; modelName: string; costPrice: number; sellPrice: number; quantity: number };
+  singleModel: { brandId?: string; modelId?: string; brandName: string; modelName: string; costPrice:number; sellPrice: number; quantity: number };
   setSingleModelField: (field: string, value: string | number) => void;
   formData: ProductFormData;
   costingOption: CostingOption;
@@ -53,6 +54,7 @@ export interface UseInventoryProductDetailsViewModelReturn {
   setWarrantyYears: (v: number) => void;
   setStock: (v: number) => void;
   setLocation: (v: string) => void;           // ← new
+  setStockInDateManual: (v: string) => void;  // ← new: manual stock-in date override
   setDescription: (v: string) => void;
   setStatus: (v: ProductStatus) => void;
   setIsDamaged: (v: boolean) => void;
@@ -141,6 +143,7 @@ const [singleModel, setSingleModel] = useState({
     warrantyYears: 0,
     stock:         0,
     location:      '',             // ← new
+    stockInDateManual: '',         // ← new: manual stock-in date override
     description:   '',
     status:        'New',
     isDamaged:     false,
@@ -210,11 +213,12 @@ const [singleModel, setSingleModel] = useState({
   const setCostPrice     = useCallback((v: number)        => setFormData(p => ({ ...p, costPrice: v })), []); // ← FIX: was missing entirely
   const setSellPrice     = useCallback((v: number)        => setFormData(p => ({ ...p, sellPrice: v })), []);
   const setBuyType       = useCallback((v: BuyType)       => setFormData(p => ({ ...p, buyType: v })), []);
-  const setWarrantyYears = useCallback((v: number)        => setFormData(p => ({ ...p, warrantyYears: v })), []);
+  const setWarrantyYears = useCallback((v: number)        => setFormData(p => ({ ...p, warrantyYears:v })), []);
   const setStock         = useCallback((v: number)        => handleStockChange(v), [handleStockChange]);
   const setLocation      = useCallback((v: string)        => setFormData(p => ({ ...p, location: v })), []); // ← new
-  const setDescription   = useCallback((v: string)        => setFormData(p => ({ ...p, description: v })), []);
-  const setStatus        = useCallback((v: ProductStatus) => setFormData(p => ({ ...p, status: v })), []);
+  const setStockInDateManual = useCallback((v: string)    => setFormData(p => ({ ...p, stockInDateManual: v })), []); // ← new
+  const setDescription   = useCallback((v: string)        => setFormData(p => ({ ...p, description: v})), []);
+  const setStatus        = useCallback((v: ProductStatus) => setFormData(p => ({ ...p, status: v })),[]);
   const setIsDamaged     = useCallback((v: boolean)       => setFormData(p => ({ ...p, isDamaged: v })), []);
 
   const setCostingBrandNameFn = useCallback((v: string) =>
@@ -222,9 +226,9 @@ const [singleModel, setSingleModel] = useState({
   const setUsdRate            = useCallback((v: number) =>
     setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, usdRate: v } : undefined })), []);
   const setTotalCustomsValue  = useCallback((v: number) =>
-    setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, totalCustomsValue: v } : undefined })), []);
+    setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, totalCustomsValue: v } : undefined})), []);
   const setTotalFreightValue  = useCallback((v: number) =>
-    setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, totalFreightValue: v } : undefined })), []);
+    setFormData(p => ({ ...p, costing: p.costing ? { ...p.costing, totalFreightValue: v } : undefined})), []);
 
   const addModel = useCallback(() => {
     setFormData(p => ({
@@ -318,7 +322,7 @@ const [singleModel, setSingleModel] = useState({
       selectedModels.forEach((m, i) => {
         const validSerials = m.serialNumbers.filter(s => s.trim() !== '');
         if (m.quantity > 0 && validSerials.length !== m.quantity)
-          errors[`serials_${i}`] = `${m.modelName}: provide ${m.quantity} serial number${m.quantity > 1 ? 's' : ''}`;
+          errors[`serials_${i}`] = `${m.modelName}: provide ${m.quantity} serial number${m.quantity >1 ? 's' : ''}`;
       });
     } else {
       const validSerials = serialInputs.filter(s => s.trim() !== '');
@@ -357,6 +361,7 @@ const [singleModel, setSingleModel] = useState({
       stock: formData.stock.toString(), description: formData.description,
       status: formData.status, isDamaged: formData.isDamaged.toString(),
       location: formData.location || '',                         // ← new
+      stockInDateManual: formData.stockInDateManual || '',        // ← new: carried through to payment/confirm step
       serialNumbers: JSON.stringify(validSerials),
       serialCities:  JSON.stringify(formData.serialCities),
     });
@@ -390,7 +395,7 @@ const [singleModel, setSingleModel] = useState({
     preloadedModels, isLoadingModels,
     serialInputs, validationErrors, isValid,
     setBrandName, setModelName, setCategory, setCostPrice, setSellPrice, setBuyType,
-    setWarrantyYears, setStock, setLocation, setDescription, setStatus, setIsDamaged,
+    setWarrantyYears, setStock, setLocation, setStockInDateManual, setDescription, setStatus, setIsDamaged,
     setCostingBrandName: setCostingBrandNameFn,
     setUsdRate, setTotalCustomsValue, setTotalFreightValue,
     addModel, updateModelField, removeModel,

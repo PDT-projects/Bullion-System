@@ -689,7 +689,7 @@ export function InventoryListView({
             <thead className="bg-gray-50 border-b border-gray-200" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
                 {['Stock-In Date (Auto)', 'Stock-In Date (Manual)', 'Type', 'Brand', 'Model', 'Serial No.', 'Location',
-                  'Ownership', 'Stock', 'Cost (AED)', 'Sell (AED)',
+                  'Ownership', 'Stock', 'Sell (AED)',
                   'Supplier/Purchasing Cost', 'Sold Goods Payment',
                   'Condition', 'Current Status', 'Actions'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">{h}</th>
@@ -753,16 +753,11 @@ export function InventoryListView({
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtPrimary(product.costPrice)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.sellPrice)}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {product.ownershipType === 'Credit' ? fmtPrimary(product.supplierCost || 0) : '—'}
+                    {fmtPrimary(product.costPrice)}
                   </td>
                   <td className="px-4 py-3">
                     {product.ownershipType === 'Credit' ? (

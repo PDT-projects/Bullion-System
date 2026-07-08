@@ -217,7 +217,7 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
                     </td>
                     <td className="px-4 py-2.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.soldDate)}</td>
                     <td className="px-4 py-2.5 text-sm text-gray-600">{r.invoiceNumber || '—'}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600">{r.ownershipType === 'Credit' ? formatCurrency(r.supplierCost) : '—'}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-600">{formatCurrency(r.supplierCost)}</td>
                     <td className="px-4 py-2.5">
                       {paymentLabel ? (
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${PAYMENT_COLOR[paymentLabel] || 'bg-gray-100 text-gray-700'}`}>{paymentLabel}</span>

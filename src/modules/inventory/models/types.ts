@@ -1,6 +1,7 @@
 // Inventory Module - Model Layer
 // Type definitions for Inventory and Product Transfer
 // Change: added `location` field to Product, CreateProductDTO, UpdateProductDTO, ProductFormData
+// Change: added `stockInDateManual` field to ProductFormData
 
 export type ProductStatus = 'New' | 'In Transit' | 'On-Order' | 'Receivable' | 'Available' | 'Sold' | 'Damaged' | 'Returned' | 'Used';
 export type BuyType = 'Import' | 'Export';
@@ -191,6 +192,7 @@ export interface ProductFormData {
   isDamaged: boolean;
   serialNumbers: string[];
   serialCities: { [serialNumber: string]: string };
+  stockInDateManual?: string;  // ← new: manual stock-in date override (applied to all serials in this batch)
   costing?: CostingInfo;
   paymentStatus?: 'paid' | 'unpaid' | 'partial';
   transactionId?: string;

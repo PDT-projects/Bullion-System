@@ -521,6 +521,7 @@ export class InventoryFirebaseService {
         serialCities,
         serialStatus,
         serialStockInDates,
+        serialStockInDatesManual: dto.serialStockInDatesManual || {},
         description:   dto.description ?? '', // FIX 1 — explicit, never dropped
         status:        dto.status,
         isDamaged:     dto.isDamaged,
@@ -868,7 +869,7 @@ export class InventoryFirebaseService {
           currentStatus: serialStatus === 'Sold' ? 'Sold' : 'In Stock',
           soldDate: serial ? p.serialSoldDates?.[serial] : undefined,
           invoiceNumber: serial ? p.serialInvoiceNumbers?.[serial] : undefined,
-          supplierCost: p.ownershipType === 'Credit' ? p.supplierCost : undefined,
+          supplierCost: p.ownershipType === 'Credit' ? p.supplierCost : p.costPrice,
           supplierPaymentStatus: p.ownershipType === 'Credit' ? p.supplierPaymentStatus : undefined,
           supplierPaidAmount: p.ownershipType === 'Credit' ? p.supplierPaidAmount : undefined,
           supplierRemainingAmount:

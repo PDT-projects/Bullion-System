@@ -496,8 +496,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             ownershipType:         ownershipType,
             supplierCost:          isCredit ? me.costPrice * me.quantity : undefined,
             supplierPaymentStatus: isCredit ? 'Unpaid' : undefined,
-            serialStockInDates:    buildStockInDates(validSerials),
-            stockInDateIsManual:   !!manualDateIso,
+            serialStockInDatesManual: buildStockInDates(validSerials),
             // Store dealer price in custom field if supported
             ...(me.dealerPrice ? { dealerPrice: me.dealerPrice } : {}),
           };
@@ -531,8 +530,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
             ownershipType:         ownershipType,
             supplierCost:          isCredit ? sm.costPrice * sm.quantity : undefined,
             supplierPaymentStatus: isCredit ? 'Unpaid' : undefined,
-            serialStockInDates:    buildStockInDates(validSerials),
-            stockInDateIsManual:   !!manualDateIso,
+            serialStockInDatesManual: buildStockInDates(validSerials),
           };
           try {
             await InventoryFirebaseService.createProduct(dto, paymentInfo);
@@ -560,8 +558,7 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
           ownershipType:         ownershipType,
           supplierCost:          isCredit ? costPrice * stock : undefined,
           supplierPaymentStatus: isCredit ? 'Unpaid' : undefined,
-          serialStockInDates:    buildStockInDates(serialNumbers),
-          stockInDateIsManual:   !!manualDateIso,
+          serialStockInDatesManual: buildStockInDates(serialNumbers),
         };
         await InventoryFirebaseService.createProduct(dto, paymentInfo);
       }
