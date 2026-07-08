@@ -30,7 +30,13 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
-import type { Invoice } from './types';
+import type { Invoice, CreateInvoiceDTO, UpdateInvoiceDTO } from './types';
+
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  const out: Record<string, any> = {};
+  Object.entries(obj).forEach(([k, v]) => { if (v !== undefined) out[k] = v; });
+  return out as T;
+}
 
 const INVOICES_COLLECTION = 'invoices';
 
@@ -113,21 +119,45 @@ export class InvoiceFirebaseService {
 
   // ── NOT YET RESTORED — real logic unknown, throws instead of guessing ──
 
-  static async createInvoice(_dto: any): Promise<Invoice> {
-    throw new Error(
-      'InvoiceFirebaseService.createInvoice is not yet restored. Provide the original implementation.'
-    );
+  static async createInvoice(dto: CreateInvoiceDTO): Promise<Invoice> {
+    try {
+      const now = new Date().toISOString();
+      const totalAmount = (dto.products || []).reduce((sum, p) => sum + (p.total || 0), 0);
+      const paidAmount = dto.paymentStatus === 'Partial' ? (dto.paidAmount || 0) : totalAmount;
+      const remainingAmount = totalAmount - paidAmount;
+      const data = stripUndefined({ ...dto, totalAmount, paidAmount, remainingAmount, createdAt: now, updatedAt: now });
+      const ref = await addDoc(collection(db, INVOICES_COLLECTION), data);
+      console.log('✅ Invoice created:', ref.id);
+      return { id: ref.id, ...data } as Invoice;
+    } catch (error) {
+      console.error('❌ Error creating invoice:', error);
+      throw new Error('Failed to create invoice');
+    }
   }
 
-  static async updateInvoice(_id: string, _dto: any): Promise<Invoice> {
-    throw new Error(
-      'InvoiceFirebaseService.updateInvoice is not yet restored. Provide the original implementation.'
-    );
+  static async updateInvoice(id: string, dto: UpdateInvoiceDTO): Promise<Invoice> {
+    try {
+      const now = new Date().toISOString();
+      const totalAmount = (dto.products || []).reduce((sum, p) => sum + (p.total || 0), 0);
+      const paidAmount = dto.paymentStatus === 'Partial' ? (dto.paidAmount || 0) : totalAmount;
+      const remainingAmount = totalAmount - paidAmount;
+      const data = stripUndefined({ ...dto, totalAmount, paidAmount, remainingAmount, updatedAt: now });
+      await updateDoc(doc(db, INVOICES_COLLECTION, id), data);
+      console.log('✅ Invoice updated:', id);
+      return { id, ...data } as Invoice;
+    } catch (error) {
+      console.error(`❌ Error updating invoice ${id}:`, error);
+      throw new Error('Failed to update invoice');
+    }
   }
 
-  static async deleteInvoice(_id: string): Promise<void> {
-    throw new Error(
-      'InvoiceFirebaseService.deleteInvoice is not yet restored. Provide the original implementation.'
-    );
+  static async deleteInvoice(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, INVOICES_COLLECTION, id));
+      console.log('✅ Invoice deleted:', id);
+    } catch (error) {
+      console.error(`❌ Error deleting invoice ${id}:`, error);
+      throw new Error('Failed to delete invoice');
+    }
   }
 }
