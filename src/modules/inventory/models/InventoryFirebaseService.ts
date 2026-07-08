@@ -957,10 +957,38 @@ export class TransferFirebaseService {
 
   static async updateTransferStatus(id: string, status: ProductTransfer['status'], receivedAt?: string): Promise<void> {
     try {
-      await updateDoc(doc(db, TRANSFERS_COLLECTION, id),
-        stripUndefined({ status, receivedAt, updatedAt: new Date().toISOString() })
-      );
+      const ref = doc(db, TRANSFERS_COLLECTION, id);
+      await updateDoc(ref, stripUndefined({ status, receivedAt, updatedAt: new Date().toISOString() }));
       console.log('✅ Transfer status updated:', id, status);
+
+      // FIX: marking a transfer "Received" only updated the transfer record —
+      // the product's own location/serialCities were never moved, so the
+      // Inventory list kept showing the origin location forever. Sync them here.
+      if (status === 'Received') {
+        const t = (await getDoc(ref)).data() as any;
+        if (t?.productId && t?.toLocation) {
+          const productRef  = doc(db, PRODUCTS_COLLECTION, t.productId);
+          const productSnap = await getDoc(productRef);
+          if (productSnap.exists()) {
+            const p = productSnap.data() as any;
+            const serials: string[] = t.serialNumbers?.length ? t.serialNumbers : (p.serialNumbers || []);
+            const serialCities = { ...(p.serialCities || {}) };
+            serials.forEach(s => { serialCities[s] = t.toLocation; });
+
+            // product.location is checked before serialCities on display, so
+            // keep it in sync once every serial sits at the same location.
+            const allCities = Object.values(serialCities).filter(Boolean);
+            const allSame = allCities.length > 0 && allCities.every(c => c === t.toLocation);
+
+            await updateDoc(productRef, stripUndefined({
+              serialCities,
+              location:  allSame ? t.toLocation : p.location,
+              updatedAt: new Date().toISOString(),
+            }));
+            console.log(`✅ Product ${t.productId} moved to ${t.toLocation}`);
+          }
+        }
+      }
     } catch (error) {
       throw new Error('Failed to update transfer status in Firestore');
     }
