@@ -244,6 +244,7 @@ function transformDocToProduct(docSnap: any): Product {
     supplierRemainingAmount:  d.supplierRemainingAmount  ?? undefined,
     supplierPaymentChannel:   d.supplierPaymentChannel   || undefined,
     serialStockInDates:       d.serialStockInDates       || {},
+    serialStockInDatesManual: d.serialStockInDatesManual || {},
     serialSoldDates:          d.serialSoldDates          || {},
     serialInvoiceNumbers:     d.serialInvoiceNumbers     || {},
     createdAt: d.createdAt || '',
@@ -520,7 +521,6 @@ export class InventoryFirebaseService {
         serialCities,
         serialStatus,
         serialStockInDates,
-        stockInDateIsManual: dto.stockInDateIsManual || false,
         description:   dto.description ?? '', // FIX 1 — explicit, never dropped
         status:        dto.status,
         isDamaged:     dto.isDamaged,
@@ -618,6 +618,7 @@ export class InventoryFirebaseService {
       if (dto.supplierPaidAmount      !== undefined) updateData.supplierPaidAmount      = dto.supplierPaidAmount;
       if (dto.supplierPaymentChannel  !== undefined) updateData.supplierPaymentChannel  = dto.supplierPaymentChannel;
       if (dto.serialStockInDates      !== undefined) updateData.serialStockInDates      = dto.serialStockInDates;
+      if (dto.serialStockInDatesManual !== undefined) updateData.serialStockInDatesManual = dto.serialStockInDatesManual;
       if (dto.serialSoldDates         !== undefined) updateData.serialSoldDates         = dto.serialSoldDates;
       if (dto.serialInvoiceNumbers    !== undefined) updateData.serialInvoiceNumbers    = dto.serialInvoiceNumbers;
 
@@ -756,9 +757,8 @@ export class InventoryFirebaseService {
       const serialStockInDates: Record<string, string> = { ...(d.serialStockInDates || {}), [serial]: now };
       const serialSoldDates: Record<string, string> = { ...(d.serialSoldDates || {}) };
       delete serialSoldDates[serial];
-      const serialInvoiceNumbers: Record<string, string> = { ...(d.serialInvoiceNumbers || {}) };
-      delete serialInvoiceNumbers[serial]; // linked invoice is deleted as part of this return — clear the stale link
 
+      const wasNotInStock = !(d.serialNumbers || []).includes(serial) || d.status === 'Sold';
       const serialNumbers: string[] = (d.serialNumbers || []).includes(serial)
         ? d.serialNumbers
         : [...(d.serialNumbers || []), serial];
@@ -768,8 +768,7 @@ export class InventoryFirebaseService {
         serialStatus,
         serialStockInDates,
         serialSoldDates,
-        serialInvoiceNumbers,
-        stock: serialNumbers.length,
+        stock: wasNotInStock ? (d.stock || 0) + 1 : d.stock,
         ownershipType: d.ownershipType === 'Credit' ? 'Owned' : d.ownershipType,
         updatedAt: now,
       }));
@@ -803,7 +802,6 @@ export class InventoryFirebaseService {
       const location      = serialCities[serial] || d.location || '';
       delete serialCities[serial];
       const serialStockInDates = { ...(d.serialStockInDates || {}) }; delete serialStockInDates[serial];
-      const serialInvoiceNumbers = { ...(d.serialInvoiceNumbers || {}) }; delete serialInvoiceNumbers[serial];
 
       await addDoc(collection(db, DAMAGED_PRODUCTS_COLLECTION), stripUndefined({
         productId,
@@ -821,8 +819,7 @@ export class InventoryFirebaseService {
         serialStatus,
         serialCities,
         serialStockInDates,
-        serialInvoiceNumbers,
-        stock: serialNumbers.length,
+        stock: Math.max(0, (d.stock || 0) - 1),
         updatedAt: now,
       }));
       console.log(`✅ Serial ${serial} moved to damaged inventory from product ${productId}`);
@@ -856,16 +853,19 @@ export class InventoryFirebaseService {
     for (const p of products) {
       const serials = p.serialNumbers && p.serialNumbers.length > 0 ? p.serialNumbers : [''];
       for (const serial of serials) {
+        const serialStatus = serial ? p.serialStatus?.[serial] : undefined;
         rows.push({
           productId: p.id,
           brandName: p.brandName,
           modelName: p.modelName,
           serialNumber: serial,
-          stockInDate: (serial && p.serialStockInDates?.[serial]) || p.createdAt || '',
-          stockInDateIsManual: p.stockInDateIsManual || false,
+          stockInDateAuto: (serial && p.serialStockInDates?.[serial]) || p.createdAt || '',
+          stockInDateManual: serial ? p.serialStockInDatesManual?.[serial] : undefined,
+          type: p.category || '',
           location: (serial && p.serialCities?.[serial]) || p.location || '',
           ownershipType: p.ownershipType || '',
-          currentStatus: (serial && p.serialStatus?.[serial]) || p.status,
+          condition: p.status,
+          currentStatus: serialStatus === 'Sold' ? 'Sold' : 'In Stock',
           soldDate: serial ? p.serialSoldDates?.[serial] : undefined,
           invoiceNumber: serial ? p.serialInvoiceNumbers?.[serial] : undefined,
           supplierCost: p.ownershipType === 'Credit' ? p.supplierCost : undefined,
@@ -880,54 +880,6 @@ export class InventoryFirebaseService {
       }
     }
     return rows;
-  }
-
-  /**
-   * Inventory Payables: all supplier-credit products with an outstanding
-   * balance. Includes stock still on shelf (not yet due) and stock that has
-   * fully sold out (stock === 0, due now) — the view distinguishes the two.
-   */
-  static async fetchPayableProducts(): Promise<Product[]> {
-    const products = await InventoryFirebaseService.fetchAllProducts();
-    return products.filter(p =>
-      p.ownershipType === 'Credit' &&
-      p.supplierPaymentStatus !== 'Cleared'
-    );
-  }
-
-  /**
-   * Record a payment made toward a supplier-credit product's purchase cost.
-   * Recomputes supplierPaymentStatus from the new paid total automatically.
-   */
-  static async recordSupplierPayment(
-    productId: string,
-    amount: number,
-    channel: 'Cash' | 'Bank'
-  ): Promise<void> {
-    try {
-      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) throw new Error('Product not found');
-      const d = snap.data() as any;
-
-      const supplierCost      = d.supplierCost ?? 0;
-      const previouslyPaid    = d.supplierPaidAmount ?? 0;
-      const newPaidAmount     = Math.min(supplierCost, previouslyPaid + amount);
-      const supplierPaymentStatus =
-        newPaidAmount >= supplierCost ? 'Cleared' :
-        newPaidAmount > 0             ? 'Partial'  : 'Unpaid';
-
-      await updateDoc(ref, {
-        supplierPaidAmount:     newPaidAmount,
-        supplierPaymentStatus,
-        supplierPaymentChannel: channel,
-        updatedAt: new Date().toISOString(),
-      });
-      console.log(`✅ Recorded supplier payment of ${amount} on product ${productId} (status: ${supplierPaymentStatus})`);
-    } catch (error) {
-      console.error(`❌ Error recording supplier payment on ${productId}:`, error);
-      throw new Error('Failed to record supplier payment');
-    }
   }
 
   static isConnected(): boolean { return !!db; }
@@ -1184,6 +1136,5 @@ export class BrandModelFirebaseService {
   const counter = String(nextCount).padStart(3, '0');          // "001", "002", ...
   return `TXN-${datePart}-${counter}`;                         // "TXN-220426-001"
 }
-
-
+ 
 }

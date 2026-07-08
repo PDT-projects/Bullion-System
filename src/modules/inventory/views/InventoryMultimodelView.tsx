@@ -409,11 +409,11 @@ function ModelCard({
           />
         </div>
 
-        {/* Category */}
+        {/* Type */}
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Category *</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Type *</label>
           <select value={e.category} onChange={ev => updateEntry(e.id, { category: ev.target.value })} style={hasErr('cat') ? inpErr : inp}>
-            <option value="">Select category</option>
+            <option value="">Select type</option>
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           {hasErr('cat') && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 3 }}>{validationErrors[`cat_${index}`]}</p>}

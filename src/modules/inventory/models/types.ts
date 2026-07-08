@@ -13,8 +13,7 @@ export type OwnershipType = 'Credit' | 'Owned';
 export type SupplierPaymentStatus = 'Unpaid' | 'Partial' | 'Cleared';
 export type PaymentChannel = 'Cash' | 'Bank' | 'Cheque' | 'Credit';
 export type CostingOption = 'with' | 'without';
-// How new inventory is being added: paid for now, or bought on supplier credit
-export type InventoryEntryType = 'credit' | 'payment';
+export type InventoryEntryType = 'in-stock' | 'on-order';
 export type InventoryEntryStep = 'details' | 'payment' | 'confirmation';
 
 // Canonical location list — single source of truth used across inventory + transfers
@@ -82,11 +81,9 @@ export interface Product {
   supplierPaymentChannel?: PaymentChannel;
   // Per-serial tracking maps (keyed by serial number)
   serialStockInDates?: { [serialNumber: string]: string };
+  serialStockInDatesManual?: { [serialNumber: string]: string };
   serialSoldDates?: { [serialNumber: string]: string };
   serialInvoiceNumbers?: { [serialNumber: string]: string };
-  // True when the stock-in date was typed in manually at entry instead of
-  // auto-filled with the creation timestamp — shown as a badge in reports.
-  stockInDateIsManual?: boolean;
 
   // Payable configuration (optional)
   enablePayable?: boolean;
@@ -174,7 +171,7 @@ export interface CreateProductDTO {
   supplierPaidAmount?: number;
   supplierPaymentChannel?: PaymentChannel;
   serialStockInDates?: { [serialNumber: string]: string };
-  stockInDateIsManual?: boolean;
+  serialStockInDatesManual?: { [serialNumber: string]: string };
 }
 
 export interface ProductFormData {
@@ -195,8 +192,6 @@ export interface ProductFormData {
   serialNumbers: string[];
   serialCities: { [serialNumber: string]: string };
   costing?: CostingInfo;
-  ownershipType?: OwnershipType;
-  manualStockInDate?: string;
   paymentStatus?: 'paid' | 'unpaid' | 'partial';
   transactionId?: string;
   paidAmount?: number;
@@ -251,9 +246,9 @@ export interface UpdateProductDTO {
   supplierPaidAmount?: number;
   supplierPaymentChannel?: PaymentChannel;
   serialStockInDates?: { [serialNumber: string]: string };
+  serialStockInDatesManual?: { [serialNumber: string]: string };
   serialSoldDates?: { [serialNumber: string]: string };
   serialInvoiceNumbers?: { [serialNumber: string]: string };
-  stockInDateIsManual?: boolean;
 }
 
 export interface CreateTransferDTO {
@@ -311,21 +306,23 @@ export interface ValidationResult {
   fieldErrors?: { [key: string]: string };
 }
 
-// ── Inventory Report (one row per serial number) ─────────────────────────────
+// ── Inventory Report (one row per serial number) — matches the sheet columns
 export interface InventoryReportRow {
   productId: string;
   brandName: string;
   modelName: string;
   serialNumber: string;
-  stockInDate: string;
-  stockInDateIsManual?: boolean;
+  stockInDateAuto: string;      // system-set (entry / return date)
+  stockInDateManual?: string;   // manual override, if entered
+  type: string;                 // = product.category (Detection Equipment, etc.)
   location: string;
   ownershipType: OwnershipType | '';
-  currentStatus: string;   // SerialStatus, falls back to product.status
+  condition: string;            // = product.status (New/Used/Damaged/Returned...)
+  currentStatus: 'In Stock' | 'Sold';
   soldDate?: string;
   invoiceNumber?: string;
   supplierCost?: number;
-  supplierPaymentStatus?: SupplierPaymentStatus;
+  supplierPaymentStatus?: SupplierPaymentStatus; // display-mapped: Cleared→Clear, Unpaid→Pending
   supplierPaidAmount?: number;
   supplierRemainingAmount?: number;
   supplierPaymentChannel?: PaymentChannel;

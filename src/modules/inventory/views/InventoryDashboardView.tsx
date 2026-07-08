@@ -2,19 +2,18 @@
 // InventoryDashboardView - Main entry page for inventory operations
 // UPDATED: Shows recent inventory payment activity panel
 
-import { Plus, Package, ArrowRight, Boxes, Undo2, FileBarChart, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Plus, Package, ArrowRight, Boxes, Undo2, Trash2, ArrowLeftRight } from 'lucide-react';
 
 interface InventoryDashboardViewProps {
   onAddNewInventory: () => void;
   onAddReturnedInventory: () => void;
   onViewInventory: () => void;
-  onViewReport: () => void;
   onViewDeleted: () => void;
   onViewTransfer: () => void;
 }
 
 export function InventoryDashboardView({
-  onAddNewInventory, onAddReturnedInventory, onViewInventory, onViewReport, onViewDeleted, onViewTransfer,
+  onAddNewInventory, onAddReturnedInventory, onViewInventory, onViewDeleted, onViewTransfer,
 }: InventoryDashboardViewProps) {
   const cards = [
     {
@@ -46,15 +45,8 @@ export function InventoryDashboardView({
       onClick: onViewTransfer,
     },
     {
-      title: 'View Inventory Report',
-      description: 'Full per-serial breakdown: model, location, stock-in date, status, invoice, supplier cost & payment',
-      icon: FileBarChart,
-      iconColor: '#7c3aed', iconBg: '#f5f3ff', borderColor: '#e2e8f0', hoverBorder: '#8b5cf6', hoverBg: '#f5f3ff',
-      onClick: onViewReport,
-    },
-    {
       title: 'View Inventory',
-      description: 'Browse and manage all existing inventory items',
+      description: 'Browse and manage all existing inventory items — includes the full per-serial report',
       icon: Boxes,
       iconColor: '#0f766e', iconBg: '#f0fdfa', borderColor: '#99f6e4', hoverBorder: '#14b8a6', hoverBg: '#f0fdfa',
       onClick: onViewInventory,

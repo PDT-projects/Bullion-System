@@ -28,6 +28,7 @@ import { BrandModelSelector } from '../components/BrandModelSelector';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 // ── Shared location components (load from Firestore, support Add New) ─────────
 import { LocationSelector, SerialLocationSelector } from './LocationSelector';
+import { CATEGORIES } from '../viewModels/useInventoryMultimodelViewModel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -358,16 +359,17 @@ export function CreateInventoryView({
           )}
         </div>
 
-        {/* ── Category ── */}
+        {/* ── Type ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-          <input
-            type="text"
+          <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+          <select
             value={formData.category || ''}
             onChange={e => setField('category', e.target.value)}
             className={inputCls(!!validation.fieldErrors?.category)}
-            placeholder="e.g. Metal Detector, Accessory"
-          />
+          >
+            <option value="">Select type</option>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           {validation.fieldErrors?.category && (
             <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.category}</p>
           )}
@@ -750,7 +752,7 @@ export function CreateInventoryView({
           {([
             ['Transaction ID', formData.transactionId || '—'],
             ['Product',        `${formData.brandName} ${formData.modelName}`],
-            ['Category',       formData.category || '—'],
+            ['Type',       formData.category || '—'],
             ['Location',       formData.location || '—'],
             ['Status',         formData.status   || '—'],
             ['Stock',          `${formData.stock} units`],

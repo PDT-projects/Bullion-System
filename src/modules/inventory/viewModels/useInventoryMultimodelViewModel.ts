@@ -24,10 +24,7 @@ export const KNOWN_BRANDS = [
   'WHITES', 'X5 ID Maxx', 'XP',
 ];
 
-export const CATEGORIES = [
-  'Detection Equipment', 'Security Equipment', 'Imaging Equipment',
-  'Surveillance Systems', 'Access Control', 'Other',
-];
+export const CATEGORIES = ['Finished Goods', 'Accessories'];
 
 export const STOCKING_LOCATIONS = [...INVENTORY_LOCATIONS];
 

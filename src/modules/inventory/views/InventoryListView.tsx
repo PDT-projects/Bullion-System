@@ -17,6 +17,9 @@ import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters, ProductTransfer } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { InventoryCurrencyDropdown } from './InventoryCurrencyDropdown';
+import { InventoryReportView } from './InventoryReportView';
+import { useInventoryReportViewModel } from '../viewModels/useInventoryReportViewModel';
+import { Activity, FileText } from 'lucide-react';
 
 interface InventoryListViewProps {
   products: Product[];
@@ -115,39 +118,7 @@ function getStatusColor(status: string): string {
   return colors[status] || 'bg-gray-100 text-gray-800';
 }
 
-// ── Payment mode badge ────────────────────────────────────────────────────────
-function PaymentModeBadge({ product }: { product: Product }) {
-  const pi = (product as any).paymentInfo;
-  if (!pi || pi.paymentStatus === 'unpaid') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700">
-        Unpaid
-      </span>
-    );
-  }
-  if (pi.installments?.length > 0) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-[#334155]">
-        <CreditCard size={10} /> Mixed
-      </span>
-    );
-  }
-  if (pi.paymentMode === 'bank') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-[#1e293b]" title={pi.bankName || ''}>
-        <Building2 size={10} /> Bank
-      </span>
-    );
-  }
-  if (pi.paymentMode === 'cash') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700">
-        <Banknote size={10} /> Cash
-      </span>
-    );
-  }
-  return null;
-}
+// (PaymentModeBadge removed — Payment column dropped from the table per sheet alignment)
 
 // ── Payment detail panel ──────────────────────────────────────────────────────
 function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: number) => string }) {
@@ -387,6 +358,8 @@ export function InventoryListView({
   const navigate = useNavigate();
   const [deleteConfirm, setDeleteConfirm] = React.useState<Product | null>(null);
   const [isDeleting,    setIsDeleting]    = React.useState(false);
+  const [tab, setTab] = React.useState<'inventory' | 'report'>('inventory');
+  const reportVM = useInventoryReportViewModel();
 
   // ── Local multi-select filters (client-side, on top of ViewModel filters) ──
   const [selectedLocations, setSelectedLocations] = React.useState<string[]>([]);
@@ -416,7 +389,7 @@ export function InventoryListView({
       result = result.filter(p => {
         const haystack = [
           p.brandName, p.modelName, p.category, p.status,
-          getDisplayLocation(p), p.ownershipType, p.supplierPaymentStatus,
+          getDisplayLocation(p), p.ownershipType, p.supplierPaymentStatus, ...p.serialNumbers,
         ].filter(Boolean).join(' ').toLowerCase();
         return haystack.includes(q);
       });
@@ -488,59 +461,92 @@ export function InventoryListView({
           </button>
           <div>
             <h2 className="text-2xl font-bold">Inventory</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {stats.totalProducts} products · {stats.totalStock} units · {fmtPrimary(stats.totalValue)} value
-            </p>
+            {tab === 'inventory' && (
+              <p className="text-sm text-gray-600 mt-1">
+                {stats.totalProducts} products · {stats.totalStock} units · {fmtPrimary(stats.totalValue)} value
+              </p>
+            )}
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <InventoryCurrencyDropdown
-            loading={ratesLoading}
-            error={ratesError}
-            lastUpdated={lastUpdated}
-          />
+          {tab === 'inventory' && (
+            <InventoryCurrencyDropdown
+              loading={ratesLoading}
+              error={ratesError}
+              lastUpdated={lastUpdated}
+            />
+          )}
           <button
-            onClick={toggleFilters}
+            onClick={tab === 'report' ? reportVM.toggleFilters : toggleFilters}
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
               cursor: 'pointer', border: 'none', transition: 'all 0.15s',
-              backgroundColor: showFilters ? '#0f172a' : '#f1f5f9',
-              color: showFilters ? '#fff' : '#374151',
+              backgroundColor: (tab === 'report' ? reportVM.showFilters : showFilters) ? '#0f172a' : '#f1f5f9',
+              color: (tab === 'report' ? reportVM.showFilters : showFilters) ? '#fff' : '#374151',
               boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
             }}
           >
             <Filter size={16} />
-            Filters {(activeFilterCount + activeLocalFilterCount) > 0 && `(${activeFilterCount + activeLocalFilterCount})`}
+            Filters {(() => {
+              const count = tab === 'report' ? reportVM.activeFilterCount : (activeFilterCount + activeLocalFilterCount);
+              return count > 0 && `(${count})`;
+            })()}
           </button>
-          <button
-            onClick={onAddToExisting}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
-              cursor: 'pointer', backgroundColor: '#f1f5f9', color: '#374151',
-              border: '1px solid #e2e8f0', transition: 'all 0.15s',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            }}
-          >
-            <Plus size={16} /> Add Stock
-          </button>
-          <button
-            onClick={onAddNew}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
-              cursor: 'pointer', backgroundColor: '#0f172a', color: '#fff',
-              border: 'none', transition: 'all 0.15s',
-              boxShadow: '0 2px 8px rgba(15,23,42,0.3)',
-            }}
-          >
-            <Plus size={16} /> New Product
-          </button>
+          {tab === 'inventory' && (
+            <>
+              <button
+                onClick={onAddToExisting}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
+                  cursor: 'pointer', backgroundColor: '#f1f5f9', color: '#374151',
+                  border: '1px solid #e2e8f0', transition: 'all 0.15s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                }}
+              >
+                <Plus size={16} /> Add Stock
+              </button>
+              <button
+                onClick={onAddNew}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
+                  cursor: 'pointer', backgroundColor: '#0f172a', color: '#fff',
+                  border: 'none', transition: 'all 0.15s',
+                  boxShadow: '0 2px 8px rgba(15,23,42,0.3)',
+                }}
+              >
+                <Plus size={16} /> New Product
+              </button>
+            </>
+          )}
         </div>
       </div>
 
+      {/* ── Inventory / Report toggle ── */}
+      <div style={{ display: 'inline-flex', backgroundColor: '#f1f5f9', borderRadius: 10, padding: 4, marginBottom: 20, gap: 2 }}>
+        {[{ key: 'inventory', label: 'Inventory', icon: Activity }, { key: 'report', label: 'Report', icon: FileText }].map(t => (
+          <button key={t.key} onClick={() => setTab(t.key as 'inventory' | 'report')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 8,
+              border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              backgroundColor: tab === t.key ? '#fff' : 'transparent',
+              color: tab === t.key ? '#0f172a' : '#64748b',
+              boxShadow: tab === t.key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            }}>
+            <t.icon size={14} /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'report' ? (
+        <div style={{ marginTop: -4 }}>
+          <InventoryReportView {...reportVM} embedded hideFilterToggle />
+        </div>
+      ) : (
+      <>
       {/* ── Global Search ── */}
       <div style={{ position: 'relative', marginBottom: 16 }}>
         <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
@@ -682,11 +688,10 @@ export function InventoryListView({
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
-                {['Brand', 'Model', 'Type', 'Location', 'Stock-In Date', 'Category', 'Stock',
-                  'Cost (AED)',
-                  'Sell (AED)',
-                  'Supplier Cost', 'Supplier Payment',
-                  'Status', 'Payment', 'Actions'].map(h => (
+                {['Stock-In Date (Auto)', 'Stock-In Date (Manual)', 'Type', 'Brand', 'Model', 'Serial No.', 'Location',
+                  'Ownership', 'Stock', 'Cost (AED)', 'Sell (AED)',
+                  'Supplier/Purchasing Cost', 'Sold Goods Payment',
+                  'Condition', 'Current Status', 'Actions'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">{h}</th>
                 ))}
               </tr>
@@ -704,41 +709,37 @@ export function InventoryListView({
                   onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fef3c7' : '#f1f5f9'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fffbeb' : (idx % 2 === 1 ? '#fafafa' : '#fff'); }}
                 >
-                  <td className="px-4 py-2.5 font-semibold text-gray-900 text-sm">{product.brandName}</td>
-                  <td className="px-4 py-2.5 text-sm text-gray-700">{product.modelName}</td>
-                  <td className="px-4 py-2.5 text-sm text-gray-600">{product.category}</td>
-                  <td className="px-4 py-3">
-                    {(() => {
-                      const route = getTransitRoute(product, transfers);
-                      if (route) {
-                        return (
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${route.received ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-700'}`}>
-                              {route.from}
-                            </span>
-                            <ArrowRight size={11} className={route.received ? 'text-slate-400 shrink-0' : 'text-yellow-600 shrink-0'} />
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${route.received ? 'bg-green-50 text-green-700' : 'bg-green-100 text-green-700'}`}>
-                              {route.to}
-                            </span>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                          <MapPin size={12} className="text-slate-400 flex-shrink-0" />
-                          <span className="truncate max-w-[100px]" title={getDisplayLocation(product)}>
-                            {getDisplayLocation(product)}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </td>
                   <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                     {(() => {
                       const dates = Object.values(product.serialStockInDates || {});
                       const earliest = dates.length ? dates.sort()[0] : product.createdAt;
                       return earliest ? new Date(earliest).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
                     })()}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                    {(() => {
+                      const dates = Object.values(product.serialStockInDatesManual || {});
+                      return dates.length ? new Date(dates.sort()[0]).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+                    })()}
+                  </td>
+                  <td className="px-4 py-2.5 text-sm text-gray-600">{product.category}</td>
+                  <td className="px-4 py-2.5 font-semibold text-gray-900 text-sm">{product.brandName}</td>
+                  <td className="px-4 py-2.5 text-sm text-gray-700">{product.modelName}</td>
+                  <td className="px-4 py-2.5 text-xs font-mono text-gray-600" style={{ maxWidth: 180 }}>
+                    {product.serialNumbers.length === 0 ? '—' : (
+                      <span className="truncate block" title={product.serialNumbers.join(', ')}>
+                        {product.serialNumbers.slice(0, 2).join(', ')}
+                        {product.serialNumbers.length > 2 && ` +${product.serialNumbers.length - 2} more`}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin size={12} className="text-slate-400 flex-shrink-0" />
+                      <span className="truncate max-w-[100px]" title={getDisplayLocation(product)}>
+                        {getDisplayLocation(product)}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -747,24 +748,18 @@ export function InventoryListView({
                       {product.ownershipType || '—'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      product.stock === 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                    }`}>
-                      {product.stock} units
-                    </span>
+                  <td className="px-4 py-3 text-sm font-semibold text-gray-700">
+                    {product.stock} units
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.costPrice)}
                     </div>
-                    {/* AED-only display; extras removed */}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.sellPrice)}
                     </div>
-                    {/* AED-only display; extras removed */}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {product.ownershipType === 'Credit' ? fmtPrimary(product.supplierCost || 0) : '—'}
@@ -776,7 +771,7 @@ export function InventoryListView({
                         product.supplierPaymentStatus === 'Partial' ? 'bg-amber-100 text-amber-800' :
                         'bg-red-100 text-red-700'
                       }`}>
-                        {product.supplierPaymentStatus || 'Unpaid'}
+                        {product.supplierPaymentStatus === 'Cleared' ? 'Clear' : product.supplierPaymentStatus === 'Partial' ? 'Partial' : 'Pending'}
                       </span>
                     ) : '—'}
                   </td>
@@ -786,7 +781,9 @@ export function InventoryListView({
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <PaymentModeBadge product={product} />
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                      {product.stock > 0 ? 'In Stock' : 'Sold'}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
@@ -839,6 +836,8 @@ export function InventoryListView({
           </table>
         )}
       </div>
+      </>
+      )}
 
       {/* ── Delete Confirmation Modal ── */}
       {deleteConfirm && (
