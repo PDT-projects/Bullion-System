@@ -1,7 +1,32 @@
 // Invoice Module - Model Layer (UPDATED)
-// Added liquidity linkage fields
+// Added:
+//   • Payment history model (invoices are Unpaid on creation; payments are
+//     recorded later from the list → status becomes Partial / Paid)
+//   • Per-product cost snapshot (supplierCost / purchaseCost) captured at sale
+//     time so the list can show Supplier Cost, Purchase Cost & Misc Expense
+//   • CustomerRecord for the persistent `customers` collection
 
 export type InvoiceCurrency = 'PKR' | 'CAD' | 'SAR' | 'AED';
+
+export type PaymentMode = 'Cash' | 'Bank' | 'Cheque';
+
+// ── A single payment recorded against an invoice ────────────────────────────
+export interface InvoicePayment {
+  id: string;                 // local uuid / timestamp id
+  amount: number;             // amount received in this payment (AED)
+  mode: PaymentMode;          // Cash | Bank | Cheque
+  date: string;               // YYYY-MM-DD — when the payment was received
+  bankId?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  chequeNumber?: string;
+  chequeBank?: string;
+  chequeDate?: string;
+  note?: string;
+  recordedBy?: string;        // uid/email of the user who logged it
+  recordedByEmail?: string;
+  recordedAt?: string;        // ISO timestamp the record was written
+}
 
 export interface InvoiceProduct {
   id: string;
@@ -12,12 +37,17 @@ export interface InvoiceProduct {
   category: string;
   description: string;
   quantity: number;
-  price: number;
-  total: number;
+  price: number;              // sell price per unit (AED)
+  total: number;              // price * quantity
   serialNumbers: string[];
   serialCities?: { [serialNumber: string]: string };
   currency: InvoiceCurrency;
   imageUrls?: string[];
+
+  // ── Cost snapshot (captured at sale time from the inventory product) ──
+  // Per-unit costs. Aggregated across quantity by the invoiceService helpers.
+  supplierCost?: number;      // per-unit supplier cost (AED)
+  purchaseCost?: number;      // per-unit landed/purchase cost (AED)
 }
 
 export interface Invoice {
@@ -37,24 +67,36 @@ export interface Invoice {
   deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered';
   deliveryReceivedStatus: 'Pending' | 'In Process' | 'Received';
   totalAmount: number;
-  status: 'Paid' | 'Unpaid' | 'Returned';
+
+  // Payment lifecycle. Every new invoice starts 'Unpaid'; recording payments
+  // moves it to 'Partial' and finally 'Paid'. 'Returned' is set by Inventory.
+  status: 'Paid' | 'Unpaid' | 'Partial' | 'Returned';
+
   salesperson?: string;
   salespersonLocation?: string;
+  branch?: string;
   clientDealBy?: string;
   referralBy?: string;
   createdBy?: string;
+
+  // ── Payment tracking ──
+  payments?: InvoicePayment[];      // full history of received payments
+  paidAmount?: number;              // sum of payments (AED)
+  remainingAmount?: number;         // totalAmount - paidAmount
+  paymentStatus?: 'Full' | 'Partial' | 'Unpaid';
+  // Denormalised "latest payment" fields for quick list rendering:
   paymentMode?: 'Cash' | 'Online' | 'Cheque';
+  lastPaymentDate?: string;
   bankId?: string;
   bankName?: string;
   bankAccountNumber?: string;
-  // Cheque-specific fields
   chequeNumber?: string;
   chequeBank?: string;
   chequeDate?: string;
-  paymentStatus?: 'Full' | 'Partial';
-  paidAmount?: number;
-  remainingAmount?: number;
+
   collectionMethod?: 'Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others';
+
+  // ── Expense / deduction fields (the "miscellaneous expense") ──
   deductionCharges: number;
   cargoAmount?: number;
   cargoCurrency?: InvoiceCurrency;
@@ -63,6 +105,12 @@ export interface Invoice {
   agentAmount?: number;
   agentCurrency?: InvoiceCurrency;
   agentDetails?: string;
+
+  // ── Cost snapshot totals (denormalised at save; helpers can recompute) ──
+  supplierCostTotal?: number;       // Σ product.supplierCost * qty
+  purchaseCostTotal?: number;       // Σ product.purchaseCost * qty
+  miscExpense?: number;             // deduction + cargo + customs + agent
+
   digitalStamp?: boolean;
   imageUrl?: string;
   pdfUrl?: string;
@@ -70,19 +118,16 @@ export interface Invoice {
   paidTo?: string;
   productLocation?: string;
   selectedCurrencies?: InvoiceCurrency[];
-  
+
   // ────────────────────────────────────────────────────────────────────
-  // ✨ NEW: Liquidity Linkage Fields
-  // When an invoice is created with a Bank/Cash payment, these fields
-  // track where the original payment was received from. When ATI entries
-  // are created, they deduct from this original liquidity pool.
+  // Liquidity Linkage Fields
   // ────────────────────────────────────────────────────────────────────
-  originalLiquiditySource?: 'bank' | 'cash';     // Where initial payment came from
-  originalLiquidityDocId?: string;                // Bank doc id or cashInHand doc id
-  originalLiquidityAmount?: number;               // Original amount received
-  remainingLiquidityAmount?: number;              // Amount still available for ATI deduction
-  originalBankTxnId?: string;                     // Reference to bank_transactions record
-  
+  originalLiquiditySource?: 'bank' | 'cash';
+  originalLiquidityDocId?: string;
+  originalLiquidityAmount?: number;
+  remainingLiquidityAmount?: number;
+  originalBankTxnId?: string;
+
   createdAt?: string;
   updatedAt?: string;
 
@@ -111,23 +156,20 @@ export interface CreateInvoiceDTO {
   products: InvoiceProduct[];
   exchangeWarrantyNote: string;
   deliveryStatus: 'Self-collect' | 'LCS' | 'Daewoo' | 'Delivered';
-  status: 'Paid' | 'Unpaid';
+  // New invoices default to Unpaid — payment is recorded later from the list.
+  status: 'Paid' | 'Unpaid' | 'Partial';
   salesperson?: string;
   salespersonLocation?: string;
   branch?: string;
   clientDealBy?: string;
   referralBy?: string;
   createdBy?: string;
-  paymentMode?: 'Cash' | 'Online' | 'Cheque';
-  bankId?: string;
-  bankName?: string;
-  bankAccountNumber?: string;
-  chequeNumber?: string;
-  chequeBank?: string;
-  chequeDate?: string;
-  paymentStatus?: 'Full' | 'Partial';
+
+  payments?: InvoicePayment[];
   paidAmount?: number;
   remainingAmount?: number;
+  paymentStatus?: 'Full' | 'Partial' | 'Unpaid';
+
   collectionMethod?: 'Self Collection' | 'TCS' | 'LCS' | 'Daewoo' | 'Others';
   deductionCharges: number;
   cargoAmount?: number;
@@ -137,6 +179,9 @@ export interface CreateInvoiceDTO {
   agentAmount?: number;
   agentCurrency?: InvoiceCurrency;
   agentDetails?: string;
+  supplierCostTotal?: number;
+  purchaseCostTotal?: number;
+  miscExpense?: number;
   digitalStamp?: boolean;
 }
 
@@ -146,7 +191,7 @@ export interface UpdateInvoiceDTO extends CreateInvoiceDTO {
 
 export interface InvoiceFilters {
   searchTerm: string;
-  statusFilter: 'all' | 'Paid' | 'Unpaid';
+  statusFilter: 'all' | 'Paid' | 'Unpaid' | 'Partial';
   dateFrom: string;
   dateTo: string;
   cityFilter: string;
@@ -157,9 +202,28 @@ export interface InvoiceStats {
   totalCount: number;
   paidCount: number;
   unpaidCount: number;
+  partialCount: number;
   totalAmount: number;
   totalDeductionCharges: number;
   netAmount: number;
+  // New aggregate fields (additive — existing consumers unaffected):
+  totalMiscExpense: number;
+  totalSupplierCost: number;
+  totalPurchaseCost: number;
+  totalPaid: number;
+  totalRemaining: number;
+}
+
+// Summary of a selected/filtered subset for the list "sum" bar.
+export interface InvoiceSelectionSummary {
+  count: number;
+  totalAmount: number;
+  miscExpense: number;
+  supplierCost: number;
+  purchaseCost: number;
+  netAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
 }
 
 export interface ValidationResult {
@@ -173,10 +237,14 @@ export interface ProductInfo {
   modelName: string;
   category: string;
   sellPrice: number;
+  // Cost fields read from the inventory product (names confirmed by inventory
+  // module). Optional so a missing field simply yields 0 rather than crashing.
+  supplierCost?: number;
+  purchaseCost?: number;
   stock: number;
   serialNumbers: string[];
   serialCities: { [serialNumber: string]: string };
-  serialStatus?: { [serialNumber: string]: 'Available' | 'In Transit' | 'Damaged' | 'Returned' };
+  serialStatus?: { [serialNumber: string]: 'Available' | 'In Transit' | 'Damaged' | 'Returned' | 'Sold' };
   description: string;
   imageUrls?: string[];
 }
@@ -191,6 +259,15 @@ export interface CustomerSuggestion {
   customerAddress?: string;
   warrantyLocation?: string;
   exchangeWarrantyNote: string;
+}
+
+// Persistent customer record (the `customers` collection). Keyed by phone.
+export interface CustomerRecord extends CustomerSuggestion {
+  id?: string;
+  invoiceCount?: number;
+  lastInvoiceDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ProvinceCities {

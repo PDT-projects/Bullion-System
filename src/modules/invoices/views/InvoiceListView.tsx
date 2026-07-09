@@ -11,9 +11,14 @@ function formatAed(amount: number): string {
 import {
   FileText, Plus, Search, Eye, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin, Trash2,
+  Pencil, Wallet, CheckCircle2, Banknote, Landmark,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Invoice, InvoiceStats, InvoiceFilters } from '../models/types';
+import { Invoice, InvoiceStats, InvoiceFilters, InvoiceSelectionSummary, PaymentMode } from '../models/types';
+import {
+  calculateSupplierCost, calculatePurchaseCost, calculateMiscExpense,
+  calculateNetAmount, calculatePaidAmount, calculateRemainingAmount,
+} from '../models/invoiceService';
 import { downloadInvoicePdf } from '../models/invoicePdfService';
 
 interface Props {
@@ -39,6 +44,22 @@ interface Props {
   onCreateInvoice: () => void;
   formatCurrency: (amount: number) => string;
   formatDate: (dateString: string) => string;
+  // selection
+  selectedIds: string[];
+  isSelected: (id: string) => boolean;
+  toggleSelect: (id: string) => void;
+  toggleSelectAll: () => void;
+  allFilteredSelected: boolean;
+  clearSelection: () => void;
+  selectionSummary: InvoiceSelectionSummary;
+  hasSelection: boolean;
+  // payment
+  banks: { id: string; name: string; accountNumber: string; balance: number; currency?: string }[];
+  paymentInvoice: Invoice | null;
+  isRecordingPayment: boolean;
+  openPayment: (invoice: Invoice) => void;
+  closePayment: () => void;
+  submitPayment: (input: { amount: number; mode: PaymentMode; date: string; bankId?: string; note?: string }) => Promise<void>;
 }
 
 function deliveryBadge(status: string) {
@@ -60,14 +81,146 @@ function receivedBadge(status: string) {
   return map[status] ?? 'bg-gray-100 text-gray-600';
 }
 
+function statusBadge(status: string) {
+  const map: Record<string, string> = {
+    Paid: 'bg-green-100 text-green-800',
+    Partial: 'bg-amber-100 text-amber-800',
+    Unpaid: 'bg-red-100 text-red-800',
+    Returned: 'bg-gray-200 text-gray-600',
+  };
+  return map[status] ?? 'bg-gray-100 text-gray-600';
+}
+
+interface PaymentModalBank { id: string; name: string; accountNumber: string; balance: number; currency?: string; }
+interface PaymentInput { amount: number; mode: PaymentMode; date: string; bankId?: string; note?: string; }
+
+function PaymentModal({
+  invoice, banks, isSaving, onClose, onSubmit, formatDisplay,
+}: {
+  invoice: Invoice; banks: PaymentModalBank[]; isSaving: boolean;
+  onClose: () => void; onSubmit: (input: PaymentInput) => void;
+  formatDisplay: (n: number) => string;
+}) {
+  const total = invoice.totalAmount || 0;
+  const alreadyPaid = calculatePaidAmount(invoice);
+  const remaining = Math.max(0, total - alreadyPaid);
+
+  const [amount, setAmount] = useState<number>(remaining);
+  const [mode, setMode] = useState<PaymentMode>('Cash');
+  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [bankId, setBankId] = useState<string>('');
+  const [note, setNote] = useState<string>('');
+
+  const willClear = amount >= remaining && remaining > 0;
+  const valid = amount > 0 && (mode !== 'Bank' || !!bankId);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-lg w-full max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-gray-50 rounded-t-xl">
+          <div>
+            <h3 className="text-base font-bold text-gray-900">Record Payment</h3>
+            <p className="text-xs text-gray-400">{invoice.invoiceNumber} · {invoice.customerName}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:bg-gray-200"><X size={18} /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Total', value: formatDisplay(total), color: 'text-gray-900' },
+              { label: 'Already Paid', value: formatDisplay(alreadyPaid), color: 'text-green-600' },
+              { label: 'Remaining', value: formatDisplay(remaining), color: 'text-red-600' },
+            ].map(c => (
+              <div key={c.label} className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{c.label}</div>
+                <div className={`text-sm font-extrabold mt-0.5 ${c.color}`}>{c.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Amount Paying Now *</label>
+              <input type="number" min="0" max={remaining || undefined} value={amount || ''}
+                onChange={e => setAmount(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Payment Date *</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900" />
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            {willClear
+              ? <>Full remaining amount — invoice moves to <strong className="text-green-700">Paid</strong>.</>
+              : <>Partial payment — invoice stays <strong className="text-amber-700">Partial</strong>.</>}
+          </p>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Payment Method *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([['Cash', Banknote], ['Bank', Landmark]] as [PaymentMode, any][]).map(([m, Icon]) => {
+                const sel = mode === m;
+                return (
+                  <button key={m} type="button" onClick={() => setMode(m)}
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-semibold transition ${
+                      sel ? 'border-gray-800 bg-gray-100 text-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}>
+                    <Icon size={16} /> {m === 'Bank' ? 'Bank Transfer' : 'Cash'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {mode === 'Bank' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Receiving Bank *</label>
+              <select value={bankId} onChange={e => setBankId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900">
+                <option value="">Select bank account</option>
+                {banks.map(b => <option key={b.id} value={b.id}>{b.name} — {b.accountNumber}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Note <span className="font-normal text-gray-400">(optional)</span></label>
+            <input type="text" value={note} onChange={e => setNote(e.target.value)}
+              placeholder="e.g. cash received at counter"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+          <button onClick={onClose} className="flex items-center gap-1.5 px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 text-sm font-medium">
+            <X size={15} /> Cancel
+          </button>
+          <button onClick={() => onSubmit({ amount, mode, date, bankId: bankId || undefined, note: note || undefined })}
+            disabled={!valid || isSaving}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-bold hover:bg-green-700 disabled:opacity-50">
+            {isSaving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><CheckCircle2 size={16} /> Confirm Payment</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function InvoiceListView({
   invoices, filteredInvoices, stats, filters, viewingInvoice, isLoading,
   onSearch, onStatusFilter, onCityFilter, onSalespersonFilter,
   onDateFromFilter, onDateToFilter, onClearFilters,
   availableCities, availableSalespersons,
   salespersonMap = {},
-  onViewInvoice, onCloseView, onCreateInvoice,
+  onViewInvoice, onCloseView, onEditInvoice, onCreateInvoice,
   formatCurrency, formatDate,
+  selectedIds, isSelected, toggleSelect, toggleSelectAll, allFilteredSelected,
+  clearSelection, selectionSummary, hasSelection,
+  banks, paymentInvoice, isRecordingPayment, openPayment, closePayment, submitPayment,
 }: Props) {
 
   const spName = (idOrName: string | undefined): string => {
@@ -112,7 +265,7 @@ export function InvoiceListView({
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 pb-28">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
@@ -235,10 +388,15 @@ export function InvoiceListView({
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-3 py-3 w-10">
+                  <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-gray-800" title="Select all filtered" />
+                </th>
                 {[
                   'Invoice #', 'Date', 'Customer', 'Branch / City',
-                  'Salesperson', 'Products', 'Amount (AED)', 'Delivery',
-                  'Payment', 'Status', 'Actions',
+                  'Salesperson', 'Products', 'Amount (AED)',
+                  'Supplier Cost', 'Purchase Cost', 'Misc Exp', 'Net',
+                  'Delivery', 'Payment', 'Status', 'Actions',
                 ].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
@@ -247,7 +405,7 @@ export function InvoiceListView({
             <tbody className="divide-y divide-gray-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={16} className="px-4 py-14 text-center text-gray-400">
                     <FileText className="mx-auto mb-3 text-gray-300" size={44} />
                     <p className="font-medium text-gray-500">No invoices found</p>
                     <p className="text-xs mt-1">
@@ -255,8 +413,21 @@ export function InvoiceListView({
                     </p>
                   </td>
                 </tr>
-              ) : filteredInvoices.map(invoice => (
-                <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
+              ) : filteredInvoices.map(invoice => {
+                const supplierCost = calculateSupplierCost(invoice);
+                const purchaseCost = calculatePurchaseCost(invoice);
+                const misc = calculateMiscExpense(invoice);
+                const net = calculateNetAmount(invoice);
+                const paid = calculatePaidAmount(invoice);
+                const remaining = calculateRemainingAmount(invoice);
+                const selected = isSelected(invoice.id);
+                return (
+                <tr key={invoice.id} className={`transition-colors ${selected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+
+                  <td className="px-3 py-3">
+                    <input type="checkbox" checked={selected} onChange={() => toggleSelect(invoice.id)}
+                      className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-gray-800" />
+                  </td>
 
                   <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
                     {invoice.invoiceNumber}
@@ -311,6 +482,11 @@ export function InvoiceListView({
                     )}
                   </td>
 
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{supplierCost > 0 ? formatDisplay(supplierCost) : '—'}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{purchaseCost > 0 ? formatDisplay(purchaseCost) : '—'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
+                  <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(net)}</td>
+
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${deliveryBadge(invoice.deliveryStatus)}`}>
                       {invoice.deliveryStatus}
@@ -323,31 +499,28 @@ export function InvoiceListView({
                   </td>
 
                   <td className="px-4 py-3">
-                    {invoice.paymentMode ? (
-                      <div className="space-y-0.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          invoice.paymentMode === 'Cash'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-blue-50 text-blue-700 border border-blue-200'
-                        }`}>
-                          {invoice.paymentMode === 'Cash' ? '💵 Cash' : '🏦 Bank'}
-                        </span>
-                        {invoice.paymentMode === 'Online' && invoice.bankName && (
-                          <p className="text-xs text-gray-400 truncate max-w-[120px]">{invoice.bankName}</p>
-                        )}
-                        {invoice.paymentStatus === 'Partial' && (
-                          <p className="text-xs text-orange-600 font-medium">
-                            Partial · {formatDisplay(invoice.paidAmount || 0)} paid
-                          </p>
-                        )}
-                      </div>
-                    ) : <span className="text-gray-300">—</span>}
+                    {invoice.status === 'Partial' && (
+                      <p className="text-xs text-orange-600 font-medium mb-1">{formatDisplay(paid)} paid · {formatDisplay(remaining)} left</p>
+                    )}
+                    {invoice.paymentMode && invoice.status !== 'Unpaid' && (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        invoice.paymentMode === 'Cash'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-blue-50 text-blue-700 border border-blue-200'
+                      }`}>
+                        {invoice.paymentMode === 'Cash' ? '💵 Cash' : '🏦 Bank'}
+                      </span>
+                    )}
+                    {invoice.status !== 'Paid' && invoice.status !== 'Returned' && (
+                      <button onClick={() => openPayment(invoice)}
+                        className="mt-1.5 flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md bg-green-600 text-white hover:bg-green-700">
+                        <Wallet size={12} /> Record Payment
+                      </button>
+                    )}
                   </td>
 
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      invoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusBadge(invoice.status)}`}>
                       {invoice.status}
                     </span>
                   </td>
@@ -357,6 +530,10 @@ export function InvoiceListView({
                       <button onClick={() => onViewInvoice(invoice)}
                         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View">
                         <Eye size={15} />
+                      </button>
+                      <button onClick={() => onEditInvoice(invoice.id)}
+                        className="p-1.5 text-gray-600 hover:bg-gray-100 rounded" title="Edit">
+                        <Pencil size={15} />
                       </button>
                       <button onClick={() => navigate(`/invoices/${invoice.id}/delete`)}
                         className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
@@ -374,11 +551,48 @@ export function InvoiceListView({
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* ── Sticky selection summary bar ── */}
+      {filteredInvoices.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
+          <div className="flex items-center gap-6 overflow-x-auto">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
+                {hasSelection ? `${selectionSummary.count} selected` : `All ${selectionSummary.count} filtered`}
+              </span>
+              {hasSelection && (
+                <button onClick={clearSelection} className="text-xs text-gray-500 hover:text-gray-700 underline">clear</button>
+              )}
+            </div>
+            {[
+              { label: 'Total', value: selectionSummary.totalAmount, color: 'text-gray-900' },
+              { label: 'Supplier Cost', value: selectionSummary.supplierCost, color: 'text-gray-700' },
+              { label: 'Purchase Cost', value: selectionSummary.purchaseCost, color: 'text-gray-700' },
+              { label: 'Misc Expense', value: selectionSummary.miscExpense, color: 'text-red-600' },
+              { label: 'Net', value: selectionSummary.netAmount, color: 'text-gray-900' },
+              { label: 'Paid', value: selectionSummary.paidAmount, color: 'text-green-600' },
+              { label: 'Remaining', value: selectionSummary.remainingAmount, color: 'text-red-600' },
+            ].map(s => (
+              <div key={s.label} className="shrink-0">
+                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{s.label}</div>
+                <div className={`text-sm font-extrabold ${s.color}`}>{formatDisplay(s.value)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Payment Modal ── */}
+      {paymentInvoice && (
+        <PaymentModal invoice={paymentInvoice} banks={banks} isSaving={isRecordingPayment}
+          onClose={closePayment} onSubmit={submitPayment} formatDisplay={formatDisplay} />
+      )}
 
       {/* ── View Modal ── */}
       {viewingInvoice && (

@@ -1,45 +1,45 @@
-// Invoice Module - Form ViewModel
-// CHANGES:
-//   - Replaced Province/City with Country/City
-//     • Countries+cities are free-text entries persisted to Firestore (appConfig/countryCities)
-//     • Previously used combos appear in dropdowns for the next invoice
-//   - Commission auto-calculation wired through internal fields
-//   - FIX: navigate('/invoices') is now delayed by 300 ms after downloadInvoicePdf()
-//     so the browser anchor-click has time to execute before the component unmounts.
+// Invoice Module - Form ViewModel  (cleaned + performance pass)
 //
-// FIX v2 (image pipeline):
-//   - mapToInvoiceProductRow() helper centralises the product-row mapping that
-//     was previously duplicated across handleSave, handleDownloadPdf and the
-//     edit-load path.  All three paths now use the same helper, so imageUrls is
-//     guaranteed to be present everywhere.
-//   - updateProduct 'productId' case and the edit-hydration path already carried
-//     imageUrls correctly; the helper just makes this explicit and consistent.
+// KEY CHANGES vs previous version
+//   1. PERFORMANCE: the form no longer blocks on fetchAllInvoices() (which
+//      pulled every invoice ever created just to power the customer
+//      autocomplete + duplicate-number check). The form now renders as soon as
+//      a few fast reads resolve; products / employees / banks / customers load
+//      in the background. Duplicate-number check is a targeted query at save.
+//   2. Removed the external currency-rate API call (AED-only now).
+//   3. Invoices are created UNPAID — no payment section is written here.
+//      Payments are recorded later from the invoice list.
+//   4. Customer contact info is upserted to the `customers` collection on save.
+//   5. Salespersons can be added inline and persist (appConfig/salespersons).
+//   6. Product rows snapshot supplierCost / purchaseCost from inventory.
+//
+// Interface is a SUPERSET of the previous one (new fields are additive) so the
+// existing InvoiceFormView keeps compiling until the restyled view ships.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  doc, getDoc, setDoc, runTransaction, collection, query,
-  orderBy, limit, getDocs,
+  doc, getDoc, setDoc, runTransaction, collection, query, where, getDocs,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
-import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
+import { Invoice, InvoiceProduct, ProductInfo, CustomerRecord } from '../models/types';
 import {
   createEmptyInvoiceProduct, updateProductWithSelection, updateProductQuantity,
-  updateProductPrice, updateSerialNumber, getAvailableSerials,
+  updateProductPrice, updateSerialNumber,
   validateInvoice, calculateTotal,
-  salespersonLocations, deliveryStatuses,
-  collectionMethods, formatCurrency, InvoiceCurrency,
-  fetchCurrencyRates, convertCurrency, CURRENCY_RATE_FALLBACK,
+  calculateMiscExpense, calculateSupplierCost, calculatePurchaseCost,
+  salespersonLocations, deliveryStatuses, collectionMethods,
+  formatCurrency, InvoiceCurrency, CURRENCY_RATE_FALLBACK,
 } from '../models/invoiceService';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
+import { CustomerFirebaseService } from '../models/CustomerFirebaseService';
 import { generateInvoicePdf, downloadInvoicePdf } from '../models/invoicePdfService';
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/Commissionautoservice';
-import { createTransactionFromInvoice, TxCompany } from '../../transactions/models/TransactionBridgeService';
-// ── Futuristic payable bridge ─────────────────────────────────────────────────
+import { TxCompany } from '../../transactions/models/transactionBridgeService';
 import { createFuturisticPayablesFromInvoice } from '../../Payable-to-futuristic/models/futuristicPayableBridge';
 
 // Default branches — always available even before Firestore loads
@@ -52,7 +52,6 @@ export function makeBranchValue(branch: string): TxCompany {
 export function branchFromValue(value: string): string {
   return value.replace(COMPANY_PREFIX, '');
 }
-
 export function getCurrencyFromBranch(branch: string): InvoiceCurrency {
   switch (branch) {
     case 'Saudia': return 'SAR';
@@ -74,7 +73,6 @@ export interface UseInvoiceFormViewModelReturn {
   isSaving: boolean;
   pdfGenerating: boolean;
   isDownloadingPdf: boolean;
-  // Country/City (replaces province/city)
   savedCountries: string[];
   savedCitiesForCountry: (country: string) => string[];
   handleAddCountryCity: (country: string, city: string) => Promise<void>;
@@ -82,8 +80,12 @@ export interface UseInvoiceFormViewModelReturn {
   deliveryStatuses: string[];
   collectionMethods: string[];
   availableProducts: ProductInfo[];
+  productsLoading: boolean;
   activeEmployees: Employee[];
   banks: Bank[];
+  // Salesperson persistence (NEW):
+  savedSalespersons: string[];
+  handleAddSalesperson: (name: string) => Promise<void>;
   setFormData: (data: Partial<Invoice>) => void;
   handleCustomerSearch: (value: string, field: 'customerName' | 'customerPhone') => void;
   handleCustomerSelect: (customer: Invoice) => void;
@@ -110,14 +112,12 @@ export interface UseInvoiceFormViewModelReturn {
 
 // ── Sequential invoice number generator ───────────────────────────────────────
 async function generateSequentialInvoiceNumber(): Promise<string> {
-  const now   = new Date();
-  const dd    = String(now.getDate()).padStart(2, '0');
-  const mm    = String(now.getMonth() + 1).padStart(2, '0');
-  const yy    = String(now.getFullYear()).slice(-2);
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yy = String(now.getFullYear()).slice(-2);
   const today = `${dd}${mm}${yy}`;
-
   const counterRef = doc(db, 'invoiceCounters', 'global');
-
   const seq = await runTransaction(db, async tx => {
     const snap = await tx.get(counterRef);
     if (!snap.exists() || snap.data().date !== today) {
@@ -128,7 +128,6 @@ async function generateSequentialInvoiceNumber(): Promise<string> {
     tx.update(counterRef, { seq: next });
     return next;
   });
-
   return `INV-${today}-${String(seq).padStart(3, '0')}`;
 }
 
@@ -136,25 +135,30 @@ async function generateSequentialInvoiceNumber(): Promise<string> {
 async function loadCountryCities(): Promise<Record<string, string[]>> {
   try {
     const snap = await getDoc(doc(db, 'appConfig', 'countryCities'));
-    if (snap.exists()) return snap.data() as Record<string, string[]>;
-    return {};
+    return snap.exists() ? (snap.data() as Record<string, string[]>) : {};
   } catch (err) {
     console.error('[CountryCities] load failed:', err);
     return {};
   }
 }
-
 async function saveCountryCities(data: Record<string, string[]>): Promise<void> {
   await setDoc(doc(db, 'appConfig', 'countryCities'), data, { merge: true });
 }
 
-// ── FIX: Centralised product-row serialiser ────────────────────────────────────
-// Converts a live InvoiceProduct row (from selectedProducts state) into the
-// plain object that gets written to Firestore and fed into the PDF renderer.
-// Using this helper in handleSave, handleDownloadPdf and the edit-hydration path
-// guarantees imageUrls is ALWAYS present and never accidentally dropped by a
-// TypeScript type-cast or a partial-spread.
-function mapToInvoiceProductRow(ip: InvoiceProduct & { imageUrls?: string[] }): InvoiceProduct & { imageUrls: string[] } {
+// ── Cost extraction seam ──────────────────────────────────────────────────────
+// Reads supplier/purchase cost from an inventory product. The exact field names
+// live in the inventory module; this fallback chain is non-destructive (missing
+// fields yield 0). >>> CONFIRM these names with inventory and trim the chain. <<<
+function extractCost(p: any): { supplierCost: number; purchaseCost: number } {
+  const supplierCost =
+    p.supplierCost ?? p.supplierPrice ?? p.supplierRate ?? p.costPrice ?? p.cost ?? 0;
+  const purchaseCost =
+    p.purchaseCost ?? p.purchasePrice ?? p.landedCost ?? p.buyingPrice ?? p.costPrice ?? p.cost ?? 0;
+  return { supplierCost: Number(supplierCost) || 0, purchaseCost: Number(purchaseCost) || 0 };
+}
+
+// ── Product-row serialiser (guarantees imageUrls + cost are always present) ────
+function mapToInvoiceProductRow(ip: InvoiceProduct): InvoiceProduct {
   return {
     id:            ip.id,
     productId:     ip.productId,
@@ -169,12 +173,41 @@ function mapToInvoiceProductRow(ip: InvoiceProduct & { imageUrls?: string[] }): 
     serialNumbers: ip.serialNumbers || [],
     serialCities:  ip.serialCities  || {},
     currency:      ip.currency      || 'AED',
-    // FIX: always include imageUrls — fall back to [] so the PDF service never
-    // receives undefined and can safely check `.length`.
-    imageUrls:     Array.isArray(ip.imageUrls) && ip.imageUrls.length > 0
-                     ? ip.imageUrls
-                     : [],
+    imageUrls:     Array.isArray(ip.imageUrls) && ip.imageUrls.length > 0 ? ip.imageUrls : [],
+    supplierCost:  ip.supplierCost || 0,
+    purchaseCost:  ip.purchaseCost || 0,
   };
+}
+
+function mapRawToProductInfo(p: any): ProductInfo {
+  const { supplierCost, purchaseCost } = extractCost(p);
+  return {
+    id:            p.id,
+    brandName:     p.brandName || p.brand || '',
+    modelName:     p.modelName || p.model || '',
+    category:      p.category  || '',
+    sellPrice:     p.sellPrice || p.salePrice || p.price || 0,
+    supplierCost,
+    purchaseCost,
+    stock:         typeof p.stock === 'number' ? p.stock : (p.serialNumbers?.length ?? 0),
+    serialNumbers: p.serialNumbers || [],
+    serialCities:  p.serialCities  || {},
+    serialStatus:  p.serialStatus  || {},
+    description:   p.description    || '',
+    imageUrls:     Array.isArray(p.imageUrls) ? p.imageUrls : [],
+  };
+}
+
+// Map a persistent customer record into the minimal Invoice-shaped object the
+// existing autocomplete dropdown consumes.
+function customerToSuggestion(c: CustomerRecord): Invoice {
+  return {
+    customerName: c.customerName, customerPhone: c.customerPhone,
+    customerPhone2: c.customerPhone2, customerCNIC: c.customerCNIC,
+    customerProvince: c.customerProvince, customerCity: c.customerCity,
+    customerAddress: c.customerAddress, warrantyLocation: c.warrantyLocation,
+    exchangeWarrantyNote: c.exchangeWarrantyNote || '',
+  } as unknown as Invoice;
 }
 
 // ── Main ViewModel ─────────────────────────────────────────────────────────────
@@ -182,10 +215,11 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const navigate = useNavigate();
   const { id }   = useParams<{ id: string }>();
 
-  const [allInvoices,      setAllInvoices]      = useState<Invoice[]>([]);
   const [allProducts,      setAllProducts]      = useState<ProductInfo[]>([]);
+  const [productsLoading,  setProductsLoading]  = useState(true);
   const [activeEmployees,  setActiveEmployees]  = useState<Employee[]>([]);
   const [banks,            setBanks]            = useState<Bank[]>([]);
+  const [savedCustomers,   setSavedCustomers]   = useState<CustomerRecord[]>([]);
   const [editingInvoice,   setEditingInvoice]   = useState<Invoice | null>(null);
   const [isLoading,        setIsLoading]        = useState(true);
   const [isSaving,         setIsSaving]         = useState(false);
@@ -194,35 +228,27 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [invoiceCompany,   setInvoiceCompany]   = useState<TxCompany>(makeBranchValue(DEFAULT_BRANCHES[0]));
   const [branches,         setBranches]         = useState<string[]>(DEFAULT_BRANCHES);
   const [salespersonLocationsList, setSalespersonLocationsList] = useState<string[]>(salespersonLocations);
+  const [savedSalespersons, setSavedSalespersons] = useState<string[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<InvoiceCurrency[]>(['AED']);
-  const [currencyRates, setCurrencyRates] = useState<Record<InvoiceCurrency, number>>(CURRENCY_RATE_FALLBACK);
-
-  // Country/City state (replaces province/city)
   const [countryCities, setCountryCities] = useState<Record<string, string[]>>({});
 
   const savedCountries = useMemo(() => Object.keys(countryCities).sort(), [countryCities]);
   const savedCitiesForCountry = useCallback(
-    (country: string) => countryCities[country] || [],
-    [countryCities],
+    (country: string) => countryCities[country] || [], [countryCities],
   );
 
   const [formData, setFormDataState] = useState<Partial<Invoice>>({
     date: new Date().toISOString().split('T')[0],
     customerName: '', customerPhone: '', customerPhone2: '',
-    customerCNIC: '',
-    customerProvince: '', // repurposed as country
-    customerCity: '',
+    customerCNIC: '', customerProvince: '', customerCity: '',
     customerAddress: '', warrantyLocation: '',
     exchangeWarrantyNote: '', deliveryStatus: 'Self-collect',
     status: 'Unpaid', salesperson: '', salespersonLocation: '',
     clientDealBy: '', referralBy: '', createdBy: '',
-    paymentMode: 'Cash', paymentStatus: 'Full', paidAmount: 0,
-    remainingAmount: 0, collectionMethod: 'Self Collection',
+    collectionMethod: 'Self Collection',
     deductionCharges: 0,
     cargoAmount: 0, cargoCurrency: 'AED', customsAmount: 0, customsCurrency: 'AED',
     agentDetails: '', agentAmount: 0, agentCurrency: 'AED',
-    bankId: '', bankName: '', bankAccountNumber: '',
-    chequeNumber: '', chequeBank: '', chequeDate: '',
     digitalStamp: false,
   });
 
@@ -230,34 +256,24 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const [customerSuggestions, setCustomerSuggestions] = useState<Invoice[]>([]);
   const [showSuggestions,     setShowSuggestions]     = useState(false);
 
-  // ── Initial load ──────────────────────────────────────────────────────────
+  // ── FAST initial load — only the essentials block render ───────────────────
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       setIsLoading(true);
       try {
-        const [
-          countryCitiesData,
-          rawProducts,
-          invoices,
-          employees,
-          bankList,
-          invoiceNumber,
-          branchSnap,
-          spLocSnap,
-        ] = await Promise.all([
-          loadCountryCities(),
-          InventoryFirebaseService.fetchAllProducts().catch(err => {
-            console.error('fetchAllProducts failed:', err);
-            toast.error('Could not load products — check Firestore rules');
-            return [] as any[];
-          }),
-          InvoiceFirebaseService.fetchAllInvoices().catch(() => [] as Invoice[]),
-          EmployeeFirebaseService.fetchAllEmployees().catch(() => []),
-          BankFirebaseService.fetchAllBanks().catch(() => []),
-          !id ? generateSequentialInvoiceNumber().catch(() => 'INV-DRAFT') : Promise.resolve(''),
-          getDoc(doc(db, 'appConfig', 'branches')).catch(() => null),
-          getDoc(doc(db, 'appConfig', 'salespersonLocations')).catch(() => null),
-        ]);
+        const [countryCitiesData, invoiceNumber, branchSnap, spLocSnap, spSnap, existing] =
+          await Promise.all([
+            loadCountryCities(),
+            !id ? generateSequentialInvoiceNumber().catch(() => 'INV-DRAFT') : Promise.resolve(''),
+            getDoc(doc(db, 'appConfig', 'branches')).catch(() => null),
+            getDoc(doc(db, 'appConfig', 'salespersonLocations')).catch(() => null),
+            getDoc(doc(db, 'appConfig', 'salespersons')).catch(() => null),
+            id ? InvoiceFirebaseService.fetchInvoiceById(id).catch(() => null) : Promise.resolve(null),
+          ]);
+        if (cancelled) return;
+
+        setCountryCities(countryCitiesData);
 
         if (branchSnap && branchSnap.exists()) {
           const saved = (branchSnap.data().list as string[]) || DEFAULT_BRANCHES;
@@ -267,142 +283,109 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           const saved = (spLocSnap.data().list as string[]) || salespersonLocations;
           setSalespersonLocationsList([...new Set([...salespersonLocations, ...saved])].sort());
         }
+        if (spSnap && spSnap.exists()) {
+          setSavedSalespersons(((spSnap.data().list as string[]) || []).sort());
+        }
 
-        setCountryCities(countryCitiesData);
-        setAllInvoices(invoices);
-        setActiveEmployees((employees as any[]).filter((e: any) => e.status === 'active'));
-        setBanks(bankList as any[]);
-
-        const productInfos: ProductInfo[] = (rawProducts as any[])
-          .filter(p => p.receivableStatus !== 'Pending')
-          .map(p => ({
-            id:            p.id,
-            brandName:     p.brandName     || p.brand     || '',
-            modelName:     p.modelName     || p.model     || '',
-            category:      p.category      || '',
-            sellPrice:     p.sellPrice     || p.salePrice || p.price || 0,
-            stock:         typeof p.stock === 'number' ? p.stock : (p.serialNumbers?.length ?? 0),
-            serialNumbers: p.serialNumbers || [],
-            serialCities:  p.serialCities  || {},
-            serialStatus:  p.serialStatus  || {},
-            description:   p.description   || '',
-            // FIX: explicitly carry imageUrls from the inventory product so it
-            // is available when building the invoice product row.
-            imageUrls:     Array.isArray(p.imageUrls) ? p.imageUrls : [],
-          }));
-        setAllProducts(productInfos);
-
-        if (id) {
-          const existing = invoices.find(i => i.id === id) ||
-                           await InvoiceFirebaseService.fetchInvoiceById(id);
-          if (existing) {
-            setEditingInvoice(existing);
-            setFormDataState({ ...existing });
-
-            // Re-hydrate imageUrls on each product row from the live inventory
-            // list. Invoices saved before imageUrls was introduced will have an
-            // empty [] from docToInvoiceProduct; this back-fills from inventory.
-            const hydratedProducts: InvoiceProduct[] = (existing.products || []).map((ip: any) => {
-              // If already has images, keep them; otherwise pull from inventory
-              if (Array.isArray(ip.imageUrls) && ip.imageUrls.length > 0) return ip;
-              const inv = (rawProducts as any[]).find((rp: any) => rp.id === ip.productId);
-              return {
-                ...ip,
-                imageUrls: (inv && Array.isArray(inv.imageUrls) && inv.imageUrls.length > 0)
-                  ? inv.imageUrls
-                  : [],
-              };
+        if (id && existing) {
+          setEditingInvoice(existing);
+          setFormDataState({ ...existing });
+          setSelectedProducts((existing.products || []).map(p => ({ ...p })));
+          setSelectedCurrencies(existing.selectedCurrencies || ['AED']);
+          if (existing.customerProvince && existing.customerCity) {
+            setCountryCities(prev => {
+              const key = existing.customerProvince;
+              const cities = [...new Set([...(prev[key] || []), existing.customerCity])];
+              return { ...prev, [key]: cities };
             });
-            setSelectedProducts(hydratedProducts);
-            setSelectedCurrencies(existing.selectedCurrencies || ['AED']);
-
-            // Ensure the country this invoice uses is in the saved list
-            if (existing.customerProvince && existing.customerCity) {
-              setCountryCities(prev => {
-                const key    = existing.customerProvince;
-                const cities = [...new Set([...(prev[key] || []), existing.customerCity])];
-                return { ...prev, [key]: cities };
-              });
-            }
           }
-        } else {
+        } else if (!id) {
           setFormDataState(prev => ({ ...prev, invoiceNumber }));
         }
       } catch (err) {
         console.error('Form load failed:', err);
         toast.error('Failed to load form data');
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);   // form renders now
       }
     };
     load();
+    return () => { cancelled = true; };
   }, [id]);
 
+  // ── Background loads — never block the form ────────────────────────────────
   useEffect(() => {
-    let mounted = true;
-    const fetchRates = async () => {
-      try {
-        const rates = await fetchCurrencyRates();
-        if (mounted) setCurrencyRates(rates);
-      } catch (err) {
-        console.warn('[InvoiceForm] Currency rates load failed:', err);
-        if (mounted) setCurrencyRates(CURRENCY_RATE_FALLBACK);
-      }
-    };
-    fetchRates();
-    const interval = window.setInterval(fetchRates, 30 * 60 * 1000);
-    return () => { mounted = false; window.clearInterval(interval); };
+    let cancelled = false;
+    setProductsLoading(true);
+    InventoryFirebaseService.fetchAllProducts()
+      .then(raw => {
+        if (cancelled) return;
+        const infos = (raw as any[])
+          .filter(p => p.receivableStatus !== 'Pending')
+          .map(mapRawToProductInfo);
+        setAllProducts(infos);
+      })
+      .catch(err => {
+        console.error('fetchAllProducts failed:', err);
+        toast.error('Could not load products — check Firestore rules');
+      })
+      .finally(() => { if (!cancelled) setProductsLoading(false); });
+
+    EmployeeFirebaseService.fetchAllEmployees()
+      .then(emps => { if (!cancelled) setActiveEmployees((emps as any[]).filter(e => e.status === 'active')); })
+      .catch(() => {});
+    BankFirebaseService.fetchAllBanks()
+      .then(list => { if (!cancelled) setBanks(list as any[]); })
+      .catch(() => {});
+    CustomerFirebaseService.fetchAllCustomers()
+      .then(list => { if (!cancelled) setSavedCustomers(list); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
+
+  // When products arrive after an edit-load, back-fill imageUrls/costs on rows.
+  useEffect(() => {
+    if (!editingInvoice || allProducts.length === 0) return;
+    setSelectedProducts(prev => prev.map(ip => {
+      const needsImg  = !Array.isArray(ip.imageUrls) || ip.imageUrls.length === 0;
+      const needsCost = !ip.supplierCost && !ip.purchaseCost;
+      if (!needsImg && !needsCost) return ip;
+      const src = allProducts.find(p => p.id === ip.productId);
+      if (!src) return ip;
+      return {
+        ...ip,
+        imageUrls:    needsImg  ? (src.imageUrls || []) : ip.imageUrls,
+        supplierCost: needsCost ? (src.supplierCost || 0) : ip.supplierCost,
+        purchaseCost: needsCost ? (src.purchaseCost || 0) : ip.purchaseCost,
+      };
+    }));
+  }, [allProducts, editingInvoice]);
 
   const isEditing = !!editingInvoice;
 
   const setFormData = useCallback((data: Partial<Invoice>) => {
-    // FIX: this used to force `date` back to TODAY on every single
-    // setFormData call while creating a new invoice, which silently
-    // reverted any date the user picked in the Date field back to today.
-    // Date now behaves like any other editable field — it defaults to
-    // today (set in the initial useState above) but stays whatever the
-    // user sets it to afterwards, for both create and edit.
-    setFormDataState(prev => ({
-      ...prev,
-      ...data,
-    }));
+    setFormDataState(prev => ({ ...prev, ...data }));
   }, []);
 
   // ── Add country+city and persist ──────────────────────────────────────────
   const handleAddCountryCity = useCallback(async (country: string, city: string) => {
-    const c  = country.trim();
-    const ci = city.trim();
+    const c = country.trim(); const ci = city.trim();
     if (!c) return;
-
     const isCountryOnly = ci === '__COUNTRY_ONLY__' || ci === '';
-
     const existingCities = countryCities[c] || [];
-    const newCities = isCountryOnly
-      ? existingCities
-      : [...new Set([...existingCities, ci])].sort();
-
+    const newCities = isCountryOnly ? existingCities : [...new Set([...existingCities, ci])].sort();
     const updated = { ...countryCities, [c]: newCities };
     setCountryCities(updated);
-
-    if (!isCountryOnly) {
-      setFormData({ customerProvince: c, customerCity: ci });
-    }
-
+    if (!isCountryOnly) setFormData({ customerProvince: c, customerCity: ci });
     try {
       await saveCountryCities(updated);
-      if (!isCountryOnly) {
-        toast.success(`"${ci}, ${c}" saved for future invoices`);
-      } else {
-        toast.success(`Country "${c}" saved — now add a city`);
-      }
+      toast.success(isCountryOnly ? `Country "${c}" saved — now add a city` : `"${ci}, ${c}" saved for future invoices`);
     } catch (err: any) {
       console.error('[CountryCities] Firestore save failed:', err?.message);
       toast.error('Saved locally but database write failed');
     }
   }, [countryCities, setFormData]);
 
-  // ── Branch ─────────────────────────────────────────────────────────────────
   const handleAddBranch = useCallback(async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -412,12 +395,9 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     try {
       await setDoc(doc(db, 'appConfig', 'branches'), { list: updated }, { merge: true });
       toast.success(`Branch "${trimmed}" saved`);
-    } catch (err: any) {
-      toast.error('Branch added locally but could not save to database');
-    }
+    } catch { toast.error('Branch added locally but could not save to database'); }
   }, [branches]);
 
-  // ── Salesperson location ───────────────────────────────────────────────────
   const handleAddSalespersonLocation = useCallback(async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -426,60 +406,59 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     try {
       await setDoc(doc(db, 'appConfig', 'salespersonLocations'), { list: updated }, { merge: true });
       toast.success(`Location "${trimmed}" saved`);
-    } catch (err: any) {
-      toast.error('Location added locally but could not save to database');
-    }
+    } catch { toast.error('Location added locally but could not save to database'); }
   }, [salespersonLocationsList]);
 
-  // ── Multi-currency ─────────────────────────────────────────────────────────
+  // ── Salesperson persistence (NEW) ──────────────────────────────────────────
+  const handleAddSalesperson = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const updated = [...new Set([...savedSalespersons, trimmed])].sort();
+    setSavedSalespersons(updated);
+    setFormData({ salesperson: trimmed });
+    try {
+      await setDoc(doc(db, 'appConfig', 'salespersons'), { list: updated }, { merge: true });
+      toast.success(`Salesperson "${trimmed}" saved for future invoices`);
+    } catch { toast.error('Salesperson added locally but could not save to database'); }
+  }, [savedSalespersons, setFormData]);
+
   const toggleCurrency = useCallback((c: InvoiceCurrency) => {
     setSelectedCurrencies(prev =>
-      prev.includes(c) ? (prev.length > 1 ? prev.filter(x => x !== c) : prev) : [...prev, c]
-    );
+      prev.includes(c) ? (prev.length > 1 ? prev.filter(x => x !== c) : prev) : [...prev, c]);
   }, []);
 
-  // Ensure primary currency follows branch/company selection
   const handleSetInvoiceCompany = useCallback((v: TxCompany) => {
     setInvoiceCompany(v);
     try {
-      const branch   = branchFromValue(v);
-      const currency = getCurrencyFromBranch(branch);
-      setSelectedCurrencies(prev => {
-        if (prev[0] === currency) return prev;
-        const without = prev.filter(c => c !== currency);
-        return [currency, ...without];
-      });
-    } catch (e) { /* non-blocking */ }
+      const currency = getCurrencyFromBranch(branchFromValue(v));
+      setSelectedCurrencies(prev => (prev[0] === currency ? prev : [currency, ...prev.filter(c => c !== currency)]));
+    } catch { /* non-blocking */ }
   }, []);
 
-  // ── Customer search / select ───────────────────────────────────────────────
+  // ── Customer search / select (from the small customers collection) ─────────
   const handleCustomerSearch = useCallback((value: string, field: 'customerName' | 'customerPhone') => {
     setFormData({ [field]: value });
     if (value.length >= 2) {
-      const map = new Map<string, Invoice>();
-      allInvoices
-        .filter(inv => field === 'customerName'
-          ? inv.customerName.toLowerCase().includes(value.toLowerCase())
-          : inv.customerPhone.includes(value))
-        .forEach(inv => { if (!map.has(inv.customerPhone)) map.set(inv.customerPhone, inv); });
-      const list = Array.from(map.values());
-      setCustomerSuggestions(list);
-      setShowSuggestions(list.length > 0);
+      const v = value.toLowerCase();
+      const matches = savedCustomers
+        .filter(c => field === 'customerName'
+          ? (c.customerName || '').toLowerCase().includes(v)
+          : (c.customerPhone || '').includes(value))
+        .slice(0, 8)
+        .map(customerToSuggestion);
+      setCustomerSuggestions(matches);
+      setShowSuggestions(matches.length > 0);
     } else {
       setShowSuggestions(false);
     }
-  }, [allInvoices, setFormData]);
+  }, [savedCustomers, setFormData]);
 
   const handleCustomerSelect = useCallback((customer: Invoice) => {
     setFormData({
-      customerName:         customer.customerName,
-      customerPhone:        customer.customerPhone,
-      customerPhone2:       customer.customerPhone2 || '',
-      customerCNIC:         customer.customerCNIC,
-      customerProvince:     customer.customerProvince,
-      customerCity:         customer.customerCity,
-      customerAddress:      customer.customerAddress || '',
-      warrantyLocation:     customer.warrantyLocation || '',
+      customerName: customer.customerName, customerPhone: customer.customerPhone,
+      customerPhone2: customer.customerPhone2 || '', customerCNIC: customer.customerCNIC,
+      customerProvince: customer.customerProvince, customerCity: customer.customerCity,
+      customerAddress: customer.customerAddress || '', warrantyLocation: customer.warrantyLocation || '',
       exchangeWarrantyNote: customer.exchangeWarrantyNote,
     });
     setShowSuggestions(false);
@@ -487,32 +466,27 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
   // ── Products ───────────────────────────────────────────────────────────────
   const addProduct = useCallback(() => {
-    // Unit price always defaults to AED, regardless of branch/company selected.
-    // (Branch→currency mapping still applies to the invoice-level currency
-    // selector via handleSetInvoiceCompany — just not to the per-product price.)
     const product = createEmptyInvoiceProduct();
     product.currency = 'AED';
     setSelectedProducts(p => [...p, product]);
   }, []);
 
   const removeProduct = useCallback(
-    (pid: string) => setSelectedProducts(p => p.filter(x => x.id !== pid)),
-    []
-  );
+    (pid: string) => setSelectedProducts(p => p.filter(x => x.id !== pid)), []);
 
   const updateProduct = useCallback((pid: string, field: string, value: any) => {
     setSelectedProducts(prev => prev.map(p => {
       if (p.id !== pid) return p;
       switch (field) {
         case 'productId': {
-          const updated  = updateProductWithSelection(p, value, allProducts);
-          // AED-native: inventory sellPrice is already in AED; tag the row AED
-          // and carry imageUrls for the PDF thumbnail.
+          const updated = updateProductWithSelection(p, value, allProducts);
           const pInfo = allProducts.find(x => x.id === value);
           return {
             ...updated,
             currency: 'AED',
             imageUrls: Array.isArray(pInfo?.imageUrls) ? pInfo!.imageUrls : [],
+            supplierCost: pInfo?.supplierCost || 0,
+            purchaseCost: pInfo?.purchaseCost || 0,
           };
         }
         case 'quantity': return updateProductQuantity(p, value);
@@ -524,9 +498,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   }, [allProducts]);
 
   const updateSerial = useCallback((productId: string, index: number, value: string) => {
-    setSelectedProducts(prev =>
-      prev.map(p => p.id !== productId ? p : updateSerialNumber(p, index, value))
-    );
+    setSelectedProducts(prev => prev.map(p => p.id !== productId ? p : updateSerialNumber(p, index, value)));
   }, []);
 
   const getAvailableSerialsForProduct = useCallback((productId: string, rowId: string): string[] => {
@@ -538,8 +510,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       (row.serialNumbers || []).forEach(s => { if (s.trim()) usedElsewhere.add(s); });
     });
     return (p.serialNumbers || []).filter(s => {
-      if (!s.trim()) return false;
-      if (usedElsewhere.has(s)) return false;
+      if (!s.trim() || usedElsewhere.has(s)) return false;
       const status = p.serialStatus?.[s] || 'Available';
       return status === 'Available' || status === 'Returned';
     });
@@ -550,18 +521,10 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   // ── PDF helpers ────────────────────────────────────────────────────────────
   const toCustomerInvoice = useCallback((inv: Invoice): Invoice => ({
     ...inv,
-    salesperson:      undefined,
-    salespersonLocation: undefined,
-    clientDealBy:     undefined,
-    referralBy:       undefined,
-    createdBy:        undefined,
-    paymentMode:      undefined,
-    bankId:           undefined,
-    bankName:         undefined,
-    bankAccountNumber: undefined,
-    chequeNumber:     undefined,
-    chequeBank:       undefined,
-    chequeDate:       undefined,
+    salesperson: undefined, salespersonLocation: undefined, clientDealBy: undefined,
+    referralBy: undefined, createdBy: undefined, paymentMode: undefined,
+    bankId: undefined, bankName: undefined, bankAccountNumber: undefined,
+    chequeNumber: undefined, chequeBank: undefined, chequeDate: undefined,
     collectionMethod: undefined,
   }), []);
 
@@ -569,8 +532,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     setPdfGenerating(true);
     try {
       const pdfBlob = await generateInvoicePdf(savedInvoice);
-      const pdfUrl  = await InvoiceFirebaseService.uploadInvoicePdf(savedInvoice.id, pdfBlob);
-      await InvoiceFirebaseService.savePdfUrl(savedInvoice.id, pdfUrl);
+      const pdfUrl  = await (InvoiceFirebaseService as any).uploadInvoicePdf?.(savedInvoice.id, pdfBlob);
+      if (pdfUrl) await (InvoiceFirebaseService as any).savePdfUrl?.(savedInvoice.id, pdfUrl);
     } catch (err) {
       console.error('PDF cloud upload failed:', err);
       toast.error('Invoice saved but PDF cloud upload failed.');
@@ -582,10 +545,9 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const handleDownloadPdf = useCallback(async () => {
     setIsDownloadingPdf(true);
     try {
-      // FIX: use mapToInvoiceProductRow so imageUrls is always present
       const invoiceData: Partial<Invoice> = {
         ...formData,
-        products:    selectedProducts.map(mapToInvoiceProductRow) as any,
+        products: selectedProducts.map(mapToInvoiceProductRow),
         totalAmount: total,
       };
       await downloadInvoicePdf(toCustomerInvoice(invoiceData as Invoice));
@@ -596,28 +558,35 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     }
   }, [formData, selectedProducts, total, toCustomerInvoice]);
 
-  // ── Save ───────────────────────────────────────────────────────────────────
+  // ── Save (always UNPAID; payments recorded later from the list) ────────────
   const handleSave = useCallback(async () => {
     const validation = validateInvoice(formData, selectedProducts);
-    if (!validation.isValid) {
-      toast.error(validation.error || 'Validation failed');
-      return;
-    }
+    if (!validation.isValid) { toast.error(validation.error || 'Validation failed'); return; }
 
     const proposedNumber = formData.invoiceNumber?.trim();
     if (proposedNumber) {
-      const conflict = allInvoices.find(inv =>
-        inv.invoiceNumber === proposedNumber &&
-        (!isEditing || inv.id !== editingInvoice?.id)
-      );
-      if (conflict) {
-        toast.error(`Invoice number "${proposedNumber}" is already in use.`, { duration: 6000 });
-        return;
-      }
+      try {
+        const dupSnap = await getDocs(query(
+          collection(db, 'invoices'), where('invoiceNumber', '==', proposedNumber),
+        ));
+        const conflict = dupSnap.docs.some(d => !isEditing || d.id !== editingInvoice?.id);
+        if (conflict) {
+          toast.error(`Invoice number "${proposedNumber}" is already in use.`, { duration: 6000 });
+          return;
+        }
+      } catch (err) { console.warn('Duplicate-number check failed (continuing):', err); }
     }
 
     setIsSaving(true);
     try {
+      const productRows = selectedProducts.map(mapToInvoiceProductRow);
+      const baseInvoice = {
+        totalAmount: total, products: productRows,
+        deductionCharges: formData.deductionCharges || 0,
+        cargoAmount: formData.cargoAmount || 0, customsAmount: formData.customsAmount || 0,
+        agentAmount: formData.agentAmount || 0,
+      } as Partial<Invoice>;
+
       const invoiceData: Omit<Invoice, 'id'> = {
         invoiceNumber:          formData.invoiceNumber!,
         date:                   formData.date!,
@@ -629,59 +598,47 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         customerCity:           formData.customerCity     || '',
         customerAddress:        formData.customerAddress,
         warrantyLocation:       formData.warrantyLocation,
-        // FIX: use mapToInvoiceProductRow to guarantee imageUrls is present on
-        // every product row written to Firestore. This replaces the previous
-        // ad-hoc `{ ...ip, imageUrls: ip.imageUrls || [] }` spread that could
-        // be silently dropped by TypeScript when the type is narrowed.
-        products: selectedProducts.map(mapToInvoiceProductRow) as any,
+        products:               productRows,
         exchangeWarrantyNote:   formData.exchangeWarrantyNote || '',
         deliveryStatus:         formData.deliveryStatus || 'Self-collect',
         deliveryReceivedStatus: editingInvoice?.deliveryReceivedStatus || 'Pending',
         totalAmount:            total,
-        status:                 formData.status   || 'Unpaid',
+        // Always created UNPAID — payment happens from the list afterwards.
+        status:                 editingInvoice ? (editingInvoice.status || 'Unpaid') : 'Unpaid',
+        payments:               editingInvoice?.payments || [],
+        paidAmount:             editingInvoice?.paidAmount || 0,
+        remainingAmount:        editingInvoice ? (editingInvoice.remainingAmount ?? total) : total,
+        paymentStatus:          editingInvoice?.paymentStatus || 'Unpaid',
         salesperson:            formData.salesperson,
         salespersonLocation:    formData.salespersonLocation,
         clientDealBy:           formData.clientDealBy,
         referralBy:             formData.referralBy,
         createdBy:              formData.createdBy,
-        paymentMode:            formData.paymentMode,
-        bankId:                 formData.paymentMode === 'Online' ? formData.bankId : undefined,
-        bankName:               formData.paymentMode === 'Online' ? formData.bankName : undefined,
-        bankAccountNumber:      formData.paymentMode === 'Online' ? formData.bankAccountNumber : undefined,
-        chequeNumber:           formData.paymentMode === 'Cheque' ? formData.chequeNumber : undefined,
-        chequeBank:             formData.paymentMode === 'Cheque' ? formData.chequeBank : undefined,
-        chequeDate:             formData.paymentMode === 'Cheque' ? formData.chequeDate : undefined,
-        paymentStatus:          formData.paymentStatus,
-        paidAmount:             formData.paymentStatus === 'Full' ? total : formData.paidAmount,
-        remainingAmount:        formData.paymentStatus === 'Full' ? 0    : formData.remainingAmount,
         collectionMethod:       formData.collectionMethod,
         deductionCharges:       formData.deductionCharges || 0,
-        cargoAmount:            formData.cargoAmount      || 0,
-        cargoCurrency:          formData.cargoCurrency    || 'AED',
-        customsAmount:          formData.customsAmount    || 0,
-        customsCurrency:        formData.customsCurrency  || 'AED',
-        agentDetails:           formData.agentDetails     || '',
-        agentAmount:            formData.agentAmount      || 0,
-        agentCurrency:          formData.agentCurrency    || 'AED',
+        cargoAmount:            formData.cargoAmount   || 0,
+        cargoCurrency:          formData.cargoCurrency || 'AED',
+        customsAmount:          formData.customsAmount || 0,
+        customsCurrency:        formData.customsCurrency || 'AED',
+        agentDetails:           formData.agentDetails  || '',
+        agentAmount:            formData.agentAmount   || 0,
+        agentCurrency:          formData.agentCurrency || 'AED',
+        supplierCostTotal:      calculateSupplierCost(baseInvoice),
+        purchaseCostTotal:      calculatePurchaseCost(baseInvoice),
+        miscExpense:            calculateMiscExpense(baseInvoice),
         digitalStamp:           formData.digitalStamp,
         branch:                 branchFromValue(invoiceCompany),
         selectedCurrencies:     selectedCurrencies,
       } as any;
 
-      let savedId: string;
+      let saved: Invoice;
 
       if (isEditing && editingInvoice) {
-        await InvoiceFirebaseService.updateInvoice(editingInvoice.id, invoiceData);
-        const saved: Invoice = { ...invoiceData, id: editingInvoice.id };
-        savedId = editingInvoice.id;
+        await InvoiceFirebaseService.updateInvoice(editingInvoice.id, invoiceData as any);
+        saved = { ...invoiceData, id: editingInvoice.id };
         toast.success('Invoice updated — downloading PDF…');
-        try { await downloadInvoicePdf(toCustomerInvoice(saved)); }
-        catch { toast.error('Invoice updated but PDF download failed'); }
-        generateAndSavePdf(saved);
       } else {
-        // Deduct inventory serials — keep the serial in the array but mark it
-        // Sold (was previously deleted entirely, which broke the "Add Returned
-        // Inventory" lookup since it queries array-contains on serialNumbers).
+        // Deduct inventory serials — mark Sold (keep serial for return lookup).
         const invoiceNumberForLink = formData.invoiceNumber!;
         const soldNow = new Date().toISOString();
         for (const ip of selectedProducts) {
@@ -689,19 +646,17 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           try {
             const product = await InventoryFirebaseService.fetchProductById(ip.productId);
             if (!product) continue;
-            const soldSerials  = ip.serialNumbers.filter(s => s.trim() !== '');
-            const newStatus    = { ...product.serialStatus };
-            const newSoldDates = { ...(product as any).serialSoldDates };
+            const soldSerials = ip.serialNumbers.filter(s => s.trim() !== '');
+            const newStatus     = { ...product.serialStatus };
+            const newSoldDates  = { ...(product as any).serialSoldDates };
             const newInvoiceNos = { ...(product as any).serialInvoiceNumbers };
             soldSerials.forEach(s => {
-              newStatus[s] = 'Sold';
-              newSoldDates[s] = soldNow;
-              newInvoiceNos[s] = invoiceNumberForLink;
+              newStatus[s] = 'Sold'; newSoldDates[s] = soldNow; newInvoiceNos[s] = invoiceNumberForLink;
             });
             await InventoryFirebaseService.updateProduct(ip.productId, {
-              stock:                Math.max(0, product.stock - ip.quantity),
-              serialStatus:         newStatus as any,
-              serialSoldDates:      newSoldDates,
+              stock: Math.max(0, product.stock - ip.quantity),
+              serialStatus: newStatus as any,
+              serialSoldDates: newSoldDates,
               serialInvoiceNumbers: newInvoiceNos,
             } as any);
           } catch (err) {
@@ -709,74 +664,41 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           }
         }
 
-        const created = await InvoiceFirebaseService.createInvoice(invoiceData);
-        savedId = created.id;
+        const created = await InvoiceFirebaseService.createInvoice(invoiceData as any);
+        saved = created;
 
-        // ── Futuristic payable: auto-create entries for Futuristic brand products ──
-        console.log('[FuturisticPayable] About to call bridge, products:', selectedProducts.map(p => ({ brandName: p.brandName, modelName: p.modelName })));
         createFuturisticPayablesFromInvoice({
-          invoiceId:     created.id,
-          invoiceNumber: invoiceData.invoiceNumber,
-          saleDate:      invoiceData.date,
-          products:      selectedProducts,
-        }).then(count => {
-          console.log('[FuturisticPayable] Bridge completed, entries created:', count);
-        }).catch(err => {
-          console.error('[FuturisticPayable] BRIDGE ERROR:', err);
-        });
+          invoiceId: created.id, invoiceNumber: invoiceData.invoiceNumber,
+          saleDate: invoiceData.date, products: selectedProducts,
+        }).catch(err => console.error('[FuturisticPayable] BRIDGE ERROR:', err));
 
-        // Auto-persist the country+city for future invoices
+        // Persist the customer for fast pre-fill next time.
+        CustomerFirebaseService.upsertCustomer(
+          CustomerFirebaseService.customerFromInvoice(invoiceData),
+          { invoiceDate: invoiceData.date },
+        ).catch(err => console.warn('[Customers] upsert failed (non-blocking):', err));
+
         if (invoiceData.customerProvince && invoiceData.customerCity) {
-          const country = invoiceData.customerProvince;
-          const city    = invoiceData.customerCity;
-          const updated = {
-            ...countryCities,
-            [country]: [...new Set([...(countryCities[country] || []), city])].sort(),
-          };
+          const country = invoiceData.customerProvince, city = invoiceData.customerCity;
+          const updated = { ...countryCities, [country]: [...new Set([...(countryCities[country] || []), city])].sort() };
           setCountryCities(updated);
           saveCountryCities(updated).catch(console.warn);
         }
 
+        // NOTE: no transaction is booked here — invoices are Unpaid on creation.
         toast.success('Invoice created — downloading PDF…');
-        try { await downloadInvoicePdf(toCustomerInvoice(created)); }
-        catch { toast.error('Invoice created but PDF download failed'); }
-        generateAndSavePdf(created);
-
-        createTransactionFromInvoice({
-          invoiceNumber: invoiceData.invoiceNumber,
-          date:          invoiceData.date,
-          customerName:  invoiceData.customerName,
-          totalAmount:   invoiceData.totalAmount,
-          paidAmount:    invoiceData.paidAmount ?? invoiceData.totalAmount,
-          paymentMode:   (invoiceData.paymentMode || 'Cash') as 'Cash' | 'Bank' | 'Cheque',
-          bankId:        invoiceData.bankId,
-          bankName:      invoiceData.bankName,
-          chequeNumber:  invoiceData.chequeNumber,
-          chequeBank:    invoiceData.chequeBank,
-          chequeDate:    invoiceData.chequeDate,
-          paymentStatus: invoiceData.paymentStatus === 'Full' ? 'Full' : invoiceData.paidAmount ? 'Partial' : 'Unpaid',
-          company:       invoiceCompany,
-          salesperson:   invoiceData.salesperson,
-          note:          `Invoice ${invoiceData.invoiceNumber} — ${invoiceData.customerName}`,
-        }).catch(err => console.warn('[TxBridge] Invoice transaction failed (non-blocking):', err));
       }
 
-      // Auto-commission (non-blocking background task)
-      if (invoiceData.status === 'Paid' && invoiceData.salesperson) {
-        autoCalculateCommissionOnInvoiceSave(savedId, invoiceData.createdBy || 'Admin')
-          .then(result => {
-            if (result?.triggered) {
-              toast.info(
-                `Commission updated for ${invoiceData.salesperson}: PKR ${result.commissionAmount.toLocaleString()}`,
-                { duration: 3000, id: `commission-${savedId}` }
-              );
-            }
-          })
+      try { await downloadInvoicePdf(toCustomerInvoice(saved)); }
+      catch { toast.error('Invoice saved but PDF download failed'); }
+      generateAndSavePdf(saved);
+
+      // Commission only fires once an invoice is actually Paid (won't trigger here).
+      if (saved.status === 'Paid' && saved.salesperson) {
+        autoCalculateCommissionOnInvoiceSave(saved.id, invoiceData.createdBy || 'Admin')
           .catch(err => console.warn('[AutoCommission] Background failed:', err));
       }
 
-      // FIX: Wait 300 ms before navigating away so the browser has time to
-      // execute the download anchor click initiated inside downloadInvoicePdf().
       await new Promise<void>(resolve => setTimeout(resolve, 300));
       navigate('/invoices');
     } catch (err) {
@@ -785,20 +707,20 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     } finally {
       setIsSaving(false);
     }
-  }, [formData, selectedProducts, total, isEditing, editingInvoice, allInvoices, countryCities, navigate, generateAndSavePdf, toCustomerInvoice, invoiceCompany]);
+  }, [formData, selectedProducts, total, isEditing, editingInvoice, countryCities, navigate, generateAndSavePdf, toCustomerInvoice, invoiceCompany, selectedCurrencies]);
 
   const handleCancel = useCallback(() => navigate('/invoices'), [navigate]);
 
   return {
     formData, selectedProducts, customerSuggestions, showSuggestions,
     isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
-    savedCountries,
-    savedCitiesForCountry,
-    handleAddCountryCity,
+    savedCountries, savedCitiesForCountry, handleAddCountryCity,
     salespersonLocations: salespersonLocationsList,
-    deliveryStatuses:     deliveryStatuses as string[],
-    collectionMethods:    collectionMethods as string[],
-    availableProducts: allProducts, activeEmployees, banks,
+    deliveryStatuses: deliveryStatuses as string[],
+    collectionMethods: collectionMethods as string[],
+    availableProducts: allProducts, productsLoading,
+    activeEmployees, banks,
+    savedSalespersons, handleAddSalesperson,
     setFormData, handleCustomerSearch, handleCustomerSelect,
     addProduct, removeProduct, updateProduct, updateSerial,
     getAvailableSerialsForProduct,
@@ -807,9 +729,8 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     formatCurrency,
     invoiceCompany, setInvoiceCompany: handleSetInvoiceCompany,
     branches, handleAddBranch,
-    salespersonLocationsList,
-    handleAddSalespersonLocation,
+    salespersonLocationsList, handleAddSalespersonLocation,
     selectedCurrencies, toggleCurrency,
-    currencyRates,
+    currencyRates: CURRENCY_RATE_FALLBACK,
   };
 }

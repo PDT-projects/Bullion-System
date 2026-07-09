@@ -16,7 +16,6 @@ export function InvoiceFormWrapper() {
       isSaving={vm.isSaving}
       pdfGenerating={vm.pdfGenerating}
       isDownloadingPdf={vm.isDownloadingPdf}
-      // Country/City (replaces provinceCities + handleAddCustomCity)
       savedCountries={vm.savedCountries}
       savedCitiesForCountry={vm.savedCitiesForCountry}
       handleAddCountryCity={vm.handleAddCountryCity}
@@ -24,8 +23,11 @@ export function InvoiceFormWrapper() {
       deliveryStatuses={vm.deliveryStatuses}
       collectionMethods={vm.collectionMethods}
       availableProducts={vm.availableProducts}
+      productsLoading={vm.productsLoading}
       activeEmployees={vm.activeEmployees}
       banks={vm.banks}
+      savedSalespersons={vm.savedSalespersons}
+      handleAddSalesperson={vm.handleAddSalesperson}
       setFormData={vm.setFormData}
       handleCustomerSearch={vm.handleCustomerSearch}
       handleCustomerSelect={vm.handleCustomerSelect}

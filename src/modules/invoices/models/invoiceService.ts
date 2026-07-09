@@ -1,14 +1,15 @@
 // Invoice Module - Service Layer
-// Pure business logic (no Firestore — that lives in invoiceFirebaseService.ts)
-// Changes:
-//   - Added 'Federal' province with Islamabad
-//   - Deduction charges are now manually entered (auto-calc removed from useEffect)
-//   - INVOICE_CURRENCIES restricted to AED only (PKR/CAD/SAR removed from all
-//     pickers: Invoice Currencies pills, Cargo/Customs/Agent/Deduction dropdowns)
+// Pure business logic (no Firestore — that lives in InvoiceFirebaseService.ts)
+// Changes in this revision:
+//   - Added cost + misc-expense + net helpers used by the list summary/columns
+//   - calculateInvoiceStats now also returns partialCount, misc/cost totals,
+//     totalPaid and totalRemaining (all additive — old fields kept)
+//   - summarizeInvoices() powers the "sum of selected invoices" bar
 
 import {
   Invoice, InvoiceProduct, InvoiceFilters, InvoiceStats,
-  ValidationResult, ProductInfo, CustomerSuggestion, ProvinceCities,
+  InvoiceSelectionSummary, ValidationResult, ProductInfo,
+  CustomerSuggestion, ProvinceCities,
 } from './types';
 
 export const provinceCities: ProvinceCities = {
@@ -23,21 +24,12 @@ export const provinceCities: ProvinceCities = {
 
 export const salespersonLocations = ['Saudia', 'Chad'];
 
-// Supported invoice currencies — type kept broad for backward-compat with
-// stored data, but the selectable list below is AED-only per business rule.
 export type InvoiceCurrency = 'PKR' | 'CAD' | 'SAR' | 'AED';
 
-// AED-only: this is the single source every currency dropdown/pill in the
-// Invoice module renders from (Invoice Currencies pills, Cargo/Customs/
-// Agent/Deduction currency selects). Restricting this one array removes
-// PKR/CAD/SAR everywhere without touching each component.
 export const INVOICE_CURRENCIES: { code: InvoiceCurrency; label: string; symbol: string }[] = [
   { code: 'AED', label: 'UAE Dirham', symbol: 'AED' },
 ];
 
-// NOTE: These are the *default* seed values only.
-// The live lists are stored in Firestore and fetched at runtime;
-// custom entries added via "Add New" are appended there, not here.
 export const deliveryStatuses: string[] = [
   'Self-collected', 'Delivered',
 ];
@@ -98,6 +90,37 @@ export function convertCurrency(
 export const calculateTotal = (products: InvoiceProduct[]): number =>
   products.reduce((sum, p) => sum + p.total, 0);
 
+// ── Cost / expense / net helpers ───────────────────────────────────────────
+// Miscellaneous expense = every non-product charge on the invoice.
+export const calculateMiscExpense = (inv: Partial<Invoice>): number =>
+  (inv.deductionCharges || 0) +
+  (inv.cargoAmount     || 0) +
+  (inv.customsAmount   || 0) +
+  (inv.agentAmount     || 0);
+
+// Total supplier cost across the invoice (per-unit cost × quantity).
+export const calculateSupplierCost = (inv: Partial<Invoice>): number =>
+  (inv.products || []).reduce((s, p) => s + (p.supplierCost || 0) * (p.quantity || 0), 0);
+
+// Total purchase (landed) cost across the invoice.
+export const calculatePurchaseCost = (inv: Partial<Invoice>): number =>
+  (inv.products || []).reduce((s, p) => s + (p.purchaseCost || 0) * (p.quantity || 0), 0);
+
+// Net amount = product revenue − miscellaneous expense.
+export const calculateNetAmount = (inv: Partial<Invoice>): number =>
+  (inv.totalAmount || 0) - calculateMiscExpense(inv);
+
+// Amount already paid / still owed.
+export const calculatePaidAmount = (inv: Partial<Invoice>): number => {
+  if (Array.isArray(inv.payments) && inv.payments.length > 0) {
+    return inv.payments.reduce((s, p) => s + (p.amount || 0), 0);
+  }
+  return inv.paidAmount || 0;
+};
+
+export const calculateRemainingAmount = (inv: Partial<Invoice>): number =>
+  Math.max(0, (inv.totalAmount || 0) - calculatePaidAmount(inv));
+
 export const validateInvoice = (invoice: Partial<Invoice>, products: InvoiceProduct[]): ValidationResult => {
   if (!invoice.customerName?.trim()) return { isValid: false, error: 'Customer name is required' };
   if (!invoice.customerPhone?.trim()) return { isValid: false, error: 'Customer phone is required' };
@@ -115,7 +138,7 @@ export const createEmptyInvoiceProduct = (): InvoiceProduct => ({
   id: Date.now().toString(),
   productId: '', productName: '', brandName: '', modelName: '',
   category: '', description: '', quantity: 1, price: 0, total: 0, serialNumbers: [],
-  currency: 'AED',
+  currency: 'AED', supplierCost: 0, purchaseCost: 0,
 });
 
 export const updateProductWithSelection = (product: InvoiceProduct, productId: string, products: ProductInfo[]): InvoiceProduct => {
@@ -134,6 +157,9 @@ export const updateProductWithSelection = (product: InvoiceProduct, productId: s
     serialNumbers: [],
     currency: 'AED',
     imageUrls: p.imageUrls || [],
+    // Snapshot cost from the inventory product at selection time.
+    supplierCost: p.supplierCost || 0,
+    purchaseCost: p.purchaseCost || 0,
   };
 };
 
@@ -201,14 +227,47 @@ export const filterInvoices = (invoices: Invoice[], filters: InvoiceFilters): In
     return true;
   });
 
-export const calculateInvoiceStats = (invoices: Invoice[]): InvoiceStats => ({
-  totalCount:            invoices.length,
-  paidCount:             invoices.filter(i => i.status === 'Paid').length,
-  unpaidCount:           invoices.filter(i => i.status === 'Unpaid').length,
-  totalAmount:           invoices.reduce((s, i) => s + i.totalAmount, 0),
-  totalDeductionCharges: invoices.reduce((s, i) => s + (i.deductionCharges || 0), 0),
-  netAmount:             invoices.reduce((s, i) => s + i.totalAmount - (i.deductionCharges || 0), 0),
-});
+export const calculateInvoiceStats = (invoices: Invoice[]): InvoiceStats => {
+  const totalMiscExpense   = invoices.reduce((s, i) => s + calculateMiscExpense(i), 0);
+  const totalSupplierCost  = invoices.reduce((s, i) => s + calculateSupplierCost(i), 0);
+  const totalPurchaseCost  = invoices.reduce((s, i) => s + calculatePurchaseCost(i), 0);
+  const totalPaid          = invoices.reduce((s, i) => s + calculatePaidAmount(i), 0);
+  const totalAmount        = invoices.reduce((s, i) => s + i.totalAmount, 0);
+  return {
+    totalCount:            invoices.length,
+    paidCount:             invoices.filter(i => i.status === 'Paid').length,
+    unpaidCount:           invoices.filter(i => i.status === 'Unpaid').length,
+    partialCount:          invoices.filter(i => i.status === 'Partial').length,
+    totalAmount,
+    totalDeductionCharges: invoices.reduce((s, i) => s + (i.deductionCharges || 0), 0),
+    netAmount:             totalAmount - totalMiscExpense,
+    totalMiscExpense,
+    totalSupplierCost,
+    totalPurchaseCost,
+    totalPaid,
+    totalRemaining:        Math.max(0, totalAmount - totalPaid),
+  };
+};
+
+// Summary for an arbitrary subset (selected rows or filtered rows) — powers
+// the list "sum of selected invoices" bar.
+export const summarizeInvoices = (invoices: Invoice[]): InvoiceSelectionSummary => {
+  const totalAmount   = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0);
+  const miscExpense   = invoices.reduce((s, i) => s + calculateMiscExpense(i), 0);
+  const supplierCost  = invoices.reduce((s, i) => s + calculateSupplierCost(i), 0);
+  const purchaseCost  = invoices.reduce((s, i) => s + calculatePurchaseCost(i), 0);
+  const paidAmount    = invoices.reduce((s, i) => s + calculatePaidAmount(i), 0);
+  return {
+    count: invoices.length,
+    totalAmount,
+    miscExpense,
+    supplierCost,
+    purchaseCost,
+    netAmount:       totalAmount - miscExpense,
+    paidAmount,
+    remainingAmount: Math.max(0, totalAmount - paidAmount),
+  };
+};
 
 export const formatCurrency = (amount: number): string =>
   new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
@@ -217,11 +276,16 @@ export const formatDate = (dateString: string): string =>
   dateString ? new Date(dateString).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
 
 export const exportInvoicesToCSV = (invoices: Invoice[]): string => {
-  const headers = ['Date', 'Invoice #', 'Customer Name', 'City', 'Total Amount', 'Deduction Charges', 'Net Amount', 'Status', 'Salesperson', 'Delivery Status'];
+  const headers = ['Date', 'Invoice #', 'Customer Name', 'City', 'Total Amount', 'Supplier Cost', 'Purchase Cost', 'Misc Expense', 'Net Amount', 'Paid', 'Remaining', 'Status', 'Salesperson', 'Delivery Status'];
   const rows = invoices.map(inv => [
     inv.date, inv.invoiceNumber, inv.customerName, inv.customerCity,
-    inv.totalAmount.toString(), (inv.deductionCharges || 0).toString(),
-    (inv.totalAmount - (inv.deductionCharges || 0)).toString(),
+    inv.totalAmount.toString(),
+    calculateSupplierCost(inv).toString(),
+    calculatePurchaseCost(inv).toString(),
+    calculateMiscExpense(inv).toString(),
+    calculateNetAmount(inv).toString(),
+    calculatePaidAmount(inv).toString(),
+    calculateRemainingAmount(inv).toString(),
     inv.status, inv.salesperson || 'N/A', inv.deliveryStatus,
   ]);
   return [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
