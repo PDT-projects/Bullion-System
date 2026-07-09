@@ -66,8 +66,8 @@ const BLACK  = '#111111';
 const YELLOW = '#FFC107';
 const CHARCOAL = '#374151';
 
-const inp = `w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-400 text-sm h-8 bg-white`;
-const lbl = 'block text-xs font-medium text-gray-700 mb-0.5';
+const inp = `w-full px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400 text-sm h-10 bg-white transition-colors`;
+const lbl = 'block text-xs font-semibold text-gray-600 mb-1.5';
 
 // ── Branch / Company selector ────────────────────────────────────────────────
 function BranchSelector({
@@ -179,9 +179,9 @@ function CountryCitySelector({
             <input type="text" value={newCountry} onChange={e => setNewCountry(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveCountry(); if (e.key === 'Escape') { setAddingCountry(false); setNewCountry(''); } }}
               placeholder="e.g. UAE" autoFocus className={`${inp} flex-1`} />
-            <button onClick={saveCountry} disabled={savingCountry} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-md text-xs disabled:opacity-50">{savingCountry ? '…' : 'Save'}</button>
+            <button onClick={saveCountry} disabled={savingCountry} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs disabled:opacity-50">{savingCountry ? '…' : 'Save'}</button>
             <button onClick={() => { setAddingCountry(false); setNewCountry(''); }}
-              className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
+              className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
           </div>
         ) : (
           <div className="flex gap-1">
@@ -192,7 +192,7 @@ function CountryCitySelector({
               {savedCountries.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <button onClick={() => setAddingCountry(true)} title="Add new country"
-              className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-300 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap">
+              className="flex items-center gap-0.5 px-2.5 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap">
               <Plus size={11} /> Add
             </button>
           </div>
@@ -291,7 +291,7 @@ function ProductPriceInput({
           className={`${inp} flex-1`}
           placeholder="0"
         />
-        <span className="px-2 flex items-center border border-gray-300 rounded-md text-xs h-8 bg-gray-50 text-gray-600">
+        <span className="px-2 flex items-center border border-gray-300 rounded-lg text-xs h-10 bg-gray-50 text-gray-600">
           AED
         </span>
       </div>
@@ -405,23 +405,23 @@ export function InvoiceFormView({
       </div>
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
         {/* ── Customer Information ── */}
         <section className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-          <div className="px-3 py-1.5 flex items-center gap-2"
+          <div className="px-4 py-3 flex items-center gap-2.5"
             style={{ background: '#f9fafb', borderBottom: '1px solid #eef2f7' }}>
-            <User size={12} style={{ color: CHARCOAL }} />
-            <h4 className="text-xs font-bold" style={{ color: CHARCOAL }}>Customer Information</h4>
+            <User size={15} style={{ color: CHARCOAL }} />
+            <h4 className="text-sm font-bold" style={{ color: CHARCOAL }}>Customer Information</h4>
           </div>
-          <div className="p-3 space-y-2">
+          <div className="p-4 space-y-4">
 
             {/* Row 1: Invoice # | Date | Customer Name | Identity Number */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Invoice Number */}
               <div>
                 <label className={lbl}>Invoice Number <span className="ml-1 text-xs font-normal text-gray-400">(auto)</span></label>
-                <div className="flex items-center h-8 px-2 border border-gray-300 rounded-md bg-gray-50 select-none" title="Auto-generated — resets and increments daily">
+                <div className="flex items-center h-10 px-3 border border-gray-300 rounded-lg bg-gray-50 select-none" title="Auto-generated — resets and increments daily">
                   <span className="text-sm font-semibold text-gray-900 tracking-wide">{formData.invoiceNumber || '—'}</span>
                   <span className="ml-auto text-[10px] font-medium text-gray-400 uppercase">Fixed daily</span>
                 </div>
@@ -482,7 +482,7 @@ export function InvoiceFormView({
             </div>
 
             {/* Row 2: Phone | Second Phone | Country | City */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="relative" ref={phoneRef}>
                 <label className={lbl}>Phone Number *</label>
                 <input type="tel" value={formData.customerPhone || ''}
@@ -515,7 +515,7 @@ export function InvoiceFormView({
             </div>
 
             {/* Row 3: Address only (warranty removed) */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={lbl}>Address</label>
                 <input type="text" value={formData.customerAddress || ''}
@@ -527,21 +527,21 @@ export function InvoiceFormView({
 
         {/* ── Products ── */}
         <section className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-          <div className="px-3 py-1.5 flex items-center justify-between"
+          <div className="px-4 py-3 flex items-center justify-between"
             style={{ background: '#f9fafb', borderBottom: '1px solid #eef2f7' }}>
             <div className="flex items-center gap-2">
-              <Package size={12} style={{ color: CHARCOAL }} />
-              <h4 className="text-xs font-bold" style={{ color: CHARCOAL }}>Products</h4>
+              <Package size={15} style={{ color: CHARCOAL }} />
+              <h4 className="text-sm font-bold" style={{ color: CHARCOAL }}>Products</h4>
             </div>
             <button onClick={addProduct}
-              className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors"
+              className="flex items-center gap-1 text-xs px-3 py-2 rounded-lg font-semibold transition-colors"
               style={{ background: CHARCOAL, color: '#fff' }}>
               <Plus size={12} /> Add Product
             </button>
           </div>
-          <div className="p-3">
+          <div className="p-4">
             {selectedProducts.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+              <p className="text-xs text-gray-400 text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                 No products added yet
               </p>
             ) : (
@@ -552,16 +552,16 @@ export function InvoiceFormView({
                   const totalChoices = serials.length + ownSelected.length;
                   const maxQty       = Math.max(totalChoices, product.quantity);
                   return (
-                    <div key={product.id} className="border border-gray-200 rounded-lg p-2 bg-gray-50">
+                    <div key={product.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-semibold text-gray-700">Product {index + 1}</span>
                         <button onClick={() => removeProduct(product.id)} className="text-red-400 hover:text-red-600">
                           <Trash2 size={13} />
                         </button>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 mb-1.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-1.5">
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-0.5">Product *</label>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1.5">Product *</label>
                           <select value={product.productId}
                             onChange={e => updateProduct(product.id, 'productId', e.target.value)} className={inp}>
                             <option value="">— Select product —</option>
@@ -574,7 +574,7 @@ export function InvoiceFormView({
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                          <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                             Qty * {product.productId && <span className="text-gray-400 font-normal">(max {maxQty})</span>}
                           </label>
                           <input type="number" min="1" max={maxQty || undefined} value={product.quantity}
@@ -584,7 +584,7 @@ export function InvoiceFormView({
                             }} className={inp} />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                          <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                             Unit Price <span className="ml-1 font-normal text-gray-400">(AED)</span>
                           </label>
                           <ProductPriceInput
@@ -600,7 +600,7 @@ export function InvoiceFormView({
                         return (
                           <div className="mb-2 flex items-center gap-3">
                             {thumb && (
-                              <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', border: '1px solid #f6e7c7', background: '#fff' }}>
+                              <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', border: '1px solid #e5e7eb', background: '#fff' }}>
                                 <img src={thumb} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                               </div>
                             )}
@@ -623,7 +623,7 @@ export function InvoiceFormView({
                             )}
                           </div>
                           {(serials.length > 0 || ownSelected.length > 0) ? (
-                            <div className="grid grid-cols-3 gap-1.5">
+                            <div className="grid grid-cols-3 gap-2">
                               {Array.from({ length: product.quantity }, (_, i) => {
                                 const currentVal = product.serialNumbers?.[i] || '';
                                 const options = currentVal && !serials.includes(currentVal) ? [currentVal, ...serials] : serials;
@@ -658,13 +658,13 @@ export function InvoiceFormView({
 
         {/* ── Delivery & Information ── */}
         <section className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-          <div className="px-3 py-1.5 flex items-center gap-2"
+          <div className="px-4 py-3 flex items-center gap-2.5"
             style={{ background: '#f9fafb', borderBottom: '1px solid #eef2f7' }}>
-            <Truck size={12} style={{ color: CHARCOAL }} />
-            <h4 className="text-xs font-bold" style={{ color: CHARCOAL }}>Delivery & Information</h4>
+            <Truck size={15} style={{ color: CHARCOAL }} />
+            <h4 className="text-sm font-bold" style={{ color: CHARCOAL }}>Delivery & Information</h4>
           </div>
-          <div className="p-3 space-y-2">
-            <div className="grid grid-cols-4 gap-2">
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className={lbl}>Delivery Status</label>
                 {addingDelivery ? (
@@ -685,9 +685,9 @@ export function InvoiceFormView({
                         setFormData({ deliveryStatus: newDelivery.trim() as any });
                         setNewDelivery(''); setAddingDelivery(false);
                       }
-                    }} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
+                    }} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs">Save</button>
                     <button onClick={() => { setAddingDelivery(false); setNewDelivery(''); }}
-                      className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
+                      className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
                   </div>
                 ) : (
                   <div className="flex gap-1">
@@ -697,7 +697,7 @@ export function InvoiceFormView({
                       {deliveryStatuses.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <button onClick={() => setAddingDelivery(true)}
-                      className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-300 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap">
+                      className="flex items-center gap-0.5 px-2.5 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap">
                       <Plus size={11} /> Add
                     </button>
                   </div>
@@ -710,8 +710,8 @@ export function InvoiceFormView({
             </div>
 
             {/* Digital Stamp + Exchange Note (warranty language kept neutral) */}
-            <div className="grid grid-cols-4 gap-2 items-end">
-              <div className="flex items-center h-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+              <div className="flex items-center h-10">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input type="checkbox" checked={!!formData.digitalStamp}
                     onChange={() => setFormData({ digitalStamp: !formData.digitalStamp })}
@@ -763,13 +763,13 @@ export function InvoiceFormView({
 
         {/* ── Sales Details (internal) ── */}
         <section className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-          <div className="px-3 py-1.5 flex items-center gap-2 bg-gray-50 border-b border-gray-100">
-            <User size={12} className="text-gray-500" />
-            <h4 className="text-xs font-bold text-gray-700">Sales Details</h4>
+          <div className="px-4 py-3 flex items-center gap-2.5 bg-gray-50 border-b border-gray-100">
+            <User size={15} className="text-gray-500" />
+            <h4 className="text-sm font-bold text-gray-700">Sales Details</h4>
             <span className="text-xs text-gray-400 ml-auto">Internal — not shown on invoice</span>
           </div>
-          <div className="p-3">
-            <div className="grid grid-cols-4 gap-2">
+          <div className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className={lbl}>Salesperson</label>
                 {addingSp ? (
@@ -781,8 +781,8 @@ export function InvoiceFormView({
                       }}
                       placeholder="New salesperson" autoFocus className={`${inp} flex-1`} />
                     <button onClick={async () => { if (newSp.trim()) { await handleAddSalesperson(newSp.trim()); setNewSp(''); setAddingSp(false); } }}
-                      style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
-                    <button onClick={() => { setAddingSp(false); setNewSp(''); }} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
+                      style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs">Save</button>
+                    <button onClick={() => { setAddingSp(false); setNewSp(''); }} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
                   </div>
                 ) : (
                   <div className="flex gap-1">
@@ -800,7 +800,7 @@ export function InvoiceFormView({
                       )}
                     </select>
                     <button onClick={() => setAddingSp(true)}
-                      className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-300 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap">
+                      className="flex items-center gap-0.5 px-2.5 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap">
                       <Plus size={11} /> Add
                     </button>
                   </div>
@@ -827,9 +827,9 @@ export function InvoiceFormView({
                         setFormData({ salespersonLocation: newSpLoc.trim() });
                         setNewSpLoc(''); setAddingSpLoc(false);
                       }
-                    }} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
+                    }} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs">Save</button>
                     <button onClick={() => { setAddingSpLoc(false); setNewSpLoc(''); }}
-                      className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
+                      className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
                   </div>
                 ) : (
                   <div className="flex gap-1">
@@ -840,7 +840,7 @@ export function InvoiceFormView({
                       {salespersonLocationsList.map(l => <option key={l} value={l}>{l}</option>)}
                     </select>
                     <button onClick={() => setAddingSpLoc(true)}
-                      className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-300 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap">
+                      className="flex items-center gap-0.5 px-2.5 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap">
                       <Plus size={11} /> Add
                     </button>
                   </div>
@@ -871,7 +871,7 @@ export function InvoiceFormView({
                 <span className="text-xs font-semibold text-gray-700">Import Charges</span>
                 <span className="text-xs text-gray-400">(deducted from commission)</span>
               </div>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className={lbl}>Cargo Amount</label>
                   <div className="flex gap-1">
@@ -880,7 +880,7 @@ export function InvoiceFormView({
                       className={`${inp} flex-1`} placeholder="0" />
                     <select value={formData.cargoCurrency || 'AED'}
                       onChange={e => setFormData({ cargoCurrency: e.target.value as InvoiceCurrency })}
-                      className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8">
+                      className="px-1 py-1 border border-gray-300 rounded-lg text-xs h-10">
                       {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
                     </select>
                   </div>
@@ -893,7 +893,7 @@ export function InvoiceFormView({
                       className={`${inp} flex-1`} placeholder="0" />
                     <select value={formData.customsCurrency || 'AED'}
                       onChange={e => setFormData({ customsCurrency: e.target.value as InvoiceCurrency })}
-                      className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8">
+                      className="px-1 py-1 border border-gray-300 rounded-lg text-xs h-10">
                       {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
                     </select>
                   </div>
@@ -906,7 +906,7 @@ export function InvoiceFormView({
                       className={`${inp} flex-1`} placeholder="0" />
                     <select value={formData.agentCurrency || 'AED'}
                       onChange={e => setFormData({ agentCurrency: e.target.value as InvoiceCurrency })}
-                      className="px-1 py-1 border border-gray-300 rounded-md text-xs h-8">
+                      className="px-1 py-1 border border-gray-300 rounded-lg text-xs h-10">
                       {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
                     </select>
                   </div>
@@ -918,7 +918,7 @@ export function InvoiceFormView({
                     className={inp} placeholder="Agent name / reference" />
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-2 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
                 <div>
                   <label className={lbl}>Deduction Charges <span className="ml-1 text-xs font-normal text-gray-400">(manual)</span></label>
                   <input type="number" min="0" value={formData.deductionCharges ?? 0}
@@ -935,15 +935,15 @@ export function InvoiceFormView({
                           if (e.key === 'Escape') { setAddingCollection(false); setNewCollection(''); }
                         }}
                         placeholder="New method" autoFocus className={`${inp} flex-1`} />
-                      <button onClick={async () => { if (newCollection.trim()) { await handleAddCollectionMethod(newCollection.trim()); setFormData({ collectionMethod: newCollection.trim() as any }); setNewCollection(''); setAddingCollection(false); } }} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-md text-xs">Save</button>
-                      <button onClick={() => { setAddingCollection(false); setNewCollection(''); }} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs"><X size={12} /></button>
+                      <button onClick={async () => { if (newCollection.trim()) { await handleAddCollectionMethod(newCollection.trim()); setFormData({ collectionMethod: newCollection.trim() as any }); setNewCollection(''); setAddingCollection(false); } }} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs">Save</button>
+                      <button onClick={() => { setAddingCollection(false); setNewCollection(''); }} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
                     </div>
                   ) : (
                     <div className="flex gap-1">
                       <select value={formData.collectionMethod || 'Self Collection'} onChange={e => setFormData({ collectionMethod: e.target.value as any })} className={`${inp} flex-1`}>
                         {collectionMethods.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
-                      <button onClick={() => setAddingCollection(true)} className="flex items-center gap-0.5 px-2 py-1 border border-dashed border-gray-300 text-gray-600 rounded-md text-xs hover:bg-gray-50 whitespace-nowrap"><Plus size={11} /> Add</button>
+                      <button onClick={() => setAddingCollection(true)} className="flex items-center gap-0.5 px-2.5 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap"><Plus size={11} /> Add</button>
                     </div>
                   )}
                 </div>
@@ -967,13 +967,13 @@ export function InvoiceFormView({
       </div>{/* end scrollable body */}
 
       {/* ── Sticky footer ── */}
-      <div className="flex-shrink-0 border-t px-4 py-2.5 shadow-[0_-2px_12px_rgba(0,0,0,0.08)]"
+      <div className="flex-shrink-0 border-t px-5 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.08)]"
         style={{ borderColor: '#e5e7eb', background: '#f9fafb' }}>
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold text-gray-700">Total:</span>
-              <span className="text-lg font-extrabold" style={{ color: '#374151' }}>
+              <span className="text-xl font-extrabold" style={{ color: '#374151' }}>
                 {fmtAed(total)}
               </span>
             </div>
@@ -1010,11 +1010,11 @@ export function InvoiceFormView({
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handleCancel}
-              className="px-3 py-1.5 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium border border-gray-200">
+              className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium border border-gray-200">
               Cancel
             </button>
             <button onClick={handleSave} disabled={isSaving}
-              className="flex items-center gap-1.5 px-5 py-1.5 rounded-lg disabled:opacity-50 transition-colors font-bold text-sm shadow-sm whitespace-nowrap"
+              className="flex items-center gap-1.5 px-6 py-2 rounded-lg disabled:opacity-50 transition-colors font-bold text-sm shadow-sm whitespace-nowrap"
               style={{ background: CHARCOAL, color: '#fff' }}>
               {isSaving
                 ? <><Loader2 size={14} className="animate-spin" /> Saving…</>

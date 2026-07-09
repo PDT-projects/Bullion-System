@@ -1,17 +1,18 @@
 // Invoice Module - List View
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
 // ── Currency helper — AED only (PKR toggle removed) ────────────────────────
 function formatAed(amount: number): string {
-  return `د.إ ${new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} AED`;
+  return `AED ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0)}`;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 import {
   FileText, Plus, Search, Eye, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin, Trash2,
-  Pencil, Wallet, CheckCircle2, Banknote, Landmark,
+  Pencil, Banknote, Landmark,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Invoice, InvoiceStats, InvoiceFilters, InvoiceSelectionSummary, PaymentMode } from '../models/types';
@@ -114,10 +115,18 @@ function PaymentModal({
   const willClear = amount >= remaining && remaining > 0;
   const valid = amount > 0 && (mode !== 'Bank' || !!bankId);
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full max-h-[92vh] overflow-y-auto shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-gray-50 rounded-t-xl">
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div
+        ref={el => {
+          if (el) {
+            el.style.setProperty('width', '520px', 'important');
+            el.style.setProperty('min-width', '0', 'important');
+            el.style.setProperty('max-width', '92vw', 'important');
+          }
+        }}
+        style={{ background: '#ffffff', borderRadius: 12, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.35)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
           <div>
             <h3 className="text-base font-bold text-gray-900">Record Payment</h3>
             <p className="text-xs text-gray-400">{invoice.invoiceNumber} · {invoice.customerName}</p>
@@ -125,7 +134,7 @@ function PaymentModal({
           <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:bg-gray-200"><X size={18} /></button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: 'Total', value: formatDisplay(total), color: 'text-gray-900' },
@@ -195,18 +204,22 @@ function PaymentModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-          <button onClick={onClose} className="flex items-center gap-1.5 px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 text-sm font-medium">
-            <X size={15} /> Cancel
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '14px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
+          <button onClick={onClose} className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 text-sm font-medium whitespace-nowrap flex-shrink-0">
+            <X size={15} style={{ flexShrink: 0 }} /> <span>Cancel</span>
           </button>
           <button onClick={() => onSubmit({ amount, mode, date, bankId: bankId || undefined, note: note || undefined })}
             disabled={!valid || isSaving}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-bold hover:bg-green-700 disabled:opacity-50">
-            {isSaving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><CheckCircle2 size={16} /> Confirm Payment</>}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-bold disabled:opacity-50 whitespace-nowrap flex-shrink-0 hover:brightness-125 transition"
+            style={{ backgroundColor: '#1f2937' }}>
+            {isSaving
+              ? <><Loader2 size={15} className="animate-spin" style={{ flexShrink: 0 }} /> <span>Saving…</span></>
+              : <span>Confirm Payment</span>}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -398,7 +411,7 @@ export function InvoiceListView({
                   'Supplier Cost', 'Purchase Cost', 'Misc Exp', 'Net',
                   'Delivery', 'Payment', 'Status', 'Actions',
                 ].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -429,15 +442,15 @@ export function InvoiceListView({
                       className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-gray-800" />
                   </td>
 
-                  <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
+                  <td className="px-3 py-3 font-semibold text-gray-800 whitespace-nowrap">
                     {invoice.invoiceNumber}
                   </td>
 
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
                     {formatDate(invoice.date)}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <p className="font-medium text-gray-900">{invoice.customerName}</p>
                     <p className="text-xs text-gray-400">{invoice.customerPhone}</p>
                     {invoice.customerPhone2 && (
@@ -445,7 +458,7 @@ export function InvoiceListView({
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <p className="font-medium text-gray-800 text-sm">{invoice.customerCity || '—'}</p>
                     {invoice.salespersonLocation && (
                       <p className="text-xs text-gray-400 mt-0.5">{invoice.salespersonLocation}</p>
@@ -455,7 +468,7 @@ export function InvoiceListView({
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     {invoice.salesperson ? (
                       <div>
                         <p className="font-medium text-gray-800 text-sm">{spName(invoice.salesperson)}</p>
@@ -469,11 +482,11 @@ export function InvoiceListView({
                     ) : <span className="text-gray-300 text-sm">—</span>}
                   </td>
 
-                  <td className="px-4 py-3 text-gray-600">
+                  <td className="px-3 py-3 text-gray-600">
                     {invoice.products.length} item(s)
                   </td>
 
-                  <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
+                  <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">
                     {formatDisplay(invoice.totalAmount)}
                     {(invoice.deductionCharges || 0) > 0 && (
                       <p className="text-xs text-red-500 font-normal">
@@ -482,12 +495,12 @@ export function InvoiceListView({
                     )}
                   </td>
 
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{supplierCost > 0 ? formatDisplay(supplierCost) : '—'}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{purchaseCost > 0 ? formatDisplay(purchaseCost) : '—'}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(net)}</td>
+                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{supplierCost > 0 ? formatDisplay(supplierCost) : '—'}</td>
+                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{purchaseCost > 0 ? formatDisplay(purchaseCost) : '—'}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
+                  <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(net)}</td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${deliveryBadge(invoice.deliveryStatus)}`}>
                       {invoice.deliveryStatus}
                     </span>
@@ -498,7 +511,7 @@ export function InvoiceListView({
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     {invoice.status === 'Partial' && (
                       <p className="text-xs text-orange-600 font-medium mb-1">{formatDisplay(paid)} paid · {formatDisplay(remaining)} left</p>
                     )}
@@ -513,19 +526,20 @@ export function InvoiceListView({
                     )}
                     {invoice.status !== 'Paid' && invoice.status !== 'Returned' && (
                       <button onClick={() => openPayment(invoice)}
-                        className="mt-1.5 flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md bg-green-600 text-white hover:bg-green-700">
-                        <Wallet size={12} /> Record Payment
+                        className="mt-1.5 inline-flex items-center justify-center text-xs font-semibold px-3 py-1.5 rounded-md text-white whitespace-nowrap hover:brightness-125 transition"
+                        style={{ backgroundColor: '#1f2937' }}>
+                        Record Payment
                       </button>
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusBadge(invoice.status)}`}>
                       {invoice.status}
                     </span>
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => onViewInvoice(invoice)}
                         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View">
