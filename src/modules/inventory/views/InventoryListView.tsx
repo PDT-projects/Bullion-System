@@ -198,7 +198,7 @@ function PaymentDetailPanel({ product, fmt }: { product: Product; fmt: (n: numbe
 
 // ── Generic Multi-Select Dropdown (Location / Category / Status) ────────────
 
-function MultiSelectFilter({
+export function MultiSelectFilter({
   label,
   pluralLabel,
   icon: FilterIcon,
@@ -365,11 +365,23 @@ export function InventoryListView({
   const [selectedLocations, setSelectedLocations] = React.useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = React.useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = React.useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = React.useState<string[]>([]);
+  const [selectedModels, setSelectedModels] = React.useState<string[]>([]);
 
   // ── Global search — matches against brand, model, category, status, location, ownership ──
   const [searchQuery, setSearchQuery] = React.useState('');
 
   const statusOptions = ['New', 'Available', 'In Transit', 'Damaged', 'Returned', 'On-Order'];
+
+  // ── Brand / Model options (Model list cascades off selected Brands) ──
+  const uniqueBrands = React.useMemo(
+    () => Array.from(new Set(products.map(p => p.brandName).filter(Boolean))).sort(),
+    [products]
+  );
+  const uniqueModels = React.useMemo(() => {
+    const src = selectedBrands.length > 0 ? products.filter(p => selectedBrands.includes(p.brandName)) : products;
+    return Array.from(new Set(src.map(p => p.modelName).filter(Boolean))).sort();
+  }, [products, selectedBrands]);
 
   const displayProducts = React.useMemo(() => {
     let result = products;
@@ -382,6 +394,12 @@ export function InventoryListView({
     }
     if (selectedStatuses.length > 0) {
       result = result.filter(p => selectedStatuses.includes(p.status));
+    }
+    if (selectedBrands.length > 0) {
+      result = result.filter(p => selectedBrands.includes(p.brandName));
+    }
+    if (selectedModels.length > 0) {
+      result = result.filter(p => selectedModels.includes(p.modelName));
     }
 
     const q = searchQuery.trim().toLowerCase();
@@ -396,12 +414,20 @@ export function InventoryListView({
     }
 
     return result;
-  }, [products, selectedLocations, selectedCategories, selectedStatuses, searchQuery]);
+  }, [products, selectedLocations, selectedCategories, selectedStatuses, selectedBrands, selectedModels, searchQuery]);
+
+  // Prune model selections that fall outside the current brand selection
+  useEffect(() => {
+    if (selectedBrands.length === 0) return;
+    setSelectedModels(prev => prev.filter(m => uniqueModels.includes(m)));
+  }, [selectedBrands, uniqueModels]);
 
   const activeLocalFilterCount =
     (selectedLocations.length > 0 ? 1 : 0) +
     (selectedCategories.length > 0 ? 1 : 0) +
-    (selectedStatuses.length > 0 ? 1 : 0);
+    (selectedStatuses.length > 0 ? 1 : 0) +
+    (selectedBrands.length > 0 ? 1 : 0) +
+    (selectedModels.length > 0 ? 1 : 0);
 
   // ── Delete handler ─────────────────────────────────────────────────────────
   // 1. Calls Firebase — waits for confirmation
@@ -605,20 +631,24 @@ export function InventoryListView({
       {showFilters && (
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-              <input type="text" value={filters.brandSearch}
-                onChange={e => setFilter('brandSearch', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Search brand..." />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-              <input type="text" value={filters.modelSearch}
-                onChange={e => setFilter('modelSearch', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Search model..." />
-            </div>
+            <MultiSelectFilter
+              label="Brand"
+              pluralLabel="Brands"
+              icon={Tag}
+              options={uniqueBrands}
+              selected={selectedBrands}
+              onChange={setSelectedBrands}
+              allLabel="All Brands"
+            />
+            <MultiSelectFilter
+              label="Model"
+              pluralLabel="Models"
+              icon={Layers}
+              options={uniqueModels}
+              selected={selectedModels}
+              onChange={setSelectedModels}
+              allLabel="All Models"
+            />
             <MultiSelectFilter
               label="Category"
               pluralLabel="Categories"
@@ -652,6 +682,8 @@ export function InventoryListView({
                   setSelectedLocations([]);
                   setSelectedCategories([]);
                   setSelectedStatuses([]);
+                  setSelectedBrands([]);
+                  setSelectedModels([]);
                   setSearchQuery('');
                 }}
                 className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm">

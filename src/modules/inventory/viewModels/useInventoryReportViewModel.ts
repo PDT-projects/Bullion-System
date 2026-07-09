@@ -18,13 +18,16 @@ export function useInventoryReportViewModel() {
   const [typeFilter, setTypeFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [conditionFilter, setConditionFilter] = useState('');
+  const [brandFilter, setBrandFilter] = useState<string[]>([]);
+  const [modelFilter, setModelFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
   const toggleFilters = useCallback(() => setShowFilters(v => !v), []);
   const clearFilters = useCallback(() => {
     setStatusFilter(''); setOwnershipFilter(''); setTypeFilter('');
-    setLocationFilter(''); setConditionFilter(''); setDateFrom(''); setDateTo('');
+    setLocationFilter(''); setConditionFilter(''); setBrandFilter([]); setModelFilter([]);
+    setDateFrom(''); setDateTo('');
   }, []);
 
   const load = useCallback(() => {
@@ -49,12 +52,14 @@ export function useInventoryReportViewModel() {
       const matchesType = !typeFilter || r.type === typeFilter;
       const matchesLocation = !locationFilter || r.location === locationFilter;
       const matchesCondition = !conditionFilter || r.condition === conditionFilter;
+      const matchesBrand = brandFilter.length === 0 || brandFilter.includes(r.brandName);
+      const matchesModel = modelFilter.length === 0 || modelFilter.includes(r.modelName);
       const stockDate = r.stockInDateAuto ? new Date(r.stockInDateAuto).getTime() : null;
       const matchesFrom = !dateFrom || (stockDate !== null && stockDate >= new Date(dateFrom).getTime());
       const matchesTo = !dateTo || (stockDate !== null && stockDate <= new Date(dateTo).getTime() + 86399999);
-      return matchesSearch && matchesStatus && matchesOwnership && matchesType && matchesLocation && matchesCondition && matchesFrom && matchesTo;
+      return matchesSearch && matchesStatus && matchesOwnership && matchesType && matchesLocation && matchesCondition && matchesBrand && matchesModel && matchesFrom && matchesTo;
     });
-  }, [rows, search, statusFilter, ownershipFilter, typeFilter, locationFilter, conditionFilter, dateFrom, dateTo]);
+  }, [rows, search, statusFilter, ownershipFilter, typeFilter, locationFilter, conditionFilter, brandFilter, modelFilter, dateFrom, dateTo]);
 
   const distinct = useCallback((key: keyof InventoryReportRow) =>
     Array.from(new Set(rows.map(r => r[key]).filter(Boolean) as string[])).sort()
@@ -62,10 +67,23 @@ export function useInventoryReportViewModel() {
   const typeOptions = useMemo(() => distinct('type'), [distinct]);
   const locationOptions = useMemo(() => distinct('location'), [distinct]);
   const conditionOptions = useMemo(() => distinct('condition'), [distinct]);
+  const brandOptions = useMemo(() => distinct('brandName'), [distinct]);
+  // Model list cascades off selected brand(s)
+  const modelOptions = useMemo(() => {
+    const src = brandFilter.length > 0 ? rows.filter(r => brandFilter.includes(r.brandName)) : rows;
+    return Array.from(new Set(src.map(r => r.modelName).filter(Boolean))).sort();
+  }, [rows, brandFilter]);
+
+  useEffect(() => {
+    if (brandFilter.length === 0) return;
+    setModelFilter(prev => prev.filter(m => modelOptions.includes(m)));
+  }, [brandFilter, modelOptions]);
 
   const activeFilterCount =
     (statusFilter ? 1 : 0) + (ownershipFilter ? 1 : 0) + (typeFilter ? 1 : 0) +
-    (locationFilter ? 1 : 0) + (conditionFilter ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+    (locationFilter ? 1 : 0) + (conditionFilter ? 1 : 0) +
+    (brandFilter.length > 0 ? 1 : 0) + (modelFilter.length > 0 ? 1 : 0) +
+    (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
 
   const formatCurrency = useCallback((n?: number) =>
     n === undefined ? '—' : new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n)
@@ -86,6 +104,8 @@ export function useInventoryReportViewModel() {
     typeFilter, setTypeFilter, typeOptions,
     locationFilter, setLocationFilter, locationOptions,
     conditionFilter, setConditionFilter, conditionOptions,
+    brandFilter, setBrandFilter, brandOptions,
+    modelFilter, setModelFilter, modelOptions,
     dateFrom, setDateFrom, dateTo, setDateTo,
     formatCurrency, formatDate, onBack, refresh: load,
   };

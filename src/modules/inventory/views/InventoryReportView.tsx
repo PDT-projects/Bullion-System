@@ -6,8 +6,9 @@
 // Supplier/Purchasing Cost, Sold Goods Payment.
 
 import React from 'react';
-import { ArrowLeft, FileBarChart, Search, Loader2, Filter, X } from 'lucide-react';
+import { ArrowLeft, FileBarChart, Search, Loader2, Filter, X, Tag, Layers } from 'lucide-react';
 import { useInventoryReportViewModel } from '../viewModels/useInventoryReportViewModel';
+import { MultiSelectFilter } from './InventoryListView';
 
 type VM = ReturnType<typeof useInventoryReportViewModel>;
 
@@ -39,6 +40,8 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
   typeFilter, setTypeFilter, typeOptions,
   locationFilter, setLocationFilter, locationOptions,
   conditionFilter, setConditionFilter, conditionOptions,
+  brandFilter, setBrandFilter, brandOptions,
+  modelFilter, setModelFilter, modelOptions,
   dateFrom, setDateFrom, dateTo, setDateTo,
   formatCurrency, formatDate, onBack, embedded,
 }) => (
@@ -110,6 +113,24 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
       {showFilters && (
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <MultiSelectFilter
+              label="Brand"
+              pluralLabel="Brands"
+              icon={Tag}
+              options={brandOptions}
+              selected={brandFilter}
+              onChange={setBrandFilter}
+              allLabel="All Brands"
+            />
+            <MultiSelectFilter
+              label="Model"
+              pluralLabel="Models"
+              icon={Layers}
+              options={modelOptions}
+              selected={modelFilter}
+              onChange={setModelFilter}
+              allLabel="All Models"
+            />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
               <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
