@@ -367,6 +367,8 @@ export function InventoryListView({
   const [selectedStatuses, setSelectedStatuses] = React.useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = React.useState<string[]>([]);
   const [selectedModels, setSelectedModels] = React.useState<string[]>([]);
+  // ── Row selection (checkboxes) for the "sum of selected" summary bar ──
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
   // ── Global search — matches against brand, model, category, status, location, ownership ──
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -428,6 +430,41 @@ export function InventoryListView({
     (selectedStatuses.length > 0 ? 1 : 0) +
     (selectedBrands.length > 0 ? 1 : 0) +
     (selectedModels.length > 0 ? 1 : 0);
+
+  // ── Selection helpers ──
+  const selectedProducts = React.useMemo(
+    () => displayProducts.filter(p => selectedIds.has(p.id)),
+    [displayProducts, selectedIds]
+  );
+  const hasSelection = selectedProducts.length > 0;
+  // Falls back to every currently filtered/visible product when nothing is checked
+  const summaryProducts = hasSelection ? selectedProducts : displayProducts;
+  const summary = React.useMemo(() => {
+    const units = summaryProducts.reduce((s, p) => s + (p.stock || 0), 0);
+    const costValue = summaryProducts.reduce((s, p) => s + (p.costPrice || 0) * (p.stock || 0), 0);
+    const sellValue = summaryProducts.reduce((s, p) => s + (p.sellPrice || 0) * (p.stock || 0), 0);
+    return { units, costValue, sellValue, count: summaryProducts.length };
+  }, [summaryProducts]);
+  const allVisibleSelected = displayProducts.length > 0 && displayProducts.every(p => selectedIds.has(p.id));
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        displayProducts.forEach(p => next.delete(p.id));
+        return next;
+      }
+      const next = new Set(prev);
+      displayProducts.forEach(p => next.add(p.id));
+      return next;
+    });
+  };
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   // ── Delete handler ─────────────────────────────────────────────────────────
   // 1. Calls Firebase — waits for confirmation
@@ -695,8 +732,18 @@ export function InventoryListView({
       )}
 
       {!isLoading && (
-        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-          Showing {displayProducts.length} of {products.length} products
+        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span>Showing {displayProducts.length} of {products.length} products</span>
+          {hasSelection && (
+            <>
+              <span style={{ color: '#cbd5e1' }}>•</span>
+              <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedProducts.length} selected</span>
+              <button onClick={() => setSelectedIds(new Set())}
+                style={{ fontSize: 12, fontWeight: 600, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                Clear selection
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -720,9 +767,13 @@ export function InventoryListView({
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
+                <th className="px-4 py-2.5 bg-gray-50" style={{ width: 36 }}>
+                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll}
+                    style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select all visible" />
+                </th>
                 {['Stock-In Date (Auto)', 'Stock-In Date (Manual)', 'Type', 'Brand', 'Model', 'Serial No.', 'Location',
                   'Ownership', 'Stock', 'Sell (AED)',
-                  'Supplier/Purchasing Cost', 'Sold Goods Payment',
+                  'Sold Goods Payment',
                   'Condition', 'Current Status', 'Actions'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">{h}</th>
                 ))}
@@ -741,6 +792,10 @@ export function InventoryListView({
                   onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fef3c7' : '#f1f5f9'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = product.status === 'In Transit' ? '#fffbeb' : (idx % 2 === 1 ? '#fafafa' : '#fff'); }}
                 >
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" checked={selectedIds.has(product.id)} onChange={() => toggleSelectOne(product.id)}
+                      style={{ width: 15, height: 15, cursor: 'pointer' }} />
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                     {(() => {
                       const dates = Object.values(product.serialStockInDates || {});
@@ -787,9 +842,6 @@ export function InventoryListView({
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.sellPrice)}
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {fmtPrimary(product.costPrice)}
                   </td>
                   <td className="px-4 py-3">
                     {product.ownershipType === 'Credit' ? (
@@ -863,6 +915,26 @@ export function InventoryListView({
           </table>
         )}
       </div>
+
+      {!isLoading && displayProducts.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200" style={{ marginTop: 12, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: hasSelection ? '#0f172a' : '#6b7280' }}>
+            {hasSelection ? `Sum of ${summary.count} selected` : `Sum of ${summary.count} filtered`}
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500 }}>Total Units</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{summary.units}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500 }}>Total Cost Value</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{fmtPrimary(summary.costValue)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500 }}>Total Sell Value</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{fmtPrimary(summary.sellValue)}</div>
+          </div>
+        </div>
+      )}
       </>
       )}
 
