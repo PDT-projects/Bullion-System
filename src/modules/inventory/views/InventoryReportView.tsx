@@ -15,7 +15,7 @@ type VM = ReturnType<typeof useInventoryReportViewModel>;
 const HEADERS = [
   'Stock-In Date (Auto)', 'Stock-In Date (Manual)', 'Type', 'Brand', 'Model',
   'Serial No.', 'Location', 'Ownership', 'Condition', 'Current Status',
-  'Sold Date', 'Invoice #', 'Supplier/Purchasing Cost', 'Sold Goods Payment',
+  'Sold Date', 'Invoice #', 'Supplier Cost', 'Purchasing Cost', 'Sold Goods Payment',
 ];
 
 // Supplier credit payment status, relabeled for display: Cleared→Clear, Unpaid→Pending
@@ -239,6 +239,7 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
                     <td className="px-4 py-2.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.soldDate)}</td>
                     <td className="px-4 py-2.5 text-sm text-gray-600">{r.invoiceNumber || '—'}</td>
                     <td className="px-4 py-2.5 text-sm text-gray-600">{formatCurrency(r.supplierCost)}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-600">{formatCurrency(r.purchasingCost)}</td>
                     <td className="px-4 py-2.5">
                       {paymentLabel ? (
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${PAYMENT_COLOR[paymentLabel] || 'bg-gray-100 text-gray-700'}`}>{paymentLabel}</span>

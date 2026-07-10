@@ -323,7 +323,8 @@ export interface InventoryReportRow {
   currentStatus: 'In Stock' | 'Sold';
   soldDate?: string;
   invoiceNumber?: string;
-  supplierCost?: number;
+  supplierCost?: number;      // set when ownershipType === 'Credit'
+  purchasingCost?: number;    // set when ownershipType === 'Owned'
   supplierPaymentStatus?: SupplierPaymentStatus; // display-mapped: Cleared→Clear, Unpaid→Pending
   supplierPaidAmount?: number;
   supplierRemainingAmount?: number;
