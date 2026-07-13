@@ -298,8 +298,60 @@ export function CreateInventoryView({
   // ══════════════════════════════════════════════════════════════════════════
   // STEP 1 — Product Details
   // ══════════════════════════════════════════════════════════════════════════
-  const renderDetailsStep = () => (
+  const renderDetailsStep = () => {
+    const isCredit = (formData as any).ownershipType === 'Credit';
+    return (
     <div className="space-y-6">
+
+      {/* ── Ownership Toggle — Credit or Owned ── */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Ownership Type <span className="text-red-500">*</span>
+        </label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {[
+            {
+              value: 'Owned',
+              label: 'Against Payment',
+              sub: 'Fully paid or will be paid via cash / bank',
+              color: '#15803d', bg: '#f0fdf4', border: '#22c55e',
+              emoji: '💳',
+            },
+            {
+              value: 'Credit',
+              label: 'On Credit',
+              sub: 'Taken from supplier on credit — payment due later',
+              color: '#b45309', bg: '#fffbeb', border: '#f59e0b',
+              emoji: '🤝',
+            },
+          ].map(opt => {
+            const sel = (formData as any).ownershipType === opt.value || (!( formData as any).ownershipType && opt.value === 'Owned');
+            return (
+              <button key={opt.value} type="button"
+                onClick={() => setField('ownershipType', opt.value)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
+                  padding: '16px 18px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                  border: `2px solid ${sel ? opt.border : '#e5e7eb'}`,
+                  backgroundColor: sel ? opt.bg : '#fff',
+                  boxShadow: sel ? `0 0 0 3px ${opt.border}30` : 'none',
+                  transition: 'all 0.18s',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+                  <span style={{ fontSize: 20 }}>{opt.emoji}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: sel ? opt.color : '#374151' }}>{opt.label}</span>
+                  {sel && (
+                    <span style={{ marginLeft: 'auto', width: 20, height: 20, borderRadius: '50%', backgroundColor: opt.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Check size={12} color="#fff" />
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: 11, color: sel ? opt.color : '#6b7280', fontWeight: 500, lineHeight: 1.4 }}>{opt.sub}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {validation.fieldErrors?.costPrice && (
         <div className="flex gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
@@ -531,16 +583,110 @@ export function CreateInventoryView({
         onRemoveExisting={removeExistingImage}
       />
     </div>
-  );
+  ); };
 
   // ══════════════════════════════════════════════════════════════════════════
-  // STEP 2 — Payment Info
+  // STEP 2 — Payment Info (Credit or Owned depending on ownershipType)
   // ══════════════════════════════════════════════════════════════════════════
   const renderPaymentStep = () => {
+    const isCredit    = (formData as any).ownershipType === 'Credit';
     const totalAmount = (formData.costPrice ?? 0) * (formData.stock || 0);
-    const paid        = formData.paidAmount ?? 0;
+    const paid        = isCredit ? ((formData as any).supplierPaidAmount ?? 0) : (formData.paidAmount ?? 0);
     const remaining   = Math.max(0, totalAmount - paid);
 
+    // ── CREDIT SCREEN ───────────────────────────────────────────────────────
+    if (isCredit) return (
+      <div className="space-y-6">
+
+        {/* Credit info banner */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12 }}>
+          <span style={{ fontSize: 22 }}>🤝</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#92400e' }}>On Credit — Supplier Payable</div>
+            <div style={{ fontSize: 12, color: '#b45309', marginTop: 2, lineHeight: 1.5 }}>
+              This inventory was taken from a supplier on credit. Record how much has been paid so far — the rest will appear in Payables.
+            </div>
+          </div>
+        </div>
+
+        {/* Supplier cost */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Cost per unit (AED)</label>
+          <input type="number" min={0} step="any"
+            value={(formData as any).supplierCost ?? formData.costPrice ?? ''}
+            onChange={e => setField('supplierCost', parseFloat(e.target.value) || 0)}
+            className={inputCls()}
+            placeholder="Total cost owed to supplier per unit"
+          />
+          <p className="text-xs text-gray-400 mt-1">Pre-filled from cost price — adjust if different from what supplier charges</p>
+        </div>
+
+        {/* Amount paid so far */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid to Supplier So Far (AED)</label>
+          <input type="number" min={0} step="any"
+            value={(formData as any).supplierPaidAmount ?? ''}
+            onChange={e => setField('supplierPaidAmount', parseFloat(e.target.value) || 0)}
+            className={inputCls()}
+            placeholder="0 if nothing paid yet"
+          />
+        </div>
+
+        {/* Payment channel for what's been paid */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">Payment Channel (for amount paid)</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            {PAYMENT_MODES.map(mode => {
+              const Icon = mode.icon;
+              const sel  = (formData as any).supplierPaymentChannel === mode.value;
+              return (
+                <button key={mode.value} type="button"
+                  onClick={() => setField('supplierPaymentChannel', mode.value)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, cursor: 'pointer',
+                    border: `2px solid ${sel ? mode.border : '#e5e7eb'}`, backgroundColor: sel ? mode.bg : '#fff', transition: 'all 0.15s' }}>
+                  <Icon size={18} color={sel ? mode.color : '#9ca3af'} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: sel ? mode.color : '#374151' }}>{mode.label}</span>
+                  {sel && <Check size={13} color={mode.color} style={{ marginLeft: 'auto' }} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Payment summary card */}
+        <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '16px 18px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 12 }}>Credit Summary</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#b45309' }}>Supplier cost / unit</span>
+              <span style={{ fontWeight: 700 }}>AED {((formData as any).supplierCost ?? formData.costPrice ?? 0).toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#b45309' }}>Units</span>
+              <span style={{ fontWeight: 700 }}>{formData.stock}</span>
+            </div>
+            <div style={{ borderTop: '1px solid #fde68a', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 15 }}>
+              <span style={{ color: '#92400e' }}>Total owed</span>
+              <span style={{ color: '#b45309' }}>AED {(((formData as any).supplierCost ?? formData.costPrice ?? 0) * (formData.stock || 0)).toLocaleString()}</span>
+            </div>
+            {paid > 0 && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#15803d' }}>Paid so far</span>
+                  <span style={{ fontWeight: 700, color: '#15803d' }}>AED {paid.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#b91c1c' }}>Still owed</span>
+                  <span style={{ fontWeight: 700, color: '#b91c1c' }}>AED {remaining.toLocaleString()}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+
+    // ── OWNED / PAYMENT SCREEN ──────────────────────────────────────────────
     return (
       <div className="space-y-6">
 
@@ -759,9 +905,16 @@ export function CreateInventoryView({
             ['Cost Price',     InventoryService.formatCurrency(formData.costPrice ?? 0)],
             ['Sell Price',     InventoryService.formatCurrency(formData.sellPrice  || 0)],
             ['Description',    formData.description || '—'],
-            ['Payment Method', formData.paymentMethod
-              ? `${formData.paymentMethod}${formData.bankName ? ` — ${formData.bankName}` : ''}`
-              : '—'],
+            ['Ownership',  (formData as any).ownershipType || 'Owned'],
+            ...((formData as any).ownershipType === 'Credit' ? [
+              ['Supplier Cost', `AED ${((formData as any).supplierCost ?? formData.costPrice ?? 0).toLocaleString()}`],
+              ['Paid So Far',   `AED ${((formData as any).supplierPaidAmount ?? 0).toLocaleString()}`],
+              ['Payment Channel', (formData as any).supplierPaymentChannel || '—'],
+            ] as [string,string][] : [
+              ['Payment Method', formData.paymentMethod
+                ? `${formData.paymentMethod}${formData.bankName ? ` — ${formData.bankName}` : ''}`
+                : '—'],
+            ] as [string,string][]),
           ] as [string, string][]).map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4">
               <span className="text-gray-500 flex-shrink-0">{label}:</span>
