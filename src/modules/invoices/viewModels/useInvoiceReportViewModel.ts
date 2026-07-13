@@ -16,18 +16,18 @@ export interface UseInvoiceReportViewModelReturn {
   isLoading: boolean;
   dateFrom: string;
   dateTo: string;
-  selectedCity: string;
-  selectedSalesperson: string;
-  selectedStatus: string;
+  selectedCity: string[];
+  selectedSalesperson: string[];
+  selectedStatus: string[];
   viewInvoice: Invoice | null;
   cities: string[];
   salespersons: string[];
   statuses: string[];
   setDateFrom: (date: string) => void;
   setDateTo: (date: string) => void;
-  setSelectedCity: (city: string) => void;
-  setSelectedSalesperson: (s: string) => void;
-  setSelectedStatus: (s: string) => void;
+  setSelectedCity: (city: string[]) => void;
+  setSelectedSalesperson: (s: string[]) => void;
+  setSelectedStatus: (s: string[]) => void;
   handleViewInvoice: (invoice: Invoice) => void;
   handleCloseView: () => void;
   handleClearFilters: () => void;
@@ -41,9 +41,9 @@ export function useInvoiceReportViewModel(): UseInvoiceReportViewModelReturn {
   const [isLoading,  setIsLoading]  = useState(true);
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
-  const [selectedCity,        setSelectedCity]        = useState('');
-  const [selectedSalesperson, setSelectedSalesperson] = useState('');
-  const [selectedStatus,      setSelectedStatus]      = useState('');
+  const [selectedCity,        setSelectedCity]        = useState<string[]>([]);
+  const [selectedSalesperson, setSelectedSalesperson] = useState<string[]>([]);
+  const [selectedStatus,      setSelectedStatus]      = useState<string[]>([]);
   const [viewInvoice,         setViewInvoice]         = useState<Invoice | null>(null);
 
   useEffect(() => {
@@ -69,18 +69,23 @@ export function useInvoiceReportViewModel(): UseInvoiceReportViewModelReturn {
 
   const statuses = ['Paid', 'Unpaid'];
 
-  const filteredInvoices = useMemo(() => filterInvoices(invoices, {
-    searchTerm: '', statusFilter: selectedStatus as any,
-    dateFrom, dateTo, cityFilter: selectedCity, salespersonFilter: selectedSalesperson,
-  }), [invoices, dateFrom, dateTo, selectedCity, selectedSalesperson, selectedStatus]);
+  const filteredInvoices = useMemo(() => {
+    let result = [...invoices];
+    if (dateFrom) result = result.filter(i => i.date >= dateFrom);
+    if (dateTo)   result = result.filter(i => i.date <= dateTo);
+    if (selectedCity.length > 0)        result = result.filter(i => selectedCity.includes(i.customerCity || ''));
+    if (selectedSalesperson.length > 0) result = result.filter(i => selectedSalesperson.includes(i.salesperson || ''));
+    if (selectedStatus.length > 0)      result = result.filter(i => selectedStatus.includes(i.status));
+    return result;
+  }, [invoices, dateFrom, dateTo, selectedCity, selectedSalesperson, selectedStatus]);
 
   const stats = useMemo(() => calculateInvoiceStats(filteredInvoices), [filteredInvoices]);
 
   const handleViewInvoice  = useCallback((invoice: Invoice) => setViewInvoice(invoice), []);
   const handleCloseView    = useCallback(() => setViewInvoice(null), []);
   const handleClearFilters = useCallback(() => {
-    setDateFrom(''); setDateTo(''); setSelectedCity('');
-    setSelectedSalesperson(''); setSelectedStatus('');
+    setDateFrom(''); setDateTo(''); setSelectedCity([]);
+    setSelectedSalesperson([]); setSelectedStatus([]);
   }, []);
   const handleExportCSV = useCallback(() => {
     const csv = exportInvoicesToCSV(filteredInvoices);

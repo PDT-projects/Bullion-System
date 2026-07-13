@@ -83,18 +83,18 @@ interface Props {
   isLoading: boolean;
   dateFrom: string;
   dateTo: string;
-  selectedCity: string;
-  selectedSalesperson: string;
-  selectedStatus: string;
+  selectedCity: string[];
+  selectedSalesperson: string[];
+  selectedStatus: string[];
   viewInvoice: Invoice | null;
   cities: string[];
   salespersons: string[];
   statuses: string[];
   setDateFrom: (date: string) => void;
   setDateTo: (date: string) => void;
-  setSelectedCity: (city: string) => void;
-  setSelectedSalesperson: (s: string) => void;
-  setSelectedStatus: (s: string) => void;
+  setSelectedCity: (city: string[]) => void;
+  setSelectedSalesperson: (s: string[]) => void;
+  setSelectedStatus: (s: string[]) => void;
   handleViewInvoice: (invoice: Invoice) => void;
   handleCloseView: () => void;
   handleClearFilters: () => void;
@@ -104,6 +104,95 @@ interface Props {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Multi-select filter dropdown (inline) ────────────────────────────────────
+function InvoiceMultiFilter({
+  label, selected, onChange, options, displayName,
+}: {
+  label: string;
+  selected: string[];
+  onChange: (v: string[]) => void;
+  options: string[];
+  displayName?: (v: string) => string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const display = displayName ?? ((v: string) => v);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = (opt: string) =>
+    onChange(selected.includes(opt) ? selected.filter(v => v !== opt) : [...selected, opt]);
+
+  const has = selected.length > 0;
+
+  return (
+    <div ref={ref} className="flex flex-col gap-1 relative min-w-[130px] flex-1">
+      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        className={`flex items-center justify-between w-full px-3 py-2 text-sm rounded-lg border cursor-pointer text-left transition-all outline-none ${has ? 'border-gray-800 bg-gray-50 text-gray-900 font-semibold' : 'border-gray-300 bg-white text-gray-400'}`}
+      >
+        <span className="truncate flex-1">
+          {has ? (selected.length === 1 ? display(selected[0]) : `${selected.length} selected`) : 'All'}
+        </span>
+        <ChevronDown size={13} className={`shrink-0 ml-1 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 z-[999] mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-[180px] max-w-[240px]">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <button type="button" onClick={() => onChange(options)} className="text-[11px] font-bold text-gray-700 hover:text-gray-900 border-none bg-none cursor-pointer p-0">Select all</button>
+            <span className="text-gray-200">|</span>
+            <button type="button" onClick={() => onChange([])} className="text-[11px] font-bold text-gray-400 hover:text-gray-600 border-none bg-none cursor-pointer p-0">Clear</button>
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {options.length === 0
+              ? <div className="px-3 py-3 text-xs text-gray-400">No options</div>
+              : options.map(opt => {
+                  const checked = selected.includes(opt);
+                  return (
+                    <div key={opt} onClick={() => toggle(opt)}
+                      className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm select-none transition-colors ${checked ? 'bg-gray-50 text-gray-900 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}>
+                      <span className="shrink-0 flex items-center justify-center rounded"
+                        style={{ width: 15, height: 15, border: `2px solid ${checked ? '#111827' : '#d1d5db'}`, backgroundColor: checked ? '#111827' : '#fff', transition: 'all 0.12s' }}>
+                        {checked && (
+                          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                            <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </span>
+                      <span className="truncate">{display(opt)}</span>
+                    </div>
+                  );
+                })}
+          </div>
+        </div>
+      )}
+
+      {has && (
+        <div className="flex flex-wrap gap-1 mt-0.5">
+          {selected.map(v => (
+            <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-900 text-white">
+              <span className="truncate max-w-[80px]">{display(v)}</span>
+              <span onClick={e => { e.stopPropagation(); toggle(v); }} className="cursor-pointer flex items-center">
+                <X size={8} color="white" />
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function InvoiceReportView({
   invoices, filteredInvoices, stats, isLoading,
   dateFrom, dateTo, selectedCity, selectedSalesperson, selectedStatus,
@@ -112,7 +201,7 @@ export function InvoiceReportView({
   handleViewInvoice, handleCloseView, handleClearFilters, handleExportCSV,
   formatCurrency, formatDate,
 }: Props) {
-  const hasFilters = dateFrom || dateTo || selectedCity || selectedSalesperson || selectedStatus;
+  const hasFilters = dateFrom || dateTo || selectedCity.length > 0 || selectedSalesperson.length > 0 || selectedStatus.length > 0;
 
   // Commission rate can be adjusted by the user (shown as %)
   const [commRate, setCommRate] = useState(DEFAULT_COMMISSION_RATE);
@@ -233,7 +322,7 @@ export function InvoiceReportView({
         )}
       </div>
 
-      {/* Filters */}
+      {/* Filters — always visible, all multi-select */}
       <div className="bg-white p-4 rounded-lg border border-gray-200">
         <div className="flex items-center gap-2 mb-3">
           <Filter size={18} className="text-[#4f46e5]" />
@@ -242,41 +331,40 @@ export function InvoiceReportView({
             <button onClick={handleClearFilters} className="ml-auto text-sm text-red-500 hover:text-red-700">Clear All</button>
           )}
         </div>
-        <div className="grid grid-cols-5 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">From Date</label>
+        <div className="flex flex-wrap gap-4 items-start">
+          {/* Date From */}
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">From Date</label>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4f46e5] focus:outline-none" />
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4f46e5] focus:outline-none bg-white text-gray-900" />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">To Date</label>
+          {/* Date To */}
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">To Date</label>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4f46e5] focus:outline-none" />
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4f46e5] focus:outline-none bg-white text-gray-900" />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">City / Country</label>
-            <select value={selectedCity} onChange={e => setSelectedCity(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4f46e5] focus:outline-none">
-              <option value="">All</option>
-              {cities.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Salesperson</label>
-            <select value={selectedSalesperson} onChange={e => setSelectedSalesperson(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4f46e5] focus:outline-none">
-              <option value="">All</option>
-              {salespersons.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-            <select value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4f46e5] focus:outline-none">
-              <option value="">All</option>
-              {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
+          {/* City multi-select */}
+          <InvoiceMultiFilter
+            label="City / Country"
+            selected={selectedCity}
+            onChange={setSelectedCity}
+            options={cities}
+          />
+          {/* Salesperson multi-select */}
+          <InvoiceMultiFilter
+            label="Salesperson"
+            selected={selectedSalesperson}
+            onChange={setSelectedSalesperson}
+            options={salespersons}
+          />
+          {/* Status multi-select */}
+          <InvoiceMultiFilter
+            label="Status"
+            selected={selectedStatus}
+            onChange={setSelectedStatus}
+            options={statuses}
+          />
         </div>
       </div>
 

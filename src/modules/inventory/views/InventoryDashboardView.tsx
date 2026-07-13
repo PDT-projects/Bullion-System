@@ -65,31 +65,135 @@ function statusBadge(status: string) {
 const fmtAED = (n: number) =>
   `د.إ ${Math.round(n).toLocaleString('en-PK')}`;
 
-// ── Select helper ─────────────────────────────────────────────────────────────
+// ── Multi-select filter dropdown ──────────────────────────────────────────────
 
-function FilterSelect({ label, value, onChange, options }: {
-  label: string; value: string; onChange: (v: string) => void; options: string[];
+function MultiFilterSelect({ label, selected, onChange, options }: {
+  label: string;
+  selected: string[];
+  onChange: (v: string[]) => void;
+  options: string[];
 }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = (opt: string) => {
+    if (selected.includes(opt)) onChange(selected.filter(v => v !== opt));
+    else onChange([...selected, opt]);
+  };
+
+  const hasSelection = selected.length > 0;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 120, flex: 1 }}>
+    <div ref={ref} style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 130, flex: 1, position: 'relative' }}>
       <label style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</label>
-      <div style={{ position: 'relative' }}>
-        <select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          style={{
-            width: '100%', padding: '7px 28px 7px 10px',
-            border: `1px solid ${value ? '#334155' : '#e2e8f0'}`,
-            borderRadius: 7, fontSize: 12, color: '#0f172a',
-            backgroundColor: '#fff', outline: 'none', appearance: 'none', cursor: 'pointer',
-            fontWeight: value ? 600 : 400,
-          }}
-        >
-          <option value="">All</option>
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <ChevronDown size={12} color="#94a3b8" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-      </div>
+
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: '100%', padding: '7px 10px',
+          border: `1.5px solid ${hasSelection ? '#334155' : '#e2e8f0'}`,
+          borderRadius: 7, fontSize: 12,
+          backgroundColor: hasSelection ? '#f1f5f9' : '#fff',
+          color: hasSelection ? '#0f172a' : '#94a3b8',
+          cursor: 'pointer', outline: 'none', textAlign: 'left',
+          fontWeight: hasSelection ? 700 : 400,
+          transition: 'border-color 0.15s',
+          boxSizing: 'border-box',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {hasSelection
+            ? selected.length === 1 ? selected[0] : `${selected.length} selected`
+            : `All`}
+        </span>
+        <ChevronDown size={12} color="#94a3b8" style={{ flexShrink: 0, marginLeft: 4, transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 999,
+          backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 9,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.13)', minWidth: 180, maxWidth: 240,
+          overflow: 'hidden',
+        }}>
+          <div style={{ padding: '7px 10px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" onClick={() => onChange(options)}
+              style={{ fontSize: 11, fontWeight: 700, color: '#334155', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+              Select all
+            </button>
+            <span style={{ color: '#e2e8f0', fontSize: 14 }}>|</span>
+            <button type="button" onClick={() => onChange([])}
+              style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+              Clear
+            </button>
+          </div>
+          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            {options.length === 0
+              ? <div style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8' }}>No options</div>
+              : options.map(opt => {
+                  const checked = selected.includes(opt);
+                  return (
+                    <div key={opt} onClick={() => toggle(opt)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 9,
+                        padding: '8px 12px', cursor: 'pointer', fontSize: 12,
+                        backgroundColor: checked ? '#f1f5f9' : 'transparent',
+                        color: checked ? '#0f172a' : '#374151',
+                        fontWeight: checked ? 600 : 400,
+                        userSelect: 'none',
+                      }}
+                      onMouseEnter={e => { if (!checked) (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'; }}
+                      onMouseLeave={e => { if (!checked) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      <span style={{
+                        width: 15, height: 15, borderRadius: 4, flexShrink: 0,
+                        border: `2px solid ${checked ? '#0f172a' : '#d1d5db'}`,
+                        backgroundColor: checked ? '#0f172a' : '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.12s',
+                      }}>
+                        {checked && (
+                          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                            <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </span>
+                      {opt}
+                    </div>
+                  );
+                })}
+          </div>
+        </div>
+      )}
+
+      {hasSelection && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 2 }}>
+          {selected.map(v => (
+            <span key={v} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '2px 6px', borderRadius: 99, fontSize: 10, fontWeight: 700,
+              backgroundColor: '#0f172a', color: '#fff',
+            }}>
+              {v}
+              <span onClick={e => { e.stopPropagation(); toggle(v); }}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', lineHeight: 1 }}>
+                <X size={9} color="#fff" />
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -130,19 +234,19 @@ export function InventoryDashboardView({
 
   const { transfers } = useProductTransferViewModel();
 
-  // ── Filters — all always visible ─────────────────────────────────────────
+  // ── Filters — all always visible, all multi-select ──────────────────────
   const [search,          setSearch]          = useState('');
-  const [brandFilter,     setBrandFilter]     = useState('');
-  const [modelFilter,     setModelFilter]     = useState('');
-  const [categoryFilter,  setCategoryFilter]  = useState('');
-  const [statusFilter,    setStatusFilter]    = useState('');
-  const [locationFilter,  setLocationFilter]  = useState('');
-  const [ownershipFilter, setOwnershipFilter] = useState('');
+  const [brandFilter,     setBrandFilter]     = useState<string[]>([]);
+  const [modelFilter,     setModelFilter]     = useState<string[]>([]);
+  const [categoryFilter,  setCategoryFilter]  = useState<string[]>([]);
+  const [statusFilter,    setStatusFilter]    = useState<string[]>([]);
+  const [locationFilter,  setLocationFilter]  = useState<string[]>([]);
+  const [ownershipFilter, setOwnershipFilter] = useState<string[]>([]);
 
   // ── Filter option lists ───────────────────────────────────────────────────
   const brands     = useMemo(() => [...new Set(allProducts.map(p => p.brandName).filter(Boolean))].sort(), [allProducts]);
   const models     = useMemo(() => {
-    const src = brandFilter ? allProducts.filter(p => p.brandName === brandFilter) : allProducts;
+    const src = brandFilter.length > 0 ? allProducts.filter(p => brandFilter.includes(p.brandName)) : allProducts;
     return [...new Set(src.map(p => p.modelName).filter(Boolean))].sort();
   }, [allProducts, brandFilter]);
   const categories = useMemo(() => [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort(), [allProducts]);
@@ -150,12 +254,14 @@ export function InventoryDashboardView({
   const locations  = useMemo(() => [...new Set(allProducts.map(getDisplayLocation).filter(l => l !== '—'))].sort(), [allProducts]);
 
   const clearFilters = () => {
-    setSearch(''); setBrandFilter(''); setModelFilter('');
-    setCategoryFilter(''); setStatusFilter(''); setLocationFilter(''); setOwnershipFilter('');
+    setSearch(''); setBrandFilter([]); setModelFilter([]);
+    setCategoryFilter([]); setStatusFilter([]); setLocationFilter([]); setOwnershipFilter([]);
   };
 
-  const activeFilterCount = [search, brandFilter, modelFilter, categoryFilter, statusFilter, locationFilter, ownershipFilter]
-    .filter(Boolean).length;
+  const activeFilterCount =
+    (search ? 1 : 0) +
+    brandFilter.length + modelFilter.length + categoryFilter.length +
+    statusFilter.length + locationFilter.length + ownershipFilter.length;
 
   // ── Filtered rows ─────────────────────────────────────────────────────────
   const displayed = useMemo(() => {
@@ -169,12 +275,12 @@ export function InventoryDashboardView({
         (p.serialNumbers || []).some(s => s.toLowerCase().includes(t))
       );
     }
-    if (brandFilter)     arr = arr.filter(p => p.brandName === brandFilter);
-    if (modelFilter)     arr = arr.filter(p => p.modelName === modelFilter);
-    if (categoryFilter)  arr = arr.filter(p => p.category === categoryFilter);
-    if (statusFilter)    arr = arr.filter(p => p.status === statusFilter);
-    if (locationFilter)  arr = arr.filter(p => getDisplayLocation(p) === locationFilter);
-    if (ownershipFilter) arr = arr.filter(p => (p.ownershipType || 'Owned') === ownershipFilter);
+    if (brandFilter.length > 0)     arr = arr.filter(p => brandFilter.includes(p.brandName));
+    if (modelFilter.length > 0)     arr = arr.filter(p => modelFilter.includes(p.modelName));
+    if (categoryFilter.length > 0)  arr = arr.filter(p => categoryFilter.includes(p.category));
+    if (statusFilter.length > 0)    arr = arr.filter(p => statusFilter.includes(p.status));
+    if (locationFilter.length > 0)  arr = arr.filter(p => locationFilter.includes(getDisplayLocation(p)));
+    if (ownershipFilter.length > 0) arr = arr.filter(p => ownershipFilter.includes(p.ownershipType || 'Owned'));
     return arr;
   }, [allProducts, search, brandFilter, modelFilter, categoryFilter, statusFilter, locationFilter, ownershipFilter]);
 
@@ -328,14 +434,14 @@ export function InventoryDashboardView({
             )}
           </div>
 
-          {/* Filter selects row */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <FilterSelect label="Brand"     value={brandFilter}     onChange={v => { setBrandFilter(v); setModelFilter(''); }} options={brands} />
-            <FilterSelect label="Model"     value={modelFilter}     onChange={setModelFilter}     options={models} />
-            <FilterSelect label="Category"  value={categoryFilter}  onChange={setCategoryFilter}  options={categories} />
-            <FilterSelect label="Status"    value={statusFilter}    onChange={setStatusFilter}    options={statuses} />
-            <FilterSelect label="Location"  value={locationFilter}  onChange={setLocationFilter}  options={locations} />
-            <FilterSelect label="Ownership" value={ownershipFilter} onChange={setOwnershipFilter} options={['Owned', 'Credit']} />
+          {/* Filter selects row — all multi-select */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <MultiFilterSelect label="Brand"     selected={brandFilter}     onChange={v => { setBrandFilter(v); setModelFilter([]); }} options={brands} />
+            <MultiFilterSelect label="Model"     selected={modelFilter}     onChange={setModelFilter}     options={models} />
+            <MultiFilterSelect label="Category"  selected={categoryFilter}  onChange={setCategoryFilter}  options={categories} />
+            <MultiFilterSelect label="Status"    selected={statusFilter}    onChange={setStatusFilter}    options={statuses} />
+            <MultiFilterSelect label="Location"  selected={locationFilter}  onChange={setLocationFilter}  options={locations} />
+            <MultiFilterSelect label="Ownership" selected={ownershipFilter} onChange={setOwnershipFilter} options={['Owned', 'Credit']} />
           </div>
         </div>
 

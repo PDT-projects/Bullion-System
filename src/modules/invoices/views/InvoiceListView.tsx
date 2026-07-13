@@ -10,9 +10,9 @@ function formatAed(amount: number): string {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 import {
-  FileText, Plus, Search, Eye, X, Loader2, FileDown,
+  FileText, Plus, Eye, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin, Trash2,
-  Pencil, Banknote, Landmark,
+  Pencil, Banknote, Landmark, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Invoice, InvoiceStats, InvoiceFilters, InvoiceSelectionSummary, PaymentMode } from '../models/types';
@@ -30,9 +30,9 @@ interface Props {
   viewingInvoice: Invoice | null;
   isLoading: boolean;
   onSearch: (searchTerm: string) => void;
-  onStatusFilter: (status: 'all' | 'Paid' | 'Unpaid') => void;
-  onCityFilter: (city: string) => void;
-  onSalespersonFilter: (sp: string) => void;
+  onStatusFilter: (statuses: string[]) => void;
+  onCityFilter: (cities: string[]) => void;
+  onSalespersonFilter: (sps: string[]) => void;
   onDateFromFilter: (date: string) => void;
   onDateToFilter: (date: string) => void;
   onClearFilters: () => void;
@@ -61,6 +61,95 @@ interface Props {
   openPayment: (invoice: Invoice) => void;
   closePayment: () => void;
   submitPayment: (input: { amount: number; mode: PaymentMode; date: string; bankId?: string; note?: string }) => Promise<void>;
+}
+
+// ── Multi-select filter dropdown (inline — no separate file needed) ────────────
+function InvoiceMultiFilter({
+  label, selected, onChange, options, displayName,
+}: {
+  label: string;
+  selected: string[];
+  onChange: (v: string[]) => void;
+  options: string[];
+  displayName?: (v: string) => string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const display = displayName ?? ((v: string) => v);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = (opt: string) =>
+    onChange(selected.includes(opt) ? selected.filter(v => v !== opt) : [...selected, opt]);
+
+  const has = selected.length > 0;
+
+  return (
+    <div ref={ref} className="flex flex-col gap-1 relative min-w-[130px] flex-1">
+      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        className={`flex items-center justify-between w-full px-3 py-2 text-sm rounded-lg border cursor-pointer text-left transition-all outline-none ${has ? 'border-gray-800 bg-gray-50 text-gray-900 font-semibold' : 'border-gray-300 bg-white text-gray-400'}`}
+      >
+        <span className="truncate flex-1">
+          {has ? (selected.length === 1 ? display(selected[0]) : `${selected.length} selected`) : 'All'}
+        </span>
+        <ChevronDown size={13} className={`shrink-0 ml-1 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 z-[999] mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-[180px] max-w-[240px]">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <button type="button" onClick={() => onChange(options)} className="text-[11px] font-bold text-gray-700 hover:text-gray-900 border-none bg-none cursor-pointer p-0">Select all</button>
+            <span className="text-gray-200">|</span>
+            <button type="button" onClick={() => onChange([])} className="text-[11px] font-bold text-gray-400 hover:text-gray-600 border-none bg-none cursor-pointer p-0">Clear</button>
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {options.length === 0
+              ? <div className="px-3 py-3 text-xs text-gray-400">No options</div>
+              : options.map(opt => {
+                  const checked = selected.includes(opt);
+                  return (
+                    <div key={opt} onClick={() => toggle(opt)}
+                      className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm select-none transition-colors ${checked ? 'bg-gray-50 text-gray-900 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}>
+                      <span className="shrink-0 flex items-center justify-center rounded"
+                        style={{ width: 15, height: 15, border: `2px solid ${checked ? '#111827' : '#d1d5db'}`, backgroundColor: checked ? '#111827' : '#fff', transition: 'all 0.12s' }}>
+                        {checked && (
+                          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                            <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </span>
+                      <span className="truncate">{display(opt)}</span>
+                    </div>
+                  );
+                })}
+          </div>
+        </div>
+      )}
+
+      {has && (
+        <div className="flex flex-wrap gap-1 mt-0.5">
+          {selected.map(v => (
+            <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-900 text-white">
+              <span className="truncate max-w-[80px]">{display(v)}</span>
+              <span onClick={e => { e.stopPropagation(); toggle(v); }} className="cursor-pointer flex items-center">
+                <X size={8} color="white" />
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function deliveryBadge(status: string) {
@@ -265,9 +354,11 @@ export function InvoiceListView({
   };
 
   const hasActiveFilters =
-    filters.searchTerm || filters.statusFilter !== 'all' ||
+    filters.searchTerm ||
+    (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : filters.statusFilter !== 'all') ||
     filters.dateFrom || filters.dateTo ||
-    filters.cityFilter || filters.salespersonFilter;
+    (Array.isArray(filters.cityFilter) ? filters.cityFilter.length > 0 : !!filters.cityFilter) ||
+    (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : !!filters.salespersonFilter);
 
   if (isLoading) {
     return (
@@ -320,9 +411,9 @@ export function InvoiceListView({
         ))}
       </div>
 
-      {/* ── Filter Bar ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
-        <div className="flex items-center gap-2 mb-1">
+      {/* ── Filter Bar — always visible, all multi-select ── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
           <Filter size={15} className="text-gray-600" />
           <span className="text-sm font-semibold text-gray-700">Filters</span>
           {hasActiveFilters && (
@@ -333,64 +424,55 @@ export function InvoiceListView({
           )}
         </div>
 
-        {/* Row 1: Search + Status */}
-        <div className="flex flex-wrap gap-3">
-          <div className="flex-1 min-w-[220px] relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-            <input
-              type="text"
-              placeholder="Search invoice, customer, phone, city…"
-              value={filters.searchTerm}
-              onChange={e => onSearch(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 placeholder-gray-400" />
-          </div>
-          {/* FIX: explicit bg-white + text-gray-900 ensures the select is readable */}
-          <select
-            value={filters.statusFilter}
-            onChange={e => onStatusFilter(e.target.value as any)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900">
-            <option value="all">All Status</option>
-            <option value="Paid">Paid</option>
-            <option value="Unpaid">Unpaid</option>
-          </select>
-        </div>
+        {/* Filters row — all multi-select */}
+        <div className="flex flex-wrap gap-3 items-start">
+          {/* Status multi-select */}
+          <InvoiceMultiFilter
+            label="Status"
+            selected={Array.isArray(filters.statusFilter) ? filters.statusFilter as string[] : (filters.statusFilter !== 'all' ? [filters.statusFilter] : [])}
+            onChange={v => onStatusFilter(v as any)}
+            options={['Paid', 'Unpaid', 'Partial']}
+          />
 
-        {/* Row 2: City + Salesperson + Date range */}
-        <div className="flex flex-wrap gap-3">
-          <select
-            value={filters.cityFilter}
-            onChange={e => onCityFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900">
-            <option value="">📍 All Cities</option>
-            {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          {/* City multi-select */}
+          <InvoiceMultiFilter
+            label="City"
+            selected={Array.isArray(filters.cityFilter) ? filters.cityFilter as string[] : (filters.cityFilter ? [filters.cityFilter] : [])}
+            onChange={v => onCityFilter(v)}
+            options={availableCities}
+          />
 
-          <select
-            value={filters.salespersonFilter}
-            onChange={e => onSalespersonFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900">
-            <option value="">👤 All Salespersons</option>
-            {availableSalespersons.map(sp => <option key={sp} value={sp}>{spName(sp) || sp}</option>)}
-          </select>
+          {/* Salesperson multi-select */}
+          <InvoiceMultiFilter
+            label="Salesperson"
+            selected={Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter as string[] : (filters.salespersonFilter ? [filters.salespersonFilter] : [])}
+            onChange={v => onSalespersonFilter(v)}
+            options={availableSalespersons}
+            displayName={sp => spName(sp)}
+          />
 
-          {/* Date From — FIX: text-gray-900 so the date value is visible */}
-          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500">
-            <span className="text-xs text-gray-400 font-medium whitespace-nowrap shrink-0">From</span>
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={e => onDateFromFilter(e.target.value)}
-              className="text-sm outline-none bg-transparent text-gray-900 w-36" />
+          {/* Date From */}
+          <div className="flex flex-col gap-1 min-w-[130px]">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">From Date</label>
+            <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-gray-800">
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={e => onDateFromFilter(e.target.value)}
+                className="text-sm outline-none bg-transparent text-gray-900 w-32" />
+            </div>
           </div>
 
           {/* Date To */}
-          <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500">
-            <span className="text-xs text-gray-400 font-medium whitespace-nowrap shrink-0">To</span>
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={e => onDateToFilter(e.target.value)}
-              className="text-sm outline-none bg-transparent text-gray-900 w-36" />
+          <div className="flex flex-col gap-1 min-w-[130px]">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">To Date</label>
+            <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-gray-800">
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={e => onDateToFilter(e.target.value)}
+                className="text-sm outline-none bg-transparent text-gray-900 w-32" />
+            </div>
           </div>
         </div>
       </div>
