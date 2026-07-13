@@ -3,7 +3,6 @@ import {
   Plus, Trash2, X, Hash, Truck, User, CreditCard,
   Loader2, FileDown, Stamp, Package, Globe, ChevronDown,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
 import { makeBranchValue, branchFromValue } from '../viewModels/useInvoiceFormViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
@@ -34,7 +33,6 @@ interface Props {
   banks: Bank[];
   savedSalespersons?: string[];
   handleAddSalesperson?: (name: string) => Promise<void>;
-  saveCustomerToBook?: () => Promise<void>;
   setFormData: (data: Partial<Invoice>) => void;
   handleCustomerSearch: (value: string, field: 'customerName' | 'customerPhone') => void;
   handleCustomerSelect: (customer: Invoice) => void;
@@ -217,9 +215,7 @@ function CountryCitySelector({
   );
 }
 
-// ── Customer book dropdown ────────────────────────────────────────────────────
-// Shows from the first keystroke. Displays full customer info: name, phone,
-// CNIC, city/address. Clicking fills ALL customer fields in the form.
+// ── Customer history dropdown ─────────────────────────────────────────────────
 function CustomerHistoryDropdown({
   suggestions, onSelect, visible, onClose,
 }: {
@@ -230,38 +226,19 @@ function CustomerHistoryDropdown({
 }) {
   if (!visible || suggestions.length === 0) return null;
   return (
-    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl max-h-64 overflow-y-auto">
-      <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between sticky top-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Customer Book</span>
-          <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-bold">{suggestions.length}</span>
-        </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-0.5 rounded"><X size={12} /></button>
+    <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+      <div className="px-3 py-1.5 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+        <span className="text-xs font-semibold text-gray-700">Previous Customers</span>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
       </div>
-      {suggestions.map((s, i) => (
-        <div key={s.id || i} onClick={() => { onSelect(s); onClose(); }}
-          className="px-3 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 group">
-          {/* Name + phone row */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700 truncate">{s.customerName}</span>
-            <span className="text-xs font-mono text-gray-500 shrink-0">{s.customerPhone}</span>
-          </div>
-          {/* Details row */}
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {s.customerPhone2 && (
-              <span className="text-[11px] text-gray-400">📞 {s.customerPhone2}</span>
-            )}
-            {s.customerCNIC && (
-              <span className="text-[11px] text-gray-400">🪪 {s.customerCNIC}</span>
-            )}
-            {(s.customerCity || s.customerProvince) && (
-              <span className="text-[11px] text-gray-400">
-                📍 {[s.customerCity, s.customerProvince].filter(Boolean).join(', ')}
-              </span>
-            )}
-            {s.customerAddress && (
-              <span className="text-[11px] text-gray-400 truncate max-w-[180px]">🏠 {s.customerAddress}</span>
-            )}
+      {suggestions.map(s => (
+        <div key={s.id} onClick={() => { onSelect(s); onClose(); }}
+          className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+          <div className="text-xs font-semibold text-gray-900">{s.customerName}</div>
+          <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+            <span>{s.customerPhone}</span>
+            {s.customerCity && <span>· {s.customerCity}</span>}
+            {s.customerCNIC && <span>· CNIC: {s.customerCNIC}</span>}
           </div>
         </div>
       ))}
@@ -322,64 +299,6 @@ function ProductPriceInput({
   );
 }
 
-
-// ── Save to Customer Book button — handles its own loading/success state ──────
-function SaveToCustomerBookButton({
-  customerName, onSave,
-}: { customerName: string; onSave: () => Promise<void> }) {
-  const [saving,  setSaving]  = React.useState(false);
-  const [saved,   setSaved]   = React.useState(false);
-  const [errMsg,  setErrMsg]  = React.useState('');
-
-  const handle = async () => {
-    setSaving(true); setSaved(false); setErrMsg('');
-    try {
-      await onSave();
-      setSaved(true);
-      toast.success(`✅ ${customerName} saved to Customer Book`);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (err: any) {
-      const msg = err?.message || 'Failed to save — check your connection';
-      setErrMsg(msg);
-      toast.error(msg);
-      console.error('[CustomerBook]', err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
-      <span className="text-xs text-gray-500">
-        {saved
-          ? <span className="text-green-600 font-semibold">✅ {customerName} saved to Customer Book</span>
-          : errMsg
-          ? <span className="text-red-500">⚠️ {errMsg}</span>
-          : <>💾 Save <strong>{customerName}</strong> to customer book for quick lookup next time</>
-        }
-      </span>
-      <button
-        type="button"
-        onClick={handle}
-        disabled={saving || saved}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-dashed transition-all shrink-0 disabled:opacity-60"
-        style={{
-          borderColor: saved ? '#16a34a' : '#334155',
-          color:       saved ? '#16a34a' : '#334155',
-          backgroundColor: 'transparent',
-        }}
-      >
-        {saving
-          ? <><Loader2 size={11} className="animate-spin" /> Saving…</>
-          : saved
-          ? <>✓ Saved</>
-          : <>+ Save to Customer Book</>
-        }
-      </button>
-    </div>
-  );
-}
-
 export function InvoiceFormView({
   formData, selectedProducts, customerSuggestions, showSuggestions,
   isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
@@ -387,7 +306,6 @@ export function InvoiceFormView({
   salespersonLocations, deliveryStatuses, collectionMethods,
   availableProducts, productsLoading = false, activeEmployees, banks,
   savedSalespersons = [], handleAddSalesperson = async () => {},
-  saveCustomerToBook = async () => {},
   setFormData, handleCustomerSearch, handleCustomerSelect,
   addProduct, removeProduct, updateProduct, updateSerial,
   getAvailableSerialsForProduct,
@@ -417,10 +335,9 @@ export function InvoiceFormView({
   const [newDelivery,    setNewDelivery]    = useState('');
   const [addingCollection, setAddingCollection] = useState(false);
   const [newCollection,    setNewCollection]    = useState('');
-  const [showNameSuggestions, setShowNameSuggestions]  = useState(false);
+  const [showNameSuggestions,  setShowNameSuggestions]  = useState(false);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
-  const [showSpSuggestions,   setShowSpSuggestions]    = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [showSpSuggestions,    setShowSpSuggestions]    = useState(false);
   const nameRef  = useRef<HTMLDivElement>(null);
   const phoneRef = useRef<HTMLDivElement>(null);
   const spRef    = useRef<HTMLDivElement>(null);
@@ -529,20 +446,16 @@ export function InvoiceFormView({
               </div>
 
               {/* Customer Name — with history dropdown */}
-              <div className="relative" ref={nameRef} data-field-error={!!fieldErrors.customerName}>
-                <label className={lbl}>
-                  Customer Name <span className="text-red-500">*</span>
-                </label>
+              <div className="relative" ref={nameRef}>
+                <label className={lbl}>Customer Name *</label>
                 <div className="relative">
                   <input type="text" value={formData.customerName || ''}
                     onChange={e => {
                       handleCustomerSearch(e.target.value, 'customerName');
                       setShowNameSuggestions(true);
-                      if (e.target.value.trim()) setFieldErrors(prev => { const n = {...prev}; delete n.customerName; return n; });
                     }}
                     onFocus={() => setShowNameSuggestions(true)}
-                    placeholder="Enter customer name"
-                    className={fieldErrors.customerName ? `${inp} !border-red-400 !bg-red-50 focus:!ring-red-300` : inp} />
+                    placeholder="Enter customer name" className={inp} />
                   {customerSuggestions.length > 0 && (
                     <button type="button"
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400"
@@ -551,11 +464,6 @@ export function InvoiceFormView({
                     </button>
                   )}
                 </div>
-                {fieldErrors.customerName && (
-                  <p className="text-red-500 text-[11px] mt-1 font-medium flex items-center gap-1">
-                    ⚠ {fieldErrors.customerName}
-                  </p>
-                )}
                 <CustomerHistoryDropdown
                   suggestions={customerSuggestions}
                   onSelect={onSelectCustomer}
@@ -578,24 +486,15 @@ export function InvoiceFormView({
 
             {/* Row 2: Phone | Second Phone | Country | City */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="relative" ref={phoneRef} data-field-error={!!fieldErrors.customerPhone}>
-                <label className={lbl}>
-                  Phone Number <span className="text-red-500">*</span>
-                </label>
+              <div className="relative" ref={phoneRef}>
+                <label className={lbl}>Phone Number *</label>
                 <input type="tel" value={formData.customerPhone || ''}
                   onChange={e => {
                     handleCustomerSearch(e.target.value, 'customerPhone');
                     setShowPhoneSuggestions(true);
-                    if (e.target.value.trim()) setFieldErrors(prev => { const n = {...prev}; delete n.customerPhone; return n; });
                   }}
                   onFocus={() => setShowPhoneSuggestions(true)}
-                  placeholder="+92 300 1234567"
-                  className={fieldErrors.customerPhone ? `${inp} !border-red-400 !bg-red-50 focus:!ring-red-300` : inp} />
-                {fieldErrors.customerPhone && (
-                  <p className="text-red-500 text-[11px] mt-1 font-medium flex items-center gap-1">
-                    ⚠ {fieldErrors.customerPhone}
-                  </p>
-                )}
+                  placeholder="+92 300 1234567" className={inp} />
                 <CustomerHistoryDropdown
                   suggestions={customerSuggestions}
                   onSelect={onSelectCustomer}
@@ -626,14 +525,6 @@ export function InvoiceFormView({
                   onChange={e => setFormData({ customerAddress: e.target.value })} className={inp} />
               </div>
             </div>
-
-            {/* Save to Customer Book */}
-            {(formData.customerName || '').trim() && (formData.customerPhone || '').trim() && (
-              <SaveToCustomerBookButton
-                customerName={formData.customerName || ''}
-                onSave={saveCustomerToBook}
-              />
-            )}
           </div>
         </section>
 
@@ -645,7 +536,7 @@ export function InvoiceFormView({
               <Package size={15} style={{ color: CHARCOAL }} />
               <h4 className="text-sm font-bold" style={{ color: CHARCOAL }}>Products</h4>
             </div>
-            <button onClick={() => { addProduct(); setFieldErrors(prev => { const n = {...prev}; delete n.products; return n; }); }}
+            <button onClick={addProduct}
               className="flex items-center gap-1 text-xs px-3 py-2 rounded-lg font-semibold transition-colors"
               style={{ background: CHARCOAL, color: '#fff' }}>
               <Plus size={12} /> Add Product
@@ -653,11 +544,9 @@ export function InvoiceFormView({
           </div>
           <div className="p-4">
             {selectedProducts.length === 0 ? (
-              <div data-field-error={!!fieldErrors.products}>
-                <p className={`text-xs text-center py-6 rounded-lg border border-dashed ${fieldErrors.products ? 'bg-red-50 border-red-300 text-red-400' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>
-                  {fieldErrors.products ? `⚠ ${fieldErrors.products}` : 'No products added yet'}
-                </p>
-              </div>
+              <p className="text-xs text-gray-400 text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                No products added yet
+              </p>
             ) : (
               <div className="space-y-2">
                 {selectedProducts.map((product, index) => {
@@ -842,36 +731,6 @@ export function InvoiceFormView({
                   className={`${inp} resize-none h-auto`} />
               </div>
             </div>
-
-            {/* Multi-currency */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <Globe size={11} className="text-gray-600" />
-                <label className="text-xs font-medium text-gray-700">Invoice Currencies (shown on PDF)</label>
-                <span className="text-xs text-gray-400">— select all that apply</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {INVOICE_CURRENCIES.map(c => {
-                  const active = selectedCurrencies.includes(c.code);
-                  return (
-                    <button key={c.code} type="button" onClick={() => toggleCurrency(c.code)}
-                      style={active ? { backgroundColor: CHARCOAL, color: '#fff', borderColor: CHARCOAL } : {}}
-                      className={`px-3 py-1 rounded-lg border text-xs font-semibold transition-all ${
-                        active
-                          ? 'shadow-sm ring-2 ring-slate-300'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                      }`}>
-                      {c.symbol} {c.code}
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedCurrencies.length > 1 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Primary: <strong>{selectedCurrencies[0]}</strong> · Also shown: {selectedCurrencies.slice(1).join(', ')}
-                </p>
-              )}
-            </div>
           </div>
         </section>
 
@@ -883,213 +742,108 @@ export function InvoiceFormView({
             <span className="text-xs text-gray-400 ml-auto">Internal — not shown on invoice</span>
           </div>
           <div className="p-4">
-            {/* Salesperson — dropdown of saved names + Add new inline */}
-            <div className="relative" ref={spRef}>
-              <label className={lbl}>Salesperson Name</label>
-              {addingSp ? (
-                /* Add new salesperson inline */
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={newSp}
-                    onChange={e => setNewSp(e.target.value)}
-                    onKeyDown={async e => {
-                      if (e.key === 'Enter' && newSp.trim()) {
-                        await handleAddSalesperson(newSp.trim());
-                        setNewSp(''); setAddingSp(false);
-                      }
-                      if (e.key === 'Escape') { setAddingSp(false); setNewSp(''); }
-                    }}
-                    placeholder="Enter salesperson name…"
-                    autoFocus
-                    className={`${inp} flex-1`}
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (newSp.trim()) { await handleAddSalesperson(newSp.trim()); setNewSp(''); setAddingSp(false); }
-                    }}
-                    disabled={!newSp.trim()}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
-                    style={{ backgroundColor: CHARCOAL, color: '#fff' }}>
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAddingSp(false); setNewSp(''); }}
-                    className="px-2 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs">
-                    <X size={13} />
-                  </button>
-                </div>
-              ) : (
-                /* Dropdown of saved salespersons */
-                <div className="flex gap-1.5">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={formData.salesperson || ''}
-                      onChange={e => {
-                        setFormData({ salesperson: e.target.value });
-                        setShowSpSuggestions(true);
-                      }}
-                      onFocus={() => setShowSpSuggestions(true)}
-                      placeholder="Select or type a name…"
-                      autoComplete="off"
-                      className={inp}
-                    />
-                    {/* Dropdown */}
-                    {showSpSuggestions && (() => {
-                      const val = (formData.salesperson || '').toLowerCase();
-                      const allSp = [
-                        ...activeEmployees.map(e => e.name),
-                        ...savedSalespersons,
-                      ].filter((v, i, a) => a.indexOf(v) === i);
-                      const matches = val
-                        ? allSp.filter(s => s.toLowerCase().includes(val))
-                        : allSp;
-                      if (matches.length === 0 && !val) return null;
-                      return (
-                        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto">
-                          <div className="px-3 py-1.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Salespersons</span>
-                            {val && <span className="text-[10px] text-gray-400">{matches.length} match{matches.length !== 1 ? 'es' : ''}</span>}
-                          </div>
-                          {matches.length === 0 ? (
-                            <div className="px-3 py-3 text-xs text-gray-400 text-center">No matches for &quot;{formData.salesperson}&quot;</div>
-                          ) : matches.map(name => (
-                            <div key={name}
-                              onMouseDown={e => { e.preventDefault(); setFormData({ salesperson: name }); setShowSpSuggestions(false); }}
-                              className="px-3 py-2.5 cursor-pointer hover:bg-blue-50 text-sm text-gray-800 font-medium border-b border-gray-50 last:border-0 transition-colors flex items-center gap-2">
-                              <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0">
-                                {name.charAt(0).toUpperCase()}
-                              </span>
-                              {name}
-                              {formData.salesperson === name && <span className="ml-auto text-blue-500 text-xs">✓</span>}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  {/* Add new button */}
-                  <button
-                    type="button"
-                    onClick={() => { setAddingSp(true); setNewSp(''); setShowSpSuggestions(false); }}
-                    className="flex items-center gap-1 px-2.5 py-2 border border-dashed border-gray-300 text-gray-500 rounded-lg text-xs hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap shrink-0"
-                    title="Add new salesperson">
-                    <Plus size={12} /> Add new
-                  </button>
-                </div>
-              )}
-              {/* Currently selected display */}
-              {!addingSp && formData.salesperson && (
-                <div className="mt-1.5 flex items-center gap-1.5">
-                  <span className="text-[11px] text-gray-500">Selected:</span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-900 text-white">
-                    {formData.salesperson}
-                    <span onClick={() => setFormData({ salesperson: '' })} className="cursor-pointer opacity-60 hover:opacity-100 ml-0.5">
-                      <X size={9} color="white" />
-                    </span>
-                  </span>
-                </div>
-              )}
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            {/* Import Charges */}
-            <div className="mt-2 pt-2 border-t border-gray-200">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Package size={11} className="text-gray-600" />
-                <span className="text-xs font-semibold text-gray-700">Import Charges</span>
-                <span className="text-xs text-gray-400">(deducted from commission)</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className={lbl}>Cargo Amount</label>
-                  <div className="flex gap-1">
-                    <input type="number" min="0" value={formData.cargoAmount ?? 0}
-                      onChange={e => setFormData({ cargoAmount: Number(e.target.value) })}
-                      className={`${inp} flex-1`} placeholder="0" />
-                    <select value={formData.cargoCurrency || 'AED'}
-                      onChange={e => setFormData({ cargoCurrency: e.target.value as InvoiceCurrency })}
-                      className="px-1 py-1 border border-gray-300 rounded-lg text-xs h-10">
-                      {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                    </select>
+              {/* Salesperson name only */}
+              <div className="relative" ref={spRef}>
+                <label className={lbl}>Salesperson Name</label>
+                {addingSp ? (
+                  <div className="flex gap-1.5">
+                    <input type="text" value={newSp} onChange={e => setNewSp(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === 'Enter' && newSp.trim()) { await handleAddSalesperson(newSp.trim()); setNewSp(''); setAddingSp(false); }
+                        if (e.key === 'Escape') { setAddingSp(false); setNewSp(''); }
+                      }}
+                      placeholder="Enter salesperson name…" autoFocus className={`${inp} flex-1`} />
+                    <button type="button" onClick={async () => { if (newSp.trim()) { await handleAddSalesperson(newSp.trim()); setNewSp(''); setAddingSp(false); } }}
+                      disabled={!newSp.trim()} className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
+                      style={{ backgroundColor: CHARCOAL, color: '#fff' }}>Save</button>
+                    <button type="button" onClick={() => { setAddingSp(false); setNewSp(''); }}
+                      className="px-2 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={13} /></button>
                   </div>
-                </div>
-                <div>
-                  <label className={lbl}>Customs Amount</label>
-                  <div className="flex gap-1">
-                    <input type="number" min="0" value={formData.customsAmount ?? 0}
-                      onChange={e => setFormData({ customsAmount: Number(e.target.value) })}
-                      className={`${inp} flex-1`} placeholder="0" />
-                    <select value={formData.customsCurrency || 'AED'}
-                      onChange={e => setFormData({ customsCurrency: e.target.value as InvoiceCurrency })}
-                      className="px-1 py-1 border border-gray-300 rounded-lg text-xs h-10">
-                      {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className={lbl}>Agent Amount</label>
-                  <div className="flex gap-1">
-                    <input type="number" min="0" value={formData.agentAmount ?? 0}
-                      onChange={e => setFormData({ agentAmount: Number(e.target.value) })}
-                      className={`${inp} flex-1`} placeholder="0" />
-                    <select value={formData.agentCurrency || 'AED'}
-                      onChange={e => setFormData({ agentCurrency: e.target.value as InvoiceCurrency })}
-                      className="px-1 py-1 border border-gray-300 rounded-lg text-xs h-10">
-                      {INVOICE_CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className={lbl}>Agent Details</label>
-                  <input type="text" value={formData.agentDetails || ''}
-                    onChange={e => setFormData({ agentDetails: e.target.value })}
-                    className={inp} placeholder="Agent name / reference" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
-                <div>
-                  <label className={lbl}>Deduction Charges <span className="ml-1 text-xs font-normal text-gray-400">(manual)</span></label>
-                  <input type="number" min="0" value={formData.deductionCharges ?? 0}
-                    onChange={e => setFormData({ deductionCharges: Number(e.target.value) })}
-                    className={inp} placeholder="0" />
-                </div>
-                <div className="col-span-3">
-                  <label className={lbl}>Collection Method</label>
-                  {addingCollection ? (
-                    <div className="flex gap-1">
-                      <input type="text" value={newCollection} onChange={e => setNewCollection(e.target.value)}
-                        onKeyDown={async e => {
-                          if (e.key === 'Enter' && newCollection.trim()) { await handleAddCollectionMethod(newCollection.trim()); setFormData({ collectionMethod: newCollection.trim() as any }); setNewCollection(''); setAddingCollection(false); }
-                          if (e.key === 'Escape') { setAddingCollection(false); setNewCollection(''); }
-                        }}
-                        placeholder="New method" autoFocus className={`${inp} flex-1`} />
-                      <button onClick={async () => { if (newCollection.trim()) { await handleAddCollectionMethod(newCollection.trim()); setFormData({ collectionMethod: newCollection.trim() as any }); setNewCollection(''); setAddingCollection(false); } }} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs">Save</button>
-                      <button onClick={() => { setAddingCollection(false); setNewCollection(''); }} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
+                ) : (
+                  <div className="flex gap-1.5">
+                    <div className="relative flex-1">
+                      <input type="text" value={formData.salesperson || ''}
+                        onChange={e => { setFormData({ salesperson: e.target.value }); setShowSpSuggestions(true); }}
+                        onFocus={() => setShowSpSuggestions(true)}
+                        placeholder="Select or type a name…" autoComplete="off" className={inp} />
+                      {showSpSuggestions && (() => {
+                        const val = (formData.salesperson || '').toLowerCase();
+                        const allSp = [...activeEmployees.map(e => e.name), ...savedSalespersons]
+                          .filter((v, i, a) => a.indexOf(v) === i);
+                        const matches = val ? allSp.filter(s => s.toLowerCase().includes(val)) : allSp;
+                        if (matches.length === 0 && !val) return null;
+                        return (
+                          <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                            <div className="px-3 py-1.5 border-b border-gray-100 bg-gray-50">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Salespersons</span>
+                            </div>
+                            {matches.length === 0 ? (
+                              <div className="px-3 py-2 text-xs text-gray-400 text-center">No matches</div>
+                            ) : matches.map(name => (
+                              <div key={name}
+                                onMouseDown={e => { e.preventDefault(); setFormData({ salesperson: name }); setShowSpSuggestions(false); }}
+                                className="px-3 py-2.5 cursor-pointer hover:bg-blue-50 text-sm text-gray-800 font-medium border-b border-gray-50 last:border-0 transition-colors flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0">
+                                  {name.charAt(0).toUpperCase()}
+                                </span>
+                                {name}
+                                {formData.salesperson === name && <span className="ml-auto text-blue-500 text-xs">✓</span>}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
-                  ) : (
-                    <div className="flex gap-1">
-                      <select value={formData.collectionMethod || 'Self Collection'} onChange={e => setFormData({ collectionMethod: e.target.value as any })} className={`${inp} flex-1`}>
-                        {collectionMethods.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <button onClick={() => setAddingCollection(true)} className="flex items-center gap-0.5 px-2.5 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap"><Plus size={11} /> Add</button>
-                    </div>
-                  )}
-                </div>
+                    <button type="button" onClick={() => { setAddingSp(true); setNewSp(''); setShowSpSuggestions(false); }}
+                      className="flex items-center gap-1 px-2.5 py-2 border border-dashed border-gray-300 text-gray-500 rounded-lg text-xs hover:bg-gray-50 transition-colors shrink-0">
+                      <Plus size={12} /> Add new
+                    </button>
+                  </div>
+                )}
+                {!addingSp && formData.salesperson && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[11px] text-gray-500">Selected:</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-900 text-white">
+                      {formData.salesperson}
+                      <span onClick={() => setFormData({ salesperson: '' })} className="cursor-pointer opacity-60 hover:opacity-100 ml-0.5"><X size={9} color="white" /></span>
+                    </span>
+                  </div>
+                )}
               </div>
-              {((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0)) > 0 && (
-                <p className="mt-1 text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1">
-                  Total import charges: <strong>
-                    {formatCurrency(
-                      convertCurrency(formData.cargoAmount || 0, formData.cargoCurrency || 'AED', 'AED', currencyRates)
-                      + convertCurrency(formData.customsAmount || 0, formData.customsCurrency || 'AED', 'AED', currencyRates)
-                      + convertCurrency(formData.agentAmount || 0, formData.agentCurrency || 'AED', 'AED', currencyRates)
-                    )}
-                  </strong>
-                </p>
-              )}
+
+              {/* Collection Method */}
+              <div>
+                <label className={lbl}>Collection Method</label>
+                {addingCollection ? (
+                  <div className="flex gap-1.5">
+                    <input type="text" value={newCollection} onChange={e => setNewCollection(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === 'Enter' && newCollection.trim()) { await handleAddCollectionMethod(newCollection.trim()); setFormData({ collectionMethod: newCollection.trim() as any }); setNewCollection(''); setAddingCollection(false); }
+                        if (e.key === 'Escape') { setAddingCollection(false); setNewCollection(''); }
+                      }}
+                      placeholder="New method" autoFocus className={`${inp} flex-1`} />
+                    <button onClick={async () => { if (newCollection.trim()) { await handleAddCollectionMethod(newCollection.trim()); setFormData({ collectionMethod: newCollection.trim() as any }); setNewCollection(''); setAddingCollection(false); } }}
+                      style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs font-bold">Save</button>
+                    <button onClick={() => { setAddingCollection(false); setNewCollection(''); }}
+                      className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5">
+                    <select value={formData.collectionMethod || 'Self Collection'}
+                      onChange={e => setFormData({ collectionMethod: e.target.value as any })}
+                      className={`${inp} flex-1`}>
+                      {collectionMethods.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <button onClick={() => setAddingCollection(true)}
+                      className="flex items-center gap-1 px-2.5 py-2 border border-dashed border-gray-300 text-gray-500 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap">
+                      <Plus size={11} /> Add
+                    </button>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         </section>
@@ -1108,61 +862,14 @@ export function InvoiceFormView({
                 {fmtAed(total)}
               </span>
             </div>
-            {(formData.deductionCharges || 0) > 0 && (
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-gray-500">Deduction:</span>
-                <span className="text-red-600 font-medium">
-                  − {formatCurrency(
-                    convertCurrency(
-                      formData.deductionCharges || 0,
-                      (formData as any).deductionCurrency || 'AED',
-                      'AED',
-                      currencyRates,
-                    )
-                  )}
-                  {(formData as any).deductionCurrency && (formData as any).deductionCurrency !== 'AED' && (
-                    <span className="ml-1 text-gray-400">({(formData as any).deductionCurrency})</span>
-                  )}
-                </span>
-              </div>
-            )}
-            {((formData.cargoAmount || 0) + (formData.customsAmount || 0) + (formData.agentAmount || 0)) > 0 && (
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-gray-500">Import:</span>
-                <span className="text-orange-600 font-medium">
-                  − {formatCurrency(
-                    convertCurrency(formData.cargoAmount || 0, formData.cargoCurrency || 'AED', 'AED', currencyRates)
-                    + convertCurrency(formData.customsAmount || 0, formData.customsCurrency || 'AED', 'AED', currencyRates)
-                    + convertCurrency(formData.agentAmount || 0, formData.agentCurrency || 'AED', 'AED', currencyRates)
-                  )}
-                </span>
-              </div>
-            )}
+
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handleCancel}
               className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium border border-gray-200">
               Cancel
             </button>
-            <button onClick={() => {
-                // Field-level validation — highlight required fields before submitting
-                const errs: Record<string, string> = {};
-                if (!(formData.customerName  || '').trim()) errs.customerName  = 'Customer name is required';
-                if (!(formData.customerPhone || '').trim()) errs.customerPhone = 'Phone number is required';
-                if (selectedProducts.length === 0)          errs.products      = 'At least one product is required';
-                selectedProducts.forEach((p: any, i: number) => {
-                  if (!p.productId) errs[`product_${i}`] = 'Select a product';
-                  const vs = (p.serialNumbers || []).filter((s: string) => s.trim() !== '');
-                  if (vs.length !== p.quantity) errs[`serial_${i}`] = `Select ${p.quantity} serial number(s)`;
-                });
-                setFieldErrors(errs);
-                if (Object.keys(errs).length > 0) {
-                  const el = document.querySelector('[data-field-error="true"]');
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  return;
-                }
-                handleSave();
-              }} disabled={isSaving}
+            <button onClick={handleSave} disabled={isSaving}
               className="flex items-center gap-1.5 px-6 py-2 rounded-lg disabled:opacity-50 transition-colors font-bold text-sm shadow-sm whitespace-nowrap"
               style={{ background: CHARCOAL, color: '#fff' }}>
               {isSaving

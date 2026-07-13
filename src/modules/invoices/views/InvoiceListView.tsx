@@ -10,7 +10,7 @@ function formatAed(amount: number): string {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 import {
-  FileText, Plus, Eye, X, Loader2, FileDown,
+  FileText, Plus, Search, Eye, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin, Trash2,
   Pencil, Banknote, Landmark, ChevronDown,
 } from 'lucide-react';
@@ -30,9 +30,9 @@ interface Props {
   viewingInvoice: Invoice | null;
   isLoading: boolean;
   onSearch: (searchTerm: string) => void;
-  onStatusFilter: (statuses: string[]) => void;
-  onCityFilter: (cities: string[]) => void;
-  onSalespersonFilter: (sps: string[]) => void;
+  onStatusFilter: (status: 'all' | 'Paid' | 'Unpaid') => void;
+  onCityFilter: (city: string) => void;
+  onSalespersonFilter: (sp: string) => void;
   onDateFromFilter: (date: string) => void;
   onDateToFilter: (date: string) => void;
   onClearFilters: () => void;
@@ -63,86 +63,67 @@ interface Props {
   submitPayment: (input: { amount: number; mode: PaymentMode; date: string; bankId?: string; note?: string }) => Promise<void>;
 }
 
-// ── Multi-select filter dropdown (inline — no separate file needed) ────────────
-function InvoiceMultiFilter({
-  label, selected, onChange, options, displayName,
-}: {
-  label: string;
-  selected: string[];
-  onChange: (v: string[]) => void;
-  options: string[];
-  displayName?: (v: string) => string;
+// ── Multi-select filter dropdown ──────────────────────────────────────────────
+function InvoiceMultiFilter({ label, selected, onChange, options, displayName }: {
+  label: string; selected: string[]; onChange: (v: string[]) => void;
+  options: string[]; displayName?: (v: string) => string;
 }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
   const display = displayName ?? ((v: string) => v);
-
   React.useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, [open]);
-
-  const toggle = (opt: string) =>
-    onChange(selected.includes(opt) ? selected.filter(v => v !== opt) : [...selected, opt]);
-
+  const toggle = (opt: string) => onChange(selected.includes(opt) ? selected.filter(v => v !== opt) : [...selected, opt]);
   const has = selected.length > 0;
-
   return (
-    <div ref={ref} className="flex flex-col gap-1 relative min-w-[130px] flex-1">
-      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</label>
-      <button
-        type="button"
-        onClick={() => setOpen(p => !p)}
-        className={`flex items-center justify-between w-full px-3 py-2 text-sm rounded-lg border cursor-pointer text-left transition-all outline-none ${has ? 'border-gray-800 bg-gray-50 text-gray-900 font-semibold' : 'border-gray-300 bg-white text-gray-400'}`}
-      >
-        <span className="truncate flex-1">
+    <div ref={ref} style={{ display:'flex', flexDirection:'column', gap:4, minWidth:130, flex:1, position:'relative' }}>
+      <label style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.06em' }}>{label}</label>
+      <button type="button" onClick={() => setOpen(p => !p)}
+        style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', padding:'7px 10px',
+          border:`1.5px solid ${has?'#334155':'#e2e8f0'}`, borderRadius:7, fontSize:12, backgroundColor:has?'#f1f5f9':'#fff',
+          color:has?'#0f172a':'#9ca3af', cursor:'pointer', fontWeight:has?700:400, textAlign:'left' }}>
+        <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
           {has ? (selected.length === 1 ? display(selected[0]) : `${selected.length} selected`) : 'All'}
         </span>
-        <ChevronDown size={13} className={`shrink-0 ml-1 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={13} style={{ flexShrink:0, marginLeft:4 }} />
       </button>
-
       {open && (
-        <div className="absolute top-full left-0 z-[999] mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-[180px] max-w-[240px]">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
-            <button type="button" onClick={() => onChange(options)} className="text-[11px] font-bold text-gray-700 hover:text-gray-900 border-none bg-none cursor-pointer p-0">Select all</button>
-            <span className="text-gray-200">|</span>
-            <button type="button" onClick={() => onChange([])} className="text-[11px] font-bold text-gray-400 hover:text-gray-600 border-none bg-none cursor-pointer p-0">Clear</button>
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:999, backgroundColor:'#fff',
+          border:'1px solid #e2e8f0', borderRadius:9, boxShadow:'0 8px 28px rgba(0,0,0,0.13)', minWidth:180, overflow:'hidden' }}>
+          <div style={{ padding:'7px 10px', borderBottom:'1px solid #f1f5f9', display:'flex', gap:8 }}>
+            <button type="button" onClick={() => onChange(options)} style={{ fontSize:11, fontWeight:700, color:'#334155', border:'none', background:'none', cursor:'pointer', padding:0 }}>Select all</button>
+            <span style={{ color:'#e2e8f0' }}>|</span>
+            <button type="button" onClick={() => onChange([])} style={{ fontSize:11, fontWeight:700, color:'#94a3b8', border:'none', background:'none', cursor:'pointer', padding:0 }}>Clear</button>
           </div>
-          <div className="max-h-56 overflow-y-auto">
-            {options.length === 0
-              ? <div className="px-3 py-3 text-xs text-gray-400">No options</div>
-              : options.map(opt => {
-                  const checked = selected.includes(opt);
-                  return (
-                    <div key={opt} onClick={() => toggle(opt)}
-                      className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm select-none transition-colors ${checked ? 'bg-gray-50 text-gray-900 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}>
-                      <span className="shrink-0 flex items-center justify-center rounded"
-                        style={{ width: 15, height: 15, border: `2px solid ${checked ? '#111827' : '#d1d5db'}`, backgroundColor: checked ? '#111827' : '#fff', transition: 'all 0.12s' }}>
-                        {checked && (
-                          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                            <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
-                      </span>
-                      <span className="truncate">{display(opt)}</span>
-                    </div>
-                  );
-                })}
+          <div style={{ maxHeight:220, overflowY:'auto' }}>
+            {options.map(opt => {
+              const checked = selected.includes(opt);
+              return (
+                <div key={opt} onClick={() => toggle(opt)}
+                  style={{ display:'flex', alignItems:'center', gap:9, padding:'8px 12px', cursor:'pointer', fontSize:12,
+                    backgroundColor:checked?'#f1f5f9':'transparent', color:checked?'#0f172a':'#374151', fontWeight:checked?600:400, userSelect:'none' }}>
+                  <span style={{ width:15, height:15, borderRadius:4, flexShrink:0, border:`2px solid ${checked?'#0f172a':'#d1d5db'}`,
+                    backgroundColor:checked?'#0f172a':'#fff', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    {checked && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </span>
+                  {display(opt)}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
-
       {has && (
-        <div className="flex flex-wrap gap-1 mt-0.5">
+        <div style={{ display:'flex', flexWrap:'wrap', gap:3, marginTop:2 }}>
           {selected.map(v => (
-            <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-900 text-white">
-              <span className="truncate max-w-[80px]">{display(v)}</span>
-              <span onClick={e => { e.stopPropagation(); toggle(v); }} className="cursor-pointer flex items-center">
-                <X size={8} color="white" />
+            <span key={v} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 6px', borderRadius:99, fontSize:10, fontWeight:700, backgroundColor:'#0f172a', color:'#fff' }}>
+              {display(v)}
+              <span onClick={e => { e.stopPropagation(); toggle(v); }} style={{ cursor:'pointer', display:'flex', alignItems:'center' }}>
+                <X size={9} color="#fff" />
               </span>
             </span>
           ))}
@@ -355,10 +336,10 @@ export function InvoiceListView({
 
   const hasActiveFilters =
     !!filters.searchTerm ||
-    (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : false) ||
+    (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : filters.statusFilter !== 'all') ||
     !!filters.dateFrom || !!filters.dateTo ||
-    (Array.isArray(filters.cityFilter) ? filters.cityFilter.length > 0 : false) ||
-    (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : false);
+    (Array.isArray(filters.cityFilter) ? filters.cityFilter.length > 0 : !!filters.cityFilter) ||
+    (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : !!filters.salespersonFilter);
 
   if (isLoading) {
     return (
@@ -411,68 +392,46 @@ export function InvoiceListView({
         ))}
       </div>
 
-      {/* ── Filter Bar — always visible, all multi-select ── */}
+      {/* ── Filter Bar — multi-select ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter size={15} className="text-gray-600" />
           <span className="text-sm font-semibold text-gray-700">Filters</span>
           {hasActiveFilters && (
-            <button onClick={onClearFilters}
-              className="ml-auto flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium">
+            <button onClick={onClearFilters} className="ml-auto flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium">
               <XCircle size={13} /> Clear all
             </button>
           )}
         </div>
-
-        {/* Filters row — all multi-select */}
         <div className="flex flex-wrap gap-3 items-start">
-          {/* Status multi-select */}
-          <InvoiceMultiFilter
-            label="Status"
+          <div className="relative flex-[2] min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={15} />
+            <input type="text" placeholder="Search invoice, customer, phone…"
+              value={filters.searchTerm} onChange={e => onSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900 placeholder-gray-400" />
+          </div>
+          <InvoiceMultiFilter label="Status"
             selected={Array.isArray(filters.statusFilter) ? filters.statusFilter as string[] : []}
-            onChange={v => onStatusFilter(v)}
-            options={['Paid', 'Unpaid', 'Partial']}
-          />
-
-          {/* City multi-select */}
-          <InvoiceMultiFilter
-            label="City"
-            selected={Array.isArray(filters.cityFilter) ? filters.cityFilter as string[] : []}
+            onChange={v => onStatusFilter(v as any)}
+            options={['Paid', 'Unpaid', 'Partial']} />
+          <InvoiceMultiFilter label="City"
+            selected={Array.isArray(filters.cityFilter) ? filters.cityFilter as string[] : (filters.cityFilter ? [filters.cityFilter as string] : [])}
             onChange={v => onCityFilter(v)}
-            options={availableCities}
-          />
-
-          {/* Salesperson multi-select */}
-          <InvoiceMultiFilter
-            label="Salesperson"
-            selected={Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter as string[] : []}
+            options={availableCities} />
+          <InvoiceMultiFilter label="Salesperson"
+            selected={Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter as string[] : (filters.salespersonFilter ? [filters.salespersonFilter as string] : [])}
             onChange={v => onSalespersonFilter(v)}
             options={availableSalespersons}
-            displayName={sp => spName(sp)}
-          />
-
-          {/* Date From */}
-          <div className="flex flex-col gap-1 min-w-[130px]">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">From Date</label>
-            <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-gray-800">
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={e => onDateFromFilter(e.target.value)}
-                className="text-sm outline-none bg-transparent text-gray-900 w-32" />
-            </div>
+            displayName={sp => spName(sp)} />
+          <div style={{ display:'flex', flexDirection:'column', gap:4, minWidth:130 }}>
+            <label style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.06em' }}>From Date</label>
+            <input type="date" value={filters.dateFrom} onChange={e => onDateFromFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900" />
           </div>
-
-          {/* Date To */}
-          <div className="flex flex-col gap-1 min-w-[130px]">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">To Date</label>
-            <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-gray-800">
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={e => onDateToFilter(e.target.value)}
-                className="text-sm outline-none bg-transparent text-gray-900 w-32" />
-            </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:4, minWidth:130 }}>
+            <label style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.06em' }}>To Date</label>
+            <input type="date" value={filters.dateTo} onChange={e => onDateToFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900" />
           </div>
         </div>
       </div>
@@ -490,7 +449,7 @@ export function InvoiceListView({
                 {[
                   'Invoice #', 'Date', 'Customer', 'Branch / City',
                   'Salesperson', 'Products', 'Amount (AED)',
-                  'Supplier Cost', 'Purchase Cost', 'Misc Exp', 'Net',
+                  'Net',
                   'Delivery', 'Payment', 'Status', 'Actions',
                 ].map(h => (
                   <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
@@ -509,9 +468,6 @@ export function InvoiceListView({
                   </td>
                 </tr>
               ) : filteredInvoices.map(invoice => {
-                const supplierCost = calculateSupplierCost(invoice);
-                const purchaseCost = calculatePurchaseCost(invoice);
-                const misc = calculateMiscExpense(invoice);
                 const net = calculateNetAmount(invoice);
                 const paid = calculatePaidAmount(invoice);
                 const remaining = calculateRemainingAmount(invoice);
@@ -570,16 +526,7 @@ export function InvoiceListView({
 
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">
                     {formatDisplay(invoice.totalAmount)}
-                    {(invoice.deductionCharges || 0) > 0 && (
-                      <p className="text-xs text-red-500 font-normal">
-                        −{formatDisplay(invoice.deductionCharges)} deduction
-                      </p>
-                    )}
                   </td>
-
-                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{supplierCost > 0 ? formatDisplay(supplierCost) : '—'}</td>
-                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{purchaseCost > 0 ? formatDisplay(purchaseCost) : '—'}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(net)}</td>
 
                   <td className="px-3 py-3">
@@ -668,9 +615,6 @@ export function InvoiceListView({
             </div>
             {[
               { label: 'Total', value: selectionSummary.totalAmount, color: 'text-gray-900' },
-              { label: 'Supplier Cost', value: selectionSummary.supplierCost, color: 'text-gray-700' },
-              { label: 'Purchase Cost', value: selectionSummary.purchaseCost, color: 'text-gray-700' },
-              { label: 'Misc Expense', value: selectionSummary.miscExpense, color: 'text-red-600' },
               { label: 'Net', value: selectionSummary.netAmount, color: 'text-gray-900' },
               { label: 'Paid', value: selectionSummary.paidAmount, color: 'text-green-600' },
               { label: 'Remaining', value: selectionSummary.remainingAmount, color: 'text-red-600' },
@@ -884,7 +828,7 @@ export function InvoiceListView({
                 <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-1">
                   <span className="text-base font-bold text-gray-900">Net Total</span>
                   <span className="text-2xl font-bold text-gray-800">
-                    {formatDisplay(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
+                    {formatDisplay(viewingInvoice.totalAmount)}
                   </span>
                 </div>
               </div>
