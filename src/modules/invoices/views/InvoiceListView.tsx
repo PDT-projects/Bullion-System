@@ -404,12 +404,7 @@ export function InvoiceListView({
           )}
         </div>
         <div className="flex flex-wrap gap-3 items-start">
-          <div className="relative flex-[2] min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={15} />
-            <input type="text" placeholder="Search invoice, customer, phone…"
-              value={filters.searchTerm} onChange={e => onSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900 placeholder-gray-400" />
-          </div>
+
           <InvoiceMultiFilter label="Status"
             selected={Array.isArray(filters.statusFilter) ? filters.statusFilter as string[] : []}
             onChange={v => onStatusFilter(v as any)}

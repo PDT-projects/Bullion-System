@@ -18,7 +18,7 @@ import {
   Building2, CreditCard, X, ChevronDown, MapPin,
   Wallet, Users, Tag, ImagePlus,
 } from 'lucide-react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import { toast } from 'sonner';
 import {
@@ -34,7 +34,7 @@ import { useNavigate } from 'react-router-dom';
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BankOption { id: string; name: string; balance: number; }
 interface BrandSuggestion { id: string; name: string; }
-interface ModelSuggestion { id: string; name: string; }
+interface ModelSuggestion { id: string; name: string; costPrice?: number; description?: string; }
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 const S = {
@@ -202,18 +202,33 @@ export const InventoryTypeSelectionView: React.FC<any> = ({ handleBack }) => {
       .finally(() => setTxnLoading(false));
   }, []);
 
-  // Load models when brand changes
+  // Load models (with costPrice + description) when brand changes
   useEffect(() => {
     if (!brandName.trim()) { setModelSuggestions([]); return; }
-    const found = brandSuggestions.find(b => b.name.toLowerCase() === brandName.toLowerCase());
-    if (found) {
-      BrandModelFirebaseService.fetchModelsByBrand(found.id)
-        .then(m => setModelSuggestions(m.map(x => ({ id: x.id, name: x.name }))))
-        .catch(() => setModelSuggestions([]));
-    } else {
-      setModelSuggestions([]);
-    }
-  }, [brandName, brandSuggestions]);
+    InventoryFirebaseService.fetchModelsByBrandName(brandName.trim())
+      .then(async models => {
+        // Enrich each model with description from latest matching product
+        const enriched: ModelSuggestion[] = await Promise.all(models.map(async m => {
+          try {
+            const snap = await getDocs(
+              query(
+                collection(db, 'products'),
+                where('brandName', '==', brandName.trim()),
+                where('modelName', '==', m.modelName),
+                orderBy('createdAt', 'desc'),
+                limit(1)
+              )
+            );
+            const desc = snap.empty ? '' : (snap.docs[0].data() as any).description || '';
+            return { id: m.id, name: m.modelName, costPrice: m.costPrice, description: desc };
+          } catch {
+            return { id: m.id, name: m.modelName, costPrice: m.costPrice, description: '' };
+          }
+        }));
+        setModelSuggestions(enriched);
+      })
+      .catch(() => setModelSuggestions([]));
+  }, [brandName]);
 
   // ── Add serial ─────────────────────────────────────────────────────────────
   const addSerial = () => {
@@ -401,11 +416,33 @@ export const InventoryTypeSelectionView: React.FC<any> = ({ handleBack }) => {
                 label="Model" required
                 value={modelName} onChange={setModelName}
                 suggestions={modelSuggestions.map(m => m.name)}
-                onSelect={setModelName}
+                onSelect={v => {
+                  setModelName(v);
+                  const found = modelSuggestions.find(m => m.name === v);
+                  if (found) {
+                    if (found.costPrice && found.costPrice > 0) setCostPrice(found.costPrice);
+                    if (found.description) setDescription(found.description);
+                  }
+                }}
                 placeholder="e.g. Ace 400i"
                 error={errors.modelName}
               />
             </div>
+
+            {/* Auto-filled hint when model matched */}
+            {modelName && modelSuggestions.find(m => m.name === modelName) && (() => {
+              const m = modelSuggestions.find(x => x.name === modelName)!;
+              return (
+                <div style={{ display: 'flex', gap: 12, padding: '8px 12px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 12 }}>
+                  <Check size={14} color="#16a34a" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <div style={{ color: '#15803d' }}>
+                    <span style={{ fontWeight: 700 }}>{modelName}</span> found in saved models.
+                    {m.costPrice ? <span> Cost auto-filled: <strong>AED {m.costPrice.toLocaleString()}</strong>.</span> : null}
+                    {m.description ? <span> Description auto-filled.</span> : null}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={S.grid3}>
               {/* Category */}
@@ -434,10 +471,44 @@ export const InventoryTypeSelectionView: React.FC<any> = ({ handleBack }) => {
                   <ChevronDown size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} />
                 </div>
               </div>
-              {/* Stock-In Date */}
+              {/* Stock-In Date — auto + optional manual override */}
               <div>
-                <label style={S.label}>Stock-In Date <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
-                <input type="date" value={stockInDate} onChange={e => setStockInDate(e.target.value)} style={S.input()} />
+                <label style={S.label}>Stock-In Date</label>
+                {/* Auto date pill — always shown */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', backgroundColor: '#f1f5f9', borderRadius: 8, marginBottom: 8, border: '1px solid #e2e8f0' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#22c55e', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Auto</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                    {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 'auto' }}>recorded on save</span>
+                </div>
+                {/* Manual override */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="date" value={stockInDate} onChange={e => setStockInDate(e.target.value)}
+                    style={{ ...S.input(), flex: 1 }} />
+                  {stockInDate && (
+                    <button type="button" onClick={() => setStockInDate('')}
+                      style={{ padding: '8px 10px', borderRadius: 7, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+                {stockInDate ? (
+                  <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3, padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#92400e', fontWeight: 600 }}>Auto date</span>
+                      <span style={{ color: '#92400e' }}>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#b45309', fontWeight: 700 }}>Manual date</span>
+                      <span style={{ color: '#b45309', fontWeight: 700 }}>{new Date(stockInDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 10, color: '#92400e' }}>Both dates saved — manual date used as stock-in reference</p>
+                  </div>
+                ) : (
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94a3b8' }}>Optional — add a manual date if stock arrived earlier</p>
+                )}
               </div>
             </div>
 

@@ -176,10 +176,10 @@ export function InventoryDashboardView({
   }, [vm.filteredRows, statusF, ownershipF]);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
-  const totalRows    = vm.rows.length;
-  const inStock      = vm.rows.filter(r => r.currentStatus !== 'Sold').length;
-  const creditCount  = vm.rows.filter(r => r.ownershipType === 'Credit').length;
-  const inTransit    = transfers.filter(t => t.status === 'In Transit' || t.status === 'Pending').length;
+  const totalRows     = vm.rows.length;
+  const ownedInStock  = vm.rows.filter(r => r.ownershipType !== 'Credit' && r.currentStatus !== 'Sold').length;
+  const creditInStock = vm.rows.filter(r => r.ownershipType === 'Credit' && r.currentStatus !== 'Sold').length;
+  const inTransit     = transfers.filter(t => t.status === 'In Transit' || t.status === 'Pending').length;
 
   // ── Totals for selected / all visible rows ────────────────────────────────
   const selectedRows = displayed.filter(r => selectedKeys.has(rowKey(r)));
@@ -251,10 +251,10 @@ export function InventoryDashboardView({
         {/* Stat cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
-            { label: 'Total Serials', value: String(totalRows), sub: 'all items', color: '#0f172a', accent: '#e2e8f0' },
-            { label: 'In Stock',      value: String(inStock),   sub: 'not yet sold', color: '#15803d', accent: '#bbf7d0' },
-            { label: 'On Credit',     value: String(creditCount), sub: 'supplier credit', color: '#b45309', accent: '#fde68a' },
-            { label: 'In Transit',    value: String(inTransit), sub: 'pending receipt', color: '#1d4ed8', accent: '#bfdbfe' },
+            { label: 'Total Serials',    value: String(totalRows),     sub: 'all items',              color: '#0f172a', accent: '#e2e8f0' },
+            { label: 'Owned — In Stock',  value: String(ownedInStock),  sub: 'against payment, unsold', color: '#15803d', accent: '#bbf7d0' },
+            { label: 'Credit — In Stock', value: String(creditInStock), sub: 'supplier credit, unsold',  color: '#b45309', accent: '#fde68a' },
+            { label: 'In Transit',        value: String(inTransit),     sub: 'pending receipt',         color: '#1d4ed8', accent: '#bfdbfe' },
           ].map(s => (
             <div key={s.label} style={{ backgroundColor: '#fff', border: `1px solid ${s.accent}`, borderTop: `3px solid ${s.accent}`, borderRadius: 10, padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>{s.label}</div>

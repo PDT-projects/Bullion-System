@@ -178,7 +178,7 @@ function CountryCitySelector({
           <div className="flex gap-1">
             <input type="text" value={newCountry} onChange={e => setNewCountry(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveCountry(); if (e.key === 'Escape') { setAddingCountry(false); setNewCountry(''); } }}
-              placeholder="e.g. UAE" autoFocus className={`${inp} flex-1`} />
+              placeholder="" autoFocus className={`${inp} flex-1`} />
             <button onClick={saveCountry} disabled={savingCountry} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs disabled:opacity-50">{savingCountry ? '…' : 'Save'}</button>
             <button onClick={() => { setAddingCountry(false); setNewCountry(''); }}
               className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
@@ -205,7 +205,7 @@ function CountryCitySelector({
           <input list={country ? `cities-${country}` : undefined} value={newCity}
             onChange={e => { setNewCity(e.target.value); setFormData({ customerCity: e.target.value }); }}
             onKeyDown={e => { if (e.key === 'Escape') { setNewCity(''); setFormData({ customerCity: '' }); } }}
-            placeholder="e.g. Dubai" className={`${inp} flex-1`} disabled={!country} />
+            placeholder="" className={`${inp} flex-1`} disabled={!country} />
           <datalist id={country ? `cities-${country}` : undefined}>
             {citiesForCountry.map(c => <option key={c} value={c}>{c}</option>)}
           </datalist>
@@ -455,7 +455,7 @@ export function InvoiceFormView({
                       setShowNameSuggestions(true);
                     }}
                     onFocus={() => setShowNameSuggestions(true)}
-                    placeholder="Enter customer name" className={inp} />
+                    placeholder="" className={inp} />
                   {customerSuggestions.length > 0 && (
                     <button type="button"
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400"
@@ -480,7 +480,7 @@ export function InvoiceFormView({
                 </label>
                 <input type="text" value={formData.customerCNIC || ''}
                   onChange={e => setFormData({ customerCNIC: e.target.value })}
-                  placeholder="e.g. 42101-1234567-1" className={inp} />
+                  placeholder="" className={inp} />
               </div>
             </div>
 
@@ -494,7 +494,7 @@ export function InvoiceFormView({
                     setShowPhoneSuggestions(true);
                   }}
                   onFocus={() => setShowPhoneSuggestions(true)}
-                  placeholder="+92 300 1234567" className={inp} />
+                  placeholder="" className={inp} />
                 <CustomerHistoryDropdown
                   suggestions={customerSuggestions}
                   onSelect={onSelectCustomer}
@@ -727,7 +727,7 @@ export function InvoiceFormView({
                 <label className={lbl}>Exchange Note</label>
                 <textarea value={formData.exchangeWarrantyNote || ''}
                   onChange={e => setFormData({ exchangeWarrantyNote: e.target.value })}
-                  rows={2} placeholder="e.g. No exchange after 7 days"
+                  rows={2} placeholder=""
                   className={`${inp} resize-none h-auto`} />
               </div>
             </div>
