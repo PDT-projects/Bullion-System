@@ -28,6 +28,7 @@ export function InvoiceFormWrapper() {
       banks={vm.banks}
       savedSalespersons={vm.savedSalespersons}
       handleAddSalesperson={vm.handleAddSalesperson}
+      saveCustomerToBook={vm.saveCustomerToBook}
       setFormData={vm.setFormData}
       handleCustomerSearch={vm.handleCustomerSearch}
       handleCustomerSelect={vm.handleCustomerSelect}

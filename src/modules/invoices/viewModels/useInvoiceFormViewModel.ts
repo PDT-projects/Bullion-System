@@ -86,6 +86,8 @@ export interface UseInvoiceFormViewModelReturn {
   // Salesperson persistence (NEW):
   savedSalespersons: string[];
   handleAddSalesperson: (name: string) => Promise<void>;
+  // Customer book — explicit save from the form button
+  saveCustomerToBook: () => Promise<void>;
   setFormData: (data: Partial<Invoice>) => void;
   handleCustomerSearch: (value: string, field: 'customerName' | 'customerPhone') => void;
   handleCustomerSelect: (customer: Invoice) => void;
@@ -435,16 +437,60 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     } catch { /* non-blocking */ }
   }, []);
 
+  // ── Save customer explicitly from the form button ────────────────────────
+  const saveCustomerToBook = useCallback(async () => {
+    const name  = (formData.customerName  || '').trim();
+    const phone = (formData.customerPhone || '').trim();
+    if (!name || !phone) {
+      throw new Error('Customer name and phone number are required');
+    }
+    const now = new Date().toISOString();
+    // Use the already-statically-imported doc/getDoc/setDoc/db — no dynamic import
+    const key = phone.replace(/[^0-9a-zA-Z]/g, '');
+    if (!key) throw new Error('Invalid phone number');
+    const ref = doc(db, 'customers', key);
+    let existing: Record<string, any> | null = null;
+    try {
+      const snap = await getDoc(ref);
+      if (snap.exists()) existing = snap.data() as Record<string, any>;
+    } catch { /* treat as new */ }
+    // Build clean payload — strip undefined values so Firestore doesn't reject
+    const raw: Record<string, any> = {
+      customerName:         name,
+      customerPhone:        phone,
+      customerPhone2:       formData.customerPhone2       || '',
+      customerCNIC:         formData.customerCNIC         || '',
+      customerProvince:     formData.customerProvince     || '',
+      customerCity:         formData.customerCity         || '',
+      customerAddress:      formData.customerAddress      || '',
+      warrantyLocation:     formData.warrantyLocation     || '',
+      exchangeWarrantyNote: formData.exchangeWarrantyNote || '',
+      invoiceCount:         (existing?.invoiceCount  || 0) + 1,
+      lastInvoiceDate:      existing?.lastInvoiceDate || now,
+      createdAt:            existing?.createdAt       || now,
+      updatedAt:            now,
+    };
+    const clean: Record<string, any> = {};
+    Object.entries(raw).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
+    // This will throw if Firestore rejects — caller catches and toasts the error
+    await setDoc(ref, clean, { merge: true });
+    // Refresh local cache so autocomplete shows the new entry immediately
+    try {
+      const fresh = await CustomerFirebaseService.fetchAllCustomers();
+      setSavedCustomers(fresh);
+    } catch { /* non-blocking */ }
+  }, [formData, db]);
+
   // ── Customer search / select (from the small customers collection) ─────────
   const handleCustomerSearch = useCallback((value: string, field: 'customerName' | 'customerPhone') => {
     setFormData({ [field]: value });
-    if (value.length >= 2) {
+    if (value.length >= 1) {
       const v = value.toLowerCase();
       const matches = savedCustomers
         .filter(c => field === 'customerName'
           ? (c.customerName || '').toLowerCase().includes(v)
           : (c.customerPhone || '').includes(value))
-        .slice(0, 8)
+        .slice(0, 12)
         .map(customerToSuggestion);
       setCustomerSuggestions(matches);
       setShowSuggestions(matches.length > 0);
@@ -721,6 +767,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     availableProducts: allProducts, productsLoading,
     activeEmployees, banks,
     savedSalespersons, handleAddSalesperson,
+    saveCustomerToBook,
     setFormData, handleCustomerSearch, handleCustomerSelect,
     addProduct, removeProduct, updateProduct, updateSerial,
     getAvailableSerialsForProduct,

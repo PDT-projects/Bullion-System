@@ -3,6 +3,7 @@ import {
   Plus, Trash2, X, Hash, Truck, User, CreditCard,
   Loader2, FileDown, Stamp, Package, Globe, ChevronDown,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
 import { makeBranchValue, branchFromValue } from '../viewModels/useInvoiceFormViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
@@ -33,6 +34,7 @@ interface Props {
   banks: Bank[];
   savedSalespersons?: string[];
   handleAddSalesperson?: (name: string) => Promise<void>;
+  saveCustomerToBook?: () => Promise<void>;
   setFormData: (data: Partial<Invoice>) => void;
   handleCustomerSearch: (value: string, field: 'customerName' | 'customerPhone') => void;
   handleCustomerSelect: (customer: Invoice) => void;
@@ -215,7 +217,9 @@ function CountryCitySelector({
   );
 }
 
-// ── Customer history dropdown ─────────────────────────────────────────────────
+// ── Customer book dropdown ────────────────────────────────────────────────────
+// Shows from the first keystroke. Displays full customer info: name, phone,
+// CNIC, city/address. Clicking fills ALL customer fields in the form.
 function CustomerHistoryDropdown({
   suggestions, onSelect, visible, onClose,
 }: {
@@ -226,19 +230,38 @@ function CustomerHistoryDropdown({
 }) {
   if (!visible || suggestions.length === 0) return null;
   return (
-    <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-xl max-h-52 overflow-y-auto">
-      <div className="px-3 py-1.5 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-        <span className="text-xs font-semibold text-gray-700">Previous Customers</span>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
+    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl max-h-64 overflow-y-auto">
+      <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between sticky top-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Customer Book</span>
+          <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-bold">{suggestions.length}</span>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-0.5 rounded"><X size={12} /></button>
       </div>
-      {suggestions.map(s => (
-        <div key={s.id} onClick={() => { onSelect(s); onClose(); }}
-          className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
-          <div className="text-xs font-semibold text-gray-900">{s.customerName}</div>
-          <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
-            <span>{s.customerPhone}</span>
-            {s.customerCity && <span>· {s.customerCity}</span>}
-            {s.customerCNIC && <span>· CNIC: {s.customerCNIC}</span>}
+      {suggestions.map((s, i) => (
+        <div key={s.id || i} onClick={() => { onSelect(s); onClose(); }}
+          className="px-3 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 group">
+          {/* Name + phone row */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700 truncate">{s.customerName}</span>
+            <span className="text-xs font-mono text-gray-500 shrink-0">{s.customerPhone}</span>
+          </div>
+          {/* Details row */}
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {s.customerPhone2 && (
+              <span className="text-[11px] text-gray-400">📞 {s.customerPhone2}</span>
+            )}
+            {s.customerCNIC && (
+              <span className="text-[11px] text-gray-400">🪪 {s.customerCNIC}</span>
+            )}
+            {(s.customerCity || s.customerProvince) && (
+              <span className="text-[11px] text-gray-400">
+                📍 {[s.customerCity, s.customerProvince].filter(Boolean).join(', ')}
+              </span>
+            )}
+            {s.customerAddress && (
+              <span className="text-[11px] text-gray-400 truncate max-w-[180px]">🏠 {s.customerAddress}</span>
+            )}
           </div>
         </div>
       ))}
@@ -299,6 +322,64 @@ function ProductPriceInput({
   );
 }
 
+
+// ── Save to Customer Book button — handles its own loading/success state ──────
+function SaveToCustomerBookButton({
+  customerName, onSave,
+}: { customerName: string; onSave: () => Promise<void> }) {
+  const [saving,  setSaving]  = React.useState(false);
+  const [saved,   setSaved]   = React.useState(false);
+  const [errMsg,  setErrMsg]  = React.useState('');
+
+  const handle = async () => {
+    setSaving(true); setSaved(false); setErrMsg('');
+    try {
+      await onSave();
+      setSaved(true);
+      toast.success(`✅ ${customerName} saved to Customer Book`);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to save — check your connection';
+      setErrMsg(msg);
+      toast.error(msg);
+      console.error('[CustomerBook]', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+      <span className="text-xs text-gray-500">
+        {saved
+          ? <span className="text-green-600 font-semibold">✅ {customerName} saved to Customer Book</span>
+          : errMsg
+          ? <span className="text-red-500">⚠️ {errMsg}</span>
+          : <>💾 Save <strong>{customerName}</strong> to customer book for quick lookup next time</>
+        }
+      </span>
+      <button
+        type="button"
+        onClick={handle}
+        disabled={saving || saved}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-dashed transition-all shrink-0 disabled:opacity-60"
+        style={{
+          borderColor: saved ? '#16a34a' : '#334155',
+          color:       saved ? '#16a34a' : '#334155',
+          backgroundColor: 'transparent',
+        }}
+      >
+        {saving
+          ? <><Loader2 size={11} className="animate-spin" /> Saving…</>
+          : saved
+          ? <>✓ Saved</>
+          : <>+ Save to Customer Book</>
+        }
+      </button>
+    </div>
+  );
+}
+
 export function InvoiceFormView({
   formData, selectedProducts, customerSuggestions, showSuggestions,
   isEditing, isLoading, isSaving, pdfGenerating, isDownloadingPdf,
@@ -306,6 +387,7 @@ export function InvoiceFormView({
   salespersonLocations, deliveryStatuses, collectionMethods,
   availableProducts, productsLoading = false, activeEmployees, banks,
   savedSalespersons = [], handleAddSalesperson = async () => {},
+  saveCustomerToBook = async () => {},
   setFormData, handleCustomerSearch, handleCustomerSelect,
   addProduct, removeProduct, updateProduct, updateSerial,
   getAvailableSerialsForProduct,
@@ -337,14 +419,17 @@ export function InvoiceFormView({
   const [newCollection,    setNewCollection]    = useState('');
   const [showNameSuggestions, setShowNameSuggestions]  = useState(false);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
+  const [showSpSuggestions,   setShowSpSuggestions]    = useState(false);
   const nameRef  = useRef<HTMLDivElement>(null);
   const phoneRef = useRef<HTMLDivElement>(null);
+  const spRef    = useRef<HTMLDivElement>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (nameRef.current  && !nameRef.current.contains(e.target as Node))  setShowNameSuggestions(false);
       if (phoneRef.current && !phoneRef.current.contains(e.target as Node)) setShowPhoneSuggestions(false);
+      if (spRef.current    && !spRef.current.contains(e.target as Node))    setShowSpSuggestions(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -522,6 +607,14 @@ export function InvoiceFormView({
                   onChange={e => setFormData({ customerAddress: e.target.value })} className={inp} />
               </div>
             </div>
+
+            {/* Save to Customer Book */}
+            {(formData.customerName || '').trim() && (formData.customerPhone || '').trim() && (
+              <SaveToCustomerBookButton
+                customerName={formData.customerName || ''}
+                onSave={saveCustomerToBook}
+              />
+            )}
           </div>
         </section>
 
@@ -769,99 +862,116 @@ export function InvoiceFormView({
             <span className="text-xs text-gray-400 ml-auto">Internal — not shown on invoice</span>
           </div>
           <div className="p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className={lbl}>Salesperson</label>
-                {addingSp ? (
-                  <div className="flex gap-1">
-                    <input type="text" value={newSp} onChange={e => setNewSp(e.target.value)}
-                      onKeyDown={async e => {
-                        if (e.key === 'Enter' && newSp.trim()) { await handleAddSalesperson(newSp.trim()); setNewSp(''); setAddingSp(false); }
-                        if (e.key === 'Escape') { setAddingSp(false); setNewSp(''); }
-                      }}
-                      placeholder="New salesperson" autoFocus className={`${inp} flex-1`} />
-                    <button onClick={async () => { if (newSp.trim()) { await handleAddSalesperson(newSp.trim()); setNewSp(''); setAddingSp(false); } }}
-                      style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs">Save</button>
-                    <button onClick={() => { setAddingSp(false); setNewSp(''); }} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
-                  </div>
-                ) : (
-                  <div className="flex gap-1">
-                    <select value={formData.salesperson || ''} onChange={e => setFormData({ salesperson: e.target.value })} className={`${inp} flex-1`}>
-                      <option value="">Select salesperson</option>
-                      {activeEmployees.length > 0 && (
-                        <optgroup label="Employees">
-                          {activeEmployees.map(e => <option key={e.id} value={e.id}>{e.name} — {e.position}</option>)}
-                        </optgroup>
-                      )}
-                      {savedSalespersons.length > 0 && (
-                        <optgroup label="Saved">
-                          {savedSalespersons.map(s => <option key={s} value={s}>{s}</option>)}
-                        </optgroup>
-                      )}
-                    </select>
-                    <button onClick={() => setAddingSp(true)}
-                      className="flex items-center gap-0.5 px-2.5 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap">
-                      <Plus size={11} /> Add
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className={lbl}>Salesperson Location</label>
-                {addingSpLoc ? (
-                  <div className="flex gap-1">
-                    <input type="text" value={newSpLoc} onChange={e => setNewSpLoc(e.target.value)}
-                      onKeyDown={async e => {
-                        if (e.key === 'Enter' && newSpLoc.trim()) {
-                          await handleAddSalespersonLocation(newSpLoc.trim());
-                          setFormData({ salespersonLocation: newSpLoc.trim() });
-                          setNewSpLoc(''); setAddingSpLoc(false);
-                        }
-                        if (e.key === 'Escape') { setAddingSpLoc(false); setNewSpLoc(''); }
-                      }}
-                      placeholder="New location" autoFocus className={`${inp} flex-1`} />
-                    <button onClick={async () => {
-                      if (newSpLoc.trim()) {
-                        await handleAddSalespersonLocation(newSpLoc.trim());
-                        setFormData({ salespersonLocation: newSpLoc.trim() });
-                        setNewSpLoc(''); setAddingSpLoc(false);
+            {/* Salesperson — dropdown of saved names + Add new inline */}
+            <div className="relative" ref={spRef}>
+              <label className={lbl}>Salesperson Name</label>
+              {addingSp ? (
+                /* Add new salesperson inline */
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={newSp}
+                    onChange={e => setNewSp(e.target.value)}
+                    onKeyDown={async e => {
+                      if (e.key === 'Enter' && newSp.trim()) {
+                        await handleAddSalesperson(newSp.trim());
+                        setNewSp(''); setAddingSp(false);
                       }
-                    }} style={{ backgroundColor: CHARCOAL, color: '#fff' }} className="px-2 py-1 rounded-lg text-xs">Save</button>
-                    <button onClick={() => { setAddingSpLoc(false); setNewSpLoc(''); }}
-                      className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs"><X size={12} /></button>
+                      if (e.key === 'Escape') { setAddingSp(false); setNewSp(''); }
+                    }}
+                    placeholder="Enter salesperson name…"
+                    autoFocus
+                    className={`${inp} flex-1`}
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (newSp.trim()) { await handleAddSalesperson(newSp.trim()); setNewSp(''); setAddingSp(false); }
+                    }}
+                    disabled={!newSp.trim()}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
+                    style={{ backgroundColor: CHARCOAL, color: '#fff' }}>
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAddingSp(false); setNewSp(''); }}
+                    className="px-2 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs">
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                /* Dropdown of saved salespersons */
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={formData.salesperson || ''}
+                      onChange={e => {
+                        setFormData({ salesperson: e.target.value });
+                        setShowSpSuggestions(true);
+                      }}
+                      onFocus={() => setShowSpSuggestions(true)}
+                      placeholder="Select or type a name…"
+                      autoComplete="off"
+                      className={inp}
+                    />
+                    {/* Dropdown */}
+                    {showSpSuggestions && (() => {
+                      const val = (formData.salesperson || '').toLowerCase();
+                      const allSp = [
+                        ...activeEmployees.map(e => e.name),
+                        ...savedSalespersons,
+                      ].filter((v, i, a) => a.indexOf(v) === i);
+                      const matches = val
+                        ? allSp.filter(s => s.toLowerCase().includes(val))
+                        : allSp;
+                      if (matches.length === 0 && !val) return null;
+                      return (
+                        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                          <div className="px-3 py-1.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Salespersons</span>
+                            {val && <span className="text-[10px] text-gray-400">{matches.length} match{matches.length !== 1 ? 'es' : ''}</span>}
+                          </div>
+                          {matches.length === 0 ? (
+                            <div className="px-3 py-3 text-xs text-gray-400 text-center">No matches for &quot;{formData.salesperson}&quot;</div>
+                          ) : matches.map(name => (
+                            <div key={name}
+                              onMouseDown={e => { e.preventDefault(); setFormData({ salesperson: name }); setShowSpSuggestions(false); }}
+                              className="px-3 py-2.5 cursor-pointer hover:bg-blue-50 text-sm text-gray-800 font-medium border-b border-gray-50 last:border-0 transition-colors flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0">
+                                {name.charAt(0).toUpperCase()}
+                              </span>
+                              {name}
+                              {formData.salesperson === name && <span className="ml-auto text-blue-500 text-xs">✓</span>}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
-                ) : (
-                  <div className="flex gap-1">
-                    <select value={formData.salespersonLocation || ''}
-                      onChange={e => setFormData({ salespersonLocation: e.target.value })}
-                      className={`${inp} flex-1`}>
-                      <option value="">Select location</option>
-                      {salespersonLocationsList.map(l => <option key={l} value={l}>{l}</option>)}
-                    </select>
-                    <button onClick={() => setAddingSpLoc(true)}
-                      className="flex items-center gap-0.5 px-2.5 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-50 whitespace-nowrap">
-                      <Plus size={11} /> Add
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className={lbl}>Referral To</label>
-                <input type="text" value={formData.clientDealBy || ''}
-                  onChange={e => setFormData({ clientDealBy: e.target.value })} className={inp} />
-              </div>
-              <div>
-                <label className={lbl}>Referral From</label>
-                <input type="text" value={formData.referralBy || ''}
-                  onChange={e => setFormData({ referralBy: e.target.value })} className={inp} />
-              </div>
-              <div className="col-span-4">
-                <label className={lbl}>Created By</label>
-                <input type="text" value={formData.createdBy || ''}
-                  onChange={e => setFormData({ createdBy: e.target.value })} className={inp} />
-              </div>
+                  {/* Add new button */}
+                  <button
+                    type="button"
+                    onClick={() => { setAddingSp(true); setNewSp(''); setShowSpSuggestions(false); }}
+                    className="flex items-center gap-1 px-2.5 py-2 border border-dashed border-gray-300 text-gray-500 rounded-lg text-xs hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap shrink-0"
+                    title="Add new salesperson">
+                    <Plus size={12} /> Add new
+                  </button>
+                </div>
+              )}
+              {/* Currently selected display */}
+              {!addingSp && formData.salesperson && (
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <span className="text-[11px] text-gray-500">Selected:</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-900 text-white">
+                    {formData.salesperson}
+                    <span onClick={() => setFormData({ salesperson: '' })} className="cursor-pointer opacity-60 hover:opacity-100 ml-0.5">
+                      <X size={9} color="white" />
+                    </span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Import Charges */}
