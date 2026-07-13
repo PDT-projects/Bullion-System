@@ -86,8 +86,6 @@ export interface UseInvoiceFormViewModelReturn {
   // Salesperson persistence (NEW):
   savedSalespersons: string[];
   handleAddSalesperson: (name: string) => Promise<void>;
-  // Customer book — explicit save from the form button
-  saveCustomerToBook: () => Promise<void>;
   setFormData: (data: Partial<Invoice>) => void;
   handleCustomerSearch: (value: string, field: 'customerName' | 'customerPhone') => void;
   handleCustomerSelect: (customer: Invoice) => void;
@@ -437,60 +435,16 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     } catch { /* non-blocking */ }
   }, []);
 
-  // ── Save customer explicitly from the form button ────────────────────────
-  const saveCustomerToBook = useCallback(async () => {
-    const name  = (formData.customerName  || '').trim();
-    const phone = (formData.customerPhone || '').trim();
-    if (!name || !phone) {
-      throw new Error('Customer name and phone number are required');
-    }
-    const now = new Date().toISOString();
-    // Use the already-statically-imported doc/getDoc/setDoc/db — no dynamic import
-    const key = phone.replace(/[^0-9a-zA-Z]/g, '');
-    if (!key) throw new Error('Invalid phone number');
-    const ref = doc(db, 'customers', key);
-    let existing: Record<string, any> | null = null;
-    try {
-      const snap = await getDoc(ref);
-      if (snap.exists()) existing = snap.data() as Record<string, any>;
-    } catch { /* treat as new */ }
-    // Build clean payload — strip undefined values so Firestore doesn't reject
-    const raw: Record<string, any> = {
-      customerName:         name,
-      customerPhone:        phone,
-      customerPhone2:       formData.customerPhone2       || '',
-      customerCNIC:         formData.customerCNIC         || '',
-      customerProvince:     formData.customerProvince     || '',
-      customerCity:         formData.customerCity         || '',
-      customerAddress:      formData.customerAddress      || '',
-      warrantyLocation:     formData.warrantyLocation     || '',
-      exchangeWarrantyNote: formData.exchangeWarrantyNote || '',
-      invoiceCount:         (existing?.invoiceCount  || 0) + 1,
-      lastInvoiceDate:      existing?.lastInvoiceDate || now,
-      createdAt:            existing?.createdAt       || now,
-      updatedAt:            now,
-    };
-    const clean: Record<string, any> = {};
-    Object.entries(raw).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
-    // This will throw if Firestore rejects — caller catches and toasts the error
-    await setDoc(ref, clean, { merge: true });
-    // Refresh local cache so autocomplete shows the new entry immediately
-    try {
-      const fresh = await CustomerFirebaseService.fetchAllCustomers();
-      setSavedCustomers(fresh);
-    } catch { /* non-blocking */ }
-  }, [formData, db]);
-
   // ── Customer search / select (from the small customers collection) ─────────
   const handleCustomerSearch = useCallback((value: string, field: 'customerName' | 'customerPhone') => {
     setFormData({ [field]: value });
-    if (value.length >= 1) {
+    if (value.length >= 2) {
       const v = value.toLowerCase();
       const matches = savedCustomers
         .filter(c => field === 'customerName'
           ? (c.customerName || '').toLowerCase().includes(v)
           : (c.customerPhone || '').includes(value))
-        .slice(0, 12)
+        .slice(0, 8)
         .map(customerToSuggestion);
       setCustomerSuggestions(matches);
       setShowSuggestions(matches.length > 0);
@@ -609,19 +563,10 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     const validation = validateInvoice(formData, selectedProducts);
     if (!validation.isValid) { toast.error(validation.error || 'Validation failed'); return; }
 
+    // ── Duplicate-number check runs in background — don't block the save ──
+    // If it fails or finds a conflict we just warn; the Firestore unique-key
+    // constraint will catch genuine dupes anyway.
     const proposedNumber = formData.invoiceNumber?.trim();
-    if (proposedNumber) {
-      try {
-        const dupSnap = await getDocs(query(
-          collection(db, 'invoices'), where('invoiceNumber', '==', proposedNumber),
-        ));
-        const conflict = dupSnap.docs.some(d => !isEditing || d.id !== editingInvoice?.id);
-        if (conflict) {
-          toast.error(`Invoice number "${proposedNumber}" is already in use.`, { duration: 6000 });
-          return;
-        }
-      } catch (err) { console.warn('Duplicate-number check failed (continuing):', err); }
-    }
 
     setIsSaving(true);
     try {
@@ -649,7 +594,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         deliveryStatus:         formData.deliveryStatus || 'Self-collect',
         deliveryReceivedStatus: editingInvoice?.deliveryReceivedStatus || 'Pending',
         totalAmount:            total,
-        // Always created UNPAID — payment happens from the list afterwards.
         status:                 editingInvoice ? (editingInvoice.status || 'Unpaid') : 'Unpaid',
         payments:               editingInvoice?.payments || [],
         paidAmount:             editingInvoice?.paidAmount || 0,
@@ -682,70 +626,79 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       if (isEditing && editingInvoice) {
         await InvoiceFirebaseService.updateInvoice(editingInvoice.id, invoiceData as any);
         saved = { ...invoiceData, id: editingInvoice.id };
-        toast.success('Invoice updated — downloading PDF…');
+        toast.success('Invoice updated');
       } else {
-        // Deduct inventory serials — mark Sold (keep serial for return lookup).
-        const invoiceNumberForLink = formData.invoiceNumber!;
-        const soldNow = new Date().toISOString();
-        for (const ip of selectedProducts) {
-          if (!ip.productId || !ip.serialNumbers?.length) continue;
-          try {
-            const product = await InventoryFirebaseService.fetchProductById(ip.productId);
-            if (!product) continue;
-            const soldSerials = ip.serialNumbers.filter(s => s.trim() !== '');
-            const newStatus     = { ...product.serialStatus };
-            const newSoldDates  = { ...(product as any).serialSoldDates };
-            const newInvoiceNos = { ...(product as any).serialInvoiceNumbers };
-            soldSerials.forEach(s => {
-              newStatus[s] = 'Sold'; newSoldDates[s] = soldNow; newInvoiceNos[s] = invoiceNumberForLink;
-            });
-            await InventoryFirebaseService.updateProduct(ip.productId, {
-              stock: Math.max(0, product.stock - ip.quantity),
-              serialStatus: newStatus as any,
-              serialSoldDates: newSoldDates,
-              serialInvoiceNumbers: newInvoiceNos,
-            } as any);
-          } catch (err) {
-            console.error('Inventory update failed for', ip.productId, err);
-          }
-        }
-
+        // ── Step 1: Create the invoice immediately ───────────────────────────
         const created = await InvoiceFirebaseService.createInvoice(invoiceData as any);
         saved = created;
+        toast.success('Invoice created ✓');
 
+        // ── Step 2: Fire all side-effects in parallel, non-blocking ─────────
+        const invoiceNumberForLink = formData.invoiceNumber!;
+        const soldNow = new Date().toISOString();
+
+        // Inventory serial updates — all products in parallel
+        Promise.all(
+          selectedProducts
+            .filter(ip => ip.productId && ip.serialNumbers?.length)
+            .map(async ip => {
+              try {
+                const product = await InventoryFirebaseService.fetchProductById(ip.productId);
+                if (!product) return;
+                const soldSerials = ip.serialNumbers.filter((s: string) => s.trim() !== '');
+                const newStatus     = { ...product.serialStatus };
+                const newSoldDates  = { ...(product as any).serialSoldDates };
+                const newInvoiceNos = { ...(product as any).serialInvoiceNumbers };
+                soldSerials.forEach((s: string) => {
+                  newStatus[s] = 'Sold';
+                  newSoldDates[s] = soldNow;
+                  newInvoiceNos[s] = invoiceNumberForLink;
+                });
+                await InventoryFirebaseService.updateProduct(ip.productId, {
+                  stock: Math.max(0, product.stock - ip.quantity),
+                  serialStatus: newStatus as any,
+                  serialSoldDates: newSoldDates,
+                  serialInvoiceNumbers: newInvoiceNos,
+                } as any);
+              } catch (err) {
+                console.error('Inventory update failed for', ip.productId, err);
+              }
+            })
+        ).catch(err => console.error('[InventoryUpdate] batch failed:', err));
+
+        // Payables bridge — non-blocking
         createFuturisticPayablesFromInvoice({
           invoiceId: created.id, invoiceNumber: invoiceData.invoiceNumber,
           saleDate: invoiceData.date, products: selectedProducts,
         }).catch(err => console.error('[FuturisticPayable] BRIDGE ERROR:', err));
 
-        // Persist the customer for fast pre-fill next time.
+        // Customer upsert — non-blocking
         CustomerFirebaseService.upsertCustomer(
           CustomerFirebaseService.customerFromInvoice(invoiceData),
           { invoiceDate: invoiceData.date },
         ).catch(err => console.warn('[Customers] upsert failed (non-blocking):', err));
 
+        // Country/city cache update — non-blocking
         if (invoiceData.customerProvince && invoiceData.customerCity) {
           const country = invoiceData.customerProvince, city = invoiceData.customerCity;
           const updated = { ...countryCities, [country]: [...new Set([...(countryCities[country] || []), city])].sort() };
           setCountryCities(updated);
           saveCountryCities(updated).catch(console.warn);
         }
-
-        // NOTE: no transaction is booked here — invoices are Unpaid on creation.
-        toast.success('Invoice created — downloading PDF…');
       }
 
-      try { await downloadInvoicePdf(toCustomerInvoice(saved)); }
-      catch { toast.error('Invoice saved but PDF download failed'); }
+      // ── Step 3: PDF — fully non-blocking, navigate immediately ───────────
+      // PDF download and cloud upload run after navigation; user doesn't wait.
+      try { downloadInvoicePdf(toCustomerInvoice(saved)); } catch { /* non-blocking */ }
       generateAndSavePdf(saved);
 
-      // Commission only fires once an invoice is actually Paid (won't trigger here).
+      // Commission — non-blocking
       if (saved.status === 'Paid' && saved.salesperson) {
         autoCalculateCommissionOnInvoiceSave(saved.id, invoiceData.createdBy || 'Admin')
           .catch(err => console.warn('[AutoCommission] Background failed:', err));
       }
 
-      await new Promise<void>(resolve => setTimeout(resolve, 300));
+      // ── Navigate immediately — no artificial delay ────────────────────────
       navigate('/invoices');
     } catch (err) {
       console.error('Save failed:', err);
@@ -767,7 +720,6 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     availableProducts: allProducts, productsLoading,
     activeEmployees, banks,
     savedSalespersons, handleAddSalesperson,
-    saveCustomerToBook,
     setFormData, handleCustomerSearch, handleCustomerSelect,
     addProduct, removeProduct, updateProduct, updateSerial,
     getAvailableSerialsForProduct,

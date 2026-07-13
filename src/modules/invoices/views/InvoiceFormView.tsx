@@ -420,6 +420,7 @@ export function InvoiceFormView({
   const [showNameSuggestions, setShowNameSuggestions]  = useState(false);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
   const [showSpSuggestions,   setShowSpSuggestions]    = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const nameRef  = useRef<HTMLDivElement>(null);
   const phoneRef = useRef<HTMLDivElement>(null);
   const spRef    = useRef<HTMLDivElement>(null);
@@ -528,16 +529,20 @@ export function InvoiceFormView({
               </div>
 
               {/* Customer Name — with history dropdown */}
-              <div className="relative" ref={nameRef}>
-                <label className={lbl}>Customer Name *</label>
+              <div className="relative" ref={nameRef} data-field-error={!!fieldErrors.customerName}>
+                <label className={lbl}>
+                  Customer Name <span className="text-red-500">*</span>
+                </label>
                 <div className="relative">
                   <input type="text" value={formData.customerName || ''}
                     onChange={e => {
                       handleCustomerSearch(e.target.value, 'customerName');
                       setShowNameSuggestions(true);
+                      if (e.target.value.trim()) setFieldErrors(prev => { const n = {...prev}; delete n.customerName; return n; });
                     }}
                     onFocus={() => setShowNameSuggestions(true)}
-                    placeholder="Enter customer name" className={inp} />
+                    placeholder="Enter customer name"
+                    className={fieldErrors.customerName ? `${inp} !border-red-400 !bg-red-50 focus:!ring-red-300` : inp} />
                   {customerSuggestions.length > 0 && (
                     <button type="button"
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400"
@@ -546,6 +551,11 @@ export function InvoiceFormView({
                     </button>
                   )}
                 </div>
+                {fieldErrors.customerName && (
+                  <p className="text-red-500 text-[11px] mt-1 font-medium flex items-center gap-1">
+                    ⚠ {fieldErrors.customerName}
+                  </p>
+                )}
                 <CustomerHistoryDropdown
                   suggestions={customerSuggestions}
                   onSelect={onSelectCustomer}
@@ -568,15 +578,24 @@ export function InvoiceFormView({
 
             {/* Row 2: Phone | Second Phone | Country | City */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="relative" ref={phoneRef}>
-                <label className={lbl}>Phone Number *</label>
+              <div className="relative" ref={phoneRef} data-field-error={!!fieldErrors.customerPhone}>
+                <label className={lbl}>
+                  Phone Number <span className="text-red-500">*</span>
+                </label>
                 <input type="tel" value={formData.customerPhone || ''}
                   onChange={e => {
                     handleCustomerSearch(e.target.value, 'customerPhone');
                     setShowPhoneSuggestions(true);
+                    if (e.target.value.trim()) setFieldErrors(prev => { const n = {...prev}; delete n.customerPhone; return n; });
                   }}
                   onFocus={() => setShowPhoneSuggestions(true)}
-                  placeholder="+92 300 1234567" className={inp} />
+                  placeholder="+92 300 1234567"
+                  className={fieldErrors.customerPhone ? `${inp} !border-red-400 !bg-red-50 focus:!ring-red-300` : inp} />
+                {fieldErrors.customerPhone && (
+                  <p className="text-red-500 text-[11px] mt-1 font-medium flex items-center gap-1">
+                    ⚠ {fieldErrors.customerPhone}
+                  </p>
+                )}
                 <CustomerHistoryDropdown
                   suggestions={customerSuggestions}
                   onSelect={onSelectCustomer}
@@ -626,7 +645,7 @@ export function InvoiceFormView({
               <Package size={15} style={{ color: CHARCOAL }} />
               <h4 className="text-sm font-bold" style={{ color: CHARCOAL }}>Products</h4>
             </div>
-            <button onClick={addProduct}
+            <button onClick={() => { addProduct(); setFieldErrors(prev => { const n = {...prev}; delete n.products; return n; }); }}
               className="flex items-center gap-1 text-xs px-3 py-2 rounded-lg font-semibold transition-colors"
               style={{ background: CHARCOAL, color: '#fff' }}>
               <Plus size={12} /> Add Product
@@ -634,9 +653,11 @@ export function InvoiceFormView({
           </div>
           <div className="p-4">
             {selectedProducts.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                No products added yet
-              </p>
+              <div data-field-error={!!fieldErrors.products}>
+                <p className={`text-xs text-center py-6 rounded-lg border border-dashed ${fieldErrors.products ? 'bg-red-50 border-red-300 text-red-400' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>
+                  {fieldErrors.products ? `⚠ ${fieldErrors.products}` : 'No products added yet'}
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
                 {selectedProducts.map((product, index) => {
@@ -1123,7 +1144,25 @@ export function InvoiceFormView({
               className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium border border-gray-200">
               Cancel
             </button>
-            <button onClick={handleSave} disabled={isSaving}
+            <button onClick={() => {
+                // Field-level validation — highlight required fields before submitting
+                const errs: Record<string, string> = {};
+                if (!(formData.customerName  || '').trim()) errs.customerName  = 'Customer name is required';
+                if (!(formData.customerPhone || '').trim()) errs.customerPhone = 'Phone number is required';
+                if (selectedProducts.length === 0)          errs.products      = 'At least one product is required';
+                selectedProducts.forEach((p: any, i: number) => {
+                  if (!p.productId) errs[`product_${i}`] = 'Select a product';
+                  const vs = (p.serialNumbers || []).filter((s: string) => s.trim() !== '');
+                  if (vs.length !== p.quantity) errs[`serial_${i}`] = `Select ${p.quantity} serial number(s)`;
+                });
+                setFieldErrors(errs);
+                if (Object.keys(errs).length > 0) {
+                  const el = document.querySelector('[data-field-error="true"]');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  return;
+                }
+                handleSave();
+              }} disabled={isSaving}
               className="flex items-center gap-1.5 px-6 py-2 rounded-lg disabled:opacity-50 transition-colors font-bold text-sm shadow-sm whitespace-nowrap"
               style={{ background: CHARCOAL, color: '#fff' }}>
               {isSaving
