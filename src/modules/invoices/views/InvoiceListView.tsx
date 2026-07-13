@@ -354,11 +354,11 @@ export function InvoiceListView({
   };
 
   const hasActiveFilters =
-    filters.searchTerm ||
-    (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : filters.statusFilter !== 'all') ||
-    filters.dateFrom || filters.dateTo ||
-    (Array.isArray(filters.cityFilter) ? filters.cityFilter.length > 0 : !!filters.cityFilter) ||
-    (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : !!filters.salespersonFilter);
+    !!filters.searchTerm ||
+    (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : false) ||
+    !!filters.dateFrom || !!filters.dateTo ||
+    (Array.isArray(filters.cityFilter) ? filters.cityFilter.length > 0 : false) ||
+    (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : false);
 
   if (isLoading) {
     return (
@@ -429,15 +429,15 @@ export function InvoiceListView({
           {/* Status multi-select */}
           <InvoiceMultiFilter
             label="Status"
-            selected={Array.isArray(filters.statusFilter) ? filters.statusFilter as string[] : (filters.statusFilter !== 'all' ? [filters.statusFilter] : [])}
-            onChange={v => onStatusFilter(v as any)}
+            selected={Array.isArray(filters.statusFilter) ? filters.statusFilter as string[] : []}
+            onChange={v => onStatusFilter(v)}
             options={['Paid', 'Unpaid', 'Partial']}
           />
 
           {/* City multi-select */}
           <InvoiceMultiFilter
             label="City"
-            selected={Array.isArray(filters.cityFilter) ? filters.cityFilter as string[] : (filters.cityFilter ? [filters.cityFilter] : [])}
+            selected={Array.isArray(filters.cityFilter) ? filters.cityFilter as string[] : []}
             onChange={v => onCityFilter(v)}
             options={availableCities}
           />
@@ -445,7 +445,7 @@ export function InvoiceListView({
           {/* Salesperson multi-select */}
           <InvoiceMultiFilter
             label="Salesperson"
-            selected={Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter as string[] : (filters.salespersonFilter ? [filters.salespersonFilter] : [])}
+            selected={Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter as string[] : []}
             onChange={v => onSalespersonFilter(v)}
             options={availableSalespersons}
             displayName={sp => spName(sp)}

@@ -191,11 +191,11 @@ export interface UpdateInvoiceDTO extends CreateInvoiceDTO {
 
 export interface InvoiceFilters {
   searchTerm: string;
-  statusFilter: 'all' | 'Paid' | 'Unpaid' | 'Partial' | string[];
+  statusFilter: string[];
   dateFrom: string;
   dateTo: string;
-  cityFilter: string | string[];
-  salespersonFilter: string | string[];
+  cityFilter: string[];
+  salespersonFilter: string[];
 }
 
 export interface InvoiceStats {

@@ -66,7 +66,7 @@ export interface UseInvoiceListViewModelReturn {
   viewingInvoice: Invoice | null;
   isLoading: boolean;
   onSearch: (searchTerm: string) => void;
-  onStatusFilter: (status: 'all' | 'Paid' | 'Unpaid' | 'Partial') => void;
+  onStatusFilter: (statuses: string[]) => void;
   onCityFilter: (city: string[]) => void;
   onSalespersonFilter: (sp: string[]) => void;
   onDateFromFilter: (date: string) => void;
@@ -107,7 +107,7 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filters, setFilters] = useState<InvoiceFilters>({
-    searchTerm: '', statusFilter: 'all', dateFrom: '', dateTo: '',
+    searchTerm: '', statusFilter: [] as string[], dateFrom: '', dateTo: '',
     cityFilter: [], salespersonFilter: [],
   });
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
@@ -171,7 +171,10 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
         (inv.salesperson ?? '').toLowerCase().includes(term) ||
         (inv.customerCity ?? '').toLowerCase().includes(term));
     }
-    if (filters.statusFilter !== 'all') result = result.filter(inv => inv.status === filters.statusFilter);
+    if (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : (filters.statusFilter !== 'all' && filters.statusFilter !== '')) {
+      const statuses = Array.isArray(filters.statusFilter) ? filters.statusFilter : [filters.statusFilter];
+      result = result.filter(inv => statuses.includes(inv.status));
+    }
     if (filters.dateFrom) result = result.filter(inv => inv.date >= filters.dateFrom);
     if (filters.dateTo)   result = result.filter(inv => inv.date <= filters.dateTo);
     if (filters.cityFilter.length > 0) {
@@ -236,12 +239,12 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const onSearch = useCallback((searchTerm: string) => setFilters(p => ({ ...p, searchTerm })), []);
-  const onStatusFilter = useCallback((statusFilter: 'all' | 'Paid' | 'Unpaid' | 'Partial') => setFilters(p => ({ ...p, statusFilter })), []);
+  const onStatusFilter = useCallback((statusFilter: string[]) => setFilters(p => ({ ...p, statusFilter })), []);
   const onCityFilter = useCallback((cityFilter: string[]) => setFilters(p => ({ ...p, cityFilter })), []);
   const onSalespersonFilter = useCallback((salespersonFilter: string[]) => setFilters(p => ({ ...p, salespersonFilter })), []);
   const onDateFromFilter = useCallback((dateFrom: string) => setFilters(p => ({ ...p, dateFrom })), []);
   const onDateToFilter = useCallback((dateTo: string) => setFilters(p => ({ ...p, dateTo })), []);
-  const onClearFilters = useCallback(() => setFilters({ searchTerm: '', statusFilter: 'all', dateFrom: '', dateTo: '', cityFilter: [], salespersonFilter: [] }), []);
+  const onClearFilters = useCallback(() => setFilters({ searchTerm: '', statusFilter: [], dateFrom: '', dateTo: '', cityFilter: [], salespersonFilter: [] }), []);
 
   const onViewInvoice = useCallback((invoice: Invoice) => setViewingInvoice(invoice), []);
   const onCloseView = useCallback(() => setViewingInvoice(null), []);
