@@ -150,11 +150,24 @@ async function saveCountryCities(data: Record<string, string[]>): Promise<void> 
 // live in the inventory module; this fallback chain is non-destructive (missing
 // fields yield 0). >>> CONFIRM these names with inventory and trim the chain. <<<
 function extractCost(p: any): { supplierCost: number; purchaseCost: number } {
-  const supplierCost =
-    p.supplierCost ?? p.supplierPrice ?? p.supplierRate ?? p.costPrice ?? p.cost ?? 0;
-  const purchaseCost =
-    p.purchaseCost ?? p.purchasePrice ?? p.landedCost ?? p.buyingPrice ?? p.costPrice ?? p.cost ?? 0;
-  return { supplierCost: Number(supplierCost) || 0, purchaseCost: Number(purchaseCost) || 0 };
+  const isCredit    = p.ownershipType === 'Credit';
+  const isOwned     = !p.ownershipType || p.ownershipType === 'Owned';
+  const costFallback = Number(p.costPrice ?? p.cost ?? 0) || 0;
+
+  const rawSupplier = Number(p.supplierCost ?? p.supplierPrice ?? p.supplierRate ?? 0) || 0;
+  const rawPurchase = Number(p.purchaseCost ?? p.purchasePrice ?? p.landedCost ?? p.buyingPrice ?? 0) || 0;
+
+  if (isCredit) {
+    // Credit: supplier cost only — fall back to costPrice if not explicitly set
+    return { supplierCost: rawSupplier || costFallback, purchaseCost: 0 };
+  }
+  if (isOwned) {
+    // Owned: purchase cost only — fall back to costPrice if not explicitly set
+    return { supplierCost: 0, purchaseCost: rawPurchase || costFallback };
+  }
+  // Unknown ownership — use whichever is set, prefer purchase cost
+  if (rawSupplier > 0 && rawPurchase === 0) return { supplierCost: rawSupplier, purchaseCost: 0 };
+  return { supplierCost: 0, purchaseCost: rawPurchase || costFallback };
 }
 
 // ── Product-row serialiser (guarantees imageUrls + cost are always present) ────
@@ -563,10 +576,19 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     const validation = validateInvoice(formData, selectedProducts);
     if (!validation.isValid) { toast.error(validation.error || 'Validation failed'); return; }
 
-    // ── Duplicate-number check runs in background — don't block the save ──
-    // If it fails or finds a conflict we just warn; the Firestore unique-key
-    // constraint will catch genuine dupes anyway.
     const proposedNumber = formData.invoiceNumber?.trim();
+    if (proposedNumber) {
+      try {
+        const dupSnap = await getDocs(query(
+          collection(db, 'invoices'), where('invoiceNumber', '==', proposedNumber),
+        ));
+        const conflict = dupSnap.docs.some(d => !isEditing || d.id !== editingInvoice?.id);
+        if (conflict) {
+          toast.error(`Invoice number "${proposedNumber}" is already in use.`, { duration: 6000 });
+          return;
+        }
+      } catch (err) { console.warn('Duplicate-number check failed (continuing):', err); }
+    }
 
     setIsSaving(true);
     try {
@@ -594,6 +616,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         deliveryStatus:         formData.deliveryStatus || 'Self-collect',
         deliveryReceivedStatus: editingInvoice?.deliveryReceivedStatus || 'Pending',
         totalAmount:            total,
+        // Always created UNPAID — payment happens from the list afterwards.
         status:                 editingInvoice ? (editingInvoice.status || 'Unpaid') : 'Unpaid',
         payments:               editingInvoice?.payments || [],
         paidAmount:             editingInvoice?.paidAmount || 0,
@@ -626,79 +649,70 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       if (isEditing && editingInvoice) {
         await InvoiceFirebaseService.updateInvoice(editingInvoice.id, invoiceData as any);
         saved = { ...invoiceData, id: editingInvoice.id };
-        toast.success('Invoice updated');
+        toast.success('Invoice updated — downloading PDF…');
       } else {
-        // ── Step 1: Create the invoice immediately ───────────────────────────
-        const created = await InvoiceFirebaseService.createInvoice(invoiceData as any);
-        saved = created;
-        toast.success('Invoice created ✓');
-
-        // ── Step 2: Fire all side-effects in parallel, non-blocking ─────────
+        // Deduct inventory serials — mark Sold (keep serial for return lookup).
         const invoiceNumberForLink = formData.invoiceNumber!;
         const soldNow = new Date().toISOString();
+        for (const ip of selectedProducts) {
+          if (!ip.productId || !ip.serialNumbers?.length) continue;
+          try {
+            const product = await InventoryFirebaseService.fetchProductById(ip.productId);
+            if (!product) continue;
+            const soldSerials = ip.serialNumbers.filter(s => s.trim() !== '');
+            const newStatus     = { ...product.serialStatus };
+            const newSoldDates  = { ...(product as any).serialSoldDates };
+            const newInvoiceNos = { ...(product as any).serialInvoiceNumbers };
+            soldSerials.forEach(s => {
+              newStatus[s] = 'Sold'; newSoldDates[s] = soldNow; newInvoiceNos[s] = invoiceNumberForLink;
+            });
+            await InventoryFirebaseService.updateProduct(ip.productId, {
+              stock: Math.max(0, product.stock - ip.quantity),
+              serialStatus: newStatus as any,
+              serialSoldDates: newSoldDates,
+              serialInvoiceNumbers: newInvoiceNos,
+            } as any);
+          } catch (err) {
+            console.error('Inventory update failed for', ip.productId, err);
+          }
+        }
 
-        // Inventory serial updates — all products in parallel
-        Promise.all(
-          selectedProducts
-            .filter(ip => ip.productId && ip.serialNumbers?.length)
-            .map(async ip => {
-              try {
-                const product = await InventoryFirebaseService.fetchProductById(ip.productId);
-                if (!product) return;
-                const soldSerials = ip.serialNumbers.filter((s: string) => s.trim() !== '');
-                const newStatus     = { ...product.serialStatus };
-                const newSoldDates  = { ...(product as any).serialSoldDates };
-                const newInvoiceNos = { ...(product as any).serialInvoiceNumbers };
-                soldSerials.forEach((s: string) => {
-                  newStatus[s] = 'Sold';
-                  newSoldDates[s] = soldNow;
-                  newInvoiceNos[s] = invoiceNumberForLink;
-                });
-                await InventoryFirebaseService.updateProduct(ip.productId, {
-                  stock: Math.max(0, product.stock - ip.quantity),
-                  serialStatus: newStatus as any,
-                  serialSoldDates: newSoldDates,
-                  serialInvoiceNumbers: newInvoiceNos,
-                } as any);
-              } catch (err) {
-                console.error('Inventory update failed for', ip.productId, err);
-              }
-            })
-        ).catch(err => console.error('[InventoryUpdate] batch failed:', err));
+        const created = await InvoiceFirebaseService.createInvoice(invoiceData as any);
+        saved = created;
 
-        // Payables bridge — non-blocking
         createFuturisticPayablesFromInvoice({
           invoiceId: created.id, invoiceNumber: invoiceData.invoiceNumber,
           saleDate: invoiceData.date, products: selectedProducts,
         }).catch(err => console.error('[FuturisticPayable] BRIDGE ERROR:', err));
 
-        // Customer upsert — non-blocking
+        // Persist the customer for fast pre-fill next time.
         CustomerFirebaseService.upsertCustomer(
           CustomerFirebaseService.customerFromInvoice(invoiceData),
           { invoiceDate: invoiceData.date },
         ).catch(err => console.warn('[Customers] upsert failed (non-blocking):', err));
 
-        // Country/city cache update — non-blocking
         if (invoiceData.customerProvince && invoiceData.customerCity) {
           const country = invoiceData.customerProvince, city = invoiceData.customerCity;
           const updated = { ...countryCities, [country]: [...new Set([...(countryCities[country] || []), city])].sort() };
           setCountryCities(updated);
           saveCountryCities(updated).catch(console.warn);
         }
+
+        // NOTE: no transaction is booked here — invoices are Unpaid on creation.
+        toast.success('Invoice created — downloading PDF…');
       }
 
-      // ── Step 3: PDF — fully non-blocking, navigate immediately ───────────
-      // PDF download and cloud upload run after navigation; user doesn't wait.
-      try { downloadInvoicePdf(toCustomerInvoice(saved)); } catch { /* non-blocking */ }
+      try { await downloadInvoicePdf(toCustomerInvoice(saved)); }
+      catch { toast.error('Invoice saved but PDF download failed'); }
       generateAndSavePdf(saved);
 
-      // Commission — non-blocking
+      // Commission only fires once an invoice is actually Paid (won't trigger here).
       if (saved.status === 'Paid' && saved.salesperson) {
         autoCalculateCommissionOnInvoiceSave(saved.id, invoiceData.createdBy || 'Admin')
           .catch(err => console.warn('[AutoCommission] Background failed:', err));
       }
 
-      // ── Navigate immediately — no artificial delay ────────────────────────
+      await new Promise<void>(resolve => setTimeout(resolve, 300));
       navigate('/invoices');
     } catch (err) {
       console.error('Save failed:', err);

@@ -177,13 +177,15 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
     }
     if (filters.dateFrom) result = result.filter(inv => inv.date >= filters.dateFrom);
     if (filters.dateTo)   result = result.filter(inv => inv.date <= filters.dateTo);
-    if (filters.cityFilter.length > 0) {
-      result = result.filter(inv => filters.cityFilter.includes(normalizeCity(inv.customerCity)));
+    if (Array.isArray(filters.cityFilter) ? filters.cityFilter.length > 0 : !!filters.cityFilter) {
+      const cities = Array.isArray(filters.cityFilter) ? filters.cityFilter : [filters.cityFilter];
+      result = result.filter(inv => cities.includes(normalizeCity(inv.customerCity)));
     }
-    if (filters.salespersonFilter.length > 0) {
+    if (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : !!filters.salespersonFilter) {
+      const sps = Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter : [filters.salespersonFilter];
       result = result.filter(inv => {
         const name = salespersonMap[inv.salesperson ?? ''] || inv.salesperson || '';
-        return filters.salespersonFilter.includes(name);
+        return sps.includes(name);
       });
     }
     return result;

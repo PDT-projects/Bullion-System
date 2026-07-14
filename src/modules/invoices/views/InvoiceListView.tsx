@@ -377,20 +377,7 @@ export function InvoiceListView({
         </div>
       </div>
 
-      {/* ── Stats ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Invoices', value: stats.totalCount,                  color: 'text-gray-900' },
-          { label: 'Paid',           value: stats.paidCount,                   color: 'text-green-600' },
-          { label: 'Unpaid',         value: stats.unpaidCount,                 color: 'text-red-600'   },
-          { label: 'Total Amount',   value: formatDisplay(stats.totalAmount), color: 'text-gray-900'  },
-        ].map(s => (
-          <div key={s.label} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-            <p className="text-xs text-gray-500 mb-1">{s.label}</p>
-            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-          </div>
-        ))}
-      </div>
+
 
       {/* ── Filter Bar — multi-select ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -404,7 +391,6 @@ export function InvoiceListView({
           )}
         </div>
         <div className="flex flex-wrap gap-3 items-start">
-
           <InvoiceMultiFilter label="Status"
             selected={Array.isArray(filters.statusFilter) ? filters.statusFilter as string[] : []}
             onChange={v => onStatusFilter(v as any)}
@@ -444,8 +430,9 @@ export function InvoiceListView({
                 {[
                   'Invoice #', 'Date', 'Customer', 'Branch / City',
                   'Salesperson', 'Products', 'Amount (AED)',
-                  'Net',
-                  'Delivery', 'Payment', 'Status', 'Actions',
+                  'Supplier Cost', 'Purchase Cost', 'Misc Exp',
+                  'Net Sale', 'Paid', 'Amount Left',
+                  'Delivery', 'Status', 'Actions',
                 ].map(h => (
                   <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
@@ -454,7 +441,7 @@ export function InvoiceListView({
             <tbody className="divide-y divide-gray-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={17} className="px-4 py-14 text-center text-gray-400">
                     <FileText className="mx-auto mb-3 text-gray-300" size={44} />
                     <p className="font-medium text-gray-500">No invoices found</p>
                     <p className="text-xs mt-1">
@@ -463,7 +450,10 @@ export function InvoiceListView({
                   </td>
                 </tr>
               ) : filteredInvoices.map(invoice => {
-                const net = calculateNetAmount(invoice);
+                const supplierCost = calculateSupplierCost(invoice);
+                const purchaseCost = calculatePurchaseCost(invoice);
+                const misc = calculateMiscExpense(invoice);
+                const netSale = (invoice.totalAmount || 0) - misc;
                 const paid = calculatePaidAmount(invoice);
                 const remaining = calculateRemainingAmount(invoice);
                 const selected = isSelected(invoice.id);
@@ -522,7 +512,40 @@ export function InvoiceListView({
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">
                     {formatDisplay(invoice.totalAmount)}
                   </td>
-                  <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(net)}</td>
+                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                    {(() => {
+                      // Show supplier cost only when it's explicitly set AND different from purchase cost
+                      // (credit items: supplierCost > 0, purchaseCost = 0 after our fix)
+                      // For old data where both equal costPrice, treat as owned (purchase cost)
+                      const hasSupplier = supplierCost > 0 && purchaseCost === 0;
+                      return hasSupplier ? formatDisplay(supplierCost) : '—';
+                    })()}
+                  </td>
+                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                    {(() => {
+                      // Show purchase cost when owned OR when both are equal (old data fallback)
+                      const hasSupplierOnly = supplierCost > 0 && purchaseCost === 0;
+                      return !hasSupplierOnly && purchaseCost > 0 ? formatDisplay(purchaseCost) : '—';
+                    })()}
+                  </td>
+                  <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
+                  <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(netSale)}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    {invoice.status === 'Unpaid'
+                      ? <span className="text-gray-300">—</span>
+                      : paid > 0
+                      ? <span className="text-green-700 font-semibold">{formatDisplay(paid)}</span>
+                      : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    {invoice.status === 'Paid'
+                      ? <span className="text-green-600 font-semibold">Cleared</span>
+                      : invoice.status === 'Unpaid'
+                      ? <span className="text-red-600 font-semibold">{formatDisplay(invoice.totalAmount)}</span>
+                      : remaining > 0
+                      ? <span className="text-red-600 font-semibold">{formatDisplay(remaining)}</span>
+                      : <span className="text-green-600 font-semibold">Cleared</span>}
+                  </td>
 
                   <td className="px-3 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${deliveryBadge(invoice.deliveryStatus)}`}>
@@ -536,24 +559,23 @@ export function InvoiceListView({
                   </td>
 
                   <td className="px-3 py-3">
-                    {invoice.status === 'Partial' && (
-                      <p className="text-xs text-orange-600 font-medium mb-1">{formatDisplay(paid)} paid · {formatDisplay(remaining)} left</p>
-                    )}
-                    {invoice.paymentMode && invoice.status !== 'Unpaid' && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        invoice.paymentMode === 'Cash'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-blue-50 text-blue-700 border border-blue-200'
-                      }`}>
-                        {invoice.paymentMode === 'Cash' ? '💵 Cash' : '🏦 Bank'}
-                      </span>
-                    )}
                     {invoice.status !== 'Paid' && invoice.status !== 'Returned' && (
                       <button onClick={() => openPayment(invoice)}
-                        className="mt-1.5 inline-flex items-center justify-center text-xs font-semibold px-3 py-1.5 rounded-md text-white whitespace-nowrap hover:brightness-125 transition"
+                        className="inline-flex items-center justify-center text-xs font-semibold px-3 py-1.5 rounded-md text-white whitespace-nowrap hover:brightness-125 transition"
                         style={{ backgroundColor: '#1f2937' }}>
                         Record Payment
                       </button>
+                    )}
+                    {invoice.paymentMode && invoice.status !== 'Unpaid' && (
+                      <div className="mt-1">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          invoice.paymentMode === 'Cash'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-blue-50 text-blue-700 border border-blue-200'
+                        }`}>
+                          {invoice.paymentMode === 'Cash' ? 'Cash' : 'Bank'}
+                        </span>
+                      </div>
                     )}
                   </td>
 
@@ -569,10 +591,7 @@ export function InvoiceListView({
                         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View">
                         <Eye size={15} />
                       </button>
-                      <button onClick={() => onEditInvoice(invoice.id)}
-                        className="p-1.5 text-gray-600 hover:bg-gray-100 rounded" title="Edit">
-                        <Pencil size={15} />
-                      </button>
+
                       <button onClick={() => navigate(`/invoices/${invoice.id}/delete`)}
                         className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
                         <Trash2 size={15} />
@@ -592,6 +611,50 @@ export function InvoiceListView({
                 );
               })}
             </tbody>
+            {filteredInvoices.length > 0 && (() => {
+              const src = hasSelection
+                ? filteredInvoices.filter(i => isSelected(i.id))
+                : filteredInvoices;
+              const tTotal    = src.reduce((s, i) => s + (i.totalAmount || 0), 0);
+              const tSupplier = src.reduce((s, i) => s + calculateSupplierCost(i), 0);
+              const tPurchase = src.reduce((s, i) => s + calculatePurchaseCost(i), 0);
+              const tMisc     = src.reduce((s, i) => s + calculateMiscExpense(i), 0);
+              const tNet      = tTotal - tMisc;
+              const tPaid     = src.reduce((s, i) => s + calculatePaidAmount(i), 0);
+              const tLeft     = src.reduce((s, i) => s + calculateRemainingAmount(i), 0);
+              return (
+                <tfoot>
+                  <tr className="bg-gray-900 text-white text-xs font-bold">
+                    {/* ☐ Invoice# Date Customer Branch Salesperson Products = 7 empty cols */}
+                    <td colSpan={7} className="px-3 py-2 text-gray-400 uppercase tracking-wide">
+                      {hasSelection ? `${src.length} selected` : `All ${src.length}`}
+                    </td>
+                    {/* Amount */}
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDisplay(tTotal)}</td>
+                    {/* Supplier Cost — only when supplierCost > 0 and purchaseCost = 0 */}
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-300">
+                      {src.some(i => calculateSupplierCost(i) > 0 && calculatePurchaseCost(i) === 0)
+                        ? formatDisplay(src.filter(i => calculatePurchaseCost(i) === 0).reduce((s, i) => s + calculateSupplierCost(i), 0))
+                        : '—'}
+                    </td>
+                    {/* Purchase Cost — when purchaseCost > 0 (including old data where both equal) */}
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-300">
+                      {tPurchase > 0 ? formatDisplay(tPurchase) : '—'}
+                    </td>
+                    {/* Misc Exp */}
+                    <td className="px-3 py-2 whitespace-nowrap text-red-400">{tMisc > 0 ? formatDisplay(tMisc) : '—'}</td>
+                    {/* Net Sale */}
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDisplay(tNet)}</td>
+                    {/* Paid */}
+                    <td className="px-3 py-2 whitespace-nowrap text-green-400">{tPaid > 0 ? formatDisplay(tPaid) : '—'}</td>
+                    {/* Amount Left */}
+                    <td className="px-3 py-2 whitespace-nowrap text-red-400">{tLeft > 0 ? formatDisplay(tLeft) : '—'}</td>
+                    {/* Delivery Status Actions = 3 empty */}
+                    <td colSpan={3} className="px-3 py-2"></td>
+                  </tr>
+                </tfoot>
+              );
+            })()}
           </table>
         </div>
       </div>
@@ -609,10 +672,13 @@ export function InvoiceListView({
               )}
             </div>
             {[
-              { label: 'Total', value: selectionSummary.totalAmount, color: 'text-gray-900' },
-              { label: 'Net', value: selectionSummary.netAmount, color: 'text-gray-900' },
-              { label: 'Paid', value: selectionSummary.paidAmount, color: 'text-green-600' },
-              { label: 'Remaining', value: selectionSummary.remainingAmount, color: 'text-red-600' },
+              { label: 'Amount',        value: selectionSummary.totalAmount,    color: 'text-gray-900' },
+              { label: 'Supplier Cost', value: selectionSummary.supplierCost, color: 'text-gray-700' },
+              { label: 'Purchase Cost', value: selectionSummary.purchaseCost, color: 'text-gray-700' },
+              { label: 'Misc Exp',      value: selectionSummary.miscExpense,    color: 'text-red-600'  },
+              { label: 'Net Sale',      value: selectionSummary.netAmount,      color: 'text-gray-900' },
+              { label: 'Paid',          value: selectionSummary.paidAmount,     color: 'text-green-600'},
+              { label: 'Amount Left',   value: selectionSummary.remainingAmount,color: 'text-red-600'  },
             ].map(s => (
               <div key={s.label} className="shrink-0">
                 <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{s.label}</div>
@@ -823,7 +889,7 @@ export function InvoiceListView({
                 <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-1">
                   <span className="text-base font-bold text-gray-900">Net Total</span>
                   <span className="text-2xl font-bold text-gray-800">
-                    {formatDisplay(viewingInvoice.totalAmount)}
+                    {formatDisplay(viewingInvoice.totalAmount - (viewingInvoice.deductionCharges || 0))}
                   </span>
                 </div>
               </div>

@@ -26,6 +26,8 @@ import {
   InventoryReturnWrapper, DamagedInventoryWrapper, InventoryReportWrapper,
 } from './modules/inventory';
 import { InvoiceListWrapper, InvoiceFormWrapper, InvoiceDeleteWrapper, InvoiceReportWrapper, DeletedInvoicesWrapper } from './modules/invoices';
+import { DummyInvoiceListView }    from './modules/invoices/views/DummyInvoiceListView';
+import { DummyInvoiceFormWrapper } from './modules/invoices/views/DummyInvoiceFormWrapper';
 import { AgainstInvoiceWrapper } from './modules/against-the-invoice';
 import {
   TransactionListWrapper, TransactionCreateWrapper, TransactionEditWrapper,
@@ -149,7 +151,9 @@ function InvoiceDeleteRoute() { return <InvoiceDeleteWrapper />; }
 function InvoiceReportRoute() { return <InvoiceReportWrapper />; }
 function DeletedInvoicesRoute() { return <DeletedInvoicesWrapper />; }
 
-function AgainstInvoiceRoute() { return <AgainstInvoiceWrapper />; }
+function AgainstInvoiceRoute()      { return <AgainstInvoiceWrapper />; }
+function DummyInvoiceListRoute()    { return <DummyInvoiceListView />; }
+function DummyInvoiceFormRoute()    { return <DummyInvoiceFormWrapper />; }
 
 function TransactionListRoute()   { return <TransactionListWrapper />; }
 function TransactionCreateRoute() { return <TransactionCreateWrapper />; }
@@ -265,6 +269,9 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Invoice"><InvoiceDeleteRoute /></ScreenProtectedRoute> },
       { path: 'reports',    element: <ScreenProtectedRoute requiredScreen="Invoice Reports"><InvoiceReportRoute /></ScreenProtectedRoute> },
       { path: 'deleted',    element: <ScreenProtectedRoute requiredScreen="Deleted Invoices"><DeletedInvoicesRoute /></ScreenProtectedRoute> },
+      { path: 'dummy',        element: <DummyInvoiceListRoute /> },
+      { path: 'dummy/new',    element: <DummyInvoiceFormRoute /> },
+      { path: 'dummy/:id',    element: <DummyInvoiceFormRoute /> },
     ],
   },
   {

@@ -4,6 +4,7 @@ import {
   LayoutDashboard, ChevronDown, ChevronRight, Package, FileText,
   DollarSign, Percent, Calculator, TrendingUp, BarChart2,
   ArrowLeftRight, PlusCircle, Clock, Building2, ArrowRightLeft, Wallet, Activity,
+  FilePlus, List,
 } from 'lucide-react';
 
 import { useAuth } from '../providers/context/AuthContext';
@@ -13,6 +14,7 @@ import type { Screen } from '../modules/user-management/models/userService';
 const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'inventory-entry':      'Inventory Dashboard',
   'invoices':             'Invoices List',
+  'dummy-invoices':        'Invoices List',
   'salary':               'Salary Dashboard',
   'commission-overview':  'Commission Slabs',
   'commission-slabs':     'Commission Slabs',
@@ -47,8 +49,14 @@ const menuItems = [
       { id: 'bank-activity',    name: 'Activity Report', icon: Activity,       path: '/banking/activity' },
     ],
   },
-  { id: 'inventory-entry', name: 'Inventory', icon: Package,    path: '/inventory' },
-  { id: 'invoices',        name: 'Invoices',  icon: FileText,   path: '/invoices' },
+  { id: 'inventory-entry', name: 'Inventory', icon: Package, path: '/inventory' },
+  {
+    id: 'invoices', name: 'Invoices', icon: FileText,
+    children: [
+      { id: 'invoices',       name: 'All Invoices',      icon: List,     path: '/invoices' },
+      { id: 'dummy-invoices', name: 'Dummy Invoices',    icon: FilePlus, path: '/invoices/dummy' },
+    ],
+  },
   { id: 'salary',          name: 'Salaries',  icon: DollarSign, path: '/salary' },
   {
     id: 'commission', name: 'Commission', icon: Percent,
@@ -62,7 +70,7 @@ const menuItems = [
 ];
 
 export function Sidebar() {
-  const [expanded, setExpanded] = useState<string[]>(['transactions', 'commission']);
+  const [expanded, setExpanded] = useState<string[]>(['transactions', 'commission', 'invoices']);
   const { role, permissions } = useAuth();
   const { hasAnyReportPermission } = useUserPermissions();
 
