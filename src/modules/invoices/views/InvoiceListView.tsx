@@ -1,6 +1,6 @@
 // Invoice Module - List View
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,7 +20,7 @@ import {
   calculateSupplierCost, calculatePurchaseCost, calculateMiscExpense,
   calculateNetAmount, calculatePaidAmount, calculateRemainingAmount,
 } from '../models/invoiceService';
-import { downloadInvoicePdf } from '../models/invoicePdfService';
+import { downloadInvoicePdf, generateInvoicePdf } from '../models/invoicePdfService';
 
 interface Props {
   invoices: Invoice[];
@@ -130,6 +130,7 @@ function InvoiceMultiFilter({ label, selected, onChange, options, displayName }:
         </div>
       )}
     </div>
+
   );
 }
 
@@ -334,6 +335,29 @@ export function InvoiceListView({
     }
   };
 
+  // PDF preview state
+  const [previewUrl,     setPreviewUrl]     = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewRef = useRef<HTMLIFrameElement>(null);
+
+  const openPdfPreview = useCallback(async (invoice: Invoice) => {
+    setPreviewLoading(true);
+    setPreviewUrl(null);
+    try {
+      const blob = await generateInvoicePdf(invoice);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch {
+      toast.error('Failed to generate PDF preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
+
+  const closePdfPreview = useCallback(() => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+  }, [previewUrl]);
+
   const hasActiveFilters =
     !!filters.searchTerm ||
     (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : filters.statusFilter !== 'all') ||
@@ -505,8 +529,19 @@ export function InvoiceListView({
                     ) : <span className="text-gray-300 text-sm">—</span>}
                   </td>
 
-                  <td className="px-3 py-3 text-gray-600">
-                    {invoice.products.length} item(s)
+                  <td className="px-3 py-3" style={{ maxWidth: 200 }}>
+                    {invoice.products.map((p: any, pi: number) => (
+                      <div key={pi} style={{ marginBottom: pi < invoice.products.length - 1 ? 4 : 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
+                          {p.productName || p.modelName || '—'}
+                        </div>
+                        {p.serialNumbers?.length > 0 && (
+                          <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
+                            {p.serialNumbers.slice(0, 2).join(', ')}{p.serialNumbers.length > 2 ? ` +${p.serialNumbers.length - 2}` : ''}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </td>
 
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">
@@ -587,8 +622,8 @@ export function InvoiceListView({
 
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => onViewInvoice(invoice)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View">
+                      <button onClick={() => openPdfPreview(invoice)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View PDF">
                         <Eye size={15} />
                       </button>
 
@@ -904,6 +939,39 @@ export function InvoiceListView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {(previewUrl || previewLoading) && createPortal(
+        <div onClick={closePdfPreview}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: '82vw', maxWidth: 960, height: '90vh', backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Invoice Preview</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {previewUrl && (
+                  <button onClick={() => { const a = document.createElement('a'); a.href = previewUrl!; a.download = 'invoice.pdf'; a.click(); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 7, border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    <FileDown size={14} /> Download
+                  </button>
+                )}
+                <button onClick={closePdfPreview}
+                  style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 18, fontWeight: 700 }}>
+                  ×
+                </button>
+              </div>
+            </div>
+            {previewLoading ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#64748b', fontSize: 14 }}>
+                <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} /> Generating PDF…
+              </div>
+            ) : previewUrl ? (
+              <iframe ref={previewRef} src={previewUrl} style={{ flex: 1, border: 'none', width: '100%' }} title="Invoice PDF Preview" />
+            ) : null}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

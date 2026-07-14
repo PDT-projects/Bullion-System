@@ -1,10 +1,10 @@
 // Dummy Invoice Module - List View
 // Shows all dummy/proforma/booking/quotation invoices
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Eye, FileText, Loader2, Download } from 'lucide-react';
-import { downloadInvoicePdf } from '../models/invoicePdfService';
+import { downloadInvoicePdf, generateInvoicePdf } from '../models/invoicePdfService';
 import { DummyInvoice } from '../models/DummyInvoiceFirebaseService';
 import { DummyInvoiceFirebaseService, DummyInvoice, DummyInvoiceType } from '../models/DummyInvoiceFirebaseService';
 import { toast } from 'sonner';
@@ -30,6 +30,50 @@ export function DummyInvoiceListView() {
   const [invoices, setInvoices]   = useState<DummyInvoice[]>([]);
   const [loading,  setLoading]    = useState(true);
   const [typeFilter, setTypeFilter] = useState<DummyInvoiceType | 'All'>('All');
+
+  const [pdfUrl,     setPdfUrl]     = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const openPdfPreview = async (inv: DummyInvoice) => {
+    setPdfLoading(true);
+    setPdfUrl(null);
+    try {
+      const invoiceForPdf: any = {
+        id: inv.id, invoiceNumber: inv.invoiceNumber, date: inv.date,
+        status: 'Draft', deliveryStatus: 'Self-collect',
+        customerName: inv.customerName || '', customerPhone: inv.customerPhone || '',
+        customerPhone2: inv.customerPhone2, customerCNIC: inv.customerCNIC || '',
+        customerCity: inv.customerCity || '', customerProvince: inv.customerProvince || '',
+        customerAddress: inv.customerAddress, salesperson: inv.salesperson,
+        totalAmount: inv.totalAmount || 0,
+        paidAmount: 0, remainingAmount: inv.totalAmount || 0, paymentStatus: 'Unpaid',
+        payments: [],
+        products: inv.products.map((p, i) => ({
+          id: p.id || String(i), productId: '', productName: p.productName,
+          brandName: '', modelName: p.productName, category: '',
+          description: p.description || '', quantity: p.quantity,
+          price: p.unitPrice, total: p.total, serialNumbers: [], currency: 'AED',
+        })),
+        exchangeWarrantyNote: inv.notes || '', selectedCurrencies: ['AED'],
+        supplierCostTotal: 0, purchaseCostTotal: 0, miscExpense: 0,
+        deductionCharges: 0, cargoAmount: 0, customsAmount: 0, agentAmount: 0,
+        branch: '', digitalStamp: false,
+      };
+      const blob = await generateInvoicePdf(invoiceForPdf);
+      const url  = URL.createObjectURL(blob);
+      setPdfUrl(url);
+    } catch (err: any) {
+      toast.error('Failed to generate PDF preview');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const closePdf = () => {
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    setPdfUrl(null);
+  };
 
   const load = () => {
     setLoading(true);
@@ -196,8 +240,8 @@ export function DummyInvoiceListView() {
                     </td>
                     <td style={{ padding: '10px 14px' }}>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => navigate(`/invoices/dummy/${inv.id}`)}
-                          title="View / Edit"
+                        <button onClick={() => openPdfPreview(inv)}
+                          title="View PDF"
                           style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                           <Eye size={13} color="#64748b" />
                         </button>
@@ -215,6 +259,40 @@ export function DummyInvoiceListView() {
           </table>
         )}
       </div>
+      {/* PDF Preview Modal */}
+      {(pdfUrl || pdfLoading) && (
+        <div onClick={closePdf}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: '80vw', maxWidth: 900, height: '90vh', backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
+            {/* Modal header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Invoice Preview</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {pdfUrl && (
+                  <button onClick={() => { const a = document.createElement('a'); a.href = pdfUrl!; a.download = 'invoice.pdf'; a.click(); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 7, border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    <Download size={14} /> Download
+                  </button>
+                )}
+                <button onClick={closePdf}
+                  style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 16 }}>
+                  ×
+                </button>
+              </div>
+            </div>
+            {/* PDF iframe */}
+            {pdfLoading ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#64748b' }}>
+                <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} /> Generating PDF…
+              </div>
+            ) : pdfUrl ? (
+              <iframe ref={iframeRef} src={pdfUrl} style={{ flex: 1, border: 'none', width: '100%' }} title="Invoice PDF" />
+            ) : null}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
