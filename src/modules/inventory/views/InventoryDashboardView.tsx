@@ -164,16 +164,20 @@ export function InventoryDashboardView({
   };
 
   // ── Single-value filters (non-multi) ─────────────────────────────────────
-  const [statusF,    setStatusF]    = useState('');
-  const [ownershipF, setOwnershipF] = useState('');
-
-  // Apply single-value filters on top of the VM's filtered rows
-  const displayed = useMemo(() => {
-    let arr = vm.filteredRows;
-    if (statusF)    arr = arr.filter(r => r.currentStatus === statusF);
-    if (ownershipF) arr = arr.filter(r => r.ownershipType === ownershipF);
-    return arr;
-  }, [vm.filteredRows, statusF, ownershipF]);
+  // Explicitly depend on all VM filter states so React re-renders correctly
+  const displayed = useMemo(() => vm.filteredRows, [
+    vm.filteredRows,
+    vm.statusFilter,
+    vm.ownershipFilter,
+    vm.brandFilter,
+    vm.modelFilter,
+    vm.typeFilter,
+    vm.locationFilter,
+    vm.conditionFilter,
+    vm.search,
+    vm.dateFrom,
+    vm.dateTo,
+  ]);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const totalRows     = vm.rows.length;
@@ -192,9 +196,9 @@ export function InventoryDashboardView({
   const fmtAED = (n: number) => n > 0 ? `د.إ ${Math.round(n).toLocaleString('en-AE')}` : '—';
 
   // ── Active filter count ───────────────────────────────────────────────────
-  const activeFilters = vm.activeFilterCount + (statusF ? 1 : 0) + (ownershipF ? 1 : 0);
+  const activeFilters = vm.activeFilterCount;
 
-  const clearAll = () => { vm.clearFilters(); setStatusF(''); setOwnershipF(''); };
+  const clearAll = () => { vm.clearFilters(); };
 
   // ── Quick action cards ────────────────────────────────────────────────────
   const quickActions = [
@@ -285,10 +289,10 @@ export function InventoryDashboardView({
               onChange={v => vm.setLocationFilter(v[v.length - 1] || '')} options={vm.locationOptions} />
             <MultiFilter label="Condition" selected={vm.conditionFilter ? [vm.conditionFilter] : []}
               onChange={v => vm.setConditionFilter(v[v.length - 1] || '')} options={vm.conditionOptions} />
-            <MultiFilter label="Status"    selected={statusF ? [statusF] : []}
-              onChange={v => setStatusF(v[v.length - 1] || '')} options={['In Stock', 'Sold']} />
-            <MultiFilter label="Ownership" selected={ownershipF ? [ownershipF] : []}
-              onChange={v => setOwnershipF(v[v.length - 1] || '')} options={['Owned', 'Credit']} />
+            <MultiFilter label="Status"    selected={vm.statusFilter ? [vm.statusFilter] : []}
+              onChange={v => vm.setStatusFilter(v[v.length - 1] || '')} options={['In Stock', 'Sold']} />
+            <MultiFilter label="Ownership" selected={vm.ownershipFilter ? [vm.ownershipFilter] : []}
+              onChange={v => vm.setOwnershipFilter(v[v.length - 1] || '')} options={['Owned', 'Credit']} />
 
             {/* Date range */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 130 }}>
