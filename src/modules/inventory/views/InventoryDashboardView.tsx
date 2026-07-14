@@ -177,6 +177,7 @@ export function InventoryDashboardView({
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const totalRows     = vm.rows.length;
+  const totalInStock  = vm.rows.filter(r => r.currentStatus !== 'Sold').length;
   const ownedInStock  = vm.rows.filter(r => r.ownershipType !== 'Credit' && r.currentStatus !== 'Sold').length;
   const creditInStock = vm.rows.filter(r => r.ownershipType === 'Credit' && r.currentStatus !== 'Sold').length;
   const inTransit     = transfers.filter(t => t.status === 'In Transit' || t.status === 'Pending').length;
@@ -200,7 +201,6 @@ export function InventoryDashboardView({
     { label: 'Add New',      icon: Plus,           onClick: onAddNewInventory,  iconColor: '#0f172a', iconBg: '#f1f5f9', border: '#cbd5e1', hoverBorder: '#334155', hoverBg: '#f1f5f9' },
     { label: 'Add Returned', icon: RotateCcw,      onClick: onAddReturnedInventory, iconColor: '#d97706', iconBg: '#fffbeb', border: '#fde68a', hoverBorder: '#f59e0b', hoverBg: '#fffbeb' },
     { label: 'Transfer',     icon: ArrowLeftRight, onClick: onViewTransfer,     iconColor: '#1d4ed8', iconBg: '#eff6ff', border: '#bfdbfe', hoverBorder: '#3b82f6', hoverBg: '#eff6ff' },
-    { label: 'Payables',     icon: Wallet,         onClick: onViewPayables,     iconColor: '#b45309', iconBg: '#fffbeb', border: '#fde68a', hoverBorder: '#d97706', hoverBg: '#fffbeb' },
     { label: 'Damaged',      icon: AlertTriangle,  onClick: () => navigate('/inventory/damaged'), iconColor: '#b91c1c', iconBg: '#fef2f2', border: '#fecaca', hoverBorder: '#ef4444', hoverBg: '#fef2f2' },
     { label: 'Deleted',      icon: Trash2,         onClick: onViewDeleted,      iconColor: '#64748b', iconBg: '#f8fafc', border: '#e2e8f0', hoverBorder: '#94a3b8', hoverBg: '#f1f5f9' },
   ];
@@ -246,22 +246,6 @@ export function InventoryDashboardView({
               </button>
             );
           })}
-        </div>
-
-        {/* Stat cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          {[
-            { label: 'Total Serials',    value: String(totalRows),     sub: 'all items',              color: '#0f172a', accent: '#e2e8f0' },
-            { label: 'Owned — In Stock',  value: String(ownedInStock),  sub: 'against payment, unsold', color: '#15803d', accent: '#bbf7d0' },
-            { label: 'Credit — In Stock', value: String(creditInStock), sub: 'supplier credit, unsold',  color: '#b45309', accent: '#fde68a' },
-            { label: 'In Transit',        value: String(inTransit),     sub: 'pending receipt',         color: '#1d4ed8', accent: '#bfdbfe' },
-          ].map(s => (
-            <div key={s.label} style={{ backgroundColor: '#fff', border: `1px solid ${s.accent}`, borderTop: `3px solid ${s.accent}`, borderRadius: 10, padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>{s.label}</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: s.color, lineHeight: 1 }}>{vm.isLoading ? '—' : s.value}</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>{s.sub}</div>
-            </div>
-          ))}
         </div>
 
         {/* Always-visible filter bar */}
