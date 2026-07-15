@@ -533,7 +533,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                   <input type="tel" value={custPhone} onChange={e=>setCustPhone(e.target.value)} style={iSty} />
                 </div>
                 <div>
-                  <label style={lbl}>Identity / CNIC</label>
+                  <label style={lbl}>Identity</label>
                   <input value={custCNIC} onChange={e=>setCustCNIC(e.target.value)} style={iSty} />
                 </div>
               </div>
