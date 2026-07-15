@@ -205,7 +205,7 @@ export const InventoryTypeSelectionView: React.FC<any> = ({ handleBack }) => {
   // Load models (with costPrice + description) when brand changes
   useEffect(() => {
     if (!brandName.trim()) { setModelSuggestions([]); return; }
-    InventoryFirebaseService.fetchModelsByBrandName(brandName.trim())
+    BrandModelFirebaseService.fetchModelsByBrandName(brandName.trim())
       .then(async models => {
         // Enrich each model with description from latest matching product
         const enriched: ModelSuggestion[] = await Promise.all(models.map(async m => {

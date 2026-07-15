@@ -1,6 +1,6 @@
 // Invoice Module - List View
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,7 +12,7 @@ function formatAed(amount: number): string {
 import {
   FileText, Plus, Search, Eye, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin, Trash2,
-  Pencil, Banknote, Landmark, ChevronDown,
+  Pencil, Banknote, Landmark, ChevronDown, Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Invoice, InvoiceStats, InvoiceFilters, InvoiceSelectionSummary, PaymentMode } from '../models/types';
@@ -21,6 +21,7 @@ import {
   calculateNetAmount, calculatePaidAmount, calculateRemainingAmount,
 } from '../models/invoiceService';
 import { downloadInvoicePdf, generateInvoicePdf } from '../models/invoicePdfService';
+import { useInvoiceFormViewModel } from '../viewModels/useInvoiceFormViewModel';
 
 interface Props {
   invoices: Invoice[];
@@ -294,6 +295,510 @@ function PaymentModal({
   );
 }
 
+
+// ── Quick Invoice Creation Modal ─────────────────────────────────────────────
+function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const vm = useInvoiceFormViewModel();
+
+  // ── Products: fetch directly (don't rely on vm's async load) ───────────────
+  const [products, setProducts]   = React.useState<any[]>([]);
+  const [prodLoading, setProdLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    import('firebase/firestore').then(({ collection, getDocs, query, where, orderBy }) => {
+      import('../../../api/firebase/firebase').then(({ db }) => {
+        getDocs(query(collection(db, 'products'), where('stock', '>', 0)))
+          .then(snap => {
+            const rows = snap.docs.map(d => {
+              const data = d.data() as any;
+              return {
+                id: d.id,
+                brandName:     data.brandName || '',
+                modelName:     data.modelName || '',
+                category:      data.category  || '',
+                sellPrice:     data.sellPrice  || data.salePrice || data.price || 0,
+                stock:         data.stock      || 0,
+                serialNumbers: data.serialNumbers || [],
+                serialStatus:  data.serialStatus  || {},
+                supplierCost:  data.supplierCost  || 0,
+                purchaseCost:  data.purchaseCost  || 0,
+                ownershipType: data.ownershipType || 'Owned',
+                description:   data.description   || '',
+              };
+            });
+            setProducts(rows);
+          })
+          .catch(() => setProducts([]))
+          .finally(() => setProdLoading(false));
+      });
+    });
+  }, []);
+
+  // ── Customer ──────────────────────────────────────────────────────────────
+  // Step-by-step entry: user types a field, presses Enter to advance
+  const [custStep,     setCustStep]     = React.useState(0); // which field is active
+  const [custName,     setCustName]     = React.useState('');
+  const [custPhone,    setCustPhone]    = React.useState('');
+  const [custPhone2,   setCustPhone2]   = React.useState('');
+  const [custCNIC,     setCustCNIC]     = React.useState('');
+  const [custCity,     setCustCity]     = React.useState('');
+  const [custProvince, setCustProvince] = React.useState('');
+  const [custAddress,  setCustAddress]  = React.useState('');
+  const [custSaved,    setCustSaved]    = React.useState(false);
+  const [showSugg,     setShowSugg]     = React.useState(false);
+  const [savingCust,   setSavingCust]   = React.useState(false);
+
+  const savedCustomers: any[] = (vm as any).savedCustomers || [];
+  const custSugg = React.useMemo(() => {
+    const q = custName.toLowerCase().trim();
+    if (!q || q.length < 1) return savedCustomers.slice(0, 5);
+    return savedCustomers.filter((c: any) =>
+      c.customerName?.toLowerCase().includes(q) || c.customerPhone?.includes(q)
+    ).slice(0, 6);
+  }, [custName, savedCustomers]);
+
+  const fillCustomer = (c: any) => {
+    setCustName(c.customerName || '');
+    setCustPhone(c.customerPhone || '');
+    setCustPhone2(c.customerPhone2 || '');
+    setCustCNIC(c.customerCNIC || '');
+    setCustCity(c.customerCity || '');
+    setCustProvince(c.customerProvince || '');
+    setCustAddress(c.customerAddress || '');
+    setCustSaved(true);
+    setShowSugg(false);
+    setCustStep(7); // all filled
+  };
+
+  const custFields = [
+    { key: 'name',     label: 'Customer Name',    val: custName,     set: setCustName,     type: 'text',   required: true  },
+    { key: 'phone',    label: 'Phone Number',      val: custPhone,    set: setCustPhone,    type: 'tel',    required: true  },
+    { key: 'phone2',   label: 'Second Phone',      val: custPhone2,   set: setCustPhone2,   type: 'tel',    required: false },
+    { key: 'cnic',     label: 'Identity / CNIC',   val: custCNIC,     set: setCustCNIC,     type: 'text',   required: false },
+    { key: 'city',     label: 'City',              val: custCity,     set: setCustCity,     type: 'text',   required: false },
+    { key: 'province', label: 'Country',           val: custProvince, set: setCustProvince, type: 'text',   required: false },
+    { key: 'address',  label: 'Address',           val: custAddress,  set: setCustAddress,  type: 'text',   required: false },
+  ];
+
+  const saveCustomer = async () => {
+    if (!custName.trim() || !custPhone.trim()) { toast.error('Name and phone required'); return; }
+    setSavingCust(true);
+    try {
+      const { CustomerFirebaseService } = await import('../models/CustomerFirebaseService');
+      await CustomerFirebaseService.upsertCustomer({
+        customerName: custName, customerPhone: custPhone,
+        customerPhone2: custPhone2 || undefined,
+        customerCNIC: custCNIC || '', customerCity: custCity || '',
+        customerProvince: custProvince || '',
+        customerAddress: custAddress || undefined,
+        exchangeWarrantyNote: '',
+      } as any);
+      setCustSaved(true);
+      toast.success('Customer saved to book');
+    } catch (err: any) {
+      toast.error('Failed to save customer');
+    } finally {
+      setSavingCust(false);
+    }
+  };
+
+  // ── Salesperson ────────────────────────────────────────────────────────────
+  const [salesperson, setSalesperson] = React.useState('');
+  const [showSpSugg,  setShowSpSugg]  = React.useState(false);
+  const savedSps: string[] = (vm as any).savedSalespersons || [];
+  const spSugg = salesperson.trim()
+    ? savedSps.filter(s => s.toLowerCase().includes(salesperson.toLowerCase()))
+    : savedSps;
+
+  // ── Lines ──────────────────────────────────────────────────────────────────
+  type Line = { id: string; productId: string; serial: string; qty: number; price: number };
+  const [lines, setLines] = React.useState<Line[]>([
+    { id: '1', productId: '', serial: '', qty: 1, price: 0 }
+  ]);
+
+  const addLine = () => setLines(p => [...p, { id: String(Date.now()), productId: '', serial: '', qty: 1, price: 0 }]);
+  const removeLine = (id: string) => setLines(p => p.length > 1 ? p.filter(l => l.id !== id) : p);
+  const updateLine = (id: string, field: keyof Line, val: any) =>
+    setLines(p => p.map(l => {
+      if (l.id !== id) return l;
+      const u = { ...l, [field]: val };
+      if (field === 'productId') {
+        const prod = products.find((x: any) => x.id === val);
+        u.price = prod?.sellPrice || 0;
+        u.serial = '';
+      }
+      return u;
+    }));
+
+  const getSerials = (productId: string, lineId: string) => {
+    const prod = products.find((x: any) => x.id === productId);
+    if (!prod) return [];
+    const used = lines.filter(l => l.id !== lineId && l.productId === productId).map(l => l.serial);
+    return (prod.serialNumbers || []).filter((s: string) =>
+      prod.serialStatus?.[s] !== 'Sold' && !used.includes(s)
+    );
+  };
+
+  const total = lines.reduce((s, l) => s + l.qty * l.price, 0);
+
+  // ── Payment ────────────────────────────────────────────────────────────────
+  const [isPaid,     setIsPaid]     = React.useState(false);
+  const [payChannel, setPayChannel] = React.useState<'cash'|'bank'>('cash');
+  const [bankId,     setBankId]     = React.useState('');
+  const banks: any[] = (vm as any).banks || [];
+
+  // ── Delivery ───────────────────────────────────────────────────────────────
+  const [delivery, setDelivery] = React.useState('Self-collect');
+
+  // ── Save invoice ───────────────────────────────────────────────────────────
+  const [saving, setSaving] = React.useState(false);
+
+  const handleGenerate = async () => {
+    if (!custName.trim())  { toast.error('Customer name is required'); return; }
+    if (!custPhone.trim()) { toast.error('Phone is required'); return; }
+    if (!lines.some(l => l.productId)) { toast.error('Select at least one product'); return; }
+    setSaving(true);
+    try {
+      const { InvoiceFirebaseService } = await import('../models/InvoiceFirebaseService');
+      const { CustomerFirebaseService } = await import('../models/CustomerFirebaseService');
+      const validLines = lines.filter(l => l.productId);
+      const invoiceProducts = validLines.map((l, i) => {
+        const p = products.find((x: any) => x.id === l.productId);
+        return {
+          id: String(i), productId: l.productId,
+          productName: p ? `${p.brandName} ${p.modelName}` : '',
+          brandName: p?.brandName || '', modelName: p?.modelName || '',
+          category: p?.category || '', description: p?.description || '',
+          quantity: l.qty, price: l.price, total: l.qty * l.price,
+          serialNumbers: l.serial ? [l.serial] : [],
+          currency: 'AED',
+          supplierCost: p?.supplierCost || 0,
+          purchaseCost: p?.purchaseCost || 0,
+          ownershipType: (p as any)?.ownershipType,
+        };
+      });
+      const selectedBank = isPaid && payChannel === 'bank' ? banks.find(b => b.id === bankId) : null;
+      const invoiceData: any = {
+        invoiceNumber: vm.formData.invoiceNumber || '',
+        date: vm.formData.date || new Date().toLocaleDateString('en-CA'),
+        customerName: custName, customerPhone: custPhone,
+        customerPhone2: custPhone2 || undefined,
+        customerCNIC: custCNIC || '', customerCity: custCity || '',
+        customerProvince: custProvince || '',
+        customerAddress: custAddress || undefined,
+        salesperson: salesperson || undefined,
+        exchangeWarrantyNote: '',
+        deliveryStatus: delivery, deliveryReceivedStatus: 'Pending',
+        status: isPaid ? 'Paid' : 'Unpaid',
+        paymentStatus: isPaid ? 'paid' : 'unpaid',
+        collectionMethod: isPaid ? (payChannel === 'cash' ? 'Cash' : 'Bank Transfer') : 'Unpaid',
+        bankId: selectedBank?.id, bankName: selectedBank?.name,
+        payments: isPaid ? [{ amount: total, method: payChannel === 'cash' ? 'Cash' : 'Bank Transfer', date: new Date().toISOString() }] : [],
+        paidAmount: isPaid ? total : 0, remainingAmount: isPaid ? 0 : total, totalAmount: total,
+        supplierCostTotal: invoiceProducts.reduce((s, p) => s + (p.supplierCost||0)*p.quantity, 0),
+        purchaseCostTotal: invoiceProducts.reduce((s, p) => s + (p.purchaseCost||0)*p.quantity, 0),
+        miscExpense: 0, deductionCharges: 0, cargoAmount: 0, customsAmount: 0, agentAmount: 0,
+        selectedCurrencies: ['AED'], branch: '', digitalStamp: false,
+        products: invoiceProducts,
+      };
+      await InvoiceFirebaseService.createInvoice(invoiceData);
+      if (!custSaved) {
+        await CustomerFirebaseService.upsertCustomer({
+          customerName: custName, customerPhone: custPhone,
+          customerPhone2: custPhone2||undefined, customerCNIC: custCNIC||'',
+          customerCity: custCity||'', customerProvince: custProvince||'',
+          customerAddress: custAddress||undefined, exchangeWarrantyNote: '',
+        } as any).catch(() => {});
+      }
+      toast.success(`✅ Invoice ${invoiceData.invoiceNumber} created`);
+      onSaved(); onClose();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Shared styles ─────────────────────────────────────────────────────────
+  const iSty: React.CSSProperties = {
+    width: '100%', border: '1px solid #e2e8f0', borderRadius: 8,
+    padding: '9px 12px', fontSize: 13, color: '#111827',
+    backgroundColor: '#fff', outline: 'none', boxSizing: 'border-box',
+  };
+  const lbl: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, color: '#94a3b8',
+    textTransform: 'uppercase', letterSpacing: '.06em',
+  };
+  const card: React.CSSProperties = {
+    backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px',
+  };
+  const tog = (active: boolean, col = '#111827'): React.CSSProperties => ({
+    flex:1, padding:'7px 14px', borderRadius:7, cursor:'pointer', fontSize:12, fontWeight:600,
+    border:`2px solid ${active ? col : '#e2e8f0'}`,
+    backgroundColor: active ? col : '#fff',
+    color: active ? '#fff' : '#6b7280',
+  });
+
+  return createPortal(
+    <div onClick={onClose}
+      style={{ position:'fixed', inset:0, backgroundColor:'rgba(15,23,42,0.5)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ width:640, maxWidth:'96vw', maxHeight:'92vh', backgroundColor:'#f8fafc', borderRadius:14, overflow:'hidden', boxShadow:'0 24px 64px rgba(0,0,0,0.35)', display:'flex', flexDirection:'column' }}>
+
+        {/* Header */}
+        <div style={{ backgroundColor:'#fff', padding:'14px 20px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+          <div>
+            <div style={{ fontSize:15, fontWeight:800, color:'#111827' }}>Create Invoice</div>
+            <div style={{ fontSize:11, color:'#94a3b8', marginTop:1 }}>{vm.formData.invoiceNumber||'Generating…'} · {vm.formData.date}</div>
+          </div>
+          <button onClick={onClose} style={{ width:28, height:28, borderRadius:6, border:'1px solid #e2e8f0', backgroundColor:'#f8fafc', cursor:'pointer', fontSize:18, color:'#6b7280', display:'flex', alignItems:'center', justifyContent:'center' }}>×</button>
+        </div>
+
+        <div style={{ flex:1, overflowY:'auto', padding:16, display:'flex', flexDirection:'column', gap:12 }}>
+
+          {/* ── Customer card ── */}
+          <div style={card}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <span style={{ fontSize:12, fontWeight:700, color:'#0f172a' }}>Customer</span>
+              {custSaved && <span style={{ fontSize:11, color:'#15803d', fontWeight:600, display:'flex', alignItems:'center', gap:4 }}><Check size={12}/> Saved to book</span>}
+            </div>
+
+            {/* Name with dropdown */}
+            <div style={{ position:'relative', marginBottom:10 }}>
+              <label style={{ ...lbl, display:'block', marginBottom:5 }}>Name *</label>
+              <input value={custName}
+                onChange={e => { setCustName(e.target.value); setShowSugg(true); setCustSaved(false); }}
+                onFocus={() => setShowSugg(true)}
+                onBlur={() => setTimeout(() => setShowSugg(false), 150)}
+                onKeyDown={e => { if (e.key === 'Enter') { setShowSugg(false); setCustStep(1); } }}
+                placeholder="Type name or search customer book…"
+                style={{ ...iSty, borderColor: custName ? '#0f172a' : '#e2e8f0', fontWeight: custName ? 600 : 400 }} />
+              {showSugg && (custName.length > 0 || savedCustomers.length > 0) && custSugg.length > 0 && (
+                <div style={{ position:'absolute', top:'calc(100% + 2px)', left:0, right:0, zIndex:99, backgroundColor:'#fff', border:'1px solid #e2e8f0', borderRadius:9, boxShadow:'0 8px 20px rgba(0,0,0,0.12)', maxHeight:160, overflowY:'auto' }}>
+                  <div style={{ padding:'5px 10px', borderBottom:'1px solid #f1f5f9', fontSize:9, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em' }}>Customer Book</div>
+                  {custSugg.map((s: any, i: number) => (
+                    <div key={i} onMouseDown={() => fillCustomer(s)}
+                      style={{ padding:'8px 12px', cursor:'pointer', borderBottom:'1px solid #f9fafb' }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor='#f8fafc'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor=''}>
+                      <div style={{ fontSize:13, fontWeight:600, color:'#111827' }}>{s.customerName}</div>
+                      <div style={{ fontSize:11, color:'#94a3b8' }}>{s.customerPhone}{s.customerCity?` · ${s.customerCity}`:''}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Phone — always visible */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom: custStep >= 1 ? 10 : 0 }}>
+              <div>
+                <label style={{ ...lbl, display:'block', marginBottom:4 }}>Phone *</label>
+                <input type="tel" value={custPhone}
+                  onChange={e => setCustPhone(e.target.value)}
+                  onKeyDown={e => { if (e.key==='Enter') setCustStep(s=>Math.max(s,2)); }}
+                  placeholder="+92 300…"
+                  style={{ ...iSty, fontSize:12, padding:'7px 10px' }} />
+              </div>
+              <div>
+                <label style={{ ...lbl, display:'block', marginBottom:4 }}>Second Phone</label>
+                <input type="tel" value={custPhone2} onChange={e=>setCustPhone2(e.target.value)}
+                  style={{ ...iSty, fontSize:12, padding:'7px 10px' }} />
+              </div>
+            </div>
+
+            {/* Expandable extra fields */}
+            {custStep >= 2 && (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                {[
+                  { label:'Identity / CNIC', val:custCNIC,     set:setCustCNIC },
+                  { label:'City',            val:custCity,     set:setCustCity },
+                  { label:'Country',         val:custProvince, set:setCustProvince },
+                  { label:'Address',         val:custAddress,  set:setCustAddress },
+                ].map(f => (
+                  <div key={f.label}>
+                    <label style={{ ...lbl, display:'block', marginBottom:4 }}>{f.label}</label>
+                    <input value={f.val} onChange={e=>f.set(e.target.value)}
+                      style={{ ...iSty, fontSize:12, padding:'7px 10px' }} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Controls */}
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              {custStep < 2 && (
+                <button type="button" onClick={()=>setCustStep(2)}
+                  style={{ fontSize:11, color:'#6366f1', border:'none', backgroundColor:'transparent', cursor:'pointer', fontWeight:600, padding:0 }}>
+                  + More details (CNIC, City, Address…)
+                </button>
+              )}
+              <div style={{ marginLeft:'auto' }}>
+                {!custSaved && custName.trim() && custPhone.trim() && (
+                  <button type="button" onClick={saveCustomer} disabled={savingCust}
+                    style={{ padding:'5px 12px', borderRadius:7, border:'1px solid #bbf7d0', backgroundColor:'#f0fdf4', color:'#15803d', fontSize:11, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+                    {savingCust ? <Loader2 size={12} style={{ animation:'spin 1s linear infinite' }}/> : <Check size={12}/>}
+                    Save to Customer Book
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Salesperson ── */}
+          <div style={{ ...card, position:'relative' }}>
+            <label style={{ ...lbl, display:'block', marginBottom:6 }}>Salesperson</label>
+            <input value={salesperson}
+              onChange={e => { setSalesperson(e.target.value); setShowSpSugg(true); }}
+              onFocus={() => setShowSpSugg(true)}
+              onBlur={() => setTimeout(() => setShowSpSugg(false), 150)}
+              placeholder="Type or select…" style={iSty} />
+            {showSpSugg && spSugg.length > 0 && (
+              <div style={{ position:'absolute', top:'calc(100% - 2px)', left:16, right:16, zIndex:99, backgroundColor:'#fff', border:'1px solid #e2e8f0', borderRadius:9, boxShadow:'0 8px 20px rgba(0,0,0,0.12)', maxHeight:130, overflowY:'auto' }}>
+                {spSugg.map((s, i) => (
+                  <div key={i} onMouseDown={() => { setSalesperson(s); setShowSpSugg(false); }}
+                    style={{ padding:'7px 12px', cursor:'pointer', fontSize:13, color:'#111827' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor='#f8fafc'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor=''}>{s}</div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Products ── */}
+          <div style={{ backgroundColor:'#fff', border:'1px solid #e2e8f0', borderRadius:10, overflow:'hidden' }}>
+            <div style={{ padding:'10px 14px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <span style={{ fontSize:12, fontWeight:700, color:'#0f172a' }}>Products</span>
+              <button onClick={addLine}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:6, border:'none', backgroundColor:'#0f172a', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                <Plus size={11}/> Add Product
+              </button>
+            </div>
+
+            {prodLoading ? (
+              <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:8, color:'#94a3b8', fontSize:13 }}>
+                <Loader2 size={15} style={{ animation:'spin 1s linear infinite' }}/> Loading inventory…
+              </div>
+            ) : products.length === 0 ? (
+              <div style={{ padding:'14px 16px', color:'#94a3b8', fontSize:13, textAlign:'center' }}>No in-stock products found</div>
+            ) : (
+              <>
+                <div style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 56px 88px 28px', gap:6, padding:'6px 14px', backgroundColor:'#f9fafb', borderBottom:'1px solid #e2e8f0' }}>
+                  {['Product','Serial No.','Qty','Price (AED)',''].map(h => (
+                    <div key={h} style={{ fontSize:9, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>{h}</div>
+                  ))}
+                </div>
+                {lines.map((l, i) => {
+                  const serials = getSerials(l.productId, l.id);
+                  return (
+                    <div key={l.id} style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 56px 88px 28px', gap:6, padding:'7px 14px', borderBottom: i < lines.length-1 ? '1px solid #f3f4f6' : 'none', alignItems:'center' }}>
+                      <select value={l.productId} onChange={e => updateLine(l.id,'productId',e.target.value)}
+                        style={{ ...iSty, fontSize:12, padding:'6px 8px' }}>
+                        <option value="">{products.length === 0 ? 'Loading inventory…' : `— Select product (${products.length} available) —`}</option>
+                        {products.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.brandName} {p.modelName} — AED {(p.sellPrice||0).toLocaleString()} ({p.stock} in stock)
+                          </option>
+                        ))}
+                      </select>
+                      <select value={l.serial} onChange={e => updateLine(l.id,'serial',e.target.value)}
+                        disabled={!l.productId || serials.length===0}
+                        style={{ ...iSty, fontSize:12, padding:'6px 8px', opacity:l.productId?1:0.4 }}>
+                        <option value="">— any —</option>
+                        {serials.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <input type="number" min={1} value={l.qty}
+                        onChange={e => updateLine(l.id,'qty',parseInt(e.target.value)||1)}
+                        style={{ ...iSty, fontSize:12, padding:'6px 4px', textAlign:'center' }}/>
+                      <input type="number" min={0} step="any" value={l.price||''}
+                        onChange={e => updateLine(l.id,'price',parseFloat(e.target.value)||0)}
+                        placeholder="0.00"
+                        style={{ ...iSty, fontSize:12, padding:'6px 4px', textAlign:'right' }}/>
+                      <button onClick={() => removeLine(l.id)} disabled={lines.length===1}
+                        style={{ border:'none', backgroundColor:'transparent', cursor:lines.length===1?'not-allowed':'pointer', opacity:lines.length===1?0.3:1, display:'flex' }}>
+                        <X size={14} color="#ef4444"/>
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+
+          {/* ── Delivery ── */}
+          <div style={card}>
+            <label style={{ ...lbl, display:'block', marginBottom:8 }}>Delivery Method</label>
+            <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
+              {['Self-collect','Courier','COD','Self Delivered'].map(v => (
+                <button key={v} onClick={() => setDelivery(v)}
+                  style={{ padding:'7px 13px', borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:600,
+                    border:`2px solid ${delivery===v?'#111827':'#e2e8f0'}`,
+                    backgroundColor:delivery===v?'#111827':'#fff',
+                    color:delivery===v?'#fff':'#6b7280' }}>{v}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Payment ── */}
+          <div style={card}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: isPaid ? 12 : 0 }}>
+              <span style={{ fontSize:12, fontWeight:700, color:'#0f172a' }}>Payment Received?</span>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => setIsPaid(false)} style={tog(!isPaid)}>Unpaid</button>
+                <button onClick={() => setIsPaid(true)}  style={tog(isPaid,'#15803d')}>Paid</button>
+              </div>
+            </div>
+            {isPaid && (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <div>
+                  <label style={{ ...lbl, display:'block', marginBottom:7 }}>Payment Channel</label>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={() => setPayChannel('cash')} style={tog(payChannel==='cash')}>💵 Cash in Hand</button>
+                    <button onClick={() => setPayChannel('bank')} style={tog(payChannel==='bank')}>🏦 Bank Transfer</button>
+                  </div>
+                </div>
+                {payChannel==='bank' && (
+                  <div>
+                    <label style={{ ...lbl, display:'block', marginBottom:6 }}>Bank Account</label>
+                    {banks.length===0
+                      ? <div style={{ fontSize:12, color:'#94a3b8', padding:'8px 12px', backgroundColor:'#f9fafb', borderRadius:7 }}>No banks added — go to Banking first</div>
+                      : <select value={bankId} onChange={e => setBankId(e.target.value)} style={iSty}>
+                          <option value="">Select bank…</option>
+                          {banks.map((b: any) => <option key={b.id} value={b.id}>{b.name} — AED {(b.balance||0).toLocaleString()}</option>)}
+                        </select>
+                    }
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Footer */}
+        <div style={{ backgroundColor:'#fff', borderTop:'1px solid #e2e8f0', padding:'12px 20px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+          <div style={{ fontSize:13, color:'#6b7280' }}>
+            Total: <strong style={{ color:'#111827', fontSize:16 }}>AED {total.toLocaleString('en-AE',{minimumFractionDigits:2})}</strong>
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={onClose}
+              style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #d1d5db', backgroundColor:'#fff', color:'#374151', fontWeight:600, fontSize:13, cursor:'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={handleGenerate} disabled={saving}
+              style={{ padding:'9px 22px', borderRadius:8, border:'none', backgroundColor:saving?'#94a3b8':'#111827', color:'#fff', fontWeight:700, fontSize:13, cursor:saving?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:7 }}>
+              {saving
+                ? <><Loader2 size={14} style={{ animation:'spin 1s linear infinite' }}/> Saving…</>
+                : <><Check size={14}/> Generate Invoice</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+
 export function InvoiceListView({
   invoices, filteredInvoices, stats, filters, viewingInvoice, isLoading,
   onSearch, onStatusFilter, onCityFilter, onSalespersonFilter,
@@ -358,6 +863,8 @@ export function InvoiceListView({
     setPreviewUrl(null);
   }, [previewUrl]);
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
   const hasActiveFilters =
     !!filters.searchTerm ||
     (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : filters.statusFilter !== 'all') ||
@@ -393,7 +900,7 @@ export function InvoiceListView({
             <Trash2 size={16} /> Deleted Invoices
           </button>
           <button
-            onClick={onCreateInvoice}
+            onClick={() => setShowCreateModal(true)}
             style={{ backgroundColor: '#1f2937', color: '#ffffff', border: '1px solid #374151' }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg active:scale-95 transition-all font-semibold shadow-md whitespace-nowrap flex-shrink-0">
             <Plus size={18} /> Create Invoice
@@ -939,6 +1446,14 @@ export function InvoiceListView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Quick Create Invoice Modal */}
+      {showCreateModal && (
+        <QuickInvoiceModal
+          onClose={() => setShowCreateModal(false)}
+          onSaved={() => { setShowCreateModal(false); }}
+        />
       )}
 
       {/* PDF Preview Modal */}

@@ -503,7 +503,8 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
       'lineTotal', 'line_total', 'subtotal'
     );
 
-    const convertedTotal = convertCurrency(total, 'PKR', primaryCurrency, rates);
+    // Use AED price directly — no currency conversion for product line totals
+    const convertedTotal = primaryCurrency === 'AED' ? total : convertCurrency(total, 'AED', primaryCurrency, rates);
 
     // ── Load thumbnail image ──────────────────────────────────────────────────
     // Tries imageUrls first (official field), then several known aliases, then
@@ -652,7 +653,7 @@ async function buildPdf(invoice: Invoice): Promise<Blob> {
 
   const totalLines = selectedCurrencies.map((currency) =>
     formatCurrency(
-      convertCurrency(invoice.totalAmount, 'PKR', currency, rates),
+      currency === 'AED' ? invoice.totalAmount : convertCurrency(invoice.totalAmount, 'AED', currency, rates),
       currency
     )
   );
