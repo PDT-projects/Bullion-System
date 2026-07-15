@@ -1066,9 +1066,13 @@ export function InvoiceListView({
                       return !hasSupplierOnly && purchaseCost > 0 ? formatDisplay(purchaseCost) : '—';
                     })()}
                   </td>
-                  {/* COGS = supplierCost + purchaseCost */}
+                  {/* COGS = whichever cost applies (mutually exclusive) */}
                   <td className="px-3 py-3 whitespace-nowrap font-semibold" style={{ color: '#7c3aed' }}>
-                    {(supplierCost + purchaseCost) > 0 ? formatDisplay(supplierCost + purchaseCost) : '—'}
+                    {(() => {
+                      const hasSupplierOnly = supplierCost > 0 && purchaseCost === 0;
+                      const cogs = hasSupplierOnly ? supplierCost : purchaseCost;
+                      return cogs > 0 ? formatDisplay(cogs) : '—';
+                    })()}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(netSale)}</td>
@@ -1199,11 +1203,18 @@ export function InvoiceListView({
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Purchase</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8' }}>{tPurchase > 0 ? formatDisplay(tPurchase) : '—'}</div>
                     </td>
-                    {/* COGS */}
+                    {/* COGS — sum of whichever cost applies per invoice (mutually exclusive) */}
                     <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b', borderRight: '1px solid #1e293b' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>COGS</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#c4b5fd' }}>
-                        {(tSupplier + tPurchase) > 0 ? formatDisplay(tSupplier + tPurchase) : '—'}
+                        {(() => {
+                          const tCogs = src.reduce((s, i) => {
+                            const sc = calculateSupplierCost(i);
+                            const pc = calculatePurchaseCost(i);
+                            return s + (sc > 0 && pc === 0 ? sc : pc);
+                          }, 0);
+                          return tCogs > 0 ? formatDisplay(tCogs) : '—';
+                        })()}
                       </div>
                     </td>
                     {/* Misc Exp */}
