@@ -211,8 +211,9 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export const InventoryTypeSelectionView: React.FC<any> = () => {
-  const navigate = useNavigate();
+export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onClose?: () => void }> = ({ onClose }) => {
+  const navigate  = useNavigate();
+  const afterSave = () => { if (onClose) { onClose(); } else { navigate('/inventory'); } };
 
   // ── Ownership ─────────────────────────────────────────────────────────────
   const [ownership, setOwnership] = useState<'Owned'|'Credit'>('Owned');
@@ -268,7 +269,8 @@ export const InventoryTypeSelectionView: React.FC<any> = () => {
   const [supplierPaid, setSupplierPaid] = useState<number|''>('');
 
   const [txnId,    setTxnId]    = useState('');
-  const [saving,   setSaving]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     generateInventoryTransactionId().then(setTxnId).catch(() => setTxnId('TXN-'+Date.now()));
@@ -304,6 +306,7 @@ export const InventoryTypeSelectionView: React.FC<any> = () => {
     if (hasErr) { setRowErrors(errs); return; }
     setRowErrors({});
     setSaving(true);
+    setSaveError('');
 
     try {
       const manualDateIso = stockInDate ? new Date(stockInDate).toISOString() : undefined;
@@ -349,19 +352,32 @@ export const InventoryTypeSelectionView: React.FC<any> = () => {
           transactionId: txnId, paidAmount: effectivePaid || undefined, totalAmount,
         };
 
-        const created = await InventoryFirebaseService.createProduct(dto, payInfo);
+        console.log('[INV] Calling createProduct...', dto.brandName, dto.modelName, 'serials:', validSerials);
+        let created: any;
+        try {
+          created = await InventoryFirebaseService.createProduct(dto, payInfo);
+          console.log('[INV] ✅ Created product:', created?.id);
+        } catch (createErr: any) {
+          console.error('[INV] ❌ createProduct failed:', createErr?.message, createErr);
+          throw createErr;
+        }
         if (images.length > 0 && rows.indexOf(row) === 0) {
           try {
-            const urls = await uploadInventoryImages(images, (created as any).id);
-            await InventoryFirebaseService.updateProduct((created as any).id, { imageUrls: urls } as any);
-          } catch {}
+            const urls = await uploadInventoryImages(images, created?.id);
+            await InventoryFirebaseService.updateProduct(created?.id, { imageUrls: urls } as any);
+          } catch (imgErr) { console.warn('[INV] Image upload failed:', imgErr); }
         }
       }
 
+      console.log('[INV] All products saved successfully');
       toast.success(`✅ ${rows.length} product${rows.length > 1 ? 's' : ''} added to inventory`);
-      navigate('/inventory');
+      afterSave();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to save');
+      console.error('[INV] Save error:', err);
+      const msg = err?.message || 'Failed to save inventory';
+      setSaveError(msg);
+      toast.error(msg);
+      alert(`❌ Save failed: ${msg}`);
     } finally {
       setSaving(false);
     }
@@ -372,7 +388,7 @@ export const InventoryTypeSelectionView: React.FC<any> = () => {
 
       {/* Header */}
       <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate('/inventory')} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={() => afterSave()} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ArrowLeft size={17} color="#64748b" />
         </button>
         <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -590,16 +606,28 @@ export const InventoryTypeSelectionView: React.FC<any> = () => {
       </div>
 
       {/* Footer */}
-      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderTop: '1px solid #e2e8f0', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <button type="button" onClick={() => navigate('/inventory')} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #d1d5db', backgroundColor: '#f3f4f6', color: '#374151', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <ArrowLeft size={15} /> Cancel
-        </button>
-        <button type="button" onClick={handleSave} disabled={saving}
-          style={{ padding: '11px 28px', borderRadius: 8, border: 'none', backgroundColor: saving ? '#94a3b8' : '#15803d', color: '#fff', fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: saving ? 'none' : '0 2px 8px rgba(21,128,61,0.35)' }}>
-          {saving
-            ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
-            : <><Check size={16} /> Save {rows.length > 1 ? `All ${rows.length} Products` : 'Inventory'}</>}
-        </button>
+      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderTop: '1px solid #e2e8f0', padding: '14px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {saveError && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8 }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>Save Failed</div>
+              <div style={{ fontSize: 12, color: '#dc2626' }}>{saveError}</div>
+            </div>
+            <button onClick={() => setSaveError('')} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 16, flexShrink: 0 }}>×</button>
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button type="button" onClick={() => afterSave()} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #d1d5db', backgroundColor: '#f3f4f6', color: '#374151', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <ArrowLeft size={15} /> Cancel
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving}
+            style={{ padding: '11px 28px', borderRadius: 8, border: 'none', backgroundColor: saving ? '#94a3b8' : '#15803d', color: '#fff', fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: saving ? 'none' : '0 2px 8px rgba(21,128,61,0.35)' }}>
+            {saving
+              ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+              : <><Check size={16} /> Save {rows.length > 1 ? `All ${rows.length} Products` : 'Inventory'}</>}
+          </button>
+        </div>
       </div>
     </div>
   );

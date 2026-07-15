@@ -8,7 +8,8 @@
 //   Supplier Cost, Purchasing Cost, Sold Goods Payment)
 // • Checkboxes + sticky totals footer
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Package, Plus, RotateCcw, ArrowLeftRight, Wallet, AlertTriangle,
   Trash2, Search, X, MapPin, Loader2, ChevronDown,
@@ -16,6 +17,11 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useInventoryReportViewModel } from '../viewModels/useInventoryReportViewModel';
+import { InventoryTypeSelectionView } from './InventoryTypeSelectionView';
+import { InventoryReturnWrapper } from './InventoryReturnWrapper';
+import { DamagedInventoryWrapper } from './DamagedInventoryWrapper';
+import { DeletedInventoryWrapper } from './DeletedInventoryWrapper';
+import { ProductTransferCreateWrapper } from './ProductTransferCreateWrapper';
 import { useProductTransferViewModel } from '../viewModels/useProductTransferViewModel';
 import { InventoryReportRow } from '../models/types';
 
@@ -145,6 +151,24 @@ export function InventoryDashboardView({
   const vm = useInventoryReportViewModel();
   const { transfers } = useProductTransferViewModel();
 
+  // ── Popup state ───────────────────────────────────────────────────────────
+  type PopupType = 'add-new' | 'add-returned' | 'transfer' | 'damaged' | 'deleted' | null;
+  const [activePopup, setActivePopup] = useState<PopupType>(null);
+  const [prevPopup,   setPrevPopup]   = useState<PopupType>(null);
+
+  const closePopup = () => {
+    setPrevPopup(activePopup);
+    setActivePopup(null);
+  };
+
+  // Refresh inventory list whenever a popup closes
+  useEffect(() => {
+    if (prevPopup !== null) {
+      vm.refresh();
+      setPrevPopup(null);
+    }
+  }, [prevPopup]);
+
   // ── Checkbox state ────────────────────────────────────────────────────────
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const rowKey = (r: InventoryReportRow) => `${r.productId}-${r.serialNumber}`;
@@ -202,11 +226,11 @@ export function InventoryDashboardView({
 
   // ── Quick action cards ────────────────────────────────────────────────────
   const quickActions = [
-    { label: 'Add New',      icon: Plus,           onClick: onAddNewInventory,  iconColor: '#0f172a', iconBg: '#f1f5f9', border: '#cbd5e1', hoverBorder: '#334155', hoverBg: '#f1f5f9' },
-    { label: 'Add Returned', icon: RotateCcw,      onClick: onAddReturnedInventory, iconColor: '#d97706', iconBg: '#fffbeb', border: '#fde68a', hoverBorder: '#f59e0b', hoverBg: '#fffbeb' },
-    { label: 'Transfer',     icon: ArrowLeftRight, onClick: onViewTransfer,     iconColor: '#1d4ed8', iconBg: '#eff6ff', border: '#bfdbfe', hoverBorder: '#3b82f6', hoverBg: '#eff6ff' },
-    { label: 'Damaged',      icon: AlertTriangle,  onClick: () => navigate('/inventory/damaged'), iconColor: '#b91c1c', iconBg: '#fef2f2', border: '#fecaca', hoverBorder: '#ef4444', hoverBg: '#fef2f2' },
-    { label: 'Deleted',      icon: Trash2,         onClick: onViewDeleted,      iconColor: '#64748b', iconBg: '#f8fafc', border: '#e2e8f0', hoverBorder: '#94a3b8', hoverBg: '#f1f5f9' },
+    { label: 'Add New',      icon: Plus,           onClick: () => setActivePopup('add-new'),      iconColor: '#0f172a', iconBg: '#f1f5f9', border: '#cbd5e1', hoverBorder: '#334155', hoverBg: '#f1f5f9' },
+    { label: 'Add Returned', icon: RotateCcw,      onClick: () => setActivePopup('add-returned'), iconColor: '#d97706', iconBg: '#fffbeb', border: '#fde68a', hoverBorder: '#f59e0b', hoverBg: '#fffbeb' },
+    { label: 'Transfer',     icon: ArrowLeftRight, onClick: () => setActivePopup('transfer'),      iconColor: '#1d4ed8', iconBg: '#eff6ff', border: '#bfdbfe', hoverBorder: '#3b82f6', hoverBg: '#eff6ff' },
+    { label: 'Damaged',      icon: AlertTriangle,  onClick: () => setActivePopup('damaged'),       iconColor: '#b91c1c', iconBg: '#fef2f2', border: '#fecaca', hoverBorder: '#ef4444', hoverBg: '#fef2f2' },
+    { label: 'Deleted',      icon: Trash2,         onClick: () => setActivePopup('deleted'),       iconColor: '#64748b', iconBg: '#f8fafc', border: '#e2e8f0', hoverBorder: '#94a3b8', hoverBg: '#f1f5f9' },
   ];
 
   const HEADERS = [
@@ -435,6 +459,26 @@ export function InventoryDashboardView({
         </div>
 
       </div>
+
+      {/* ── Action Popups ── */}
+      {activePopup && createPortal(
+        <div onClick={closePopup}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: '90vw', maxWidth: 860, height: '88vh', backgroundColor: '#f8fafc', borderRadius: 14, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+            <button onClick={closePopup}
+              style={{ position: 'absolute', top: 12, right: 14, zIndex: 10, width: 30, height: 30, borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#64748b' }}>×</button>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {activePopup === 'add-new'      && <InventoryTypeSelectionView handleBack={closePopup} onClose={() => { closePopup(); setTimeout(() => vm.refresh(), 300); }} />}
+              {activePopup === 'add-returned' && <InventoryReturnWrapper />}
+              {activePopup === 'transfer'     && <ProductTransferCreateWrapper />}
+              {activePopup === 'damaged'      && <DamagedInventoryWrapper />}
+              {activePopup === 'deleted'      && <DeletedInventoryWrapper />}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
