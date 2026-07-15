@@ -961,7 +961,7 @@ export function InvoiceListView({
                 {[
                   'Invoice #', 'Date', 'Customer', 'Branch / City',
                   'Salesperson', 'Products', 'Amount (AED)',
-                  'Supplier Cost', 'Purchase Cost', 'Misc Exp',
+                  'Supplier Cost', 'Purchase Cost', 'COGS', 'Misc Exp',
                   'Net Sale', 'Paid', 'Amount Left',
                   'Delivery', 'Status', 'Actions',
                 ].map(h => (
@@ -972,7 +972,7 @@ export function InvoiceListView({
             <tbody className="divide-y divide-gray-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={17} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={18} className="px-4 py-14 text-center text-gray-400">
                     <FileText className="mx-auto mb-3 text-gray-300" size={44} />
                     <p className="font-medium text-gray-500">No invoices found</p>
                     <p className="text-xs mt-1">
@@ -1056,19 +1056,19 @@ export function InvoiceListView({
                   </td>
                   <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
                     {(() => {
-                      // Show supplier cost only when it's explicitly set AND different from purchase cost
-                      // (credit items: supplierCost > 0, purchaseCost = 0 after our fix)
-                      // For old data where both equal costPrice, treat as owned (purchase cost)
                       const hasSupplier = supplierCost > 0 && purchaseCost === 0;
                       return hasSupplier ? formatDisplay(supplierCost) : '—';
                     })()}
                   </td>
                   <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
                     {(() => {
-                      // Show purchase cost when owned OR when both are equal (old data fallback)
                       const hasSupplierOnly = supplierCost > 0 && purchaseCost === 0;
                       return !hasSupplierOnly && purchaseCost > 0 ? formatDisplay(purchaseCost) : '—';
                     })()}
+                  </td>
+                  {/* COGS = supplierCost + purchaseCost */}
+                  <td className="px-3 py-3 whitespace-nowrap font-semibold" style={{ color: '#7c3aed' }}>
+                    {(supplierCost + purchaseCost) > 0 ? formatDisplay(supplierCost + purchaseCost) : '—'}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(netSale)}</td>
@@ -1166,33 +1166,69 @@ export function InvoiceListView({
               const tLeft     = src.reduce((s, i) => s + calculateRemainingAmount(i), 0);
               return (
                 <tfoot>
-                  <tr className="bg-gray-900 text-white text-xs font-bold">
-                    {/* ☐ Invoice# Date Customer Branch Salesperson Products = 7 empty cols */}
-                    <td colSpan={7} className="px-3 py-2 text-gray-400 uppercase tracking-wide">
-                      {hasSelection ? `${src.length} selected` : `All ${src.length}`}
+                  <tr style={{ backgroundColor: '#0f172a' }}>
+                    {/* Label cell */}
+                    <td colSpan={7} style={{ padding: '0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                          {hasSelection ? `${src.length} selected` : `All ${src.length}`}
+                        </span>
+                        {hasSelection && (
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, backgroundColor: '#1e293b', color: '#94a3b8', fontWeight: 700 }}>
+                            of {filteredInvoices.length} total
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    {/* Amount */}
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDisplay(tTotal)}</td>
-                    {/* Supplier Cost — only when supplierCost > 0 and purchaseCost = 0 */}
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-300">
-                      {src.some(i => calculateSupplierCost(i) > 0 && calculatePurchaseCost(i) === 0)
-                        ? formatDisplay(src.filter(i => calculatePurchaseCost(i) === 0).reduce((s, i) => s + calculateSupplierCost(i), 0))
-                        : '—'}
+                    {/* Amount (AED) */}
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Amount</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{formatDisplay(tTotal)}</div>
                     </td>
-                    {/* Purchase Cost — when purchaseCost > 0 (including old data where both equal) */}
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-300">
-                      {tPurchase > 0 ? formatDisplay(tPurchase) : '—'}
+                    {/* Supplier Cost */}
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Supplier</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8' }}>
+                        {src.some(i => calculateSupplierCost(i) > 0 && calculatePurchaseCost(i) === 0)
+                          ? formatDisplay(src.filter(i => calculatePurchaseCost(i) === 0).reduce((s, i) => s + calculateSupplierCost(i), 0))
+                          : '—'}
+                      </div>
+                    </td>
+                    {/* Purchase Cost */}
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Purchase</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8' }}>{tPurchase > 0 ? formatDisplay(tPurchase) : '—'}</div>
+                    </td>
+                    {/* COGS */}
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b', borderRight: '1px solid #1e293b' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>COGS</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#c4b5fd' }}>
+                        {(tSupplier + tPurchase) > 0 ? formatDisplay(tSupplier + tPurchase) : '—'}
+                      </div>
                     </td>
                     {/* Misc Exp */}
-                    <td className="px-3 py-2 whitespace-nowrap text-red-400">{tMisc > 0 ? formatDisplay(tMisc) : '—'}</td>
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Misc Exp</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#fca5a5' }}>{tMisc > 0 ? formatDisplay(tMisc) : '—'}</div>
+                    </td>
                     {/* Net Sale */}
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDisplay(tNet)}</td>
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Net Sale</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{formatDisplay(tNet)}</div>
+                    </td>
                     {/* Paid */}
-                    <td className="px-3 py-2 whitespace-nowrap text-green-400">{tPaid > 0 ? formatDisplay(tPaid) : '—'}</td>
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Paid</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#86efac' }}>{tPaid > 0 ? formatDisplay(tPaid) : '—'}</div>
+                    </td>
                     {/* Amount Left */}
-                    <td className="px-3 py-2 whitespace-nowrap text-red-400">{tLeft > 0 ? formatDisplay(tLeft) : '—'}</td>
-                    {/* Delivery Status Actions = 3 empty */}
-                    <td colSpan={3} className="px-3 py-2"></td>
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Left</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: tLeft > 0 ? '#fca5a5' : '#86efac' }}>
+                        {tLeft > 0 ? formatDisplay(tLeft) : '—'}
+                      </div>
+                    </td>
+                    <td colSpan={3} style={{ padding: '10px 12px' }}></td>
                   </tr>
                 </tfoot>
               );
@@ -1200,36 +1236,6 @@ export function InvoiceListView({
           </table>
         </div>
       </div>
-
-      {/* ── Sticky selection summary bar ── */}
-      {filteredInvoices.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center gap-6 overflow-x-auto">
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
-                {hasSelection ? `${selectionSummary.count} selected` : `All ${selectionSummary.count} filtered`}
-              </span>
-              {hasSelection && (
-                <button onClick={clearSelection} className="text-xs text-gray-500 hover:text-gray-700 underline">clear</button>
-              )}
-            </div>
-            {[
-              { label: 'Amount',        value: selectionSummary.totalAmount,    color: 'text-gray-900' },
-              { label: 'Supplier Cost', value: selectionSummary.supplierCost, color: 'text-gray-700' },
-              { label: 'Purchase Cost', value: selectionSummary.purchaseCost, color: 'text-gray-700' },
-              { label: 'Misc Exp',      value: selectionSummary.miscExpense,    color: 'text-red-600'  },
-              { label: 'Net Sale',      value: selectionSummary.netAmount,      color: 'text-gray-900' },
-              { label: 'Paid',          value: selectionSummary.paidAmount,     color: 'text-green-600'},
-              { label: 'Amount Left',   value: selectionSummary.remainingAmount,color: 'text-red-600'  },
-            ].map(s => (
-              <div key={s.label} className="shrink-0">
-                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{s.label}</div>
-                <div className={`text-sm font-extrabold ${s.color}`}>{formatDisplay(s.value)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Payment Modal ── */}
       {paymentInvoice && (
