@@ -259,14 +259,10 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
   const imageInputRef                   = useRef<HTMLInputElement>(null);
   const [imgDragging,  setImgDragging]  = useState(false);
 
-  // Payment
-  const [paymentMode,  setPaymentMode]  = useState('Cash');
-  const [paidAmount,   setPaidAmount]   = useState<number|''>('');
-  const [banks,        setBanks]        = useState<BankOption[]>([]);
-  const [bankId,       setBankId]       = useState('');
-  const [banksLoading, setBanksLoading] = useState(false);
-  const [creditChannel,setCreditChannel]= useState('Cash');
-  const [supplierPaid, setSupplierPaid] = useState<number|''>('');
+  // NOTE: Payment collection has been removed from the add-inventory flow.
+  // Every new item is saved as `paymentStatus: 'unpaid'` and reconciled later
+  // from the Transactions / Payables module. The `Credit` / `Owned` ownership
+  // toggle remains because it decides whether the item shows up in Payables.
 
   const [txnId,    setTxnId]    = useState('');
   const [saving,    setSaving]    = useState(false);
@@ -276,17 +272,6 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
     generateInventoryTransactionId().then(setTxnId).catch(() => setTxnId('TXN-'+Date.now()));
   }, []);
 
-  useEffect(() => {
-    const needsBank = paymentMode === 'Bank Transfer' || paymentMode === 'Cheque';
-    if (!needsBank || isCredit) return;
-    setBanksLoading(true);
-    getDocs(query(collection(db, 'banks'), orderBy('name')))
-      .then(snap => setBanks(snap.docs.map(d => { const b = d.data() as any; return { id: d.id, name: b.name||'—', balance: Number(b.balance)||0 }; })))
-      .catch(() => {})
-      .finally(() => setBanksLoading(false));
-  }, [paymentMode, isCredit]);
-
-  const needsBank = !isCredit && (paymentMode === 'Bank Transfer' || paymentMode === 'Cheque');
   const grandTotal = rows.reduce((s, r) => s + r.costPrice * (r.serials.filter(x=>x.trim()).length || r.quantity), 0);
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -294,16 +279,35 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
     // Validate
     const errs: Record<string, any> = {};
     let hasErr = false;
-    rows.forEach(r => {
+    rows.forEach((r, i) => {
       const e: any = {};
       if (!r.brandName.trim())  { e.brand    = 'Required'; hasErr = true; }
       if (!r.modelName.trim())  { e.model    = 'Required'; hasErr = true; }
       if (!r.category.trim())   { e.category = 'Required'; hasErr = true; }
       if (!r.costPrice || r.costPrice <= 0) { e.cost = 'Required'; hasErr = true; }
+
+      // Serial numbers are REQUIRED, must match the row's quantity, and no duplicates
+      const validSerials = r.serials.filter(s => s.trim() !== '');
+      if (!r.quantity || r.quantity <= 0) {
+        e.quantity = 'Must be at least 1'; hasErr = true;
+      } else if (validSerials.length === 0) {
+        e.serials = 'Serial numbers are required'; hasErr = true;
+      } else if (validSerials.length !== r.quantity) {
+        e.serials = `Provide ${r.quantity} serial${r.quantity === 1 ? '' : 's'} (${validSerials.length} filled)`; hasErr = true;
+      } else if (new Set(validSerials).size !== validSerials.length) {
+        e.serials = 'Duplicate serial numbers'; hasErr = true;
+      }
+
       if (Object.keys(e).length) errs[r.id] = e;
     });
     if (!location.trim()) { toast.error('Location is required'); hasErr = true; }
-    if (hasErr) { setRowErrors(errs); return; }
+    if (hasErr) {
+      setRowErrors(errs);
+      if (Object.values(errs).some((e: any) => e.serials || e.quantity)) {
+        toast.error('Fix serial-number errors before saving');
+      }
+      return;
+    }
     setRowErrors({});
     setSaving(true);
     setSaveError('');
@@ -337,19 +341,22 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           serialNumbers: validSerials, serialCities: seededCities,
           status: status as any, isDamaged: false, costingOption: 'without',
           ownershipType: ownership,
+          // Payment collection removed — supplier balance is still recorded for
+          // Credit-ownership so it shows in Payables, but no amount-paid /
+          // payment-channel is captured here. Both are set later from Transactions.
           supplierCost:          isCredit ? row.costPrice * stock : undefined,
           supplierPaymentStatus: isCredit ? 'Unpaid' : undefined,
-          supplierPaidAmount:    isCredit && supplierPaid ? Number(supplierPaid) : undefined,
-          supplierPaymentChannel:isCredit ? creditChannel : undefined,
+          supplierPaidAmount:    undefined,
+          supplierPaymentChannel:undefined,
           serialStockInDatesManual: manualDateIso
             ? Object.fromEntries(validSerials.map(s => [s, manualDateIso])) : undefined,
         };
 
-        const effectivePaid = isCredit ? 0 : (Number(paidAmount) || 0);
-        const totalAmount   = row.costPrice * stock;
-        const payInfo: any  = {
-          paymentStatus: isCredit ? 'unpaid' : (effectivePaid >= totalAmount ? 'paid' : effectivePaid > 0 ? 'partial' : 'unpaid'),
-          transactionId: txnId, paidAmount: effectivePaid || undefined, totalAmount,
+        const totalAmount = row.costPrice * stock;
+        const payInfo: any = {
+          paymentStatus: 'unpaid',
+          transactionId: txnId,
+          totalAmount,
         };
 
         console.log('[INV] Calling createProduct...', dto.brandName, dto.modelName, 'serials:', validSerials);
@@ -536,62 +543,18 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           )}
         </div>
 
-        {/* ── Payment ── */}
-        {isCredit ? (
-          <div style={S.card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}><Users size={15} color="#b45309" /> Supplier Credit Details</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <p style={{ fontSize: 12, color: '#b45309', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', margin: 0 }}>No payment now — will appear in Inventory Payables.</p>
-              <div>
-                <label style={S.label}>Amount Paid So Far (AED)</label>
-                <input type="number" min={0} step="any" value={supplierPaid} onChange={e => setSupplierPaid(e.target.value==='' ? '' : parseFloat(e.target.value)||0)} placeholder="0" style={S.inp()} />
-              </div>
-              <div>
-                <label style={S.label}>Payment Channel</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                  {PAYMENT_MODES.map(m => { const Icon = m.icon; const sel = creditChannel === m.value; return (
-                    <button key={m.value} type="button" onClick={() => setCreditChannel(m.value)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 12px', borderRadius: 9, cursor: 'pointer', border: `2px solid ${sel?m.border:'#e5e7eb'}`, backgroundColor: sel?m.bg:'#fff' }}>
-                      <Icon size={15} color={sel?m.color:'#9ca3af'} /><span style={{ fontSize: 12, fontWeight: 700, color: sel?m.color:'#374151' }}>{m.label}</span>
-                      {sel && <Check size={11} color={m.color} style={{ marginLeft:'auto' }} />}
-                    </button>
-                  ); })}
-                </div>
-              </div>
-            </div>
+        {/* ── Payment (removed) ──
+            Payment collection UI removed from this flow. All new items are
+            saved as unpaid and reconciled from the Transactions module.
+            The Credit / Owned toggle is kept above so the item shows in
+            Payables correctly, but no amounts or channels are captured here. */}
+        <div style={{ padding: '12px 16px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Wallet size={16} color="#1d4ed8" />
+          <div style={{ fontSize: 12, color: '#1e3a8a', lineHeight: 1.5 }}>
+            <b>Payment tracked separately.</b> This inventory will be saved as{' '}
+            <b>unpaid</b>{isCredit ? ' and appear in Inventory Payables' : ''}. Record payment later from the Transactions module.
           </div>
-        ) : (
-          <div style={S.card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}><Wallet size={15} color="#15803d" /> Payment Details</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={S.label}>Payment Method</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                  {PAYMENT_MODES.map(m => { const Icon = m.icon; const sel = paymentMode === m.value; return (
-                    <button key={m.value} type="button" onClick={() => setPaymentMode(m.value)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 12px', borderRadius: 9, cursor: 'pointer', border: `2px solid ${sel?m.border:'#e5e7eb'}`, backgroundColor: sel?m.bg:'#fff' }}>
-                      <Icon size={15} color={sel?m.color:'#9ca3af'} /><span style={{ fontSize: 12, fontWeight: 700, color: sel?m.color:'#374151' }}>{m.label}</span>
-                      {sel && <Check size={11} color={m.color} style={{ marginLeft:'auto' }} />}
-                    </button>
-                  ); })}
-                </div>
-              </div>
-              {needsBank && (
-                <div>
-                  <label style={S.label}>Bank Account</label>
-                  {banksLoading ? <div style={{ fontSize: 13, color: '#64748b' }}>Loading…</div>
-                    : banks.length === 0 ? <div style={{ padding: '10px 14px', border: '1px solid #fde68a', borderRadius: 8, backgroundColor: '#fffbeb', fontSize: 13, color: '#92400e' }}>No banks found — add one in Banking.</div>
-                    : <select value={bankId} onChange={e => setBankId(e.target.value)} style={{ ...S.inp(), appearance: 'none' }}>
-                        <option value="">Select bank…</option>
-                        {banks.map(b => <option key={b.id} value={b.id}>{b.name} — AED {b.balance.toLocaleString()}</option>)}
-                      </select>}
-                </div>
-              )}
-              <div>
-                <label style={S.label}>Amount Paid (AED)</label>
-                <input type="number" min={0} step="any" value={paidAmount} onChange={e => setPaidAmount(e.target.value===''?'':parseFloat(e.target.value)||0)} placeholder="Leave blank if unpaid" style={S.inp()} />
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
 
         {/* Grand total */}
         {grandTotal > 0 && (

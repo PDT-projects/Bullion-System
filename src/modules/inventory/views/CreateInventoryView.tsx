@@ -263,10 +263,11 @@ export function CreateInventoryView({
   const lastUpdated = null;
 
   // ── Stepper config ────────────────────────────────────────────────────────
+  // Payment step removed — flow is now Product Details → Confirmation.
+  // Payments are recorded later from the Transactions module.
   const steps = [
     { id: 'details',      label: 'Product Details', number: 1 },
-    { id: 'payment',      label: 'Payment Info',    number: 2 },
-    { id: 'confirmation', label: 'Confirmation',    number: 3 },
+    { id: 'confirmation', label: 'Confirmation',    number: 2 },
   ];
   const currentIdx = steps.findIndex(s => s.id === currentStep);
 
@@ -906,15 +907,12 @@ export function CreateInventoryView({
             ['Sell Price',     InventoryService.formatCurrency(formData.sellPrice  || 0)],
             ['Description',    formData.description || '—'],
             ['Ownership',  (formData as any).ownershipType || 'Owned'],
+            // Payment method removed — payments are tracked from the Transactions module.
+            // Credit-ownership shows supplier balance so the payable is visible, but
+            // amounts paid / method are all reconciled elsewhere.
             ...((formData as any).ownershipType === 'Credit' ? [
               ['Supplier Cost', `AED ${((formData as any).supplierCost ?? formData.costPrice ?? 0).toLocaleString()}`],
-              ['Paid So Far',   `AED ${((formData as any).supplierPaidAmount ?? 0).toLocaleString()}`],
-              ['Payment Channel', (formData as any).supplierPaymentChannel || '—'],
-            ] as [string,string][] : [
-              ['Payment Method', formData.paymentMethod
-                ? `${formData.paymentMethod}${formData.bankName ? ` — ${formData.bankName}` : ''}`
-                : '—'],
-            ] as [string,string][]),
+            ] as [string,string][] : [] as [string,string][]),
           ] as [string, string][]).map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4">
               <span className="text-gray-500 flex-shrink-0">{label}:</span>
@@ -930,12 +928,6 @@ export function CreateInventoryView({
               </span>
             </div>
           ))}
-          {formData.paidAmount != null && (
-            <div className="flex justify-between gap-4">
-              <span className="text-gray-500">Paid:</span>
-              <span className="font-semibold text-gray-900">{InventoryService.formatCurrency(formData.paidAmount)}</span>
-            </div>
-          )}
           <div className="flex justify-between gap-4 border-t border-gray-200 pt-3 mt-2">
             <span className="text-gray-500">Serials:</span>
             <span className="font-semibold text-gray-900">{formData.serialNumbers.length} entered</span>
@@ -1018,7 +1010,6 @@ export function CreateInventoryView({
         {/* Step content */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           {currentStep === 'details'      && renderDetailsStep()}
-          {currentStep === 'payment'      && renderPaymentStep()}
           {currentStep === 'confirmation' && renderConfirmationStep()}
 
           {/* Navigation */}

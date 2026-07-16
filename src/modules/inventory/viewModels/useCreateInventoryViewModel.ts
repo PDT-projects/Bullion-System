@@ -277,9 +277,10 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           fieldErrors.serialNumbers = 'Duplicate serial numbers found';
         }
       }
-    } else if (currentStep === 'payment') {
-      if (!formData.paymentMethod) fieldErrors.paymentMethod = 'Payment method required';
     }
+    // NOTE: Payment step was removed from the add-inventory flow.
+    // Payments are managed later from the Transactions module. handleSubmit
+    // saves the product with paymentStatus: 'unpaid' when no method is set.
 
     setValidation({ isValid: Object.keys(fieldErrors).length === 0, fieldErrors });
     return Object.keys(fieldErrors).length === 0;
@@ -287,13 +288,14 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
 
   const goToNextStep = useCallback(() => {
     if (!validateCurrentStep()) return;
-    const steps: InventoryEntryStep[] = ['details', 'payment', 'confirmation'];
+    // Payment step removed — flow is now details → confirmation → save
+    const steps: InventoryEntryStep[] = ['details', 'confirmation'];
     const idx = steps.indexOf(currentStep);
     if (idx < steps.length - 1) setCurrentStep(steps[idx + 1]);
   }, [currentStep, validateCurrentStep]);
 
   const goToPreviousStep = useCallback(() => {
-    const steps: InventoryEntryStep[] = ['details', 'payment', 'confirmation'];
+    const steps: InventoryEntryStep[] = ['details', 'confirmation'];
     const idx = steps.indexOf(currentStep);
     if (idx > 0) setCurrentStep(steps[idx - 1]);
   }, [currentStep]);
