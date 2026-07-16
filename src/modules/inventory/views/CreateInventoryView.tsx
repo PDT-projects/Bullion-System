@@ -509,9 +509,9 @@ export function CreateInventoryView({
           <textarea
             value={formData.description || ''}
             onChange={e => setField('description', e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-            placeholder="Optional product notes, specs, or details"
+            rows={4}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white whitespace-pre-wrap"
+            placeholder="Notes, specs, warranty terms. Press Enter for a new line — each line is preserved."
           />
         </div>
       </div>
@@ -918,8 +918,13 @@ export function CreateInventoryView({
           ] as [string, string][]).map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4">
               <span className="text-gray-500 flex-shrink-0">{label}:</span>
-              <span className={`font-semibold text-right truncate max-w-[55%] ${
-                label === 'Transaction ID' ? 'font-mono text-indigo-700' : 'text-gray-900'
+              <span className={`font-semibold text-right max-w-[55%] ${
+                // Description keeps paragraph breaks; everything else stays on one line
+                label === 'Description'
+                  ? 'whitespace-pre-wrap break-words text-gray-900'
+                  : label === 'Transaction ID'
+                    ? 'truncate font-mono text-indigo-700'
+                    : 'truncate text-gray-900'
               }`}>
                 {value}
               </span>

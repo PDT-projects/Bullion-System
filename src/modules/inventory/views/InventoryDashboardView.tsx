@@ -17,6 +17,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useInventoryReportViewModel } from '../viewModels/useInventoryReportViewModel';
+import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
+import { useAuth } from '../../../providers/context/AuthContext';
 import { InventoryTypeSelectionView } from './InventoryTypeSelectionView';
 import { InventoryReturnWrapper } from './InventoryReturnWrapper';
 import { DamagedInventoryWrapper } from './DamagedInventoryWrapper';
@@ -187,8 +189,9 @@ export function InventoryDashboardView({
     setSelectedKeys(next);
   };
 
-  // ── Single-value filters (non-multi) ─────────────────────────────────────
+  // ── Filter-driven visible rows ──────────────────────────────────────────
   // Explicitly depend on all VM filter states so React re-renders correctly
+  // when any filter changes (all filters are string[] arrays — multi-select)
   const displayed = useMemo(() => vm.filteredRows, [
     vm.filteredRows,
     vm.statusFilter,
@@ -224,6 +227,82 @@ export function InventoryDashboardView({
 
   const clearAll = () => { vm.clearFilters(); };
 
+  // ── Bulk delete on selected rows ──────────────────────────────────────────
+  // Each selected row is one serial. We call deleteSerial() per row so
+  // multiple serials from the same product are removed individually — the
+  // parent product only disappears when its LAST serial is removed (that
+  // fallback is baked into deleteSerial itself).
+  const { user } = useAuth();
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [isBulkDeleting,    setIsBulkDeleting]    = useState(false);
+  // ── Per-row delete ────
+  const [confirmRowDelete, setConfirmRowDelete] = useState<InventoryReportRow | null>(null);
+  const [isRowDeleting,    setIsRowDeleting]    = useState(false);
+
+  const handleBulkDelete = async () => {
+    if (selectedRows.length === 0) return;
+    setIsBulkDeleting(true);
+    const deletedBy = user
+      ? { uid: user.uid, email: user.email || '', displayName: user.displayName || undefined }
+      : { uid: 'unknown', email: 'unknown@system', displayName: 'Unknown User' };
+    const failed: Array<{ productId: string; serial: string }> = [];
+    try {
+      // Sequential — same-product deletes race if run in parallel because
+      // they read + rewrite the parent product's serial arrays.
+      for (const row of selectedRows) {
+        try {
+          await InventoryFirebaseService.deleteSerial(row.productId, row.serialNumber, deletedBy);
+        } catch (e) {
+          console.error(`Bulk delete failed for serial ${row.serialNumber} of ${row.productId}:`, e);
+          failed.push({ productId: row.productId, serial: row.serialNumber });
+        }
+      }
+      const succeeded = selectedRows.length - failed.length;
+      if (failed.length === 0) {
+        toast.success(`${succeeded} serial${succeeded === 1 ? '' : 's'} moved to Deleted Inventory`);
+      } else {
+        toast.error(`Deleted ${succeeded}, ${failed.length} failed — check console.`);
+      }
+      setSelectedKeys(new Set());
+      setConfirmBulkDelete(false);
+      vm.refresh(); // refetch rows so deleted items disappear
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleRowDelete = async () => {
+    if (!confirmRowDelete) return;
+    setIsRowDeleting(true);
+    const deletedBy = user
+      ? { uid: user.uid, email: user.email || '', displayName: user.displayName || undefined }
+      : { uid: 'unknown', email: 'unknown@system', displayName: 'Unknown User' };
+    try {
+      await InventoryFirebaseService.deleteSerial(
+        confirmRowDelete.productId,
+        confirmRowDelete.serialNumber,
+        deletedBy,
+      );
+      toast.success(
+        `Serial ${confirmRowDelete.serialNumber || '(no serial)'} of ${confirmRowDelete.brandName} ${confirmRowDelete.modelName} moved to Deleted Inventory`,
+      );
+      // Drop this row from local selection if it was checked
+      const key = rowKey(confirmRowDelete);
+      if (selectedKeys.has(key)) {
+        const next = new Set(selectedKeys);
+        next.delete(key);
+        setSelectedKeys(next);
+      }
+      setConfirmRowDelete(null);
+      vm.refresh();
+    } catch (e) {
+      console.error(`Row delete failed for ${confirmRowDelete.productId}:`, e);
+      toast.error('Failed to delete item. Please try again.');
+    } finally {
+      setIsRowDeleting(false);
+    }
+  };
+
   // ── Quick action cards ────────────────────────────────────────────────────
   const quickActions = [
     { label: 'Add New',      icon: Plus,           onClick: () => setActivePopup('add-new'),      iconColor: '#0f172a', iconBg: '#f1f5f9', border: '#cbd5e1', hoverBorder: '#334155', hoverBg: '#f1f5f9' },
@@ -238,6 +317,7 @@ export function InventoryDashboardView({
     'Stock-In Date', 'Type', 'Brand', 'Model', 'Serial No.',
     'Location', 'Ownership', 'Condition', 'Status',
     'Sold Date', 'Invoice #', 'Supplier Cost', 'Purchasing Cost', 'Sold Goods Payment',
+    'Actions',
   ];
 
   return (
@@ -307,16 +387,11 @@ export function InventoryDashboardView({
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <MultiFilter label="Brand"     selected={vm.brandFilter}  onChange={v => { vm.setBrandFilter(v); vm.setModelFilter([]); }} options={vm.brandOptions} />
             <MultiFilter label="Model"     selected={vm.modelFilter}  onChange={vm.setModelFilter}  options={vm.modelOptions} />
-            <MultiFilter label="Type"      selected={vm.typeFilter ? [vm.typeFilter] : []}
-              onChange={v => vm.setTypeFilter(v[v.length - 1] || '')} options={vm.typeOptions} />
-            <MultiFilter label="Location"  selected={vm.locationFilter ? [vm.locationFilter] : []}
-              onChange={v => vm.setLocationFilter(v[v.length - 1] || '')} options={vm.locationOptions} />
-            <MultiFilter label="Condition" selected={vm.conditionFilter ? [vm.conditionFilter] : []}
-              onChange={v => vm.setConditionFilter(v[v.length - 1] || '')} options={vm.conditionOptions} />
-            <MultiFilter label="Status"    selected={vm.statusFilter ? [vm.statusFilter] : []}
-              onChange={v => vm.setStatusFilter(v[v.length - 1] || '')} options={['In Stock', 'Sold']} />
-            <MultiFilter label="Ownership" selected={vm.ownershipFilter ? [vm.ownershipFilter] : []}
-              onChange={v => vm.setOwnershipFilter(v[v.length - 1] || '')} options={['Owned', 'Credit']} />
+            <MultiFilter label="Type"      selected={vm.typeFilter}      onChange={vm.setTypeFilter}      options={vm.typeOptions} />
+            <MultiFilter label="Location"  selected={vm.locationFilter}  onChange={vm.setLocationFilter}  options={vm.locationOptions} />
+            <MultiFilter label="Condition" selected={vm.conditionFilter} onChange={vm.setConditionFilter} options={vm.conditionOptions} />
+            <MultiFilter label="Status"    selected={vm.statusFilter}    onChange={vm.setStatusFilter}    options={['In Stock', 'Sold']} />
+            <MultiFilter label="Ownership" selected={vm.ownershipFilter} onChange={vm.setOwnershipFilter} options={['Owned', 'Credit']} />
 
             {/* Date range */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 130 }}>
@@ -346,10 +421,27 @@ export function InventoryDashboardView({
               )}
             </span>
             {selectedRows.length > 0 && (
-              <button onClick={() => setSelectedKeys(new Set())}
-                style={{ fontSize: 11, color: '#64748b', border: 'none', background: 'none', cursor: 'pointer' }}>
-                Clear selection
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button onClick={() => setSelectedKeys(new Set())}
+                  style={{ fontSize: 11, color: '#64748b', border: 'none', background: 'none', cursor: 'pointer' }}>
+                  Clear selection
+                </button>
+                <button
+                  onClick={() => setConfirmBulkDelete(true)}
+                  disabled={isBulkDeleting}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontSize: 12, fontWeight: 700, padding: '5px 11px',
+                    border: 'none', borderRadius: 6,
+                    backgroundColor: '#dc2626', color: '#fff',
+                    cursor: isBulkDeleting ? 'not-allowed' : 'pointer',
+                    opacity: isBulkDeleting ? 0.6 : 1,
+                    boxShadow: '0 1px 3px rgba(220,38,38,0.35)',
+                  }}
+                >
+                  <Trash2 size={12} /> Delete ({selectedRows.length})
+                </button>
+              </div>
             )}
           </div>
 
@@ -436,6 +528,30 @@ export function InventoryDashboardView({
                               ? <Badge label={payLabel} bg={PAYMENT_COLOR[payLabel]?.bg || '#f3f4f6'} color={PAYMENT_COLOR[payLabel]?.color || '#6b7280'} />
                               : <span style={{ color: '#94a3b8' }}>—</span>}
                           </td>
+                          <td style={{ padding: '9px 12px', verticalAlign: 'middle', textAlign: 'center' }}>
+                            <button
+                              onClick={e => { e.stopPropagation(); setConfirmRowDelete(r); }}
+                              title={`Delete ${r.brandName} ${r.modelName}`}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                width: 28, height: 28, borderRadius: 6, border: '1px solid #fecaca',
+                                backgroundColor: '#fff', color: '#dc2626', cursor: 'pointer',
+                                transition: 'all 0.12s',
+                              }}
+                              onMouseEnter={e => {
+                                (e.currentTarget as HTMLElement).style.backgroundColor = '#dc2626';
+                                (e.currentTarget as HTMLElement).style.color = '#fff';
+                                (e.currentTarget as HTMLElement).style.borderColor = '#dc2626';
+                              }}
+                              onMouseLeave={e => {
+                                (e.currentTarget as HTMLElement).style.backgroundColor = '#fff';
+                                (e.currentTarget as HTMLElement).style.color = '#dc2626';
+                                (e.currentTarget as HTMLElement).style.borderColor = '#fecaca';
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -450,6 +566,7 @@ export function InventoryDashboardView({
                       <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>{fmtAED(totalSupplier)}</td>
                       <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>{fmtAED(totalPurchasing)}</td>
                       <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#4ade80', whiteSpace: 'nowrap' }}>{fmtAED(totalPaid)}</td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>
@@ -474,6 +591,112 @@ export function InventoryDashboardView({
               {activePopup === 'transfer'     && <ProductTransferCreateWrapper />}
               {activePopup === 'damaged'      && <DamagedInventoryWrapper />}
               {activePopup === 'deleted'      && <DeletedInventoryWrapper />}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Bulk Delete Confirmation Modal ── */}
+      {confirmBulkDelete && createPortal(
+        <div
+          onClick={() => !isBulkDeleting && setConfirmBulkDelete(false)}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: '#fff', borderRadius: 14, width: 420, maxWidth: '100%', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#fef2f2' }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AlertTriangle size={22} color="#dc2626" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#991b1b' }}>Delete selected items?</div>
+                <div style={{ fontSize: 12, color: '#b91c1c' }}>Items move to Deleted Inventory — recoverable.</div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 20px', fontSize: 13, color: '#475569', lineHeight: 1.55 }}>
+              You've selected <b>{selectedRows.length}</b> serial{selectedRows.length === 1 ? '' : 's'} to delete.
+              Each will be individually removed from stock — sibling serials of the same product are not affected.
+            </div>
+            <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid #f1f5f9', backgroundColor: '#f8fafc' }}>
+              <button
+                onClick={() => setConfirmBulkDelete(false)}
+                disabled={isBulkDeleting}
+                style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                style={{
+                  flex: 1, padding: '9px 0', borderRadius: 8, border: 'none',
+                  backgroundColor: '#dc2626', color: '#fff', fontSize: 13, fontWeight: 700,
+                  cursor: isBulkDeleting ? 'not-allowed' : 'pointer', opacity: isBulkDeleting ? 0.6 : 1,
+                }}
+              >
+                {isBulkDeleting ? 'Deleting…' : `Delete ${selectedRows.length}`}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Single-Row Delete Confirmation Modal ── */}
+      {confirmRowDelete && createPortal(
+        <div
+          onClick={() => !isRowDeleting && setConfirmRowDelete(null)}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: '#fff', borderRadius: 14, width: 420, maxWidth: '100%', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#fef2f2' }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AlertTriangle size={22} color="#dc2626" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#991b1b' }}>Delete this item?</div>
+                <div style={{ fontSize: 12, color: '#b91c1c' }}>Moves to Deleted Inventory — recoverable.</div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 20px', fontSize: 13, color: '#475569', lineHeight: 1.55 }}>
+              <div style={{ padding: '12px 14px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+                  {confirmRowDelete.brandName} — {confirmRowDelete.modelName}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  <span>Serial: <b style={{ fontFamily: 'monospace', color: '#0f172a' }}>{confirmRowDelete.serialNumber || '—'}</b></span>
+                  <span>Location: <b style={{ color: '#0f172a' }}>{confirmRowDelete.location || '—'}</b></span>
+                </div>
+              </div>
+              <div style={{ marginTop: 10, padding: '10px 12px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 12, color: '#1e3a8a' }}>
+                Only this serial is removed from stock — sibling serials of the same product stay untouched.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid #f1f5f9', backgroundColor: '#f8fafc' }}>
+              <button
+                onClick={() => setConfirmRowDelete(null)}
+                disabled={isRowDeleting}
+                style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRowDelete}
+                disabled={isRowDeleting}
+                style={{
+                  flex: 1, padding: '9px 0', borderRadius: 8, border: 'none',
+                  backgroundColor: '#dc2626', color: '#fff', fontSize: 13, fontWeight: 700,
+                  cursor: isRowDeleting ? 'not-allowed' : 'pointer', opacity: isRowDeleting ? 0.6 : 1,
+                }}
+              >
+                {isRowDeleting ? 'Deleting…' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>,

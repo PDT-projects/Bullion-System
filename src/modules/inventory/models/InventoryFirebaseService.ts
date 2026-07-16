@@ -691,6 +691,104 @@ export class InventoryFirebaseService {
     }
   }
 
+  /**
+   * Soft-delete a SINGLE serial from a product.
+   *
+   * Rationale: `deleteProduct` marks the whole document as deleted, which
+   * cascades to every serial in the product's `serialNumbers` array.
+   * `deleteSerial` instead surgically removes ONE serial from all the
+   * per-serial maps, decrements `stock`, and archives a single-serial snapshot
+   * to `deleted_products` so it can still be reviewed / restored.
+   *
+   * If the removed serial was the LAST one on the product, the whole
+   * product is soft-deleted via the existing `deleteProduct` flow — no
+   * empty stock records left behind.
+   */
+  static async deleteSerial(
+    productId: string,
+    serial: string,
+    deletedBy: { uid: string; email: string; displayName?: string }
+  ): Promise<void> {
+    try {
+      console.log(`🔥 Soft-deleting serial ${serial} of product ${productId} by ${deletedBy.email}...`);
+      const productRef  = doc(db, PRODUCTS_COLLECTION, productId);
+      const productSnap = await getDoc(productRef);
+      if (!productSnap.exists()) throw new Error(`Product ${productId} not found`);
+      const p = productSnap.data() as any;
+
+      const existingSerials: string[] = Array.isArray(p.serialNumbers) ? p.serialNumbers : [];
+      if (!existingSerials.includes(serial)) {
+        // Serial isn't on the product's live array — it might have been sold
+        // (which removes it from serialNumbers on invoice creation). In that
+        // case there's nothing to remove from the live document; but we still
+        // want an archive record so the deletion shows in Deleted Inventory.
+        console.warn(`Serial ${serial} not present on product ${productId}. Archiving as reference only.`);
+      }
+
+      const now = new Date().toISOString();
+      const remainingSerials = existingSerials.filter(s => s !== serial);
+
+      // If this was the last live serial, fall back to whole-product delete —
+      // no reason to keep an empty product document sitting around.
+      if (existingSerials.includes(serial) && remainingSerials.length === 0) {
+        console.log(`↪️  Last serial removed — delegating to deleteProduct for ${productId}`);
+        await this.deleteProduct(productId, deletedBy);
+        return;
+      }
+
+      // Build cleaned per-serial maps for the parent product (the ones we KEEP)
+      const cleanedCities: Record<string, any>   = { ...(p.serialCities  || {}) }; delete cleanedCities[serial];
+      const cleanedStatus: Record<string, any>   = { ...(p.serialStatus  || {}) }; delete cleanedStatus[serial];
+      const cleanedStockIn: Record<string, any>  = { ...(p.serialStockInDates || {}) }; delete cleanedStockIn[serial];
+      const cleanedManual: Record<string, any>   = { ...(p.serialStockInDatesManual || {}) }; delete cleanedManual[serial];
+      const cleanedSold: Record<string, any>     = { ...(p.serialSoldDates || {}) }; delete cleanedSold[serial];
+      const cleanedInvoice: Record<string, any>  = { ...(p.serialInvoiceNumbers || {}) }; delete cleanedInvoice[serial];
+
+      // Snapshot for the deleted_products archive — only carries this serial.
+      // `deletionScope: 'serial'` lets Deleted Inventory views distinguish
+      // whole-product deletes from single-serial deletes.
+      const archiveSnapshot = {
+        ...p,
+        originalId:    productId,
+        serialNumbers: [serial],
+        serialCities:  p.serialCities?.[serial]  ? { [serial]: p.serialCities[serial]  } : {},
+        serialStatus:  p.serialStatus?.[serial]  ? { [serial]: p.serialStatus[serial]  } : {},
+        serialStockInDates:       p.serialStockInDates?.[serial]       ? { [serial]: p.serialStockInDates[serial]       } : {},
+        serialStockInDatesManual: p.serialStockInDatesManual?.[serial] ? { [serial]: p.serialStockInDatesManual[serial] } : {},
+        serialSoldDates:          p.serialSoldDates?.[serial]          ? { [serial]: p.serialSoldDates[serial]          } : {},
+        serialInvoiceNumbers:     p.serialInvoiceNumbers?.[serial]     ? { [serial]: p.serialInvoiceNumbers[serial]     } : {},
+        stock:          1,
+        deletionScope: 'serial' as const,
+        deletedAt:      now,
+        deletedBy:      deletedBy.uid,
+        deletedByEmail: deletedBy.email,
+        deletedByName:  deletedBy.displayName || deletedBy.email,
+      };
+      await addDoc(collection(db, DELETED_PRODUCTS_COLLECTION), archiveSnapshot);
+
+      // Update the live product only if the serial was actually present.
+      // (If it wasn't in serialNumbers — e.g. already sold — the parent doc
+      // shouldn't be mutated; the archive record above is enough.)
+      if (existingSerials.includes(serial)) {
+        await updateDoc(productRef, {
+          stock:                    remainingSerials.length,
+          serialNumbers:            remainingSerials,
+          serialCities:             cleanedCities,
+          serialStatus:             cleanedStatus,
+          serialStockInDates:       cleanedStockIn,
+          serialStockInDatesManual: cleanedManual,
+          serialSoldDates:          cleanedSold,
+          serialInvoiceNumbers:     cleanedInvoice,
+          updatedAt:                now,
+        });
+      }
+      console.log(`✅ Serial ${serial} deleted — remaining stock: ${remainingSerials.length}`);
+    } catch (error) {
+      console.error(`❌ Error deleting serial ${serial} of ${productId}:`, error);
+      throw new Error('Failed to delete serial');
+    }
+  }
+
   /** Fetch all soft-deleted products (for Deleted Inventory view) */
   static async fetchDeletedProducts(): Promise<DeletedProduct[]> {
     try {

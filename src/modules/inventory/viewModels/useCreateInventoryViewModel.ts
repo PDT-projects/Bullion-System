@@ -262,8 +262,21 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
       if (!formData.sellPrice || formData.sellPrice <= 0)   fieldErrors.sellPrice  = 'Valid sell price required';
       if (formData.costPrice === undefined || formData.costPrice === null || (formData.costPrice as any) === '')
         fieldErrors.costPrice = 'Cost price is required (can be 0)';
-      if (!isEditMode && validSerials.length !== formData.stock)
-        fieldErrors.serialNumbers = `Provide ${formData.stock} serial number(s)`;
+
+      // Serial numbers are REQUIRED (not optional) when adding new inventory.
+      // Edit mode preserves whatever serials were there before — the entry-time
+      // requirement doesn't retroactively apply to existing records.
+      if (!isEditMode) {
+        if (!formData.stock || formData.stock <= 0) {
+          fieldErrors.stock = 'Stock quantity must be at least 1';
+        } else if (validSerials.length === 0) {
+          fieldErrors.serialNumbers = 'Serial numbers are required';
+        } else if (validSerials.length !== formData.stock) {
+          fieldErrors.serialNumbers = `Provide ${formData.stock} serial number${formData.stock > 1 ? 's' : ''} (${validSerials.length} filled)`;
+        } else if (new Set(validSerials).size !== validSerials.length) {
+          fieldErrors.serialNumbers = 'Duplicate serial numbers found';
+        }
+      }
     } else if (currentStep === 'payment') {
       if (!formData.paymentMethod) fieldErrors.paymentMethod = 'Payment method required';
     }

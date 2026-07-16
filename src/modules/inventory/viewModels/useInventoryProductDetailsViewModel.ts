@@ -7,15 +7,16 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   ProductFormData, CostingOption, BuyType, ProductStatus,
-  InventoryEntryType, CostingModel, INVENTORY_LOCATIONS,
+  InventoryEntryType, CostingModel, INVENTORY_LOCATIONS, CreateProductDTO,
 } from '../models/types';
 import {
   createInitialCostingInfo, calculateModelCosts,
   recalculateAllModels, createEmptyCostingModel,
 } from '../models/costingCalculator';
-import { BrandModelFirebaseService } from '../models/InventoryFirebaseService';
+import { BrandModelFirebaseService, InventoryFirebaseService } from '../models/InventoryFirebaseService';
 
 const CATEGORIES = [
   'Detection Equipment', 'Security Equipment', 'Imaging Equipment',
@@ -69,8 +70,9 @@ export interface UseInventoryProductDetailsViewModelReturn {
   updateSerialCity: (index: number, value: string) => void;
   updateModelSerial: (modelIdx: number, serialIdx: number, value: string) => void;
   updateModelSerialCity: (modelIdx: number, serialIdx: number, city: string) => void;
-  handleNext: (selectedModels?: SelectedModel[]) => void;
+  handleNext: (selectedModels?: SelectedModel[]) => Promise<void> | void;
   handleBack: () => void;
+  isSaving: boolean;
   showCostingFields: boolean;
   categories: string[];
   cities: string[];
@@ -321,13 +323,29 @@ const [singleModel, setSingleModel] = useState({
     if (costingOption === 'with' && selectedModels) {
       selectedModels.forEach((m, i) => {
         const validSerials = m.serialNumbers.filter(s => s.trim() !== '');
-        if (m.quantity > 0 && validSerials.length !== m.quantity)
-          errors[`serials_${i}`] = `${m.modelName}: provide ${m.quantity} serial number${m.quantity >1 ? 's' : ''}`;
+        // Serial numbers REQUIRED per model
+        if (m.quantity <= 0) {
+          errors[`qty_${i}`] = `${m.modelName || `Row ${i + 1}`}: quantity must be at least 1`;
+        } else if (validSerials.length === 0) {
+          errors[`serials_${i}`] = `${m.modelName || `Row ${i + 1}`}: serial numbers are required`;
+        } else if (validSerials.length !== m.quantity) {
+          errors[`serials_${i}`] = `${m.modelName || `Row ${i + 1}`}: provide ${m.quantity} serial number${m.quantity > 1 ? 's' : ''} (${validSerials.length} filled)`;
+        } else if (new Set(validSerials).size !== validSerials.length) {
+          errors[`serials_${i}`] = `${m.modelName || `Row ${i + 1}`}: duplicate serial numbers found`;
+        }
       });
     } else {
       const validSerials = serialInputs.filter(s => s.trim() !== '');
-      if (formData.stock > 0 && validSerials.length !== formData.stock)
-        errors.serialNumbers = `Please provide ${formData.stock} serial numbers`;
+      // Serial numbers REQUIRED — stock must be at least 1 and every unit must have a serial
+      if (!formData.stock || formData.stock <= 0) {
+        errors.stock = 'Stock quantity must be at least 1';
+      } else if (validSerials.length === 0) {
+        errors.serialNumbers = 'Serial numbers are required';
+      } else if (validSerials.length !== formData.stock) {
+        errors.serialNumbers = `Provide ${formData.stock} serial number${formData.stock > 1 ? 's' : ''} (${validSerials.length} filled)`;
+      } else if (new Set(validSerials).size !== validSerials.length) {
+        errors.serialNumbers = 'Duplicate serial numbers found';
+      }
     }
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -348,39 +366,104 @@ const [singleModel, setSingleModel] = useState({
     totalValueOfBrand: formData.costing?.totalValueOfBrand || 0,
   }), [formData.costing]);
 
-  // Navigation — passes location through URL params
-  const handleNext = useCallback((selectedModels?: SelectedModel[]) => {
+  // ── isSaving flag for the save button ──
+  const [isSaving, setIsSaving] = useState(false);
+
+  // ── handleNext → save inventory directly (no payment step) ────────────────
+  // Payment collection was removed from the add flow. Products are saved
+  // with paymentStatus = 'unpaid' and reconciled later from the Transactions
+  // module. selectedModels only appears in the 'with costing' path.
+  const handleNext = useCallback(async (selectedModels?: SelectedModel[]) => {
     if (!validateForm(selectedModels)) return;
-    const validSerials = serialInputs.filter(s => s.trim() !== '');
-    const params = new URLSearchParams({
-      type: inventoryType, costing: costingOption,
-      brandName: formData.brandName, modelName: formData.modelName,
-      category: formData.category, costPrice: (formData.costPrice ?? 0).toString(),
-      sellPrice: formData.sellPrice.toString(),
-      buyType: formData.buyType, warrantyYears: formData.warrantyYears.toString(),
-      stock: formData.stock.toString(), description: formData.description,
-      status: formData.status, isDamaged: formData.isDamaged.toString(),
-      location: formData.location || '',                         // ← new
-      stockInDateManual: formData.stockInDateManual || '',        // ← new: carried through to payment/confirm step
-      serialNumbers: JSON.stringify(validSerials),
-      serialCities:  JSON.stringify(formData.serialCities),
-    });
-    if (costingBrandId) params.set('costingBrandId', costingBrandId);
-    if (costingOption === 'with' && formData.costing) {
-      params.set('usdRate',           formData.costing.usdRate.toString());
-      params.set('totalCustomsValue', formData.costing.totalCustomsValue.toString());
-      params.set('totalFreightValue', formData.costing.totalFreightValue.toString());
-      params.set('totalUnitCostUSD',  formData.costing.totalUnitCostUSD.toString());
-      params.set('shipmentTotalUSD',  formData.costing.shipmentTotalUSD.toString());
-      params.set('consignmentValue',  formData.costing.consignmentValue.toString());
-      params.set('totalValueOfBrand', formData.costing.totalValueOfBrand.toString());
-      params.set('costingModels',     JSON.stringify(formData.costing.models));
-      params.set('costingBrandName',  formData.costing.brandName);
+    setIsSaving(true);
+    try {
+      // With costing: one product per selected model
+      if (costingOption === 'with' && selectedModels && selectedModels.length > 0) {
+        let successCount = 0;
+        const failed: string[] = [];
+        for (const m of selectedModels) {
+          try {
+            const validSerials = m.serialNumbers.filter(s => s.trim() !== '');
+            const serialCities: { [k: string]: string } = { ...(m.serialCities || {}) };
+            validSerials.forEach(s => {
+              if (!serialCities[s]) serialCities[s] = formData.location || '';
+            });
+            const dto: CreateProductDTO = {
+              brandName:     formData.brandName,
+              modelName:     m.modelName,
+              category:      formData.category,
+              costPrice:     m.costPrice ?? formData.costPrice ?? 0,
+              sellPrice:     m.salePrice ?? formData.sellPrice ?? 0,
+              buyType:       formData.buyType || 'Import',
+              warrantyYears: formData.warrantyYears || 1,
+              stock:         m.quantity,
+              location:      formData.location || '',
+              description:   formData.description,
+              serialNumbers: validSerials,
+              serialCities,
+              status:        formData.status || 'New',
+              isDamaged:     formData.isDamaged ?? false,
+              costingOption: 'with',
+              costing:       formData.costing,
+            } as any;
+            await InventoryFirebaseService.createProduct(dto, {
+              paymentStatus: 'unpaid',
+              totalAmount:   (dto.costPrice || 0) * (dto.stock || 0),
+            });
+            successCount++;
+          } catch (err) {
+            console.error(`Failed to save model ${m.modelName}:`, err);
+            failed.push(m.modelName);
+          }
+        }
+        if (failed.length === 0) {
+          toast.success(`✅ ${successCount} product${successCount === 1 ? '' : 's'} added to inventory`);
+          navigate('/inventory');
+        } else if (successCount === 0) {
+          toast.error('Failed to save any items. Check console for details.');
+        } else {
+          toast.warning(`Saved ${successCount}, but ${failed.length} failed: ${failed.join(', ')}`);
+          navigate('/inventory');
+        }
+        return;
+      }
+
+      // Without costing: single product built from formData + serialInputs
+      const validSerials = serialInputs.filter(s => s.trim() !== '');
+      const serialCities: { [k: string]: string } = { ...(formData.serialCities || {}) };
+      validSerials.forEach(s => {
+        if (!serialCities[s]) serialCities[s] = formData.location || '';
+      });
+      const dto: CreateProductDTO = {
+        brandName:     formData.brandName,
+        modelName:     formData.modelName,
+        category:      formData.category,
+        costPrice:     formData.costPrice ?? 0,
+        sellPrice:     formData.sellPrice,
+        buyType:       formData.buyType || 'Import',
+        warrantyYears: formData.warrantyYears || 1,
+        stock:         formData.stock,
+        location:      formData.location || '',
+        description:   formData.description,
+        serialNumbers: validSerials,
+        serialCities,
+        status:        formData.status || 'New',
+        isDamaged:     formData.isDamaged ?? false,
+        costingOption: 'without',
+      } as any;
+      await InventoryFirebaseService.createProduct(dto, {
+        paymentStatus: 'unpaid',
+        totalAmount:   (dto.costPrice || 0) * (dto.stock || 0),
+      });
+      toast.success('✅ Product added to inventory');
+      navigate('/inventory');
+    } catch (err) {
+      console.error('Product details save error:', err);
+      toast.error('Failed to save inventory. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
-    if (selectedModels?.length)
-      params.set('selectedModels', JSON.stringify(selectedModels));
-    navigate(`/inventory/create-new/payment?${params.toString()}`);
-  }, [navigate, formData, serialInputs, costingOption, validateForm, inventoryType, costingBrandId]);
+  }, [navigate, formData, serialInputs, costingOption, validateForm]);
 
   const handleBack = useCallback(() => {
     if (costingOption === 'with')
@@ -402,7 +485,7 @@ const [singleModel, setSingleModel] = useState({
     updateSerialNumber, updateSerialCity,
     updateModelSerial:     () => {},
     updateModelSerialCity: () => {},
-    handleNext, handleBack,
+    handleNext, handleBack, isSaving,
     showCostingFields: costingOption === 'with',
     categories: CATEGORIES,
     cities: [...INVENTORY_LOCATIONS],

@@ -6,9 +6,11 @@
 // Supplier/Purchasing Cost, Sold Goods Payment.
 
 import React from 'react';
-import { ArrowLeft, FileBarChart, Search, Loader2, Filter, X, Tag, Layers } from 'lucide-react';
+import { toast } from 'sonner';
+import { ArrowLeft, FileBarChart, Search, Loader2, Filter, X, Tag, Layers, MapPin, Package, Activity, Shield, Trash2, AlertTriangle } from 'lucide-react';
 import { useInventoryReportViewModel } from '../viewModels/useInventoryReportViewModel';
 import { MultiSelectFilter } from './InventoryListView';
+import { useAuth } from '../../../providers/context/AuthContext';
 
 type VM = ReturnType<typeof useInventoryReportViewModel>;
 
@@ -32,19 +34,59 @@ const conditionColor = (c: string) => {
   return map[c] || 'bg-gray-100 text-gray-700';
 };
 
-export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilterToggle?: boolean }> = ({
-  filteredRows, isLoading, error, search, setSearch,
-  showFilters, toggleFilters, clearFilters, activeFilterCount,
-  hideFilterToggle,
-  statusFilter, setStatusFilter, ownershipFilter, setOwnershipFilter,
-  typeFilter, setTypeFilter, typeOptions,
-  locationFilter, setLocationFilter, locationOptions,
-  conditionFilter, setConditionFilter, conditionOptions,
-  brandFilter, setBrandFilter, brandOptions,
-  modelFilter, setModelFilter, modelOptions,
-  dateFrom, setDateFrom, dateTo, setDateTo,
-  formatCurrency, formatDate, onBack, embedded,
-}) => (
+export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilterToggle?: boolean }> = (props) => {
+  const {
+    filteredRows, isLoading, error, search, setSearch,
+    showFilters, toggleFilters, clearFilters, activeFilterCount,
+    hideFilterToggle,
+    statusFilter, setStatusFilter, ownershipFilter, setOwnershipFilter,
+    typeFilter, setTypeFilter, typeOptions,
+    locationFilter, setLocationFilter, locationOptions,
+    conditionFilter, setConditionFilter, conditionOptions,
+    brandFilter, setBrandFilter, brandOptions,
+    modelFilter, setModelFilter, modelOptions,
+    dateFrom, setDateFrom, dateTo, setDateTo,
+    formatCurrency, formatDate, onBack, embedded,
+    // selection + bulk delete (added in the ViewModel)
+    isRowSelected, toggleRow, toggleAllVisible, clearSelection,
+    allVisibleSelected, isBulkDeleting, bulkDeleteSelected, selectedRowIds,
+  } = props;
+
+  const { user } = useAuth();
+  const [confirmBulkDelete, setConfirmBulkDelete] = React.useState(false);
+
+  // Static option lists (mirror the `<select>` markup we replaced)
+  const STATUS_OPTIONS = React.useMemo(() => ['In Stock', 'Sold'], []);
+  const OWNERSHIP_OPTIONS = React.useMemo(() => ['Owned', 'Credit'], []);
+
+  // Count of distinct products (not rows) that would be deleted
+  const distinctSelectedProductCount = React.useMemo(() => {
+    const s = new Set<string>();
+    filteredRows.forEach(r => { if (isRowSelected(r)) s.add(r.productId); });
+    return s.size;
+  }, [filteredRows, isRowSelected]);
+
+  const selectedRowCount = selectedRowIds.size;
+
+  const handleConfirmBulkDelete = async () => {
+    const deletedBy = user
+      ? { uid: user.uid, email: user.email || '', displayName: user.displayName || undefined }
+      : { uid: 'unknown', email: 'unknown@system', displayName: 'Unknown User' };
+    try {
+      const { deletedCount, failed } = await bulkDeleteSelected(deletedBy);
+      setConfirmBulkDelete(false);
+      if (failed.length === 0) {
+        toast.success(`Deleted ${deletedCount} product${deletedCount === 1 ? '' : 's'} — moved to Deleted Inventory`);
+      } else {
+        toast.error(`Deleted ${deletedCount}, but ${failed.length} failed. Check console for details.`);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Bulk delete failed. Please try again.');
+    }
+  };
+
+  return (
   <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: embedded ? 'transparent' : '#f8fafc' }}>
     {!embedded && (
     <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
@@ -131,48 +173,51 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
               onChange={setModelFilter}
               allLabel="All Models"
             />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                <option value="">All Types</option>
-                {typeOptions.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-              <select value={locationFilter} onChange={e => setLocationFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                <option value="">All Locations</option>
-                {locationOptions.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Condition</label>
-              <select value={conditionFilter} onChange={e => setConditionFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                <option value="">All Conditions</option>
-                {conditionOptions.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Current Status</label>
-              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                <option value="">All Statuses</option>
-                <option value="In Stock">In Stock</option>
-                <option value="Sold">Sold</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ownership</label>
-              <select value={ownershipFilter} onChange={e => setOwnershipFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                <option value="">All Ownership</option>
-                <option value="Owned">Owned</option>
-                <option value="Credit">Credit</option>
-              </select>
-            </div>
+            <MultiSelectFilter
+              label="Type"
+              pluralLabel="Types"
+              icon={Package}
+              options={typeOptions}
+              selected={typeFilter}
+              onChange={setTypeFilter}
+              allLabel="All Types"
+            />
+            <MultiSelectFilter
+              label="Location"
+              pluralLabel="Locations"
+              icon={MapPin}
+              options={locationOptions}
+              selected={locationFilter}
+              onChange={setLocationFilter}
+              allLabel="All Locations"
+            />
+            <MultiSelectFilter
+              label="Condition"
+              pluralLabel="Conditions"
+              icon={Tag}
+              options={conditionOptions}
+              selected={conditionFilter}
+              onChange={setConditionFilter}
+              allLabel="All Conditions"
+            />
+            <MultiSelectFilter
+              label="Current Status"
+              pluralLabel="Statuses"
+              icon={Activity}
+              options={STATUS_OPTIONS}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              allLabel="All Statuses"
+            />
+            <MultiSelectFilter
+              label="Ownership"
+              pluralLabel="Ownerships"
+              icon={Shield}
+              options={OWNERSHIP_OPTIONS}
+              selected={ownershipFilter}
+              onChange={setOwnershipFilter}
+              allLabel="All Ownership"
+            />
             <div className="flex items-end">
               <button onClick={clearFilters}
                 className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm">
@@ -193,6 +238,36 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
         </div>
       )}
 
+      {/* ── Bulk actions bar (shows only when rows are selected) ── */}
+      {selectedRowCount > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 14px', marginBottom: 12, borderRadius: 10,
+          backgroundColor: '#eff6ff', border: '1px solid #bfdbfe',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#1e3a8a' }}>
+            <span style={{ fontWeight: 700 }}>{selectedRowCount} row{selectedRowCount === 1 ? '' : 's'} selected</span>
+            {distinctSelectedProductCount !== selectedRowCount && (
+              <span style={{ fontSize: 12, color: '#475569' }}>
+                ({distinctSelectedProductCount} product{distinctSelectedProductCount === 1 ? '' : 's'} will be deleted)
+              </span>
+            )}
+            <button onClick={clearSelection}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: '1px solid #cbd5e1',
+                borderRadius: 6, backgroundColor: '#fff', fontSize: 12, cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
+              <X size={12} /> Clear
+            </button>
+          </div>
+          <button onClick={() => setConfirmBulkDelete(true)} disabled={isBulkDeleting}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: 'none',
+              borderRadius: 8, backgroundColor: '#dc2626', color: '#fff', fontSize: 13, fontWeight: 700,
+              cursor: isBulkDeleting ? 'not-allowed' : 'pointer', opacity: isBulkDeleting ? 0.6 : 1,
+              boxShadow: '0 2px 6px rgba(220,38,38,0.25)' }}>
+            <Trash2 size={14} /> {isBulkDeleting ? 'Deleting…' : 'Delete Selected'}
+          </button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center gap-2 text-gray-500 text-sm">
           <Loader2 size={16} className="animate-spin" /> Loading report…
@@ -206,6 +281,15 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
+                <th className="px-4 py-2.5 bg-gray-50" style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                    title="Select all visible rows"
+                    style={{ width: 15, height: 15, cursor: 'pointer' }}
+                  />
+                </th>
                 {HEADERS.map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">{h}</th>
                 ))}
@@ -214,8 +298,20 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
             <tbody className="divide-y divide-gray-100">
               {filteredRows.map((r, i) => {
                 const paymentLabel = r.supplierPaymentStatus ? (PAYMENT_DISPLAY[r.supplierPaymentStatus] || r.supplierPaymentStatus) : null;
+                const selected = isRowSelected(r);
                 return (
-                  <tr key={`${r.productId}-${r.serialNumber}-${i}`} style={{ backgroundColor: i % 2 === 1 ? '#fafafa' : '#fff' }}>
+                  <tr
+                    key={`${r.productId}-${r.serialNumber}-${i}`}
+                    style={{ backgroundColor: selected ? '#eff6ff' : (i % 2 === 1 ? '#fafafa' : '#fff') }}
+                  >
+                    <td className="px-4 py-2.5" style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleRow(r)}
+                        style={{ width: 15, height: 15, cursor: 'pointer' }}
+                      />
+                    </td>
                     <td className="px-4 py-2.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.stockInDateAuto)}</td>
                     <td className="px-4 py-2.5 text-sm text-gray-600 whitespace-nowrap">{r.stockInDateManual ? formatDate(r.stockInDateManual) : '—'}</td>
                     <td className="px-4 py-2.5 text-sm text-gray-600">{r.type || '—'}</td>
@@ -253,5 +349,55 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
         </div>
       )}
     </div>
+
+    {/* ── Bulk delete confirmation modal ── */}
+    {confirmBulkDelete && (
+      <div style={{
+        position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16,
+      }}>
+        <div style={{ backgroundColor: '#fff', borderRadius: 14, width: 420, maxWidth: '100%', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <AlertTriangle size={22} color="#dc2626" />
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Delete selected items?</div>
+              <div style={{ fontSize: 12, color: '#64748b' }}>They'll be moved to Deleted Inventory.</div>
+            </div>
+          </div>
+          <div style={{ padding: '16px 20px', fontSize: 13, color: '#475569', lineHeight: 1.55 }}>
+            You've selected <b>{selectedRowCount}</b> row{selectedRowCount === 1 ? '' : 's'}
+            {distinctSelectedProductCount !== selectedRowCount && (
+              <> from <b>{distinctSelectedProductCount}</b> distinct product{distinctSelectedProductCount === 1 ? '' : 's'}</>
+            )}.
+            {distinctSelectedProductCount !== selectedRowCount && (
+              <div style={{ marginTop: 10, padding: '10px 12px', backgroundColor: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#78350f' }}>
+                Note: this deletes at the product level — all serials belonging to those products will be affected.
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid #f1f5f9', backgroundColor: '#f8fafc' }}>
+            <button
+              onClick={() => setConfirmBulkDelete(false)}
+              disabled={isBulkDeleting}
+              style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmBulkDelete}
+              disabled={isBulkDeleting}
+              style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: 'none',
+                backgroundColor: '#dc2626', color: '#fff', fontSize: 13, fontWeight: 700,
+                cursor: isBulkDeleting ? 'not-allowed' : 'pointer', opacity: isBulkDeleting ? 0.6 : 1 }}
+            >
+              {isBulkDeleting ? 'Deleting…' : `Delete ${distinctSelectedProductCount}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
-);
+  );
+};

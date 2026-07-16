@@ -17,9 +17,11 @@ import { LocationSelector, SerialLocationSelector } from './LocationSelector';
 interface Props extends UseInventoryMultiModelViewModelReturn {}
 
 // ── Stepper ───────────────────────────────────────────────────────────────────
+// Payment step removed — inventory saves directly from the Models step and
+// any payment tracking is handled later from the Transactions module.
 const STEPS = [
   { n: 1, label: 'Type' }, { n: 2, label: 'Costing' },
-  { n: 3, label: 'Models' }, { n: 4, label: 'Payment' },
+  { n: 3, label: 'Models' },
 ];
 const Stepper = ({ current }: { current: number }) => (
   <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 32px' }}>
@@ -263,12 +265,12 @@ function DescriptionField({
         key={entryId}
         defaultValue={value}
         onChange={ev => updateEntry(entryId, { description: ev.target.value })}
-        rows={2}
-        placeholder="Optional notes, specs, or details..."
+        rows={3}
+        placeholder="Notes, specs, warranty terms. Press Enter for a new line —&#10;made in USA&#10;3 years warranty"
         style={{
           width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8,
           fontSize: 13, outline: 'none', color: '#111827', backgroundColor: '#fff',
-          boxSizing: 'border-box', resize: 'vertical',
+          boxSizing: 'border-box', resize: 'vertical', whiteSpace: 'pre-wrap',
         }}
       />
     </div>
@@ -695,8 +697,8 @@ export const InventoryMultiModelView: React.FC<Props> = ({
               }}
             >
               {isSaving
-                ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Preparing…</>
-                : <>Proceed to Payment <ArrowRight size={16} /></>
+                ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+                : <><Check size={16} /> Save Inventory</>
               }
             </button>
           </div>

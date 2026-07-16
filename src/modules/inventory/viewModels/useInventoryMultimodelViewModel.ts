@@ -8,8 +8,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { InventoryEntryType, INVENTORY_LOCATIONS } from '../models/types';
-import { BrandModelFirebaseService } from '../models/InventoryFirebaseService';
+import { InventoryEntryType, INVENTORY_LOCATIONS, CreateProductDTO } from '../models/types';
+import { BrandModelFirebaseService, InventoryFirebaseService } from '../models/InventoryFirebaseService';
 import { uploadInventoryImages } from '../models/InventoryFirebaseService';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
@@ -251,14 +251,20 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
 
   const isValid = useMemo(() => {
     if (!selectedBrandName.trim()) return false;
-    return entries.every(e =>
-      e.modelName.trim() !== '' &&
-      e.costPrice > 0 &&
-      e.sellPrice > 0 &&
-      e.category.trim() !== '' &&
-      e.stockQty > 0 &&
-      e.stockingLocation.trim() !== ''
-    );
+    return entries.every(e => {
+      const validSerials = e.serialNumbers.filter(s => s.trim() !== '');
+      return (
+        e.modelName.trim() !== '' &&
+        e.costPrice > 0 &&
+        e.sellPrice > 0 &&
+        e.category.trim() !== '' &&
+        e.stockQty > 0 &&
+        e.stockingLocation.trim() !== '' &&
+        // Serial numbers are REQUIRED — one per unit, no blanks, no duplicates
+        validSerials.length === e.stockQty &&
+        new Set(validSerials).size === validSerials.length
+      );
+    });
   }, [selectedBrandName, entries]);
 
   const validateForm = useCallback((): boolean => {
@@ -271,6 +277,16 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
       if (!e.category.trim())  errors[`cat_${i}`]   = `Row ${i + 1}: category required`;
       if (e.stockQty <= 0)     errors[`qty_${i}`]   = `Row ${i + 1}: quantity must be > 0`;
       if (!e.stockingLocation) errors[`loc_${i}`]   = `Row ${i + 1}: stocking location required`;
+
+      // Serial numbers are REQUIRED and must match stockQty
+      const validSerials = e.serialNumbers.filter(s => s.trim() !== '');
+      if (validSerials.length === 0) {
+        errors[`serials_${i}`] = `Row ${i + 1}: serial numbers are required`;
+      } else if (validSerials.length !== e.stockQty) {
+        errors[`serials_${i}`] = `Row ${i + 1}: provide ${e.stockQty} serial number${e.stockQty === 1 ? '' : 's'} (${validSerials.length} filled)`;
+      } else if (new Set(validSerials).size !== validSerials.length) {
+        errors[`serials_${i}`] = `Row ${i + 1}: duplicate serial numbers found`;
+      }
     });
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -279,7 +295,10 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
   // ── isSaving ──────────────────────────────────────────────────────────────
   const [isSaving, setIsSaving] = useState(false);
 
-  // ── handleNext → go to payment ────────────────────────────────────────────
+  // ── handleNext → save all entries directly (no payment step) ────────────
+  // Payment tracking was removed from the add-inventory flow. Items are saved
+  // with paymentStatus = 'unpaid' and can be paid off later from the
+  // Transactions / Payables modules.
   const handleNext = useCallback(async () => {
     if (!validateForm()) {
       toast.error('Please fix the highlighted errors before continuing.');
@@ -287,57 +306,91 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
     }
     setIsSaving(true);
     try {
-      // Optionally persist new models to Firestore so they appear in future dropdowns
+      // Persist brand + models to Firestore so they appear in future dropdowns
       try {
         await BrandModelFirebaseService.saveCostingBrandAndModels(
           selectedBrandName,
-          entries.map(e => ({ modelName: e.modelName, costPrice: e.costPrice }))
+          entries.map(e => ({ modelName: e.modelName, costPrice: e.costPrice })),
         );
       } catch {
         // non-blocking — proceed even if save fails
       }
 
-      // Upload images for each entry (optional — entries with no images are skipped)
-      const imageUrlsMap: Record<string, string[]> = {};
+      let successCount = 0;
+      const failed: string[] = [];
+
+      // Sequential — parallel writes on the same brand+model pair could race
+      // against the duplicate-serial check inside createProduct.
       for (const e of entries) {
-        if (e.images.length > 0) {
-          const productKey = `${selectedBrandName}-${e.modelName}-${Date.now()}`.replace(/\s+/g, '_');
-          imageUrlsMap[e.id] = await uploadInventoryImages(e.images, productKey);
-        } else {
-          imageUrlsMap[e.id] = [];
+        try {
+          const validSerials = e.serialNumbers.filter(s => s.trim() !== '');
+
+          // Upload images if any (non-blocking failure)
+          let imageUrls: string[] = [];
+          if (e.images.length > 0) {
+            try {
+              const productKey = `${selectedBrandName}-${e.modelName}-${Date.now()}`.replace(/\s+/g, '_');
+              imageUrls = await uploadInventoryImages(e.images, productKey);
+            } catch (imgErr) {
+              console.warn(`Image upload failed for ${e.modelName}:`, imgErr);
+            }
+          }
+
+          // Seed per-serial city map: entry-specific overrides over stocking default
+          const serialCities: { [k: string]: string } = { ...e.serialCities };
+          validSerials.forEach(s => {
+            if (!serialCities[s]) serialCities[s] = e.stockingLocation;
+          });
+
+          const dto: CreateProductDTO = {
+            brandName:     selectedBrandName,
+            modelName:     e.modelName,
+            category:      e.category,
+            costPrice:     e.costPrice,
+            sellPrice:     e.sellPrice,
+            buyType:       'Import',
+            warrantyYears: 1,
+            stock:         e.stockQty,
+            location:      e.stockingLocation,
+            description:   e.description,
+            serialNumbers: validSerials,
+            serialCities,
+            status:        (e.status as any) || 'New',
+            isDamaged:     false,
+            costingOption: 'without',
+            imageUrls,
+          } as any;
+
+          // paymentStatus: 'unpaid' — this new item is a payable to be
+          // reconciled later from the Transactions module. No paidAmount here.
+          await InventoryFirebaseService.createProduct(dto, {
+            paymentStatus: 'unpaid',
+            totalAmount:   e.costPrice * e.stockQty,
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to save entry (${e.modelName}):`, err);
+          failed.push(e.modelName || `row-${entries.indexOf(e) + 1}`);
         }
       }
 
-      const params = new URLSearchParams({
-        type:             inventoryType,
-        costing:          'without',
-        brandName:        selectedBrandName,
-        brandId:          selectedBrandId,
-        multiModels:      JSON.stringify(entries.map(e => ({
-          modelName:       e.modelName,
-          costPrice:       e.costPrice,
-          salePrice:       e.sellPrice,
-          quantity:        e.stockQty,
-          category:        e.category,
-          status:          e.status,
-          location:        e.stockingLocation,
-          dealerPrice:     e.dealerPrice,
-          description:     e.description,
-          serialNumbers:   e.serialNumbers.filter(s => s.trim() !== ''),
-          serialCities:    e.serialCities,
-          imageUrls:       imageUrlsMap[e.id] ?? [],
-        }))),
-        grandTotalCost:   grandTotalCost.toString(),
-        grandTotalUnits:  grandTotalUnits.toString(),
-      });
-
-      navigate(`/inventory/create-new/payment?${params.toString()}`);
+      if (failed.length === 0) {
+        toast.success(`✅ ${successCount} product${successCount === 1 ? '' : 's'} added to inventory`);
+        navigate('/inventory');
+      } else if (successCount === 0) {
+        toast.error(`Failed to save any items. Check console for details.`);
+      } else {
+        toast.warning(`Saved ${successCount}, but ${failed.length} failed: ${failed.join(', ')}`);
+        // Partial success — still return to inventory so the user sees what saved
+        navigate('/inventory');
+      }
     } catch (err) {
-      toast.error('Failed to prepare data. Please try again.');
+      console.error('Multi-model save fatal error:', err);
+      toast.error('Failed to save inventory. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  }, [validateForm, selectedBrandName, selectedBrandId, entries, grandTotalCost, grandTotalUnits, inventoryType, navigate]);
+  }, [validateForm, selectedBrandName, entries, inventoryType, navigate]);
 
   const handleBack = useCallback(() => {
     // Credit inventory skips the costing-option screen entirely (always "without"),

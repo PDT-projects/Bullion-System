@@ -9,7 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Package, Hash, ArrowLeft, ArrowRight, Loader2,
-  ChevronDown, ChevronUp, MapPin, Tag,
+  ChevronDown, ChevronUp, MapPin, Tag, Check,
 } from 'lucide-react';
 import {
   UseInventoryProductDetailsViewModelReturn,
@@ -30,6 +30,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   setLocation, setDescription, setStatus, updateSerialNumber, updateSerialCity,
   handleNext, handleBack, categories, cities,
   costingBrandId, costingBrandName, preloadedModels, isLoadingModels,
+  isSaving,
 }) => {
   // Dealer price local state (optional, not validated)
   const [dealerPrice, setDealerPrice] = useState<number | ''>('');
@@ -136,8 +137,8 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
 
   // ── SHARED COMPONENTS ────────────────────────────────────────────────────────
   const stepsDef = costingOption === 'with'
-    ? [{ n: 1, l: 'Type' }, { n: 2, l: 'Costing' }, { n: 3, l: 'Details' }, { n: 4, l: 'Products' }, { n: 5, l: 'Payment' }]
-    : [{ n: 1, l: 'Type' }, { n: 2, l: 'Costing' }, { n: 3, l: 'Details' }, { n: 4, l: 'Payment' }];
+    ? [{ n: 1, l: 'Type' }, { n: 2, l: 'Costing' }, { n: 3, l: 'Details' }, { n: 4, l: 'Products' }]
+    : [{ n: 1, l: 'Type' }, { n: 2, l: 'Costing' }, { n: 3, l: 'Details' }];
   const currentStepNum = costingOption === 'with' ? 4 : 3;
 
   const ProgressBar = () => (
@@ -254,8 +255,9 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
         <textarea
           value={formData.description}
           onChange={e => setDescription(e.target.value)}
-          rows={3}
-          className={`${inputCls} resize-vertical`}
+          rows={4}
+          placeholder="Notes, specs, warranty terms. Press Enter for a new line — each line is preserved."
+          className={`${inputCls} resize-vertical whitespace-pre-wrap`}
         />
         {validationErrors.description && (
           <p className="text-red-500 text-sm mt-1">{validationErrors.description}</p>
@@ -484,8 +486,9 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                 <textarea
                   value={formData.description}
                   onChange={e => setDescription(e.target.value)}
-                  rows={3}
-                  className={`${inputCls} resize-vertical`}
+                  rows={4}
+                  placeholder="Notes, specs, warranty terms. Press Enter for a new line — each line is preserved."
+                  className={`${inputCls} resize-vertical whitespace-pre-wrap`}
                 />
                 {validationErrors.description && (
                   <p className="text-red-500 text-sm mt-1">{validationErrors.description}</p>
@@ -547,9 +550,13 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               </button>
               <button
                 onClick={() => handleNext()}
-                className="px-8 py-3 rounded-lg font-semibold text-gray-900 text-lg shadow-lg flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 hover:text-gray-900 active:bg-indigo-800 active:text-gray-900 transition-all duration-200"
+                disabled={isSaving}
+                className="px-8 py-3 rounded-lg font-semibold text-white text-lg shadow-lg flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Next: Payment <ArrowRight size={20} />
+                {isSaving
+                  ? <><Loader2 size={18} className="animate-spin" /> Saving…</>
+                  : <><Check size={18} /> Save Inventory</>
+                }
               </button>
             </div>
           </div>
@@ -764,17 +771,19 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               )}
               <button
                 onClick={() => handleNextWithDealer(selectedModels)}
-                disabled={isLoadingModels || selectedModels.length === 0}
+                disabled={isLoadingModels || selectedModels.length === 0 || isSaving}
                 className={`px-8 py-3 rounded-lg font-semibold text-lg shadow-lg flex items-center gap-2 transition-colors ${
-                  !isLoadingModels && selectedModels.length > 0
-                    ? 'bg-indigo-600 text-gray-900 hover:bg-indigo-700 hover:text-gray-900 active:bg-indigo-800 active:text-gray-900'
+                  !isLoadingModels && !isSaving && selectedModels.length > 0
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800'
                     : 'bg-gray-200 text-gray-700 cursor-not-allowed'
                 }`}
               >
                 {isLoadingModels ? (
                   <><Loader2 size={18} className="animate-spin" /> Loading...</>
+                ) : isSaving ? (
+                  <><Loader2 size={18} className="animate-spin" /> Saving…</>
                 ) : (
-                  <>Next: Payment <ArrowRight size={20} /></>
+                  <><Check size={18} /> Save Inventory</>
                 )}
               </button>
             </div>

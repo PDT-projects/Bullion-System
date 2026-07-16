@@ -369,6 +369,9 @@ export function InventoryListView({
   const [selectedModels, setSelectedModels] = React.useState<string[]>([]);
   // ── Row selection (checkboxes) for the "sum of selected" summary bar ──
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  // ── Bulk delete state ──
+  const [confirmBulkDelete, setConfirmBulkDelete] = React.useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
 
   // ── Global search — matches against brand, model, category, status, location, ownership ──
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -494,6 +497,38 @@ export function InventoryListView({
       setDeleteConfirm(null);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // ── Bulk delete: soft-delete every selected (visible) product ──────────────
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBulkDeleting(true);
+    const user = currentUser ?? { uid: 'unknown', email: 'unknown@system', displayName: 'Unknown User' };
+    const ids = Array.from(selectedIds);
+    const failed: string[] = [];
+    try {
+      for (const id of ids) {
+        try {
+          await InventoryFirebaseService.deleteProduct(id, {
+            uid: user.uid, email: user.email, displayName: user.displayName,
+          });
+          onDelete?.(id); // remove from parent list state
+        } catch (e) {
+          console.error(`Bulk delete failed for ${id}:`, e);
+          failed.push(id);
+        }
+      }
+      const succeeded = ids.length - failed.length;
+      if (failed.length === 0) {
+        toast.success(`${succeeded} item${succeeded === 1 ? '' : 's'} moved to Deleted Inventory`);
+      } else {
+        toast.error(`Deleted ${succeeded}, ${failed.length} failed — check console.`);
+      }
+      setSelectedIds(new Set());
+      setConfirmBulkDelete(false);
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -732,15 +767,28 @@ export function InventoryListView({
       )}
 
       {!isLoading && (
-        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span>Showing {displayProducts.length} of {products.length} products</span>
           {hasSelection && (
             <>
               <span style={{ color: '#cbd5e1' }}>•</span>
               <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedProducts.length} selected</span>
               <button onClick={() => setSelectedIds(new Set())}
-                style={{ fontSize: 12, fontWeight: 600, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                style={{ fontSize: 12, fontWeight: 600, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                 Clear selection
+              </button>
+              <button
+                onClick={() => setConfirmBulkDelete(true)}
+                disabled={isBulkDeleting}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '4px 10px', border: 'none', borderRadius: 6,
+                  backgroundColor: '#dc2626', color: '#fff', fontSize: 12, fontWeight: 700,
+                  cursor: isBulkDeleting ? 'not-allowed' : 'pointer', opacity: isBulkDeleting ? 0.6 : 1,
+                  boxShadow: '0 1px 3px rgba(220,38,38,0.35)',
+                }}
+              >
+                <Trash2 size={12} /> Delete Selected ({selectedProducts.length})
               </button>
             </>
           )}
@@ -992,6 +1040,63 @@ export function InventoryListView({
         </div>
       )}
 
+      {/* ── Bulk Delete Confirmation Modal ── */}
+      {confirmBulkDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-red-100 bg-red-50">
+              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-red-100">
+                <AlertTriangle size={18} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-red-800">Delete {selectedProducts.length} Item{selectedProducts.length === 1 ? '' : 's'}?</h3>
+                <p className="text-xs text-red-500 mt-0.5">This action cannot be undone</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-gray-700">
+                You're about to delete <b>{selectedProducts.length}</b> product{selectedProducts.length === 1 ? '' : 's'}:
+              </p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 max-h-40 overflow-y-auto">
+                {selectedProducts.slice(0, 8).map(p => (
+                  <div key={p.id} className="text-xs text-gray-700 py-0.5">
+                    • <b>{p.brandName}</b> {p.modelName} <span className="text-gray-400">({p.stock} in stock)</span>
+                  </div>
+                ))}
+                {selectedProducts.length > 8 && (
+                  <div className="text-xs text-gray-500 italic pt-1">…and {selectedProducts.length - 8} more</div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                ⚠️ All selected items will be moved to <strong>Deleted Inventory</strong>. Originals stay preserved in Firebase.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={() => setConfirmBulkDelete(false)}
+                disabled={isBulkDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg disabled:opacity-50 transition-colors"
+                style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
+                onMouseEnter={e => { if (!isBulkDeleting) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#b91c1c'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#dc2626'; }}
+              >
+                {isBulkDeleting ? (
+                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Deleting…</>
+                ) : (
+                  <><Trash2 size={14} /> Delete {selectedProducts.length}</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── View Modal ── */}
       {viewProduct && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1089,7 +1194,7 @@ export function InventoryListView({
               {viewProduct.description && (
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Description</p>
-                  <p className="text-sm text-gray-800">{viewProduct.description}</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{viewProduct.description}</p>
                 </div>
               )}
             </div>
