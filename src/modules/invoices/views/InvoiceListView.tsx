@@ -372,8 +372,8 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
               stock: data.stock || 0,
               serialNumbers: data.serialNumbers || [],
               serialStatus: data.serialStatus || {},
-              supplierCost: data.supplierCost || 0,
-              purchaseCost: data.purchaseCost || 0,
+              supplierCost: data.ownershipType === 'Credit' ? (data.supplierCost || data.costPrice || 0) : 0,
+              purchaseCost: data.ownershipType === 'Credit' ? 0 : (data.costPrice || data.purchaseCost || 0),
               ownershipType: data.ownershipType || 'Owned',
               category: data.category || '',
               description: data.description || '',
@@ -463,6 +463,46 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         selectedCurrencies: ['AED'], branch: '', digitalStamp: false,
         products: invoiceProducts,
       } as any);
+
+      // ── Deduct stock from inventory ──────────────────────────────────────────
+      const { collection, getDoc, doc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('../../../api/firebase/firebase');
+      for (const l of validLines) {
+        try {
+          const prodRef = doc(db, 'products', l.productId);
+          const snap = await getDoc(prodRef);
+          if (!snap.exists()) continue;
+          const pdata = snap.data() as any;
+          const newSerialStatus = { ...(pdata.serialStatus || {}) };
+          const newSerialSoldDates = { ...(pdata.serialSoldDates || {}) };
+          const soldDate = new Date().toISOString();
+
+          if (l.serial) {
+            // Mark specific serial as Sold
+            newSerialStatus[l.serial] = 'Sold';
+            newSerialSoldDates[l.serial] = soldDate;
+          } else {
+            // No serial chosen — mark first available serial as Sold
+            const avail = (pdata.serialNumbers || []).find((s: string) => newSerialStatus[s] !== 'Sold');
+            if (avail) { newSerialStatus[avail] = 'Sold'; newSerialSoldDates[avail] = soldDate; }
+          }
+
+          const newStock = Math.max(0, (pdata.stock || 0) - l.qty);
+          const allSold = (pdata.serialNumbers || []).length > 0 &&
+            (pdata.serialNumbers || []).every((s: string) => newSerialStatus[s] === 'Sold');
+
+          await updateDoc(prodRef, {
+            stock: newStock,
+            serialStatus: newSerialStatus,
+            serialSoldDates: newSerialSoldDates,
+            status: allSold || newStock === 0 ? 'Sold' : pdata.status,
+            updatedAt: soldDate,
+          });
+        } catch (stockErr) {
+          console.warn('[Invoice] Stock deduction failed for', l.productId, stockErr);
+        }
+      }
+
       // Auto-save customer
       CustomerFirebaseService.upsertCustomer({
         customerName: custName, customerPhone: custPhone,
