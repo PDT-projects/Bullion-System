@@ -22,6 +22,7 @@ import {
 } from '../models/invoiceService';
 import { downloadInvoicePdf, generateInvoicePdf } from '../models/invoicePdfService';
 import { useInvoiceFormViewModel } from '../viewModels/useInvoiceFormViewModel';
+import { InvoiceMiscExpenseService } from '../models/InvoiceMiscExpenseService';
 
 interface Props {
   invoices: Invoice[];
@@ -573,7 +574,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                   <input type="tel" value={custPhone} onChange={e=>setCustPhone(e.target.value)} style={iSty} />
                 </div>
                 <div>
-                  <label style={lbl}>Identity</label>
+                  <label style={lbl}>Identity / CNIC</label>
                   <input value={custCNIC} onChange={e=>setCustCNIC(e.target.value)} style={iSty} />
                 </div>
               </div>
@@ -693,6 +694,127 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 }
 
 
+
+// ── Misc Expense Modal ───────────────────────────────────────────────────────
+function MiscExpenseModal({ invoice, banks, onClose, onSaved }: {
+  invoice: Invoice; banks: any[]; onClose: () => void; onSaved: () => void;
+}) {
+  const [amount,   setAmount]   = React.useState<number | ''>('');
+  const [category, setCategory] = React.useState('Shipping');
+  const [mode,     setMode]     = React.useState<'Cash'|'Bank'|'Cheque'>('Cash');
+  const [bankId,   setBankId]   = React.useState('');
+  const [date,     setDate]     = React.useState(new Date().toLocaleDateString('en-CA'));
+  const [note,     setNote]     = React.useState('');
+  const [saving,   setSaving]   = React.useState(false);
+
+  const CATEGORIES = ['Shipping', 'Cargo', 'Customs', 'Agent Fee', 'Handling', 'Insurance', 'Other'];
+
+  const handleSave = async () => {
+    if (!amount || amount <= 0) { toast.error('Enter an amount greater than zero'); return; }
+    setSaving(true);
+    try {
+      const bank = mode === 'Bank' ? banks.find(b => b.id === bankId) : undefined;
+      await InvoiceMiscExpenseService.recordExpense({
+        invoice,
+        amount: Number(amount),
+        category,
+        mode,
+        date,
+        bankId: bank?.id,
+        bankName: bank?.name,
+        note: note || undefined,
+        company: (invoice.branch || 'Main') as any,
+      });
+      toast.success(`Expense of AED ${Number(amount).toLocaleString()} recorded`);
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to record expense');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const iSty: React.CSSProperties = { width:'100%', border:'1px solid #e2e8f0', borderRadius:8, padding:'9px 12px', fontSize:13, color:'#111827', backgroundColor:'#fff', outline:'none', boxSizing:'border-box' };
+  const lbl: React.CSSProperties = { fontSize:11, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:5 };
+
+  return createPortal(
+    <div onClick={onClose}
+      style={{ position:'fixed', inset:0, backgroundColor:'rgba(15,23,42,0.5)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ width:460, maxWidth:'94vw', backgroundColor:'#fff', borderRadius:14, overflow:'hidden', boxShadow:'0 24px 64px rgba(0,0,0,0.35)' }}>
+        {/* Header */}
+        <div style={{ padding:'16px 20px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div>
+            <div style={{ fontSize:15, fontWeight:800, color:'#0f172a' }}>Add Misc Expense</div>
+            <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>Invoice {invoice.invoiceNumber} · {invoice.customerName}</div>
+          </div>
+          <button onClick={onClose} style={{ width:28, height:28, borderRadius:6, border:'1px solid #e2e8f0', backgroundColor:'#f8fafc', cursor:'pointer', fontSize:17, color:'#6b7280' }}>×</button>
+        </div>
+        {/* Body */}
+        <div style={{ padding:'18px 20px', display:'flex', flexDirection:'column', gap:14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div>
+              <label style={lbl}>Amount (AED) *</label>
+              <input type="number" min={0} step="any" value={amount}
+                onChange={e => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                placeholder="0.00" style={iSty} autoFocus />
+            </div>
+            <div>
+              <label style={lbl}>Category</label>
+              <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...iSty, appearance:'none' }}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={lbl}>Payment Mode</label>
+            <div style={{ display:'flex', gap:8 }}>
+              {(['Cash','Bank','Cheque'] as const).map(m => (
+                <button key={m} onClick={() => setMode(m)}
+                  style={{ flex:1, padding:'8px 12px', borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:600,
+                    border:`2px solid ${mode===m?'#111827':'#e2e8f0'}`,
+                    backgroundColor:mode===m?'#111827':'#fff',
+                    color:mode===m?'#fff':'#6b7280' }}>{m}</button>
+              ))}
+            </div>
+          </div>
+          {mode === 'Bank' && (
+            <div>
+              <label style={lbl}>Bank Account</label>
+              {banks.length === 0
+                ? <div style={{ fontSize:12, color:'#94a3b8', padding:'8px 12px', backgroundColor:'#f9fafb', borderRadius:7 }}>No banks — add one in Banking</div>
+                : <select value={bankId} onChange={e => setBankId(e.target.value)} style={{ ...iSty, appearance:'none' }}>
+                    <option value="">Select bank…</option>
+                    {banks.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>}
+            </div>
+          )}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div>
+              <label style={lbl}>Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={iSty} />
+            </div>
+            <div>
+              <label style={lbl}>Note</label>
+              <input value={note} onChange={e => setNote(e.target.value)} placeholder="Optional" style={iSty} />
+            </div>
+          </div>
+        </div>
+        {/* Footer */}
+        <div style={{ padding:'14px 20px', borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'flex-end', gap:8 }}>
+          <button onClick={onClose} style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #d1d5db', backgroundColor:'#fff', color:'#374151', fontWeight:600, fontSize:13, cursor:'pointer' }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ padding:'9px 22px', borderRadius:8, border:'none', backgroundColor:saving?'#94a3b8':'#dc2626', color:'#fff', fontWeight:700, fontSize:13, cursor:saving?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:7 }}>
+            {saving ? <><Loader2 size={14} style={{ animation:'spin 1s linear infinite' }}/> Saving…</> : <>+ Add Expense</>}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function InvoiceListView({
   invoices, filteredInvoices, stats, filters, viewingInvoice, isLoading,
   onSearch, onStatusFilter, onCityFilter, onSalespersonFilter,
@@ -758,6 +880,7 @@ export function InvoiceListView({
   }, [previewUrl]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [miscExpenseInvoice, setMiscExpenseInvoice] = useState<Invoice | null>(null);
 
   const hasActiveFilters =
     !!filters.searchTerm ||
@@ -877,7 +1000,11 @@ export function InvoiceListView({
               ) : filteredInvoices.map(invoice => {
                 const supplierCost = calculateSupplierCost(invoice);
                 const purchaseCost = calculatePurchaseCost(invoice);
-                const misc = calculateMiscExpense(invoice);
+                // Prefer the running miscExpense total (from InvoiceMiscExpenseService),
+                // fall back to the legacy 4-bucket calculation for old invoices
+                const misc = (invoice.miscExpense && invoice.miscExpense > 0)
+                  ? invoice.miscExpense
+                  : calculateMiscExpense(invoice);
                 const netSale = (invoice.totalAmount || 0) - misc;
                 const paid = calculatePaidAmount(invoice);
                 const remaining = calculateRemainingAmount(invoice);
@@ -999,13 +1126,20 @@ export function InvoiceListView({
                   </td>
 
                   <td className="px-3 py-3">
-                    {invoice.status !== 'Paid' && invoice.status !== 'Returned' && (
-                      <button onClick={() => openPayment(invoice)}
-                        className="inline-flex items-center justify-center text-xs font-semibold px-3 py-1.5 rounded-md text-white whitespace-nowrap hover:brightness-125 transition"
-                        style={{ backgroundColor: '#1f2937' }}>
-                        Record Payment
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {invoice.status !== 'Paid' && invoice.status !== 'Returned' && (
+                        <button onClick={() => openPayment(invoice)}
+                          className="inline-flex items-center justify-center text-xs font-semibold px-3 py-1.5 rounded-md text-white whitespace-nowrap hover:brightness-125 transition"
+                          style={{ backgroundColor: '#1f2937' }}>
+                          Record Payment
+                        </button>
+                      )}
+                      <button onClick={() => setMiscExpenseInvoice(invoice)}
+                        className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-md whitespace-nowrap transition"
+                        style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                        + Misc Exp
                       </button>
-                    )}
+                    </div>
                     {invoice.paymentMode && invoice.status !== 'Unpaid' && (
                       <div className="mt-1">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -1058,7 +1192,7 @@ export function InvoiceListView({
               const tTotal    = src.reduce((s, i) => s + (i.totalAmount || 0), 0);
               const tSupplier = src.reduce((s, i) => s + calculateSupplierCost(i), 0);
               const tPurchase = src.reduce((s, i) => s + calculatePurchaseCost(i), 0);
-              const tMisc     = src.reduce((s, i) => s + calculateMiscExpense(i), 0);
+              const tMisc     = src.reduce((s, i) => s + ((i.miscExpense && i.miscExpense > 0) ? i.miscExpense : calculateMiscExpense(i)), 0);
               const tNet      = tTotal - tMisc;
               const tPaid     = src.reduce((s, i) => s + calculatePaidAmount(i), 0);
               const tLeft     = src.reduce((s, i) => s + calculateRemainingAmount(i), 0);
@@ -1357,6 +1491,16 @@ export function InvoiceListView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Misc Expense Modal */}
+      {miscExpenseInvoice && (
+        <MiscExpenseModal
+          invoice={miscExpenseInvoice}
+          banks={banks}
+          onClose={() => setMiscExpenseInvoice(null)}
+          onSaved={() => setMiscExpenseInvoice(null)}
+        />
       )}
 
       {/* Quick Create Invoice Modal */}
