@@ -509,7 +509,11 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
                 <label style={S.label}>Condition</label>
                 <div style={{ position: 'relative' }}>
                   <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...S.inp(), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
-                    {['New','Used','In Transit','Returned','Damaged'].map(s => <option key={s} value={s}>{s}</option>)}
+                    {/* Condition list intentionally limited to New / Used.
+                        In Transit / Returned / Damaged are not user-selectable
+                        at add-time — those states are set by other flows
+                        (transfer, invoice return, damage report). */}
+                    {['New','Used'].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                   <ChevronDown size={13} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} />
                 </div>
