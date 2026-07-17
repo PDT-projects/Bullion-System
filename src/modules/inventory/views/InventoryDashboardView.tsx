@@ -12,12 +12,14 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Package, Plus, RotateCcw, ArrowLeftRight, Wallet, AlertTriangle,
-  Trash2, Search, X, MapPin, Loader2, ChevronDown,
+  Trash2, Search, X, MapPin, Loader2, ChevronDown, Eye, Download,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useInventoryReportViewModel } from '../viewModels/useInventoryReportViewModel';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
+import { InvoiceLifecycleService } from '../../invoices/models/InvoiceLifecycleService';
+import { generateInvoicePdf } from '../../invoices/models/invoicePdfService';
 import { useAuth } from '../../../providers/context/AuthContext';
 import { InventoryTypeSelectionView } from './InventoryTypeSelectionView';
 import { InventoryReturnWrapper } from './InventoryReturnWrapper';
@@ -238,6 +240,52 @@ export function InventoryDashboardView({
   // ── Per-row delete ────
   const [confirmRowDelete, setConfirmRowDelete] = useState<InventoryReportRow | null>(null);
   const [isRowDeleting,    setIsRowDeleting]    = useState(false);
+
+  // ── Invoice PDF preview ──
+  // When the user clicks the eye icon in the Invoice # column, we look up
+  // the invoice by number, render a PDF, and show it in an inline modal.
+  // Kept in local component state (not the VM) because the preview is a
+  // one-off action tied to a row and doesn't need to survive VM refreshes.
+  const [invoicePreviewUrl,    setInvoicePreviewUrl]    = useState<string | null>(null);
+  const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
+  const [invoicePreviewNumber, setInvoicePreviewNumber] = useState<string>('');
+  const [invoicePreviewInvoice, setInvoicePreviewInvoice] = useState<any>(null);
+
+  const openInvoicePreview = useCallback(async (invoiceNumber: string) => {
+    if (!invoiceNumber) return;
+    setInvoicePreviewNumber(invoiceNumber);
+    setInvoicePreviewLoading(true);
+    try {
+      const inv = await InvoiceLifecycleService.fetchInvoiceByNumber(invoiceNumber);
+      if (!inv) {
+        toast.error(`Invoice ${invoiceNumber} not found (may have been deleted)`);
+        setInvoicePreviewNumber('');
+        return;
+      }
+      setInvoicePreviewInvoice(inv);
+      const blob = await generateInvoicePdf(inv as any);
+      const url  = URL.createObjectURL(blob);
+      setInvoicePreviewUrl(url);
+    } catch (err) {
+      console.error('[InventoryDashboard] Invoice PDF preview failed:', err);
+      toast.error('Failed to open invoice PDF');
+      setInvoicePreviewNumber('');
+    } finally {
+      setInvoicePreviewLoading(false);
+    }
+  }, []);
+
+  const closeInvoicePreview = useCallback(() => {
+    if (invoicePreviewUrl) URL.revokeObjectURL(invoicePreviewUrl);
+    setInvoicePreviewUrl(null);
+    setInvoicePreviewNumber('');
+    setInvoicePreviewInvoice(null);
+  }, [invoicePreviewUrl]);
+
+  // Clean up the blob URL on unmount so it doesn't leak.
+  useEffect(() => {
+    return () => { if (invoicePreviewUrl) URL.revokeObjectURL(invoicePreviewUrl); };
+  }, [invoicePreviewUrl]);
 
   const handleBulkDelete = async () => {
     if (selectedRows.length === 0) return;
@@ -533,8 +581,28 @@ export function InventoryDashboardView({
                           <td style={{ padding: '9px 12px', color: '#64748b', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                             {r.currentStatus === 'Sold' ? vm.formatDate(r.soldDate) : '—'}
                           </td>
-                          <td style={{ padding: '9px 12px', fontFamily: 'monospace', fontSize: 11, color: r.currentStatus === 'Sold' && r.invoiceNumber ? '#0f172a' : '#94a3b8', fontWeight: r.currentStatus === 'Sold' && r.invoiceNumber ? 700 : 400, verticalAlign: 'middle' }}>
-                            {r.currentStatus === 'Sold' && r.invoiceNumber ? r.invoiceNumber : '—'}
+                          <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
+                            {r.currentStatus === 'Sold' && r.invoiceNumber ? (
+                              <button
+                                onClick={() => openInvoicePreview(r.invoiceNumber!)}
+                                title={`View invoice ${r.invoiceNumber} (PDF)`}
+                                disabled={invoicePreviewLoading && invoicePreviewNumber === r.invoiceNumber}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  width: 30, height: 26, borderRadius: 6, border: '1px solid #e2e8f0',
+                                  backgroundColor: '#fff', cursor: 'pointer', color: '#4338ca',
+                                  transition: 'all 0.15s',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; }}
+                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#fff';   e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                              >
+                                {invoicePreviewLoading && invoicePreviewNumber === r.invoiceNumber
+                                  ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                                  : <Eye size={13} />}
+                              </button>
+                            ) : (
+                              <span style={{ color: '#94a3b8', fontSize: 11 }}>—</span>
+                            )}
                           </td>
                           <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{vm.formatCurrency(r.supplierCost)}</td>
                           <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{vm.formatCurrency(r.purchasingCost)}</td>
@@ -712,6 +780,95 @@ export function InventoryDashboardView({
               >
                 {isRowDeleting ? 'Deleting…' : 'Delete'}
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Invoice PDF preview modal ──
+          Rendered via portal so it overlays every other popup. Uses an iframe
+          on the blob URL for the PDF — the browser's built-in viewer handles
+          scrolling / zoom / print out of the box, and we get a Download link
+          for a quick save. Backdrop click closes; blob URL is revoked in the
+          effect above so nothing leaks. */}
+      {(invoicePreviewUrl || invoicePreviewLoading) && createPortal(
+        <div
+          onClick={closeInvoicePreview}
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.7)',
+            zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '90vw', maxWidth: 900, height: '92vh',
+              backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden',
+              display: 'flex', flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.55)',
+            }}
+          >
+            <div style={{
+              padding: '12px 16px', borderBottom: '1px solid #e2e8f0',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 7, backgroundColor: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Eye size={14} color="#4338ca" />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Invoice preview</div>
+                  <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>
+                    {invoicePreviewNumber}
+                    {invoicePreviewInvoice?.customerName ? ` · ${invoicePreviewInvoice.customerName}` : ''}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {invoicePreviewUrl && (
+                  <a
+                    href={invoicePreviewUrl}
+                    download={`${invoicePreviewNumber || 'invoice'}.pdf`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '6px 12px', fontSize: 12, fontWeight: 700,
+                      color: '#0f172a', backgroundColor: '#f1f5f9', borderRadius: 7,
+                      textDecoration: 'none',
+                    }}
+                    title="Download PDF"
+                  >
+                    <Download size={12} /> Download
+                  </a>
+                )}
+                <button
+                  onClick={closeInvoicePreview}
+                  style={{
+                    width: 30, height: 30, borderRadius: 7,
+                    border: '1px solid #e2e8f0', backgroundColor: '#fff',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b',
+                  }}
+                  title="Close preview"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+              {invoicePreviewLoading ? (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', gap: 10 }}>
+                  <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: 13 }}>Generating PDF…</span>
+                </div>
+              ) : invoicePreviewUrl ? (
+                <iframe
+                  src={invoicePreviewUrl}
+                  title={`Invoice ${invoicePreviewNumber}`}
+                  style={{ width: '100%', height: '100%', border: 'none', backgroundColor: '#fff' }}
+                />
+              ) : null}
             </div>
           </div>
         </div>,

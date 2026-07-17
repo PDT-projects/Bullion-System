@@ -858,7 +858,7 @@ export function InvoiceListView({
             selected={Array.isArray(filters.statusFilter) ? filters.statusFilter as string[] : []}
             onChange={v => onStatusFilter(v as any)}
             options={['Paid', 'Unpaid', 'Partial']} />
-          <InvoiceMultiFilter label="City"
+          <InvoiceMultiFilter label="Location"
             selected={Array.isArray(filters.cityFilter) ? filters.cityFilter as string[] : (filters.cityFilter ? [filters.cityFilter as string] : [])}
             onChange={v => onCityFilter(v)}
             options={availableCities} />
@@ -891,7 +891,7 @@ export function InvoiceListView({
                     className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-gray-800" title="Select all filtered" />
                 </th>
                 {[
-                  'Invoice #', 'Date', 'Customer', 'Branch / City',
+                  'Invoice #', 'Date', 'Customer', 'Branch / Location',
                   'Salesperson', 'Products', 'Amount (AED)',
                   'Supplier Cost', 'Purchase Cost', 'Misc Exp',
                   'Net Sale', 'Paid', 'Amount Left',
