@@ -67,7 +67,7 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
   modelSuggestions: ModelSuggestion[];
   onBrandSelect: (name: string) => void;
   onModelSelect: (name: string, model?: ModelSuggestion) => void;
-  error?: { brand?: string; model?: string; category?: string; cost?: string };
+  error?: { brand?: string; model?: string; category?: string; cost?: string; serials?: string; quantity?: string };
 }) {
   const [openBrand, setOpenBrand] = useState(false);
   const [openModel, setOpenModel] = useState(false);
@@ -157,10 +157,26 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
           </div>
           {error?.category && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.category}</p>}
         </div>
-        {/* Description */}
+        {/* Description — multi-line so users can enter paragraphs (made in UK / 3 years warranty / etc) */}
         <div>
           <label style={S.label}>Description</label>
-          <input type="text" value={row.description} onChange={e => onChange('description', e.target.value)} placeholder="Optional…" style={S.inp()} />
+          <textarea
+            value={row.description}
+            onChange={e => onChange('description', e.target.value)}
+            placeholder={'Optional — Enter for a new line\nMade in UK\n3 years warranty'}
+            rows={3}
+            style={{
+              ...S.inp(),
+              height: 'auto',
+              minHeight: 60,
+              paddingTop: 8,
+              paddingBottom: 8,
+              resize: 'vertical',
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.5,
+              fontFamily: 'inherit',
+            }}
+          />
         </div>
         {/* Qty */}
         <div>
@@ -185,20 +201,23 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
         </div>
       </div>
 
-      {/* Serial slots */}
+      {/* Serial slots — REQUIRED, one per unit */}
       <div>
-        <label style={S.label}>Serial Numbers</label>
+        <label style={S.label}>
+          Serial Numbers <span style={{ color: '#ef4444' }}>*</span>
+        </label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {Array.from({ length: row.quantity }).map((_, idx) => (
             <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 11, color: '#94a3b8', width: 24, textAlign: 'right', flexShrink: 0 }}>#{idx+1}</span>
               <input type="text" value={row.serials[idx] || ''}
                 onChange={e => { const next = [...row.serials]; next[idx] = e.target.value; onChange('serials', next); }}
-                placeholder={`Serial #${idx+1} (optional)`}
-                style={{ ...S.inp(), fontSize: 12, flex: 1 }} />
+                placeholder={`Serial #${idx+1}`}
+                style={{ ...S.inp(!!error?.serials), fontSize: 12, flex: 1 }} />
             </div>
           ))}
         </div>
+        {error?.serials && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{error.serials}</p>}
         {row.costPrice > 0 && (
           <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
             Subtotal: <strong style={{ color: '#0f172a' }}>AED {(row.costPrice * (row.serials.filter(s=>s.trim()).length || row.quantity)).toLocaleString()}</strong>

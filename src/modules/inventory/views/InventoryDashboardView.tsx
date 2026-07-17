@@ -314,7 +314,8 @@ export function InventoryDashboardView({
 
   const HEADERS = [
     '', // checkbox
-    'Stock-In Date', 'Type', 'Brand', 'Model', 'Serial No.',
+    'Stock-In Date (Auto)', 'Stock-In Date (Manual)',
+    'Type', 'Brand', 'Model', 'Serial No.',
     'Location', 'Ownership', 'Condition', 'Status',
     'Sold Date', 'Invoice #', 'Supplier Cost', 'Purchasing Cost', 'Sold Goods Payment',
     'Actions',
@@ -487,6 +488,20 @@ export function InventoryDashboardView({
                               style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#0f172a' }} />
                           </td>
                           <td style={{ padding: '9px 12px', color: '#64748b', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{vm.formatDate(r.stockInDateAuto)}</td>
+                          <td
+                            style={{
+                              padding: '9px 12px',
+                              whiteSpace: 'nowrap',
+                              verticalAlign: 'middle',
+                              // Manual date is user-set; auto date is system-set and can't be edited.
+                              // When the user hasn't overridden the auto date, show a dim '—'.
+                              color: r.stockInDateManual ? '#0f172a' : '#cbd5e1',
+                              fontWeight: r.stockInDateManual ? 600 : 400,
+                            }}
+                            title={r.stockInDateManual ? 'Manual override — user-entered stock-in date' : 'No manual override — auto date is the source of truth'}
+                          >
+                            {r.stockInDateManual ? vm.formatDate(r.stockInDateManual) : '—'}
+                          </td>
                           <td style={{ padding: '9px 12px', color: '#64748b', verticalAlign: 'middle' }}>{r.type || '—'}</td>
                           <td style={{ padding: '9px 12px', fontWeight: 700, color: '#0f172a', verticalAlign: 'middle' }}>{r.brandName}</td>
                           <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{r.modelName}</td>
@@ -560,7 +575,7 @@ export function InventoryDashboardView({
                   {/* Sticky totals footer */}
                   <tfoot>
                     <tr style={{ backgroundColor: '#0f172a', position: 'sticky', bottom: 0 }}>
-                      <td colSpan={12} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                      <td colSpan={13} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>
                         {selectedRows.length > 0 ? `Totals — ${selectedRows.length} selected rows` : `Totals — all ${displayed.length} rows`}
                       </td>
                       <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>{fmtAED(totalSupplier)}</td>

@@ -789,6 +789,64 @@ export class InventoryFirebaseService {
     }
   }
 
+  /**
+   * Canonical write-point for invoice creation.
+   *
+   * When an invoice is created that sells one or more serials of a product, the
+   * invoice-creation flow must record three things back onto the product doc so
+   * the Inventory Report can show them correctly:
+   *   1. `serialStatus[serial] = 'Sold'`      — marks the serial as sold
+   *   2. `serialSoldDates[serial] = <ISO>`    — surfaces in the "Sold Date" column
+   *   3. `serialInvoiceNumbers[serial] = <#>` — surfaces in the "Invoice #" column
+   *
+   * The serial STAYS in `serialNumbers` (so it still shows in the per-serial
+   * report as "Sold"). If your existing invoice flow removes sold serials from
+   * `serialNumbers`, that's why sold items previously disappeared from the
+   * report — this method keeps them visible with a Sold badge.
+   *
+   * @param productId       The product's Firestore doc id
+   * @param sales           One or more { serial, invoiceNumber, soldDate? } records
+   * @param soldDate        Optional shared sold date (defaults to now). Individual
+   *                        sales can override via their own `soldDate` field.
+   */
+  static async markSerialsSold(
+    productId: string,
+    sales: Array<{ serial: string; invoiceNumber: string; soldDate?: string }>,
+    soldDate?: string,
+  ): Promise<void> {
+    if (!productId || !sales || sales.length === 0) return;
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error(`Product ${productId} not found`);
+      const p = snap.data() as any;
+      const now = new Date().toISOString();
+      const fallbackDate = soldDate || now;
+
+      const nextStatus:   Record<string, any> = { ...(p.serialStatus         || {}) };
+      const nextSoldDate: Record<string, any> = { ...(p.serialSoldDates      || {}) };
+      const nextInvoice:  Record<string, any> = { ...(p.serialInvoiceNumbers || {}) };
+
+      for (const s of sales) {
+        if (!s.serial) continue;
+        nextStatus[s.serial]   = 'Sold';
+        nextSoldDate[s.serial] = s.soldDate || fallbackDate;
+        nextInvoice[s.serial]  = s.invoiceNumber || '';
+      }
+
+      await updateDoc(ref, {
+        serialStatus:         nextStatus,
+        serialSoldDates:      nextSoldDate,
+        serialInvoiceNumbers: nextInvoice,
+        updatedAt:            now,
+      });
+      console.log(`✅ Marked ${sales.length} serial(s) as Sold on product ${productId} — invoice numbers recorded`);
+    } catch (error) {
+      console.error(`❌ Error marking serials as sold on ${productId}:`, error);
+      throw new Error('Failed to mark serials as sold');
+    }
+  }
+
   /** Fetch all soft-deleted products (for Deleted Inventory view) */
   static async fetchDeletedProducts(): Promise<DeletedProduct[]> {
     try {
