@@ -651,27 +651,38 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         saved = { ...invoiceData, id: editingInvoice.id };
         toast.success('Invoice updated — downloading PDF…');
       } else {
-        // Deduct inventory serials — mark Sold (keep serial for return lookup).
+        // Deduct inventory serials — mark Sold (keep serial in serialNumbers
+        // so the Inventory Report can still render the row with a Sold badge).
+        //
+        // Route through InventoryFirebaseService.markSerialsSold — a single
+        // canonical write-point that updates:
+        //   - serialStatus[serial] = 'Sold'
+        //   - serialSoldDates[serial] = <ISO>
+        //   - serialInvoiceNumbers[serial] = <invoice number>
+        // in one shot, so the Inventory dashboard's "Invoice #" column
+        // populates correctly for every future invoice.
         const invoiceNumberForLink = formData.invoiceNumber!;
         const soldNow = new Date().toISOString();
         for (const ip of selectedProducts) {
           if (!ip.productId || !ip.serialNumbers?.length) continue;
+          const soldSerials = ip.serialNumbers.filter(s => s.trim() !== '');
+          if (soldSerials.length === 0) continue;
           try {
+            await InventoryFirebaseService.markSerialsSold(
+              ip.productId,
+              soldSerials.map(s => ({ serial: s, invoiceNumber: invoiceNumberForLink, soldDate: soldNow })),
+              soldNow,
+            );
+            // Stock is a separate available-count field the dashboard shows;
+            // markSerialsSold intentionally doesn't touch it (that would
+            // race with concurrent invoice saves). Decrement here as a
+            // dedicated single-field update.
             const product = await InventoryFirebaseService.fetchProductById(ip.productId);
-            if (!product) continue;
-            const soldSerials = ip.serialNumbers.filter(s => s.trim() !== '');
-            const newStatus     = { ...product.serialStatus };
-            const newSoldDates  = { ...(product as any).serialSoldDates };
-            const newInvoiceNos = { ...(product as any).serialInvoiceNumbers };
-            soldSerials.forEach(s => {
-              newStatus[s] = 'Sold'; newSoldDates[s] = soldNow; newInvoiceNos[s] = invoiceNumberForLink;
-            });
-            await InventoryFirebaseService.updateProduct(ip.productId, {
-              stock: Math.max(0, product.stock - ip.quantity),
-              serialStatus: newStatus as any,
-              serialSoldDates: newSoldDates,
-              serialInvoiceNumbers: newInvoiceNos,
-            } as any);
+            if (product) {
+              await InventoryFirebaseService.updateProduct(ip.productId, {
+                stock: Math.max(0, (product.stock || 0) - ip.quantity),
+              } as any);
+            }
           } catch (err) {
             console.error('Inventory update failed for', ip.productId, err);
           }

@@ -5,7 +5,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Invoice } from '../models/types';
 import { InvoiceLifecycleService } from '../models/InvoiceLifecycleService';
-import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 import { useAuth } from '../../../providers/context/AuthContext';
 import { formatCurrency, formatDate } from '../models/invoiceService';
 
@@ -26,28 +25,28 @@ export function useInvoiceDeleteViewModel(invoices: Invoice[]): UseInvoiceDelete
   const handleDelete = useCallback(async () => {
     if (!id || !invoice) { navigate('/invoices'); return; }
     try {
-      // Return serials to inventory
-      for (const ip of invoice.products) {
-        if (!ip.productId || !ip.serialNumbers?.length) continue;
-        try {
-          const product = await InventoryFirebaseService.fetchProductById(ip.productId);
-          if (!product) continue;
-          const merged = [...(product.serialNumbers || []), ...ip.serialNumbers.filter(s => s.trim() !== '')];
-          await InventoryFirebaseService.updateProduct(ip.productId, {
-            stock:         (product.stock || 0) + ip.quantity,
-            serialNumbers: merged,
-          });
-        } catch { /* skip missing products */ }
-      }
-      // Soft-delete: archive to deleted_invoices instead of hard delete.
-      // Deleted invoices cannot be deleted again from that section.
-      await InvoiceLifecycleService.softDeleteInvoice(
+      // All reversal logic lives in the service now:
+      //   - sold serials go back to inventory + Sold status/date/invoice-number cleared
+      //   - every linked transaction (payments + misc expenses) removed from ledger
+      //   - invoice archived to deleted_invoices, cannot be undone
+      const summary = await InvoiceLifecycleService.softDeleteInvoice(
         id,
         user ? { uid: user.uid, email: user.email || '' } : undefined
       );
-      toast.success('Invoice moved to Deleted Invoices — products returned to inventory');
+
+      // Build a summary toast so the user sees exactly what was reversed.
+      const parts: string[] = [];
+      if (summary.serialsRestored > 0) {
+        parts.push(`${summary.serialsRestored} serial${summary.serialsRestored === 1 ? '' : 's'} returned to stock`);
+      }
+      if (summary.transactionsRemoved > 0) {
+        parts.push(`${summary.transactionsRemoved} transaction${summary.transactionsRemoved === 1 ? '' : 's'} reversed`);
+      }
+      const detail = parts.length > 0 ? ` — ${parts.join(', ')}` : '';
+      toast.success(`Invoice moved to Deleted Invoices${detail}`);
       navigate('/invoices');
-    } catch {
+    } catch (err) {
+      console.error('[InvoiceDelete] softDeleteInvoice failed:', err);
       toast.error('Failed to delete invoice');
     }
   }, [id, invoice, navigate, user]);

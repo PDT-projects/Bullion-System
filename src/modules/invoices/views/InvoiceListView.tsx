@@ -22,7 +22,8 @@ import {
 } from '../models/invoiceService';
 import { downloadInvoicePdf, generateInvoicePdf } from '../models/invoicePdfService';
 import { useInvoiceFormViewModel } from '../viewModels/useInvoiceFormViewModel';
-import { InvoiceMiscExpenseService } from '../models/InvoiceMiscExpenseService';
+import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
+// InvoiceMiscExpenseService import removed — misc expense creation moved to Transactions module.
 
 interface Props {
   invoices: Invoice[];
@@ -343,53 +344,66 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [products,     setProducts]     = React.useState<any[]>([]);
   const [prodLoading,  setProdLoading]  = React.useState(true);
 
-  // Load locations once
-  React.useEffect(() => {
-    import('firebase/firestore').then(({ collection, getDocs, query, where }) =>
-      import('../../../api/firebase/firebase').then(({ db }) =>
-        getDocs(query(collection(db, 'products'), where('stock', '>', 0))).then(snap => {
-          const locs = new Set<string>();
-          snap.docs.forEach(d => { const l = (d.data() as any).location; if (l) locs.add(l); });
-          setAllLocations(Array.from(locs).sort());
-        }).catch(() => {})
-      )
-    );
-  }, []);
+  // The standalone "load locations" effect that used to live here was removed —
+  // fetchProducts() below already sets allLocations. Loading them separately
+  // pulled in every location that had ever held a product, including ones
+  // whose stock had since been fully sold (e.g. showing "germny" long after
+  // its inventory was gone). Deriving locations from the filtered product
+  // list is the single source of truth.
 
-  // Fetch products — all at once, filter client-side (avoids composite index requirement)
-  const fetchProducts = React.useCallback((loc: string) => {
+  // Fetch products via InventoryFirebaseService — this is the same code path
+  // the Inventory dashboard uses. It filters out `isDeleted` records and
+  // returns only what should be visible as live stock. Using a raw Firestore
+  // query here (as the old code did) bypassed those filters, so soft-deleted
+  // products and stale locations like "germny" leaked into the dropdown even
+  // after they'd been removed from inventory.
+  const fetchProducts = React.useCallback((_loc: string) => {
     setProdLoading(true);
-    import('firebase/firestore').then(({ collection, getDocs, query, where }) =>
-      import('../../../api/firebase/firebase').then(({ db }) =>
-        getDocs(query(collection(db, 'products'), where('stock', '>', 0))).then(snap => {
-          const all = snap.docs.map(d => {
-            const data = d.data() as any;
-            return {
-              id: d.id,
-              label: `${data.brandName || ''} ${data.modelName || ''}`.trim(),
-              brandName: data.brandName || '', modelName: data.modelName || '',
-              location: data.location || '',
-              sellPrice: data.sellPrice || data.salePrice || 0,
-              stock: data.stock || 0,
-              serialNumbers: data.serialNumbers || [],
-              serialStatus: data.serialStatus || {},
-              supplierCost: data.ownershipType === 'Credit' ? (data.supplierCost || data.costPrice || 0) : 0,
-              purchaseCost: data.ownershipType === 'Credit' ? 0 : (data.costPrice || data.purchaseCost || 0),
-              ownershipType: data.ownershipType || 'Owned',
-              category: data.category || '',
-              description: data.description || '',
-            };
+    InventoryFirebaseService.fetchAllProducts()
+      .then((rawProducts: any[]) => {
+        const mapped = rawProducts
+          // Exclude on-order records that haven't been received yet — they're
+          // in the collection but aren't sellable inventory.
+          .filter(p => p.receivableStatus !== 'Pending')
+          .map(p => ({
+            id: p.id,
+            label: `${p.brandName || ''} ${p.modelName || ''}`.trim(),
+            brandName: p.brandName || '',
+            modelName: p.modelName || '',
+            location:  p.location  || '',
+            sellPrice: p.sellPrice || p.salePrice || 0,
+            stock:     p.stock     || 0,
+            serialNumbers: p.serialNumbers || [],
+            serialStatus:  p.serialStatus  || {},
+            supplierCost: p.ownershipType === 'Credit' ? (p.supplierCost || p.costPrice || 0) : 0,
+            purchaseCost: p.ownershipType === 'Credit' ? 0 : (p.costPrice || p.purchaseCost || 0),
+            ownershipType: p.ownershipType || 'Owned',
+            category: p.category || '',
+            description: p.description || '',
+          }));
+        // Only surface products with at least one Available/Returned serial.
+        // Products whose stock counter is stale (says >0 while every serial
+        // is Sold/Damaged) get filtered out here.
+        const all = mapped.filter(p => {
+          const serials: string[] = Array.isArray(p.serialNumbers) ? p.serialNumbers : [];
+          if (serials.length === 0) return false;
+          return serials.some(s => {
+            const status = p.serialStatus?.[s] || 'Available';
+            return status === 'Available' || status === 'Returned';
           });
-          // Extract locations for filter
-          const locs = new Set<string>();
-          all.forEach(p => { if (p.location) locs.add(p.location); });
-          setAllLocations(Array.from(locs).sort());
-          // Filter by location client-side
-          setAllProductsCache(all);
-          setProducts(all); // initially show all, location filter applies after
-        }).catch(() => setProducts([])).finally(() => setProdLoading(false))
-      )
-    );
+        });
+        // Location dropdown derived from the filtered set — no ghost locations.
+        const locs = new Set<string>();
+        all.forEach(p => { if (p.location) locs.add(p.location); });
+        setAllLocations(Array.from(locs).sort());
+        setAllProductsCache(all);
+        setProducts(all);
+      })
+      .catch(err => {
+        console.error('[QuickInvoiceModal] fetchAllProducts failed:', err);
+        setProducts([]);
+      })
+      .finally(() => setProdLoading(false));
   }, []);
 
   const [allProductsCache, setAllProductsCache] = React.useState<any[]>([]);
@@ -466,7 +480,19 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       } as any);
 
       // ── Deduct stock from inventory ──────────────────────────────────────────
-      const { collection, getDoc, doc, updateDoc } = await import('firebase/firestore');
+      // Uses InventoryFirebaseService.markSerialsSold, the single canonical
+      // write-point for recording per-serial sale metadata:
+      //   - serialStatus[serial] = 'Sold'
+      //   - serialSoldDates[serial] = <ISO>
+      //   - serialInvoiceNumbers[serial] = <invoice number>   ← the field
+      //     the Inventory dashboard reads for its "Invoice #" column.
+      //
+      // The old inline code here set serialStatus + serialSoldDates but never
+      // wrote serialInvoiceNumbers, which is why sold rows always showed a
+      // blank "—" in that column.
+      const soldDate = new Date().toISOString();
+      const invoiceNumberForLink = vm.formData.invoiceNumber || '';
+      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
       const { db } = await import('../../../api/firebase/firebase');
       for (const l of validLines) {
         try {
@@ -474,28 +500,36 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
           const snap = await getDoc(prodRef);
           if (!snap.exists()) continue;
           const pdata = snap.data() as any;
-          const newSerialStatus = { ...(pdata.serialStatus || {}) };
-          const newSerialSoldDates = { ...(pdata.serialSoldDates || {}) };
-          const soldDate = new Date().toISOString();
 
+          // Resolve which serial(s) to mark sold — either the one the user
+          // explicitly picked, or the first still-Available one if they didn't.
+          const targetSerials: string[] = [];
           if (l.serial) {
-            // Mark specific serial as Sold
-            newSerialStatus[l.serial] = 'Sold';
-            newSerialSoldDates[l.serial] = soldDate;
+            targetSerials.push(l.serial);
           } else {
-            // No serial chosen — mark first available serial as Sold
-            const avail = (pdata.serialNumbers || []).find((s: string) => newSerialStatus[s] !== 'Sold');
-            if (avail) { newSerialStatus[avail] = 'Sold'; newSerialSoldDates[avail] = soldDate; }
+            const avail = (pdata.serialNumbers || []).find(
+              (s: string) => pdata.serialStatus?.[s] !== 'Sold'
+            );
+            if (avail) targetSerials.push(avail);
           }
+          if (targetSerials.length === 0) continue;
 
+          // 1) Per-serial metadata via the canonical helper (records invoice #)
+          await InventoryFirebaseService.markSerialsSold(
+            l.productId,
+            targetSerials.map(s => ({ serial: s, invoiceNumber: invoiceNumberForLink, soldDate })),
+            soldDate,
+          );
+
+          // 2) Stock counter + product-level status (independent update)
+          const nextStatus = { ...(pdata.serialStatus || {}) };
+          targetSerials.forEach(s => { nextStatus[s] = 'Sold'; });
           const newStock = Math.max(0, (pdata.stock || 0) - l.qty);
           const allSold = (pdata.serialNumbers || []).length > 0 &&
-            (pdata.serialNumbers || []).every((s: string) => newSerialStatus[s] === 'Sold');
+            (pdata.serialNumbers || []).every((s: string) => nextStatus[s] === 'Sold');
 
           await updateDoc(prodRef, {
             stock: newStock,
-            serialStatus: newSerialStatus,
-            serialSoldDates: newSerialSoldDates,
             status: allSold || newStock === 0 ? 'Sold' : pdata.status,
             updatedAt: soldDate,
           });
@@ -695,125 +729,6 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 
 
 
-// ── Misc Expense Modal ───────────────────────────────────────────────────────
-function MiscExpenseModal({ invoice, banks, onClose, onSaved }: {
-  invoice: Invoice; banks: any[]; onClose: () => void; onSaved: () => void;
-}) {
-  const [amount,   setAmount]   = React.useState<number | ''>('');
-  const [category, setCategory] = React.useState('Shipping');
-  const [mode,     setMode]     = React.useState<'Cash'|'Bank'|'Cheque'>('Cash');
-  const [bankId,   setBankId]   = React.useState('');
-  const [date,     setDate]     = React.useState(new Date().toLocaleDateString('en-CA'));
-  const [note,     setNote]     = React.useState('');
-  const [saving,   setSaving]   = React.useState(false);
-
-  const CATEGORIES = ['Shipping', 'Cargo', 'Customs', 'Agent Fee', 'Handling', 'Insurance', 'Other'];
-
-  const handleSave = async () => {
-    if (!amount || amount <= 0) { toast.error('Enter an amount greater than zero'); return; }
-    setSaving(true);
-    try {
-      const bank = mode === 'Bank' ? banks.find(b => b.id === bankId) : undefined;
-      await InvoiceMiscExpenseService.recordExpense({
-        invoice,
-        amount: Number(amount),
-        category,
-        mode,
-        date,
-        bankId: bank?.id,
-        bankName: bank?.name,
-        note: note || undefined,
-        company: (invoice.branch || 'Main') as any,
-      });
-      toast.success(`Expense of AED ${Number(amount).toLocaleString()} recorded`);
-      onSaved();
-      onClose();
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to record expense');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const iSty: React.CSSProperties = { width:'100%', border:'1px solid #e2e8f0', borderRadius:8, padding:'9px 12px', fontSize:13, color:'#111827', backgroundColor:'#fff', outline:'none', boxSizing:'border-box' };
-  const lbl: React.CSSProperties = { fontSize:11, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:5 };
-
-  return createPortal(
-    <div onClick={onClose}
-      style={{ position:'fixed', inset:0, backgroundColor:'rgba(15,23,42,0.5)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div onClick={e => e.stopPropagation()}
-        style={{ width:460, maxWidth:'94vw', backgroundColor:'#fff', borderRadius:14, overflow:'hidden', boxShadow:'0 24px 64px rgba(0,0,0,0.35)' }}>
-        {/* Header */}
-        <div style={{ padding:'16px 20px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <div>
-            <div style={{ fontSize:15, fontWeight:800, color:'#0f172a' }}>Add Misc Expense</div>
-            <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>Invoice {invoice.invoiceNumber} · {invoice.customerName}</div>
-          </div>
-          <button onClick={onClose} style={{ width:28, height:28, borderRadius:6, border:'1px solid #e2e8f0', backgroundColor:'#f8fafc', cursor:'pointer', fontSize:17, color:'#6b7280' }}>×</button>
-        </div>
-        {/* Body */}
-        <div style={{ padding:'18px 20px', display:'flex', flexDirection:'column', gap:14 }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-            <div>
-              <label style={lbl}>Amount (AED) *</label>
-              <input type="number" min={0} step="any" value={amount}
-                onChange={e => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                placeholder="0.00" style={iSty} autoFocus />
-            </div>
-            <div>
-              <label style={lbl}>Category</label>
-              <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...iSty, appearance:'none' }}>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label style={lbl}>Payment Mode</label>
-            <div style={{ display:'flex', gap:8 }}>
-              {(['Cash','Bank','Cheque'] as const).map(m => (
-                <button key={m} onClick={() => setMode(m)}
-                  style={{ flex:1, padding:'8px 12px', borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:600,
-                    border:`2px solid ${mode===m?'#111827':'#e2e8f0'}`,
-                    backgroundColor:mode===m?'#111827':'#fff',
-                    color:mode===m?'#fff':'#6b7280' }}>{m}</button>
-              ))}
-            </div>
-          </div>
-          {mode === 'Bank' && (
-            <div>
-              <label style={lbl}>Bank Account</label>
-              {banks.length === 0
-                ? <div style={{ fontSize:12, color:'#94a3b8', padding:'8px 12px', backgroundColor:'#f9fafb', borderRadius:7 }}>No banks — add one in Banking</div>
-                : <select value={bankId} onChange={e => setBankId(e.target.value)} style={{ ...iSty, appearance:'none' }}>
-                    <option value="">Select bank…</option>
-                    {banks.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>}
-            </div>
-          )}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-            <div>
-              <label style={lbl}>Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={iSty} />
-            </div>
-            <div>
-              <label style={lbl}>Note</label>
-              <input value={note} onChange={e => setNote(e.target.value)} placeholder="Optional" style={iSty} />
-            </div>
-          </div>
-        </div>
-        {/* Footer */}
-        <div style={{ padding:'14px 20px', borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'flex-end', gap:8 }}>
-          <button onClick={onClose} style={{ padding:'9px 18px', borderRadius:8, border:'1px solid #d1d5db', backgroundColor:'#fff', color:'#374151', fontWeight:600, fontSize:13, cursor:'pointer' }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving}
-            style={{ padding:'9px 22px', borderRadius:8, border:'none', backgroundColor:saving?'#94a3b8':'#dc2626', color:'#fff', fontWeight:700, fontSize:13, cursor:saving?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:7 }}>
-            {saving ? <><Loader2 size={14} style={{ animation:'spin 1s linear infinite' }}/> Saving…</> : <>+ Add Expense</>}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
 
 export function InvoiceListView({
   invoices, filteredInvoices, stats, filters, viewingInvoice, isLoading,
@@ -880,7 +795,7 @@ export function InvoiceListView({
   }, [previewUrl]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [miscExpenseInvoice, setMiscExpenseInvoice] = useState<Invoice | null>(null);
+  // miscExpenseInvoice state removed — misc expenses are added from Transactions module now.
 
   const hasActiveFilters =
     !!filters.searchTerm ||
@@ -978,7 +893,7 @@ export function InvoiceListView({
                 {[
                   'Invoice #', 'Date', 'Customer', 'Branch / City',
                   'Salesperson', 'Products', 'Amount (AED)',
-                  'Supplier Cost', 'Purchase Cost', 'COGS', 'Misc Exp',
+                  'Supplier Cost', 'Purchase Cost', 'Misc Exp',
                   'Net Sale', 'Paid', 'Amount Left',
                   'Delivery', 'Status', 'Actions',
                 ].map(h => (
@@ -989,7 +904,7 @@ export function InvoiceListView({
             <tbody className="divide-y divide-gray-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={18} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={17} className="px-4 py-14 text-center text-gray-400">
                     <FileText className="mx-auto mb-3 text-gray-300" size={44} />
                     <p className="font-medium text-gray-500">No invoices found</p>
                     <p className="text-xs mt-1">
@@ -1087,14 +1002,7 @@ export function InvoiceListView({
                       return !hasSupplierOnly && purchaseCost > 0 ? formatDisplay(purchaseCost) : '—';
                     })()}
                   </td>
-                  {/* COGS = whichever cost applies (mutually exclusive) */}
-                  <td className="px-3 py-3 whitespace-nowrap font-semibold" style={{ color: '#7c3aed' }}>
-                    {(() => {
-                      const hasSupplierOnly = supplierCost > 0 && purchaseCost === 0;
-                      const cogs = hasSupplierOnly ? supplierCost : purchaseCost;
-                      return cogs > 0 ? formatDisplay(cogs) : '—';
-                    })()}
-                  </td>
+                  {/* COGS per-row column removed — total is shown in footer only */}
                   <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(netSale)}</td>
                   <td className="px-3 py-3 whitespace-nowrap">
@@ -1134,11 +1042,7 @@ export function InvoiceListView({
                           Record Payment
                         </button>
                       )}
-                      <button onClick={() => setMiscExpenseInvoice(invoice)}
-                        className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-md whitespace-nowrap transition"
-                        style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                        + Misc Exp
-                      </button>
+                      {/* + Misc Exp button removed — misc expenses now added from Transactions module */}
                     </div>
                     {invoice.paymentMode && invoice.status !== 'Unpaid' && (
                       <div className="mt-1">
@@ -1192,6 +1096,12 @@ export function InvoiceListView({
               const tTotal    = src.reduce((s, i) => s + (i.totalAmount || 0), 0);
               const tSupplier = src.reduce((s, i) => s + calculateSupplierCost(i), 0);
               const tPurchase = src.reduce((s, i) => s + calculatePurchaseCost(i), 0);
+              // COGS = supplier cost when purchase cost is zero, else purchase cost (mutually exclusive per invoice)
+              const tCogs     = src.reduce((s, i) => {
+                const sc = calculateSupplierCost(i);
+                const pc = calculatePurchaseCost(i);
+                return s + (sc > 0 && pc === 0 ? sc : pc);
+              }, 0);
               const tMisc     = src.reduce((s, i) => s + ((i.miscExpense && i.miscExpense > 0) ? i.miscExpense : calculateMiscExpense(i)), 0);
               const tNet      = tTotal - tMisc;
               const tPaid     = src.reduce((s, i) => s + calculatePaidAmount(i), 0);
@@ -1231,20 +1141,7 @@ export function InvoiceListView({
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Purchase</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8' }}>{tPurchase > 0 ? formatDisplay(tPurchase) : '—'}</div>
                     </td>
-                    {/* COGS — sum of whichever cost applies per invoice (mutually exclusive) */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b', borderRight: '1px solid #1e293b' }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>COGS</div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: '#c4b5fd' }}>
-                        {(() => {
-                          const tCogs = src.reduce((s, i) => {
-                            const sc = calculateSupplierCost(i);
-                            const pc = calculatePurchaseCost(i);
-                            return s + (sc > 0 && pc === 0 ? sc : pc);
-                          }, 0);
-                          return tCogs > 0 ? formatDisplay(tCogs) : '—';
-                        })()}
-                      </div>
-                    </td>
+                    {/* COGS per-column removed — total displayed in the trailing summary cell */}
                     {/* Misc Exp */}
                     <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Misc Exp</div>
@@ -1267,7 +1164,13 @@ export function InvoiceListView({
                         {tLeft > 0 ? formatDisplay(tLeft) : '—'}
                       </div>
                     </td>
-                    <td colSpan={3} style={{ padding: '10px 12px' }}></td>
+                    {/* COGS grand total displayed here — no per-row column above, just the sum at the end */}
+                    <td colSpan={3} style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>COGS Total</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#c4b5fd' }}>
+                        {tCogs > 0 ? formatDisplay(tCogs) : '—'}
+                      </div>
+                    </td>
                   </tr>
                 </tfoot>
               );
@@ -1493,15 +1396,7 @@ export function InvoiceListView({
         </div>
       )}
 
-      {/* Misc Expense Modal */}
-      {miscExpenseInvoice && (
-        <MiscExpenseModal
-          invoice={miscExpenseInvoice}
-          banks={banks}
-          onClose={() => setMiscExpenseInvoice(null)}
-          onSaved={() => setMiscExpenseInvoice(null)}
-        />
-      )}
+      {/* Misc Expense Modal removed — add misc expenses from the Transactions module */}
 
       {/* Quick Create Invoice Modal */}
       {showCreateModal && (
