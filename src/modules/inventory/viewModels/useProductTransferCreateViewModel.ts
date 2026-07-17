@@ -60,7 +60,21 @@ function localDateTimeNow(): string {
   );
 }
 
-export function useProductTransferCreateViewModel(): UseProductTransferCreateViewModelReturn {
+/**
+ * Optional overrides for post-save and back behavior. When these callbacks are
+ * provided, the VM calls them instead of navigating to `/product-transfer`
+ * with react-router. That lets a parent that hosts this view inside a popup
+ * keep the user in the popup (e.g. toggle back to a report tab) rather than
+ * routing away.
+ */
+export interface UseProductTransferCreateViewModelOptions {
+  onSaveSuccess?: () => void;
+  onCancel?: () => void;
+}
+
+export function useProductTransferCreateViewModel(
+  options?: UseProductTransferCreateViewModelOptions,
+): UseProductTransferCreateViewModelReturn {
   const navigate = useNavigate();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -288,16 +302,31 @@ export function useProductTransferCreateViewModel(): UseProductTransferCreateVie
         });
       }
       toast.success(`Transfer created — products removed from ${formData.fromLocation} and are In Transit to ${formData.toLocation}`);
-      navigate('/product-transfer');
+      // If the caller provided an onSaveSuccess override (popup context),
+      // use it — the caller decides what to do next (e.g. toggle to report).
+      // Fallback: legacy behavior of routing to the full transfer report page.
+      if (options?.onSaveSuccess) {
+        options.onSaveSuccess();
+      } else {
+        navigate('/product-transfer');
+      }
     } catch (err) {
       console.error('Transfer failed:', err);
       toast.error('Failed to create transfer. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [validation, transferItems, formData, getProductById, navigate, costPerUnit]);
+  }, [validation, transferItems, formData, getProductById, navigate, costPerUnit, options]);
 
-  const onBack = useCallback(() => navigate('/product-transfer'), [navigate]);
+  const onBack = useCallback(() => {
+    // Same pattern for Back — if the popup wants to intercept (to toggle
+    // back to its report tab), it does; otherwise fall back to routing.
+    if (options?.onCancel) {
+      options.onCancel();
+    } else {
+      navigate('/product-transfer');
+    }
+  }, [navigate, options]);
 
   return {
     products, locations, formData, transferItems,

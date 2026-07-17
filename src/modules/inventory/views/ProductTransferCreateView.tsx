@@ -13,11 +13,17 @@ import React from 'react';
 import {
   ArrowLeft, ArrowRight, Plus, Trash2, Loader2,
   MapPin, Package, Hash, User, Calendar, FileText,
-  CheckSquare, Square, DollarSign,
+  CheckSquare, Square, DollarSign, List,
 } from 'lucide-react';
 import { UseProductTransferCreateViewModelReturn } from '../viewModels/useProductTransferCreateViewModel';
 
-interface Props extends UseProductTransferCreateViewModelReturn {}
+// The wrapper passes `onViewTransfers` so this view can offer a "View Transfers"
+// button in the header that toggles back to the report tab. When rendered
+// standalone (e.g. from a full-page route), the prop is undefined and the
+// button is hidden — safe fallback.
+interface Props extends UseProductTransferCreateViewModelReturn {
+  onViewTransfers?: () => void;
+}
 
 export const ProductTransferCreateView: React.FC<Props> = ({
   products, locations, formData, transferItems,
@@ -28,6 +34,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
   toggleSummary, handleSave, onBack,
   getAvailableSerials, getProductStockByLocation, getProductById,
   addNewLocation,
+  onViewTransfers,
 }) => {
   if (isLoading) {
     return (
@@ -44,20 +51,37 @@ export const ProductTransferCreateView: React.FC<Props> = ({
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-4xl mx-auto">
 
-        {/* ── Header ── */}
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={onBack}
-            className="p-2 text-gray-600 hover:bg-gray-100 border border-gray-200 bg-white rounded-lg transition-colors shadow-sm"
-          >
-            <ArrowLeft size={22} />
-          </button>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">New Product Transfer</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Move products between locations — select serials to transfer
-            </p>
+        {/* Header. Right padding on the outer flex leaves room for the parent
+            popup's × close button (absolute, top:12 right:14 in the popup
+            portal) so it doesn't overlap the "View Transfers" toggle below. */}
+        <div className="flex items-center justify-between gap-4 mb-6" style={{ paddingRight: 48 }}>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="p-2 text-gray-600 hover:bg-gray-100 border border-gray-200 bg-white rounded-lg transition-colors shadow-sm"
+            >
+              <ArrowLeft size={22} />
+            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">New Product Transfer</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Move products between locations — select serials to transfer
+              </p>
+            </div>
           </div>
+
+          {/* View Transfers — only rendered when parent (wrapper) passes the
+              callback. Toggles to the report view inside the same popup. */}
+          {onViewTransfers && (
+            <button
+              onClick={onViewTransfers}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm text-white bg-slate-900 hover:bg-slate-800 shadow-md whitespace-nowrap"
+              style={{ letterSpacing: '0.01em' }}
+              title="View all transfers"
+            >
+              <List size={16} /> View Transfers
+            </button>
+          )}
         </div>
 
         <div className="space-y-6">
