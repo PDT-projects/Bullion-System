@@ -106,6 +106,39 @@ export interface Transaction {
   dueDate?: string;
   createdAt?: string;
   updatedAt?: string;
+
+  // ────────────────────────────────────────────────────────────────
+  // Phase 1 — NEW fields (all optional, backward-compat with legacy)
+  // ────────────────────────────────────────────────────────────────
+  //
+  // Semantic mapping between old model and new UI:
+  //   • `mainCategory` ('Cash Inflow' | 'Cash Outflow')  ↔  UI "TYPE"     (Inflow / Outflow)
+  //   • `subCategory`                                     ↔  UI "CATEGORY"
+  //   • `subCategoryDetail`  (NEW)                        ↔  UI "SUB CATEGORY" (third level, user-managed per category)
+  //
+  // Read helpers in transactionsService.ts (`getTxAccount`, `getTxCategoryPath`)
+  // resolve this for both new AND legacy transactions, so anywhere that already
+  // reads `mainCategory` / `subCategory` / `mode` keeps working unchanged.
+
+  /** Third-level category tag under `subCategory`. User-defined per Category (see DynamicCategory type 'subCategoryDetail'). */
+  subCategoryDetail?: string;
+
+  /** Unified account reference. `'cash-in-hand'` for the virtual cash account, otherwise a bank doc id. */
+  accountId?: string;
+  /** Fast discriminator so callers don't need to look up the bank doc to know if it's Cash. */
+  accountType?: AccountType;
+  /** Denormalized account name for list display without joining. */
+  accountName?: string;
+
+  /** Explicit branch reference (replaces string `company` at write time; `company` remains for legacy reads). */
+  branchId?: string;
+  branchName?: string;
+
+  /** Optional remitter (Inflow only) — "Who sent this money" in the reference UI. */
+  remitterName?: string;
+
+  /** Required attachment URL on new records. Legacy records may only have `attachments[]`. */
+  attachmentUrl?: string;
 }
 
 export interface TransactionItem {
@@ -245,11 +278,15 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
 // ── Dynamic Category (user-added, stored in Firestore /dynamicCategories) ─────
 export interface DynamicCategory {
   id: string;
-  // 'mainCategory' / 'subCategory'        → transaction category tree
-  // 'plMainCategory' / 'plSubCategory'    → P&L category tree
-  // 'bsMainCategory' / 'bsSubCategory'    → Balance Sheet category tree
-  type: 'mainCategory' | 'subCategory' | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory';
-  parentCategory?: string;   // for subCategory / plSubCategory: which parent it belongs to
+  // 'mainCategory' / 'subCategory'         → transaction category tree
+  // 'subCategoryDetail' (NEW)              → third-level tag under a subCategory
+  //                                          e.g. Category='Utilities' → SubCat='Electricity Bill'
+  // 'plMainCategory' / 'plSubCategory'     → P&L category tree
+  // 'bsMainCategory' / 'bsSubCategory'     → Balance Sheet category tree
+  type: 'mainCategory' | 'subCategory' | 'subCategoryDetail' | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory';
+  // For 'subCategory' this is the parent mainCategory ('Cash Inflow' / 'Cash Outflow' / 'Loan').
+  // For 'subCategoryDetail' this is the parent subCategory string.
+  parentCategory?: string;
   name: string;
   createdAt: string;
 }
@@ -325,3 +362,40 @@ export const LOAN_SUB_CATEGORIES = new Set([
   'Other loan - Full',
   'Other loan - Partial',
 ]);
+
+// ────────────────────────────────────────────────────────────────
+// Phase 1 — NEW: Accounts & Branches (Cash + Banks as unified accounts)
+// ────────────────────────────────────────────────────────────────
+
+/** Which "kind" of account this is. Cash-in-Hand is virtual, banks are real Firestore docs. */
+export type AccountType = 'cash' | 'bank';
+
+/** Doc id of the virtual Cash-in-Hand account. Balances for this id are computed
+ *  from all cash-mode transactions, not stored on any doc. */
+export const CASH_IN_HAND_ID = 'cash-in-hand';
+export const CASH_IN_HAND_NAME = 'Cash in Hand';
+
+/**
+ * Unified account model. Cash-in-Hand is a synthesized instance with id
+ * `CASH_IN_HAND_ID`; every bank account in the `banks` collection also becomes
+ * an `Account` for the transaction UI.
+ *
+ * Balance is always live-computed from transactions (source of truth) rather
+ * than trusted from the bank doc — that keeps balances honest even when other
+ * modules write bank-side debits/credits without going through this ledger.
+ */
+export interface Account {
+  id: string;                 // CASH_IN_HAND_ID or a bank doc id
+  name: string;               // 'Cash in Hand' | 'HBL — Main Branch' etc
+  type: AccountType;
+  balance: number;            // live-computed running balance
+  accountNumber?: string;     // banks only
+  currency?: string;          // default 'AED'
+}
+
+/** Branch record (kept as a Firestore doc so it can be added/renamed by the user). */
+export interface Branch {
+  id: string;
+  name: string;               // e.g. 'Main Office', 'DHA Warehouse'
+  createdAt?: string;
+}

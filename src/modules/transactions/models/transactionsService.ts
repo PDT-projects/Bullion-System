@@ -1,6 +1,9 @@
 // Transactions Module - Business Logic Service (no Firestore)
 
-import { Transaction, TransactionFilters, TransactionStats, LOAN_SUB_CATEGORIES, BSMainCategory } from './types';
+import {
+  Transaction, TransactionFilters, TransactionStats, LOAN_SUB_CATEGORIES, BSMainCategory,
+  AccountType, CASH_IN_HAND_ID, CASH_IN_HAND_NAME,
+} from './types';
 
 export const getTransactionTotals = (t: Transaction) => {
   const partialTotal = (t.partialPayments || []).reduce((s, p) => s + p.amount, 0);
@@ -201,4 +204,131 @@ export const resolveBSBucket = (t: Transaction): { bsMain: string; bsSub: string
   }
 
   return null;
+};
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 1 — Read helpers for the new UI model (accounts, three-level categories)
+//
+// Every helper here reads from BOTH shapes:
+//   • New records write the explicit `accountId` / `accountType` / `subCategoryDetail` fields.
+//   • Legacy records only have `mode` + `bankId` + `subCategory`.
+// Consumers (list, form, stats) call these helpers instead of touching the raw
+// fields, so display stays consistent regardless of when the record was written.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve the account a transaction belongs to. Falls back to legacy `mode`
+ * + `bankId` when the new fields aren't populated. Cash / Cheque with no bank
+ * ref map to the virtual Cash-in-Hand account.
+ */
+export const getTxAccount = (
+  t: Transaction,
+): { id: string; type: AccountType; name: string } => {
+  if (t.accountId && t.accountType) {
+    return {
+      id:   t.accountId,
+      type: t.accountType,
+      name: t.accountName || t.bankName || (t.accountType === 'cash' ? CASH_IN_HAND_NAME : 'Bank'),
+    };
+  }
+  // Legacy fallback: derive from mode + bank fields
+  if ((t.mode === 'Bank' || t.mode === 'Cheque') && t.bankId) {
+    return { id: t.bankId, type: 'bank', name: t.bankName || 'Bank' };
+  }
+  return { id: CASH_IN_HAND_ID, type: 'cash', name: CASH_IN_HAND_NAME };
+};
+
+/**
+ * Resolve the three-level category path.
+ *   type      → UI "TYPE" (Inflow / Outflow / Loan)
+ *   category  → UI "CATEGORY" (the mid-level tag)
+ *   subCategory → UI "SUB CATEGORY" (the third level, optional)
+ */
+export const getTxCategoryPath = (t: Transaction): {
+  type: string;
+  category: string;
+  subCategory: string | undefined;
+} => ({
+  type:        t.mainCategory,
+  category:    t.subCategory,
+  subCategory: t.subCategoryDetail,
+});
+
+/**
+ * Which transactions actually affect a live balance:
+ *   • pending_approval → not yet committed to the ledger
+ *   • rejected         → cancelled, doesn't count
+ * Everything else (approved or not_required legacy records) does count.
+ */
+const isLiquid = (t: Transaction) =>
+  t.approvalStatus === 'approved' ||
+  t.approvalStatus === 'not_required' ||
+  !t.approvalStatus;
+
+/**
+ * "Realized" amount for balance math — the amount that actually moved money.
+ * For Full payments it's the transaction amount; for Partial it's what has
+ * been paid so far (amountPaid or the sum of partialPayments via
+ * getTransactionTotals). Never uses `amount` when a partial is in play, so
+ * balances don't get inflated for money still owed.
+ */
+const realizedAmount = (t: Transaction): number => {
+  const { totalPaid } = getTransactionTotals(t);
+  return totalPaid;
+};
+
+/**
+ * Live balance for the virtual Cash-in-Hand account.
+ * Iterates cash-type transactions only, adds inflows, subtracts outflows.
+ */
+export const computeCashInHandBalance = (transactions: Transaction[]): number => {
+  let bal = 0;
+  for (const t of transactions) {
+    if (!isLiquid(t)) continue;
+    if (getTxAccount(t).type !== 'cash') continue;
+    if (t.mainCategory === 'Cash Inflow')      bal += realizedAmount(t);
+    else if (t.mainCategory === 'Cash Outflow') bal -= realizedAmount(t);
+  }
+  return bal;
+};
+
+/**
+ * Live balance for a specific bank account. Optionally seed with an opening
+ * balance stored on the bank doc — final balance is opening + ledger delta.
+ */
+export const computeBankBalance = (
+  transactions: Transaction[],
+  bankId: string,
+  seedBalance = 0,
+): number => {
+  let bal = seedBalance;
+  for (const t of transactions) {
+    if (!isLiquid(t)) continue;
+    const acc = getTxAccount(t);
+    if (acc.type !== 'bank' || acc.id !== bankId) continue;
+    if (t.mainCategory === 'Cash Inflow')      bal += realizedAmount(t);
+    else if (t.mainCategory === 'Cash Outflow') bal -= realizedAmount(t);
+  }
+  return bal;
+};
+
+/**
+ * Inflow / Outflow / Net for a given month (defaults to the current month).
+ * Used by the summary bar's "INFLOW · MO" / "OUTFLOW · MO" / "NET · MO" cards.
+ */
+export const computeMonthlyFlow = (
+  transactions: Transaction[],
+  now: Date = new Date(),
+): { inflow: number; outflow: number; net: number } => {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  let inflow = 0, outflow = 0;
+  for (const t of transactions) {
+    if (!isLiquid(t)) continue;
+    if (!t.date) continue;
+    const d = new Date(t.date);
+    if (d.getFullYear() !== y || d.getMonth() !== m) continue;
+    if (t.mainCategory === 'Cash Inflow')       inflow  += realizedAmount(t);
+    else if (t.mainCategory === 'Cash Outflow') outflow += realizedAmount(t);
+  }
+  return { inflow, outflow, net: inflow - outflow };
 };
