@@ -12,15 +12,17 @@
 // group in the trailing ACTIONS cell.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus, Eye, Edit, Trash2, X, Filter as FilterIcon, Check,
   ChevronDown, Wallet, Landmark, TrendingUp, TrendingDown, Loader2,
-  PlusCircle, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Search,
+  PlusCircle, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Search, Clock, RotateCcw,
 } from 'lucide-react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, setDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { toast } from 'sonner';
 import { db } from '../../../api/firebase/firebase';
 import {
-  Transaction, TransactionFilters, TransactionStats,
+  Transaction, TransactionFilters, TransactionStats, CASH_IN_HAND_ID,
 } from '../models/types';
 import {
   getTransactionTotals,
@@ -62,28 +64,48 @@ export function TransactionListView({
 }: Props) {
 
   // ── Bank list (drives Opening Balance, Banks·N, and the Account filter) ──
-  const [banks, setBanks] = useState<{ id: string; name: string; balance: number }[]>([]);
-  useEffect(() => {
-    getDocs(query(collection(db, 'banks'), orderBy('name')))
-      .then(snap => setBanks(snap.docs.map(d => {
+  const [banks, setBanks] = useState<{ id: string; name: string; balance: number; accountNumber?: string }[]>([]);
+  const [cashOpening, setCashOpening] = useState<number>(0);
+
+  // Extracted so the modals can trigger a refresh after edits without a full
+  // page reload. Also loads the cash-in-hand opening balance from the small
+  // settings doc (`settings/cashOpening`) — this is the ONE persistent seed
+  // that the running-balance math needs beyond the bank docs themselves.
+  const refreshAccounts = React.useCallback(async () => {
+    try {
+      const snap = await getDocs(query(collection(db, 'banks'), orderBy('name')));
+      setBanks(snap.docs.map(d => {
         const b = d.data() as any;
-        return { id: d.id, name: b.name || '—', balance: Number(b.balance) || 0 };
-      })))
-      .catch(() => setBanks([]));
+        return { id: d.id, name: b.name || '—', balance: Number(b.balance) || 0, accountNumber: b.accountNumber };
+      }));
+    } catch { setBanks([]); }
+    try {
+      const { doc: firestoreDoc, getDoc } = await import('firebase/firestore');
+      const cashSnap = await getDoc(firestoreDoc(db, 'settings', 'cashOpening'));
+      setCashOpening(cashSnap.exists() ? Number((cashSnap.data() as any).amount) || 0 : 0);
+    } catch { setCashOpening(0); }
   }, []);
+  useEffect(() => { refreshAccounts(); }, [refreshAccounts]);
+
+  // ── Modal open state ─────────────────────────────────────────────────
+  const [openingModal, setOpeningModal] = useState(false);
+  const [banksModal,   setBanksModal]   = useState(false);
+  const [detailPanelOpen, setDetailPanelOpen] = useState(false);
 
   // ── Summary metrics (all live-computed from `transactions`) ──────────────
   const summary = useMemo(() => {
     const monthly = computeMonthlyFlow(transactions);
-    const cash    = computeCashInHandBalance(transactions);
+    // Cash live balance = cash opening seed + cash-mode transactions delta.
+    const cashLedger = computeCashInHandBalance(transactions);
+    const cash    = cashOpening + cashLedger;
     const bankSum = banks.reduce(
       (sum, b) => sum + computeBankBalance(transactions, b.id, b.balance),
       0,
     );
-    // Opening balance = seed balances of all banks (pre-ledger). Cash starts at 0.
-    const opening = banks.reduce((s, b) => s + b.balance, 0);
-    return { ...monthly, cash, bankSum, opening, bankCount: banks.length };
-  }, [transactions, banks]);
+    // Opening balance = cash opening seed + all bank opening seeds.
+    const opening = cashOpening + banks.reduce((s, b) => s + b.balance, 0);
+    return { ...monthly, cash, bankSum, opening, bankCount: banks.length, cashOpening };
+  }, [transactions, banks, cashOpening]);
 
   // ── Local filter chip state (drives which dropdown is open) ──────────────
   const [openChip, setOpenChip] = useState<null | 'filter' | 'category' | 'subcategory' | 'account' | 'branch'>(null);
@@ -127,7 +149,31 @@ export function TransactionListView({
   const [chipSubCategory, setChipSubCategory] = useState<string>('');
   const [chipAccount,     setChipAccount]     = useState<string>('');
   const [chipBranch,      setChipBranch]      = useState<string>('');
+  const [chipType,        setChipType]        = useState<'' | 'Inflow' | 'Outflow'>('');
   const [settledOnly,     setSettledOnly]     = useState<boolean>(false);
+  const [pendingOnly,     setPendingOnly]     = useState<boolean>(false);
+
+  // A transaction counts as "pending" when either:
+  //   • its approval is still awaited/rejected, or
+  //   • the ledger acknowledges a partial payment with money still due.
+  // Matches what usePendingPaymentsViewModel filters on so the two lists agree.
+  const isPending = (t: Transaction): boolean => {
+    if (t.approvalStatus === 'pending_approval') return true;
+    if (t.approvalStatus === 'rejected') return true;
+    const { remaining } = getTransactionTotals(t);
+    if (remaining > 0 && t.paymentStatus === 'Partial') return true;
+    return false;
+  };
+
+  // Live count for the callout above the table
+  const pendingCount = useMemo(
+    () => filteredTransactions.filter(isPending).length,
+    [filteredTransactions],
+  );
+  const pendingTotal = useMemo(
+    () => filteredTransactions.reduce((s, t) => s + (isPending(t) ? getTransactionTotals(t).remaining : 0), 0),
+    [filteredTransactions],
+  );
 
   // Apply chip filters on top of the VM's filteredTransactions.
   const rows = useMemo(() => {
@@ -140,9 +186,12 @@ export function TransactionListView({
         if (b !== chipBranch) return false;
       }
       if (settledOnly && t.paymentStatus !== 'Full') return false;
+      if (pendingOnly && !isPending(t)) return false;
+      if (chipType === 'Inflow'  && t.mainCategory !== 'Cash Inflow')  return false;
+      if (chipType === 'Outflow' && t.mainCategory !== 'Cash Outflow') return false;
       return true;
     });
-  }, [filteredTransactions, chipCategory, chipSubCategory, chipAccount, chipBranch, settledOnly]);
+  }, [filteredTransactions, chipCategory, chipSubCategory, chipAccount, chipBranch, settledOnly, pendingOnly, chipType]);
 
   // ── Running balance per account for the BALANCE column ──────────────────
   // Sort rows chronologically (oldest first) so the running total makes sense,
@@ -175,25 +224,81 @@ export function TransactionListView({
     return map;
   }, [rows, banks]);
 
-  const hasAnyChipFilter = !!(chipCategory || chipSubCategory || chipAccount || chipBranch || settledOnly);
+  const hasAnyChipFilter = !!(chipCategory || chipSubCategory || chipAccount || chipBranch || settledOnly || pendingOnly || chipType);
 
   return (
     <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20, backgroundColor: '#f8fafc', minHeight: '100%' }}>
 
-      {/* ── Summary strip ─────────────────────────────────────────────── */}
+      {/* ── Summary strip ───────────────────────────────────────────────
+          Every tile is clickable — click filters the list by that tile's
+          concept (Inflow tile → chipType='Inflow', etc). Opening Bal opens
+          the Opening Balances modal; Banks opens the Banks manager. The
+          chevron on the right toggles a detail panel that spells out the
+          full reconcile (Balance at End of Month · Sum of All Accounts ·
+          Outstanding Balance · Balanced/Difference summary).                */}
       <div style={{
         backgroundColor: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
-        padding: '14px 18px',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(6, minmax(0,1fr))',
-        gap: 14,
+        overflow: 'hidden',
       }}>
-        <SummaryCell tone="opening" label="Opening Bal"  value={summary.opening}       icon={<PlusCircle size={15} />} />
-        <SummaryCell tone="inflow"  label="Inflow · Mo"  value={summary.inflow}        icon={<ArrowUpCircle size={15} />} />
-        <SummaryCell tone="outflow" label="Outflow · Mo" value={summary.outflow}       icon={<ArrowDownCircle size={15} />} />
-        <SummaryCell tone="net"     label="Net · Mo"     value={summary.net}           icon={<ArrowLeftRight size={15} />} />
-        <SummaryCell tone="cash"    label="Cash"         value={summary.cash}          icon={<Wallet size={15} />} />
-        <SummaryCell tone="banks"   label={`Banks · ${summary.bankCount}`} value={summary.bankSum} icon={<Landmark size={15} />} />
+        <div style={{
+          padding: '14px 44px 14px 18px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(6, minmax(0,1fr))',
+          gap: 14,
+          position: 'relative',
+        }}>
+          <SummaryCell tone="opening" label="Opening Bal"  value={summary.opening}
+            icon={<PlusCircle size={15} />}
+            onClick={() => setOpeningModal(true)}
+            title="Set opening balances for each account" />
+          <SummaryCell tone="inflow"  label="Inflow · Mo"  value={summary.inflow}
+            icon={<ArrowUpCircle size={15} />}
+            active={chipType === 'Inflow'}
+            onClick={() => setChipType(chipType === 'Inflow' ? '' : 'Inflow')}
+            title="Filter to Inflow transactions" />
+          <SummaryCell tone="outflow" label="Outflow · Mo" value={summary.outflow}
+            icon={<ArrowDownCircle size={15} />}
+            active={chipType === 'Outflow'}
+            onClick={() => setChipType(chipType === 'Outflow' ? '' : 'Outflow')}
+            title="Filter to Outflow transactions" />
+          <SummaryCell tone="net"     label="Net · Mo"     value={summary.net}
+            icon={<ArrowLeftRight size={15} />}
+            onClick={() => setDetailPanelOpen(v => !v)}
+            title="Toggle reconcile detail" />
+          <SummaryCell tone="cash"    label="Cash"         value={summary.cash}
+            icon={<Wallet size={15} />}
+            active={chipAccount === CASH_IN_HAND_ID}
+            onClick={() => setChipAccount(chipAccount === CASH_IN_HAND_ID ? '' : CASH_IN_HAND_ID)}
+            title="Filter to Cash-in-Hand transactions" />
+          <SummaryCell tone="banks"   label={`Banks · ${summary.bankCount}`} value={summary.bankSum}
+            icon={<Landmark size={15} />}
+            onClick={() => setBanksModal(true)}
+            title="Add / rename / remove bank accounts" />
+
+          {/* Chevron expand toggle — anchored top-right of the strip */}
+          <button
+            onClick={() => setDetailPanelOpen(v => !v)}
+            title={detailPanelOpen ? 'Hide details' : 'Show reconcile details'}
+            style={{
+              position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+              width: 28, height: 28, borderRadius: 8, border: '1px solid #e2e8f0',
+              backgroundColor: '#fff', cursor: 'pointer', color: '#475569',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <ChevronDown size={14} style={{ transform: detailPanelOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+          </button>
+        </div>
+
+        {/* Expanded reconcile detail panel */}
+        {detailPanelOpen && (
+          <ReconcileDetail
+            banks={banks}
+            transactions={transactions}
+            cashOpening={cashOpening}
+            summary={summary}
+          />
+        )}
       </div>
 
       {/* ── Section header ─────────────────────────────────────────────── */}
@@ -325,6 +430,32 @@ export function TransactionListView({
           <Check size={12} /> Settled only
         </button>
 
+        {/* Pending only toggle — surfaces the pending-payments view inline */}
+        <button
+          onClick={() => setPendingOnly(v => !v)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '7px 13px', borderRadius: 99,
+            border: `1px solid ${pendingOnly ? '#c2410c' : '#e2e8f0'}`,
+            backgroundColor: pendingOnly ? '#c2410c' : '#fff',
+            color: pendingOnly ? '#fff' : '#334155',
+            fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          <Clock size={12} /> Pending only
+          {pendingCount > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              minWidth: 18, height: 16, padding: '0 6px', borderRadius: 99,
+              fontSize: 10, fontWeight: 800,
+              backgroundColor: pendingOnly ? 'rgba(255,255,255,0.25)' : '#fff7ed',
+              color: pendingOnly ? '#fff' : '#c2410c',
+            }}>
+              {pendingCount}
+            </span>
+          )}
+        </button>
+
         {/* Spacer + Add */}
         <div style={{ flex: 1 }} />
         <button
@@ -349,12 +480,53 @@ export function TransactionListView({
           {chipSubCategory && <ActiveBadge label={`Sub: ${chipSubCategory}`} onRemove={() => setChipSubCategory('')} />}
           {chipAccount && <ActiveBadge label={`Account: ${accountOptions.find(a => a.id === chipAccount)?.name || ''}`} onRemove={() => setChipAccount('')} />}
           {chipBranch && <ActiveBadge label={`Branch: ${chipBranch}`} onRemove={() => setChipBranch('')} />}
+          {chipType && <ActiveBadge label={`Type: ${chipType}`} onRemove={() => setChipType('')} />}
           {settledOnly && <ActiveBadge label="Settled only" onRemove={() => setSettledOnly(false)} />}
+          {pendingOnly && <ActiveBadge label="Pending only" onRemove={() => setPendingOnly(false)} />}
           <button
-            onClick={() => { setChipCategory(''); setChipSubCategory(''); setChipAccount(''); setChipBranch(''); setSettledOnly(false); }}
+            onClick={() => { setChipCategory(''); setChipSubCategory(''); setChipAccount(''); setChipBranch(''); setSettledOnly(false); setPendingOnly(false); setChipType(''); }}
             style={{ fontSize: 11, color: '#4f46e5', border: 'none', background: 'transparent', cursor: 'pointer', fontWeight: 700 }}
           >
             Clear all
+          </button>
+        </div>
+      )}
+
+      {/* ── Pending payments callout ────────────────────────────────────
+          Only rendered when there are pending payments AND the user hasn't
+          already filtered to pending-only. Clicking "View" toggles the
+          filter chip so the table narrows to just those rows.               */}
+      {pendingCount > 0 && !pendingOnly && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 16px', borderRadius: 10,
+          backgroundColor: '#fff7ed', border: '1px solid #fed7aa',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#ffedd5', color: '#c2410c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Clock size={16} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#9a3412' }}>
+                {pendingCount} pending payment{pendingCount === 1 ? '' : 's'}
+              </div>
+              <div style={{ fontSize: 11, color: '#c2410c' }}>
+                {pendingTotal > 0
+                  ? <>Total outstanding: <b>{CURRENCY} {fmt(pendingTotal)}</b></>
+                  : 'Awaiting approval'}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setPendingOnly(true)}
+            style={{
+              padding: '7px 14px', borderRadius: 8, border: 'none',
+              backgroundColor: '#c2410c', color: '#fff',
+              fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}
+          >
+            View pending <ChevronDown size={11} style={{ transform: 'rotate(-90deg)' }} />
           </button>
         </div>
       )}
@@ -439,15 +611,34 @@ export function TransactionListView({
           </table>
         </div>
       </div>
+
+      {/* ── Modals ────────────────────────────────────────────────────── */}
+      {openingModal && (
+        <OpeningBalancesModal
+          banks={banks}
+          cashOpening={cashOpening}
+          onClose={() => setOpeningModal(false)}
+          onSaved={async () => { await refreshAccounts(); setOpeningModal(false); }}
+        />
+      )}
+      {banksModal && (
+        <BanksManagerModal
+          banks={banks}
+          transactions={transactions}
+          onClose={() => setBanksModal(false)}
+          onSaved={async () => { await refreshAccounts(); }}
+        />
+      )}
     </div>
   );
 }
 
 // ── Cells / chips / helpers ─────────────────────────────────────────────────
 
-function SummaryCell({ tone, label, value, icon }: {
+function SummaryCell({ tone, label, value, icon, onClick, active, title }: {
   tone: 'opening' | 'inflow' | 'outflow' | 'net' | 'cash' | 'banks';
   label: string; value: number; icon: React.ReactNode;
+  onClick?: () => void; active?: boolean; title?: string;
 }) {
   const palette: Record<string, { bg: string; fg: string }> = {
     opening: { bg: '#fff7ed', fg: '#c2410c' },
@@ -459,7 +650,23 @@ function SummaryCell({ tone, label, value, icon }: {
   };
   const p = palette[tone];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, minWidth: 0,
+        padding: '6px 8px', borderRadius: 10,
+        // Active tiles get a subtle ring + tinted background so users can see
+        // which filter is currently applied via the summary strip.
+        border: active ? `1.5px solid ${p.fg}` : '1.5px solid transparent',
+        backgroundColor: active ? p.bg : 'transparent',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'all .12s',
+        textAlign: 'left',
+      }}
+      onMouseEnter={e => { if (onClick && !active) e.currentTarget.style.backgroundColor = '#f8fafc'; }}
+      onMouseLeave={e => { if (onClick && !active) e.currentTarget.style.backgroundColor = 'transparent'; }}
+    >
       <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: p.bg, color: p.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         {icon}
       </div>
@@ -469,7 +676,7 @@ function SummaryCell({ tone, label, value, icon }: {
           <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 4 }}>{CURRENCY}</span>{fmt(value)}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -672,4 +879,433 @@ const IconAction: React.FC<{
       {children}
     </button>
   );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ReconcileDetail — expanded panel shown when the ▾ chevron is clicked
+//
+// Three cards + a Balanced/Difference summary that mirrors the reference
+// screenshot (Image 2). Balance at End of Month · Sum of All Accounts ·
+// Outstanding Balance from the payables/receivables side.
+// ═══════════════════════════════════════════════════════════════════════════
+const ReconcileDetail: React.FC<{
+  banks: Array<{ id: string; name: string; balance: number }>;
+  transactions: Transaction[];
+  cashOpening: number;
+  summary: { opening: number; inflow: number; outflow: number; cash: number; bankSum: number };
+}> = ({ banks, transactions, cashOpening, summary }) => {
+  // "Total balance" is what the ledger says right now (opening + inflows - outflows).
+  const totalBalance = summary.opening + summary.inflow - summary.outflow;
+  // "Sum of all accounts" is the same number arrived at from the other side —
+  // add live cash balance + each bank's live balance. If both numbers agree,
+  // the books are balanced.
+  const cashLive = summary.cash;
+  const bankLive = banks.map(b => ({
+    id: b.id, name: b.name,
+    live: computeBankBalance(transactions, b.id, b.balance),
+  }));
+  const sumAccounts = cashLive + bankLive.reduce((s, b) => s + b.live, 0);
+  const diff = totalBalance - sumAccounts;
+
+  return (
+    <div style={{ padding: '16px 18px', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr)) auto', gap: 14 }}>
+
+        {/* Balance at End of Month */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 10 }}>Balance at End of Month</div>
+          <ReconRow label={<>Opening</>} value={summary.opening} />
+          <ReconRow label={<>+ Inflows</>} value={summary.inflow} tone="inflow" />
+          <ReconRow label={<>− Outflows</>} value={summary.outflow} tone="outflow" />
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: 12, color: '#64748b' }}>Total balance</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#059669' }}>{CURRENCY} {fmt(totalBalance)}</span>
+          </div>
+        </div>
+
+        {/* Sum of All Accounts */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 10 }}>Sum of All Accounts</div>
+          <ReconRow label={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Wallet size={11} color="#65a30d" /> Cash in hand</span>} value={cashLive} />
+          {bankLive.map(b => (
+            <ReconRow
+              key={b.id}
+              label={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Landmark size={11} color="#2563eb" /> {b.name}</span>}
+              value={b.live}
+            />
+          ))}
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: 12, color: '#64748b' }}>Total balance</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#059669' }}>{CURRENCY} {fmt(sumAccounts)}</span>
+          </div>
+        </div>
+
+        {/* Outstanding Balance (placeholder — receivables/payables would come from invoices module) */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 10 }}>Outstanding Balance</div>
+          <ReconRow label={<>Receivables · owed to you</>} value={0} muted />
+          <ReconRow label={<>Payables · you owe</>} value={0} muted />
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: 12, color: '#64748b' }}>Net position</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#334155' }}>{CURRENCY} 0</span>
+          </div>
+        </div>
+
+        {/* Balanced / Difference summary */}
+        <div style={{
+          backgroundColor: Math.abs(diff) < 0.5 ? '#f0fdf4' : '#fef2f2',
+          border: `1px solid ${Math.abs(diff) < 0.5 ? '#bbf7d0' : '#fecaca'}`,
+          borderRadius: 10, padding: 14, minWidth: 190,
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            {Math.abs(diff) < 0.5 ? (
+              <>
+                <div style={{ width: 42, height: 42, borderRadius: 99, backgroundColor: '#059669', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                  <Check size={20} strokeWidth={3} />
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#059669' }}>Balanced</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Accounts matched</div>
+              </>
+            ) : (
+              <>
+                <div style={{ width: 42, height: 42, borderRadius: 99, backgroundColor: '#dc2626', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                  <X size={20} strokeWidth={3} />
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>Off by {CURRENCY} {fmt(Math.abs(diff))}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Reconcile needed</div>
+              </>
+            )}
+          </div>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${Math.abs(diff) < 0.5 ? '#bbf7d0' : '#fecaca'}`, fontSize: 11 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ color: '#64748b' }}>Cash</span>
+              <span style={{ color: '#0f172a', fontWeight: 700 }}>{CURRENCY} {fmt(cashLive)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#64748b' }}>Banks</span>
+              <span style={{ color: '#0f172a', fontWeight: 700 }}>{CURRENCY} {fmt(summary.bankSum)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ReconRow: React.FC<{ label: React.ReactNode; value: number; tone?: 'inflow' | 'outflow'; muted?: boolean }> = ({ label, value, tone, muted }) => {
+  const color = muted ? '#94a3b8'
+    : tone === 'inflow' ? '#059669'
+    : tone === 'outflow' ? '#dc2626'
+    : '#0f172a';
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0', fontSize: 12 }}>
+      <span style={{ color: '#475569' }}>{label}</span>
+      <span style={{ color, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{CURRENCY} {fmt(value)}</span>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OpeningBalancesModal — set the seed balance for each account (Cash + banks)
+//
+// Doesn't create a transaction — it just persists a starting-point number so
+// the running-balance math has a base to add ledger deltas to. Cash goes into
+// `settings/cashOpening.amount`; banks go into each bank doc's `.balance`
+// field.
+// ═══════════════════════════════════════════════════════════════════════════
+const OpeningBalancesModal: React.FC<{
+  banks: Array<{ id: string; name: string; balance: number }>;
+  cashOpening: number;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}> = ({ banks, cashOpening, onClose, onSaved }) => {
+  const [cash, setCash] = useState<number>(cashOpening);
+  const [bankOpen, setBankOpen] = useState<Record<string, number>>(
+    Object.fromEntries(banks.map(b => [b.id, b.balance])),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Cash opening → single settings doc
+      await setDoc(doc(db, 'settings', 'cashOpening'), { amount: Number(cash) || 0 }, { merge: true });
+      // Each bank opening → the bank doc's `balance` field
+      for (const b of banks) {
+        const next = Number(bankOpen[b.id]) || 0;
+        if (next !== b.balance) {
+          await updateDoc(doc(db, 'banks', b.id), { balance: next });
+        }
+      }
+      toast.success('Opening balances saved');
+      await onSaved();
+    } catch (err: any) {
+      console.error('[OpeningBalancesModal] save failed:', err);
+      toast.error(err?.message || 'Failed to save opening balances');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inp: React.CSSProperties = {
+    padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8,
+    fontSize: 13, textAlign: 'right', width: 130, outline: 'none',
+    fontVariantNumeric: 'tabular-nums',
+  };
+
+  return createPortal(
+    <div onClick={onClose} style={backdrop}>
+      <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 540 }}>
+        <div style={modalHeader}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Opening Balances</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>Starting amount for each account before any transactions</div>
+          </div>
+          <button onClick={onClose} style={modalClose}><X size={14} /></button>
+        </div>
+
+        <div style={{ padding: '14px 18px', maxHeight: '60vh', overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center', marginBottom: 6, padding: '0 6px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>Account</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textAlign: 'right' }}>Opening Balance</div>
+          </div>
+
+          {/* Cash-in-Hand */}
+          <div style={acctRow}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#f0fdf4', color: '#65a30d', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Wallet size={14} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Cash in Hand</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>Current balance: {fmt(cashOpening)}</div>
+              </div>
+            </div>
+            <input type="number" step="any" value={cash} onChange={e => setCash(Number(e.target.value) || 0)} style={inp} />
+          </div>
+
+          {/* Banks */}
+          {banks.map(b => (
+            <div key={b.id} style={acctRow}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#eef2ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Landmark size={14} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{b.name}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Current balance: {fmt(b.balance)}</div>
+                </div>
+              </div>
+              <input type="number" step="any" value={bankOpen[b.id] ?? 0} onChange={e => setBankOpen(prev => ({ ...prev, [b.id]: Number(e.target.value) || 0 }))} style={inp} />
+            </div>
+          ))}
+
+          <div style={{ marginTop: 12, padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: 8, fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+            This doesn't create a transaction — it's just each account's starting point.
+            Live balance = <b>opening + inflows − outflows</b>.
+          </div>
+        </div>
+
+        <div style={modalFooter}>
+          <button onClick={onClose} disabled={saving} style={btnGhost}><X size={12} /> Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={btnPrimary}>
+            {saving ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</> : <><Check size={12} /> Save</>}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BanksManagerModal — inline bank CRUD (add / rename / edit opening / delete)
+//
+// Everything the removed Banking screen used to do, folded into the
+// transactions module. Uses the `banks` collection Firestore directly.
+// ═══════════════════════════════════════════════════════════════════════════
+const BanksManagerModal: React.FC<{
+  banks: Array<{ id: string; name: string; balance: number }>;
+  transactions: Transaction[];
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}> = ({ banks, transactions, onClose, onSaved }) => {
+  const [rows, setRows] = useState<Array<{ id: string; name: string; balance: number; isNew?: boolean; toDelete?: boolean }>>(
+    banks.map(b => ({ ...b })),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const addRow = () => {
+    setRows(prev => [...prev, { id: `new-${Date.now()}-${prev.length}`, name: '', balance: 0, isNew: true }]);
+  };
+  const markDelete = (id: string) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, toDelete: !r.toDelete } : r));
+  };
+  const update = (id: string, patch: Partial<{ name: string; balance: number }>) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+  };
+
+  const totalBalance = rows.filter(r => !r.toDelete).reduce((s, r) => s + (Number(r.balance) || 0), 0);
+  const visibleCount = rows.filter(r => !r.toDelete && !r.isNew).length + rows.filter(r => !r.toDelete && r.isNew && r.name.trim()).length;
+
+  const handleSave = async () => {
+    // Validate: no blank names among non-deleted rows
+    const kept = rows.filter(r => !r.toDelete);
+    for (const r of kept) {
+      if (!r.name.trim()) { toast.error('Every bank needs a name'); return; }
+    }
+    setSaving(true);
+    try {
+      for (const r of rows) {
+        if (r.isNew && !r.toDelete && r.name.trim()) {
+          // Add new bank
+          await addDoc(collection(db, 'banks'), {
+            name: r.name.trim(),
+            balance: Number(r.balance) || 0,
+            createdAt: new Date().toISOString(),
+          });
+        } else if (!r.isNew && r.toDelete) {
+          // Delete existing bank
+          await deleteDoc(doc(db, 'banks', r.id));
+        } else if (!r.isNew && !r.toDelete) {
+          // Update existing bank (only if it changed)
+          const original = banks.find(b => b.id === r.id);
+          if (original && (original.name !== r.name || original.balance !== r.balance)) {
+            await updateDoc(doc(db, 'banks', r.id), {
+              name: r.name.trim(),
+              balance: Number(r.balance) || 0,
+            });
+          }
+        }
+      }
+      toast.success('Bank accounts updated');
+      await onSaved();
+      onClose();
+    } catch (err: any) {
+      console.error('[BanksManagerModal] save failed:', err);
+      toast.error(err?.message || 'Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inp: React.CSSProperties = {
+    padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6,
+    fontSize: 12, outline: 'none', width: '100%',
+  };
+
+  return createPortal(
+    <div onClick={onClose} style={backdrop}>
+      <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 640 }}>
+        <div style={modalHeader}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Bank Accounts</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>Live balance per bank — add, rename, or adjust opening balances</div>
+          </div>
+          <button onClick={onClose} style={modalClose}><X size={14} /></button>
+        </div>
+
+        <div style={{ padding: '14px 18px', maxHeight: '65vh', overflowY: 'auto' }}>
+          {/* Summary */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            <div style={{ padding: 12, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>Banks</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{visibleCount}</div>
+            </div>
+            <div style={{ padding: 12, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>Total Balance</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{fmt(totalBalance)}</div>
+            </div>
+          </div>
+
+          {/* Rows */}
+          {rows.map(r => {
+            const live = r.isNew ? Number(r.balance) || 0 : computeBankBalance(transactions, r.id, Number(r.balance) || 0);
+            return (
+              <div key={r.id} style={{ padding: 12, marginBottom: 10, border: `1px solid ${r.toDelete ? '#fecaca' : '#e2e8f0'}`, borderRadius: 8, backgroundColor: r.toDelete ? '#fef2f2' : '#fff', opacity: r.toDelete ? 0.6 : 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px auto', gap: 8, alignItems: 'end' }}>
+                  <div>
+                    <label style={miniLabel}>Bank Name</label>
+                    <input value={r.name} onChange={e => update(r.id, { name: e.target.value })} placeholder="e.g. HBL — Main Branch" style={inp} disabled={r.toDelete} />
+                  </div>
+                  <div>
+                    <label style={miniLabel}>Opening Balance</label>
+                    <input type="number" step="any" value={r.balance} onChange={e => update(r.id, { balance: Number(e.target.value) || 0 })} style={{ ...inp, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }} disabled={r.toDelete} />
+                  </div>
+                  <button onClick={() => markDelete(r.id)} title={r.toDelete ? 'Undo delete' : 'Remove bank'} style={{ width: 32, height: 32, borderRadius: 6, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', color: r.toDelete ? '#059669' : '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {r.toDelete ? <RotateCcw size={13} /> : <Trash2 size={13} />}
+                  </button>
+                </div>
+                {!r.isNew && !r.toDelete && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Current live balance</span>
+                    <span style={{ fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{CURRENCY} {fmt(live)}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <button onClick={addRow} style={{ ...btnGhost, width: '100%', justifyContent: 'center', padding: '10px 12px', border: '1px dashed #cbd5e1' }}>
+            <Plus size={13} /> Add Bank Branch
+          </button>
+
+          <div style={{ marginTop: 12, padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: 8, fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+            Renaming or changing opening balance here updates that bank going forward.
+            Removing a bank does <b>not</b> delete its past transactions, but they'll stop appearing in the
+            bank balance cards above.
+          </div>
+        </div>
+
+        <div style={modalFooter}>
+          <button onClick={onClose} disabled={saving} style={btnGhost}><X size={12} /> Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={btnPrimary}>
+            {saving ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</> : <><Check size={12} /> Save Changes</>}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Modal styling helpers
+// ═══════════════════════════════════════════════════════════════════════════
+const backdrop: React.CSSProperties = {
+  position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)', zIndex: 10000,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+};
+const modalBox: React.CSSProperties = {
+  width: '100%', maxHeight: '92vh', backgroundColor: '#fff', borderRadius: 14,
+  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.55)',
+  display: 'flex', flexDirection: 'column', overflow: 'hidden',
+};
+const modalHeader: React.CSSProperties = {
+  padding: '14px 20px', borderBottom: '1px solid #f1f5f9',
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+};
+const modalClose: React.CSSProperties = {
+  width: 28, height: 28, border: '1px solid #e2e8f0', borderRadius: 7,
+  backgroundColor: '#fff', cursor: 'pointer', color: '#64748b',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
+const modalFooter: React.CSSProperties = {
+  padding: '14px 20px', borderTop: '1px solid #f1f5f9',
+  display: 'flex', gap: 8, justifyContent: 'flex-end', flexShrink: 0, backgroundColor: '#fff',
+};
+const acctRow: React.CSSProperties = {
+  padding: '10px 12px', marginBottom: 8, border: '1px solid #e2e8f0', borderRadius: 10,
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+};
+const miniLabel: React.CSSProperties = {
+  display: 'block', fontSize: 10, fontWeight: 700, color: '#94a3b8', marginBottom: 4,
+};
+const btnPrimary: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8,
+  border: 'none', backgroundColor: '#0f172a', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+};
+const btnGhost: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 8,
+  border: '1px solid #e2e8f0', backgroundColor: '#fff', color: '#334155', fontSize: 12, fontWeight: 700, cursor: 'pointer',
 };

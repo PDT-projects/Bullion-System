@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, ChevronDown, ChevronRight, Package, FileText,
   DollarSign, Percent, Calculator, TrendingUp, BarChart2,
-  ArrowLeftRight, PlusCircle, Clock, Building2, ArrowRightLeft, Wallet, Activity,
+  ArrowLeftRight, Building2, ArrowRightLeft, Wallet, Activity,
   FilePlus, List,
 } from 'lucide-react';
 
@@ -20,9 +20,7 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'commission-slabs':     'Commission Slabs',
   'commission-calculate': 'Commission Calculation',
   'commission-reports':   'Commission Reports',
-  'add-transaction':      'Add Transaction',
   'transactions-list':    'Transaction List',
-  'pending-payment':      'Pending Payments',
   'banking-overview':     'Banking Dashboard',
   'bank-accounts':        'Bank Accounts List',
   'transfers':            'Bank Transfers List',
@@ -32,12 +30,11 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
 
 const menuItems = [
   {
-    id: 'transactions', name: 'Transactions', icon: ArrowLeftRight,
-    children: [
-      { id: 'transactions-list', name: 'Transactions',     icon: ArrowLeftRight, path: '/transactions' },
-      { id: 'add-transaction',   name: 'Add Transaction',  icon: PlusCircle,     path: '/transactions/new' },
-      { id: 'pending-payment',   name: 'Pending Payments', icon: Clock,          path: '/transactions/pending' },
-    ],
+    // Transactions is a flat item now (no submenu). The old sub-items
+    // "Add Transaction" and "Pending Payments" were removed — creation is
+    // handled by the "+ Add Transaction" button in the list view itself,
+    // and pending payments are surfaced inline in that same list.
+    id: 'transactions-list', name: 'Transactions', icon: ArrowLeftRight, path: '/transactions',
   },
   // Banking module hidden from sidebar
   // {
