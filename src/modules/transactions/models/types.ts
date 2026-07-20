@@ -225,6 +225,12 @@ export const COMPANIES = [
 
 export const MAIN_CATEGORIES = ['Cash Inflow', 'Cash Outflow', 'Loan'];
 
+/** Special Outflow category that opens an invoice-picker in the transaction modal.
+ *  Picking it wires the transaction into the invoice's misc-expense history via
+ *  InvoiceMiscExpenseService.recordExpense (which also books the ledger entry
+ *  itself, so the modal must NOT double-book). */
+export const INVOICE_MISC_EXPENSE_CATEGORY = 'Invoice Misc Expense';
+
 export const SUB_CATEGORIES: Record<string, string[]> = {
   'Cash Inflow': [
     'Product sale received',
@@ -237,6 +243,7 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
     'Other',
   ],
   'Cash Outflow': [
+    'Invoice Misc Expense',            // Special: triggers the invoice-picker UI in the transaction modal
     'Employee salary',
     'Advance salary',
     'Commission paid - Employee',

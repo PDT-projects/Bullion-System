@@ -11,7 +11,7 @@
 //   • Branch dropdown with +Add
 //   • Total Amount * / Amount Received (partial payment)
 //   • Remitter Name (Inflow only)
-//   • Attachment / Receipt (required — base64 into the existing attachments[] array)
+//   • Attachment / Receipt (optional — base64 into the existing attachments[] array)
 //   • Cancel / Submit
 //
 // Writes BOTH the new Phase 1 fields (accountId / accountType / subCategoryDetail
@@ -26,8 +26,12 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
+import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
+import { InvoiceMiscExpenseService } from '../../invoices/models/InvoiceMiscExpenseService';
+import { Invoice } from '../../invoices/models/types';
 import {
   Transaction, DynamicCategory, SUB_CATEGORIES, CASH_IN_HAND_ID, CASH_IN_HAND_NAME,
+  INVOICE_MISC_EXPENSE_CATEGORY,
 } from '../models/types';
 
 // ── Props ───────────────────────────────────────────────────────────────────
@@ -83,6 +87,41 @@ export function QuickTransactionModal({
   const [editSubCatMode, setEditSubCatMode] = useState(false);
   const [showAddBranch, setShowAddBranch] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
+
+  // ── Invoice picker (Outflow · "Invoice Misc Expense" only) ──────────
+  // Lazy-loaded the first time the user picks this special category, then
+  // cached for the rest of the session so switching in/out of the option
+  // doesn't refetch.
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoiceId, setInvoiceId] = useState('');
+  const isInvoiceMisc = type === 'Outflow' && category === INVOICE_MISC_EXPENSE_CATEGORY;
+
+  useEffect(() => {
+    if (!isInvoiceMisc || invoices.length > 0 || invoicesLoading) return;
+    setInvoicesLoading(true);
+    InvoiceFirebaseService.fetchAllInvoices()
+      .then(list => {
+        // Show non-fully-paid first so the common case (adding an expense to
+        // an unpaid invoice) is easy to find. Sort within each bucket by
+        // invoice number desc so newest is up top.
+        const sorted = [...list].sort((a, b) => {
+          const aPaid = a.paymentStatus === 'Full';
+          const bPaid = b.paymentStatus === 'Full';
+          if (aPaid !== bPaid) return aPaid ? 1 : -1;
+          return (b.invoiceNumber || '').localeCompare(a.invoiceNumber || '');
+        });
+        setInvoices(sorted);
+      })
+      .catch(err => {
+        console.error('[QuickTransactionModal] fetchAllInvoices failed:', err);
+        toast.error('Failed to load invoices');
+      })
+      .finally(() => setInvoicesLoading(false));
+  }, [isInvoiceMisc, invoices.length, invoicesLoading]);
+
+  // If user swaps the category away from Invoice Misc, clear the invoice link
+  useEffect(() => { if (!isInvoiceMisc) setInvoiceId(''); }, [isInvoiceMisc]);
 
   // UI state
   const [accountOpen, setAccountOpen] = useState(false);
@@ -218,22 +257,31 @@ export function QuickTransactionModal({
     if (!txId) { toast.error('Transaction ID not ready'); return; }
     if (!category) { toast.error('Category is required'); return; }
     if (!totalAmount || Number(totalAmount) <= 0) { toast.error('Total amount must be greater than zero'); return; }
-    if (!attachment) { toast.error('Attachment / receipt is required'); return; }
     if (selectedAccount.type === 'bank' && !selectedAccount.id) {
       toast.error('Pick a valid bank account'); return;
+    }
+    // Special path: Invoice Misc Expense requires a linked invoice
+    if (isInvoiceMisc && !invoiceId) {
+      toast.error('Pick which invoice this expense belongs to'); return;
     }
 
     setSaving(true);
     try {
-      // Encode receipt as data URL (kept on the existing attachments[] shape).
-      const dataUrl = await fileToDataUrl(attachment);
-      const attachmentEntry = {
-        id: `att-${Date.now()}`,
-        name: attachment.name,
-        type: attachment.type || 'application/octet-stream',
-        dataUrl,
-        uploadedAt: new Date().toISOString(),
-      };
+      // Attachment is optional. Only encode + attach when the user picked a file.
+      let dataUrl: string | undefined;
+      let attachmentEntry: {
+        id: string; name: string; type: string; dataUrl: string; uploadedAt: string;
+      } | undefined;
+      if (attachment) {
+        dataUrl = await fileToDataUrl(attachment);
+        attachmentEntry = {
+          id: `att-${Date.now()}`,
+          name: attachment.name,
+          type: attachment.type || 'application/octet-stream',
+          dataUrl,
+          uploadedAt: new Date().toISOString(),
+        };
+      }
 
       const total = Number(totalAmount);
       const paid  = amountReceived === '' ? total : Math.max(0, Math.min(total, Number(amountReceived)));
@@ -244,6 +292,34 @@ export function QuickTransactionModal({
       const time = now.toTimeString().split(' ')[0];
       const branchId = branches.find(b => b.name === branchName)?.id;
       const isCash = selectedAccount.type === 'cash';
+
+      // ── FORK: Invoice Misc Expense ──────────────────────────────────
+      // For this special category, InvoiceMiscExpenseService.recordExpense
+      // does BOTH sides in one call:
+      //   1. appends to the invoice's miscExpenses[] and updates miscExpense total
+      //   2. books an Outflow transaction with linkedType: 'invoice',
+      //      linkedId: invoiceNumber  (so the invoice-delete reversal picks it up)
+      // Calling createTransaction here too would double-book — so we return
+      // early after recordExpense succeeds.
+      if (isInvoiceMisc) {
+        const inv = invoices.find(x => x.id === invoiceId);
+        if (!inv) { toast.error('Selected invoice not found'); setSaving(false); return; }
+        await InvoiceMiscExpenseService.recordExpense({
+          invoice:  inv,
+          amount:   total,
+          category: description || 'Misc expense',
+          mode:     isCash ? 'Cash' : 'Bank',
+          date:     manualDate,
+          bankId:   isCash ? undefined : selectedAccount.id,
+          bankName: isCash ? undefined : selectedAccount.name,
+          note:     description || undefined,
+          company:  (branchName || 'Main Office') as any,
+        });
+        toast.success(`Misc expense added to invoice ${inv.invoiceNumber}`);
+        onSaved();
+        onClose();
+        return;
+      }
 
       const legacyMain: 'Cash Inflow' | 'Cash Outflow' =
         type === 'Inflow' ? 'Cash Inflow' : 'Cash Outflow';
@@ -276,7 +352,7 @@ export function QuickTransactionModal({
         plMainCategory:  type === 'Inflow' ? 'Revenue' : 'Operating Expenses',
         bsMainCategory:  'Assets',
         bsSubCategory:   isCash ? 'Cash & Cash Equivalents' : 'Bank Balances',
-        attachments:     [attachmentEntry],
+        attachments:     attachmentEntry ? [attachmentEntry] : undefined,
 
         // ── Phase 1 new fields ─────────────────────────────────────────
         subCategoryDetail: subCategory || undefined,
@@ -286,7 +362,7 @@ export function QuickTransactionModal({
         branchId,
         branchName:        branchName || undefined,
         remitterName:      type === 'Inflow' && remitterName ? remitterName : undefined,
-        attachmentUrl:     dataUrl,
+        attachmentUrl:     dataUrl,       // undefined when no file — stripped by deepStripUndefined on write
       } as Omit<Transaction, 'id'>;
 
       await TransactionFirebaseService.createTransaction(txData);
@@ -466,6 +542,42 @@ export function QuickTransactionModal({
             )}
           </div>
 
+          {/* ── Invoice picker (special: Outflow → "Invoice Misc Expense") ── */}
+          {isInvoiceMisc && (
+            <div style={{
+              padding: 12,
+              border: '1px solid #fed7aa',
+              backgroundColor: '#fff7ed',
+              borderRadius: 10,
+            }}>
+              <label style={{ ...label, color: '#c2410c' }}>
+                Link to Invoice <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              <select
+                value={invoiceId}
+                onChange={e => setInvoiceId(e.target.value)}
+                disabled={invoicesLoading}
+                style={sel}
+              >
+                <option value="">
+                  {invoicesLoading ? 'Loading invoices…'
+                    : invoices.length === 0 ? 'No invoices found'
+                    : '— Select invoice —'}
+                </option>
+                {invoices.map(inv => {
+                  const label = `${inv.invoiceNumber} — ${inv.customerName || 'Unknown'}`
+                    + (inv.paymentStatus === 'Full' ? '  (paid)' : '');
+                  return <option key={inv.id} value={inv.id}>{label}</option>;
+                })}
+              </select>
+              <div style={{ fontSize: 11, color: '#9a3412', marginTop: 6, lineHeight: 1.4 }}>
+                This expense will be added to the invoice's <b>Misc Expense</b>
+                total AND recorded here as an Outflow transaction. Deleting
+                the invoice will reverse both.
+              </div>
+            </div>
+          )}
+
           {/* Description */}
           <div>
             <label style={label}>(Max 120 Characters)</label>
@@ -550,7 +662,7 @@ export function QuickTransactionModal({
 
           {/* Attachment */}
           <div>
-            <label style={label}>Attachment / Receipt <span style={{ color: '#dc2626' }}>*</span></label>
+            <label style={label}>Attachment / Receipt <span style={{ color: '#94a3b8', fontWeight: 500 }}>(optional)</span></label>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '10px 12px', border: `1px dashed ${attachment ? '#65a30d' : '#cbd5e1'}`,
@@ -579,7 +691,7 @@ export function QuickTransactionModal({
               )}
             </div>
             <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
-              Required — a photo or PDF of the receipt/proof for this transaction.
+              Optional — a photo or PDF of the receipt/proof for this transaction.
             </div>
           </div>
         </div>
@@ -595,7 +707,7 @@ export function QuickTransactionModal({
           <button onClick={handleSubmit} disabled={saving} style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '9px 18px', borderRadius: 8, border: 'none',
-            backgroundColor: saving ? '#94a3b8' : '#c2410c', color: '#fff',
+            backgroundColor: saving ? '#94a3b8' : '#0f172a', color: '#fff',
             fontSize: 13, fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer',
           }}>
             {saving

@@ -1,194 +1,34 @@
-// Transactions Module - Transaction List View
-// Updated: multi-currency display (PKR / CAD / AED / SAR) matching Dashboard theme
+// Transactions Module - Transaction List View (Phase 4 redesign)
+//
+// Rewritten to match the reference Image 1 layout:
+//   • Compact summary strip: OPENING BAL · INFLOW·MO · OUTFLOW·MO · NET·MO · CASH · BANKS·N
+//   • Filter chip row:       FILTER · Category · Sub-category · Account · Branch · Settled only · + Add Transaction
+//   • Table columns:         TXN ID · DATE · MANUAL DATE · TYPE · CATEGORY · SUB CATEGORY · ACCOUNT
+//                            · AMOUNT · CASH IN (teal) · CASH OUT (red) · BALANCE · BALANCE DUE · STATUS · (actions)
+//   • Empty state:           "No transactions yet — click '+ Add Transaction' to record one."
+//
+// Same Props interface as the previous view — drop-in compatible with existing
+// wrapper. All row actions (view / edit / delete) preserved as a compact icon
+// group in the trailing ACTIONS cell.
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Plus, Eye, Edit, Trash2, Search, Download,
-  TrendingUp, TrendingDown, Wallet, X,
-  AlertCircle, Loader2, Filter,
-  CheckCircle, Clock, ShieldAlert, Ban,
-  ChevronDown, Check, RefreshCw, DollarSign,
+  Plus, Eye, Edit, Trash2, X, Filter as FilterIcon, Check,
+  ChevronDown, Wallet, Landmark, TrendingUp, TrendingDown, Loader2,
+  PlusCircle, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Search,
 } from 'lucide-react';
-import { CurrencyDropdown } from '../../../features/finance/CurrencyPicker';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../../api/firebase/firebase';
 import {
   Transaction, TransactionFilters, TransactionStats,
-  COMPANIES, MAIN_CATEGORIES,
 } from '../models/types';
-import { getTransactionTotals, isPending } from '../models/transactionsService';
+import {
+  getTransactionTotals,
+  getTxAccount, getTxCategoryPath,
+  computeCashInHandBalance, computeBankBalance, computeMonthlyFlow,
+} from '../models/transactionsService';
 
-// ─── Currency System (mirrored from Dashboard) ──────────────────────────────
-
-type CurrencyCode = 'AED';
-
-interface CurrencyMeta {
-  code: CurrencyCode;
-  label: string;
-  countryCode: string;
-  locale: string;
-  decimals: number;
-}
-
-const CURRENCIES: CurrencyMeta[] = [
-  { code: 'AED', label: 'UAE Dirham', countryCode: 'AE', locale: 'en-AE', decimals: 2 },
-];
-
-type RateMap = Record<CurrencyCode, number>;
-const FALLBACK_RATES: RateMap = { AED: 1 };
-
-const getMeta = (code: CurrencyCode) => CURRENCIES[0];
-
-const fmtAmount = (amount: number, meta: CurrencyMeta): string => {
-  try {
-    return new Intl.NumberFormat(meta.locale, {
-      style: 'currency', currency: meta.code,
-      minimumFractionDigits: meta.decimals,
-      maximumFractionDigits: meta.decimals,
-    }).format(amount);
-  } catch {
-    return `${meta.code} ${amount.toFixed(meta.decimals)}`;
-  }
-};
-
-const convertFromAed = (amount: number, target: CurrencyCode, rates: RateMap): number => amount; // no-op, only AED supported
-
-function useCurrencyRates() {
-  // Static rates for AED-only UI
-  return { rates: FALLBACK_RATES, loading: false, error: false, lastUpdated: null, refresh: () => {} };
-}
-
-function CurrencyBadge() {
-  return (
-    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">AED</span>
-  );
-}
-
-// ─── Currency rows shown below main value on cards ───────────────────────────
-
-function CurrencyRows({
-  extras, pkrAmount, rates, dark = false,
-}: {
-  extras: CurrencyCode[];
-  pkrAmount: number;
-  rates: RateMap;
-  dark?: boolean;
-}) {
-  if (extras.length === 0) return null;
-  return (
-    <div
-      className={`mt-3 pt-2.5 flex flex-col gap-1.5 ${dark ? '' : 'border-t border-gray-100'}`}
-      style={dark ? { borderTop: '1px solid rgba(255,255,255,0.1)' } : {}}
-    >
-      {extras.map(code => {
-        const meta = getMeta(code);
-        const amt  = convertFromAed(pkrAmount, code, rates);
-        return (
-          <div key={code} className="flex items-center justify-between gap-2">
-            <span
-              className="flex items-center gap-1.5 text-xs"
-              style={dark ? { color: 'rgba(255,255,255,0.45)' } : { color: '#9ca3af' }}
-            >
-              <span
-                className="text-[10px] font-bold px-1 py-0.5 rounded leading-none"
-                style={dark ? { background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.6)' } : { background: '#f3f4f6', color: '#6b7280' }}
-              >
-                {getMeta(code).countryCode}
-              </span>
-              {code}
-            </span>
-            <span
-              className="text-xs font-semibold tabular-nums"
-              style={dark ? { color: 'rgba(255,255,255,0.75)' } : { color: '#374151' }}
-            >
-              {fmtAmount(amt, meta)}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Stat card ───────────────────────────────────────────────────────────────
-
-function StatCard({
-  label, icon, pkrAmount, primary, extras, rates,
-  subtitle, amountColor, dark = false, countValue,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  pkrAmount: number;
-  primary: CurrencyCode;
-  extras: CurrencyCode[];
-  rates: RateMap;
-  subtitle?: string;
-  amountColor?: string;
-  dark?: boolean;
-  countValue?: React.ReactNode;
-}) {
-  const meta   = getMeta(primary);
-  const amount = convertFromAed(pkrAmount, primary, rates);
-
-  if (dark) {
-    return (
-      <div
-        className="rounded-2xl p-5 flex flex-col"
-        style={{ background: 'linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#334155 100%)', boxShadow: '0 4px 16px rgba(15,23,42,0.25)' }}
-      >
-        <div className="flex items-center justify-between mb-2.5">
-          <span className="text-xs font-semibold tracking-wide" style={{ color: 'rgba(255,255,255,0.45)' }}>{label}</span>
-          {icon}
-        </div>
-        {countValue !== undefined ? (
-          <>
-            <p className={`text-2xl font-bold tabular-nums leading-none mb-1.5 ${amountColor ?? 'text-white'}`}>{countValue}</p>
-            <p className="text-sm tabular-nums" style={{ color: 'rgba(255,255,255,0.5)' }}>{fmtAmount(amount, meta)}</p>
-          </>
-        ) : (
-          <p className={`text-2xl font-bold tabular-nums leading-none mb-1.5 ${amountColor ?? 'text-white'}`}>
-            {fmtAmount(amount, meta)}
-          </p>
-        )}
-        {subtitle && <p className="text-xs font-medium mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{subtitle}</p>}
-        <CurrencyRows extras={extras} pkrAmount={pkrAmount} rates={rates} dark />
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl p-5 border border-gray-100 flex flex-col hover:shadow-md hover:border-gray-200 transition-all duration-200">
-      <div className="flex items-center justify-between mb-2.5">
-        <span className="text-xs font-semibold text-gray-400 tracking-wide">{label}</span>
-        {icon}
-      </div>
-      {countValue !== undefined ? (
-        <>
-          <p className={`text-2xl font-bold tabular-nums leading-none mb-1 ${amountColor ?? 'text-gray-900'}`}>{countValue}</p>
-          <p className="text-sm text-gray-500 tabular-nums">{fmtAmount(amount, meta)}</p>
-        </>
-      ) : (
-        <p className={`text-2xl font-bold tabular-nums leading-none mb-1.5 ${amountColor ?? 'text-gray-900'}`}>
-          {fmtAmount(amount, meta)}
-        </p>
-      )}
-      {subtitle && <p className="text-xs text-gray-400 font-medium">{subtitle}</p>}
-      <CurrencyRows extras={extras} pkrAmount={pkrAmount} rates={rates} />
-    </div>
-  );
-}
-
-// ─── IconBadge ────────────────────────────────────────────────────────────────
-
-function IconBadge({ children, bg }: { children: React.ReactNode; bg: string }) {
-  return (
-    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${bg}`}>
-      {children}
-    </div>
-  );
-}
-
-// ─── Props ───────────────────────────────────────────────────────────────────
-
+// ── Props ───────────────────────────────────────────────────────────────────
 interface Props {
   transactions: Transaction[];
   filteredTransactions: Transaction[];
@@ -208,516 +48,389 @@ interface Props {
   getCategoryColor: (c: string) => string;
 }
 
-// ─── Main View ───────────────────────────────────────────────────────────────
+// ── Currency prefix (kept from prior file) ──────────────────────────────────
+const CURRENCY = 'AED';
+const fmt = (n: number) =>
+  n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+// ── View ────────────────────────────────────────────────────────────────────
 export function TransactionListView({
-  transactions, filteredTransactions, stats, filters, isLoading,
-  viewTransaction, setFilters, setViewTransaction,
-  handleDeleteTransaction, handleCreateTransaction, handleEditTransaction, handleExportCSV,
-  formatCurrency, formatDate, formatDateTime, getCategoryColor,
+  transactions, filteredTransactions, filters, isLoading,
+  setFilters,
+  handleDeleteTransaction, handleCreateTransaction, handleEditTransaction, setViewTransaction,
+  formatDate,
 }: Props) {
-  const navigate = useNavigate();
-  const [showFilters, setShowFilters] = React.useState(false);
 
-  // Currency state — local to this view (AED is primary by default)
-  const primaryCurrency: CurrencyCode = 'AED';
-  const extraCurrencies: CurrencyCode[] = [];
-  const { rates, loading: ratesLoading, error: ratesError, lastUpdated, refresh: refreshRates } = useCurrencyRates();
+  // ── Bank list (drives Opening Balance, Banks·N, and the Account filter) ──
+  const [banks, setBanks] = useState<{ id: string; name: string; balance: number }[]>([]);
+  useEffect(() => {
+    getDocs(query(collection(db, 'banks'), orderBy('name')))
+      .then(snap => setBanks(snap.docs.map(d => {
+        const b = d.data() as any;
+        return { id: d.id, name: b.name || '—', balance: Number(b.balance) || 0 };
+      })))
+      .catch(() => setBanks([]));
+  }, []);
 
-  const cardProps = { primary: primaryCurrency, extras: extraCurrencies, rates };
-
-  // Convert a PKR amount for display in the chosen primary currency
-  const fmtPrimary = (aedAmount: number) => fmtAmount(convertFromAed(aedAmount, primaryCurrency, rates), getMeta(primaryCurrency));
-
-  const modeBadge = (mode: string) => {
-    const colors: Record<string, string> = {
-      Cash:   'bg-blue-50 text-blue-700',
-      Bank:   'bg-slate-100 text-slate-700',
-      Cheque: 'bg-purple-50 text-purple-700',
-    };
-    return colors[mode] || 'bg-gray-100 text-gray-700';
-  };
-
-  const rowMeta = (t: Transaction): {
-    rowClass: string;
-    statusBadge: React.ReactNode;
-    dimAmount: boolean;
-  } => {
-    if (t.approvalStatus === 'rejected') {
-      return {
-        rowClass:  'bg-red-50 opacity-75',
-        dimAmount: true,
-        statusBadge: (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-200 whitespace-nowrap">
-            <Ban size={10} /> Rejected
-          </span>
-        ),
-      };
-    }
-    if (t.approvalStatus === 'pending_approval') {
-      return {
-        rowClass:  'bg-amber-50',
-        dimAmount: true,
-        statusBadge: (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 border border-amber-200 whitespace-nowrap">
-            <ShieldAlert size={10} /> Awaiting Approval
-          </span>
-        ),
-      };
-    }
-    const pending = isPending(t);
-    return {
-      rowClass:  '',
-      dimAmount: false,
-      statusBadge: pending ? (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700 border border-orange-100 whitespace-nowrap">
-          <Clock size={10} /> Pending
-        </span>
-      ) : (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 border border-emerald-100 whitespace-nowrap">
-          <CheckCircle size={10} /> Cleared
-        </span>
-      ),
-    };
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-10 h-10 animate-spin text-slate-600" />
-      </div>
+  // ── Summary metrics (all live-computed from `transactions`) ──────────────
+  const summary = useMemo(() => {
+    const monthly = computeMonthlyFlow(transactions);
+    const cash    = computeCashInHandBalance(transactions);
+    const bankSum = banks.reduce(
+      (sum, b) => sum + computeBankBalance(transactions, b.id, b.balance),
+      0,
     );
-  }
+    // Opening balance = seed balances of all banks (pre-ledger). Cash starts at 0.
+    const opening = banks.reduce((s, b) => s + b.balance, 0);
+    return { ...monthly, cash, bankSum, opening, bankCount: banks.length };
+  }, [transactions, banks]);
+
+  // ── Local filter chip state (drives which dropdown is open) ──────────────
+  const [openChip, setOpenChip] = useState<null | 'filter' | 'category' | 'subcategory' | 'account' | 'branch'>(null);
+  const chipRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!openChip) return;
+    const handler = (e: MouseEvent) => {
+      if (chipRef.current && !chipRef.current.contains(e.target as Node)) setOpenChip(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openChip]);
+
+  // Options for the Category / Sub-category / Account / Branch chips —
+  // derived from the currently loaded transactions + banks list.
+  const categoryOptions = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach(t => { const c = getTxCategoryPath(t).category; if (c) s.add(c); });
+    return [...s].sort();
+  }, [transactions]);
+  const subCategoryOptions = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach(t => { const sc = getTxCategoryPath(t).subCategory; if (sc) s.add(sc); });
+    return [...s].sort();
+  }, [transactions]);
+  const accountOptions = useMemo(() => {
+    const list: Array<{ id: string; name: string; type: 'cash' | 'bank' }> = [
+      { id: 'cash-in-hand', name: 'Cash in Hand', type: 'cash' },
+    ];
+    banks.forEach(b => list.push({ id: b.id, name: b.name, type: 'bank' }));
+    return list;
+  }, [banks]);
+  const branchOptions = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach(t => { const b = t.branchName || t.company; if (b) s.add(b); });
+    return [...s].sort();
+  }, [transactions]);
+
+  // ── Chip filter state (kept local — doesn't touch the VM's filters) ─────
+  const [chipCategory,    setChipCategory]    = useState<string>('');
+  const [chipSubCategory, setChipSubCategory] = useState<string>('');
+  const [chipAccount,     setChipAccount]     = useState<string>('');
+  const [chipBranch,      setChipBranch]      = useState<string>('');
+  const [settledOnly,     setSettledOnly]     = useState<boolean>(false);
+
+  // Apply chip filters on top of the VM's filteredTransactions.
+  const rows = useMemo(() => {
+    return filteredTransactions.filter(t => {
+      if (chipCategory && getTxCategoryPath(t).category !== chipCategory) return false;
+      if (chipSubCategory && getTxCategoryPath(t).subCategory !== chipSubCategory) return false;
+      if (chipAccount && getTxAccount(t).id !== chipAccount) return false;
+      if (chipBranch) {
+        const b = t.branchName || t.company;
+        if (b !== chipBranch) return false;
+      }
+      if (settledOnly && t.paymentStatus !== 'Full') return false;
+      return true;
+    });
+  }, [filteredTransactions, chipCategory, chipSubCategory, chipAccount, chipBranch, settledOnly]);
+
+  // ── Running balance per account for the BALANCE column ──────────────────
+  // Sort rows chronologically (oldest first) so the running total makes sense,
+  // then compute per-account running totals. Rendered back in the row order the
+  // user sees (newest first). Seeds cash at 0 and each bank at its stored balance.
+  const balanceByRow = useMemo(() => {
+    const seeded: Record<string, number> = { 'cash-in-hand': 0 };
+    banks.forEach(b => { seeded[b.id] = b.balance; });
+
+    const chrono = [...rows].sort((a, b) => {
+      const ka = (a.date || '') + ' ' + (a.time || '');
+      const kb = (b.date || '') + ' ' + (b.time || '');
+      return ka.localeCompare(kb);
+    });
+
+    const runningByAcc: Record<string, number> = { ...seeded };
+    const map = new Map<string, number>();
+    for (const t of chrono) {
+      const acc = getTxAccount(t);
+      const running = runningByAcc[acc.id] ?? 0;
+      const { totalPaid } = getTransactionTotals(t);
+      const isIn  = t.mainCategory === 'Cash Inflow';
+      const isOut = t.mainCategory === 'Cash Outflow';
+      const isCommitted = t.approvalStatus === 'approved' || t.approvalStatus === 'not_required' || !t.approvalStatus;
+      const delta = isCommitted ? (isIn ? totalPaid : isOut ? -totalPaid : 0) : 0;
+      const next = running + delta;
+      runningByAcc[acc.id] = next;
+      map.set(t.id, next);
+    }
+    return map;
+  }, [rows, banks]);
+
+  const hasAnyChipFilter = !!(chipCategory || chipSubCategory || chipAccount || chipBranch || settledOnly);
 
   return (
-    <div className="p-6 space-y-5 min-h-full bg-gray-50/70">
+    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20, backgroundColor: '#f8fafc', minHeight: '100%' }}>
 
-      {/* ── Header — mirrors Dashboard top bar layout exactly ── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        {/* Left: page title */}
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Transactions</h2>
-          <p className="text-gray-400 text-sm mt-0.5">Record and manage all financial transactions</p>
-        </div>
-
-        {/* Right: currency picker · Live indicator · Refresh · Export · Add — same order as Dashboard */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
-          <button
-            onClick={refreshRates}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors bg-white border border-gray-200 rounded-xl px-3 py-2 hover:shadow-sm"
-          >
-            <RefreshCw size={13} /> Refresh
-          </button>
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-3 py-2 text-slate-600 border border-gray-200 rounded-xl hover:bg-gray-50 text-sm font-medium transition-all bg-white"
-          >
-            <Download size={15} /> Export
-          </button>
-          <button
-            onClick={handleCreateTransaction}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 18px', borderRadius: 10,
-              background: '#1e293b', color: '#fff',
-              fontWeight: 700, fontSize: 14,
-              border: 'none', cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-              whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#0f172a')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#1e293b')}
-          >
-            <Plus size={15} /> Add Transaction
-          </button>
-        </div>
+      {/* ── Summary strip ─────────────────────────────────────────────── */}
+      <div style={{
+        backgroundColor: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
+        padding: '14px 18px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(6, minmax(0,1fr))',
+        gap: 14,
+      }}>
+        <SummaryCell tone="opening" label="Opening Bal"  value={summary.opening}       icon={<PlusCircle size={15} />} />
+        <SummaryCell tone="inflow"  label="Inflow · Mo"  value={summary.inflow}        icon={<ArrowUpCircle size={15} />} />
+        <SummaryCell tone="outflow" label="Outflow · Mo" value={summary.outflow}       icon={<ArrowDownCircle size={15} />} />
+        <SummaryCell tone="net"     label="Net · Mo"     value={summary.net}           icon={<ArrowLeftRight size={15} />} />
+        <SummaryCell tone="cash"    label="Cash"         value={summary.cash}          icon={<Wallet size={15} />} />
+        <SummaryCell tone="banks"   label={`Banks · ${summary.bankCount}`} value={summary.bankSum} icon={<Landmark size={15} />} />
       </div>
 
-      {/* ── Stats ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start">
-        <StatCard
-          label="Total Inflow"
-          icon={<IconBadge bg="bg-emerald-50"><TrendingUp size={15} className="text-emerald-500" /></IconBadge>}
-          pkrAmount={stats.totalInflow}
-          amountColor="text-emerald-600"
-          {...cardProps}
-        />
-        <StatCard
-          label="Total Outflow"
-          icon={<IconBadge bg="bg-red-50"><TrendingDown size={15} className="text-red-400" /></IconBadge>}
-          pkrAmount={stats.totalOutflow}
-          amountColor="text-red-600"
-          {...cardProps}
-        />
-        <StatCard
-          label="Net Balance"
-          icon={<IconBadge bg="bg-slate-50"><Wallet size={15} className="text-slate-500" /></IconBadge>}
-          pkrAmount={stats.netBalance}
-          amountColor={stats.netBalance >= 0 ? 'text-slate-800' : 'text-red-600'}
-          {...cardProps}
-        />
-        <StatCard
-          label="Pending"
-          icon={<IconBadge bg="bg-amber-50"><AlertCircle size={15} className="text-amber-500" /></IconBadge>}
-          pkrAmount={stats.totalPending}
-          countValue={<span className="text-orange-500">{stats.pendingCount}</span>}
-          amountColor="text-orange-600"
-          {...cardProps}
-        />
+      {/* ── Section header ─────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a', margin: 0 }}>Transactions</h2>
       </div>
 
-      {stats.pendingApprovalCount > 0 && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-800">
-          <ShieldAlert size={18} className="shrink-0 text-amber-500" />
-          <span>
-            <strong>{stats.pendingApprovalCount} transaction{stats.pendingApprovalCount > 1 ? 's' : ''}</strong>{' '}
-            {stats.pendingApprovalCount > 1 ? 'are' : 'is'} awaiting admin approval.
-            These are <strong>not included</strong> in the financial totals above until approved.
-          </span>
+      {/* ── Filter chip row ────────────────────────────────────────────── */}
+      <div ref={chipRef} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', position: 'relative' }}>
+        {/* Filter (search) */}
+        <FilterChip
+          icon={<FilterIcon size={12} />}
+          label="Filter"
+          active={!!filters.searchTerm}
+          activeColor="#0f172a"
+          onClick={() => setOpenChip(openChip === 'filter' ? null : 'filter')}
+        />
+        {openChip === 'filter' && (
+          <Panel>
+            <div style={{ padding: 12, minWidth: 260 }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  autoFocus
+                  value={filters.searchTerm}
+                  onChange={e => setFilters({ searchTerm: e.target.value })}
+                  placeholder="Search TXN ID, note, remitter, …"
+                  style={{ width: '100%', padding: '8px 12px 8px 30px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }}
+                />
+              </div>
+            </div>
+          </Panel>
+        )}
+
+        {/* Category */}
+        <Chip
+          label="Category" active={!!chipCategory} activeValue={chipCategory}
+          onOpen={() => setOpenChip(openChip === 'category' ? null : 'category')}
+          onClear={() => setChipCategory('')}
+        />
+        {openChip === 'category' && (
+          <Panel>
+            <ListPanel
+              title="Category" empty="No categories yet"
+              options={categoryOptions} value={chipCategory}
+              onPick={v => { setChipCategory(v); setOpenChip(null); }}
+            />
+          </Panel>
+        )}
+
+        {/* Sub-category */}
+        <Chip
+          label="Sub-category" active={!!chipSubCategory} activeValue={chipSubCategory}
+          onOpen={() => setOpenChip(openChip === 'subcategory' ? null : 'subcategory')}
+          onClear={() => setChipSubCategory('')}
+        />
+        {openChip === 'subcategory' && (
+          <Panel>
+            <ListPanel
+              title="Sub-category" empty="No sub-categories yet"
+              options={subCategoryOptions} value={chipSubCategory}
+              onPick={v => { setChipSubCategory(v); setOpenChip(null); }}
+            />
+          </Panel>
+        )}
+
+        {/* Account */}
+        <Chip
+          label="Account" active={!!chipAccount}
+          activeValue={accountOptions.find(a => a.id === chipAccount)?.name}
+          onOpen={() => setOpenChip(openChip === 'account' ? null : 'account')}
+          onClear={() => setChipAccount('')}
+        />
+        {openChip === 'account' && (
+          <Panel>
+            <div style={{ minWidth: 240, maxHeight: 260, overflowY: 'auto' }}>
+              <PanelHeader>All accounts</PanelHeader>
+              <PickRow selected={chipAccount === ''} onClick={() => { setChipAccount(''); setOpenChip(null); }}>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>All accounts</span>
+              </PickRow>
+              <div style={{ padding: '6px 12px 4px', fontSize: 12, fontWeight: 600, color: '#64748b', backgroundColor: '#f8fafc' }}>Cash</div>
+              <PickRow selected={chipAccount === 'cash-in-hand'} onClick={() => { setChipAccount('cash-in-hand'); setOpenChip(null); }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <Wallet size={12} color="#65a30d" /> Cash in Hand
+                </span>
+                <span style={{ fontSize: 11, color: '#64748b' }}>{CURRENCY} {fmt(summary.cash)}</span>
+              </PickRow>
+              <div style={{ padding: '6px 12px 4px', fontSize: 12, fontWeight: 600, color: '#64748b', backgroundColor: '#f8fafc' }}>Bank</div>
+              {banks.map(b => (
+                <PickRow key={b.id} selected={chipAccount === b.id} onClick={() => { setChipAccount(b.id); setOpenChip(null); }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                    <Landmark size={12} color="#2563eb" /> {b.name}
+                  </span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{CURRENCY} {fmt(computeBankBalance(transactions, b.id, b.balance))}</span>
+                </PickRow>
+              ))}
+            </div>
+          </Panel>
+        )}
+
+        {/* Branch */}
+        <Chip
+          label="Branch" active={!!chipBranch} activeValue={chipBranch}
+          onOpen={() => setOpenChip(openChip === 'branch' ? null : 'branch')}
+          onClear={() => setChipBranch('')}
+        />
+        {openChip === 'branch' && (
+          <Panel>
+            <ListPanel
+              title="Branch" empty="No branches yet"
+              options={branchOptions} value={chipBranch}
+              onPick={v => { setChipBranch(v); setOpenChip(null); }}
+            />
+          </Panel>
+        )}
+
+        {/* Settled only toggle */}
+        <button
+          onClick={() => setSettledOnly(v => !v)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '7px 13px', borderRadius: 99,
+            border: `1px solid ${settledOnly ? '#0f172a' : '#e2e8f0'}`,
+            backgroundColor: settledOnly ? '#0f172a' : '#fff',
+            color: settledOnly ? '#fff' : '#334155',
+            fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          <Check size={12} /> Settled only
+        </button>
+
+        {/* Spacer + Add */}
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={handleCreateTransaction}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '9px 16px', borderRadius: 10, border: 'none',
+            backgroundColor: '#0f172a', color: '#fff',
+            fontSize: 13, fontWeight: 800, cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(15,23,42,0.35)',
+          }}
+        >
+          <Plus size={14} /> Add Transaction
+        </button>
+      </div>
+
+      {/* Active chip badges (Clear all) */}
+      {hasAnyChipFilter && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: -8 }}>
+          <span style={{ fontSize: 11, color: '#64748b' }}>Active filters:</span>
+          {chipCategory && <ActiveBadge label={`Category: ${chipCategory}`} onRemove={() => setChipCategory('')} />}
+          {chipSubCategory && <ActiveBadge label={`Sub: ${chipSubCategory}`} onRemove={() => setChipSubCategory('')} />}
+          {chipAccount && <ActiveBadge label={`Account: ${accountOptions.find(a => a.id === chipAccount)?.name || ''}`} onRemove={() => setChipAccount('')} />}
+          {chipBranch && <ActiveBadge label={`Branch: ${chipBranch}`} onRemove={() => setChipBranch('')} />}
+          {settledOnly && <ActiveBadge label="Settled only" onRemove={() => setSettledOnly(false)} />}
+          <button
+            onClick={() => { setChipCategory(''); setChipSubCategory(''); setChipAccount(''); setChipBranch(''); setSettledOnly(false); }}
+            style={{ fontSize: 11, color: '#4f46e5', border: 'none', background: 'transparent', cursor: 'pointer', fontWeight: 700 }}
+          >
+            Clear all
+          </button>
         </div>
       )}
 
-      {/* ── Search + Filters ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-              size={16}
-            />
-            <input
-              type="text"
-              placeholder="Search by TXN ID, company, category, note, paid by/to…"
-              value={filters.searchTerm}
-              onChange={e => setFilters({ searchTerm: e.target.value })}
-              className="w-full h-10 pl-10 pr-4 border border-gray-200 rounded-xl
-                         focus:ring-2 focus:ring-slate-300 focus:border-slate-400 focus:outline-none
-                         text-sm placeholder-gray-400 bg-gray-50 hover:bg-white transition-colors"
-            />
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-              showFilters
-                ? 'bg-slate-100 border-slate-300 text-slate-800'
-                : 'border-gray-200 text-gray-600 hover:bg-gray-50 bg-white'
-            }`}
-          >
-            <Filter size={14} /> Filters
-          </button>
-        </div>
-
-        {showFilters && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-3 border-t border-gray-100">
-            {[
-              {
-                label: 'Category',
-                value: filters.mainCategory,
-                onChange: (v: string) => setFilters({ mainCategory: v }),
-                options: [
-                  <option key="" value="">All Categories</option>,
-                  ...MAIN_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>),
-                ],
-              },
-              {
-                label: 'Payment Status',
-                value: filters.paymentStatus,
-                onChange: (v: string) => setFilters({ paymentStatus: v }),
-                options: [
-                  <option value="">All Statuses</option>,
-                  <option value="Pending">Pending</option>,
-                  <option value="Full">Cleared</option>,
-                ],
-              },
-              {
-                label: 'Approval Status',
-                value: filters.approvalStatus,
-                onChange: (v: string) => setFilters({ approvalStatus: v }),
-                options: [
-                  <option value="">All</option>,
-                  <option value="pending_approval">Awaiting Approval</option>,
-                  <option value="approved">Approved</option>,
-                  <option value="rejected">Rejected</option>,
-                  <option value="not_required">No Approval Required</option>,
-                ],
-              },
-              {
-                label: 'Company / Branch',
-                value: filters.company,
-                onChange: (v: string) => setFilters({ company: v }),
-                options: [
-                  <option value="">All Branches</option>,
-                  ...COMPANIES.map(c => <option key={c.id} value={c.name}>{c.name}</option>),
-                ],
-              },
-            ].map(({ label, value, onChange, options }) => (
-              <div key={label}>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wide">{label}</label>
-                <select
-                  value={value}
-                  onChange={e => onChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-300 focus:outline-none bg-gray-50"
-                >
-                  {options}
-                </select>
-              </div>
-            ))}
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wide">Date From</label>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={e => setFilters({ dateFrom: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-300 focus:outline-none bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wide">Date To</label>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={e => setFilters({ dateTo: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-300 focus:outline-none bg-gray-50"
-              />
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={() => setFilters({
-                  searchTerm: '', mainCategory: '', dateFrom: '', dateTo: '',
-                  paymentStatus: '', company: '', approvalStatus: '',
-                })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-1 bg-white"
-              >
-                <X size={13} /> Clear All
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Active filter chips */}
-        {(filters.dateFrom || filters.dateTo || filters.mainCategory || filters.paymentStatus || filters.company || filters.approvalStatus) && (
-          <div className="flex flex-wrap gap-2 pt-2">
-            {filters.dateFrom && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 text-xs rounded-xl border border-slate-100 font-medium">
-                From: {formatDate(filters.dateFrom)}
-                <button onClick={() => setFilters({ dateFrom: '' })}><X size={10} /></button>
-              </span>
-            )}
-            {filters.dateTo && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 text-xs rounded-xl border border-slate-100 font-medium">
-                To: {formatDate(filters.dateTo)}
-                <button onClick={() => setFilters({ dateTo: '' })}><X size={10} /></button>
-              </span>
-            )}
-            {filters.mainCategory && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 text-xs rounded-xl border border-slate-100 font-medium">
-                {filters.mainCategory}
-                <button onClick={() => setFilters({ mainCategory: '' })}><X size={10} /></button>
-              </span>
-            )}
-            {filters.paymentStatus && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 text-xs rounded-xl border border-slate-100 font-medium">
-                {filters.paymentStatus}
-                <button onClick={() => setFilters({ paymentStatus: '' })}><X size={10} /></button>
-              </span>
-            )}
-            {filters.approvalStatus && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 text-xs rounded-xl border border-amber-100 font-medium">
-                Approval: {filters.approvalStatus.replace('_', ' ')}
-                <button onClick={() => setFilters({ approvalStatus: '' })}><X size={10} /></button>
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Transaction Table ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between rounded-t-2xl">
-          <div>
-            <h3 className="text-sm font-bold text-gray-900 tracking-tight">All Transactions</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{filteredTransactions.length} record{filteredTransactions.length !== 1 ? 's' : ''} found</p>
-          </div>
-          {/* Show active primary currency in table header */}
-          <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-            {primaryCurrency}
-          </span>
-        </div>
-
-        {/* txn-table-scroll: sticky header + dual-axis scroll, scrollbar always visible */}
-        <style>{`
-          .txn-table-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
-          .txn-table-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 0 0 16px 16px; }
-          .txn-table-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 999px; border: 2px solid #f1f5f9; }
-          .txn-table-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
-          .txn-table-scroll thead th { position: sticky; top: 0; z-index: 2; background: #f9fafb; }
-        `}</style>
-        <div
-          className="txn-table-scroll overflow-x-auto overflow-y-auto"
-          style={{ borderRadius: '0 0 16px 16px', maxHeight: '60vh', scrollbarWidth: 'thin', scrollbarColor: '#94a3b8 #f1f5f9' }}
-        >
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                {[
-                  'TXN ID', 'Date', 'Company', 'Category',
-                  'Sub Category', 'Amount', 'Paid', 'Remaining', 'Status', 'Mode', 'Actions',
-                ].map(h => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap border-b border-gray-100"
-                  >
-                    {h}
-                  </th>
+      {/* ── Table ───────────────────────────────────────────────────────── */}
+      <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                {(['Txn ID','Date','Manual Date','Type','Category','Sub Category','Account','Amount'] as const).map(h => (
+                  <ThCell key={h}>{h}</ThCell>
                 ))}
+                <ThCell tone="inflow">Cash In</ThCell>
+                <ThCell tone="outflow">Cash Out</ThCell>
+                <ThCell>Balance</ThCell>
+                <ThCell>Balance Due</ThCell>
+                <ThCell>Status</ThCell>
+                <ThCell align="right">Actions</ThCell>
               </tr>
             </thead>
-
-            <tbody className="divide-y divide-gray-50">
-              {filteredTransactions.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="px-4 py-16 text-center text-gray-300 text-sm">
-                    No transactions found
-                  </td>
-                </tr>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={14} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
+                  <Loader2 size={18} style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle' }} /> Loading…
+                </td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={14} style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                  {transactions.length === 0
+                    ? <>No transactions yet — click <b>"+ Add Transaction"</b> to record one.</>
+                    : 'No transactions match the current filters.'}
+                </td></tr>
               ) : (
-                filteredTransactions.map(t => {
-                  const { totalPaid, remainingAmount } = getTransactionTotals(t);
-                  const { rowClass, statusBadge, dimAmount } = rowMeta(t);
-                  const isRejected       = t.approvalStatus === 'rejected';
-                  const isPendingApproval = t.approvalStatus === 'pending_approval';
+                rows.map(t => {
+                  const cat = getTxCategoryPath(t);
+                  const acc = getTxAccount(t);
+                  const { totalPaid, remaining } = getTransactionTotals(t);
+                  const isIn  = t.mainCategory === 'Cash Inflow';
+                  const isOut = t.mainCategory === 'Cash Outflow';
+                  const running = balanceByRow.get(t.id) ?? 0;
 
                   return (
-                    <tr key={t.id} className={`transition-colors hover:bg-slate-50/60 ${rowClass}`}>
-
-                      {/* TXN ID */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`text-xs font-mono font-semibold ${isRejected ? 'text-red-400 line-through' : 'text-slate-600'}`}>
-                            {t.transactionId || '—'}
-                          </span>
-                          {isRejected && (
-                            <span style={{fontSize:'9px'}} className="font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-px rounded uppercase tracking-widest">
-                              Rejected
-                            </span>
-                          )}
-                          {isPendingApproval && (
-                            <span style={{fontSize:'9px'}} className="font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-px rounded uppercase tracking-widest">
-                              Pending
-                            </span>
-                          )}
-                          {(t as any).linkedType === 'invoice' && (
-                            <span style={{fontSize:'9px'}} className="font-bold text-sky-600 bg-sky-50 border border-sky-200 px-1.5 py-px rounded uppercase tracking-widest">
-                              Invoice
-                            </span>
-                          )}
-                          {(t as any).linkedType === 'inventory' && (
-                            <span style={{fontSize:'9px'}} className="font-bold text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-px rounded uppercase tracking-widest">
-                              Inventory
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Date */}
-                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                        {formatDate(t.date)}
-                      </td>
-
-                      {/* Company short name */}
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[130px] truncate" title={t.company}>
-                        {t.company.includes(': ') ? t.company.split(': ')[1] : t.company}
-                      </td>
-
-                      {/* Main Category */}
-                      <td className="px-4 py-3">
-                        <span className={`px-2.5 py-1 text-xs font-medium rounded-full whitespace-nowrap inline-flex items-center leading-none ${
-                          isRejected ? 'bg-red-100 text-red-500 line-through' : getCategoryColor(t.mainCategory)
-                        }`}>
-                          {t.mainCategory}
+                    <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <TdCell mono color="#4f46e5" weight={700}>{t.transactionId}</TdCell>
+                      <TdCell>{formatDate(t.date)}</TdCell>
+                      <TdCell>{t.date ? formatDate(t.date) : '—'}</TdCell>
+                      <TdCell>
+                        {isIn  && <TypeBadge label="Inflow"  tone="inflow" />}
+                        {isOut && <TypeBadge label="Outflow" tone="outflow" />}
+                        {!isIn && !isOut && <TypeBadge label={t.mainCategory} tone="loan" />}
+                      </TdCell>
+                      <TdCell>{cat.category || '—'}</TdCell>
+                      <TdCell>{cat.subCategory || '—'}</TdCell>
+                      <TdCell>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          {acc.type === 'cash'
+                            ? <Wallet size={11} color="#65a30d" />
+                            : <Landmark size={11} color="#2563eb" />}
+                          {acc.name}
                         </span>
-                      </td>
-
-                      {/* Sub Category */}
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[130px] truncate" title={t.subCategory}>
-                        {t.subCategory}
-                      </td>
-
-                      {/* Amount — shows in selected currency */}
-                      <td className="px-4 py-3 font-semibold text-sm whitespace-nowrap">
-                        {isRejected ? (
-                          <span className="text-red-400 line-through">
-                            {t.mainCategory === 'Cash Inflow' ? '+' : '−'}
-                            {fmtPrimary(t.amount || 0)}
-                          </span>
-                        ) : (
-                          <span className={`${dimAmount ? 'text-gray-400' : t.mainCategory === 'Cash Inflow' ? 'text-emerald-700' : 'text-red-700'}`}>
-                            {t.mainCategory === 'Cash Inflow' ? '+' : '−'}
-                            {fmtPrimary(t.amount || 0)}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Paid */}
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        {(isRejected || isPendingApproval)
-                          ? <span className="text-gray-300">—</span>
-                          : <span className="text-emerald-700 font-medium">{fmtPrimary(totalPaid)}</span>
-                        }
-                      </td>
-
-                      {/* Remaining */}
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        {(isRejected || isPendingApproval)
-                          ? <span className="text-gray-300">—</span>
-                          : remainingAmount > 0
-                            ? <span className="text-orange-600 font-medium">{fmtPrimary(remainingAmount)}</span>
-                            : <span className="text-gray-300">—</span>
-                        }
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-3">{statusBadge}</td>
-
-                      {/* Mode */}
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${modeBadge(t.mode)}`}>
-                          {t.mode}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setViewTransaction(t)}
-                            title="View details"
-                            className="p-1.5 text-gray-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                          >
-                            <Eye size={14} />
-                          </button>
-                          {!isRejected && (
-                            <button
-                              onClick={() => handleEditTransaction(t.id)}
-                              title="Edit transaction"
-                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            >
-                              <Edit size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => navigate(`/transactions/${t.id}/delete`)}
-                            title="Delete transaction"
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                      </TdCell>
+                      <TdCell num>{fmt(t.amount || 0)}</TdCell>
+                      <TdCell num tone="inflow"  bold>{isIn  ? fmt(totalPaid) : '—'}</TdCell>
+                      <TdCell num tone="outflow" bold>{isOut ? fmt(totalPaid) : '—'}</TdCell>
+                      <TdCell num>{fmt(running)}</TdCell>
+                      <TdCell num tone={remaining > 0 ? 'outflow' : undefined}>{remaining > 0 ? fmt(remaining) : '—'}</TdCell>
+                      <TdCell>
+                        <StatusBadge status={t.paymentStatus} approvalStatus={t.approvalStatus} />
+                      </TdCell>
+                      <TdCell align="right">
+                        <div style={{ display: 'inline-flex', gap: 4 }}>
+                          <IconAction title="View"   onClick={() => setViewTransaction(t)}     color="#4f46e5"><Eye size={12} /></IconAction>
+                          <IconAction title="Edit"   onClick={() => handleEditTransaction(t.id)} color="#0f172a"><Edit size={12} /></IconAction>
+                          <IconAction title="Delete" onClick={() => handleDeleteTransaction(t.id)} color="#dc2626"><Trash2 size={12} /></IconAction>
                         </div>
-                      </td>
-
+                      </TdCell>
                     </tr>
                   );
                 })
@@ -726,330 +439,237 @@ export function TransactionListView({
           </table>
         </div>
       </div>
-
-      {/* ── View Transaction Modal ── */}
-      {viewTransaction && (() => {
-        const { totalPaid, remainingAmount } = getTransactionTotals(viewTransaction);
-        const pending    = isPending(viewTransaction);
-        const isRejected = viewTransaction.approvalStatus === 'rejected';
-        const isInflow   = viewTransaction.mainCategory === 'Cash Inflow';
-        const isLoan     = viewTransaction.mainCategory === 'Loan';
-        const branch     = viewTransaction.company.includes(': ') ? viewTransaction.company.split(': ')[1] : viewTransaction.company;
-
-        const amountColor = isRejected
-          ? 'text-red-400 line-through'
-          : isInflow
-            ? 'text-emerald-500'
-            : isLoan
-              ? 'text-slate-500'
-              : 'text-red-400';
-
-        const amountSign = isInflow ? '+' : '−';
-
-        const approvalBadge = () => {
-          const s = viewTransaction.approvalStatus;
-          if (!s || s === 'not_required') return null;
-          const map: Record<string, { cls: string; label: string }> = {
-            pending_approval: { cls: 'bg-amber-100 text-amber-700 border-amber-200', label: '⏳ Pending Approval' },
-            approved:         { cls: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: '✅ Approved' },
-            rejected:         { cls: 'bg-red-100 text-red-700 border-red-200',        label: '❌ Rejected' },
-          };
-          const m = map[s];
-          if (!m) return null;
-          return (
-            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${m.cls}`}>
-              {m.label}
-            </span>
-          );
-        };
-
-        return (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden ${isRejected ? 'ring-2 ring-red-200' : ''}`}>
-
-              {/* Modal Header — dark slate like Dashboard "Overall Balance" card */}
-              <div className={`border-b px-6 pt-5 pb-6 relative ${
-                isRejected
-                  ? 'bg-red-50 border-red-200'
-                  : 'border-gray-100'
-              }`}
-                style={!isRejected ? {
-                  background: 'linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#334155 100%)',
-                } : {}}
-              >
-                <button
-                  onClick={() => setViewTransaction(null)}
-                  className="absolute top-4 right-4 p-1.5 rounded-lg transition-colors"
-                  style={!isRejected ? { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' } : { background: '#fee2e2', color: '#dc2626' }}
-                >
-                  <X size={15} />
-                </button>
-
-                <div className="flex items-center gap-2 flex-wrap mb-3">
-                  <span className="px-2.5 py-0.5 text-xs font-mono rounded-full tracking-wide"
-                    style={!isRejected ? { background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)' } : { background: '#fee2e2', color: '#dc2626' }}>
-                    {viewTransaction.transactionId || '—'}
-                  </span>
-                  {(viewTransaction as any).linkedType && (
-                    <span className={`inline-flex items-center gap-1 text-[10px] ${
-                      (viewTransaction as any).linkedType === 'invoice'
-                        ? 'text-sky-400'
-                        : (viewTransaction as any).linkedType === 'inventory'
-                        ? 'text-pink-400'
-                        : 'text-gray-400'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        (viewTransaction as any).linkedType === 'invoice' ? 'bg-sky-400' : 'bg-pink-400'
-                      }`} />
-                      {(viewTransaction as any).linkedType}
-                    </span>
-                  )}
-                  <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full"
-                    style={!isRejected ? { background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)' } : { background: '#fee2e2', color: '#dc2626' }}>
-                    {viewTransaction.mainCategory}
-                  </span>
-                  <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full"
-                    style={!isRejected ? { background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)' } : { background: '#fee2e2', color: '#dc2626' }}>
-                    {viewTransaction.mode}
-                  </span>
-                  {approvalBadge()}
-                </div>
-
-                <div>
-                  <p className="text-sm mb-0.5" style={!isRejected ? { color: 'rgba(255,255,255,0.5)' } : { color: '#6b7280' }}>
-                    {viewTransaction.subCategory}
-                  </p>
-                  {/* Primary currency amount */}
-                  <p className={`text-4xl font-extrabold tracking-tight ${!isRejected ? amountColor : 'text-red-400 line-through'}`}>
-                    {amountSign}{fmtPrimary(viewTransaction.amount || 0)}
-                  </p>
-                  {/* Extra currencies below */}
-                  {extraCurrencies.length > 0 && !isRejected && (
-                    <div className="flex flex-wrap gap-3 mt-2">
-                      {extraCurrencies.map(code => {
-                        const meta = getMeta(code);
-                        const amt  = convertFromAed(viewTransaction.amount || 0, code, rates);
-                        return (
-                          <span key={code} className="flex items-center gap-1 text-sm"
-                            style={{ color: 'rgba(255,255,255,0.55)' }}>
-                            <span className="text-[10px] font-bold px-1 py-0.5 rounded leading-none"
-                              style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.6)' }}>
-                              {getMeta(code).countryCode}
-                            </span>
-                            {fmtAmount(amt, meta)}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <p className="text-sm mt-1" style={!isRejected ? { color: 'rgba(255,255,255,0.4)' } : { color: '#9ca3af' }}>
-                    {branch} &bull; {formatDate(viewTransaction.date)}
-                  </p>
-                  {isRejected && (
-                    <p className="mt-2 text-xs font-semibold text-red-600 uppercase tracking-wide">
-                      ⚠ Rejected — no financial impact recorded
-                    </p>
-                  )}
-                </div>
-
-                {/* Payment progress bar */}
-                {viewTransaction.amount > 0 && !isRejected && viewTransaction.approvalStatus !== 'pending_approval' && (
-                  <div className="mt-4">
-                    <div className="flex justify-between text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                      <span>Paid: {fmtPrimary(totalPaid)}</span>
-                      <span>{remainingAmount > 0 ? `Remaining: ${fmtPrimary(remainingAmount)}` : 'Fully cleared'}</span>
-                    </div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.15)' }}>
-                      <div
-                        className="h-full bg-slate-600 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (totalPaid / viewTransaction.amount) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Modal Body */}
-              <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-
-                {/* Status row */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  {isRejected ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-200">
-                      <Ban size={13} /> Rejected — No Liquidity Impact
-                    </span>
-                  ) : viewTransaction.approvalStatus === 'pending_approval' ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-amber-100 text-amber-700 border border-amber-200">
-                      <ShieldAlert size={13} /> Awaiting Admin Approval
-                    </span>
-                  ) : pending ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-orange-100 text-orange-700 border border-orange-100">
-                      <Clock size={13} /> Pending Payment
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-emerald-100 text-emerald-700 border border-emerald-100">
-                      <CheckCircle size={13} /> Fully Cleared
-                    </span>
-                  )}
-                  {viewTransaction.linkedType && viewTransaction.linkedType !== 'manual' && (
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold tracking-wide border uppercase ${
-                      viewTransaction.linkedType === 'invoice'
-                        ? 'bg-blue-50 text-blue-600 border-blue-100'
-                        : 'bg-violet-50 text-violet-600 border-violet-100'
-                    }`}>
-                      {viewTransaction.linkedType === 'invoice' ? '🧾' : '📦'} {viewTransaction.linkedType}
-                    </span>
-                  )}
-                </div>
-
-                {/* Details grid */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  {([
-                    ['Date',         formatDate(viewTransaction.date)],
-                    ['Time',         viewTransaction.time || '—'],
-                    ['Branch',       branch],
-                    ['Payment Mode', viewTransaction.mode],
-                    ['Paid By',      viewTransaction.paidBy || '—'],
-                    ['Paid To',      viewTransaction.paidTo || '—'],
-                    ...(viewTransaction.bankName          ? [['Bank',         viewTransaction.bankName]          as [string,string]] : []),
-                    ...(viewTransaction.chequeNumber      ? [['Cheque #',     viewTransaction.chequeNumber]      as [string,string]] : []),
-                    ...(viewTransaction.chequeBank        ? [['Cheque Bank',  viewTransaction.chequeBank]        as [string,string]] : []),
-                    ...(viewTransaction.accountablePerson ? [['Accountable',  viewTransaction.accountablePerson] as [string,string]] : []),
-                    ...(viewTransaction.salaryMonth       ? [['Salary Month', viewTransaction.salaryMonth]       as [string,string]] : []),
-                    ...(viewTransaction.linkedRef         ? [['Linked Ref',   viewTransaction.linkedRef]         as [string,string]] : []),
-                  ] as [string,string][]).map(([label, value]) => (
-                    <div key={label} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">{label}</p>
-                      <p className="text-sm font-medium text-gray-800 truncate">{value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Payment breakdown */}
-                {!isRejected && viewTransaction.approvalStatus !== 'pending_approval' && (
-                  <div className="grid grid-cols-3 gap-2.5">
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Total</p>
-                      <p className="text-sm font-bold text-slate-700">{fmtPrimary(viewTransaction.amount || 0)}</p>
-                      {extraCurrencies.map(code => (
-                        <p key={code} className="text-[10px] text-slate-500 mt-0.5">
-                          {fmtAmount(convertFromAed(viewTransaction.amount || 0, code, rates), getMeta(code))}
-                        </p>
-                      ))}
-                    </div>
-                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-500 mb-1">Paid</p>
-                      <p className="text-sm font-bold text-emerald-700">{fmtPrimary(totalPaid)}</p>
-                      {extraCurrencies.map(code => (
-                        <p key={code} className="text-[10px] text-emerald-400 mt-0.5">
-                          {fmtAmount(convertFromAed(totalPaid, code, rates), getMeta(code))}
-                        </p>
-                      ))}
-                    </div>
-                    <div className={`p-3 rounded-xl border text-center ${remainingAmount > 0 ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
-                      <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${remainingAmount > 0 ? 'text-orange-400' : 'text-gray-400'}`}>
-                        Remaining
-                      </p>
-                      <p className={`text-sm font-bold ${remainingAmount > 0 ? 'text-orange-600' : 'text-gray-300'}`}>
-                        {remainingAmount > 0 ? fmtPrimary(remainingAmount) : '—'}
-                      </p>
-                      {remainingAmount > 0 && extraCurrencies.map(code => (
-                        <p key={code} className="text-[10px] text-orange-300 mt-0.5">
-                          {fmtAmount(convertFromAed(remainingAmount, code, rates), getMeta(code))}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Note */}
-                {viewTransaction.note && (
-                  <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-100">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-500 mb-1">Note</p>
-                    <p className="text-sm text-gray-700 leading-relaxed">{viewTransaction.note}</p>
-                  </div>
-                )}
-
-                {/* Rejection reason */}
-                {viewTransaction.approvalStatus === 'rejected' && (
-                  <div className="p-3.5 bg-red-50 rounded-xl border border-red-100">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-red-400 mb-1">Rejection Reason</p>
-                    <p className="text-sm text-red-700">
-                      {viewTransaction.rejectionReason || 'Rejected by admin'}
-                    </p>
-                  </div>
-                )}
-
-                {/* Partial payments */}
-                {!isRejected && viewTransaction.approvalStatus !== 'pending_approval' &&
-                  (viewTransaction.partialPayments || []).length > 0 && (
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
-                      <span className="w-5 h-5 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-xs font-bold">
-                        {viewTransaction.partialPayments!.length}
-                      </span>
-                      Partial Payments
-                    </p>
-                    <div className="space-y-2">
-                      {viewTransaction.partialPayments!.map((p, idx) => (
-                        <div key={p.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold shrink-0">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-sm font-semibold text-gray-800">{fmtPrimary(p.amount)}</span>
-                              {extraCurrencies.map(code => (
-                                <span key={code} className="text-xs text-gray-400">
-                                  · {fmtAmount(convertFromAed(p.amount, code, rates), getMeta(code))}
-                                </span>
-                              ))}
-                              <span className="text-xs text-gray-400">· {p.method}</span>
-                              {p.chequeNumber && (
-                                <span className="text-xs text-gray-400">· #{p.chequeNumber}</span>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {formatDate(p.date)}{p.time ? ` at ${p.time}` : ''}
-                            </p>
-                          </div>
-                          <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-semibold border ${
-                            p.isCleared
-                              ? 'bg-emerald-100 text-emerald-700 border-emerald-100'
-                              : 'bg-amber-100 text-amber-700 border-amber-100'
-                          }`}>
-                            {p.isCleared ? 'Cleared' : 'Uncleared'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/60 flex gap-3">
-                {!isRejected && (
-                  <button
-                    onClick={() => { setViewTransaction(null); handleEditTransaction(viewTransaction.id); }}
-                    className="flex-1 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <Edit size={14} /> Edit
-                  </button>
-                )}
-                <button
-                  onClick={() => setViewTransaction(null)}
-                  className="flex-1 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-semibold hover:bg-slate-900 transition-colors"
-                >
-                  Close
-                </button>
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
-
     </div>
   );
 }
+
+// ── Cells / chips / helpers ─────────────────────────────────────────────────
+
+function SummaryCell({ tone, label, value, icon }: {
+  tone: 'opening' | 'inflow' | 'outflow' | 'net' | 'cash' | 'banks';
+  label: string; value: number; icon: React.ReactNode;
+}) {
+  const palette: Record<string, { bg: string; fg: string }> = {
+    opening: { bg: '#fff7ed', fg: '#c2410c' },
+    inflow:  { bg: '#ecfdf5', fg: '#059669' },
+    outflow: { bg: '#fef2f2', fg: '#dc2626' },
+    net:     { bg: '#f1f5f9', fg: '#0f172a' },
+    cash:    { bg: '#f0f9ff', fg: '#0369a1' },
+    banks:   { bg: '#eef2ff', fg: '#4338ca' },
+  };
+  const p = palette[tone];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+      <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: p.bg, color: p.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {icon}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: p.fg, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 4 }}>{CURRENCY}</span>{fmt(value)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Chip({ label, active, activeValue, onOpen, onClear }: {
+  label: string; active: boolean; activeValue?: string;
+  onOpen: () => void; onClear: () => void;
+}) {
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '7px 13px', borderRadius: 99,
+        border: `1px solid ${active ? '#0f172a' : '#e2e8f0'}`,
+        backgroundColor: active ? '#0f172a' : '#fff',
+        color: active ? '#fff' : '#334155',
+        fontSize: 12, fontWeight: 700, cursor: 'pointer',
+      }}
+    >
+      {label}{active && activeValue ? `: ${activeValue}` : ''}
+      {active
+        ? <X size={12} onClick={e => { e.stopPropagation(); onClear(); }} />
+        : <ChevronDown size={12} />}
+    </button>
+  );
+}
+
+function FilterChip({ icon, label, active, activeColor, onClick }: {
+  icon: React.ReactNode; label: string; active: boolean; activeColor: string; onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '7px 13px', borderRadius: 99,
+      border: `1px solid ${active ? activeColor : '#e2e8f0'}`,
+      backgroundColor: active ? activeColor : '#fff',
+      color: active ? '#fff' : '#334155',
+      fontSize: 12, fontWeight: 700, cursor: 'pointer',
+    }}>
+      {icon} {label} <ChevronDown size={12} />
+    </button>
+  );
+}
+
+const Panel: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <div style={{
+      position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 20,
+      backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
+      boxShadow: '0 12px 28px rgba(15,23,42,0.14)', overflow: 'hidden',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+const PanelHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <div style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600, color: '#64748b', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+      {children}
+    </div>
+  );
+}
+
+function ListPanel({ title, empty, options, value, onPick }: {
+  title: string; empty: string; options: string[]; value: string; onPick: (v: string) => void;
+}) {
+  return (
+    <div style={{ minWidth: 220, maxHeight: 260, overflowY: 'auto' }}>
+      <PanelHeader>{title}</PanelHeader>
+      <PickRow selected={value === ''} onClick={() => onPick('')}>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>All</span>
+      </PickRow>
+      {options.length === 0 ? (
+        <div style={{ padding: '12px 14px', fontSize: 12, color: '#94a3b8' }}>{empty}</div>
+      ) : options.map(o => (
+        <PickRow key={o} selected={value === o} onClick={() => onPick(o)}>
+          <span style={{ fontSize: 12 }}>{o}</span>
+        </PickRow>
+      ))}
+    </div>
+  );
+}
+
+const PickRow: React.FC<{ selected: boolean; onClick: () => void; children: React.ReactNode }> = ({ selected, onClick, children }) => {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '9px 12px', cursor: 'pointer',
+        backgroundColor: selected ? '#fff7ed' : '#fff',
+        borderBottom: '1px solid #f8fafc',
+      }}
+    >
+      {children}
+      {selected && <Check size={12} color="#c2410c" />}
+    </div>
+  );
+}
+
+function ActiveBadge({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '3px 8px', borderRadius: 99, backgroundColor: '#eef2ff', color: '#3730a3',
+      fontSize: 11, fontWeight: 700,
+    }}>
+      {label}
+      <X size={10} style={{ cursor: 'pointer' }} onClick={onRemove} />
+    </span>
+  );
+}
+
+const ThCell: React.FC<{
+  children: React.ReactNode; tone?: 'inflow' | 'outflow'; align?: 'left' | 'right';
+}> = ({ children, tone, align }) => {
+  const toneBg = tone === 'inflow' ? '#ecfdf5' : tone === 'outflow' ? '#fef2f2' : 'transparent';
+  const toneFg = tone === 'inflow' ? '#065f46' : tone === 'outflow' ? '#991b1b' : '#64748b';
+  return (
+    <th style={{
+      padding: '12px 12px',
+      textAlign: align || 'left',
+      fontSize: 12, fontWeight: 600,
+      color: toneFg, backgroundColor: toneBg, whiteSpace: 'nowrap',
+    }}>
+      {children}
+    </th>
+  );
+};
+
+const TdCell: React.FC<{
+  children: React.ReactNode; num?: boolean; tone?: 'inflow' | 'outflow';
+  bold?: boolean; mono?: boolean; weight?: number; color?: string; align?: 'left' | 'right';
+}> = ({ children, num, tone, bold, mono, weight, color, align }) => {
+  const toneBg = tone === 'inflow' ? '#f0fdf4' : tone === 'outflow' ? '#fef2f2' : 'transparent';
+  const toneFg = tone === 'inflow' ? '#059669' : tone === 'outflow' ? '#dc2626' : color || '#334155';
+  return (
+    <td style={{
+      padding: '12px 12px',
+      fontSize: 13,
+      fontWeight: weight ?? (bold ? 700 : 500),
+      textAlign: align || (num ? 'right' : 'left'),
+      color: toneFg,
+      backgroundColor: toneBg,
+      fontFamily: mono ? 'monospace' : undefined,
+      fontVariantNumeric: num ? 'tabular-nums' : undefined,
+      whiteSpace: 'nowrap',
+    }}>
+      {children}
+    </td>
+  );
+};
+
+function TypeBadge({ label, tone }: { label: string; tone: 'inflow' | 'outflow' | 'loan' }) {
+  const palette = {
+    inflow:  { bg: '#ecfdf5', fg: '#059669', icon: <TrendingUp size={10} /> },
+    outflow: { bg: '#fef2f2', fg: '#dc2626', icon: <TrendingDown size={10} /> },
+    loan:    { bg: '#eef2ff', fg: '#4338ca', icon: null },
+  }[tone];
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 8px', borderRadius: 99,
+      backgroundColor: palette.bg, color: palette.fg,
+      fontSize: 10, fontWeight: 700,
+    }}>
+      {palette.icon} {label}
+    </span>
+  );
+}
+
+function StatusBadge({ status, approvalStatus }: { status?: string; approvalStatus?: string }) {
+  if (approvalStatus === 'pending_approval') {
+    return <span style={pill('#fef3c7', '#92400e')}>Pending Approval</span>;
+  }
+  if (approvalStatus === 'rejected') {
+    return <span style={pill('#fee2e2', '#991b1b')}>Rejected</span>;
+  }
+  if (status === 'Partial') return <span style={pill('#fef3c7', '#92400e')}>Partial</span>;
+  if (status === 'Full')    return <span style={pill('#ecfdf5', '#065f46')}>Settled</span>;
+  return <span style={pill('#f1f5f9', '#64748b')}>{status || '—'}</span>;
+}
+const pill = (bg: string, fg: string): React.CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 99,
+  backgroundColor: bg, color: fg, fontSize: 10, fontWeight: 700,
+});
+
+const IconAction: React.FC<{
+  title: string; onClick: () => void; color: string; children: React.ReactNode;
+}> = ({ title, onClick, color, children }) => {
+  return (
+    <button
+      onClick={onClick} title={title}
+      style={{
+        width: 26, height: 24, borderRadius: 6, border: '1px solid #e2e8f0',
+        backgroundColor: '#fff', cursor: 'pointer', color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      {children}
+    </button>
+  );
+};
