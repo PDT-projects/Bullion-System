@@ -29,6 +29,7 @@ import {
   getTxAccount, getTxCategoryPath,
   computeCashInHandBalance, computeBankBalance, computeMonthlyFlow,
 } from '../models/transactionsService';
+import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 
 // ── Props ───────────────────────────────────────────────────────────────────
 interface Props {
@@ -90,6 +91,9 @@ export function TransactionListView({
   // ── Modal open state ─────────────────────────────────────────────────
   const [openingModal, setOpeningModal] = useState(false);
   const [banksModal,   setBanksModal]   = useState(false);
+  const [deletedModal, setDeletedModal] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
+  const [isDeleting,    setIsDeleting]    = useState(false);
   const [detailPanelOpen, setDetailPanelOpen] = useState(false);
 
   // ── Summary metrics (all live-computed from `transactions`) ──────────────
@@ -456,8 +460,20 @@ export function TransactionListView({
           )}
         </button>
 
-        {/* Spacer + Add */}
+        {/* Spacer + actions */}
         <div style={{ flex: 1 }} />
+        <button
+          onClick={() => setDeletedModal(true)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '9px 14px', borderRadius: 10,
+            border: '1px solid #e2e8f0', backgroundColor: '#fff',
+            color: '#dc2626', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}
+          title="View audit log of deleted transactions"
+        >
+          <Trash2 size={13} /> Deleted Transactions
+        </button>
         <button
           onClick={handleCreateTransaction}
           style={{
@@ -600,7 +616,7 @@ export function TransactionListView({
                         <div style={{ display: 'inline-flex', gap: 4 }}>
                           <IconAction title="View"   onClick={() => setViewTransaction(t)}     color="#4f46e5"><Eye size={12} /></IconAction>
                           <IconAction title="Edit"   onClick={() => handleEditTransaction(t.id)} color="#0f172a"><Edit size={12} /></IconAction>
-                          <IconAction title="Delete" onClick={() => handleDeleteTransaction(t.id)} color="#dc2626"><Trash2 size={12} /></IconAction>
+                          <IconAction title="Delete" onClick={() => setPendingDelete(t)} color="#dc2626"><Trash2 size={12} /></IconAction>
                         </div>
                       </TdCell>
                     </tr>
@@ -627,6 +643,30 @@ export function TransactionListView({
           transactions={transactions}
           onClose={() => setBanksModal(false)}
           onSaved={async () => { await refreshAccounts(); }}
+        />
+      )}
+      {deletedModal && (
+        <DeletedTransactionsModal
+          onClose={() => setDeletedModal(false)}
+          formatDate={formatDate}
+        />
+      )}
+      {pendingDelete && (
+        <ConfirmDeleteModal
+          transaction={pendingDelete}
+          isDeleting={isDeleting}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={async () => {
+            const id = pendingDelete.id;
+            setIsDeleting(true);
+            try {
+              await handleDeleteTransaction(id);
+            } finally {
+              setIsDeleting(false);
+              setPendingDelete(null);
+            }
+          }}
+          formatDate={formatDate}
         />
       )}
     </div>
@@ -1316,3 +1356,301 @@ const btnGhost: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 8,
   border: '1px solid #e2e8f0', backgroundColor: '#fff', color: '#334155', fontSize: 12, fontWeight: 700, cursor: 'pointer',
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DeletedTransactionsModal — read-only audit log of archived transactions
+//
+// Shows every record archived via TransactionFirebaseService.deleteTransaction,
+// with WHO deleted (email + display name), WHEN (localized date/time), and
+// the original transaction fields. No delete/edit actions here — the archive
+// is append-only by design.
+// ═══════════════════════════════════════════════════════════════════════════
+const DeletedTransactionsModal: React.FC<{
+  onClose: () => void;
+  formatDate: (d: string) => string;
+}> = ({ onClose, formatDate }) => {
+  const [rows, setRows] = useState<Array<any>>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    TransactionFirebaseService.fetchDeletedTransactions()
+      .then(setRows)
+      .catch(err => {
+        console.error('[DeletedTransactionsModal] fetch failed:', err);
+        toast.error('Failed to load deleted transactions');
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return rows;
+    const s = search.toLowerCase();
+    return rows.filter(r =>
+      (r.transactionId || '').toLowerCase().includes(s) ||
+      (r.subCategory   || '').toLowerCase().includes(s) ||
+      (r.mainCategory  || '').toLowerCase().includes(s) ||
+      (r.note          || '').toLowerCase().includes(s) ||
+      (r.deletedByEmail|| '').toLowerCase().includes(s) ||
+      (r.deletedByName || '').toLowerCase().includes(s),
+    );
+  }, [rows, search]);
+
+  const fmtDateTime = (iso?: string) => {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    } catch { return iso; }
+  };
+
+  return createPortal(
+    <div onClick={onClose} style={backdrop}>
+      <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 960, width: '96vw' }}>
+        <div style={modalHeader}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Trash2 size={15} color="#dc2626" /> Deleted Transactions
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>
+              Read-only audit trail — deleted records cannot be restored or removed from here
+            </div>
+          </div>
+          <button onClick={onClose} style={modalClose}><X size={14} /></button>
+        </div>
+
+        <div style={{ padding: '12px 18px', borderBottom: '1px solid #f1f5f9' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search TXN ID, category, note, or who deleted…"
+              style={{ width: '100%', padding: '8px 12px 8px 30px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ maxHeight: '65vh', overflowY: 'auto', padding: '4px 0' }}>
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading…
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+              {rows.length === 0 ? 'No transactions have been deleted yet.' : 'No records match your search.'}
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#0f172a' }}>
+                  {['Txn ID','Original Date','Type','Category','Account','Amount','Deleted By','Deleted At'].map(h => (
+                    <th key={h} style={{
+                      padding: '10px 12px', textAlign: 'left',
+                      fontSize: 11, fontWeight: 600, color: '#cbd5e1',
+                      whiteSpace: 'nowrap',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(r => {
+                  const isIn  = r.mainCategory === 'Cash Inflow';
+                  const isOut = r.mainCategory === 'Cash Outflow';
+                  const accName = r.accountName || r.bankName || (r.mode === 'Cash' ? 'Cash in Hand' : '—');
+                  return (
+                    <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={cellMono}>{r.transactionId || '—'}</td>
+                      <td style={cell}>{r.date ? formatDate(r.date) : '—'}</td>
+                      <td style={cell}>
+                        {isIn  && <TypeBadge label="Inflow"  tone="inflow" />}
+                        {isOut && <TypeBadge label="Outflow" tone="outflow" />}
+                        {!isIn && !isOut && <TypeBadge label={r.mainCategory || '—'} tone="loan" />}
+                      </td>
+                      <td style={cell}>{r.subCategory || '—'}</td>
+                      <td style={cell}>{accName}</td>
+                      <td style={{ ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        {CURRENCY} {fmt(r.amount || 0)}
+                      </td>
+                      <td style={cell}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 12, color: '#0f172a', fontWeight: 700 }}>
+                            {r.deletedByName || r.deletedByEmail || 'Unknown'}
+                          </span>
+                          {r.deletedByEmail && r.deletedByName && (
+                            <span style={{ fontSize: 10, color: '#64748b' }}>{r.deletedByEmail}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ ...cell, fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>
+                        {fmtDateTime(r.deletedAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={{ ...modalFooter, justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 11, color: '#64748b' }}>
+            {loading ? '…' : `${filtered.length} of ${rows.length} record${rows.length === 1 ? '' : 's'}`}
+          </div>
+          <button onClick={onClose} style={btnGhost}><X size={12} /> Close</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+const cell: React.CSSProperties = {
+  padding: '10px 12px', fontSize: 12, color: '#334155', whiteSpace: 'nowrap',
+};
+const cellMono: React.CSSProperties = { ...cell, fontFamily: 'monospace', fontWeight: 700, color: '#4f46e5' };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ConfirmDeleteModal — proper in-app confirmation for transaction delete
+//
+// Replaces the browser's native `window.confirm()` (which shows an unstyled
+// "localhost:3000 says…" dialog) with a themed modal that:
+//   • Shows the transaction being deleted (txn id, category, account, amount)
+//   • Explains this is a soft-delete (archived + balance restored)
+//   • Says the archive is append-only (can't restore, can't re-delete)
+// ═══════════════════════════════════════════════════════════════════════════
+const ConfirmDeleteModal: React.FC<{
+  transaction: Transaction;
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  formatDate: (d: string) => string;
+}> = ({ transaction: t, isDeleting, onCancel, onConfirm, formatDate }) => {
+  const acc  = getTxAccount(t);
+  const path = getTxCategoryPath(t);
+  const isIn  = t.mainCategory === 'Cash Inflow';
+  const isOut = t.mainCategory === 'Cash Outflow';
+
+  return createPortal(
+    <div onClick={isDeleting ? undefined : onCancel} style={backdrop}>
+      <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 460 }}>
+        {/* Header */}
+        <div style={{ ...modalHeader, borderBottom: 'none', paddingBottom: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Trash2 size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Delete this transaction?</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                It will be archived to Deleted Transactions
+              </div>
+            </div>
+          </div>
+          {!isDeleting && (
+            <button onClick={onCancel} style={modalClose}><X size={14} /></button>
+          )}
+        </div>
+
+        {/* Transaction snapshot */}
+        <div style={{ padding: '10px 20px 6px' }}>
+          <div style={{
+            padding: 14, borderRadius: 10, backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+          }}>
+            {/* Top row: TXN + amount */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0' }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', marginBottom: 2 }}>Transaction</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#4f46e5', fontFamily: 'monospace' }}>{t.transactionId}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', marginBottom: 2 }}>Amount</div>
+                <div style={{
+                  fontSize: 15, fontWeight: 800,
+                  color: isIn ? '#059669' : isOut ? '#dc2626' : '#334155',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {isIn ? '+' : isOut ? '−' : ''}{CURRENCY} {fmt(t.amount || 0)}
+                </div>
+              </div>
+            </div>
+
+            {/* Details grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
+              <DetailRow label="Type" value={
+                isIn  ? <TypeBadge label="Inflow"  tone="inflow" />
+                : isOut ? <TypeBadge label="Outflow" tone="outflow" />
+                : <TypeBadge label={t.mainCategory || '—'} tone="loan" />
+              } />
+              <DetailRow label="Date" value={<span style={{ color: '#334155' }}>{formatDate(t.date)}</span>} />
+              <DetailRow label="Category" value={<span style={{ color: '#334155' }}>{path.category || '—'}</span>} />
+              <DetailRow label="Account" value={
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#334155' }}>
+                  {acc.type === 'cash' ? <Wallet size={11} color="#65a30d" /> : <Landmark size={11} color="#2563eb" />}
+                  {acc.name}
+                </span>
+              } />
+              {(path.subCategory || t.note) && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', marginBottom: 2 }}>
+                    {path.subCategory ? 'Sub Category' : 'Note'}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#334155' }}>
+                    {path.subCategory || t.note || '—'}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Explanation */}
+        <div style={{ padding: '4px 20px 14px' }}>
+          <div style={{
+            padding: '10px 12px', borderRadius: 8,
+            backgroundColor: '#fff7ed', border: '1px solid #fed7aa',
+            fontSize: 11, color: '#9a3412', lineHeight: 1.5,
+          }}>
+            <b style={{ color: '#c2410c' }}>Note:</b> the balance will be restored automatically. This
+            record will still be visible in <b>Deleted Transactions</b> along with who deleted it
+            and when — but it <b>cannot be restored or re-deleted</b> from there.
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={modalFooter}>
+          <button onClick={onCancel} disabled={isDeleting} style={btnGhost}>
+            <X size={12} /> Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '9px 18px', borderRadius: 8, border: 'none',
+              backgroundColor: isDeleting ? '#94a3b8' : '#dc2626', color: '#fff',
+              fontSize: 13, fontWeight: 800, cursor: isDeleting ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {isDeleting
+              ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Deleting…</>
+              : <><Trash2 size={13} /> Delete Transaction</>}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div>
+    <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', marginBottom: 2 }}>{label}</div>
+    <div style={{ fontSize: 12 }}>{value}</div>
+  </div>
+);

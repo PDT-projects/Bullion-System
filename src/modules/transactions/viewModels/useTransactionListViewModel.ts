@@ -11,6 +11,7 @@ import {
   formatDateTime, getCategoryColor, exportToCSV, downloadCSV,
 } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
+import { useAuth } from '../../../providers/context/AuthContext';
 
 export interface UseTransactionListViewModelReturn {
   transactions: Transaction[];
@@ -41,6 +42,7 @@ const DEFAULT_FILTERS: TransactionFilters = {
 
 export function useTransactionListViewModel(): UseTransactionListViewModelReturn {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading,    setIsLoading]    = useState(true);
   const [filters,      setFiltersState] = useState<TransactionFilters>(DEFAULT_FILTERS);
@@ -94,15 +96,20 @@ export function useTransactionListViewModel(): UseTransactionListViewModelReturn
   }, []);
 
   const handleDeleteTransaction = useCallback(async (id: string) => {
-    if (!window.confirm('Delete this transaction? This cannot be undone.')) return;
+    // Confirmation was moved into the view (ConfirmDeleteModal in
+    // TransactionListView) so the popup styling matches the rest of the app.
+    // By the time this handler runs, the user has already confirmed.
     try {
-      await TransactionFirebaseService.deleteTransaction(id);
+      const deletedBy = user
+        ? { uid: user.uid, email: user.email || '', displayName: user.displayName || undefined }
+        : undefined;
+      await TransactionFirebaseService.deleteTransaction(id, deletedBy);
       setTransactions(prev => prev.filter(t => t.id !== id));
-      toast.success('Transaction deleted');
+      toast.success('Transaction archived — balance restored');
     } catch {
       toast.error('Failed to delete transaction');
     }
-  }, []);
+  }, [user]);
 
   const handleCreateTransaction = useCallback(() => navigate('/transactions/new'), [navigate]);
   const handleEditTransaction    = useCallback((id: string) => navigate(`/transactions/${id}/edit`), [navigate]);

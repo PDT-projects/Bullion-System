@@ -10,6 +10,7 @@ import { db } from '../../../api/firebase/firebase';
 import { Transaction, PartialPayment, AppNotification, DynamicCategory } from './types';
 
 const COLLECTION       = 'transactions';
+const DELETED_COLLECTION = 'deleted_transactions';
 const COUNTER_COL      = 'transactionCounters';
 const NOTIF_COLLECTION = 'appNotifications';
 const CATEGORIES_COL   = 'dynamicCategories';
@@ -235,14 +236,65 @@ export class TransactionFirebaseService {
     }
   }
 
-  // ── Delete transaction ────────────────────────────────────────────────────
-  static async deleteTransaction(id: string): Promise<void> {
+  // ── Delete transaction (soft — archived to deleted_transactions) ─────────
+  //
+  // Reads the transaction, snapshots it into the `deleted_transactions`
+  // collection with `deletedAt` + `deletedBy` metadata, and only then removes
+  // it from the live `transactions` collection.
+  //
+  // Why this restores the balance for free: every balance helper (Cash-in-Hand,
+  // per-bank, monthly flow) iterates the LIVE transactions list. Once the doc
+  // is gone from `transactions`, it's automatically excluded from every running
+  // total, so the numbers snap back to what they were before the transaction
+  // existed. Nothing else on the compute side needs to change.
+  //
+  // Deleted records are read-only afterwards — this service intentionally has
+  // no method to delete them again, so the archive is append-only.
+  static async deleteTransaction(
+    id: string,
+    deletedBy?: { uid: string; email: string; displayName?: string },
+  ): Promise<void> {
     try {
-      await deleteDoc(doc(db, COLLECTION, id));
-      console.log('✅ Transaction deleted:', id);
+      const ref  = doc(db, COLLECTION, id);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        console.warn(`[TransactionFirebaseService] transaction ${id} not found — skipping delete`);
+        return;
+      }
+      const data = snap.data() as any;
+
+      const archive = deepStripUndefined({
+        ...data,
+        originalId:     id,
+        deletedAt:      new Date().toISOString(),
+        deletedBy:      deletedBy?.uid || 'unknown',
+        deletedByEmail: deletedBy?.email || 'unknown',
+        deletedByName:  deletedBy?.displayName || deletedBy?.email || 'Unknown user',
+      });
+      await addDoc(collection(db, DELETED_COLLECTION), archive);
+      await deleteDoc(ref);
+
+      console.log(`✅ Transaction ${id} archived to deleted_transactions by ${deletedBy?.email || 'unknown'}`);
     } catch (error) {
       console.error('❌ Error deleting transaction:', error);
       throw new Error('Failed to delete transaction');
+    }
+  }
+
+  // ── Fetch archived (deleted) transactions ────────────────────────────────
+  static async fetchDeletedTransactions(): Promise<Array<Transaction & {
+    originalId?: string;
+    deletedAt?: string;
+    deletedBy?: string;
+    deletedByEmail?: string;
+    deletedByName?: string;
+  }>> {
+    try {
+      const snap = await getDocs(query(collection(db, DELETED_COLLECTION), orderBy('deletedAt', 'desc')));
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+    } catch (error) {
+      console.error('❌ Error fetching deleted transactions:', error);
+      return [];
     }
   }
 
