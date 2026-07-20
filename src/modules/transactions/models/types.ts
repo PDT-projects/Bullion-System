@@ -231,46 +231,43 @@ export const MAIN_CATEGORIES = ['Cash Inflow', 'Cash Outflow', 'Loan'];
  *  itself, so the modal must NOT double-book). */
 export const INVOICE_MISC_EXPENSE_CATEGORY = 'Invoice Misc Expense';
 
+/** Special Inflow category that opens an invoice-picker for recording customer
+ *  payments against a sales invoice. Modal routes the save through
+ *  InvoicePaymentService.recordPayment (which updates invoice payment history
+ *  AND books the ledger entry — modal must NOT double-book). */
+export const SALES_INVOICE_CATEGORY = 'Sales Invoice';
+
 export const SUB_CATEGORIES: Record<string, string[]> = {
+  // ── Inflow (money coming in) ─────────────────────────────────────────
+  // Matches the reference exactly — three categories, no more. Sub-category
+  // handling picks up the finer-grained distinctions (Loan / Commission /
+  // Other are managed as user-added Sub-categories per parent).
   'Cash Inflow': [
-    'Product sale received',
-    'Payment received - Customers',
-    'Payment received - Company',
-    'TCS/DHL/LCS payment received',
-    'Commission received',
-    'Loan received - From Employee',
-    'Loan received - From Company',
-    'Other',
+    'Sales Invoice',                  // Special: opens invoice picker
+    'Account Payable',
+    'Account Receivable',
   ],
+  // ── Outflow (money going out) ────────────────────────────────────────
+  // Reorganized into a curated tree that matches the reference UI.
+  // The special "Invoice Misc Expense" entry opens the invoice picker.
   'Cash Outflow': [
-    'Invoice Misc Expense',            // Special: triggers the invoice-picker UI in the transaction modal
-    'Employee salary',
-    'Advance salary',
-    'Commission paid - Employee',
-    'Commission paid - Dealer',
-    'Loan paid to employee',
-    'Office Rent',
-    'Electricity Bill',
-    'Gas Bill',
-    'Water Bill',
-    'Internet Bill',
-    'PTCL Bill',
-    'Petrol expense',
-    'Kitchen Expense',
-    'Grocery Expense',
-    'Stationery Expense',
-    'Marketing/SEO/VPN',
-    'Courier',
-    'Bykea/delivery',
-    'Parcel received Payment',
-    'Payment to company',
-    'Payment to person',
-    'Purchase',
-    'Repair payment',
-    'Cylinder payment',
-    'Medical/hospital bill',
-    'Personal expense/Non business',
-    'Other payment',
+    'Invoice Misc Expense',           // Special: opens invoice picker
+    'Payrolls',
+    'Loan Receivable',
+    'Utility Bills & Rents',
+    'Grocery & Stationery',
+    'Advertising and Marketing',
+    'Purchase Order',
+    'Supplier Payment',
+    'Sold Goods Payment',
+    'Logistics & Freight',
+    'Bank Charges',
+    'Travelling, Accommodations & Food',
+    'Zakat & Donations',
+    'Tax & Consultations',
+    'Account Payable',
+    'Account Receivable',
+    'Other Expenses',
   ],
   'Loan': [
     'Loan given',

@@ -1,11 +1,18 @@
 // Invoice Module - Delete View
+//
+// UPDATED: accepts an `isLoading` prop from the wrapper. While the invoice
+// list is still being fetched, we render a spinner instead of the "Invoice
+// Not Found" state — that was the false-negative flash users were seeing
+// because the wrapper starts with an empty invoices array and the view
+// immediately concluded the invoice didn't exist.
 
 import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, X, Loader2 } from 'lucide-react';
 import { Invoice } from '../models/types';
 
 interface Props {
   invoice: Invoice | null;
+  isLoading?: boolean;
   handleDelete: () => void;
   handleCancel: () => void;
   formatCurrency: (amount: number) => string;
@@ -22,7 +29,29 @@ const deleteBtn: React.CSSProperties = {
   backgroundColor: '#dc2626', color: '#ffffff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
 };
 
-export function InvoiceDeleteView({ invoice, handleDelete, handleCancel, formatCurrency, formatDate }: Props) {
+export function InvoiceDeleteView({ invoice, isLoading, handleDelete, handleCancel, formatCurrency, formatDate }: Props) {
+
+  // While the parent is still fetching the invoice list we don't know yet
+  // whether the target invoice exists. Show a neutral loading state — do NOT
+  // render "Invoice Not Found" because that will be wrong for the split
+  // second between mount and the fetch resolving.
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
+          <div className="flex items-center gap-3 text-gray-600">
+            <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+            <div>
+              <div className="text-base font-semibold text-gray-900">Loading invoice…</div>
+              <div className="text-xs text-gray-500 mt-0.5">Fetching the record before we confirm the delete.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loaded, but no matching invoice — this really IS a not-found case.
   if (!invoice) {
     return (
       <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">

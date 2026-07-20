@@ -311,6 +311,9 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [custAddress,  setCustAddress]  = React.useState('');
   const [showSugg,     setShowSugg]     = React.useState(false);
   const [salesperson,  setSalesperson]  = React.useState('');
+  const [showAddSp,    setShowAddSp]    = React.useState(false);
+  const [newSpName,    setNewSpName]    = React.useState('');
+  const [savingSp,     setSavingSp]     = React.useState(false);
   const [delivery,     setDelivery]     = React.useState('Self-collect');
   const [saving,       setSaving]       = React.useState(false);
 
@@ -608,7 +611,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                   <input type="tel" value={custPhone} onChange={e=>setCustPhone(e.target.value)} style={iSty} />
                 </div>
                 <div>
-                  <label style={lbl}>Identity / CNIC</label>
+                  <label style={lbl}>Identity</label>
                   <input value={custCNIC} onChange={e=>setCustCNIC(e.target.value)} style={iSty} />
                 </div>
               </div>
@@ -627,11 +630,100 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                   <input value={custAddress} onChange={e=>setCustAddress(e.target.value)} style={iSty} />
                 </div>
               </div>
-              {/* Salesperson */}
+              {/* Salesperson — proper select + inline Add button.
+                  The old free-text input with a datalist was confusing —
+                  users didn't realize they could type a new name, and
+                  saved ones didn't render as a visible list. Now the
+                  dropdown shows every saved salesperson, and the +Add
+                  button opens an inline input that persists to
+                  appConfig/salespersons via vm.handleAddSalesperson. */}
               <div>
                 <label style={lbl}>Salesperson</label>
-                <input value={salesperson} onChange={e=>setSalesperson(e.target.value)} list="modal-sp-list" style={iSty} placeholder="Select or type…" />
-                <datalist id="modal-sp-list">{savedSps.map(s => <option key={s} value={s}/>)}</datalist>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <select
+                    value={salesperson}
+                    onChange={e => setSalesperson(e.target.value)}
+                    style={{ ...iSty, flex: 1, appearance: 'none', paddingRight: 28, cursor: 'pointer' }}
+                  >
+                    <option value="">— None —</option>
+                    {savedSps.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddSp(true); setNewSpName(''); }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '9px 12px', borderRadius: 8, border: '1px solid #e2e8f0',
+                      backgroundColor: '#fff', color: '#334155',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                    title="Add a new salesperson (saved for future invoices)"
+                  >
+                    <Plus size={12} /> Add
+                  </button>
+                </div>
+
+                {showAddSp && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                    <input
+                      autoFocus
+                      value={newSpName}
+                      onChange={e => setNewSpName(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === 'Enter' && newSpName.trim() && !savingSp) {
+                          setSavingSp(true);
+                          try {
+                            await (vm as any).handleAddSalesperson?.(newSpName.trim());
+                            setSalesperson(newSpName.trim());
+                            setNewSpName('');
+                            setShowAddSp(false);
+                          } finally { setSavingSp(false); }
+                        }
+                      }}
+                      disabled={savingSp}
+                      placeholder="Salesperson name"
+                      style={{ ...iSty, flex: 1, opacity: savingSp ? 0.6 : 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (savingSp || !newSpName.trim()) return;
+                        setSavingSp(true);
+                        try {
+                          await (vm as any).handleAddSalesperson?.(newSpName.trim());
+                          setSalesperson(newSpName.trim());
+                          setNewSpName('');
+                          setShowAddSp(false);
+                        } finally { setSavingSp(false); }
+                      }}
+                      disabled={savingSp || !newSpName.trim()}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '9px 14px', borderRadius: 8, border: 'none',
+                        backgroundColor: savingSp ? '#94a3b8' : '#0f172a', color: '#fff',
+                        fontSize: 12, fontWeight: 700,
+                        cursor: savingSp ? 'not-allowed' : 'pointer',
+                        opacity: !newSpName.trim() && !savingSp ? 0.5 : 1,
+                      }}
+                    >
+                      {savingSp
+                        ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+                        : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowAddSp(false); setNewSpName(''); }}
+                      disabled={savingSp}
+                      style={{
+                        padding: '9px 12px', borderRadius: 8, border: '1px solid #e2e8f0',
+                        backgroundColor: '#fff', color: '#334155', fontSize: 12, fontWeight: 700,
+                        cursor: savingSp ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -17,6 +17,7 @@ import {
   Plus, Trash2, X, Filter as FilterIcon, Check,
   ChevronDown, Wallet, Landmark, TrendingUp, TrendingDown, Loader2,
   PlusCircle, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Search, Clock, RotateCcw,
+  History,
 } from 'lucide-react';
 import { collection, getDocs, query, orderBy, doc, setDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
@@ -30,6 +31,7 @@ import {
   computeCashInHandBalance, computeBankBalance, computeMonthlyFlow,
 } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
+import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 
 // ── Props ───────────────────────────────────────────────────────────────────
 interface Props {
@@ -94,6 +96,7 @@ export function TransactionListView({
   const [deletedModal, setDeletedModal] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
   const [isDeleting,    setIsDeleting]    = useState(false);
+  const [historyTx,     setHistoryTx]     = useState<Transaction | null>(null);
   const [detailPanelOpen, setDetailPanelOpen] = useState(false);
 
   // ── Summary metrics (all live-computed from `transactions`) ──────────────
@@ -161,11 +164,22 @@ export function TransactionListView({
   //   • its approval is still awaited/rejected, or
   //   • the ledger acknowledges a partial payment with money still due.
   // Matches what usePendingPaymentsViewModel filters on so the two lists agree.
+  // A transaction is considered "pending" when either:
+  //   1. Its approval is awaiting or was rejected (workflow gate)
+  //   2. It has an amount still owed on the transaction ITSELF (manual
+  //      partial like "recorded 60 of 100")
+  //   3. It's linked to an invoice that's still partially outstanding —
+  //      InvoicePaymentService writes paymentStatus='Partial' on the
+  //      payment transaction as a linkage flag whenever the parent
+  //      invoice still has a balance owed. The Cash In column on such
+  //      transactions matches Amount (the payment IS atomic), but the
+  //      invoice is not settled, so it belongs on the Pending list.
   const isPending = (t: Transaction): boolean => {
     if (t.approvalStatus === 'pending_approval') return true;
     if (t.approvalStatus === 'rejected') return true;
+    if (t.paymentStatus === 'Partial') return true;
     const { remaining } = getTransactionTotals(t);
-    if (remaining > 0 && t.paymentStatus === 'Partial') return true;
+    if (remaining > 0) return true;
     return false;
   };
 
@@ -529,7 +543,7 @@ export function TransactionListView({
               <div style={{ fontSize: 11, color: '#c2410c' }}>
                 {pendingTotal > 0
                   ? <>Total outstanding: <b>{CURRENCY} {fmt(pendingTotal)}</b></>
-                  : 'Awaiting approval'}
+                  : 'Includes invoice-linked payments and awaiting-approval entries'}
               </div>
             </div>
           </div>
@@ -614,6 +628,13 @@ export function TransactionListView({
                       </TdCell>
                       <TdCell align="right">
                         <div style={{ display: 'inline-flex', gap: 4 }}>
+                          {t.linkedType === 'invoice' && (
+                            <IconAction
+                              title="View invoice payment history"
+                              onClick={() => setHistoryTx(t)}
+                              color="#4f46e5"
+                            ><History size={12} /></IconAction>
+                          )}
                           <IconAction title="Delete" onClick={() => setPendingDelete(t)} color="#dc2626"><Trash2 size={12} /></IconAction>
                         </div>
                       </TdCell>
@@ -664,6 +685,13 @@ export function TransactionListView({
               setPendingDelete(null);
             }
           }}
+          formatDate={formatDate}
+        />
+      )}
+      {historyTx && (
+        <PaymentHistoryModal
+          transaction={historyTx}
+          onClose={() => setHistoryTx(null)}
           formatDate={formatDate}
         />
       )}
@@ -1505,8 +1533,7 @@ const DeletedTransactionsModal: React.FC<{
     </div>,
     document.body,
   );
-};
-
+};        
 const cell: React.CSSProperties = {
   padding: '10px 12px', fontSize: 12, color: '#334155', whiteSpace: 'nowrap',
 };
@@ -1652,3 +1679,182 @@ const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label,
     <div style={{ fontSize: 12 }}>{value}</div>
   </div>
 );
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PaymentHistoryModal — read-only invoice payment log
+//
+// Opened from the History (⏱) icon on any transaction whose linkedType is
+// 'invoice'. Fetches the linked invoice by number, then shows:
+//   • Invoice summary (total / paid / remaining)
+//   • Every payment: date · mode · amount · bank / cheque / note
+//   • Every misc expense (if any) — same style, distinct color
+// Deliberately read-only. To change or remove entries, the user goes to the
+// invoice itself or deletes the source transaction (which reverses via the
+// existing linkedType/linkedId query).
+// ═══════════════════════════════════════════════════════════════════════════
+const PaymentHistoryModal: React.FC<{
+  transaction: Transaction;
+  onClose: () => void;
+  formatDate: (d: string) => string;
+}> = ({ transaction: t, onClose, formatDate }) => {
+  const [invoice, setInvoice] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const invNum = t.linkedId;
+    if (!invNum) { setLoading(false); return; }
+    // linkedId stores the invoice NUMBER (not doc id). Use InvoiceLifecycleService
+    // ergonomics via a small fallback — filter fetchAllInvoices by matching number.
+    setLoading(true);
+    InvoiceFirebaseService.fetchAllInvoices()
+      .then(list => {
+        const match = list.find((i: any) => i.invoiceNumber === invNum);
+        setInvoice(match || null);
+      })
+      .catch(err => {
+        console.error('[PaymentHistoryModal] fetch failed:', err);
+      })
+      .finally(() => setLoading(false));
+  }, [t.linkedId]);
+
+  const payments      = (invoice?.payments      || []) as Array<any>;
+  const miscExpenses  = (invoice?.miscExpenses  || []) as Array<any>;
+  const total         = Number(invoice?.totalAmount) || 0;
+  const paid          = Number(invoice?.paidAmount)
+    || payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const remaining     = Math.max(0, total - paid);
+
+  return createPortal(
+    <div onClick={onClose} style={backdrop}>
+      <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 640 }}>
+        <div style={modalHeader}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <History size={15} color="#4f46e5" /> Payment History
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>
+              {t.linkedId || '—'}{invoice?.customerName ? ` · ${invoice.customerName}` : ''}
+            </div>
+          </div>
+          <button onClick={onClose} style={modalClose}><X size={14} /></button>
+        </div>
+
+        <div style={{ padding: '14px 20px', maxHeight: '65vh', overflowY: 'auto' }}>
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading invoice…
+            </div>
+          ) : !invoice ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+              Invoice {t.linkedId} not found. It may have been deleted.
+            </div>
+          ) : (
+            <>
+              {/* Summary row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+                <MiniStat label="Total"     value={total}     fg="#0f172a" />
+                <MiniStat label="Paid"      value={paid}      fg="#059669" />
+                <MiniStat label="Remaining" value={remaining} fg={remaining > 0 ? '#c2410c' : '#94a3b8'} />
+              </div>
+
+              {/* Payments */}
+              <div style={{ marginBottom: miscExpenses.length > 0 ? 16 : 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#059669', marginBottom: 8 }}>
+                  Payments · {payments.length}
+                </div>
+                {payments.length === 0 ? (
+                  <div style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontSize: 12, backgroundColor: '#f8fafc', borderRadius: 8 }}>
+                    No payments recorded yet.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {payments.map((p: any, i: number) => (
+                      <HistoryRow
+                        key={p.id || i}
+                        date={p.date}
+                        mode={p.mode}
+                        detail={p.bankName || p.chequeNumber || p.note}
+                        amount={Number(p.amount) || 0}
+                        formatDate={formatDate}
+                        tone="in"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Misc expenses */}
+              {miscExpenses.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 8 }}>
+                    Misc Expenses · {miscExpenses.length}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {miscExpenses.map((m: any, i: number) => (
+                      <HistoryRow
+                        key={m.id || i}
+                        date={m.date}
+                        mode={m.mode}
+                        detail={m.category || m.note}
+                        amount={Number(m.amount) || 0}
+                        formatDate={formatDate}
+                        tone="out"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div style={{ ...modalFooter, justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 11, color: '#64748b' }}>
+            Read-only — changes go through the invoice or the source transaction
+          </div>
+          <button onClick={onClose} style={btnGhost}><X size={12} /> Close</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+const MiniStat: React.FC<{ label: string; value: number; fg: string }> = ({ label, value, fg }) => (
+  <div style={{ textAlign: 'center', padding: '10px 6px', backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
+    <div style={{ fontSize: 15, fontWeight: 800, color: fg, fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
+      <span style={{ fontSize: 10, color: '#94a3b8', marginRight: 3 }}>{CURRENCY}</span>{fmt(value)}
+    </div>
+  </div>
+);
+
+const HistoryRow: React.FC<{
+  date?: string; mode?: string; detail?: string; amount: number;
+  formatDate: (d: string) => string;
+  tone: 'in' | 'out';
+}> = ({ date, mode, detail, amount, formatDate, tone }) => {
+  const modeChip = mode === 'Bank' ? { bg: '#dbeafe', fg: '#1d4ed8' }
+    : mode === 'Cheque' ? { bg: '#fef3c7', fg: '#92400e' }
+    : { bg: '#dcfce7', fg: '#166534' };
+  const amountFg = tone === 'in' ? '#059669' : '#dc2626';
+  const rowBg    = tone === 'in' ? '#f0fdf4' : '#fef2f2';
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: '110px 70px 1fr auto', gap: 10, alignItems: 'center',
+      padding: '8px 10px', backgroundColor: rowBg, borderRadius: 8, fontSize: 12,
+    }}>
+      <span style={{ color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{date ? formatDate(date) : '—'}</span>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        padding: '2px 8px', borderRadius: 99,
+        backgroundColor: modeChip.bg, color: modeChip.fg,
+        fontSize: 10, fontWeight: 700,
+      }}>{mode || 'Cash'}</span>
+      <span style={{ color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail || '—'}</span>
+      <span style={{ color: amountFg, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+        {tone === 'in' ? '+' : '−'}{CURRENCY} {fmt(amount)}
+      </span>
+    </div>
+  );
+};

@@ -209,14 +209,31 @@ export class InvoicePaymentService {
       chequeNumber:    mode === 'Cheque' ? payment.chequeNumber : undefined,
       chequeBank:      mode === 'Cheque' ? payment.chequeBank   : undefined,
       chequeDate:      mode === 'Cheque' ? payment.chequeDate   : undefined,
+
+      // A payment transaction is ATOMIC on the cash side — the money was
+      // either received in full or not at all. The `amount / amountPaid /
+      // totalPaid` fields all reflect what actually moved, and
+      // `remainingAmount` on the transaction itself is 0.
+      //
+      // `paymentStatus` here serves as a LINKAGE FLAG rather than a
+      // transaction-level cash flag:
+      //   • 'Full'    → payment cleared the parent invoice completely
+      //   • 'Partial' → parent invoice still has an outstanding balance
+      // The transactions list uses this to filter "Pending only" — a
+      // transaction flagged Partial surfaces there even though its own
+      // Cash In matches Amount (because the invoice it's paying is still
+      // in progress).
       amountPaid:      payment.amount,
-      remainingAmount: remainingAfter,
+      remainingAmount: 0,
       paymentStatus:   fullyCleared ? 'Full' : 'Partial',
       totalPaid:       payment.amount,
-      isFullyCleared:  fullyCleared && mode !== 'Cheque',
+      isFullyCleared:  fullyCleared && mode !== 'Cheque',   // cheques aren't cleared until they clear
+
       paidBy:          invoice.customerName,
       paidTo:          undefined,
-      note:            payment.note || `Invoice ${invoice.invoiceNumber} payment #${seq}`,
+      note:            payment.note || (fullyCleared
+        ? `Invoice ${invoice.invoiceNumber} payment #${seq} — invoice now settled`
+        : `Invoice ${invoice.invoiceNumber} payment #${seq} — invoice balance AED ${remainingAfter.toLocaleString()} remaining`),
       partialPayments: [],
       linkedType:      'invoice',
       linkedId:        invoice.invoiceNumber,

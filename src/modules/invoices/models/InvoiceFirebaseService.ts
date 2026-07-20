@@ -123,8 +123,20 @@ export class InvoiceFirebaseService {
     try {
       const now = new Date().toISOString();
       const totalAmount = (dto.products || []).reduce((sum, p) => sum + (p.total || 0), 0);
-      const paidAmount = dto.paymentStatus === 'Partial' ? (dto.paidAmount || 0) : totalAmount;
-      const remainingAmount = totalAmount - paidAmount;
+      // paidAmount resolution rule:
+      //   • Caller-supplied paidAmount is authoritative when provided (this is
+      //     how the invoice-creation flows correctly send `paidAmount: 0` for
+      //     brand-new UNPAID invoices).
+      //   • If paidAmount is absent, infer from paymentStatus — only mark
+      //     as full-paid when status is explicitly 'Paid' or 'Full'.
+      //   • Everything else defaults to 0 (Unpaid).
+      // The old logic `status === 'Partial' ? paidAmount : totalAmount` was
+      // inverted and caused every non-partial invoice (including brand-new
+      // Unpaid ones) to be booked as fully paid immediately.
+      const paidAmount = dto.paidAmount !== undefined
+        ? Math.max(0, Math.min(totalAmount, Number(dto.paidAmount) || 0))
+        : (dto.paymentStatus === 'Paid' || (dto.paymentStatus as any) === 'Full' ? totalAmount : 0);
+      const remainingAmount = Math.max(0, totalAmount - paidAmount);
       const data = stripUndefined({ ...dto, totalAmount, paidAmount, remainingAmount, createdAt: now, updatedAt: now });
       const ref = await addDoc(collection(db, INVOICES_COLLECTION), data);
       console.log('✅ Invoice created:', ref.id);
@@ -139,8 +151,11 @@ export class InvoiceFirebaseService {
     try {
       const now = new Date().toISOString();
       const totalAmount = (dto.products || []).reduce((sum, p) => sum + (p.total || 0), 0);
-      const paidAmount = dto.paymentStatus === 'Partial' ? (dto.paidAmount || 0) : totalAmount;
-      const remainingAmount = totalAmount - paidAmount;
+      // Same corrected paidAmount logic as createInvoice above.
+      const paidAmount = dto.paidAmount !== undefined
+        ? Math.max(0, Math.min(totalAmount, Number(dto.paidAmount) || 0))
+        : (dto.paymentStatus === 'Paid' || (dto.paymentStatus as any) === 'Full' ? totalAmount : 0);
+      const remainingAmount = Math.max(0, totalAmount - paidAmount);
       const data = stripUndefined({ ...dto, totalAmount, paidAmount, remainingAmount, updatedAt: now });
       await updateDoc(doc(db, INVOICES_COLLECTION, id), data);
       console.log('✅ Invoice updated:', id);

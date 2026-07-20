@@ -28,10 +28,11 @@ import { toast } from 'sonner';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { InvoiceMiscExpenseService } from '../../invoices/models/InvoiceMiscExpenseService';
+import { InvoicePaymentService } from '../../invoices/models/InvoicePaymentService';
 import { Invoice } from '../../invoices/models/types';
 import {
   Transaction, DynamicCategory, SUB_CATEGORIES, CASH_IN_HAND_ID, CASH_IN_HAND_NAME,
-  INVOICE_MISC_EXPENSE_CATEGORY,
+  INVOICE_MISC_EXPENSE_CATEGORY, SALES_INVOICE_CATEGORY,
 } from '../models/types';
 
 // ── Props ───────────────────────────────────────────────────────────────────
@@ -84,9 +85,11 @@ export function QuickTransactionModal({
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [showAddSubCat, setShowAddSubCat] = useState(false);
   const [newSubCatName, setNewSubCatName] = useState('');
+  const [savingSubCat, setSavingSubCat] = useState(false);
   const [editSubCatMode, setEditSubCatMode] = useState(false);
   const [showAddBranch, setShowAddBranch] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
+  const [savingBranch, setSavingBranch] = useState(false);
 
   // ── Invoice picker (Outflow · "Invoice Misc Expense" only) ──────────
   // Lazy-loaded the first time the user picks this special category, then
@@ -95,10 +98,14 @@ export function QuickTransactionModal({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [invoiceId, setInvoiceId] = useState('');
-  const isInvoiceMisc = type === 'Outflow' && category === INVOICE_MISC_EXPENSE_CATEGORY;
+  const isInvoiceMisc  = type === 'Outflow' && category === INVOICE_MISC_EXPENSE_CATEGORY;
+  const isSalesInvoice = type === 'Inflow'  && category === SALES_INVOICE_CATEGORY;
+  /** Either invoice-linked category — the modal loads invoices + shows the
+   *  picker in both cases, and forks the save flow to the right service. */
+  const needsInvoice = isInvoiceMisc || isSalesInvoice;
 
   useEffect(() => {
-    if (!isInvoiceMisc || invoices.length > 0 || invoicesLoading) return;
+    if (invoices.length > 0 || invoicesLoading) return;
     setInvoicesLoading(true);
     InvoiceFirebaseService.fetchAllInvoices()
       .then(list => {
@@ -115,13 +122,40 @@ export function QuickTransactionModal({
       })
       .catch(err => {
         console.error('[QuickTransactionModal] fetchAllInvoices failed:', err);
-        toast.error('Failed to load invoices');
+        // Silent — a network hiccup here shouldn't disrupt someone who's
+        // recording a plain non-invoice transaction. Toast only when the
+        // picker is actually rendered and empty (below).
       })
       .finally(() => setInvoicesLoading(false));
-  }, [isInvoiceMisc, invoices.length, invoicesLoading]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // If user swaps the category away from Invoice Misc, clear the invoice link
-  useEffect(() => { if (!isInvoiceMisc) setInvoiceId(''); }, [isInvoiceMisc]);
+  // Reset invoice link when moving away from any invoice-linked category
+  useEffect(() => { if (!needsInvoice) setInvoiceId(''); }, [needsInvoice]);
+
+  // Currently-selected invoice + derived payment stats. Used to render the
+  // history breakdown and enforce the max-amount cap for Sales Invoice.
+  const selectedInvoice = useMemo(
+    () => invoices.find(i => i.id === invoiceId) || null,
+    [invoices, invoiceId],
+  );
+  const invoiceStats = useMemo(() => {
+    if (!selectedInvoice) return { total: 0, paid: 0, remaining: 0, payments: [] as any[] };
+    const total = Number((selectedInvoice as any).totalAmount) || 0;
+    const payments = ((selectedInvoice as any).payments || []) as Array<any>;
+    const paid = Number((selectedInvoice as any).paidAmount)
+      || payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const remaining = Math.max(0, total - paid);
+    return { total, paid, remaining, payments };
+  }, [selectedInvoice]);
+
+  // Auto-clamp the entered amount if the user typed something above the
+  // remaining balance and then picked a different invoice with a smaller cap.
+  useEffect(() => {
+    if (!isSalesInvoice || !selectedInvoice) return;
+    if (totalAmount !== '' && Number(totalAmount) > invoiceStats.remaining) {
+      setTotalAmount(invoiceStats.remaining);
+    }
+  }, [isSalesInvoice, selectedInvoice, invoiceStats.remaining]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // UI state
   const [accountOpen, setAccountOpen] = useState(false);
@@ -196,9 +230,11 @@ export function QuickTransactionModal({
 
   // ── Sub-category management ──────────────────────────────────────────
   const handleAddSubCat = async () => {
+    if (savingSubCat) return;                 // guard against double-click / repeat Enter
     const name = newSubCatName.trim();
     if (!name) return;
     if (!category) { toast.error('Pick a Category first'); return; }
+    setSavingSubCat(true);
     try {
       const added = await TransactionFirebaseService.addDynamicCategory({
         type: 'subCategoryDetail',
@@ -213,6 +249,8 @@ export function QuickTransactionModal({
       toast.success(`Sub-category "${name}" added`);
     } catch (e: any) {
       toast.error(e?.message || 'Failed to add sub-category');
+    } finally {
+      setSavingSubCat(false);
     }
   };
 
@@ -228,8 +266,10 @@ export function QuickTransactionModal({
 
   // ── Branch management ────────────────────────────────────────────────
   const handleAddBranch = async () => {
+    if (savingBranch) return;                 // guard against double-click / repeat Enter
     const name = newBranchName.trim();
     if (!name) return;
+    setSavingBranch(true);
     try {
       const added = await TransactionFirebaseService.addCompany(name);
       setBranches(prev => [...prev, { id: added.id, name: added.name }]);
@@ -239,6 +279,8 @@ export function QuickTransactionModal({
       toast.success(`Branch "${name}" added`);
     } catch (e: any) {
       toast.error(e?.message || 'Failed to add branch');
+    } finally {
+      setSavingBranch(false);
     }
   };
 
@@ -260,9 +302,19 @@ export function QuickTransactionModal({
     if (selectedAccount.type === 'bank' && !selectedAccount.id) {
       toast.error('Pick a valid bank account'); return;
     }
-    // Special path: Invoice Misc Expense requires a linked invoice
-    if (isInvoiceMisc && !invoiceId) {
-      toast.error('Pick which invoice this expense belongs to'); return;
+    // Both invoice-linked categories require the user to pick an invoice
+    if (needsInvoice && !invoiceId) {
+      toast.error('Pick which invoice this transaction belongs to'); return;
+    }
+    // For Sales Invoice, guard against overpayment / paid-in-full invoices.
+    if (isSalesInvoice && selectedInvoice) {
+      if (invoiceStats.remaining === 0) {
+        toast.error('This invoice is fully paid — nothing left to record'); return;
+      }
+      if (Number(totalAmount) > invoiceStats.remaining) {
+        toast.error(`Amount cannot exceed remaining balance (AED ${invoiceStats.remaining.toLocaleString()})`);
+        return;
+      }
     }
 
     setSaving(true);
@@ -316,6 +368,31 @@ export function QuickTransactionModal({
           company:  (branchName || 'Main Office') as any,
         });
         toast.success(`Misc expense added to invoice ${inv.invoiceNumber}`);
+        onSaved();
+        onClose();
+        return;
+      }
+
+      // ── FORK: Sales Invoice (customer payment received) ─────────────
+      // InvoicePaymentService.recordPayment handles both:
+      //   1. Appends a payment entry to the invoice + recomputes remaining/status
+      //   2. Books an Inflow transaction with linkedType: 'invoice',
+      //      linkedId: invoiceNumber  (matches the invoice-delete reversal query)
+      // Same double-book warning — return early after success.
+      if (isSalesInvoice) {
+        const inv = invoices.find(x => x.id === invoiceId);
+        if (!inv) { toast.error('Selected invoice not found'); setSaving(false); return; }
+        await InvoicePaymentService.recordPayment({
+          invoice:  inv,
+          amount:   total,
+          mode:     isCash ? 'Cash' : 'Bank',
+          date:     manualDate,
+          bankId:   isCash ? undefined : selectedAccount.id,
+          bankName: isCash ? undefined : selectedAccount.name,
+          note:     description || undefined,
+          company:  (branchName || 'Main Office') as any,
+        });
+        toast.success(`Payment recorded against invoice ${inv.invoiceNumber}`);
         onSaved();
         onClose();
         return;
@@ -519,11 +596,31 @@ export function QuickTransactionModal({
                   autoFocus value={newSubCatName}
                   onChange={e => setNewSubCatName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddSubCat()}
+                  disabled={savingSubCat}
                   placeholder={`Sub-category under "${category}"`}
-                  style={{ ...inp, flex: 1 }}
+                  style={{ ...inp, flex: 1, opacity: savingSubCat ? 0.6 : 1 }}
                 />
-                <button onClick={handleAddSubCat} style={btnPrimary}>Save</button>
-                <button onClick={() => { setShowAddSubCat(false); setNewSubCatName(''); }} style={btnGhost(false)}>Cancel</button>
+                <button
+                  onClick={handleAddSubCat}
+                  disabled={savingSubCat || !newSubCatName.trim()}
+                  style={{
+                    ...btnPrimary,
+                    backgroundColor: savingSubCat ? '#94a3b8' : btnPrimary.backgroundColor,
+                    cursor: savingSubCat ? 'not-allowed' : 'pointer',
+                    opacity: !newSubCatName.trim() && !savingSubCat ? 0.5 : 1,
+                  }}
+                >
+                  {savingSubCat
+                    ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+                    : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setShowAddSubCat(false); setNewSubCatName(''); }}
+                  disabled={savingSubCat}
+                  style={btnGhost(savingSubCat)}
+                >
+                  Cancel
+                </button>
               </div>
             )}
 
@@ -542,41 +639,143 @@ export function QuickTransactionModal({
             )}
           </div>
 
-          {/* ── Invoice picker (special: Outflow → "Invoice Misc Expense") ── */}
-          {isInvoiceMisc && (
-            <div style={{
-              padding: 12,
-              border: '1px solid #fed7aa',
-              backgroundColor: '#fff7ed',
-              borderRadius: 10,
-            }}>
-              <label style={{ ...label, color: '#c2410c' }}>
-                Link to Invoice <span style={{ color: '#dc2626' }}>*</span>
-              </label>
-              <select
-                value={invoiceId}
-                onChange={e => setInvoiceId(e.target.value)}
-                disabled={invoicesLoading}
-                style={sel}
-              >
-                <option value="">
-                  {invoicesLoading ? 'Loading invoices…'
-                    : invoices.length === 0 ? 'No invoices found'
-                    : '— Select invoice —'}
-                </option>
-                {invoices.map(inv => {
-                  const label = `${inv.invoiceNumber} — ${inv.customerName || 'Unknown'}`
-                    + (inv.paymentStatus === 'Full' ? '  (paid)' : '');
-                  return <option key={inv.id} value={inv.id}>{label}</option>;
-                })}
-              </select>
-              <div style={{ fontSize: 11, color: '#9a3412', marginTop: 6, lineHeight: 1.4 }}>
-                This expense will be added to the invoice's <b>Misc Expense</b>
-                total AND recorded here as an Outflow transaction. Deleting
-                the invoice will reverse both.
+          {/* ── Invoice picker ──────────────────────────────────────────
+              Shown for two special categories:
+                • Outflow → "Invoice Misc Expense" — routes save through
+                  InvoiceMiscExpenseService.recordExpense
+                • Inflow  → "Sales Invoice"       — routes save through
+                  InvoicePaymentService.recordPayment (records customer payment)
+              Panel is tinted orange for the Outflow flow and emerald for
+              the Inflow flow so the two cases look visually distinct.        */}
+          {needsInvoice && (() => {
+            const isIn = isSalesInvoice;
+            const borderColor = isIn ? '#a7f3d0' : '#fed7aa';
+            const bg          = isIn ? '#ecfdf5' : '#fff7ed';
+            const accentFg    = isIn ? '#065f46' : '#c2410c';
+            const helperFg    = isIn ? '#166534' : '#9a3412';
+            return (
+              <div style={{ padding: 12, border: `1px solid ${borderColor}`, backgroundColor: bg, borderRadius: 10 }}>
+                <label style={{ ...label, color: accentFg }}>
+                  Link to Invoice <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <select
+                  value={invoiceId}
+                  onChange={e => setInvoiceId(e.target.value)}
+                  disabled={invoicesLoading}
+                  style={sel}
+                >
+                  <option value="">
+                    {invoicesLoading ? 'Loading invoices…'
+                      : (() => {
+                          // For Sales Invoice: only show invoices that still owe something.
+                          // For Invoice Misc Expense: any invoice is a valid target.
+                          const pickable = isIn
+                            ? invoices.filter(i => i.paymentStatus !== 'Full')
+                            : invoices;
+                          return pickable.length === 0
+                            ? (isIn ? 'No invoices with pending balance' : 'No invoices found')
+                            : '— Select invoice —';
+                        })()}
+                  </option>
+                  {invoices
+                    // Hide fully-paid invoices from Sales Invoice — you can't
+                    // record a payment against one that's already settled.
+                    // Misc Expense keeps them all, since expenses can be added
+                    // to a paid invoice too.
+                    .filter(inv => isIn ? inv.paymentStatus !== 'Full' : true)
+                    .map(inv => {
+                      // Compose the display label per user spec:
+                      //   INV-XXX — CustomerFirstName · AED remaining
+                      // For Sales Invoice we show the REMAINING amount so the
+                      // user knows what's still payable at a glance. For Misc
+                      // Expense we keep showing the full total.
+                      const firstName = (inv.customerName || '').split(/\s+/)[0].trim();
+                      const modelName = (inv.products && inv.products[0]?.modelName) || '';
+                      const identity  = firstName || modelName || 'Unknown';
+                      const total     = Number((inv as any).totalAmount) || 0;
+                      const paid      = Number((inv as any).paidAmount) || 0;
+                      const remaining = Math.max(0, total - paid);
+                      const shownAmt  = isIn ? remaining : total;
+                      const partialTag = isIn && paid > 0 ? '  (partial)' : '';
+                      const label = `${inv.invoiceNumber} — ${identity} · AED ${shownAmt.toLocaleString()}${partialTag}`;
+                      return <option key={inv.id} value={inv.id}>{label}</option>;
+                    })}
+                </select>
+                <div style={{ fontSize: 11, color: helperFg, marginTop: 6, lineHeight: 1.4 }}>
+                  {isIn ? (
+                    <>
+                      This payment will be recorded against the invoice's <b>payment history</b> AND
+                      booked here as an Inflow transaction. Deleting the invoice will reverse both.
+                    </>
+                  ) : (
+                    <>
+                      This expense will be added to the invoice's <b>Misc Expense</b> total
+                      AND recorded here as an Outflow transaction. Deleting the invoice
+                      will reverse both.
+                    </>
+                  )}
+                </div>
+
+                {/* ── Sales Invoice payment history + remaining balance ── */}
+                {isSalesInvoice && selectedInvoice && (
+                  <div style={{
+                    marginTop: 12, padding: 10,
+                    backgroundColor: '#fff', borderRadius: 8,
+                    border: '1px solid #d1fae5',
+                  }}>
+                    {/* Summary row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <SumCell label="Invoice total"  value={invoiceStats.total}     fg="#0f172a" />
+                      <SumCell label="Already paid"   value={invoiceStats.paid}      fg="#059669" />
+                      <SumCell label="Remaining"      value={invoiceStats.remaining} fg={invoiceStats.remaining > 0 ? '#c2410c' : '#94a3b8'} bold />
+                    </div>
+
+                    {/* Payment log */}
+                    {invoiceStats.payments.length > 0 && (
+                      <div style={{ borderTop: '1px solid #ecfdf5', paddingTop: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#065f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                          Past payments · {invoiceStats.payments.length}
+                        </div>
+                        <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {invoiceStats.payments.map((p: any, i: number) => (
+                            <div key={p.id || i} style={{
+                              display: 'grid', gridTemplateColumns: '90px 60px 1fr auto', gap: 8, alignItems: 'center',
+                              fontSize: 11, padding: '4px 6px', backgroundColor: '#f0fdf4', borderRadius: 6,
+                            }}>
+                              <span style={{ color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{p.date || '—'}</span>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 3,
+                                padding: '2px 6px', borderRadius: 99,
+                                backgroundColor: p.mode === 'Bank' ? '#dbeafe' : p.mode === 'Cheque' ? '#fef3c7' : '#dcfce7',
+                                color:           p.mode === 'Bank' ? '#1d4ed8' : p.mode === 'Cheque' ? '#92400e' : '#166534',
+                                fontSize: 9, fontWeight: 700,
+                              }}>{p.mode || 'Cash'}</span>
+                              <span style={{ color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {p.bankName || p.note || '—'}
+                              </span>
+                              <span style={{ color: '#059669', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                                AED {(Number(p.amount) || 0).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {invoiceStats.remaining === 0 && (
+                      <div style={{
+                        marginTop: 8, padding: '6px 10px', borderRadius: 6,
+                        backgroundColor: '#f0fdf4', color: '#065f46',
+                        fontSize: 11, fontWeight: 700, textAlign: 'center',
+                      }}>
+                        ✓ This invoice is fully paid. Nothing left to record.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Description */}
           <div>
@@ -614,11 +813,31 @@ export function QuickTransactionModal({
                   autoFocus value={newBranchName}
                   onChange={e => setNewBranchName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddBranch()}
+                  disabled={savingBranch}
                   placeholder="Branch name"
-                  style={{ ...inp, flex: 1 }}
+                  style={{ ...inp, flex: 1, opacity: savingBranch ? 0.6 : 1 }}
                 />
-                <button onClick={handleAddBranch} style={btnPrimary}>Save</button>
-                <button onClick={() => { setShowAddBranch(false); setNewBranchName(''); }} style={btnGhost(false)}>Cancel</button>
+                <button
+                  onClick={handleAddBranch}
+                  disabled={savingBranch || !newBranchName.trim()}
+                  style={{
+                    ...btnPrimary,
+                    backgroundColor: savingBranch ? '#94a3b8' : btnPrimary.backgroundColor,
+                    cursor: savingBranch ? 'not-allowed' : 'pointer',
+                    opacity: !newBranchName.trim() && !savingBranch ? 0.5 : 1,
+                  }}
+                >
+                  {savingBranch
+                    ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+                    : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setShowAddBranch(false); setNewBranchName(''); }}
+                  disabled={savingBranch}
+                  style={btnGhost(savingBranch)}
+                >
+                  Cancel
+                </button>
               </div>
             )}
           </div>
@@ -629,11 +848,29 @@ export function QuickTransactionModal({
               <label style={label}>Total Amount <span style={{ color: '#dc2626' }}>*</span></label>
               <input
                 type="number" min={0} step="any"
+                // Cap the total when a Sales Invoice is picked — you can't
+                // record a payment larger than what's still owed. For every
+                // other transaction the max is unrestricted.
+                max={isSalesInvoice && selectedInvoice ? invoiceStats.remaining : undefined}
                 value={totalAmount}
-                onChange={e => setTotalAmount(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                onChange={e => {
+                  const raw = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
+                  if (raw !== '' && isSalesInvoice && selectedInvoice) {
+                    // Clamp instead of blocking so paste-behavior still lands in a valid state.
+                    setTotalAmount(Math.min(Number(raw), invoiceStats.remaining));
+                  } else {
+                    setTotalAmount(raw);
+                  }
+                }}
                 placeholder="0"
+                disabled={isSalesInvoice && selectedInvoice ? invoiceStats.remaining === 0 : false}
                 style={inp}
               />
+              {isSalesInvoice && selectedInvoice && invoiceStats.remaining > 0 && (
+                <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                  Max <b>AED {invoiceStats.remaining.toLocaleString()}</b> — invoice's remaining balance
+                </div>
+              )}
             </div>
             <div>
               <label style={label}>Amount Received</label>
@@ -794,3 +1031,15 @@ const btnGhost = (disabled: boolean): React.CSSProperties => ({
   cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
   display: 'inline-flex', alignItems: 'center', gap: 5,
 });
+
+// ── Small helper for the Sales Invoice summary row (Total / Paid / Remaining)
+function SumCell({ label, value, fg, bold }: { label: string; value: number; fg: string; bold?: boolean }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '6px 4px', backgroundColor: '#f8fafc', borderRadius: 6 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: bold ? 800 : 700, color: fg, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
+        <span style={{ fontSize: 10, color: '#94a3b8', marginRight: 3 }}>AED</span>{value.toLocaleString()}
+      </div>
+    </div>
+  );
+}

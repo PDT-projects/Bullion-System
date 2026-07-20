@@ -55,11 +55,14 @@ const menuItems = [
       { id: 'dummy-invoices', name: 'Dummy Invoices',    icon: FilePlus, path: '/invoices/dummy' },
     ],
   },
-  { id: 'salary',          name: 'Salaries',  icon: DollarSign, path: '/salary' },
   {
-    id: 'commission', name: 'Commission', icon: Percent,
+    // Merged group — Salaries + all Commission screens under a single
+    // "Payrolls" umbrella. Removes the top-level clutter of two sections
+    // when both are about paying people.
+    id: 'payrolls', name: 'Payrolls', icon: DollarSign,
     children: [
-      { id: 'commission-overview',  name: 'Overview',             icon: FileText,   path: '/commission' },
+      { id: 'salary',               name: 'Salaries',             icon: DollarSign, path: '/salary' },
+      { id: 'commission-overview',  name: 'Commission Overview',  icon: FileText,   path: '/commission' },
       { id: 'commission-slabs',     name: 'Commission Slabs',     icon: Percent,    path: '/commission/slabs' },
       { id: 'commission-calculate', name: 'Calculate Commission', icon: Calculator, path: '/commission/calculate' },
       { id: 'commission-reports',   name: 'Commission Reports',   icon: TrendingUp, path: '/commission/reports' },
@@ -68,7 +71,7 @@ const menuItems = [
 ];
 
 export function Sidebar() {
-  const [expanded, setExpanded] = useState<string[]>(['transactions', 'commission', 'invoices']);
+  const [expanded, setExpanded] = useState<string[]>(['transactions', 'payrolls', 'invoices']);
   const { role, permissions } = useAuth();
   const { hasAnyReportPermission } = useUserPermissions();
 
