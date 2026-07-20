@@ -536,7 +536,7 @@ export function TransactionListView({
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
             <thead>
-              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <tr style={{ backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b' }}>
                 {(['Txn ID','Date','Manual Date','Type','Category','Sub Category','Account','Amount'] as const).map(h => (
                   <ThCell key={h}>{h}</ThCell>
                 ))}
@@ -794,8 +794,15 @@ function ActiveBadge({ label, onRemove }: { label: string; onRemove: () => void 
 const ThCell: React.FC<{
   children: React.ReactNode; tone?: 'inflow' | 'outflow'; align?: 'left' | 'right';
 }> = ({ children, tone, align }) => {
-  const toneBg = tone === 'inflow' ? '#ecfdf5' : tone === 'outflow' ? '#fef2f2' : 'transparent';
-  const toneFg = tone === 'inflow' ? '#065f46' : tone === 'outflow' ? '#991b1b' : '#64748b';
+  // Header row is charcoal (#0f172a) so tint the Cash In / Cash Out columns
+  // with dark-mode friendly backgrounds and give every cell a light
+  // foreground so text stays readable against the dark row.
+  const toneBg = tone === 'inflow' ? 'rgba(16,185,129,0.15)'
+    : tone === 'outflow' ? 'rgba(239,68,68,0.15)'
+    : 'transparent';
+  const toneFg = tone === 'inflow' ? '#6ee7b7'
+    : tone === 'outflow' ? '#fca5a5'
+    : '#cbd5e1';
   return (
     <th style={{
       padding: '12px 12px',
