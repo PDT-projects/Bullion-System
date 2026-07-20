@@ -14,7 +14,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Plus, Eye, Edit, Trash2, X, Filter as FilterIcon, Check,
+  Plus, Trash2, X, Filter as FilterIcon, Check,
   ChevronDown, Wallet, Landmark, TrendingUp, TrendingDown, Loader2,
   PlusCircle, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Search, Clock, RotateCcw,
 } from 'lucide-react';
@@ -614,8 +614,6 @@ export function TransactionListView({
                       </TdCell>
                       <TdCell align="right">
                         <div style={{ display: 'inline-flex', gap: 4 }}>
-                          <IconAction title="View"   onClick={() => setViewTransaction(t)}     color="#4f46e5"><Eye size={12} /></IconAction>
-                          <IconAction title="Edit"   onClick={() => handleEditTransaction(t.id)} color="#0f172a"><Edit size={12} /></IconAction>
                           <IconAction title="Delete" onClick={() => setPendingDelete(t)} color="#dc2626"><Trash2 size={12} /></IconAction>
                         </div>
                       </TdCell>
