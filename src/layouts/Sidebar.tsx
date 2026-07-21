@@ -56,9 +56,9 @@ const menuItems = [
     ],
   },
   {
-    // Merged group — Salaries + all Commission screens under a single
-    // "Payrolls" umbrella. Removes the top-level clutter of two sections
-    // when both are about paying people.
+    // Payroll umbrella — Salaries + all Commission screens grouped under
+    // a single dropdown so the sidebar stays tidy but you can still
+    // navigate straight to any sub-screen.
     id: 'payrolls', name: 'Payrolls', icon: DollarSign,
     children: [
       { id: 'salary',               name: 'Salaries',             icon: DollarSign, path: '/salary' },
@@ -71,7 +71,8 @@ const menuItems = [
 ];
 
 export function Sidebar() {
-  const [expanded, setExpanded] = useState<string[]>(['transactions', 'payrolls', 'invoices']);
+  // Both dropdowns start CLOSED — users can expand explicitly.
+  const [expanded, setExpanded] = useState<string[]>([]);
   const { role, permissions } = useAuth();
   const { hasAnyReportPermission } = useUserPermissions();
 

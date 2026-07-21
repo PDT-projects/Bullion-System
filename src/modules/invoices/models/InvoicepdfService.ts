@@ -1,116 +1,71 @@
-// Invoice Module - PDF Generation Service
-// Theme: Yellow · Black · Gold (Bullion Electronics brand palette)
+// Invoice Module — PDF Generation Service (v5 — Proforma layout)
 //
-// CHANGES v4 (professional image rendering):
-//   1. THUMB_W increased from 28 mm → 36 mm for a larger, clearer product photo.
-//   2. Product image slot now renders with a drop-shadow + white card frame +
-//      gold accent border using roundedRect for a polished, professional look.
-//   3. Image is drawn with aspect-ratio-preserving "contain" fit: uses
-//      doc.getImageProperties() to detect natural W×H, then letterboxes or
-//      pillarboxes the image so it's always fully visible and never cropped.
-//   4. Product-name column widened from 65 mm → 70 mm to accommodate the larger
-//      image slot; Details column trimmed from 47 mm → 42 mm to compensate.
-//   5. Row minimum height updated to THUMB_W + 2×1.8 mm slot-padding so the
-//      full image card is always visible.
+// Rewritten to match the reference "GoldXtra"-style proforma invoice layout:
+//   • Yellow strip + black header bar with brand name
+//   • PROFORMA INVOICE title, right-aligned date + PI #
+//   • Company info block (seller)
+//   • Bill To / Ship To dual columns with gold header bars
+//   • Product table (IMAGE | DESCRIPTION | QTY | UNIT PRICE US $ | TOTAL US $)
+//   • Totals block with gold-highlighted TOTAL row
+//   • Amount in words
+//   • Terms + stamp + beneficiary payment instructions
+//   • Thank You footer
 //
-// CHANGES v3 (stamp + image pipeline):
-//   1. BullionStamp.jpeg is loaded from /BullionStamp.jpeg (public folder / assets).
-//      When invoice.digitalStamp === true the stamp is drawn as a semi-transparent
-//      watermark-style overlay centred on the last page, just above the signature line.
-//   2. Product thumbnail images were already wired in v2; this release keeps that
-//      logic intact and adds the stamp on top of everything else so it is never
-//      obscured by table cells or other content.
-//   3. loadImage() continues to use XHR for Firebase Storage URLs; the stamp asset
-//      is a local relative path so it goes through the same helper (XHR works for
-//      same-origin assets too).
-//
-// FIX v2 (image pipeline — retained):
-//   1. tdCell accepts an optional `textOffsetX` parameter so the product-name
-//      text can be nudged right to make room for a thumbnail image.
-//   2. Drawing order inside the product-row loop: tdCells first → image on top.
-//   3. Row-height calculation accounts for THUMB_W so images fit fully.
-//   4. loadImage() uses XHR to avoid CORS pre-flight failures with Firebase Storage.
+// Same exports as prior versions (generateInvoicePdf / downloadInvoicePdf)
+// so all upstream callers (InventoryDashboardView eye icon, InvoiceListView
+// download button, etc.) keep working unchanged.
 
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import { Invoice } from './types';
-import {
-  InvoiceCurrency,
-  fetchCurrencyRates,
-  convertCurrency,
-} from './invoiceService';
 
-const logoAsset  = '/bullionlogo.jpeg';
-const stampAsset = '/BullionStamp.jpeg';
+// ── Palette ─────────────────────────────────────────────────────────────────
+const GOLD      = { r: 232, g: 185, b: 57  };   // #E8B939 — yellow strips
+const GOLD_DARK = { r: 212, g: 160, b: 23  };   // #D4A017 — brand text
+const BLACK     = { r: 20,  g: 20,  b: 20  };   // near-black for header
+const LINE      = { r: 210, g: 210, b: 210 };   // grey borders
+const LIGHT_BG  = { r: 250, g: 250, b: 250 };   // zebra row tint
+const TEXT_D    = { r: 30,  g: 30,  b: 30  };   // primary text
+const TEXT_M    = { r: 90,  g: 90,  b: 90  };   // muted text
+const RED       = { r: 190, g: 30,  b: 30  };
 
-const PW = 210,
-  PH = 297,
-  ML = 14,
-  MR = 14,
-  CW = PW - ML - MR;
+// ── Page geometry (A4 portrait) ─────────────────────────────────────────────
+const PAGE_W = 210;
+const PAGE_H = 297;
+const ML     = 8;                  // left margin
+const MR     = 8;                  // right margin
+const CONTENT_W = PAGE_W - ML - MR;
 
-type RGB = [number, number, number];
-
-// ── Brand palette ──────────────────────────────────────────────────────────────
-const BLACK: RGB      = [17, 17, 17];
-const GOLD: RGB       = [180, 140, 60];
-const GOLD_RICH: RGB  = [212, 160, 23];
-const YELLOW: RGB     = [255, 193, 7];
-const YELLOW_BG: RGB  = [255, 248, 220];
-const WHITE: RGB      = [255, 255, 255];
-const GRAY: RGB       = [110, 110, 110];
-const LIGHT_GRAY: RGB = [200, 200, 200];
-
-const sf = (d: jsPDF, c: RGB) => d.setFillColor(c[0], c[1], c[2]);
-const sd = (d: jsPDF, c: RGB) => d.setDrawColor(c[0], c[1], c[2]);
-const st = (d: jsPDF, c: RGB) => d.setTextColor(c[0], c[1], c[2]);
-
-const currencyMeta: Record<
-  InvoiceCurrency,
-  { locale: string; fractionDigits: number; code: string }
-> = {
-  PKR: { locale: 'en-PK', fractionDigits: 0, code: 'PKR' },
-  CAD: { locale: 'en-CA', fractionDigits: 2, code: 'CAD' },
-  SAR: { locale: 'en-US', fractionDigits: 2, code: 'SAR' },
-  AED: { locale: 'en-AE', fractionDigits: 2, code: 'AED' },
+// ── Seller (hardcoded — same values as prior PDF versions) ─────────────────
+const SELLER = {
+  brand:    'Bullion Electronics',
+  name:     'BULLION Specialized Electronic Devices Trading',
+  contact:  'Ref: Sales Team',
+  email:    'sales@bullionelectronics.ae',
+  address1: 'C108 Building 936 M-04, Plot Mohammed Bin Zayed City',
+  address2: 'ME9, Abu Dhabi',
+  country:  'UAE',
+  phone:    '+971 56 985 2213',
 };
 
-function formatCurrency(
-  amount: number,
-  currency: InvoiceCurrency = 'AED'
-): string {
-  const meta = currencyMeta[currency] ?? currencyMeta.AED;
-  try {
-    return new Intl.NumberFormat(meta.locale, {
-      style: 'currency',
-      currency: meta.code,
-      minimumFractionDigits: meta.fractionDigits,
-      maximumFractionDigits: meta.fractionDigits,
-    }).format(amount);
-  } catch {
-    return `${meta.code} ${amount.toFixed(meta.fractionDigits)}`;
-  }
-}
+// ── Beneficiary bank info (hardcoded — from existing PDF) ──────────────────
+const BENEFICIARY = {
+  companyName:   'BULLION Specialized Electronic Devices Trading L.L.C - O.P.C',
+  bankName:      'Emirates NBD',
+  swiftCode:     'EBILAEAD',
+  accountNumber: '1015895052001',
+  routingCode:   '302620122',
+  iban:          'AE220260000101589505200001',
+  branch:        'Dalma Mall, Abu Dhabi, UAE',
+};
 
-const fmtDate = (d: string) =>
-  d
-    ? new Date(d).toLocaleDateString('en-PK', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : '';
+// ── Currency ────────────────────────────────────────────────────────────────
+// Reference invoice used US$; we default to AED to match the rest of the app.
+// Change CURRENCY_CODE if you want USD/etc.
+const CURRENCY_CODE   = 'AED';
+const CURRENCY_SYMBOL = 'AED';
 
-interface ImageData {
-  dataUrl: string;
-  format: 'PNG' | 'JPEG';
-}
-
-// ── Image loading — XHR-based to bypass Firebase Storage CORS issues ──────────
-// Using plain fetch() against a Firebase Storage URL fails in browsers when the
-// bucket hasn't configured an `Access-Control-Allow-Origin` header. XHR with
-// responseType='blob' works because Firebase's CDN URLs include the required
-// CORS headers for XHR reads from web app origins. Same-origin local paths
-// (e.g. /BullionStamp.jpeg) work fine with XHR too.
+// ── Image loader (kept identical to prior versions — proven with Firebase) ─
+interface ImageData { dataUrl: string; format: 'PNG' | 'JPEG'; }
 async function loadImage(src: string): Promise<ImageData | null> {
   if (!src) return null;
   return new Promise((resolve) => {
@@ -118,693 +73,478 @@ async function loadImage(src: string): Promise<ImageData | null> {
     xhr.open('GET', src, true);
     xhr.responseType = 'blob';
     xhr.timeout = 8000;
-
     xhr.onload = () => {
       if (xhr.status !== 200) { resolve(null); return; }
       const blob: Blob = xhr.response;
       if (!blob || blob.size === 0) { resolve(null); return; }
-
-      // Validate magic bytes via ArrayBuffer before passing to jsPDF
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const buffer = reader.result as ArrayBuffer;
-          const b = new Uint8Array(buffer);
+          const b = new Uint8Array(reader.result as ArrayBuffer);
           let format: 'PNG' | 'JPEG';
-          if (b[0] === 0x89 && b[1] === 0x50) {
-            format = 'PNG';
-          } else if (b[0] === 0xff && b[1] === 0xd8) {
-            format = 'JPEG';
-          } else {
-            resolve(null); return;
-          }
-          // Convert blob to data-URL for jsPDF
+          if (b[0] === 0x89 && b[1] === 0x50) format = 'PNG';
+          else if (b[0] === 0xff && b[1] === 0xd8) format = 'JPEG';
+          else { resolve(null); return; }
           const r2 = new FileReader();
-          r2.onload = () => resolve(r2.result ? { dataUrl: r2.result as string, format } : null);
+          r2.onload  = () => resolve(r2.result ? { dataUrl: r2.result as string, format } : null);
           r2.onerror = () => resolve(null);
           r2.readAsDataURL(blob);
-        } catch {
-          resolve(null);
-        }
+        } catch { resolve(null); }
       };
       reader.onerror = () => resolve(null);
       reader.readAsArrayBuffer(blob);
     };
-
     xhr.onerror   = () => resolve(null);
     xhr.ontimeout = () => resolve(null);
     xhr.send();
   });
 }
 
-// ── Table column definitions ───────────────────────────────────────────────────
-// pn column is wider (70 mm) to comfortably hold both the 36 mm thumbnail and
-// the product name text side-by-side. pd is trimmed to compensate.
-const C = {
-  sr: { x: ML,        w: 10 },
-  pn: { x: ML + 10,   w: 70 },
-  pd: { x: ML + 80,   w: 42 },
-  bn: { x: ML + 122,  w: 35 },
-  am: { x: ML + 157,  w: 25 },
-} as const;
+// ── Formatters ──────────────────────────────────────────────────────────────
+const fmt = (n: number) =>
+  (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const ROW_H   = 8;
-const CELL_FS = 8;
-// Line-height and padding shared by tdCell AND the external row-height calc.
-// Must be identical in both places — a mismatch was the original cause of
-// text overflowing / disappearing outside the drawn cell borders.
-const CELL_LH  = CELL_FS * 0.52;   // ~4.16 mm per line
-const CELL_PAD = 2.5;               // top + bottom padding inside each cell (mm)
-
-// Thumbnail size (mm). 36 mm gives a clear, professional product image that is
-// large enough to see detail while fitting neatly inside the product-name cell.
-const THUMB_W = 36;
-
-// ── Helper: resolve a product field by trying multiple possible key names ──────
-function pField(p: any, ...keys: string[]): string {
-  for (const k of keys) {
-    const v = p?.[k];
-    if (v !== undefined && v !== null && v !== '') return String(v);
-  }
-  return '';
+/** Convert integer to English words. Used for the "In Words" line. */
+function numberToWords(n: number): string {
+  n = Math.floor(Number(n) || 0);
+  if (n === 0) return 'Zero';
+  const a = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const b = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const inner = (num: number): string => {
+    if (num < 20) return a[num];
+    if (num < 100) return b[Math.floor(num / 10)] + (num % 10 ? ' ' + a[num % 10] : '');
+    if (num < 1000) return a[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + inner(num % 100) : '');
+    return '';
+  };
+  const parts: string[] = [];
+  const crore  = Math.floor(n / 10000000); n %= 10000000;
+  const lakh   = Math.floor(n / 100000);   n %= 100000;
+  const thou   = Math.floor(n / 1000);     n %= 1000;
+  if (crore) parts.push(inner(crore) + ' Crore');
+  if (lakh)  parts.push(inner(lakh)  + ' Lakh');
+  if (thou)  parts.push(inner(thou)  + ' Thousand');
+  if (n)     parts.push(inner(n));
+  return parts.join(' ');
 }
 
-function pNumber(p: any, ...keys: string[]): number {
-  for (const k of keys) {
-    const v = p?.[k];
-    if (v !== undefined && v !== null && !isNaN(Number(v))) return Number(v);
-  }
-  return 0;
+function formatDateDDMMMYYYY(iso: string): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const day = d.getDate();
+    const suf = day % 10 === 1 && day !== 11 ? 'st'
+             : day % 10 === 2 && day !== 12 ? 'nd'
+             : day % 10 === 3 && day !== 13 ? 'rd' : 'th';
+    const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    return `${day}${suf} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  } catch { return iso; }
 }
 
-function pArray(p: any, ...keys: string[]): string[] {
-  for (const k of keys) {
-    const v = p?.[k];
-    if (Array.isArray(v) && v.length > 0) return v.map(String);
-    if (typeof v === 'string' && v.trim()) return [v];
-  }
-  return [];
-}
+// ── Drawing primitives ──────────────────────────────────────────────────────
+function fill(doc: jsPDF, c: {r:number;g:number;b:number}) { doc.setFillColor(c.r,c.g,c.b); }
+function stroke(doc: jsPDF, c: {r:number;g:number;b:number}) { doc.setDrawColor(c.r,c.g,c.b); }
+function text(doc: jsPDF, c: {r:number;g:number;b:number}) { doc.setTextColor(c.r,c.g,c.b); }
 
-// ── Table header cell (minimal: text + bottom rule, no heavy fill) ─────────────
-function thCell(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  w: number,
-  label: string,
-  align: 'left' | 'center' | 'right' = 'left'
-) {
-  // Bottom rule spanning the column (drawn per-cell so the full header underlines)
-  sd(doc, BLACK);
-  doc.setLineWidth(0.4);
-  doc.line(x, y + ROW_H, x + w, y + ROW_H);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  st(doc, BLACK);
-
-  const tx =
-    align === 'center' ? x + w / 2 :
-    align === 'right'  ? x + w - 2 :
-                         x + 2.5;
-  doc.text(label, tx, y + ROW_H / 2 + 1.5, { align });
-}
-
-// ── Table data cell ────────────────────────────────────────────────────────────
-// FIX v2: added `textOffsetX` option so callers can shift the text start-x
-// rightward (e.g. to clear a thumbnail image) without duplicating drawing logic.
-// The background rect and border are always drawn at (x, y, w, h); only the
-// text origin is shifted.
-function tdCell(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  w: number,
-  minH: number,
-  lines: string[],
-  opts: {
-    bold?:        boolean;
-    align?:       'left' | 'center' | 'right';
-    fs?:          number;
-    alt?:         boolean;
-    textOffsetX?: number;   // extra mm to add to the left-text start-x
-  } = {}
-): number {
-  const { bold = false, align = 'left', fs = CELL_FS, alt = false, textOffsetX = 0 } = opts;
-
-  const LH  = fs * 0.52;
-  const PAD = CELL_PAD;
-
-  const textBlockH = lines.length * LH + Math.max(0, lines.length - 1) * 0.5;
-  const h = Math.max(minH, textBlockH + PAD * 2);
-
-  // Subtle alternating row background (very light, optional)
-  if (alt) {
-    sf(doc, [250, 249, 245] as RGB);
-    doc.setLineWidth(0);
+/** Draws a rectangle with an optional border and fill in one call. */
+function box(doc: jsPDF, x: number, y: number, w: number, h: number, opts: {
+  fill?: {r:number;g:number;b:number};
+  border?: {r:number;g:number;b:number};
+  borderWidth?: number;
+}) {
+  if (opts.fill) {
+    fill(doc, opts.fill);
     doc.rect(x, y, w, h, 'F');
   }
-
-  // Thin bottom separator only (no full border box)
-  sd(doc, LIGHT_GRAY);
-  doc.setLineWidth(0.12);
-  doc.line(x, y + h, x + w, y + h);
-
-  // Text
-  doc.setFont('helvetica', bold ? 'bold' : 'normal');
-  doc.setFontSize(fs);
-  st(doc, BLACK);
-
-  const firstLineY = y + (h - textBlockH) / 2 + LH * 0.75;
-
-  lines.forEach((ln, i) => {
-    const ty = firstLineY + i * (LH + 0.5);
-    if (align === 'center') {
-      doc.text(ln, x + w / 2, ty, { align: 'center' });
-    } else if (align === 'right') {
-      doc.text(ln, x + w - PAD, ty, { align: 'right' });
-    } else {
-      // Apply textOffsetX only for left-aligned text
-      doc.text(ln, x + PAD + textOffsetX, ty);
-    }
-  });
-
-  return h;
-}
-
-// ── Page-break guard ───────────────────────────────────────────────────────────
-function pb(doc: jsPDF, y: number, need: number): number {
-  if (y + need > PH - 18) {
-    doc.addPage();
-    return 14;
+  if (opts.border) {
+    stroke(doc, opts.border);
+    doc.setLineWidth(opts.borderWidth || 0.2);
+    doc.rect(x, y, w, h);
   }
-  return y;
 }
 
-function goldRule(doc: jsPDF, x: number, y: number, w: number) {
-  sd(doc, GOLD);
-  doc.setLineWidth(0.5);
-  doc.line(x, y, x + w, y);
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Page sections
+// ═══════════════════════════════════════════════════════════════════════════
 
-const TERMS = [
-  'Bullion Electronics guarantees that this device is a 100% genuine branded product with an official warranty.',
-  'We are not responsible for the performance, accuracy, and results of any device as per the claims of the manufacturer.',
-  'Customer hereby acknowledges that all accessories and parts of the device are complete and the device is in working condition.',
-  'The company is not responsible for field testing of the machine.',
-  'Customers can watch/visit our YouTube Channel for machine training and air testing before purchasing the machine.',
-  'Machines work well on old/buried objects.',
-  'Company is exclusively responsible for providing after-sales services to customers who have purchased machines from us.',
-  "For warranty claims, the client must present the original purchaser's Identity and a copy of this invoice.",
-  'Warranty claims take approximately 90 working days to process.',
-  'The Company shall not be held responsible for any illegal activities undertaken by clients.',
-  'Clients are strictly prohibited from excavating on legally restricted properties; the Company disclaims any responsibility for such actions.',
-];
+/** Top yellow strip + black header bar with brand name. */
+function renderHeader(doc: jsPDF): number {
+  // Thin yellow strip at very top
+  box(doc, 0, 0, PAGE_W, 4, { fill: GOLD });
 
-// ── Main PDF builder ───────────────────────────────────────────────────────────
-async function buildPdf(invoice: Invoice): Promise<Blob> {
-  // Load logo and (conditionally) stamp in parallel to avoid sequential round-trips
-  const [logoImg, stampImg] = await Promise.all([
-    loadImage(logoAsset),
-    invoice.digitalStamp ? loadImage(stampAsset) : Promise.resolve(null),
-  ]);
+  // Black bar
+  box(doc, 0, 4, PAGE_W, 14, { fill: BLACK });
 
-  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
-  // ── HEADER (minimal & clean) ─────────────────────────────────────────────────
-  // Thin gold accent line across the very top, then a light header with a small
-  // logo + brand on the left and a large muted "INVOICE" wordmark on the right.
-  const HEADER_H = 40;
-
-  // Top gold accent line
-  sf(doc, YELLOW);
-  doc.setLineWidth(0);
-  doc.rect(0, 0, PW, 2.2, 'F');
-
-  // Logo (small, on a black rounded tile to keep brand visible on white)
-  const LOGO_D  = 18;
-  const LOGO_Y  = 9;
-
-  if (logoImg) {
-    doc.addImage(logoImg.dataUrl, logoImg.format, ML, LOGO_Y, LOGO_D, LOGO_D);
-  }
-
-  const TEXT_X = logoImg ? ML + LOGO_D + 5 : ML;
-
+  // Brand name in gold
+  text(doc, GOLD_DARK);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
-  st(doc, BLACK);
-  doc.text('Bullion Specialized Electronics', TEXT_X, LOGO_Y + 7);
+  doc.text(SELLER.brand, PAGE_W / 2, 13.5, { align: 'center' });
+
+  // Thin gold underline separator below the bar
+  box(doc, 0, 18, PAGE_W, 0.6, { fill: GOLD });
+
+  return 22;  // y-cursor after the header
+}
+
+/** "PROFORMA INVOICE" title + right-aligned date and PI #. */
+function renderTitleRow(doc: jsPDF, invoice: Invoice, y: number): number {
+  text(doc, TEXT_D);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text('INVOICE', PAGE_W / 2, y + 6, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  st(doc, GRAY);
-  const branchName = (invoice as any).branch || 'Islamabad';
-  doc.text(`  ·  Abu Dhabi  `, TEXT_X, LOGO_Y + 12.5);
+  doc.setFontSize(9);
+  doc.text(`Date: ${formatDateDDMMMYYYY(invoice.date)}`, PAGE_W - MR, y + 3, { align: 'right' });
+  doc.text(`PI # ${invoice.invoiceNumber}`,                PAGE_W - MR, y + 8, { align: 'right' });
 
-  // Large muted INVOICE wordmark + number on the right
+  return y + 15;
+}
+
+/** Company info block on the left side, below the title. */
+function renderSellerInfo(doc: jsPDF, y: number): number {
+  text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  st(doc, LIGHT_GRAY);
-  doc.text('INVOICE', PW - MR, LOGO_Y + 6, { align: 'right' });
+  doc.setFontSize(9.5);
+  doc.text(SELLER.name, ML, y);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  st(doc, GRAY);
-  doc.text(invoice.invoiceNumber || '', PW - MR, LOGO_Y + 12, { align: 'right' });
+  doc.setFontSize(9);
+  let ly = y + 4.5;
+  const lines = [SELLER.contact, SELLER.email, SELLER.address1, SELLER.address2, SELLER.country, SELLER.phone];
+  for (const l of lines) { doc.text(l, ML, ly); ly += 4; }
 
-  let y = HEADER_H + 6;
+  // Subtle divider under the seller block
+  stroke(doc, LINE);
+  doc.setLineWidth(0.2);
+  doc.line(ML, ly + 1, PAGE_W - MR, ly + 1);
 
-  // Thin gold separator under the header
-  goldRule(doc, ML, y - 4, CW);
+  return ly + 4;
+}
 
-  // ── BILL TO + META ───────────────────────────────────────────────────────────
-  const COL_MID = ML + CW / 2 + 4;
+/** BILL TO / SHIP TO dual columns with gold header bars. */
+function renderBillShipTo(doc: jsPDF, invoice: Invoice, y: number): number {
+  const colW = (CONTENT_W - 2) / 2;           // 2mm gutter between columns
+  const gutter = 2;
+  const bh = 6;                                // header bar height
 
+  // Header bars (light gold background, dark text)
+  box(doc, ML,               y, colW, bh, { fill: { r: 250, g: 235, b: 200 } });
+  box(doc, ML + colW + gutter, y, colW, bh, { fill: { r: 250, g: 235, b: 200 } });
+
+  text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6.5);
-  st(doc, LIGHT_GRAY);
-  doc.text('BILLED TO', ML, y);
-  doc.text('INVOICE DETAILS', COL_MID, y);
-  y += 5.5;
+  doc.setFontSize(9);
+  doc.text('BILL TO', ML + 2, y + 4);
+  doc.text('SHIP TO', ML + colW + gutter + 2, y + 4);
 
-  let lY = y;
+  // Customer info under both headers
+  const detailY = y + bh + 4;
+  doc.setFontSize(9);
+  const cName  = invoice.customerName  || '—';
+  const phone1 = invoice.customerPhone || '';
+  const cCity  = invoice.customerCity  || '';
+  const cProv  = invoice.customerProvince || invoice.customerCountry || '';
+  const cAddr  = invoice.customerAddress || '';
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  st(doc, BLACK);
-  doc.text(invoice.customerName || '', ML, lY);
-  lY += 5.5;
+  const infoLines = [
+    { text: cName,                     bold: true },
+    { text: phone1 ? `Phone: ${phone1}` : '',       bold: false },
+    { text: cCity && cProv ? `${cCity}, ${cProv}` : cCity || cProv, bold: false },
+    { text: cAddr,                     bold: false },
+  ].filter(l => l.text);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  st(doc, GRAY);
-
-  const locationStr = [invoice.customerCity, invoice.customerProvince]
-    .filter(Boolean).join(', ');
-  if (locationStr) { doc.text(locationStr, ML, lY); lY += 4.5; }
-
-  if (invoice.customerAddress?.trim()) {
-    doc.text(invoice.customerAddress.trim(), ML, lY);
-    lY += 4.5;
+  let ly = detailY;
+  for (const l of infoLines) {
+    doc.setFont('helvetica', l.bold ? 'bold' : 'normal');
+    // BILL TO column
+    const wrapped = doc.splitTextToSize(l.text, colW - 4);
+    doc.text(wrapped, ML + 2, ly);
+    // SHIP TO column (same info by default — matches reference)
+    doc.text(wrapped, ML + colW + gutter + 2, ly);
+    ly += wrapped.length * 4;
   }
 
-  const infoRows: [string, string][] = [];
-  if (invoice.customerCNIC?.trim()) {
-    infoRows.push(['Identity:', invoice.customerCNIC.trim()]);
+  // Divider
+  stroke(doc, LINE);
+  doc.setLineWidth(0.2);
+  doc.line(ML, ly + 2, PAGE_W - MR, ly + 2);
+
+  return ly + 5;
+}
+
+// ── Product table ──────────────────────────────────────────────────────────
+const COL = {
+  image: { x: ML,          w: 30 },
+  desc:  { x: ML + 30,     w: 90 },
+  qty:   { x: ML + 120,    w: 20 },
+  unit:  { x: ML + 140,    w: 27 },
+  total: { x: ML + 167,    w: 27 },
+} as const;
+
+/** Yellow header row for the product table. */
+function renderProductsHeader(doc: jsPDF, y: number): number {
+  const h = 9;
+  box(doc, ML, y, CONTENT_W, h, { fill: GOLD });
+
+  text(doc, TEXT_D);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('IMAGE',           COL.image.x + COL.image.w / 2, y + 6, { align: 'center' });
+  doc.text('DESCRIPTION',     COL.desc.x + 4,                y + 6);
+  doc.text('QTY',             COL.qty.x + COL.qty.w / 2,     y + 6, { align: 'center' });
+  doc.text(`UNIT PRICE ${CURRENCY_SYMBOL}`, COL.unit.x + COL.unit.w / 2,  y + 6, { align: 'center' });
+  doc.text(`TOTAL ${CURRENCY_SYMBOL}`,      COL.total.x + COL.total.w / 2, y + 6, { align: 'center' });
+
+  return y + h;
+}
+
+/** One product row. Returns the y-cursor after the row. */
+function renderProductRow(
+  doc: jsPDF, product: any, y: number,
+  imageData: ImageData | null, rowIdx: number,
+): number {
+  const ROW_H = 24;
+
+  // Zebra tinting
+  if (rowIdx % 2 === 1) {
+    box(doc, ML, y, CONTENT_W, ROW_H, { fill: LIGHT_BG });
   }
-  infoRows.push([
-    'Mobile:',
-    invoice.customerPhone2
-      ? `${invoice.customerPhone} / ${invoice.customerPhone2}`
-      : invoice.customerPhone || '',
-  ]);
 
-  infoRows.forEach(([label, value]) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    st(doc, BLACK);
-    doc.text(label, ML, lY);
-    doc.setFont('helvetica', 'normal');
-    st(doc, GRAY);
-    doc.text(value, ML + 16, lY);
-    lY += 4.5;
-  });
+  // Column borders
+  stroke(doc, LINE);
+  doc.setLineWidth(0.15);
+  doc.line(ML, y, ML, y + ROW_H);                                        // left
+  doc.line(COL.desc.x,  y, COL.desc.x,  y + ROW_H);
+  doc.line(COL.qty.x,   y, COL.qty.x,   y + ROW_H);
+  doc.line(COL.unit.x,  y, COL.unit.x,  y + ROW_H);
+  doc.line(COL.total.x, y, COL.total.x, y + ROW_H);
+  doc.line(PAGE_W - MR, y, PAGE_W - MR, y + ROW_H);                      // right
+  doc.line(ML, y + ROW_H, PAGE_W - MR, y + ROW_H);                       // bottom
 
-  const metaRows: [string, string][] = [
-    ['Invoice No', invoice.invoiceNumber || ''],
-    ['Date',       fmtDate(invoice.date)],
-    ['Status',     invoice.status || 'Unpaid'],
-    ['Delivery',   invoice.deliveryStatus || ''],
+  // Product image — small card with border
+  const imgPad = 2;
+  const imgSize = ROW_H - imgPad * 2;
+  const imgX = COL.image.x + (COL.image.w - imgSize) / 2;
+  const imgY = y + imgPad;
+  box(doc, imgX, imgY, imgSize, imgSize, { fill: { r: 245, g: 245, b: 245 }, border: LINE, borderWidth: 0.1 });
+  if (imageData) {
+    try {
+      doc.addImage(imageData.dataUrl, imageData.format, imgX + 0.5, imgY + 0.5, imgSize - 1, imgSize - 1);
+    } catch { /* image draw failed — leave the placeholder card */ }
+  }
+
+  // Description
+  text(doc, TEXT_D);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  const brand = (product.brandName || '').toUpperCase();
+  const model = product.modelName || '';
+  const nameLine = `${brand} ${model}`.trim() || (product.productName || 'Item');
+  doc.text(nameLine, COL.desc.x + 4, y + 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  text(doc, TEXT_M);
+  const typeLine = product.type || product.category || 'Product';
+  doc.text(typeLine, COL.desc.x + 4, y + 11);
+  const warrantyLine = product.warranty || product.warrantyPeriod || (product.exchangeWarrantyNote ? '' : '');
+  if (warrantyLine) doc.text(warrantyLine, COL.desc.x + 4, y + 16);
+
+  // Numbers
+  const qty       = Number(product.quantity) || 1;
+  const unitPrice = Number(product.sellPrice || product.unitPrice || product.price) || 0;
+  const total     = qty * unitPrice;
+
+  text(doc, TEXT_D);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.text(String(qty),   COL.qty.x + COL.qty.w / 2,   y + 13, { align: 'center' });
+  doc.text(fmt(unitPrice), COL.unit.x + COL.unit.w - 3, y + 13, { align: 'right' });
+  doc.text(fmt(total),     COL.total.x + COL.total.w - 3, y + 13, { align: 'right' });
+
+  return y + ROW_H;
+}
+
+/** Totals block on the right side. */
+function renderTotals(doc: jsPDF, invoice: Invoice, y: number): number {
+  const rowW = 90;
+  const labelW = 50;
+  const valW = rowW - labelW;
+  const rowH = 6;
+  const rightX = PAGE_W - MR;
+  const leftX  = rightX - rowW;
+
+  const subtotal = (invoice.products || []).reduce((s, p: any) => s + (Number(p.sellPrice || p.unitPrice || p.price) || 0) * (Number(p.quantity) || 1), 0);
+  const discount = Number((invoice as any).deductionCharges) || 0;
+  const afterDisc = Math.max(0, subtotal - discount);
+  const shipping  = Number((invoice as any).cargoAmount) || 0;
+  const totalDue  = afterDisc + shipping;
+
+  const rows: Array<{ label: string; value: string; highlight?: boolean }> = [
+    { label: 'SUBTOTAL',              value: fmt(subtotal) },
+    { label: 'DISCOUNT',              value: fmt(discount) },
+    { label: 'SUBTOTAL LESS DISCOUNT', value: fmt(afterDisc) },
+    { label: shipping > 0 ? 'SHIPPING' : 'Free SHIPPING', value: fmt(shipping) },
   ];
 
-  let rY = y;
-  metaRows.forEach(([label, value]) => {
+  let cursorY = y;
+  stroke(doc, LINE);
+  doc.setLineWidth(0.15);
+  for (const r of rows) {
+    doc.line(leftX, cursorY, rightX, cursorY);
+    text(doc, TEXT_D);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    st(doc, GRAY);
-    doc.text(label, COL_MID, rY);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    // Colour the status value red when unpaid, otherwise black
-    if (label === 'Status' && /unpaid/i.test(value)) {
-      st(doc, [163, 45, 45] as RGB);
-    } else {
-      st(doc, BLACK);
-    }
-    doc.text(value, PW - MR, rY, { align: 'right' });
-    rY += 5.5;
-  });
-
-  y = Math.max(lY, rY) + 5;
-
-  // ── PRODUCTS TABLE ───────────────────────────────────────────────────────────
-  y = pb(doc, y, ROW_H + 10);
-
-  thCell(doc, C.sr.x, y, C.sr.w, '#',             'center');
-  thCell(doc, C.pn.x, y, C.pn.w, 'Product Name');
-  thCell(doc, C.pd.x, y, C.pd.w, 'Details');
-  thCell(doc, C.bn.x, y, C.bn.w, 'Serial / Batch');
-  thCell(doc, C.am.x, y, C.am.w, 'Amount',        'right');
-  y += ROW_H;
-
-  const selectedCurrencies =
-    Array.isArray((invoice as any).selectedCurrencies) &&
-    (invoice as any).selectedCurrencies.length
-      ? ((invoice as any).selectedCurrencies as InvoiceCurrency[])
-      : ['AED'];
-
-  const primaryCurrency = selectedCurrencies[0] || 'AED';
-  const rates = await fetchCurrencyRates();
-
-  const products: any[] = Array.isArray(invoice.products) ? invoice.products : [];
-
-  for (let idx = 0; idx < products.length; idx++) {
-    const p   = products[idx];
-    const alt = idx % 2 === 1;
-
-    // ── Resolve field names defensively ──────────────────────────────────────
-    const productName = pField(p,
-      'productName', 'product_name', 'name', 'title', 'item', 'itemName'
-    );
-    const description = pField(p,
-      'description', 'details', 'desc', 'productDetails', 'product_details',
-      'info', 'notes', 'specifications', 'spec'
-    );
-    const serialRaw = pArray(p,
-      'serialNumbers', 'serial_numbers', 'serials', 'serialNumber',
-      'serial_number', 'serial', 'batch', 'batchNumber', 'batch_number', 'imei'
-    );
-    const serialStr = serialRaw.join(', ');
-
-    const total = pNumber(p,
-      'total', 'totalAmount', 'total_amount', 'amount', 'price',
-      'lineTotal', 'line_total', 'subtotal'
-    );
-
-    // Use AED price directly — no currency conversion for product line totals
-    const convertedTotal = primaryCurrency === 'AED' ? total : convertCurrency(total, 'AED', primaryCurrency, rates);
-
-    // ── Load thumbnail image ──────────────────────────────────────────────────
-    // Tries imageUrls first (official field), then several known aliases, then
-    // falls back to a URL-sniff scan of all keys on the product object.
-    let thumbImg: ImageData | null = null;
-
-    const imgCandidates = pArray(p,
-      'imageUrls', 'imageUrl', 'image_url', 'photo', 'images', 'thumbnails'
-    );
-    const firstImg = imgCandidates.length > 0 ? imgCandidates[0] : null;
-    if (firstImg) {
-      try { thumbImg = await loadImage(firstImg); } catch { thumbImg = null; }
-    }
-
-    // Defensive fallback: scan all keys for any array whose first element looks
-    // like a Firebase Storage URL that we might have missed above.
-    if (!thumbImg) {
-      for (const key of Object.keys(p)) {
-        const val = (p as any)[key];
-        if (
-          Array.isArray(val) && val.length > 0 &&
-          typeof val[0] === 'string' &&
-          (val[0].startsWith('https://firebasestorage') || val[0].startsWith('http'))
-        ) {
-          try { thumbImg = await loadImage(val[0]); } catch { thumbImg = null; }
-          if (thumbImg) break;
-        }
-      }
-    }
-
-    // ── Compute layout dimensions ─────────────────────────────────────────────
-    // When a thumbnail is present:
-    //   • text starts at C.pn.x + CELL_PAD + THUMB_W + 3  (image gap = 3 mm)
-    //   • the available text width shrinks by (THUMB_W + 3)
-    //   • the row must be at least THUMB_W mm tall to show the full image
-    const hasThumb     = thumbImg !== null;
-    const thumbGap     = hasThumb ? THUMB_W + 4 : 0;   // mm gap = image slot + 4 mm margin
-    const pnTextWidth  = C.pn.w - CELL_PAD * 2 - thumbGap;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(CELL_FS);
-    const pnLines = doc.splitTextToSize(productName || '—', pnTextWidth) as string[];
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(CELL_FS);
-    const pdLines = doc.splitTextToSize(description || '—', C.pd.w - CELL_PAD * 2) as string[];
-    const bnLines = doc.splitTextToSize(serialStr   || '—', C.bn.w - CELL_PAD * 2) as string[];
-
-    // Row height: tallest cell wins; if there's a thumbnail the row must be at
-    // least (THUMB_W + 2*1.8 slot padding) tall so the full image slot fits.
-    const calcH = (lines: string[]) =>
-      Math.max(
-        ROW_H,
-        lines.length * CELL_LH + Math.max(0, lines.length - 1) * 0.5 + CELL_PAD * 2
-      );
-    const minThumbH = hasThumb ? THUMB_W + 1.5 * 2 : ROW_H;
-    const rH = Math.max(calcH(pnLines), calcH(pdLines), calcH(bnLines), minThumbH);
-
-    y = pb(doc, y, rH);
-
-    // ── FIX: draw ALL cells first, then paint the thumbnail on top ────────────
-    // Previously addImage was called before tdCell for the product-name column,
-    // so the alternating background rect (drawn inside tdCell) covered the image.
-    // Correct order: cells first (backgrounds, borders, text), image last.
-    tdCell(doc, C.sr.x, y, C.sr.w, rH, [String(idx + 1)], { align: 'center', alt });
-    tdCell(doc, C.pn.x, y, C.pn.w, rH, pnLines, {
-      bold: true,
-      alt,
-      // Shift text right by thumbGap so it doesn't overlap the image area.
-      // When hasThumb is false thumbGap is 0, so behaviour is unchanged.
-      textOffsetX: thumbGap,
-    });
-    tdCell(doc, C.pd.x, y, C.pd.w, rH, pdLines, { alt });
-    tdCell(doc, C.bn.x, y, C.bn.w, rH, bnLines, { alt });
-    tdCell(doc, C.am.x, y, C.am.w, rH, [formatCurrency(convertedTotal, primaryCurrency)], {
-      bold: true, align: 'right', alt,
-    });
-
-    // Draw thumbnail AFTER all tdCell calls so it sits on top of everything.
-    // Uses "cover" fit + clipping: the image is scaled so its shorter dimension
-    // fills the slot completely, then clipped. This zooms into the product and
-    // eliminates the empty black margins that surround it in the source photo.
-    if (thumbImg) {
-      try {
-        const SLOT_PAD = 1.5;
-        const SLOT_W   = THUMB_W - SLOT_PAD * 2;
-        const SLOT_H   = rH - SLOT_PAD * 2;
-        const SLOT_X   = C.pn.x + CELL_PAD;
-        const SLOT_Y   = y + SLOT_PAD;
-
-        // White background
-        sf(doc, WHITE);
-        doc.setLineWidth(0);
-        doc.rect(SLOT_X, SLOT_Y, SLOT_W, SLOT_H, 'F');
-
-        // ── "Cover" scale: enlarge so the shorter side fills the slot ──────────
-        // Then centre and clip so overflow is hidden.
-        // ZOOM factor > 1.0 crops further into the centre of the image.
-        const ZOOM = 1.6;   // 1.6× crops ~37% of each edge — removes black margins
-
-        let drawW = SLOT_W * ZOOM;
-        let drawH = SLOT_H * ZOOM;
-        try {
-          const props = (doc as any).getImageProperties
-            ? (doc as any).getImageProperties(thumbImg.dataUrl)
-            : null;
-          if (props && props.width > 0 && props.height > 0) {
-            const ar = props.width / props.height;
-            const slotAr = SLOT_W / SLOT_H;
-            if (ar >= slotAr) {
-              // Image wider than slot — constrain by height
-              drawH = SLOT_H * ZOOM;
-              drawW = drawH * ar;
-            } else {
-              // Image taller than slot — constrain by width
-              drawW = SLOT_W * ZOOM;
-              drawH = drawW / ar;
-            }
-          }
-        } catch { /* fallback */ }
-
-        // Centre the oversized image so we crop equally on each side
-        const drawX = SLOT_X + (SLOT_W - drawW) / 2;
-        const drawY = SLOT_Y + (SLOT_H - drawH) / 2;
-
-        // Save graphics state, clip to slot rect, draw, restore
-        doc.saveGraphicsState();
-        // jsPDF clip path: add a rect path and clip
-        (doc as any).rect(SLOT_X, SLOT_Y, SLOT_W, SLOT_H, null);
-        (doc.internal as any).write('W n');   // PDF clip operator
-        doc.addImage(thumbImg.dataUrl, thumbImg.format, drawX, drawY, drawW, drawH);
-        doc.restoreGraphicsState();
-      } catch { /* non-blocking */ }
-    }
-
-    y += rH;
+    doc.setFontSize(9);
+    doc.text(r.label, leftX + labelW - 2, cursorY + 4, { align: 'right' });
+    doc.text(r.value, rightX - 2,          cursorY + 4, { align: 'right' });
+    cursorY += rowH;
   }
+  doc.line(leftX, cursorY, rightX, cursorY);
 
-  y += 4;
-
-  // ── TOTAL (clean right-aligned summary) ──────────────────────────────────────
-  y = pb(doc, y, 18);
-
-  const TOT_W = 75;
-  const TOT_X = PW - MR - TOT_W;
-
-  const totalLines = selectedCurrencies.map((currency) =>
-    formatCurrency(
-      currency === 'AED' ? invoice.totalAmount : convertCurrency(invoice.totalAmount, 'AED', currency, rates),
-      currency
-    )
-  );
-
-  // Subtotal row (uses the primary/first currency total)
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  st(doc, GRAY);
-  doc.text('Subtotal', TOT_X, y + 3);
-  st(doc, BLACK);
-  doc.text(totalLines[0] || '', PW - MR, y + 3, { align: 'right' });
-
-  // Black rule above the grand total
-  sd(doc, BLACK);
-  doc.setLineWidth(0.5);
-  doc.line(TOT_X, y + 6.5, PW - MR, y + 6.5);
-
-  // Grand total (bold, gold value). Extra currencies stack beneath.
+  // TOTAL row — gold background
+  box(doc, leftX, cursorY, rowW, rowH + 2, { fill: GOLD });
+  text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  st(doc, BLACK);
-  doc.text('Total', TOT_X, y + 12);
-  st(doc, GOLD_RICH);
-  doc.text(totalLines, PW - MR, y + 12, { align: 'right' });
+  doc.text(`TOTAL  ${CURRENCY_CODE}`, leftX + labelW - 2, cursorY + 5, { align: 'right' });
+  doc.text(`${CURRENCY_SYMBOL}  ${fmt(totalDue)}`, rightX - 2, cursorY + 5, { align: 'right' });
+  cursorY += rowH + 2;
 
-  y += 12 + Math.max(0, totalLines.length - 1) * 5.5 + 4;
-
-  // ── TERMS & CONDITIONS ───────────────────────────────────────────────────────
-  y = pb(doc, y, 18);
-
+  // In Words row (spans full width)
+  const wordsY = cursorY + 3;
+  box(doc, ML, wordsY, CONTENT_W, 8, { border: LINE, borderWidth: 0.15 });
+  text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  st(doc, BLACK);
-  doc.text('Terms & Conditions', ML, y + 3);
-  goldRule(doc, ML, y + 5, CW);
-  y += 9;
-
-  const TX = ML + 5;
+  doc.setFontSize(9);
+  doc.text('In Words', ML + 2, wordsY + 5.2);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.8);
-  st(doc, GRAY);
+  const words = numberToWords(Math.floor(totalDue)) + ` ${CURRENCY_CODE}${totalDue % 1 > 0 ? ' and ' + numberToWords(Math.round((totalDue % 1) * 100)) + ' Fils' : ''}`;
+  doc.text(words, ML + 22, wordsY + 5.2);
 
-  for (const term of TERMS) {
-    const lines  = doc.splitTextToSize(term, CW - 5) as string[];
-    const termH  = lines.length * 3 + 2;
-    y = pb(doc, y, termH + 1.5);
+  return wordsY + 8 + 4;
+}
 
-    sf(doc, GOLD_RICH);
-    doc.ellipse(ML + 1.2, y - 0.4, 0.8, 0.8, 'F');
-    lines.forEach((ln, i) => doc.text(ln, TX, y + i * 3));
-    y += termH;
-  }
+/** Terms & Conditions block on the left + stamp/signature area on the right. */
+function renderTermsAndStamp(doc: jsPDF, invoice: Invoice, y: number, stamp: ImageData | null): number {
+  const blockH = 32;
 
-  y += 4;
-
-  // ── THANK YOU ────────────────────────────────────────────────────────────────
-  y = pb(doc, y, 16);
-
-  goldRule(doc, ML, y, CW);
-  y += 5;
-
+  // Left half — terms
+  text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
-  st(doc, BLACK);
-  doc.text('Thank you for your purchase!', PW / 2, y, { align: 'center' });
+  doc.setFontSize(9.5);
+  doc.text('TERMS & CONDITIONS:', ML, y + 4);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  st(doc, GRAY);
-  doc.text('We value your trust in Bullion Electronics.', PW / 2, y + 5, { align: 'center' });
+  doc.setFontSize(9);
+  const terms = [
+    `Tentative Ship Date: ${formatDateDDMMMYYYY(invoice.date)}`,
+    'Ship Via : DHL',
+    'Payment Terms 100% in Advance',
+    `All Prices listed are in ${CURRENCY_CODE}`,
+  ];
+  let ly = y + 9;
+  for (const t of terms) { doc.text(t, ML, ly); ly += 4.5; }
 
-  y += 9;
-
-  // ── SIGNATURE ────────────────────────────────────────────────────────────────
-  const SIG_W  = 60;
-  const L_SIG_X = ML;
-  const SIG_Y  = PH - 28;
-
-  sd(doc, GOLD);
-  doc.setLineWidth(0.5);
-  doc.line(L_SIG_X, SIG_Y, L_SIG_X + SIG_W, SIG_Y);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  st(doc, BLACK);
-  doc.text('Authorized Signature', L_SIG_X + SIG_W / 2, SIG_Y + 4.5, { align: 'center' });
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  st(doc, GRAY);
-  doc.text('Bullion Electronics', L_SIG_X + SIG_W / 2, SIG_Y + 8.5, { align: 'center' });
-
-  // ── STAMP ────────────────────────────────────────────────────────────────────
-  // Drawn on the last page only, in the bottom-right corner above the footer.
-  // The stamp is rendered at 40×40 mm with jsPDF's globalAlpha trick: we draw
-  // the image twice — first a white rectangle at low opacity to soften it, then
-  // the stamp itself — giving a classic ink-stamp look without needing a PNG with
-  // a transparent background (the source file is a JPEG).
-  if (invoice.digitalStamp && stampImg) {
+  // Right half — stamp area (if enabled)
+  if (stamp && (invoice as any).digitalStamp !== false) {
     try {
-      const STAMP_SIZE = 40; // mm
-      const STAMP_X    = PW - MR - STAMP_SIZE;        // flush with right margin
-      const STAMP_Y    = PH - 13 - STAMP_SIZE - 4;    // just above the footer bar
-
-      // jsPDF doesn't have a native opacity/alpha API for images; the cleanest
-      // cross-version approach is to set the GState via internal APIs.
-      // We use a simple workaround: draw the image directly — JPEG stamps already
-      // have white backgrounds which blend acceptably on white paper.
-      doc.addImage(
-        stampImg.dataUrl,
-        stampImg.format,
-        STAMP_X,
-        STAMP_Y,
-        STAMP_SIZE,
-        STAMP_SIZE,
-      );
-    } catch { /* non-blocking — if stamp fails the rest of the PDF is intact */ }
+      const sX = PAGE_W - MR - 45;
+      const sY = y + 2;
+      doc.addImage(stamp.dataUrl, stamp.format, sX, sY, 42, blockH - 4);
+    } catch { /* stamp failed — no fallback needed */ }
   }
 
-  // ── FOOTER (light) ───────────────────────────────────────────────────────────
-  sf(doc, GOLD);
-  doc.rect(0, PH - 11, PW, 0.5, 'F');
+  return y + blockH;
+}
+
+/** Beneficiary payment instructions block at the bottom. */
+function renderBeneficiary(doc: jsPDF, y: number): number {
+  text(doc, TEXT_D);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('Beneficiary Payment Instructions:', ML, y);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  st(doc, GRAY);
-  doc.text(
-    'Bullion Electronics  ·  C108 Building 936 M-04, Plot- Mohammed Bin Zayed City, ME9, Abu Dhabi, United Arab Emirates  ·  +971 56 985 2213',
-    PW / 2, PH - 6, { align: 'center' }
-  );
+  doc.setFontSize(9);
+  const rows = [
+    `Company Name: ${BENEFICIARY.companyName}`,
+    `Bank Name: ${BENEFICIARY.bankName}`,
+    `SWIFT Code: ${BENEFICIARY.swiftCode}`,
+    `Account Number: ${BENEFICIARY.accountNumber}`,
+    `Routing Code: ${BENEFICIARY.routingCode}`,
+    `IBAN: ${BENEFICIARY.iban}`,
+    `Bank Branch: ${BENEFICIARY.branch}`,
+  ];
+  let ly = y + 5;
+  for (const r of rows) { doc.text(r, ML, ly); ly += 4.2; }
+
+  return ly + 2;
+}
+
+/** Thank You footer bar. */
+function renderThankYou(doc: jsPDF, y: number) {
+  const h = 6;
+  box(doc, 0, y, PAGE_W, h, { fill: BLACK });
+  text(doc, { r: 255, g: 255, b: 255 });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('THANK YOU', PAGE_W / 2, y + 4.3, { align: 'center' });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Main entry point
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  // Load product images + stamp in parallel so drawing isn't blocked serially.
+  const products = invoice.products || [];
+  const [productImages, stampImage] = await Promise.all([
+    Promise.all(products.map((p: any) => p.imageUrl ? loadImage(p.imageUrl) : Promise.resolve(null))),
+    loadImage('/BullionStamp.jpeg'),
+  ]);
+
+  // ── First page ──────────────────────────────────────────────────────────
+  let y = renderHeader(doc);
+  y = renderTitleRow(doc, invoice, y);
+  y = renderSellerInfo(doc, y);
+  y = renderBillShipTo(doc, invoice, y);
+  y = renderProductsHeader(doc, y);
+
+  for (let i = 0; i < products.length; i++) {
+    // Rough end-of-content check — reserve ~90mm for totals + terms + beneficiary + thank-you
+    if (y + 26 > PAGE_H - 90) {
+      // New page — repeat just the yellow strip + black bar + products header
+      renderThankYou(doc, PAGE_H - 7);
+      doc.addPage();
+      y = renderHeader(doc);
+      y = renderProductsHeader(doc, y + 3);
+    }
+    y = renderProductRow(doc, products[i], y, productImages[i], i);
+  }
+
+  // ── Trailing sections on the last page ──────────────────────────────────
+  y += 4;
+  y = renderTotals(doc, invoice, y);
+  y = renderTermsAndStamp(doc, invoice, y, stampImage);
+  y += 2;
+  renderBeneficiary(doc, y);
+  renderThankYou(doc, PAGE_H - 7);
 
   return doc.output('blob');
 }
- 
-// ── Public API ────────────────────────────────────────────────────────────────
-export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
-  return buildPdf(invoice);
-}
 
 export async function downloadInvoicePdf(invoice: Invoice): Promise<void> {
-  const blob = await buildPdf(invoice);
+  const blob = await generateInvoicePdf(invoice);
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
   a.download = `${invoice.invoiceNumber || 'invoice'}.pdf`;
-  a.style.display = 'none';
   document.body.appendChild(a);
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 5000);
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
