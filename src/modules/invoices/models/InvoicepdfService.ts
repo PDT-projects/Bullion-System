@@ -187,7 +187,7 @@ function renderHeader(doc: jsPDF): number {
   return 22;  // y-cursor after the header
 }
 
-/** "PROFORMA INVOICE" title + right-aligned date and PI #. */
+/** "INVOICE" title + right-aligned date and PI #. */
 function renderTitleRow(doc: jsPDF, invoice: Invoice, y: number): number {
   text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
@@ -447,8 +447,10 @@ function renderTermsAndStamp(doc: jsPDF, invoice: Invoice, y: number, stamp: Ima
   let ly = y + 9;
   for (const t of terms) { doc.text(t, ML, ly); ly += 4.5; }
 
-  // Right half — stamp area (if enabled)
-  if (stamp && (invoice as any).digitalStamp !== false) {
+  // Right half — stamp area (only when the invoice was flagged with
+  // digitalStamp=true at creation time). Strict opt-in — undefined or false
+  // both skip drawing.
+  if (stamp && (invoice as any).digitalStamp === true) {
     try {
       const sX = PAGE_W - MR - 45;
       const sY = y + 2;
@@ -501,10 +503,13 @@ export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
   // Load product images + stamp in parallel so drawing isn't blocked serially.
+  // Skip the stamp fetch entirely when the invoice hasn't opted in — no point
+  // hitting the network for an asset we won't draw.
   const products = invoice.products || [];
+  const wantsStamp = (invoice as any).digitalStamp === true;
   const [productImages, stampImage] = await Promise.all([
     Promise.all(products.map((p: any) => p.imageUrl ? loadImage(p.imageUrl) : Promise.resolve(null))),
-    loadImage('/BullionStamp.jpeg'),
+    wantsStamp ? loadImage('/BullionStamp.jpeg') : Promise.resolve(null),
   ]);
 
   // ── First page ──────────────────────────────────────────────────────────

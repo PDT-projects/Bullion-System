@@ -315,6 +315,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [newSpName,    setNewSpName]    = React.useState('');
   const [savingSp,     setSavingSp]     = React.useState(false);
   const [delivery,     setDelivery]     = React.useState('Self-collect');
+  const [addStamp,     setAddStamp]     = React.useState(false);
   const [saving,       setSaving]       = React.useState(false);
 
   const [savedCustomers, setSavedCustomers] = React.useState<any[]>([]);
@@ -478,7 +479,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         supplierCostTotal: invoiceProducts.reduce((s, p) => s + (p.supplierCost||0)*p.quantity, 0),
         purchaseCostTotal: invoiceProducts.reduce((s, p) => s + (p.purchaseCost||0)*p.quantity, 0),
         miscExpense: 0, deductionCharges: 0, cargoAmount: 0, customsAmount: 0, agentAmount: 0,
-        selectedCurrencies: ['AED'], branch: '', digitalStamp: false,
+        selectedCurrencies: ['AED'], branch: '', digitalStamp: addStamp,
         products: invoiceProducts,
       } as any);
 
@@ -611,7 +612,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                   <input type="tel" value={custPhone} onChange={e=>setCustPhone(e.target.value)} style={iSty} />
                 </div>
                 <div>
-                  <label style={lbl}>Identity</label>
+                  <label style={lbl}>Identity / CNIC</label>
                   <input value={custCNIC} onChange={e=>setCustCNIC(e.target.value)} style={iSty} />
                 </div>
               </div>
@@ -796,6 +797,38 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                     color:delivery===v?'#fff':'#6b7280' }}>{v}</button>
               ))}
             </div>
+
+            {/* Stamp toggle — checkbox drives whether the PDF renders the
+                Bullion stamp (loaded from /BullionStamp.jpeg) alongside the
+                Terms & Conditions on the invoice PDF. Opt-in by default. */}
+            <label
+              onClick={() => setAddStamp(v => !v)}
+              style={{
+                marginTop: 12,
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', borderRadius: 8,
+                border: `1.5px solid ${addStamp ? '#111827' : '#e2e8f0'}`,
+                backgroundColor: addStamp ? '#f8fafc' : '#fff',
+                cursor: 'pointer', userSelect: 'none',
+              }}
+            >
+              <span style={{
+                width: 16, height: 16, borderRadius: 4,
+                border: `1.5px solid ${addStamp ? '#111827' : '#cbd5e1'}`,
+                backgroundColor: addStamp ? '#111827' : '#fff',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                {addStamp && (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6.5L4.5 9L10 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: addStamp ? '#111827' : '#64748b' }}>
+                Include digital stamp on PDF
+              </span>
+            </label>
           </div>
 
         </div>
