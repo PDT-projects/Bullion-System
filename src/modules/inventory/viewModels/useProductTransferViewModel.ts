@@ -123,13 +123,18 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
       const transferredSerials = transfer.serialNumbers || [];
       const toLocation = transfer.toLocation;
 
-      // Step 1: Clean up source product
+      // Step 1: Update source product's serialCities so remaining serials
+      // keep their existing city assignments (preserve prior overrides).
       const sourceRemainingSerials = (sourceProduct.serialNumbers || []).filter(
         s => !transferredSerials.includes(s)
       );
-      const sourceCities: Record<string, string> = {};
+      const sourceCities: Record<string, string> = { ...(sourceProduct.serialCities || {}) };
+      // Drop the transferred serials from the source's map — they're moving.
+      transferredSerials.forEach(s => { delete sourceCities[s]; });
+      // Make each remaining serial's location explicit (fall back to product
+      // default) so future writes don't have anything to "fall through" to.
       sourceRemainingSerials.forEach(s => {
-        sourceCities[s] = sourceProduct.serialCities?.[s] || sourceProduct.location || '';
+        if (!sourceCities[s]) sourceCities[s] = sourceProduct.location || '';
       });
 
       await InventoryFirebaseService.updateProduct(sourceProduct.id, {
@@ -138,7 +143,7 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
         serialCities:  sourceCities,
       });
 
-      // Step 2: Find or use destination product record
+      // Step 2: Find destination product record.
       const destProduct =
         allProducts.find(
           p =>
@@ -157,18 +162,52 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
         ) ??
         sourceProduct;
 
-      const existingSerials = (destProduct.serialNumbers || []).filter(
-        s => !transferredSerials.includes(s)
-      );
-      const mergedSerials = [...existingSerials, ...transferredSerials];
-      const mergedCities: Record<string, string> = {};
-      mergedSerials.forEach(s => { mergedCities[s] = toLocation; });
+      // BUG that this fixes: previously we built `mergedCities` fresh with
+      // every serial pinned at `toLocation`, then set `location: toLocation`
+      // too. When source and destination were the same product (the common
+      // case for this codebase — one product doc per brand/model, serials
+      // spread across cities via serialCities) that rewrite touched EVERY
+      // serial in the product, not just the ones being received.
+      //
+      // Preserve destProduct's existing serialCities and only update the
+      // transferred serials to the new location. product.location only
+      // gets advanced when every serial now sits at that location — safer
+      // than always overwriting it.
+      const isSameAsSource = destProduct.id === sourceProduct.id;
+      // If dest === source, the source-side write we just did means
+      // destProduct.serialNumbers/serialCities in local state are stale.
+      // Rehydrate from what we just wrote.
+      const destBaseSerials: string[] = isSameAsSource
+        ? sourceRemainingSerials
+        : (destProduct.serialNumbers || []);
+      const destBaseCities: Record<string, string> = isSameAsSource
+        ? { ...sourceCities }
+        : { ...(destProduct.serialCities || {}) };
+
+      // Merge in the transferred serials at their new location.
+      const mergedSerials = [
+        ...destBaseSerials.filter(s => !transferredSerials.includes(s)),
+        ...transferredSerials,
+      ];
+      const mergedCities: Record<string, string> = { ...destBaseCities };
+      transferredSerials.forEach(s => { mergedCities[s] = toLocation; });
+      // Make sure every non-transferred serial has an explicit location too.
+      mergedSerials.forEach(s => {
+        if (!mergedCities[s]) mergedCities[s] = destProduct.location || '';
+      });
+
+      // Only advance product.location when literally every serial is at the
+      // new location. Otherwise leave the existing default so future serials
+      // without a serialCities entry still fall back to their real region.
+      const allValues = mergedSerials.map(s => mergedCities[s]).filter(Boolean);
+      const allSame   = allValues.length === mergedSerials.length
+                     && allValues.every(v => v === toLocation);
 
       await InventoryFirebaseService.updateProduct(destProduct.id, {
         stock:         mergedSerials.length,
         serialNumbers: mergedSerials,
         serialCities:  mergedCities,
-        location:      toLocation,
+        location:      allSame ? toLocation : destProduct.location,
       });
 
       // Step 3: Mark transfer as Received with full ISO timestamp
@@ -183,10 +222,16 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
       );
       setAllProducts(prev =>
         prev.map(p => {
-          if (p.id === sourceProduct.id)
+          if (p.id === sourceProduct.id && !isSameAsSource)
             return { ...p, stock: sourceRemainingSerials.length, serialNumbers: sourceRemainingSerials, serialCities: sourceCities };
           if (p.id === destProduct.id)
-            return { ...p, stock: mergedSerials.length, serialNumbers: mergedSerials, serialCities: mergedCities, location: toLocation };
+            return {
+              ...p,
+              stock: mergedSerials.length,
+              serialNumbers: mergedSerials,
+              serialCities: mergedCities,
+              location: allSame ? toLocation : p.location,
+            };
           return p;
         })
       );

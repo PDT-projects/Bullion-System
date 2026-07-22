@@ -1,8 +1,26 @@
 [
   {
-    "origin": ["http://localhost:3000", "http://localhost:3001"],
+    "origin": [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:5173",
+      "http://localhost:5000",
+      "https://bullionelectronicssoftware.web.app",
+      "https://bullionelectronicssoftware.firebaseapp.com"
+    ],
     "method": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
-    "responseHeader": ["Content-Type", "Authorization", "x-goog-resumable", "Range", "Content-Range"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Encoding",
+      "Content-Range",
+      "Range",
+      "Cache-Control",
+      "Authorization",
+      "Access-Control-Allow-Origin",
+      "x-goog-resumable",
+      "x-goog-meta-*"
+    ],
     "maxAgeSeconds": 3600
   }
 ]

@@ -25,6 +25,7 @@ import { ReferralReport }           from '../sales/ReferralReport';
 import { CommissionReport }         from '../sales/CommissionReport';
 import { ProfitLossReport }         from './ProfitLossReport';
 import { BalanceSheetReport }       from './BalanceSheetReport';
+import { IncomeStatementReport }    from './IncomeStatementReport';
 import { LoanHistory }              from './LoanHistory';
 import { BankActivityView }         from '../../modules/banking/views/BankActivityView';
 
@@ -47,6 +48,7 @@ interface ReportsHubProps {
 const SCREEN_MAP: Record<string, Screen> = {
   'sales':            'Sales Report',
   'profit-loss':      'Profit Loss Report',
+  'income-statement': 'Profit Loss Report',
   'balance-sheet':    'Balance Sheet Report',
   'inventory':        'Inventory Report',
   'transactions':     'Transaction History Report',
@@ -64,6 +66,7 @@ const SCREEN_MAP: Record<string, Screen> = {
 const ALL_REPORT_CARDS = [
   { id: 'sales',            name: 'Sales Report',         description: 'Revenue trends, customer analytics & performance',                                          icon: TrendingUp,  accent: '#334155', lightBg: '#eef2ff', tag: 'Revenue'  },
   { id: 'profit-loss',      name: 'Profit & Loss',        description: 'Net profit, expense breakdowns & margins',                                                  icon: DollarSign,  accent: '#0f766e', lightBg: '#f0fdfa', tag: 'Finance'  },
+  { id: 'income-statement', name: 'Income Statement',     description: 'Revenue, COGS, gross profit & operating expenses in P&L format',                            icon: BarChart2,   accent: '#0f766e', lightBg: '#f0fdfa', tag: 'Finance'  },
   { id: 'balance-sheet',    name: 'Balance Sheet',        description: 'Assets, liabilities & equity position',                                                     icon: FileText,    accent: '#2563eb', lightBg: '#eff6ff', tag: 'Finance'  },
   { id: 'inventory',        name: 'Inventory Report',     description: 'Stock levels, distribution & valuation',                                                    icon: Package,     accent: '#334155', lightBg: '#f5f3ff', tag: 'Stock'    },
   { id: 'transactions',     name: 'Transaction History',  description: 'Full ledger with filters & export',                                                         icon: Receipt,     accent: '#0369a1', lightBg: '#f0f9ff', tag: 'History'  },
@@ -89,6 +92,7 @@ function renderReport(
   switch (id) {
     case 'sales':           return <SalesReport invoices={invoices} products={products} />;
     case 'profit-loss':     return <ProfitLossReport transactions={transactions} invoices={invoices} onBack={onBack} />;
+    case 'income-statement':return <IncomeStatementReport transactions={transactions} invoices={invoices} onBack={onBack} />;
     case 'balance-sheet':   return <BalanceSheetReport transactions={transactions} banks={banks} loans={loans} products={products} onBack={onBack} />;
     case 'inventory':       return <InventoryReport products={products} />;
     case 'transactions':    return <TransactionHistoryReport transactions={transactions} />;

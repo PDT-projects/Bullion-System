@@ -198,7 +198,7 @@ export function DummyInvoiceFormView(props: Props) {
                 <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} style={S.input(!customerName.trim())} placeholder="" />
               </div>
               <div>
-                <label style={S.label}>Identity / CNIC</label>
+                <label style={S.label}>Identity</label>
                 <input type="text" value={customerCNIC} onChange={e => setCustomerCNIC(e.target.value)} style={S.input()} />
               </div>
             </div>

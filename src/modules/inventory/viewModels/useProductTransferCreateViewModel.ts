@@ -48,7 +48,17 @@ export interface UseProductTransferCreateViewModelReturn {
 const LOCATIONS = ['Dubai', 'Saudia', 'Chad', 'Sudan'];
 
 function getSerialEffectiveLocation(product: Product, serial: string): string {
-  return product.location || '';
+  // BUG that this fixes: the previous body just returned `product.location`,
+  // ignoring the `serial` argument entirely. That meant when a transfer's
+  // create flow rebuilt `serialCities` for the remaining (non-transferred)
+  // serials, every remaining serial was written with the same product-wide
+  // default — even if some of those serials were actually stored elsewhere
+  // via prior transfers. Result: transferring 2 of 5 serials silently
+  // rewrote the other 3 to `product.location`, and the inventory list
+  // showed them all at the same place.
+  //
+  // Consult the per-serial map first, then fall back to product.location.
+  return product.serialCities?.[serial] || product.location || '';
 }
 
 function localDateTimeNow(): string {
@@ -272,9 +282,21 @@ export function useProductTransferCreateViewModel(
         const remainingSerials = (product.serialNumbers || []).filter(
           s => !transferredSerials.includes(s)
         );
-        const newCities: Record<string, string> = {};
+        // Preserve existing per-serial locations for remaining serials.
+        // Previously this created a brand-new empty object, which meant every
+        // remaining serial got rewritten with the product-wide default from
+        // getSerialEffectiveLocation — even if some of those serials had
+        // their own overrides from previous transfers.
+        const newCities: Record<string, string> = { ...(product.serialCities || {}) };
+        // Drop any transferred serials from the map — they're no longer at the
+        // source. Their real destination is written when the transfer is
+        // marked Received.
+        transferredSerials.forEach(s => { delete newCities[s]; });
+        // For remaining serials, make sure each has an explicit location
+        // entry so future transfers don't accidentally fall back to
+        // product.location.
         remainingSerials.forEach(s => {
-          newCities[s] = getSerialEffectiveLocation(product, s);
+          if (!newCities[s]) newCities[s] = getSerialEffectiveLocation(product, s);
         });
         const updatedSerialStatus: Record<string, string> = { ...(product.serialStatus || {}) };
         transferredSerials.forEach(s => { updatedSerialStatus[s] = 'In Transit'; });

@@ -187,12 +187,12 @@ function renderHeader(doc: jsPDF): number {
   return 22;  // y-cursor after the header
 }
 
-/** "INVOICE" title + right-aligned date and PI #. */
+/** "PROFORMA INVOICE" title + right-aligned date and PI #. */
 function renderTitleRow(doc: jsPDF, invoice: Invoice, y: number): number {
   text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
-  doc.text('INVOICE', PAGE_W / 2, y + 6, { align: 'center' });
+  doc.text('PROFORMA INVOICE', PAGE_W / 2, y + 6, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
@@ -450,11 +450,27 @@ function renderTermsAndStamp(doc: jsPDF, invoice: Invoice, y: number, stamp: Ima
   // Right half — stamp area (only when the invoice was flagged with
   // digitalStamp=true at creation time). Strict opt-in — undefined or false
   // both skip drawing.
+  //
+  // The stamp image is circular. Previously we drew it into a fixed 42×28
+  // box which stretched the round stamp into an ellipse. Now we read the
+  // image's natural dimensions via getImageProperties and scale to fit
+  // inside a square bounding box, preserving aspect ratio so a circular
+  // stamp renders as an actual circle.
   if (stamp && (invoice as any).digitalStamp === true) {
     try {
-      const sX = PAGE_W - MR - 45;
-      const sY = y + 2;
-      doc.addImage(stamp.dataUrl, stamp.format, sX, sY, 42, blockH - 4);
+      const boxMax = Math.min(blockH - 2, 34);   // square-ish bounding box
+      let drawW = boxMax;
+      let drawH = boxMax;
+      try {
+        const props = doc.getImageProperties(stamp.dataUrl);
+        const ratio = props.width / props.height;
+        if (ratio >= 1) { drawW = boxMax; drawH = boxMax / ratio; }
+        else            { drawH = boxMax; drawW = boxMax * ratio; }
+      } catch { /* fall through — use the square defaults if we can't read the dims */ }
+      // Right-align within the reserved 45mm strip, vertically center in block
+      const sX = PAGE_W - MR - drawW;
+      const sY = y + (blockH - drawH) / 2;
+      doc.addImage(stamp.dataUrl, stamp.format, sX, sY, drawW, drawH);
     } catch { /* stamp failed — no fallback needed */ }
   }
 

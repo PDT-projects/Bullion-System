@@ -316,6 +316,8 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [savingSp,     setSavingSp]     = React.useState(false);
   const [delivery,     setDelivery]     = React.useState('Self-collect');
   const [addStamp,     setAddStamp]     = React.useState(false);
+  const [shipping,     setShipping]     = React.useState<number | ''>('');
+  const [discount,     setDiscount]     = React.useState<number | ''>('');
   const [saving,       setSaving]       = React.useState(false);
 
   const [savedCustomers, setSavedCustomers] = React.useState<any[]>([]);
@@ -375,6 +377,12 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             brandName: p.brandName || '',
             modelName: p.modelName || '',
             location:  p.location  || '',
+            // Per-serial city overrides (populated by the transfer flow).
+            // A product with product.location='Sudan' can still have some
+            // serials sitting in 'Chad' via serialCities — we need the map
+            // to decide correctly whether the product is available at a
+            // selected location.
+            serialCities:  p.serialCities  || {},
             sellPrice: p.sellPrice || p.salePrice || 0,
             stock:     p.stock     || 0,
             serialNumbers: p.serialNumbers || [],
@@ -396,9 +404,17 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             return status === 'Available' || status === 'Returned';
           });
         });
-        // Location dropdown derived from the filtered set — no ghost locations.
+        // Location dropdown derived from BOTH product.location AND every
+        // per-serial city in serialCities — otherwise transferred cities
+        // (e.g. serials moved to Chad while the product default remained
+        // Sudan) would never appear in the filter dropdown.
         const locs = new Set<string>();
-        all.forEach(p => { if (p.location) locs.add(p.location); });
+        all.forEach(p => {
+          if (p.location) locs.add(p.location);
+          Object.values(p.serialCities || {}).forEach((c: any) => {
+            if (c) locs.add(String(c));
+          });
+        });
         setAllLocations(Array.from(locs).sort());
         setAllProductsCache(all);
         setProducts(all);
@@ -412,7 +428,30 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 
   const [allProductsCache, setAllProductsCache] = React.useState<any[]>([]);
   React.useEffect(() => { fetchProducts(''); }, [fetchProducts]);
-  React.useEffect(() => { if (allProductsCache.length > 0) setProducts(prodLocation ? allProductsCache.filter((p:any) => p.location === prodLocation) : allProductsCache); }, [prodLocation, allProductsCache]);
+  React.useEffect(() => {
+    if (allProductsCache.length === 0) return;
+    if (!prodLocation) {
+      setProducts(allProductsCache);
+      return;
+    }
+    // FIX: previously this filtered by `p.location === prodLocation` alone,
+    // which missed any product whose per-serial map (serialCities) had
+    // serials sitting in the selected city while the product-wide default
+    // pointed elsewhere. Result: after a partial transfer, the "Chad"
+    // filter showed nothing even though Chad had inventory.
+    //
+    // Now a product qualifies when EITHER the product default matches OR
+    // any Available/Returned serial's per-serial city matches.
+    setProducts(allProductsCache.filter((p: any) => {
+      if (p.location === prodLocation) return true;
+      const cities = p.serialCities || {};
+      return (p.serialNumbers || []).some((s: string) => {
+        const status = p.serialStatus?.[s] || 'Available';
+        if (status !== 'Available' && status !== 'Returned') return false;
+        return (cities[s] || p.location || '') === prodLocation;
+      });
+    }));
+  }, [prodLocation, allProductsCache]);
 
   // ── Lines ─────────────────────────────────────────────────────────────────
   type Line = { id: string; productId: string; serial: string; qty: number; price: number };
@@ -436,10 +475,28 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     const prod = products.find((x: any) => x.id === productId);
     if (!prod) return [];
     const used = lines.filter(l => l.id !== lineId && l.productId === productId).map(l => l.serial);
-    return (prod.serialNumbers || []).filter((s: string) => prod.serialStatus?.[s] !== 'Sold' && !used.includes(s));
+    return (prod.serialNumbers || []).filter((s: string) => {
+      if (prod.serialStatus?.[s] === 'Sold') return false;
+      if (used.includes(s)) return false;
+      // When a location filter is active, only surface serials that are
+      // actually at that location (per-serial map first, product default
+      // as fallback). Without this, picking a product in Chad could still
+      // show Sudan serials in the serial dropdown.
+      if (prodLocation) {
+        const serialCity = prod.serialCities?.[s] || prod.location || '';
+        if (serialCity !== prodLocation) return false;
+      }
+      return true;
+    });
   };
 
-  const total = lines.reduce((s, l) => s + l.qty * l.price, 0);
+  // Line-items subtotal, then apply shipping (adds) and discount (subtracts)
+  // to arrive at the final invoice total. Values are clamped so a huge
+  // discount can't push the invoice below zero.
+  const subtotal      = lines.reduce((s, l) => s + l.qty * l.price, 0);
+  const shippingNum   = Math.max(0, Number(shipping) || 0);
+  const discountNum   = Math.max(0, Math.min(subtotal + shippingNum, Number(discount) || 0));
+  const total         = Math.max(0, subtotal + shippingNum - discountNum);
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
@@ -478,7 +535,10 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         paidAmount: 0, remainingAmount: total, totalAmount: total,
         supplierCostTotal: invoiceProducts.reduce((s, p) => s + (p.supplierCost||0)*p.quantity, 0),
         purchaseCostTotal: invoiceProducts.reduce((s, p) => s + (p.purchaseCost||0)*p.quantity, 0),
-        miscExpense: 0, deductionCharges: 0, cargoAmount: 0, customsAmount: 0, agentAmount: 0,
+        miscExpense: 0,
+        deductionCharges: discountNum,
+        cargoAmount:      shippingNum,
+        customsAmount: 0, agentAmount: 0,
         selectedCurrencies: ['AED'], branch: '', digitalStamp: addStamp,
         products: invoiceProducts,
       } as any);
@@ -612,7 +672,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                   <input type="tel" value={custPhone} onChange={e=>setCustPhone(e.target.value)} style={iSty} />
                 </div>
                 <div>
-                  <label style={lbl}>Identity / CNIC</label>
+                  <label style={lbl}>Identity</label>
                   <input value={custCNIC} onChange={e=>setCustCNIC(e.target.value)} style={iSty} />
                 </div>
               </div>
@@ -730,59 +790,169 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
           </div>
 
           {/* ── Products ── */}
-          <div style={{ backgroundColor:'#fff', border:'1px solid #e2e8f0', borderRadius:10, overflow:'hidden' }}>
-            {/* Header with location filter */}
-            <div style={{ padding:'8px 12px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-              <span style={{ fontSize:12, fontWeight:700, color:'#0f172a' }}>Products</span>
-              <select value={prodLocation} onChange={e => setProdLocation(e.target.value)}
-                style={{ fontSize:11, border:'1px solid #e2e8f0', borderRadius:6, padding:'4px 8px', color:prodLocation?'#0f172a':'#94a3b8', backgroundColor:prodLocation?'#f1f5f9':'#f9fafb', cursor:'pointer', outline:'none' }}>
-                <option value="">All locations ({products.length})</option>
-                {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
-              {prodLoading && <Loader2 size={13} color="#94a3b8" style={{ animation:'spin 1s linear infinite' }}/>}
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Products</span>
+                <select value={prodLocation} onChange={e => setProdLocation(e.target.value)}
+                  style={{ fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', color: prodLocation ? '#0f172a' : '#94a3b8', backgroundColor: prodLocation ? '#f1f5f9' : '#f9fafb', cursor: 'pointer', outline: 'none' }}>
+                  <option value="">All locations ({products.length})</option>
+                  {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+                {prodLoading && <Loader2 size={13} color="#94a3b8" style={{ animation: 'spin 1s linear infinite' }} />}
+              </div>
               <button onClick={addLine}
-                style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:6, border:'none', backgroundColor:'#0f172a', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-                <Plus size={11}/> Add Product
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 7, border: 'none', backgroundColor: '#0f172a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <Plus size={12} /> Add Product
               </button>
             </div>
 
-            {/* Column headers */}
-            <div style={{ display:'grid', gridTemplateColumns:'2.2fr 1.1fr 48px 88px 24px', gap:5, padding:'5px 12px', backgroundColor:'#f9fafb', borderBottom:'1px solid #e2e8f0' }}>
-              {['Product','Serial No.','Qty','Price (AED)',''].map(h => (
-                <div key={h} style={{ fontSize:9, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>{h}</div>
-              ))}
-            </div>
+            {/* Empty-state banner — very unlikely but if lines somehow ends
+                up empty, at least the modal doesn't look broken. */}
+            {lines.length === 0 && (
+              <div style={{ padding: '14px 12px', textAlign: 'center', fontSize: 12, color: '#94a3b8', backgroundColor: '#f8fafc', borderRadius: 8, border: '1px dashed #e2e8f0' }}>
+                No product lines. Click <b>+ Add Product</b> above to start.
+              </div>
+            )}
 
-            {/* Product rows */}
-            {lines.map((l, i) => {
-              const serials = getSerials(l.productId, l.id);
-              return (
-                <div key={l.id} style={{ display:'grid', gridTemplateColumns:'2.2fr 1.1fr 48px 88px 24px', gap:5, padding:'6px 12px', borderBottom: i<lines.length-1 ? '1px solid #f3f4f6' : 'none', alignItems:'center' }}>
-                  <select value={l.productId} onChange={e => updateLine(l.id,'productId',e.target.value)}
-                    style={{ border:'1px solid #e2e8f0', borderRadius:7, padding:'5px 6px', fontSize:11, outline:'none', width:'100%', backgroundColor:'#fff', color:l.productId?'#111827':'#94a3b8' }}>
-                    <option value="">{prodLoading ? 'Loading…' : products.length===0 ? 'No products' : `— select product —`}</option>
-                    {products.map((p: any) => (
-                      <option key={p.id} value={p.id}>{p.brandName} {p.modelName} (AED {(p.sellPrice||0).toLocaleString()}, {p.stock} left{p.location?` · ${p.location}`:''})</option>
-                    ))}
-                  </select>
-                  <select value={l.serial} onChange={e => updateLine(l.id,'serial',e.target.value)}
-                    disabled={!l.productId}
-                    style={{ border:'1px solid #e2e8f0', borderRadius:7, padding:'5px 4px', fontSize:11, outline:'none', width:'100%', backgroundColor:'#fff', opacity:l.productId?1:0.4 }}>
-                    <option value="">— any —</option>
-                    {serials.map((s: string) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <input type="number" min={1} value={l.qty} onChange={e=>updateLine(l.id,'qty',parseInt(e.target.value)||1)}
-                    style={{ border:'1px solid #e2e8f0', borderRadius:7, padding:'5px 3px', fontSize:12, outline:'none', width:'100%', textAlign:'center' }}/>
-                  <input type="number" min={0} step="any" value={l.price||''} onChange={e=>updateLine(l.id,'price',parseFloat(e.target.value)||0)}
-                    placeholder="0.00"
-                    style={{ border:'1px solid #e2e8f0', borderRadius:7, padding:'5px 4px', fontSize:12, outline:'none', width:'100%', textAlign:'right' }}/>
-                  <button onClick={() => removeLine(l.id)} disabled={lines.length===1}
-                    style={{ border:'none', background:'transparent', cursor:lines.length===1?'not-allowed':'pointer', opacity:lines.length===1?0.3:1, display:'flex', padding:0 }}>
-                    <X size={13} color="#ef4444"/>
-                  </button>
-                </div>
-              );
-            })}
+            {/* One card per product line — labeled fields, hard to miss. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {lines.map((l, i) => {
+                const serials = getSerials(l.productId, l.id);
+                return (
+                  <div key={l.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, backgroundColor: '#fafbfc' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                        Line {i + 1}
+                      </span>
+                      <button onClick={() => removeLine(l.id)} disabled={lines.length === 1}
+                        title="Remove line"
+                        style={{ border: 'none', background: 'transparent', cursor: lines.length === 1 ? 'not-allowed' : 'pointer', opacity: lines.length === 1 ? 0.3 : 1, display: 'flex', padding: 0 }}>
+                        <X size={14} color="#ef4444" />
+                      </button>
+                    </div>
+
+                    {/* Product select */}
+                    <div style={{ marginBottom: 6 }}>
+                      <label style={{ ...lbl, fontSize: 9 }}>Product</label>
+                      <select value={l.productId} onChange={e => updateLine(l.id, 'productId', e.target.value)}
+                        style={{ ...iSty, padding: '6px 8px', fontSize: 12, color: l.productId ? '#111827' : '#94a3b8' }}>
+                        <option value="">
+                          {prodLoading ? 'Loading products…'
+                            : products.length === 0 ? 'No products available'
+                            : '— select product —'}
+                        </option>
+                        {products.map((p: any) => {
+                          // Compute the count that actually applies right now:
+                          //  - If a location filter is active → count only Available/Returned
+                          //    serials that live at that specific location (per serialCities,
+                          //    falling back to product.location).
+                          //  - Otherwise → total Available/Returned across all locations.
+                          // Previously we always showed p.stock, which is the product-wide
+                          // total. That said "3 left · Chad" while the serial dropdown for
+                          // that product (correctly filtered) showed only 1.
+                          const serials: string[] = p.serialNumbers || [];
+                          let count = 0;
+                          for (const s of serials) {
+                            const st = p.serialStatus?.[s] || 'Available';
+                            if (st !== 'Available' && st !== 'Returned') continue;
+                            if (prodLocation) {
+                              const city = p.serialCities?.[s] || p.location || '';
+                              if (city !== prodLocation) continue;
+                            }
+                            count++;
+                          }
+                          const shownLoc = prodLocation || p.location || '';
+                          return (
+                            <option key={p.id} value={p.id}>
+                              {p.brandName} {p.modelName} (AED {(p.sellPrice || 0).toLocaleString()}, {count} left{shownLoc ? ` · ${shownLoc}` : ''})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {/* Serial + Qty + Price row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 60px 100px', gap: 6 }}>
+                      <div>
+                        <label style={{ ...lbl, fontSize: 9 }}>Serial No.</label>
+                        <select value={l.serial} onChange={e => updateLine(l.id, 'serial', e.target.value)}
+                          disabled={!l.productId}
+                          style={{ ...iSty, padding: '6px 8px', fontSize: 12, opacity: l.productId ? 1 : 0.4 }}>
+                          <option value="">— any —</option>
+                          {serials.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ ...lbl, fontSize: 9 }}>Qty</label>
+                        <input type="number" min={1} value={l.qty}
+                          onChange={e => updateLine(l.id, 'qty', parseInt(e.target.value) || 1)}
+                          style={{ ...iSty, padding: '6px 8px', fontSize: 12, textAlign: 'center' }} />
+                      </div>
+                      <div>
+                        <label style={{ ...lbl, fontSize: 9 }}>Price (AED)</label>
+                        <input type="number" min={0} step="any" value={l.price || ''}
+                          onChange={e => updateLine(l.id, 'price', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                          style={{ ...iSty, padding: '6px 8px', fontSize: 12, textAlign: 'right' }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Charges ─────────────────────────────────────────────
+              Optional shipping (adds to total) and discount (subtracts).
+              Both feed the invoice's cargoAmount/deductionCharges fields
+              which the PDF Totals block already renders. */}
+          <div style={card}>
+            <label style={{ ...lbl, marginBottom:7 }}>Charges</label>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div>
+                <label style={{ ...lbl, fontSize:10 }}>Shipping (AED)</label>
+                <input
+                  type="number" min={0} step="any"
+                  value={shipping}
+                  onChange={e => setShipping(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  style={iSty}
+                />
+              </div>
+              <div>
+                <label style={{ ...lbl, fontSize:10 }}>Discount (AED)</label>
+                <input
+                  type="number" min={0} step="any"
+                  value={discount}
+                  onChange={e => setDiscount(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  style={iSty}
+                />
+              </div>
+            </div>
+            {(shippingNum > 0 || discountNum > 0) && (
+              <div style={{
+                marginTop: 10, padding: '8px 10px', backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0', borderRadius: 8,
+                fontSize: 11, color: '#64748b',
+                display: 'grid', gridTemplateColumns: '1fr auto', gap: 4,
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                <span>Subtotal</span>
+                <span style={{ color: '#0f172a', fontWeight: 700 }}>AED {subtotal.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                {shippingNum > 0 && <>
+                  <span>+ Shipping</span>
+                  <span style={{ color: '#0f172a', fontWeight: 700 }}>AED {shippingNum.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                </>}
+                {discountNum > 0 && <>
+                  <span>− Discount</span>
+                  <span style={{ color: '#dc2626', fontWeight: 700 }}>AED {discountNum.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                </>}
+                <span style={{ color: '#0f172a', fontWeight: 800, paddingTop: 4, borderTop: '1px solid #e2e8f0', marginTop: 2 }}>Total</span>
+                <span style={{ color: '#0f172a', fontWeight: 800, paddingTop: 4, borderTop: '1px solid #e2e8f0', marginTop: 2 }}>AED {total.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
           </div>
 
           {/* ── Delivery ── */}
@@ -1018,7 +1188,8 @@ export function InvoiceListView({
                 {[
                   'Invoice #', 'Date', 'Customer', 'Branch / Location',
                   'Salesperson', 'Products', 'Amount (AED)',
-                  'Supplier Cost', 'Purchase Cost', 'Misc Exp',
+                  'Supplier Cost', 'Purchase Cost',
+                  'Shipping', 'Discount', 'Misc Exp',
                   'Net Sale', 'Paid', 'Amount Left',
                   'Delivery', 'Status', 'Actions',
                 ].map(h => (
@@ -1029,7 +1200,7 @@ export function InvoiceListView({
             <tbody className="divide-y divide-gray-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={17} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={19} className="px-4 py-14 text-center text-gray-400">
                     <FileText className="mx-auto mb-3 text-gray-300" size={44} />
                     <p className="font-medium text-gray-500">No invoices found</p>
                     <p className="text-xs mt-1">
@@ -1040,11 +1211,16 @@ export function InvoiceListView({
               ) : filteredInvoices.map(invoice => {
                 const supplierCost = calculateSupplierCost(invoice);
                 const purchaseCost = calculatePurchaseCost(invoice);
-                // Prefer the running miscExpense total (from InvoiceMiscExpenseService),
-                // fall back to the legacy 4-bucket calculation for old invoices
-                const misc = (invoice.miscExpense && invoice.miscExpense > 0)
-                  ? invoice.miscExpense
-                  : calculateMiscExpense(invoice);
+                // Misc Expense is ONLY the running total added from the
+                // Transactions module (InvoiceMiscExpenseService writes it
+                // to invoice.miscExpense). Shipping and discount are
+                // customer-facing charges on the invoice and should NOT
+                // count as misc expense — they have their own columns now.
+                const misc = Number(invoice.miscExpense) || 0;
+                // Shipping (cargoAmount) and discount (deductionCharges)
+                // are broken out into their own columns.
+                const shipping = Number((invoice as any).cargoAmount) || 0;
+                const discount = Number((invoice as any).deductionCharges) || 0;
                 const netSale = (invoice.totalAmount || 0) - misc;
                 const paid = calculatePaidAmount(invoice);
                 const remaining = calculateRemainingAmount(invoice);
@@ -1128,6 +1304,8 @@ export function InvoiceListView({
                     })()}
                   </td>
                   {/* COGS per-row column removed — total is shown in footer only */}
+                  <td className="px-3 py-3 whitespace-nowrap">{shipping > 0 ? <span className="text-slate-800 font-medium">{formatDisplay(shipping)}</span> : '—'}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">{discount > 0 ? <span className="text-red-600 font-medium">−{formatDisplay(discount)}</span> : '—'}</td>
                   <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(netSale)}</td>
                   <td className="px-3 py-3 whitespace-nowrap">
@@ -1227,7 +1405,9 @@ export function InvoiceListView({
                 const pc = calculatePurchaseCost(i);
                 return s + (sc > 0 && pc === 0 ? sc : pc);
               }, 0);
-              const tMisc     = src.reduce((s, i) => s + ((i.miscExpense && i.miscExpense > 0) ? i.miscExpense : calculateMiscExpense(i)), 0);
+              const tMisc     = src.reduce((s, i) => s + (Number(i.miscExpense) || 0), 0);
+              const tShipping = src.reduce((s, i) => s + (Number((i as any).cargoAmount)      || 0), 0);
+              const tDiscount = src.reduce((s, i) => s + (Number((i as any).deductionCharges) || 0), 0);
               const tNet      = tTotal - tMisc;
               const tPaid     = src.reduce((s, i) => s + calculatePaidAmount(i), 0);
               const tLeft     = src.reduce((s, i) => s + calculateRemainingAmount(i), 0);
@@ -1267,6 +1447,16 @@ export function InvoiceListView({
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8' }}>{tPurchase > 0 ? formatDisplay(tPurchase) : '—'}</div>
                     </td>
                     {/* COGS per-column removed — total displayed in the trailing summary cell */}
+                    {/* Shipping */}
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Shipping</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: tShipping > 0 ? '#e2e8f0' : '#94a3b8' }}>{tShipping > 0 ? formatDisplay(tShipping) : '—'}</div>
+                    </td>
+                    {/* Discount */}
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Discount</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: tDiscount > 0 ? '#fca5a5' : '#94a3b8' }}>{tDiscount > 0 ? `−${formatDisplay(tDiscount)}` : '—'}</div>
+                    </td>
                     {/* Misc Exp */}
                     <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Misc Exp</div>

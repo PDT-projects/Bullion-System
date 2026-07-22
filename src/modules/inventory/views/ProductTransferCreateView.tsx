@@ -10,10 +10,11 @@
 //  • Validation message updated to match new model
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft, ArrowRight, Plus, Trash2, Loader2,
   MapPin, Package, Hash, User, Calendar, FileText,
-  CheckSquare, Square, DollarSign, List,
+  CheckSquare, Square, DollarSign, List, X, Check,
 } from 'lucide-react';
 import { UseProductTransferCreateViewModelReturn } from '../viewModels/useProductTransferCreateViewModel';
 
@@ -46,6 +47,35 @@ export const ProductTransferCreateView: React.FC<Props> = ({
 
   const inputCls =
     'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm';
+
+  // ── "Add new location" modal state ─────────────────────────────────────
+  // Replaces the four native window.prompt() dialogs with a proper themed
+  // modal. `target` tracks which field to fill (From/To) after save.
+  const [addLocState, setAddLocState] = React.useState<{
+    target: 'from' | 'to' | null;
+    value: string;
+    saving: boolean;
+  }>({ target: null, value: '', saving: false });
+
+  const openAddLoc = (target: 'from' | 'to') =>
+    setAddLocState({ target, value: '', saving: false });
+  const closeAddLoc = () =>
+    setAddLocState({ target: null, value: '', saving: false });
+
+  const submitAddLoc = async () => {
+    const name = addLocState.value.trim();
+    if (!name || addLocState.saving) return;
+    setAddLocState(s => ({ ...s, saving: true }));
+    try {
+      const added = await addNewLocation(name);
+      if (added) {
+        setFormField(addLocState.target === 'from' ? 'fromLocation' : 'toLocation', added);
+      }
+      closeAddLoc();
+    } catch {
+      setAddLocState(s => ({ ...s, saving: false }));
+    }
+  };
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -163,16 +193,10 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                 <div className="flex gap-2">
                   <select
                     value={formData.fromLocation}
-                    onChange={async e => {
+                    onChange={e => {
                       const v = e.target.value;
                       if (v === '__add_new__') {
-                        const nv = window.prompt('Add new From location (e.g. Dubai)');
-                        if (nv?.trim()) {
-                          const added = await addNewLocation(nv.trim());
-                          if (added) setFormField('fromLocation', added);
-                        } else {
-                          setFormField('fromLocation', '');
-                        }
+                        openAddLoc('from');
                       } else {
                         setFormField('fromLocation', v);
                       }
@@ -185,13 +209,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                   </select>
                   <button
                     type="button"
-                    onClick={async () => {
-                      const v = window.prompt('Add new From location');
-                      if (v?.trim()) {
-                        const added = await addNewLocation(v.trim());
-                        if (added) setFormField('fromLocation', added);
-                      }
-                    }}
+                    onClick={() => openAddLoc('from')}
                     className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                   >
                     <Plus size={14} />
@@ -207,16 +225,10 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                 <div className="flex gap-2">
                   <select
                     value={formData.toLocation}
-                    onChange={async e => {
+                    onChange={e => {
                       const v = e.target.value;
                       if (v === '__add_new__') {
-                        const nv = window.prompt('Add new To location (e.g. Saudia)');
-                        if (nv?.trim()) {
-                          const added = await addNewLocation(nv.trim());
-                          if (added) setFormField('toLocation', added);
-                        } else {
-                          setFormField('toLocation', '');
-                        }
+                        openAddLoc('to');
                       } else {
                         setFormField('toLocation', v);
                       }
@@ -231,13 +243,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                   </select>
                   <button
                     type="button"
-                    onClick={async () => {
-                      const v = window.prompt('Add new To location');
-                      if (v?.trim()) {
-                        const added = await addNewLocation(v.trim());
-                        if (added) setFormField('toLocation', added);
-                      }
-                    }}
+                    onClick={() => openAddLoc('to')}
                     className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                   >
                     <Plus size={14} />
@@ -573,6 +579,119 @@ export const ProductTransferCreateView: React.FC<Props> = ({
 
         </div>
       </div>
+
+      {/* ── Add new location modal ────────────────────────────────────
+          Replaces the browser's native window.prompt() that showed up
+          as an unstyled "localhost:3000 says" dialog. Same behaviour —
+          types a location name, saves via addNewLocation, then wires
+          it into either From or To field based on which one triggered.  */}
+      {addLocState.target && createPortal(
+        <div
+          onClick={addLocState.saving ? undefined : closeAddLoc}
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)',
+            zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 440, backgroundColor: '#fff', borderRadius: 14,
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.55)', overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: 9,
+                  backgroundColor: addLocState.target === 'from' ? '#eff6ff' : '#f0fdf4',
+                  color:            addLocState.target === 'from' ? '#2563eb' : '#059669',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <MapPin size={16} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>
+                    Add {addLocState.target === 'from' ? 'source' : 'destination'} location
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                    Saved for future transfers · e.g. Dubai, Saudia, Chad
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={closeAddLoc}
+                disabled={addLocState.saving}
+                style={{
+                  width: 28, height: 28, border: '1px solid #e2e8f0', borderRadius: 7,
+                  backgroundColor: '#fff', cursor: addLocState.saving ? 'not-allowed' : 'pointer',
+                  color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <X size={13} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '16px 20px' }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>
+                Location Name
+              </label>
+              <input
+                autoFocus
+                value={addLocState.value}
+                onChange={e => setAddLocState(s => ({ ...s, value: e.target.value }))}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') submitAddLoc();
+                  else if (e.key === 'Escape' && !addLocState.saving) closeAddLoc();
+                }}
+                disabled={addLocState.saving}
+                placeholder="e.g. Canada"
+                style={{
+                  width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0',
+                  borderRadius: 8, fontSize: 14, outline: 'none',
+                  opacity: addLocState.saving ? 0.6 : 1,
+                }}
+              />
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8, justifyContent: 'flex-end', backgroundColor: '#f8fafc' }}>
+              <button
+                onClick={closeAddLoc}
+                disabled={addLocState.saving}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '9px 14px', borderRadius: 8, border: '1px solid #e2e8f0',
+                  backgroundColor: '#fff', color: '#334155',
+                  fontSize: 12, fontWeight: 700,
+                  cursor: addLocState.saving ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <X size={12} /> Cancel
+              </button>
+              <button
+                onClick={submitAddLoc}
+                disabled={addLocState.saving || !addLocState.value.trim()}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '9px 18px', borderRadius: 8, border: 'none',
+                  backgroundColor: addLocState.saving ? '#94a3b8' : '#0f172a',
+                  color: '#fff', fontSize: 13, fontWeight: 800,
+                  cursor: (addLocState.saving || !addLocState.value.trim()) ? 'not-allowed' : 'pointer',
+                  opacity: (!addLocState.value.trim() && !addLocState.saving) ? 0.5 : 1,
+                }}
+              >
+                {addLocState.saving
+                  ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+                  : <><Check size={12} /> Add Location</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 };

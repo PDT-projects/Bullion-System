@@ -53,18 +53,27 @@ export async function uploadInventoryImages(
   images: File[],
   productKey: string
 ): Promise<string[]> {
-  const urls: string[] = [];
-  for (const file of images) {
+  // Upload all images in parallel — the previous serial `for` loop meant
+  // 5 images took 5× longer than 1. Promise.all lets them fly concurrently,
+  // and a 30s timeout per upload prevents the UI from hanging indefinitely
+  // when the Firebase Storage bucket rejects the request (usually a CORS
+  // misconfiguration — see cors.json + gsutil command in project root).
+  return Promise.all(images.map(async file => {
     const ext     = file.name.split('.').pop() ?? 'jpg';
     const mime    = file.type || (ext === 'png' ? 'image/png' : 'image/jpeg');
     const path    = `inventory-images/${productKey}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
     const fileRef = storageRef(storage, path);
-    // Pass explicit metadata so Storage knows the content type on preflight
-    await uploadBytes(fileRef, file, { contentType: mime });
-    const url = await getDownloadURL(fileRef);
-    urls.push(url);
-  }
-  return urls;
+
+    const timeoutMs = 30_000;
+    const uploadPromise = uploadBytes(fileRef, file, { contentType: mime })
+      .then(() => getDownloadURL(fileRef));
+    const timeoutPromise = new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error(
+        `Upload timed out after ${timeoutMs / 1000}s — check Firebase Storage CORS configuration (see cors.json).`
+      )), timeoutMs)
+    );
+    return Promise.race([uploadPromise, timeoutPromise]);
+  }));
 }
 
 /**
@@ -1128,21 +1137,44 @@ export class TransferFirebaseService {
           const productSnap = await getDoc(productRef);
           if (productSnap.exists()) {
             const p = productSnap.data() as any;
-            const serials: string[] = t.serialNumbers?.length ? t.serialNumbers : (p.serialNumbers || []);
-            const serialCities = { ...(p.serialCities || {}) };
-            serials.forEach(s => { serialCities[s] = t.toLocation; });
+            const transferredSerials: string[] = t.serialNumbers?.length ? t.serialNumbers : (p.serialNumbers || []);
+            const allSerials: string[] = p.serialNumbers || [];
 
-            // product.location is checked before serialCities on display, so
-            // keep it in sync once every serial sits at the same location.
-            const allCities = Object.values(serialCities).filter(Boolean);
-            const allSame = allCities.length > 0 && allCities.every(c => c === t.toLocation);
+            // BUG that this fixes: previously we only wrote the transferred
+            // serials into serialCities and then checked "are all entries
+            // equal to toLocation?". Since serialCities held ONLY the
+            // transferred ones, the check was always true — so we bumped
+            // product.location to toLocation, and every non-transferred
+            // serial (which falls back to product.location on display)
+            // moved with them. Result: transferring 2 of 5 serials moved
+            // all 5, and even OTHER products displayed the wrong city.
+            //
+            // Materialize the current location for every serial FIRST, then
+            // overwrite the transferred ones. Now allSame reflects reality.
+            const serialCities: Record<string, string> = { ...(p.serialCities || {}) };
+            for (const s of allSerials) {
+              if (serialCities[s] == null || serialCities[s] === '') {
+                serialCities[s] = p.location || '';
+              }
+            }
+            for (const s of transferredSerials) {
+              serialCities[s] = t.toLocation;
+            }
+
+            // Only advance product.location when literally every serial
+            // now sits at the new location. Otherwise leave the default
+            // alone so unmapped-in-the-future serials still fall back
+            // sensibly.
+            const values = allSerials.map(s => serialCities[s]).filter(Boolean);
+            const allSame = values.length === allSerials.length
+                          && values.every(c => c === t.toLocation);
 
             await updateDoc(productRef, stripUndefined({
               serialCities,
               location:  allSame ? t.toLocation : p.location,
               updatedAt: new Date().toISOString(),
             }));
-            console.log(`✅ Product ${t.productId} moved to ${t.toLocation}`);
+            console.log(`✅ Product ${t.productId}: ${transferredSerials.length}/${allSerials.length} serials → ${t.toLocation}`);
           }
         }
       }
