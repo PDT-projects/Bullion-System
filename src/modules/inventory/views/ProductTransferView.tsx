@@ -324,7 +324,7 @@ interface ProductTransferViewProps {
   };
   onAdd: () => void;
   onView: (transfer: ProductTransfer) => void;
-  onMarkReceived: (transfer: ProductTransfer) => void;
+  onMarkReceived: (transfer: ProductTransfer, receiverName: string) => void;
   onDelete: (id: string) => void;
   onCloseView: () => void;
   /** Formats an ISO datetime string → "1 Jun 2026, 14:30" */
@@ -335,6 +335,35 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
   transfers, viewTransfer, isLoading, stats,
   onAdd, onView, onMarkReceived, onDelete, onCloseView, formatDateTime,
 }) => {
+  // Receiver-name prompt state — replaces the direct onMarkReceived call.
+  // When the user clicks "Receive" (either from the row or the detail modal)
+  // we open this prompt asking for the recipient's name. Only after they
+  // confirm do we call onMarkReceived, which applies the inventory updates.
+  const [receivingTransfer, setReceivingTransfer] = React.useState<ProductTransfer | null>(null);
+  const [receiverName, setReceiverName] = React.useState('');
+  const [isReceiving, setIsReceiving] = React.useState(false);
+
+  const openReceivePrompt = (t: ProductTransfer) => {
+    setReceivingTransfer(t);
+    setReceiverName('');
+  };
+  const closeReceivePrompt = () => {
+    if (isReceiving) return;
+    setReceivingTransfer(null);
+    setReceiverName('');
+  };
+  const confirmReceive = async () => {
+    if (!receivingTransfer || !receiverName.trim() || isReceiving) return;
+    setIsReceiving(true);
+    try {
+      await onMarkReceived(receivingTransfer, receiverName.trim());
+      setReceivingTransfer(null);
+      setReceiverName('');
+    } finally {
+      setIsReceiving(false);
+    }
+  };
+
   const statusBadge = (status: string) => {
     const base = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold';
     if (status === 'Received' || status === 'Completed') return `${base} bg-green-100 text-green-700`;
@@ -515,7 +544,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
 
                         {(t.status === 'Pending' || t.status === 'In Transit') && (
                           <button
-                            onClick={() => onMarkReceived(t)}
+                            onClick={() => openReceivePrompt(t)}
                             className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors font-semibold"
                           >
                             <CheckCircle2 size={13} /> Receive
@@ -723,7 +752,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
               <div className="flex items-center gap-2">
                 {(viewTransfer.status === 'Pending' || viewTransfer.status === 'In Transit') && (
                   <button
-                    onClick={() => onMarkReceived(viewTransfer)}
+                    onClick={() => openReceivePrompt(viewTransfer)}
                     className="flex items-center gap-2 px-5 py-2.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
                   >
                     <CheckCircle2 size={16} /> Mark as Received
@@ -738,6 +767,81 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ── Receive Prompt Modal ────────────────────────────────────────
+          Opens when a Receive button is clicked. Asks for the receiver's
+          name; on confirm, fires the actual onMarkReceived(transfer, name)
+          which does all the inventory updates + records the receiver + the
+          receive date on the transfer. */}
+      {receivingTransfer && (
+        <div
+          onClick={closeReceivePrompt}
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(15,23,42,0.55)' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+          >
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-700">
+                <CheckCircle2 size={18} />
+              </div>
+              <div>
+                <div className="text-base font-bold text-gray-900">Mark as Received</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  Confirm who received {receivingTransfer.brandName} {receivingTransfer.modelName} at {receivingTransfer.toLocation}.
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Receiver's Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  autoFocus
+                  value={receiverName}
+                  onChange={e => setReceiverName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && receiverName.trim()) confirmReceive();
+                    else if (e.key === 'Escape') closeReceivePrompt();
+                  }}
+                  disabled={isReceiving}
+                  placeholder="Enter the recipient's full name"
+                  className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800">
+                On confirm: the stock-in date and location for the transferred serials will be updated
+                to today ({new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })})
+                and this transfer will be marked <b>Received</b>.
+              </div>
+            </div>
+
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+              <button
+                onClick={closeReceivePrompt}
+                disabled={isReceiving}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReceive}
+                disabled={!receiverName.trim() || isReceiving}
+                className="px-5 py-2 text-sm font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              >
+                {isReceiving
+                  ? (<><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>)
+                  : (<><CheckCircle2 size={14} /> Confirm Receipt</>)}
+              </button>
+            </div>
           </div>
         </div>
       )}

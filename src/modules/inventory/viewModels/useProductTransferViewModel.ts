@@ -27,7 +27,7 @@ interface UseProductTransferViewModelReturn {
   setFilter: (key: keyof TransferFilters, value: any) => void;
   clearFilters: () => void;
   toggleFilters: () => void;
-  handleMarkReceived: (transfer: ProductTransfer) => Promise<void>;
+  handleMarkReceived: (transfer: ProductTransfer, receiverName: string) => Promise<void>;
   handleDeleteTransfer: (id: string) => Promise<void>;
   setViewTransfer: (transfer: ProductTransfer | null) => void;
   onBack: () => void;
@@ -110,134 +110,94 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
   const toggleFilters = useCallback(() => setShowFilters(p => !p), []);
 
   // ── CORE: Mark Received → add serials to destination product ─────────────
-  const handleMarkReceived = useCallback(async (transfer: ProductTransfer) => {
+  const handleMarkReceived = useCallback(async (transfer: ProductTransfer, receiverName: string) => {
     if (transfer.status === 'Received') {
       toast.error('This transfer is already marked as received');
       return;
     }
+    if (!receiverName || !receiverName.trim()) {
+      toast.error('Receiver name is required');
+      return;
+    }
 
     try {
-      const sourceProduct = allProducts.find(p => p.id === transfer.productId);
-      if (!sourceProduct) { toast.error('Source product not found'); return; }
+      const product = allProducts.find(p => p.id === transfer.productId);
+      if (!product) { toast.error('Product not found'); return; }
 
       const transferredSerials = transfer.serialNumbers || [];
       const toLocation = transfer.toLocation;
+      const receivedAt = new Date().toISOString();
+      const receiveDateOnly = receivedAt.slice(0, 10);
 
-      // Step 1: Update source product's serialCities so remaining serials
-      // keep their existing city assignments (preserve prior overrides).
-      const sourceRemainingSerials = (sourceProduct.serialNumbers || []).filter(
-        s => !transferredSerials.includes(s)
-      );
-      const sourceCities: Record<string, string> = { ...(sourceProduct.serialCities || {}) };
-      // Drop the transferred serials from the source's map — they're moving.
-      transferredSerials.forEach(s => { delete sourceCities[s]; });
-      // Make each remaining serial's location explicit (fall back to product
-      // default) so future writes don't have anything to "fall through" to.
-      sourceRemainingSerials.forEach(s => {
-        if (!sourceCities[s]) sourceCities[s] = sourceProduct.location || '';
-      });
+      // Because create no longer touches the inventory, all transferred
+      // serials are still on the source product record. Marking Received
+      // just updates their per-serial location AND their per-serial
+      // stock-in date to today. The rest of the product is untouched.
+      const nextCities: Record<string, string> = { ...(product.serialCities || {}) };
+      const nextStockInDates: Record<string, string> = { ...((product as any).serialStockInDates || {}) };
+      const nextStatus: Record<string, string> = { ...(product.serialStatus || {}) };
+      for (const s of transferredSerials) {
+        nextCities[s] = toLocation;
+        nextStockInDates[s] = receiveDateOnly;
+        // Clear any transit marker back to Available (in case a prior
+        // buggy write left "In Transit" on it).
+        if (nextStatus[s] === 'In Transit') nextStatus[s] = 'Available';
+      }
 
-      await InventoryFirebaseService.updateProduct(sourceProduct.id, {
-        stock:         sourceRemainingSerials.length,
-        serialNumbers: sourceRemainingSerials,
-        serialCities:  sourceCities,
-      });
-
-      // Step 2: Find destination product record.
-      const destProduct =
-        allProducts.find(
-          p =>
-            p.brandName === sourceProduct.brandName &&
-            p.modelName === sourceProduct.modelName &&
-            p.id !== sourceProduct.id &&
-            p.location === toLocation &&
-            p.receivableStatus !== 'Pending'
-        ) ??
-        allProducts.find(
-          p =>
-            p.brandName === sourceProduct.brandName &&
-            p.modelName === sourceProduct.modelName &&
-            p.id !== sourceProduct.id &&
-            p.receivableStatus !== 'Pending'
-        ) ??
-        sourceProduct;
-
-      // BUG that this fixes: previously we built `mergedCities` fresh with
-      // every serial pinned at `toLocation`, then set `location: toLocation`
-      // too. When source and destination were the same product (the common
-      // case for this codebase — one product doc per brand/model, serials
-      // spread across cities via serialCities) that rewrite touched EVERY
-      // serial in the product, not just the ones being received.
-      //
-      // Preserve destProduct's existing serialCities and only update the
-      // transferred serials to the new location. product.location only
-      // gets advanced when every serial now sits at that location — safer
-      // than always overwriting it.
-      const isSameAsSource = destProduct.id === sourceProduct.id;
-      // If dest === source, the source-side write we just did means
-      // destProduct.serialNumbers/serialCities in local state are stale.
-      // Rehydrate from what we just wrote.
-      const destBaseSerials: string[] = isSameAsSource
-        ? sourceRemainingSerials
-        : (destProduct.serialNumbers || []);
-      const destBaseCities: Record<string, string> = isSameAsSource
-        ? { ...sourceCities }
-        : { ...(destProduct.serialCities || {}) };
-
-      // Merge in the transferred serials at their new location.
-      const mergedSerials = [
-        ...destBaseSerials.filter(s => !transferredSerials.includes(s)),
-        ...transferredSerials,
-      ];
-      const mergedCities: Record<string, string> = { ...destBaseCities };
-      transferredSerials.forEach(s => { mergedCities[s] = toLocation; });
-      // Make sure every non-transferred serial has an explicit location too.
-      mergedSerials.forEach(s => {
-        if (!mergedCities[s]) mergedCities[s] = destProduct.location || '';
-      });
-
-      // Only advance product.location when literally every serial is at the
-      // new location. Otherwise leave the existing default so future serials
-      // without a serialCities entry still fall back to their real region.
-      const allValues = mergedSerials.map(s => mergedCities[s]).filter(Boolean);
-      const allSame   = allValues.length === mergedSerials.length
+      // If every serial on the product is now at toLocation, advance the
+      // product-wide default so future writes fall back correctly.
+      const allSerials: string[] = product.serialNumbers || [];
+      const allValues = allSerials.map(s => nextCities[s] || product.location || '').filter(Boolean);
+      const allSame   = allValues.length === allSerials.length
                      && allValues.every(v => v === toLocation);
 
-      await InventoryFirebaseService.updateProduct(destProduct.id, {
-        stock:         mergedSerials.length,
-        serialNumbers: mergedSerials,
-        serialCities:  mergedCities,
-        location:      allSame ? toLocation : destProduct.location,
-      });
+      await InventoryFirebaseService.updateProduct(product.id, {
+        serialCities:  nextCities,
+        serialStatus:  nextStatus,
+        // Per user request: bring the product's stock-in date forward to
+        // the receive date so the inventory list shows a recent stock-in
+        // for these serials.
+        stockInDate:   receiveDateOnly,
+        ...(({ serialStockInDates: nextStockInDates } as any)),
+        location:      allSame ? toLocation : product.location,
+      } as any);
 
-      // Step 3: Mark transfer as Received with full ISO timestamp
-      const receivedAt = new Date().toISOString();
+      // Update the transfer with status + receiver info + receive date.
+      // updateTransferStatus already writes status + receivedAt; the
+      // receiverName goes via a direct doc merge in the service.
       await TransferFirebaseService.updateTransferStatus(transfer.id, 'Received', receivedAt);
+      // Also stamp the receiverName on the transfer doc.
+      try {
+        await (TransferFirebaseService as any).updateTransferReceiver?.(transfer.id, receiverName.trim());
+      } catch {
+        // Fallback if the helper doesn't exist yet — write via generic patch
+        await (TransferFirebaseService as any).patchTransfer?.(transfer.id, { receiverName: receiverName.trim() });
+      }
 
-      // Step 4: Sync local state
+      // Sync local state
       setAllTransfers(prev =>
         prev.map(t =>
-          t.id === transfer.id ? { ...t, status: 'Received', receivedAt } : t
+          t.id === transfer.id
+            ? { ...t, status: 'Received', receivedAt, receiverName: receiverName.trim() } as any
+            : t
         )
       );
       setAllProducts(prev =>
-        prev.map(p => {
-          if (p.id === sourceProduct.id && !isSameAsSource)
-            return { ...p, stock: sourceRemainingSerials.length, serialNumbers: sourceRemainingSerials, serialCities: sourceCities };
-          if (p.id === destProduct.id)
-            return {
+        prev.map(p => p.id === product.id
+          ? {
               ...p,
-              stock: mergedSerials.length,
-              serialNumbers: mergedSerials,
-              serialCities: mergedCities,
+              serialCities: nextCities,
+              serialStatus: nextStatus,
+              stockInDate: receiveDateOnly,
               location: allSame ? toLocation : p.location,
-            };
-          return p;
-        })
+              ...(({ serialStockInDates: nextStockInDates } as any)),
+            } as any
+          : p
+        )
       );
 
       toast.success(
-        `✅ Transfer received at ${toLocation} — ${transferredSerials.length} unit(s) added to stock`
+        `✅ Transfer received by ${receiverName.trim()} at ${toLocation} — ${transferredSerials.length} unit(s) updated`
       );
       setViewTransfer(null);
     } catch (err) {

@@ -275,37 +275,14 @@ export function useProductTransferCreateViewModel(
           quantity:      item.selectedSerials.length,
         };
       });
+      // Per user request: creating a transfer does NOT touch the inventory
+      // list. Products stay where they are until the transfer is marked
+      // Received (which is when the receive-side VM updates serialCities
+      // + stockInDate + serialStatus). This keeps the inventory list
+      // stable during in-transit periods.
       for (const item of transferItems) {
         const product = getProductById(item.productId);
         if (!product) continue;
-        const transferredSerials = item.selectedSerials;
-        const remainingSerials = (product.serialNumbers || []).filter(
-          s => !transferredSerials.includes(s)
-        );
-        // Preserve existing per-serial locations for remaining serials.
-        // Previously this created a brand-new empty object, which meant every
-        // remaining serial got rewritten with the product-wide default from
-        // getSerialEffectiveLocation — even if some of those serials had
-        // their own overrides from previous transfers.
-        const newCities: Record<string, string> = { ...(product.serialCities || {}) };
-        // Drop any transferred serials from the map — they're no longer at the
-        // source. Their real destination is written when the transfer is
-        // marked Received.
-        transferredSerials.forEach(s => { delete newCities[s]; });
-        // For remaining serials, make sure each has an explicit location
-        // entry so future transfers don't accidentally fall back to
-        // product.location.
-        remainingSerials.forEach(s => {
-          if (!newCities[s]) newCities[s] = getSerialEffectiveLocation(product, s);
-        });
-        const updatedSerialStatus: Record<string, string> = { ...(product.serialStatus || {}) };
-        transferredSerials.forEach(s => { updatedSerialStatus[s] = 'In Transit'; });
-        await InventoryFirebaseService.updateProduct(product.id, {
-          stock:         remainingSerials.length,
-          serialNumbers: remainingSerials,
-          serialCities:  newCities,
-          serialStatus:  updatedSerialStatus,
-        });
         await TransferFirebaseService.createTransfer({
           productId:     product.id,
           productName:   `${product.brandName} ${product.modelName}`,
@@ -313,8 +290,8 @@ export function useProductTransferCreateViewModel(
           modelName:     product.modelName,
           fromLocation:  formData.fromLocation,
           toLocation:    formData.toLocation,
-          quantity:      transferredSerials.length,
-          serialNumbers: transferredSerials,
+          quantity:      item.selectedSerials.length,
+          serialNumbers: item.selectedSerials,
           transferDate:  isoDateTime,
           transferredBy: formData.transferredBy,
           note:          formData.note,
@@ -323,10 +300,7 @@ export function useProductTransferCreateViewModel(
           transferItems: transferItemsSummary,
         });
       }
-      toast.success(`Transfer created — products removed from ${formData.fromLocation} and are In Transit to ${formData.toLocation}`);
-      // If the caller provided an onSaveSuccess override (popup context),
-      // use it — the caller decides what to do next (e.g. toggle to report).
-      // Fallback: legacy behavior of routing to the full transfer report page.
+      toast.success('Transfer created successfully — pending receipt');
       if (options?.onSaveSuccess) {
         options.onSaveSuccess();
       } else {

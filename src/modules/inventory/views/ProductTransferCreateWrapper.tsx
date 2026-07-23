@@ -115,6 +115,28 @@ function TransferReportSection({ vm, onNewTransferClick }: {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | 'In Transit' | 'Received' | 'Pending' | 'Cancelled'>('');
 
+  // Receive-prompt state — opens when a Received button is clicked. Asks
+  // for the recipient's name; on confirm, fires vm.handleMarkReceived
+  // which does the inventory update (per-serial location + stock-in date
+  // to today) and marks the transfer Received with the receiver name.
+  const [receivingTransfer, setReceivingTransfer] = useState<ProductTransfer | null>(null);
+  const [receiverName, setReceiverName] = useState('');
+  const [isReceiving, setIsReceiving] = useState(false);
+
+  const openReceive  = (t: ProductTransfer) => { setReceivingTransfer(t); setReceiverName(''); };
+  const closeReceive = () => { if (isReceiving) return; setReceivingTransfer(null); setReceiverName(''); };
+  const confirmReceive = async () => {
+    if (!receivingTransfer || !receiverName.trim() || isReceiving) return;
+    setIsReceiving(true);
+    try {
+      await vm.handleMarkReceived(receivingTransfer, receiverName.trim());
+      setReceivingTransfer(null);
+      setReceiverName('');
+    } finally {
+      setIsReceiving(false);
+    }
+  };
+
   const filtered = vm.transfers.filter(t => {
     if (statusFilter && t.status !== statusFilter) return false;
     if (search.trim()) {
@@ -223,11 +245,119 @@ function TransferReportSection({ vm, onNewTransferClick }: {
               {filtered.map(t => {
                 const rowKey = t.id || `${t.productId}-${t.date}`;
                 return (
-                  <TransferRow key={rowKey} t={t} onMarkReceived={vm.handleMarkReceived} formatDateTime={vm.formatDateTime} />
+                  <TransferRow key={rowKey} t={t} onOpenReceive={openReceive} formatDateTime={vm.formatDateTime} />
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── Receive Prompt Modal ────────────────────────────────────────
+          Opens when a Received button is clicked in any row. Asks for
+          the receiver's name; on confirm, fires vm.handleMarkReceived
+          which applies the per-serial location + stock-in-date update
+          and marks the transfer Received. */}
+      {receivingTransfer && (
+        <div
+          onClick={closeReceive}
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)',
+            zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 460, backgroundColor: '#fff', borderRadius: 16,
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.55)', overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                backgroundColor: '#ecfdf5', color: '#059669',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <CheckCircle2 size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>Mark as Received</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                  Confirm who received {receivingTransfer.brandName} {receivingTransfer.modelName} at {receivingTransfer.toLocation}.
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>
+                  Receiver's Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  autoFocus
+                  value={receiverName}
+                  onChange={e => setReceiverName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && receiverName.trim()) confirmReceive();
+                    else if (e.key === 'Escape') closeReceive();
+                  }}
+                  disabled={isReceiving}
+                  placeholder="Enter the recipient's full name"
+                  style={{
+                    width: '100%', padding: '10px 12px', fontSize: 14,
+                    border: '2px solid #e2e8f0', borderRadius: 8, outline: 'none',
+                    opacity: isReceiving ? 0.6 : 1,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{
+                padding: '10px 12px', borderRadius: 8,
+                backgroundColor: '#eff6ff', border: '1px solid #dbeafe',
+                fontSize: 11.5, color: '#1e40af', lineHeight: 1.5,
+              }}>
+                On confirm: the stock-in date and location for the transferred serials will be updated
+                to today (<b>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</b>)
+                and this transfer will be marked <b>Received</b>.
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={closeReceive}
+                disabled={isReceiving}
+                style={{
+                  padding: '9px 16px', fontSize: 12.5, fontWeight: 700,
+                  color: '#334155', backgroundColor: '#fff',
+                  border: '1px solid #e2e8f0', borderRadius: 8,
+                  cursor: isReceiving ? 'not-allowed' : 'pointer',
+                  opacity: isReceiving ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReceive}
+                disabled={!receiverName.trim() || isReceiving}
+                style={{
+                  padding: '9px 20px', fontSize: 12.5, fontWeight: 800,
+                  color: '#fff', backgroundColor: (!receiverName.trim() || isReceiving) ? '#94a3b8' : '#059669',
+                  border: 'none', borderRadius: 8,
+                  cursor: (!receiverName.trim() || isReceiving) ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {isReceiving
+                  ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Confirming…</>
+                  : <><CheckCircle2 size={13} /> Confirm Receipt</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -237,15 +367,10 @@ function TransferReportSection({ vm, onNewTransferClick }: {
 // ── Row + helpers ──────────────────────────────────────────────────────────
 interface TransferRowProps {
   t: ProductTransfer;
-  onMarkReceived: (t: ProductTransfer) => Promise<void>;
+  onOpenReceive: (t: ProductTransfer) => void;
   formatDateTime: (d: string) => string;
 }
-const TransferRow: React.FC<TransferRowProps> = ({ t, onMarkReceived, formatDateTime }) => {
-  const [busy, setBusy] = useState(false);
-  const handleReceive = async () => {
-    setBusy(true);
-    try { await onMarkReceived(t); } finally { setBusy(false); }
-  };
+const TransferRow: React.FC<TransferRowProps> = ({ t, onOpenReceive, formatDateTime }) => {
   const serials = t.serialNumbers || [];
 
   return (
@@ -288,15 +413,14 @@ const TransferRow: React.FC<TransferRowProps> = ({ t, onMarkReceived, formatDate
       <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
         {t.status === 'In Transit' && (
           <button
-            onClick={handleReceive}
-            disabled={busy}
+            onClick={() => onOpenReceive(t)}
             style={{
               padding: '5px 11px', fontSize: 11, fontWeight: 700, borderRadius: 6,
-              border: 'none', backgroundColor: busy ? '#94a3b8' : '#15803d', color: '#fff',
-              cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+              border: 'none', backgroundColor: '#15803d', color: '#fff',
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
             }}
           >
-            {busy ? <><Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> …</> : <><CheckCircle2 size={11} /> Received</>}
+            <CheckCircle2 size={11} /> Received
           </button>
         )}
       </td>

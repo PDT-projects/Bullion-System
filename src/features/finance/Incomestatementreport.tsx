@@ -351,17 +351,13 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
   }, [txInRange, invInRange]);
 
   // ── Expand/collapse state ─────────────────────────────────────────────
-  // Sections AND categories are expanded by default so users see transactions
-  // and invoice-level detail immediately. They can collapse anything they
-  // don't want to see. Detail rows (level 2) aren't expandable.
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  // On first load / when the tree changes, seed with everything expanded once.
-  React.useEffect(() => {
-    setExpanded(new Set([
-      'section-revenue', 'section-cogs', 'section-opex',
-      ...allExpandableIds,
-    ]));
-  }, [allExpandableIds.length, allExpandableIds.join('|')]);
+  // Only the three top-level SECTIONS (Revenue / COGS / OpEx) are open on
+  // first render — categories start collapsed so the report presents as a
+  // clean summary. Click any category chevron to drill into its
+  // transactions / per-invoice details.
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(['section-revenue', 'section-cogs', 'section-opex'])
+  );
 
   const toggle = (id: string) => setExpanded(prev => {
     const next = new Set(prev);

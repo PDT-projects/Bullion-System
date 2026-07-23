@@ -47,7 +47,7 @@ export function useInventoryReportViewModel() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter(r => {
+    const filtered = rows.filter(r => {
       const matchesSearch = !q || [
         r.brandName, r.modelName, r.serialNumber, r.type, r.location,
         r.ownershipType, r.condition, r.currentStatus, r.invoiceNumber, r.supplierPaymentStatus,
@@ -63,6 +63,20 @@ export function useInventoryReportViewModel() {
       const matchesFrom = !dateFrom || (stockDate !== null && stockDate >= new Date(dateFrom).getTime());
       const matchesTo = !dateTo || (stockDate !== null && stockDate <= new Date(dateTo).getTime() + 86399999);
       return matchesSearch && matchesStatus && matchesOwnership && matchesType && matchesLocation && matchesCondition && matchesBrand && matchesModel && matchesFrom && matchesTo;
+    });
+
+    // Sort by stock-in date — newest (most recent) at the top, older at
+    // the bottom. Items without a stock-in date go to the bottom so they
+    // don't disrupt the chronological read.
+    return filtered.slice().sort((a, b) => {
+      const at = a.stockInDateAuto ? new Date(a.stockInDateAuto).getTime() : Number.NEGATIVE_INFINITY;
+      const bt = b.stockInDateAuto ? new Date(b.stockInDateAuto).getTime() : Number.NEGATIVE_INFINITY;
+      if (at !== bt) return bt - at;   // descending — most recent first
+      // Tiebreaker: brand + model + serial so same-date rows have a stable
+      // deterministic order across renders.
+      const aKey = `${a.brandName || ''}|${a.modelName || ''}|${a.serialNumber || ''}`;
+      const bKey = `${b.brandName || ''}|${b.modelName || ''}|${b.serialNumber || ''}`;
+      return aKey.localeCompare(bKey);
     });
   }, [rows, search, statusFilter, ownershipFilter, typeFilter, locationFilter, conditionFilter, brandFilter, modelFilter, dateFrom, dateTo]);
 
@@ -131,31 +145,31 @@ export function useInventoryReportViewModel() {
   const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRowIds.has(rowKey(r)));
 
   // ── Bulk delete ───────────────────────────────────────────────────────────
-  // Delete distinct products backing the selected rows. Multiple serials from
-  // one product only trigger one product-level soft delete (that's how the
-  // existing per-item delete works — the whole product is soft-deleted).
+  // Deletes each SELECTED SERIAL individually. Multiple selected rows from the
+  // same product become multiple deleteSerial() calls — each removes one serial
+  // from the parent product's arrays and archives a single-serial snapshot.
+  // If a delete empties out the parent product, the whole product is
+  // soft-deleted (that's handled inside InventoryFirebaseService.deleteSerial).
   const bulkDeleteSelected = useCallback(async (
     deletedBy: { uid: string; email: string; displayName?: string }
-  ): Promise<{ deletedCount: number; failed: string[] }> => {
-    const productIds = new Set<string>();
-    filteredRows.forEach(r => {
-      if (selectedRowIds.has(rowKey(r))) productIds.add(r.productId);
-    });
-    if (productIds.size === 0) return { deletedCount: 0, failed: [] };
+  ): Promise<{ deletedCount: number; failed: Array<{ productId: string; serial: string }> }> => {
+    const targets = filteredRows.filter(r => selectedRowIds.has(rowKey(r)));
+    if (targets.length === 0) return { deletedCount: 0, failed: [] };
 
     setIsBulkDeleting(true);
-    const failed: string[] = [];
+    const failed: Array<{ productId: string; serial: string }> = [];
     let deletedCount = 0;
     try {
-      // Sequential is safer than Promise.all here — surfaces per-item failures
-      // and avoids hammering Firestore with parallel writes on large selections.
-      for (const id of productIds) {
+      // Sequential — safer than Promise.all on the same-product case since
+      // each delete reads & rewrites the parent product's serial arrays.
+      // Parallel writes on the same doc would race and drop deletions.
+      for (const row of targets) {
         try {
-          await InventoryFirebaseService.deleteProduct(id, deletedBy);
+          await InventoryFirebaseService.deleteSerial(row.productId, row.serialNumber, deletedBy);
           deletedCount++;
         } catch (e) {
-          console.error(`Failed to delete product ${id}:`, e);
-          failed.push(id);
+          console.error(`Failed to delete serial ${row.serialNumber} of ${row.productId}:`, e);
+          failed.push({ productId: row.productId, serial: row.serialNumber });
         }
       }
       clearSelection();
