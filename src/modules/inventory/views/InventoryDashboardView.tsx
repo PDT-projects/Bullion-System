@@ -438,7 +438,7 @@ export function InventoryDashboardView({
             <MultiFilter label="Model"     selected={vm.modelFilter}  onChange={vm.setModelFilter}  options={vm.modelOptions} />
             <MultiFilter label="Type"      selected={vm.typeFilter}      onChange={vm.setTypeFilter}      options={vm.typeOptions} />
             <MultiFilter label="Location"  selected={vm.locationFilter}  onChange={vm.setLocationFilter}  options={vm.locationOptions} />
-            <MultiFilter label="Condition" selected={vm.conditionFilter} onChange={vm.setConditionFilter} options={vm.conditionOptions} />
+            <MultiFilter label="Condition" selected={vm.conditionFilter} onChange={vm.setConditionFilter} options={['New', 'Used']} />
             <MultiFilter label="Status"    selected={vm.statusFilter}    onChange={vm.setStatusFilter}    options={['In Stock', 'Sold']} />
             <MultiFilter label="Ownership" selected={vm.ownershipFilter} onChange={vm.setOwnershipFilter} options={['Owned', 'Credit']} />
 
