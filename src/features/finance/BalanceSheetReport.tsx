@@ -1,25 +1,37 @@
 // BalanceSheetReport.tsx
 // Computes balance sheet figures from live Firestore data.
-// Assets = Cash + Banks + Inventory + Loans Receivable
-// Liabilities = Loans Payable + Pending Bills
+// Assets = Cash + Banks + Inventory + Loans Receivable + Accounts Receivable
+// Liabilities = Accounts Payable + Loans Payable + Pending Bills
 // Equity = Assets − Liabilities (accounting identity)
 //
-// ALSO: renders a "Manual BS Classification" panel driven by the
-// bsMainCategory / bsSubCategory fields saved on each transaction.
-// Priority: manual classification (saved from form) → shown in dedicated section.
+// Each line item is expandable — click to see the underlying rows.
+// A "Generate PDF" button prints the currently filtered view.
 
 import React, { useMemo, useState } from 'react';
 import { resolveBSBucket, getTransactionTotals } from '../../modules/transactions/models/transactionsService';
 import type { Transaction } from '../../modules/transactions/models/types';
-import { ArrowLeft, Tag, ChevronDown, ChevronUp, Filter, X, Calendar, MapPin } from 'lucide-react';
-import { CurrencyCode, useCurrencyRates, convertFromPKR, fmtCurrency as fmtForeignCurrency, getCurrencyMeta } from './currencyUtils';
-import { CurrencyDropdown } from './CurrencyPicker';
+import {
+  ArrowLeft, Tag, ChevronDown, ChevronUp, ChevronRight,
+  Filter, X, Calendar, MapPin, FileDown,
+} from 'lucide-react';
 
-// Remove local type - use imported Transaction type
-type Bank      = { id: string; name: string; balance: number; accountNumber: string; };
-type Loan      = { id: string; type: 'Payable' | 'Receivable'; remaining: number; loanAmount: number; paid: number; status: string; };
-type Product   = { id: string; costPrice: number; stock: number; };
-type Bill      = { id: string; amount: number; status: string; };
+type Bank    = { id: string; name: string; balance: number; accountNumber: string; };
+type Loan    = {
+  id: string; type: 'Payable' | 'Receivable';
+  remaining: number; loanAmount: number; paid: number; status: string;
+  personName?: string; borrowerName?: string; lenderName?: string; description?: string;
+};
+type Product = {
+  id: string; costPrice: number; stock: number;
+  name?: string; productName?: string; product_name?: string;
+  title?: string; itemName?: string; item_name?: string;
+  productTitle?: string; product_title?: string;
+  label?: string; displayName?: string; display_name?: string;
+  product?: string;
+  sku?: string; code?: string; description?: string;
+  [key: string]: any;
+};
+type Bill    = { id: string; amount: number; status: string; vendor?: string; description?: string; dueDate?: string; };
 
 type BalanceSheetReportProps = {
   transactions: Transaction[];
@@ -27,7 +39,6 @@ type BalanceSheetReportProps = {
   loans: Loan[];
   products: Product[];
   onBack: () => void;
-  // bills prop is optional — pass if available
   bills?: Bill[];
 };
 
@@ -36,12 +47,19 @@ const formatCurrency = (amount: number) =>
     style: 'currency', currency: 'AED', minimumFractionDigits: 0
   }).format(amount);
 
-const Row = ({ label, value, bold = false }: { label: string; value: number; bold?: boolean }) => (
-  <div className={`flex justify-between items-center py-2 border-b border-gray-100 ${bold ? 'font-semibold' : ''}`}>
-    <span className={bold ? 'text-gray-900' : 'text-gray-700'}>{label}</span>
-    <span className={bold ? 'font-bold text-lg text-gray-900' : 'font-medium text-gray-900'}>{formatCurrency(value)}</span>
-  </div>
-);
+// Products can arrive with the display name under any of several field names.
+// Try each in priority order before falling back to the id.
+// NOTE: `description` is intentionally NOT in this list — it's not a name.
+const productDisplayName = (p: Product): string => {
+  const cand =
+    p.name || p.productName || p.product_name ||
+    p.title || p.itemName || p.item_name ||
+    p.productTitle || p.product_title ||
+    p.label || p.displayName || p.display_name ||
+    p.product ||
+    p.sku || p.code;
+  return (cand && String(cand).trim()) || p.id;
+};
 
 const SubTotal = ({ label, value, colorClass = 'bg-blue-50' }: { label: string; value: number; colorClass?: string }) => (
   <div className={`flex justify-between items-center py-3 ${colorClass} rounded-lg px-3 mt-2`}>
@@ -50,11 +68,95 @@ const SubTotal = ({ label, value, colorClass = 'bg-blue-50' }: { label: string; 
   </div>
 );
 
+// ── Expandable line-item row ─────────────────────────────────────────────────
+// Always expandable — even zero-value rows can be opened so users can verify
+// there really are no underlying records. The `hasDetails` prop is accepted for
+// backward compatibility but no longer disables the row.
+const ExpandableRow = ({
+  label, value, expanded, onToggle, note, children,
+}: {
+  label: string;
+  value: number;
+  expanded: boolean;
+  onToggle: () => void;
+  hasDetails?: boolean;
+  note?: string;
+  children?: React.ReactNode;
+}) => (
+  <div className="border-b border-gray-100">
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full flex justify-between items-center py-2 text-left hover:bg-gray-50 cursor-pointer transition-colors"
+    >
+      <span className="flex items-center gap-1.5 text-gray-700">
+        {expanded
+          ? <ChevronDown size={14} className="text-gray-400" />
+          : <ChevronRight size={14} className="text-gray-400" />}
+        {label}
+        {note && <span className="text-[10px] text-gray-400 italic">· {note}</span>}
+      </span>
+      <span className="font-medium text-gray-900">{formatCurrency(value)}</span>
+    </button>
+    {expanded && (
+      <div className="ml-5 mb-3 pl-3 border-l-2 border-blue-100 py-2">
+        {children}
+      </div>
+    )}
+  </div>
+);
+
+const EmptyDetail = ({ text }: { text: string }) => (
+  <p className="text-xs text-gray-400 italic py-2">{text}</p>
+);
+
+const DetailTable = ({
+  headers, rows,
+}: {
+  headers: string[];
+  rows: (string | number)[][];
+}) => (
+  <div className="overflow-x-auto rounded-md border border-gray-100">
+    <table className="w-full text-xs">
+      <thead className="bg-gray-50">
+        <tr>
+          {headers.map((h, i) => (
+            <th
+              key={h}
+              className={`px-2.5 py-1.5 font-semibold text-gray-500 uppercase tracking-wider ${
+                i === headers.length - 1 ? 'text-right' : 'text-left'
+              }`}
+            >
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100 bg-white">
+        {rows.map((r, i) => (
+          <tr key={i} className="hover:bg-gray-50">
+            {r.map((cell, j) => (
+              <td
+                key={j}
+                className={`px-2.5 py-1.5 text-gray-700 ${
+                  j === r.length - 1 ? 'text-right font-semibold text-gray-900 tabular-nums' : ''
+                }`}
+              >
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
 export function BalanceSheetReport({ transactions, banks, loans, products, bills = [], onBack }: BalanceSheetReportProps) {
   const [showBSClassified, setShowBSClassified] = useState(true);
   const [expandedSubs,     setExpandedSubs]     = useState<Set<string>>(new Set());
+  const [expandedRows,     setExpandedRows]     = useState<Set<string>>(new Set());
 
-  const today    = new Date().toISOString().split('T')[0];
   const thisYear = new Date().getFullYear();
   const getTransactionLocation = (t: any): string => {
     const c = t.company || '';
@@ -83,11 +185,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const [customTo,          setCustomTo]          = useState('');
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
-  const primaryCurrency: CurrencyCode = 'AED';
-  const extraCurrencies: CurrencyCode[] = [];
-  const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
-  const reportCurrencyCodes: CurrencyCode[] = [primaryCurrency, ...extraCurrencies];
-
   const availableYears = useMemo(() => {
     const s = new Set<number>();
     transactions.forEach(t => {
@@ -112,6 +209,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const toggleMonth    = (m: string) => setSelectedMonths(p => p.includes(m) ? p.filter(v => v !== m) : [...p, m]);
   const toggleLocation = (l: string) => setSelectedLocations(p => p.includes(l) ? p.filter(v => v !== l) : [...p, l]);
   const hasActiveFilter = filterMode !== 'alltime' || selectedLocations.length > 0;
+  const isDateFiltered  = filterMode !== 'alltime';
 
   const resetFilters = () => {
     setFilterMode('alltime'); setSelectedYears([]); setSelectedMonths([]);
@@ -119,13 +217,8 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   };
 
   const modeBtnStyle = (mode: FilterMode): React.CSSProperties => ({
-    padding: '6px 14px',
-    fontSize: '12px',
-    fontWeight: 600,
-    borderRadius: '8px',
-    border: '1px solid',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
+    padding: '6px 14px', fontSize: '12px', fontWeight: 600,
+    borderRadius: '8px', border: '1px solid', cursor: 'pointer', transition: 'all 0.15s',
     background: filterMode === mode ? '#1e293b' : '#ffffff',
     color: filterMode === mode ? '#ffffff' : '#4b5563',
     borderColor: filterMode === mode ? '#1e293b' : '#d1d5db',
@@ -135,13 +228,20 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const activePeriodLabel = () => {
     if (filterMode === 'alltime') return 'All Time';
     if (filterMode === 'yearly'  && selectedYears.length > 0)  return selectedYears.sort().join(', ');
-    if (filterMode === 'monthly' && selectedMonths.length > 0) return `${selectedMonths.length} month(s)`;
+    if (filterMode === 'monthly' && selectedMonths.length > 0) return selectedMonths.sort().map(monthLabel).join(', ');
     if (filterMode === 'custom'  && (customFrom || customTo))  return `${customFrom || '—'} → ${customTo || '—'}`;
     return 'All Time';
   };
 
   const toggleSub = (key: string) =>
     setExpandedSubs(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
+  const toggleRow = (key: string) =>
+    setExpandedRows(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
@@ -177,15 +277,13 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     });
   }, [transactions, filterMode, selectedMonths, selectedYears, customFrom, customTo, selectedLocations]);
 
-
-
   // ── FULL BS Classification (manual + auto) ─────────────────────────────────
   const classifiedBS = useMemo(() => {
     const map = new Map<string, Map<string, { total: number; txns: Transaction[]; manual: boolean[] }>>();
     for (const t of liquid) {
       const bucket = resolveBSBucket(t);
       if (!bucket) continue;
-      
+
       if (!map.has(bucket.bsMain)) map.set(bucket.bsMain, new Map());
       const inner = map.get(bucket.bsMain)!;
       if (!inner.has(bucket.bsSub)) inner.set(bucket.bsSub, { total: 0, txns: [], manual: [] });
@@ -226,69 +324,88 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     return total;
   };
 
+  // ── Underlying detail lists (used both for expansion & PDF) ─────────────────
+  const details = useMemo(() => {
+    // Cash in Hand — Cash-mode transactions from the filtered set
+    const cashInflowTxns  = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && t.mode === 'Cash');
+    const cashOutflowTxns = liquid.filter(t => t.mainCategory === 'Cash Outflow' && t.mode === 'Cash');
+    const cashIn  = cashInflowTxns.reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
+    const cashOut = cashOutflowTxns.reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
+
+    // Accounts Receivable / Payable — from filtered transactions with remaining amount
+    const receivableTxns = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && (t.remainingAmount ?? 0) > 0);
+    const payableTxns    = liquid.filter(t => t.mainCategory === 'Cash Outflow' && (t.remainingAmount ?? 0) > 0);
+
+    // Loans — current snapshot (unaffected by date range because loans have no txn date field)
+    const loansReceivableList = loans.filter(l => l.type === 'Receivable' && l.status !== 'Full');
+    const loansPayableList    = loans.filter(l => l.type === 'Payable'    && l.status !== 'Full');
+
+    // Bills — current snapshot
+    const pendingBillsList = bills.filter(b => b.status === 'Pending' || b.status === 'Overdue');
+
+    // Inventory — current snapshot
+    const inventoryList = products
+      .map(p => ({
+        ...p,
+        displayName: productDisplayName(p),
+        value: (p.costPrice || 0) * (p.stock || 0),
+      }))
+      .filter(p => p.value !== 0);
+
+    return {
+      cashInflowTxns, cashOutflowTxns, cashIn, cashOut,
+      receivableTxns, payableTxns,
+      loansReceivableList, loansPayableList,
+      pendingBillsList, inventoryList,
+    };
+  }, [liquid, loans, bills, products]);
+
   const bs = useMemo(() => {
     // ── ASSETS ──────────────────────────────────────────────────────────────
-    // Cash in Hand: only the amounts actually paid in Cash mode.
-    const cashIn  = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && t.mode === 'Cash')
-      .reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
-    const cashOut = liquid.filter(t => t.mainCategory === 'Cash Outflow' && t.mode === 'Cash')
-      .reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
-    const cashInHand = Math.max(0, cashIn - cashOut);
+    const cashInHand = Math.max(0, details.cashIn - details.cashOut);
 
-    // Bank balance: from banks collection
+    // Bank balance: from banks collection — current snapshot
     const bankBalance = banks.reduce((s, b) => s + (b.balance || 0), 0);
 
-    // Accounts receivable: pending inflow (partial / cheque uncleared)
-    const accountsReceivable = liquid
-      .filter(t => t.mainCategory === 'Cash Inflow' && (t.remainingAmount ?? 0) > 0)
+    // Accounts receivable — from filtered transactions
+    const accountsReceivable = details.receivableTxns
       .reduce((s, t) => s + (t.remainingAmount ?? 0), 0);
 
-    // Inventory value: sum of (costPrice × stock)
-    const inventoryValue = products.reduce((s, p) => s + (p.costPrice || 0) * (p.stock || 0), 0);
+    // Inventory value
+    const inventoryValue = details.inventoryList.reduce((s, p) => s + p.value, 0);
 
-    // Loans receivable (what others owe us)
-    const loansReceivable = loans
-      .filter(l => l.type === 'Receivable' && l.status !== 'Full')
-      .reduce((s, l) => s + (l.remaining || 0), 0);
+    // Loans receivable
+    const loansReceivable = details.loansReceivableList.reduce((s, l) => s + (l.remaining || 0), 0);
 
-    // Add manually classified assets that are not already represented by the standard totals.
+    // Manually classified assets not represented by the standard totals above
     const knownAssetBuckets = new Set(['Cash & Cash Equivalents', 'Inventory', 'Accounts Receivable', 'Loans Receivable']);
     const classifiedAssets = Array.from(classifiedBS.get('Assets')?.entries() || [])
       .filter(([sub]) => !knownAssetBuckets.has(sub))
       .reduce((sum, [, entry]) => sum + entry.total, 0);
+
     const totalCurrentAssets = cashInHand + bankBalance + accountsReceivable + inventoryValue + loansReceivable + classifiedAssets;
-
-    // Fixed assets — keep as 0 unless a fixed asset module is added
-    const totalFixedAssets = 0;
-
-    const totalAssets = totalCurrentAssets + totalFixedAssets;
+    const totalFixedAssets   = 0;
+    const totalAssets        = totalCurrentAssets + totalFixedAssets;
 
     // ── LIABILITIES ──────────────────────────────────────────────────────────
-    // Accounts payable: pending outflow
-    const accountsPayable = liquid
-      .filter(t => t.mainCategory === 'Cash Outflow' && (t.remainingAmount ?? 0) > 0)
+    const accountsPayable = details.payableTxns
       .reduce((s, t) => s + (t.remainingAmount ?? 0), 0);
 
-    // Loans payable
-    const loansPayable = loans
-      .filter(l => l.type === 'Payable' && l.status !== 'Full')
+    const loansPayable = details.loansPayableList
       .reduce((s, l) => s + (l.remaining || 0), 0);
 
-    // Pending bills
-    const pendingBills = bills
-      .filter(b => b.status === 'Pending' || b.status === 'Overdue')
+    const pendingBills = details.pendingBillsList
       .reduce((s, b) => s + b.amount, 0);
 
-    // Add manually classified liabilities that are not already included in standard current liability totals.
     const knownLiabilityBuckets = new Set(['Accounts Payable', 'Short-term Loans']);
     const classifiedLiabilities = Array.from(classifiedBS.get('Liabilities & Equity')?.entries() || [])
       .filter(([sub]) => !knownLiabilityBuckets.has(sub))
       .reduce((sum, [, entry]) => sum + entry.total, 0);
+
     const totalCurrentLiabilities = accountsPayable + loansPayable + pendingBills + classifiedLiabilities;
     const totalLiabilities        = totalCurrentLiabilities;
 
     // ── EQUITY ───────────────────────────────────────────────────────────────
-    // Fundamental accounting equation: Assets = Liabilities + Equity
     const totalEquity                 = totalAssets - totalLiabilities;
     const totalLiabilitiesAndEquity   = totalLiabilities + totalEquity;
 
@@ -306,23 +423,184 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       totalLiabilitiesAndEquity,
       balanced: Math.abs(totalAssets - totalLiabilitiesAndEquity) < 1,
     };
-  }, [liquid, banks, loans, products, bills]);
+  }, [details, banks, classifiedBS]);
 
-  // Stored amounts are already in AED. Show AED as-is; convert only for other currencies.
-  const convertFromAED = (aed: number, code: CurrencyCode) =>
-    code === 'AED' ? aed : convertFromPKR(aed, code, rates);
+  // ── PDF generation ─────────────────────────────────────────────────────────
+  const generatePDF = () => {
+    const win = window.open('', '_blank', 'width=1000,height=800');
+    if (!win) {
+      alert('Please allow pop-ups for this site to generate the PDF.');
+      return;
+    }
 
-  const currencyMetrics = useMemo(() => reportCurrencyCodes.map(code => ({
-    code,
-    totalAssets: convertFromAED(bs.assets.totalAssets, code),
-    totalLiabilities: convertFromAED(bs.liabilities.totalLiabilities, code),
-    totalEquity: convertFromAED(bs.equity.totalEquity, code),
-  })), [rates, reportCurrencyCodes, bs.assets.totalAssets, bs.liabilities.totalLiabilities, bs.equity.totalEquity]);
+    const fmt = (n: number) => formatCurrency(n);
+    const esc = (s: any) => String(s ?? '').replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as any)[c]);
 
+    // Cap detail rows per section so the PDF fits on one page.
+    // Anything beyond this gets summarized as "+N more".
+    const MAX_ROWS_PER_SECTION = 6;
+    const detailTable = (headers: string[], rows: (string | number)[][]) => {
+      if (rows.length === 0) return '<p class="empty">No records for this period.</p>';
+      const shown = rows.slice(0, MAX_ROWS_PER_SECTION);
+      const overflow = rows.length - shown.length;
+      return `
+        <table class="detail">
+          <thead><tr>${headers.map((h, i) =>
+            `<th class="${i === headers.length - 1 ? 'amt' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+          <tbody>${shown.map(r =>
+            `<tr>${r.map((c, i) =>
+              `<td class="${i === r.length - 1 ? 'amt' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}
+          ${overflow > 0 ? `<tr><td colspan="${headers.length}" style="text-align:center;color:#94a3b8;font-style:italic;padding:2px 4px;font-size:7.5px">+ ${overflow} more record${overflow === 1 ? '' : 's'} (see full report in-app)</td></tr>` : ''}
+          </tbody>
+        </table>`;
+    };
+
+    const cashRows: (string | number)[][] = [
+      ...details.cashInflowTxns.map(t => [(t.date || '').slice(0, 10), 'Inflow', t.company || '—', fmt(getTransactionTotals(t).totalPaid)]),
+      ...details.cashOutflowTxns.map(t => [(t.date || '').slice(0, 10), 'Outflow', t.company || '—', `- ${fmt(getTransactionTotals(t).totalPaid)}`]),
+    ];
+    const bankRows      = banks.map(b => [b.name || '—', b.accountNumber ? '****' + b.accountNumber.slice(-4) : '—', fmt(b.balance || 0)]);
+    const arRows        = details.receivableTxns.map(t => [(t.date || '').slice(0, 10), t.company || '—', fmt(t.amount || 0), fmt(t.remainingAmount || 0)]);
+    const invRows       = details.inventoryList.map(p => [p.displayName, fmt(p.costPrice || 0), (p.stock || 0), fmt(p.value)]);
+    const loanRxRows    = details.loansReceivableList.map(l => [l.personName || l.borrowerName || l.description || l.id, fmt(l.loanAmount || 0), fmt(l.paid || 0), fmt(l.remaining || 0)]);
+    const apRows        = details.payableTxns.map(t => [(t.date || '').slice(0, 10), t.company || '—', fmt(t.amount || 0), fmt(t.remainingAmount || 0)]);
+    const loanPayRows   = details.loansPayableList.map(l => [l.personName || l.lenderName || l.description || l.id, fmt(l.loanAmount || 0), fmt(l.paid || 0), fmt(l.remaining || 0)]);
+    const billRows      = details.pendingBillsList.map(b => [b.vendor || b.description || b.id, b.dueDate || '—', b.status, fmt(b.amount)]);
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Balance Sheet — ${esc(activePeriodLabel())}</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #111827; padding: 6mm 8mm; background: #fff; font-size: 10px; line-height: 1.35; }
+  h1 { font-size: 16px; margin: 0 0 2px 0; color: #0f172a; letter-spacing: -0.01em; }
+  h2 { font-size: 12px; margin: 8px 0 5px 0; padding: 5px 10px; background: #0f172a; color: #fff; border-radius: 4px; letter-spacing: 0.02em; }
+  h3 { font-size: 9.5px; margin: 6px 0 3px 0; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+  .meta { color: #64748b; font-size: 9.5px; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; gap: 12px; }
+  .meta strong { color: #0f172a; }
+  .row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #f1f5f9; font-size: 10px; }
+  .row .lbl { color: #475569; }
+  .row .val { font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .subtotal { display: flex; justify-content: space-between; padding: 5px 8px; margin-top: 4px; background: #eff6ff; border-radius: 4px; font-weight: 700; font-size: 10.5px; }
+  .total { display: flex; justify-content: space-between; padding: 6px 10px; margin-top: 5px; background: linear-gradient(to right, #dbeafe, #f1f5f9); border-radius: 5px; font-weight: 700; font-size: 11.5px; color: #0f172a; border: 1px solid #93c5fd; }
+  .total.liab { background: linear-gradient(to right, #dcfce7, #f0fdf4); border-color: #86efac; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  table.detail { width: 100%; border-collapse: collapse; margin: 2px 0 5px 0; font-size: 8.5px; }
+  table.detail th { background: #f8fafc; padding: 2px 5px; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; letter-spacing: 0.03em; font-size: 7.5px; }
+  table.detail td { padding: 2px 5px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+  table.detail th.amt, table.detail td.amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: #0f172a; }
+  .empty { font-size: 8.5px; color: #94a3b8; font-style: italic; margin: 2px 0; }
+  .item { margin-bottom: 4px; page-break-inside: avoid; }
+  .item-hdr { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid #e2e8f0; font-size: 10.5px; font-weight: 600; color: #0f172a; margin-bottom: 1px; }
+  .verify { margin-top: 8px; padding: 6px 10px; text-align: center; border-radius: 5px; background: ${bs.balanced ? '#f0fdf4' : '#fefce8'}; border: 1px solid ${bs.balanced ? '#86efac' : '#fde68a'}; page-break-inside: avoid; }
+  .verify h3 { color: #0f172a; margin: 0 0 3px 0; font-size: 10px; }
+  .verify-grid { display: flex; justify-content: center; align-items: center; gap: 16px; font-size: 10px; }
+  .verify-grid .eq { font-size: 14px; color: #94a3b8; }
+  .verify-grid .num { font-size: 12px; font-weight: 700; color: #0f172a; }
+  .footer { margin-top: 6px; padding-top: 4px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 8px; color: #94a3b8; }
+  .snapshot-note { display: inline-block; font-size: 7.5px; color: #92400e; background: #fef3c7; padding: 0 4px; border-radius: 3px; margin-left: 4px; font-style: italic; font-weight: 500; }
+  .cols > div { page-break-inside: avoid; }
+  h2 { page-break-after: avoid; }
+</style></head><body>
+  <h1>Balance Sheet</h1>
+  <div class="meta">
+    <div>Period: <strong>${esc(activePeriodLabel())}</strong>${selectedLocations.length > 0 ? ` &nbsp;·&nbsp; Location: <strong>${esc(selectedLocations.join(', '))}</strong>` : ''}</div>
+    <div>Generated ${esc(new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }))} &nbsp;·&nbsp; ${liquid.length} transactions in scope</div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Assets</h2>
+
+      <div class="item">
+        <div class="item-hdr"><span>Cash in Hand</span><span>${fmt(bs.assets.cashInHand)}</span></div>
+        ${detailTable(['Date', 'Type', 'Company', 'Amount'], cashRows)}
+      </div>
+
+      <div class="item">
+        <div class="item-hdr"><span>Bank Balance<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.assets.bankBalance)}</span></div>
+        ${detailTable(['Bank', 'Account', 'Balance'], bankRows)}
+      </div>
+
+      <div class="item">
+        <div class="item-hdr"><span>Accounts Receivable</span><span>${fmt(bs.assets.accountsReceivable)}</span></div>
+        ${detailTable(['Date', 'Company', 'Total', 'Outstanding'], arRows)}
+      </div>
+
+      <div class="item">
+        <div class="item-hdr"><span>Inventory Stock Value<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.assets.inventoryValue)}</span></div>
+        ${detailTable(['Product', 'Cost Price', 'Stock', 'Value'], invRows)}
+      </div>
+
+      <div class="item">
+        <div class="item-hdr"><span>Loans Receivable<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.assets.loansReceivable)}</span></div>
+        ${detailTable(['Borrower', 'Loan', 'Paid', 'Remaining'], loanRxRows)}
+      </div>
+
+      <div class="subtotal"><span>Total Current Assets</span><span>${fmt(bs.assets.totalCurrentAssets)}</span></div>
+      <div class="total"><span>TOTAL ASSETS</span><span>${fmt(bs.assets.totalAssets)}</span></div>
+    </div>
+
+    <div>
+      <h2>Liabilities &amp; Equity</h2>
+
+      <div class="item">
+        <div class="item-hdr"><span>Accounts Payable</span><span>${fmt(bs.liabilities.accountsPayable)}</span></div>
+        ${detailTable(['Date', 'Company', 'Total', 'Outstanding'], apRows)}
+      </div>
+
+      <div class="item">
+        <div class="item-hdr"><span>Loans Payable<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.liabilities.loansPayable)}</span></div>
+        ${detailTable(['Lender', 'Loan', 'Paid', 'Remaining'], loanPayRows)}
+      </div>
+
+      <div class="item">
+        <div class="item-hdr"><span>Pending Bills<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.liabilities.pendingBills)}</span></div>
+        ${detailTable(['Vendor', 'Due', 'Status', 'Amount'], billRows)}
+      </div>
+
+      <div class="subtotal"><span>Total Current Liabilities</span><span>${fmt(bs.liabilities.totalCurrentLiabilities)}</span></div>
+      <div class="total liab"><span>TOTAL LIABILITIES</span><span>${fmt(bs.liabilities.totalLiabilities)}</span></div>
+
+      <h3 style="margin-top:16px">Equity</h3>
+      <div class="row"><span class="lbl">Owner's Equity (Assets − Liabilities)</span><span class="val">${fmt(bs.equity.totalEquity)}</span></div>
+      <div class="subtotal" style="background:#dcfce7"><span>Total Equity</span><span>${fmt(bs.equity.totalEquity)}</span></div>
+
+      <div class="total liab"><span>TOTAL LIABILITIES + EQUITY</span><span>${fmt(bs.totalLiabilitiesAndEquity)}</span></div>
+    </div>
+  </div>
+
+  <div class="verify">
+    <h3>Balance Verification</h3>
+    <div class="verify-grid">
+      <div><div style="color:#64748b;font-size:8px;text-transform:uppercase;letter-spacing:0.05em">Total Assets</div><div class="num">${fmt(bs.assets.totalAssets)}</div></div>
+      <span class="eq">=</span>
+      <div><div style="color:#64748b;font-size:8px;text-transform:uppercase;letter-spacing:0.05em">Liabilities + Equity</div><div class="num">${fmt(bs.totalLiabilitiesAndEquity)}</div></div>
+    </div>
+    <div style="margin-top:4px;font-size:9.5px;font-weight:600;color:${bs.balanced ? '#15803d' : '#a16207'}">
+      ${bs.balanced ? '✓ Balance sheet is balanced' : '⚠ Minor rounding difference detected'}
+    </div>
+  </div>
+
+  <div class="footer">This report was generated from live data as of ${esc(new Date().toLocaleDateString('en-US', { dateStyle: 'long' }))}. Items marked "current snapshot" reflect present state and are not affected by the date filter.</div>
+</body></html>`;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+
+    // Trigger print once the doc is ready
+    const trigger = () => setTimeout(() => { try { win.focus(); win.print(); } catch {} }, 350);
+    if (win.document.readyState === 'complete') trigger();
+    else win.addEventListener('load', trigger);
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Balance Sheet</h1>
           <p className="text-gray-500 mt-1 text-sm">
@@ -337,10 +615,55 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             )}
           </p>
         </div>
-        <button onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          <ArrowLeft size={16} /> Back to Reports Hub
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={generatePDF}
+            title="Download this balance sheet as a PDF"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '8px 16px 8px 8px',
+              background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13.5,
+              fontWeight: 600,
+              letterSpacing: '0.015em',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px -2px rgba(220, 38, 38, 0.35), 0 1px 2px rgba(0,0,0,0.06)',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px -2px rgba(220, 38, 38, 0.45), 0 2px 4px rgba(0,0,0,0.08)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px -2px rgba(220, 38, 38, 0.35), 0 1px 2px rgba(0,0,0,0.06)';
+            }}
+            onMouseDown={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+          >
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 28, height: 28,
+              borderRadius: 6,
+              background: 'rgba(255, 255, 255, 0.20)',
+            }}>
+              <FileDown size={15} strokeWidth={2.5} />
+            </span>
+            <span>Generate PDF</span>
+          </button>
+          <button onClick={onBack}
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors text-sm font-medium">
+            <ArrowLeft size={16} /> Back to Reports Hub
+          </button>
+        </div>
       </div>
 
       {/* ── Filter Panel ── */}
@@ -480,44 +803,15 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         </div>
       </div>
 
-
-
-      <div className="grid grid-cols-1 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900">Currency conversion summary</h3>
-              <p className="text-xs text-gray-500">Choose the report currency and optional extra conversions.</p>
-            </div>
-            <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
-          </div>
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-            <span>{ratesLoading ? 'Loading exchange rates…' : ratesError ? 'Using fallback rates' : `Updated ${lastUpdated ? lastUpdated.toLocaleTimeString('en-US') : '—'}`}</span>
-            {ratesError && <span className="text-amber-600">Using estimated rates</span>}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {currencyMetrics.map(item => (
-              <div key={item.code} className="rounded-xl border border-gray-100 p-4 bg-slate-50">
-                <div className="text-sm font-semibold text-gray-900">{getCurrencyMeta(item.code).flag} {item.code}</div>
-                <div className="mt-3 space-y-2 text-sm text-gray-700">
-                  <div>
-                    <div className="text-xs text-gray-500">Total Assets</div>
-                    <div className="font-semibold text-gray-900">{fmtForeignCurrency(item.totalAssets, item.code)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500">Total Liabilities</div>
-                    <div className="font-semibold text-gray-900">{fmtForeignCurrency(item.totalLiabilities, item.code)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500">Equity</div>
-                    <div className="font-semibold text-gray-900">{fmtForeignCurrency(item.totalEquity, item.code)}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+      {isDateFiltered && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3 text-xs flex items-start gap-2">
+          <span className="text-base leading-none">ℹ️</span>
+          <span>
+            Cash flows, receivables and payables reflect the selected date range.
+            <strong> Bank balances, inventory, loans, and pending bills</strong> are current snapshots and cannot be historically reconstructed from the data model.
+          </span>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* ── ASSETS ── */}
@@ -525,12 +819,127 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">ASSETS</h2>
 
           <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">Current Assets</h3>
-          <div className="space-y-1 mb-4">
-            <Row label="Cash in Hand"          value={bs.assets.cashInHand} />
-            <Row label="Bank Balance"          value={bs.assets.bankBalance} />
-            <Row label="Accounts Receivable"   value={bs.assets.accountsReceivable} />
-            <Row label="Inventory Stock Value" value={bs.assets.inventoryValue} />
-            <Row label="Loans Receivable"      value={bs.assets.loansReceivable} />
+          <div className="space-y-0 mb-4">
+
+            {/* Cash in Hand */}
+            <ExpandableRow
+              label="Cash in Hand"
+              value={bs.assets.cashInHand}
+              expanded={expandedRows.has('cashInHand')}
+              onToggle={() => toggleRow('cashInHand')}
+              hasDetails={details.cashInflowTxns.length + details.cashOutflowTxns.length > 0}
+            >
+              <div className="text-xs text-gray-600 mb-2 flex justify-between">
+                <span>Cash Inflows (mode = Cash): <strong className="text-green-700">{formatCurrency(details.cashIn)}</strong></span>
+                <span>Cash Outflows: <strong className="text-red-700">{formatCurrency(details.cashOut)}</strong></span>
+              </div>
+              {(details.cashInflowTxns.length + details.cashOutflowTxns.length) > 0 ? (
+                <DetailTable
+                  headers={['Date', 'Type', 'Company', 'Amount']}
+                  rows={[
+                    ...details.cashInflowTxns.map(t => [
+                      (t.date || '').slice(0, 10),
+                      'Inflow',
+                      t.company || '—',
+                      formatCurrency(getTransactionTotals(t).totalPaid),
+                    ]),
+                    ...details.cashOutflowTxns.map(t => [
+                      (t.date || '').slice(0, 10),
+                      'Outflow',
+                      t.company || '—',
+                      `- ${formatCurrency(getTransactionTotals(t).totalPaid)}`,
+                    ]),
+                  ]}
+                />
+              ) : <EmptyDetail text="No cash-mode transactions in this period." />}
+            </ExpandableRow>
+
+            {/* Bank Balance */}
+            <ExpandableRow
+              label="Bank Balance"
+              value={bs.assets.bankBalance}
+              expanded={expandedRows.has('bankBalance')}
+              onToggle={() => toggleRow('bankBalance')}
+              hasDetails={banks.length > 0}
+              note="current snapshot"
+            >
+              {banks.length > 0 ? (
+                <DetailTable
+                  headers={['Bank', 'Account', 'Balance']}
+                  rows={banks.map(b => [
+                    b.name || '—',
+                    b.accountNumber ? '****' + b.accountNumber.slice(-4) : '—',
+                    formatCurrency(b.balance || 0),
+                  ])}
+                />
+              ) : <EmptyDetail text="No bank accounts on file." />}
+            </ExpandableRow>
+
+            {/* Accounts Receivable */}
+            <ExpandableRow
+              label="Accounts Receivable"
+              value={bs.assets.accountsReceivable}
+              expanded={expandedRows.has('accountsReceivable')}
+              onToggle={() => toggleRow('accountsReceivable')}
+              hasDetails={details.receivableTxns.length > 0}
+            >
+              {details.receivableTxns.length > 0 ? (
+                <DetailTable
+                  headers={['Date', 'Company', 'Total', 'Outstanding']}
+                  rows={details.receivableTxns.map(t => [
+                    (t.date || '').slice(0, 10),
+                    t.company || '—',
+                    formatCurrency(t.amount || 0),
+                    formatCurrency(t.remainingAmount || 0),
+                  ])}
+                />
+              ) : <EmptyDetail text="No outstanding receivables in this period." />}
+            </ExpandableRow>
+
+            {/* Inventory */}
+            <ExpandableRow
+              label="Inventory Stock Value"
+              value={bs.assets.inventoryValue}
+              expanded={expandedRows.has('inventoryValue')}
+              onToggle={() => toggleRow('inventoryValue')}
+              hasDetails={details.inventoryList.length > 0}
+              note="current snapshot"
+            >
+              {details.inventoryList.length > 0 ? (
+                <DetailTable
+                  headers={['Product', 'Cost Price', 'Stock', 'Value']}
+                  rows={details.inventoryList.map(p => [
+                    p.displayName,
+                    formatCurrency(p.costPrice || 0),
+                    (p.stock || 0),
+                    formatCurrency(p.value),
+                  ])}
+                />
+              ) : <EmptyDetail text="No products with stock value." />}
+            </ExpandableRow>
+
+            {/* Loans Receivable */}
+            <ExpandableRow
+              label="Loans Receivable"
+              value={bs.assets.loansReceivable}
+              expanded={expandedRows.has('loansReceivable')}
+              onToggle={() => toggleRow('loansReceivable')}
+              hasDetails={details.loansReceivableList.length > 0}
+              note="current snapshot"
+            >
+              {details.loansReceivableList.length > 0 ? (
+                <DetailTable
+                  headers={['Borrower', 'Loan', 'Paid', 'Remaining']}
+                  rows={details.loansReceivableList.map(l => [
+                    l.personName || l.borrowerName || l.description || l.id,
+                    formatCurrency(l.loanAmount || 0),
+                    formatCurrency(l.paid || 0),
+                    formatCurrency(l.remaining || 0),
+                  ])}
+                />
+              ) : <EmptyDetail text="No outstanding loans receivable." />}
+            </ExpandableRow>
+
           </div>
           <SubTotal label="Total Current Assets" value={bs.assets.totalCurrentAssets} colorClass="bg-blue-50" />
 
@@ -551,10 +960,73 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">LIABILITIES & EQUITY</h2>
 
           <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">Current Liabilities</h3>
-          <div className="space-y-1 mb-4">
-            <Row label="Accounts Payable (Pending)"  value={bs.liabilities.accountsPayable} />
-            <Row label="Loans Payable (Outstanding)" value={bs.liabilities.loansPayable} />
-            <Row label="Pending Bills"               value={bs.liabilities.pendingBills} />
+          <div className="space-y-0 mb-4">
+
+            {/* Accounts Payable */}
+            <ExpandableRow
+              label="Accounts Payable (Pending)"
+              value={bs.liabilities.accountsPayable}
+              expanded={expandedRows.has('accountsPayable')}
+              onToggle={() => toggleRow('accountsPayable')}
+              hasDetails={details.payableTxns.length > 0}
+            >
+              {details.payableTxns.length > 0 ? (
+                <DetailTable
+                  headers={['Date', 'Company', 'Total', 'Outstanding']}
+                  rows={details.payableTxns.map(t => [
+                    (t.date || '').slice(0, 10),
+                    t.company || '—',
+                    formatCurrency(t.amount || 0),
+                    formatCurrency(t.remainingAmount || 0),
+                  ])}
+                />
+              ) : <EmptyDetail text="No outstanding payables in this period." />}
+            </ExpandableRow>
+
+            {/* Loans Payable */}
+            <ExpandableRow
+              label="Loans Payable (Outstanding)"
+              value={bs.liabilities.loansPayable}
+              expanded={expandedRows.has('loansPayable')}
+              onToggle={() => toggleRow('loansPayable')}
+              hasDetails={details.loansPayableList.length > 0}
+              note="current snapshot"
+            >
+              {details.loansPayableList.length > 0 ? (
+                <DetailTable
+                  headers={['Lender', 'Loan', 'Paid', 'Remaining']}
+                  rows={details.loansPayableList.map(l => [
+                    l.personName || l.lenderName || l.description || l.id,
+                    formatCurrency(l.loanAmount || 0),
+                    formatCurrency(l.paid || 0),
+                    formatCurrency(l.remaining || 0),
+                  ])}
+                />
+              ) : <EmptyDetail text="No outstanding loans payable." />}
+            </ExpandableRow>
+
+            {/* Pending Bills */}
+            <ExpandableRow
+              label="Pending Bills"
+              value={bs.liabilities.pendingBills}
+              expanded={expandedRows.has('pendingBills')}
+              onToggle={() => toggleRow('pendingBills')}
+              hasDetails={details.pendingBillsList.length > 0}
+              note="current snapshot"
+            >
+              {details.pendingBillsList.length > 0 ? (
+                <DetailTable
+                  headers={['Vendor', 'Due Date', 'Status', 'Amount']}
+                  rows={details.pendingBillsList.map(b => [
+                    b.vendor || b.description || b.id,
+                    b.dueDate || '—',
+                    b.status,
+                    formatCurrency(b.amount),
+                  ])}
+                />
+              ) : <EmptyDetail text="No pending bills." />}
+            </ExpandableRow>
+
           </div>
           <SubTotal label="Total Current Liabilities" value={bs.liabilities.totalCurrentLiabilities} colorClass="bg-red-50" />
 
@@ -612,8 +1084,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                 Transactions with a manual Balance Sheet category override set in the transaction form.
                 These reflect your deliberate classification and are shown here for reporting.
               </p>
-
-
 
               {Array.from(bsClassified.entries()).map(([mainCat, subMap]) => (
                 <div key={mainCat}>

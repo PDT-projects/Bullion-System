@@ -194,6 +194,17 @@ function mapToInvoiceProductRow(ip: InvoiceProduct): InvoiceProduct {
 
 function mapRawToProductInfo(p: any): ProductInfo {
   const { supplierCost, purchaseCost } = extractCost(p);
+  // Be defensive about which field holds the image URLs — different code
+  // paths (multi-model view, wizard, quick-add modal) have historically
+  // saved under slightly different keys.
+  let imageUrls: string[] = [];
+  if (Array.isArray(p.imageUrls) && p.imageUrls.length > 0)      imageUrls = p.imageUrls;
+  else if (Array.isArray(p.images) && p.images.length > 0)        imageUrls = p.images;
+  else if (Array.isArray(p.photos) && p.photos.length > 0)        imageUrls = p.photos;
+  else if (Array.isArray(p.pictures) && p.pictures.length > 0)    imageUrls = p.pictures;
+  else if (typeof p.imageUrl === 'string' && p.imageUrl)          imageUrls = [p.imageUrl];
+  else if (typeof p.image === 'string' && p.image)                imageUrls = [p.image];
+
   return {
     id:            p.id,
     brandName:     p.brandName || p.brand || '',
@@ -207,7 +218,7 @@ function mapRawToProductInfo(p: any): ProductInfo {
     serialCities:  p.serialCities  || {},
     serialStatus:  p.serialStatus  || {},
     description:   p.description    || '',
-    imageUrls:     Array.isArray(p.imageUrls) ? p.imageUrls : [],
+    imageUrls,
   };
 }
 
@@ -337,6 +348,15 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           .filter(p => p.receivableStatus !== 'Pending')
           .map(mapRawToProductInfo);
         setAllProducts(infos);
+        // Diagnostic: how many products have images? Which don't?
+        const withImg    = infos.filter(p => p.imageUrls && p.imageUrls.length > 0);
+        const withoutImg = infos.filter(p => !p.imageUrls || p.imageUrls.length === 0);
+        console.log(`[Invoice] Loaded ${infos.length} products —`,
+                    `${withImg.length} have images, ${withoutImg.length} have none.`);
+        if (withoutImg.length > 0 && withoutImg.length <= 20) {
+          console.log('[Invoice] Products without images:',
+                      withoutImg.map(p => `${p.brandName} ${p.modelName} (${p.id})`));
+        }
       })
       .catch(err => {
         console.error('fetchAllProducts failed:', err);
@@ -494,6 +514,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         case 'productId': {
           const updated = updateProductWithSelection(p, value, allProducts);
           const pInfo = allProducts.find(x => x.id === value);
+          console.log(`[Invoice] Picked product "${pInfo?.brandName} ${pInfo?.modelName}" (${value}) — imageUrls:`, pInfo?.imageUrls);
           return {
             ...updated,
             currency: 'AED',
@@ -544,7 +565,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const generateAndSavePdf = useCallback(async (savedInvoice: Invoice): Promise<void> => {
     setPdfGenerating(true);
     try {
-      const pdfBlob = await generateInvoicePdf(savedInvoice);
+      const pdfBlob = await generateInvoicePdf(savedInvoice, { enrichWithProducts: allProducts });
       const pdfUrl  = await (InvoiceFirebaseService as any).uploadInvoicePdf?.(savedInvoice.id, pdfBlob);
       if (pdfUrl) await (InvoiceFirebaseService as any).savePdfUrl?.(savedInvoice.id, pdfUrl);
     } catch (err) {
@@ -558,18 +579,27 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const handleDownloadPdf = useCallback(async () => {
     setIsDownloadingPdf(true);
     try {
+      // Enrich rows the same way handleSave does — so images show up in a
+      // preview PDF even before saving.
+      const productRows = selectedProducts.map(mapToInvoiceProductRow).map(row => {
+        const hasImages = Array.isArray(row.imageUrls) && row.imageUrls.length > 0;
+        if (hasImages || !row.productId) return row;
+        const src = allProducts.find(p => p.id === row.productId);
+        const srcImages = src && Array.isArray(src.imageUrls) ? src.imageUrls : [];
+        return srcImages.length > 0 ? { ...row, imageUrls: srcImages } : row;
+      });
       const invoiceData: Partial<Invoice> = {
         ...formData,
-        products: selectedProducts.map(mapToInvoiceProductRow),
+        products: productRows,
         totalAmount: total,
       };
-      await downloadInvoicePdf(toCustomerInvoice(invoiceData as Invoice));
+      await downloadInvoicePdf(toCustomerInvoice(invoiceData as Invoice), { enrichWithProducts: allProducts });
     } catch {
       toast.error('PDF download failed');
     } finally {
       setIsDownloadingPdf(false);
     }
-  }, [formData, selectedProducts, total, toCustomerInvoice]);
+  }, [formData, selectedProducts, total, toCustomerInvoice, allProducts]);
 
   // ── Save (always UNPAID; payments recorded later from the list) ────────────
   const handleSave = useCallback(async () => {
@@ -592,7 +622,19 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
     setIsSaving(true);
     try {
-      const productRows = selectedProducts.map(mapToInvoiceProductRow);
+      // Product rows. As a safety net, if any row is missing imageUrls (e.g.
+      // due to an older code path, an edit-load timing issue, or accidental
+      // strip somewhere), re-hydrate from the live inventory record so the
+      // PDF always has product images to render.
+      const productRows = selectedProducts.map(mapToInvoiceProductRow).map(row => {
+        const hasImages = Array.isArray(row.imageUrls) && row.imageUrls.length > 0;
+        if (hasImages || !row.productId) return row;
+        const src = allProducts.find(p => p.id === row.productId);
+        const srcImages = src && Array.isArray(src.imageUrls) ? src.imageUrls : [];
+        if (srcImages.length === 0) return row;
+        console.log(`[Invoice] Enriched row ${row.productName} with ${srcImages.length} image(s) from inventory`);
+        return { ...row, imageUrls: srcImages };
+      });
       const baseInvoice = {
         totalAmount: total, products: productRows,
         deductionCharges: formData.deductionCharges || 0,

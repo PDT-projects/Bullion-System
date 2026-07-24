@@ -33,7 +33,8 @@ interface ProductRow {
   category: string;
   description: string;
   quantity: number;
-  costPrice: number;
+  costPrice: number;   // Purchasing / supplier cost — internal only
+  sellPrice: number;   // Retail price — what customers see on the invoice
   serials: string[]; // one per slot
 }
 
@@ -56,18 +57,19 @@ const PAYMENT_MODES = [
 ];
 
 function newRow(): ProductRow {
-  return { id: Math.random().toString(36).slice(2), brandName: '', modelName: '', category: '', description: '', quantity: 1, costPrice: 0, serials: [] };
+  return { id: Math.random().toString(36).slice(2), brandName: '', modelName: '', category: '', description: '', quantity: 1, costPrice: 0, sellPrice: 0, serials: [] };
 }
 
 // ── Brand/model autocomplete for a single row ──────────────────────────────
-function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, onBrandSelect, onModelSelect, error }: {
+function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, onBrandSelect, onModelSelect, error, isCredit }: {
   row: ProductRow;
   onChange: (field: keyof ProductRow, val: any) => void;
   brandSuggestions: BrandSuggestion[];
   modelSuggestions: ModelSuggestion[];
   onBrandSelect: (name: string) => void;
   onModelSelect: (name: string, model?: ModelSuggestion) => void;
-  error?: { brand?: string; model?: string; category?: string; cost?: string; serials?: string; quantity?: string };
+  error?: { brand?: string; model?: string; category?: string; cost?: string; retail?: string; serials?: string; quantity?: string };
+  isCredit: boolean;
 }) {
   const [openBrand, setOpenBrand] = useState(false);
   const [openModel, setOpenModel] = useState(false);
@@ -143,7 +145,7 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 100px', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr 78px 105px 105px', gap: 10 }}>
         {/* Category */}
         <div>
           <label style={S.label}>Category <span style={{ color: '#ef4444' }}>*</span></label>
@@ -183,21 +185,38 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
           <label style={S.label}>Qty</label>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <button type="button" onClick={() => { const n = Math.max(1, row.quantity - 1); onChange('quantity', n); onChange('serials', row.serials.slice(0, n)); }}
-              style={{ width: 30, height: 36, border: '1px solid #d1d5db', borderRight: 'none', borderRadius: '7px 0 0 7px', backgroundColor: '#f3f4f6', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>−</button>
+              style={{ width: 26, height: 36, border: '1px solid #d1d5db', borderRight: 'none', borderRadius: '7px 0 0 7px', backgroundColor: '#f3f4f6', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>−</button>
             <input type="number" min={1} value={row.quantity}
               onChange={e => { const n = Math.max(1, parseInt(e.target.value)||1); onChange('quantity', n); if (n < row.serials.length) onChange('serials', row.serials.slice(0, n)); }}
-              style={{ width: 40, height: 36, border: '1px solid #d1d5db', textAlign: 'center', fontSize: 13, fontWeight: 700, outline: 'none' }} />
+              style={{ width: 30, height: 36, border: '1px solid #d1d5db', textAlign: 'center', fontSize: 13, fontWeight: 700, outline: 'none' }} />
             <button type="button" onClick={() => onChange('quantity', row.quantity + 1)}
-              style={{ width: 30, height: 36, border: '1px solid #d1d5db', borderLeft: 'none', borderRadius: '0 7px 7px 0', backgroundColor: '#f3f4f6', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
+              style={{ width: 26, height: 36, border: '1px solid #d1d5db', borderLeft: 'none', borderRadius: '0 7px 7px 0', backgroundColor: '#f3f4f6', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>+</button>
           </div>
         </div>
-        {/* Cost */}
+        {/* Cost — label switches with ownership type:
+              • Owned (Against Payment) → Purchasing Cost (bought outright)
+              • Credit (On Credit)      → Supplier Cost   (owed to supplier)
+             Either way it writes to row.costPrice and is internal only. */}
         <div>
-          <label style={S.label}>Cost (AED) <span style={{ color: '#ef4444' }}>*</span></label>
+          <label style={S.label} title={isCredit
+            ? 'What you owe the supplier per unit. Recorded as a payable until settled.'
+            : 'What you paid to buy this stock. Used for internal valuation only.'}>
+            {isCredit ? 'Supplier Cost' : 'Purchasing Cost'} <span style={{ color: '#9ca3af', fontWeight: 400 }}>(AED)</span> <span style={{ color: '#ef4444' }}>*</span>
+          </label>
           <input type="number" min={0} step="any" value={row.costPrice || ''}
             onChange={e => onChange('costPrice', parseFloat(e.target.value) || 0)}
             placeholder="0.00" style={S.inp(!!error?.cost)} />
           {error?.cost && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.cost}</p>}
+        </div>
+        {/* Retail Price — customer-facing, appears on the invoice */}
+        <div>
+          <label style={S.label} title="What customers pay. This is the price that appears on their sales invoice.">
+            Retail Price <span style={{ color: '#9ca3af', fontWeight: 400 }}>(AED)</span> <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input type="number" min={0} step="any" value={row.sellPrice || ''}
+            onChange={e => onChange('sellPrice', parseFloat(e.target.value) || 0)}
+            placeholder="0.00" style={S.inp(!!error?.retail)} />
+          {error?.retail && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.retail}</p>}
         </div>
       </div>
 
@@ -304,6 +323,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
       if (!r.modelName.trim())  { e.model    = 'Required'; hasErr = true; }
       if (!r.category.trim())   { e.category = 'Required'; hasErr = true; }
       if (!r.costPrice || r.costPrice <= 0) { e.cost = 'Required'; hasErr = true; }
+      if (!r.sellPrice || r.sellPrice <= 0) { e.retail = 'Required'; hasErr = true; }
 
       // Serial numbers are REQUIRED, must match the row's quantity, and no duplicates
       const validSerials = r.serials.filter(s => s.trim() !== '');
@@ -355,7 +375,9 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
         const dto: any = {
           brandName: row.brandName.trim(), modelName: row.modelName.trim(),
           category: row.category, description: row.description.trim(),
-          costPrice: row.costPrice, sellPrice: row.costPrice,
+          // Purchasing cost is internal only. Retail (sellPrice) is what flows to
+          // the invoice — see updateProductWithSelection in invoiceService.ts.
+          costPrice: row.costPrice, sellPrice: row.sellPrice,
           buyType: 'Import', warrantyYears: 0, stock, location,
           serialNumbers: validSerials, serialCities: seededCities,
           status: status as any, isDamaged: false, costingOption: 'without',
@@ -382,16 +404,43 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
         let created: any;
         try {
           created = await InventoryFirebaseService.createProduct(dto, payInfo);
-          console.log('[INV] ✅ Created product:', created?.id);
+          console.log('[INV] ✅ Created product:', created?.id, 'full object:', created);
         } catch (createErr: any) {
           console.error('[INV] ❌ createProduct failed:', createErr?.message, createErr);
           throw createErr;
         }
-        if (images.length > 0 && rows.indexOf(row) === 0) {
-          try {
-            const urls = await uploadInventoryImages(images, created?.id);
-            await InventoryFirebaseService.updateProduct(created?.id, { imageUrls: urls } as any);
-          } catch (imgErr) { console.warn('[INV] Image upload failed:', imgErr); }
+
+        // ── Image upload ──────────────────────────────────────────────────────
+        // Previously: `if (images.length > 0 && rows.indexOf(row) === 0)` — this
+        //   only attached images to the FIRST product in a batch. If a user
+        //   added images and then reordered / added another row above, or
+        //   simply added a second product first, no images were saved.
+        // Now: we attach the batch of images to EVERY product in the batch
+        //   (each product ends up with the same imageUrls), and we scream in
+        //   the console + a toast if anything at all fails.
+        if (images.length > 0) {
+          const createdId = created?.id;
+          if (!createdId) {
+            console.error('[INV] ❌ Cannot upload images: created product has no .id. created =', created);
+            toast.error('Product saved but images could not be linked (no product id returned).');
+          } else {
+            try {
+              console.log('[INV] Uploading', images.length, 'image(s) for product', createdId);
+              const urls = await uploadInventoryImages(images, createdId);
+              console.log('[INV] uploadInventoryImages returned:', urls);
+              if (!Array.isArray(urls) || urls.length === 0) {
+                console.error('[INV] ❌ uploadInventoryImages returned empty/invalid:', urls);
+                toast.error('Image upload returned no URLs. Check Storage rules / network.');
+              } else {
+                await InventoryFirebaseService.updateProduct(createdId, { imageUrls: urls } as any);
+                console.log('[INV] ✅ imageUrls persisted on product', createdId, ':', urls);
+              }
+            } catch (imgErr: any) {
+              // Loud — the user was seeing this fail silently.
+              console.error('[INV] ❌ Image upload FAILED for product', createdId, ':', imgErr);
+              toast.error(`Image upload failed: ${imgErr?.message || 'Unknown error'}. Product saved without image.`);
+            }
+          }
         }
       }
 
@@ -484,6 +533,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
                 if (model?.description) updateRow(row.id, 'description', model.description);
               }}
               error={rowErrors[row.id]}
+              isCredit={isCredit}
             />
           </div>
         ))}

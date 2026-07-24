@@ -182,16 +182,16 @@ export const InventoryAddExistingView: React.FC<Props> = ({
                   <input type="number" value={entry.addQty} onChange={e => setAddQty(Number(e.target.value))} style={inp} min={1} />
                 </div>
 
-                {/* Prices */}
+                {/* Prices — Retail (customer-facing) and Purchasing (internal cost) */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <CurrencyPriceInput
-                    label="Updated Sell Price"
+                    label="Retail Price"
                     pkrValue={entry.newSellPrice}
                     onChange={setNewSellPrice}
                     required
                   />
                   <CurrencyPriceInput
-                    label="Updated Cost Price"
+                    label="Purchasing Cost"
                     pkrValue={entry.newCostPrice}
                     onChange={setNewCostPrice}
                     required

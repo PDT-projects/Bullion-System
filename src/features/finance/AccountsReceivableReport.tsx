@@ -1,26 +1,50 @@
 // Accounts Receivable Report
 //
-// Shows every invoice with an outstanding balance (unpaid or partial),
-// grouped by customer with expandable per-invoice detail rows. Includes
-// an aging breakdown (current / 1-30 / 31-60 / 61-90 / 90+ days) and
-// date-range filter chips.
+// STRICTLY loan-based per ERP schema:
+//   • Cash Outflow + subCategory = "Loan Given"     → we extend credit to them (+)
+//   • Cash Inflow  + subCategory = "Loan Recovered" → they pay us back (−)
 //
-// Data source: invoices[] — any invoice where remainingAmount > 0
-//              (or totalAmount - paidAmount > 0) counts as AR.
+// For each counterparty (borrower) we compute a running net position:
+//     Net Owed to Us = Given − Recovered
+//   • Positive → they still owe us that much
+//   • Negative → they've overpaid us (rare; effectively becomes payable)
+//
+// Aging: for each borrower with a positive net, we consume their recoveries
+// against their Loan Given transactions FIFO (oldest first) — the date of
+// the earliest still-unrecovered Loan Given is used to compute age.
+//
+// Sales-invoice receivables are NOT included here (handled by a separate
+// invoice-aging report if needed).
 
 import React, { useMemo, useState } from 'react';
 import {
   ChevronRight, TrendingUp, Users, Clock, AlertTriangle,
   Download, Calendar, Layers, Minimize2, Maximize2,
 } from 'lucide-react';
+import { Transaction } from '../../modules/transactions/models/types';
 
 interface Props {
-  transactions: any[];
-  invoices:     any[];
+  transactions: Transaction[];
+  invoices?:    any[];   // kept for backward-compat with the reports hub — unused
   onBack?:      () => void;
 }
 
 const CURRENCY = 'AED';
+
+// Classification strings that map to Accounts Receivable.
+// Match is case-insensitive, trimmed, and uses SUBSTRING matching.
+//
+// AR goes UP when we lend money out (Cash Outflow):
+const AR_INCREASE_KEYWORDS = [
+  'loan given', 'loan issued', 'loan disbursed',
+  'loan receivable', 'loans receivable',
+];
+// AR goes DOWN when the money comes back (Cash Inflow):
+const AR_DECREASE_KEYWORDS = [
+  'loan recovered', 'loan recovery', 'loan collected', 'loan repayment received',
+  'account receivable', 'accounts receivable',
+];
+
 const fmt = (n: number) =>
   (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (iso: string) => {
@@ -37,22 +61,75 @@ const daysSince = (iso: string): number => {
   if (isNaN(d.getTime())) return 0;
   return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
 };
+const norm = (s: any) => String(s ?? '').trim().toLowerCase();
 
-interface OpenInvoice {
+// Pull EVERY string value on a transaction, including nested {name/label/value}
+// objects. This gives the classifier the widest possible surface to work with.
+const allStrings = (t: any): { field: string; value: string }[] => {
+  const out: { field: string; value: string }[] = [];
+  if (!t || typeof t !== 'object') return out;
+  for (const k of Object.keys(t)) {
+    const v = (t as any)[k];
+    if (typeof v === 'string' && v.trim()) {
+      out.push({ field: k, value: v.trim() });
+    } else if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const inner = String(v.name || v.label || v.value || v.title || '').trim();
+      if (inner) out.push({ field: k, value: inner });
+    }
+  }
+  return out;
+};
+
+const detectDirection = (t: any): 'inflow' | 'outflow' | null => {
+  const strs = allStrings(t).map(x => x.value.toLowerCase());
+  const hasIn  = strs.some(s => s === 'in'  || s === 'inflow'  || s.includes('cash inflow')  || s === 'credit');
+  const hasOut = strs.some(s => s === 'out' || s === 'outflow' || s.includes('cash outflow') || s === 'debit');
+  if (hasIn && !hasOut)  return 'inflow';
+  if (hasOut && !hasIn)  return 'outflow';
+  const main = norm((t as any).mainCategory) || norm((t as any).type) || norm((t as any).flow);
+  if (main.includes('inflow'))  return 'inflow';
+  if (main.includes('outflow')) return 'outflow';
+  return null;
+};
+
+const matchesAny = (strings: string[], keywords: string[]): boolean =>
+  strings.some(s => keywords.some(k => s.includes(k)));
+
+interface ArTx {
   id: string;
-  invoiceNumber: string;
   date: string;
-  customerName: string;
-  totalAmount:  number;
-  paidAmount:   number;
-  remaining:    number;
-  ageDays:      number;
-  bucket:       'current' | '1-30' | '31-60' | '61-90' | '90+';
+  direction: 'given' | 'recovered';   // given = new receivable (+), recovered = paying us back (−)
+  amount: number;
+  counterparty: string;
+  subCategory: string;
+  mode?: string;
+  note?: string;
 }
 
-export function AccountsReceivableReport({ invoices }: Props) {
-  // Date-range filter — filters by invoice date so users can look at
-  // AR "as of" a period. Default: all invoices (any date).
+type Bucket = 'current' | '1-30' | '31-60' | '61-90' | '90+';
+
+// FIFO consumption: given transactions sorted oldest→newest are consumed by
+// total recovered. Returns the earliest still-unrecovered date, or '' if all
+// recovered.
+function oldestUnrecoveredDate(txs: ArTx[], totalRecovered: number): string {
+  const givens = txs
+    .filter(x => x.direction === 'given')
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+  let remaining = totalRecovered;
+  for (const g of givens) {
+    if (remaining >= g.amount) { remaining -= g.amount; continue; }
+    return g.date;
+  }
+  return ''; // all fully recovered
+}
+
+const bucketOf = (ageDays: number): Bucket =>
+  ageDays === 0 ? 'current' :
+  ageDays <= 30 ? '1-30'    :
+  ageDays <= 60 ? '31-60'   :
+  ageDays <= 90 ? '61-90'   : '90+';
+
+export function AccountsReceivableReport({ transactions }: Props) {
   type Preset = 'all' | 'thisMonth' | 'lastMonth' | 'last3Months' | 'thisYear' | 'custom';
   const [preset, setPreset] = useState<Preset>('all');
   const [from, setFrom] = useState<string>('2000-01-01');
@@ -77,87 +154,108 @@ export function AccountsReceivableReport({ invoices }: Props) {
   const onFromChange = (v: string) => { setFrom(v); setPreset('custom'); };
   const onToChange   = (v: string) => { setTo(v);   setPreset('custom'); };
 
-  // Build the list of open invoices
-  const { openInvoices, byCustomer, totals, aging } = useMemo(() => {
-    const openInvoices: OpenInvoice[] = [];
-    for (const inv of invoices || []) {
-      if (inv.status === 'deleted') continue;
-      const total = Number(inv.totalAmount) || 0;
-      const paid  = Number(inv.paidAmount)  || 0;
-      const remaining = Number(inv.remainingAmount);
-      const owed = (isFinite(remaining) && remaining > 0)
-        ? remaining
-        : Math.max(0, total - paid);
-      if (owed <= 0.001) continue;
-      const invDate = String(inv.date || '').slice(0, 10);
-      if (invDate < from || invDate > to) continue;
-      const ageDays = daysSince(invDate);
-      const bucket: OpenInvoice['bucket'] =
-        ageDays === 0            ? 'current' :
-        ageDays <= 30            ? '1-30'    :
-        ageDays <= 60            ? '31-60'   :
-        ageDays <= 90            ? '61-90'   : '90+';
-      openInvoices.push({
-        id: inv.id || inv.invoiceNumber,
-        invoiceNumber: inv.invoiceNumber || 'INV-?',
-        date: invDate,
-        customerName: inv.customerName || 'Unknown Customer',
-        totalAmount: total,
-        paidAmount: paid,
-        remaining: owed,
-        ageDays,
-        bucket,
+  // Filter → group by counterparty (borrower) → aging
+  const { byCounterparty, totals, aging } = useMemo(() => {
+    const arTxs: ArTx[] = [];
+
+    for (const t of transactions || []) {
+      const ap = (t as any).approvalStatus;
+      if (ap === 'pending_approval' || ap === 'rejected') continue;
+
+      const direction = detectDirection(t);
+      if (!direction) continue;
+
+      const cands = allStrings(t)
+        .map(x => x.value.toLowerCase())
+        .filter(Boolean);
+
+      let arDirection: 'given' | 'recovered' | null = null;
+      if (direction === 'outflow' && matchesAny(cands, AR_INCREASE_KEYWORDS)) arDirection = 'given';
+      if (direction === 'inflow'  && matchesAny(cands, AR_DECREASE_KEYWORDS)) arDirection = 'recovered';
+      if (!arDirection) continue;
+
+      const d = String((t as any).date || '').slice(0, 10);
+      if (d < from || d > to) continue;
+
+      // Borrower is the person we gave money to (outflow: paidTo) or
+      // the person paying us back (inflow: paidBy).
+      const counterparty = (arDirection === 'given' ? (t as any).paidTo : (t as any).paidBy)
+                        || (t as any).company
+                        || (t as any).note
+                        || 'Unknown counterparty';
+
+      arTxs.push({
+        id: (t as any).id || `${(t as any).transactionId}-${(t as any).date}`,
+        date: d,
+        direction: arDirection,
+        amount: Number((t as any).amount) || 0,
+        counterparty: String(counterparty),
+        subCategory: String((t as any).category || (t as any).subCategory || ''),
+        mode: (t as any).mode,
+        note: (t as any).note,
       });
     }
-    openInvoices.sort((a, b) => b.remaining - a.remaining);
+    arTxs.sort((a, b) => (a.date < b.date ? 1 : -1));
 
-    // Group by customer
-    const byCustomerMap: Record<string, OpenInvoice[]> = {};
-    for (const oi of openInvoices) {
-      (byCustomerMap[oi.customerName] ||= []).push(oi);
+    // Group by counterparty
+    const map: Record<string, ArTx[]> = {};
+    for (const x of arTxs) (map[x.counterparty] ||= []).push(x);
+
+    const byCounterparty = Object.keys(map).map(name => {
+      const txs = map[name];
+      const given     = txs.filter(x => x.direction === 'given').reduce((s, x) => s + x.amount, 0);
+      const recovered = txs.filter(x => x.direction === 'recovered').reduce((s, x) => s + x.amount, 0);
+      const net = given - recovered;
+      const agingDate = net > 0 ? oldestUnrecoveredDate(txs, recovered) : '';
+      const ageDays   = agingDate ? daysSince(agingDate) : 0;
+      const bucket    = net > 0 ? bucketOf(ageDays) : null;
+      return { name, txs, given, recovered, net, ageDays, bucket, agingDate };
+    }).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+
+    const totalGiven      = byCounterparty.reduce((s, c) => s + c.given, 0);
+    const totalRecovered  = byCounterparty.reduce((s, c) => s + c.recovered, 0);
+    const netOutstanding  = totalGiven - totalRecovered;
+    const stillOwedToUs   = byCounterparty.reduce((s, c) => s + Math.max(0, c.net), 0);
+
+    const aging: Record<Bucket, number> = { current: 0, '1-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
+    for (const c of byCounterparty) {
+      if (c.bucket && c.net > 0) aging[c.bucket] += c.net;
     }
-    const byCustomer = Object.keys(byCustomerMap).map(name => {
-      const invs = byCustomerMap[name];
-      const total = invs.reduce((s, i) => s + i.remaining, 0);
-      const oldest = invs.reduce((m, i) => Math.max(m, i.ageDays), 0);
-      return { name, invoices: invs, total, oldest };
-    }).sort((a, b) => b.total - a.total);
-
-    // Aging totals
-    const aging = { current: 0, '1-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
-    for (const oi of openInvoices) aging[oi.bucket] += oi.remaining;
-
-    const totalOwed = openInvoices.reduce((s, i) => s + i.remaining, 0);
-    const overdue   = aging['1-30'] + aging['31-60'] + aging['61-90'] + aging['90+'];
-    const critical  = aging['90+'];
 
     return {
-      openInvoices, byCustomer,
-      totals: { totalOwed, customers: byCustomer.length, overdue, critical },
+      byCounterparty,
+      totals: {
+        counterparties: byCounterparty.length,
+        totalGiven, totalRecovered, netOutstanding, stillOwedToUs,
+        overdue:  aging['1-30'] + aging['31-60'] + aging['61-90'] + aging['90+'],
+        critical: aging['90+'],
+      },
       aging,
     };
-  }, [invoices, from, to]);
+  }, [transactions, from, to]);
 
-  // Expand/collapse per customer
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpanded(prev => {
     const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
   });
-  const expandAll   = () => setExpanded(new Set(byCustomer.map(c => c.name)));
+  const expandAll   = () => setExpanded(new Set(byCounterparty.map(c => c.name)));
   const collapseAll = () => setExpanded(new Set());
 
   const handleExport = () => {
     const rows: string[] = [];
-    rows.push(`Accounts Receivable,${from} to ${to}`);
+    rows.push(`Accounts Receivable (Loans),${from} to ${to}`);
     rows.push('');
-    rows.push('Customer,Invoice #,Date,Age (days),Total,Paid,Remaining');
-    for (const c of byCustomer) {
-      for (const i of c.invoices) {
-        rows.push([c.name, i.invoiceNumber, i.date, String(i.ageDays), i.totalAmount.toFixed(2), i.paidAmount.toFixed(2), i.remaining.toFixed(2)].join(','));
+    rows.push('Borrower,Date,Direction,Sub Category,Amount,Age Days,Mode,Note');
+    for (const c of byCounterparty) {
+      for (const x of c.txs) {
+        rows.push([c.name, x.date, x.direction, x.subCategory, x.amount.toFixed(2), String(c.ageDays), x.mode || '', (x.note || '').replace(/[,\n]/g, ' ')].join(','));
       }
     }
     rows.push('');
-    rows.push(`Total Outstanding,${totals.totalOwed.toFixed(2)}`);
+    rows.push(`Total Loans Given,${totals.totalGiven.toFixed(2)}`);
+    rows.push(`Total Recovered,${totals.totalRecovered.toFixed(2)}`);
+    rows.push(`Net Outstanding,${totals.netOutstanding.toFixed(2)}`);
+    rows.push(`Still Owed To Us (positive nets only),${totals.stillOwedToUs.toFixed(2)}`);
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -179,10 +277,23 @@ export function AccountsReceivableReport({ invoices }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+      {/* Schema note */}
+      <div style={{
+        padding: '10px 14px', borderRadius: 10, backgroundColor: '#f0f9ff',
+        border: '1px solid #bae6fd', display: 'flex', alignItems: 'flex-start', gap: 8,
+      }}>
+        <span style={{ fontSize: 13, lineHeight: 1 }}>ℹ️</span>
+        <div style={{ fontSize: 11.5, color: '#0c4a6e', lineHeight: 1.5 }}>
+          Only loan-based receivable transactions are shown:
+          &nbsp;<strong>Cash Outflow</strong> with category <em>"Loan Given"</em> or <em>"Loan Receivable"</em> (money extended)
+          &nbsp;·&nbsp; <strong>Cash Inflow</strong> with category <em>"Loan Recovered"</em> or <em>"Account Receivable"</em> (money returned).
+        </div>
+      </div>
+
       {/* Filters + actions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <label style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 4 }}>Invoice date</label>
+          <label style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 4 }}>Transaction date</label>
           {([['all', 'All time'], ['thisMonth', 'This month'], ['lastMonth', 'Last month'], ['last3Months', 'Last 3 months'], ['thisYear', 'This year']] as [Preset, string][]).map(([id, label]) => {
             const active = preset === id;
             return (
@@ -214,20 +325,20 @@ export function AccountsReceivableReport({ invoices }: Props) {
 
       {/* Summary tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12 }}>
-        <Tile icon={<TrendingUp size={18} />} label="Total Outstanding" value={totals.totalOwed} fg="#c2410c" bg="#fff7ed" />
-        <Tile icon={<Users size={18} />}       label="Customers"          value={totals.customers} fg="#334155" bg="#f1f5f9" plain />
-        <Tile icon={<Clock size={18} />}       label="Overdue (>0 days)"  value={totals.overdue} fg="#dc2626" bg="#fef2f2" />
+        <Tile icon={<TrendingUp size={18} />}    label="Total Outstanding"   value={totals.stillOwedToUs} fg="#c2410c" bg="#fff7ed" />
+        <Tile icon={<Users size={18} />}         label="Borrowers"           value={totals.counterparties} fg="#334155" bg="#f1f5f9" plain />
+        <Tile icon={<Clock size={18} />}         label="Overdue (>0 days)"   value={totals.overdue} fg="#dc2626" bg="#fef2f2" />
         <Tile icon={<AlertTriangle size={18} />} label="Critical (>90 days)" value={totals.critical} fg="#b91c1c" bg="#fef2f2" highlight />
       </div>
 
       {/* Aging breakdown */}
       <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', fontSize: 12.5, fontWeight: 800, color: '#334155', backgroundColor: '#fafbfc' }}>
-          Aging Breakdown
+          Aging Breakdown (by oldest unrecovered Loan Given)
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 0 }}>
-          {([['current', 'Current', '#059669'], ['1-30', '1–30 days', '#0284c7'], ['31-60', '31–60 days', '#c2410c'], ['61-90', '61–90 days', '#dc2626'], ['90+', '90+ days', '#991b1b']] as [keyof typeof aging, string, string][]).map(([k, label, color], i) => (
-            <div key={String(k)} style={{ padding: '14px 16px', borderRight: i < 4 ? '1px solid #f1f5f9' : 'none' }}>
+          {([['current', 'Current', '#059669'], ['1-30', '1–30 days', '#0284c7'], ['31-60', '31–60 days', '#c2410c'], ['61-90', '61–90 days', '#dc2626'], ['90+', '90+ days', '#991b1b']] as [Bucket, string, string][]).map(([k, label, color], i) => (
+            <div key={k} style={{ padding: '14px 16px', borderRight: i < 4 ? '1px solid #f1f5f9' : 'none' }}>
               <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
               <div style={{ fontSize: 15, fontWeight: 800, color, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
                 <span style={{ opacity: 0.55, fontSize: '0.75em', marginRight: 3 }}>{CURRENCY}</span>{fmt(aging[k])}
@@ -237,27 +348,32 @@ export function AccountsReceivableReport({ invoices }: Props) {
         </div>
       </div>
 
-      {/* Per-customer list */}
+      {/* Per-borrower list */}
       <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ padding: '14px 22px', borderBottom: '1px solid #e2e8f0', background: 'linear-gradient(90deg, #f8fafc 0%, #ffffff 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Layers size={16} color="#334155" />
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Outstanding by Customer</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Receivables by Borrower</div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 22px', backgroundColor: '#fafbfc', borderBottom: '1px solid #e2e8f0', fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-          <span>Customer / Invoice</span>
-          <span style={{ textAlign: 'right', minWidth: 180 }}>Remaining ({CURRENCY})</span>
+          <span>Borrower / Transaction</span>
+          <span style={{ textAlign: 'right', minWidth: 180 }}>Net Owed to Us ({CURRENCY})</span>
         </div>
 
-        {byCustomer.length === 0 ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
-            No outstanding invoices in this range. Everyone's paid up.
+        {byCounterparty.length === 0 ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 13, lineHeight: 1.6 }}>
+            No loan-based receivable transactions in this range.
+            <div style={{ fontSize: 11.5, color: '#cbd5e1', marginTop: 6 }}>
+              Add a <strong>Cash Outflow</strong> with category "Loan Given" / "Loan Receivable", or a <strong>Cash Inflow</strong> with category "Loan Recovered" / "Account Receivable" to see data here.
+            </div>
           </div>
-        ) : byCustomer.map(cust => {
-          const isOpen = expanded.has(cust.name);
+        ) : byCounterparty.map(c => {
+          const isOpen  = expanded.has(c.name);
+          const owed    = c.net > 0;
+          const overpaid = c.net < 0;
           return (
-            <React.Fragment key={cust.name}>
+            <React.Fragment key={c.name}>
               <div
-                onClick={() => toggle(cust.name)}
+                onClick={() => toggle(c.name)}
                 style={{
                   display: 'grid', gridTemplateColumns: '1fr auto', gap: 10,
                   alignItems: 'center', padding: '12px 22px',
@@ -267,32 +383,45 @@ export function AccountsReceivableReport({ invoices }: Props) {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <ChevronRight size={14} style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', color: '#c2410c' }} />
-                  <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{cust.name}</span>
+                  <ChevronRight size={14} style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', color: owed ? '#c2410c' : '#059669' }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{c.name}</span>
                   <span style={{ fontSize: 10.5, color: '#94a3b8', marginLeft: 4 }}>
-                    · {cust.invoices.length} {cust.invoices.length === 1 ? 'invoice' : 'invoices'} · oldest {cust.oldest}d
+                    · {c.txs.length} {c.txs.length === 1 ? 'entry' : 'entries'} · Given AED {fmt(c.given)} · Recovered AED {fmt(c.recovered)}
+                    {owed && c.ageDays > 0 && <> · oldest {c.ageDays}d</>}
                   </span>
                 </div>
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#c2410c', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', minWidth: 180, textAlign: 'right' }}>
-                  <span style={{ opacity: 0.6, fontSize: '0.82em', marginRight: 3 }}>{CURRENCY}</span>{fmt(cust.total)}
+                <span style={{ fontSize: 14, fontWeight: 800, color: owed ? (c.ageDays > 60 ? '#dc2626' : '#c2410c') : overpaid ? '#059669' : '#64748b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', minWidth: 180, textAlign: 'right' }}>
+                  {c.net === 0 ? '' : owed ? '+' : '−'}
+                  <span style={{ opacity: 0.6, fontSize: '0.82em', marginRight: 3 }}>{CURRENCY}</span>{fmt(Math.abs(c.net))}
+                  {c.net === 0 && <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 6, color: '#94a3b8' }}>SETTLED</span>}
                 </span>
               </div>
 
-              {isOpen && cust.invoices.map(inv => (
-                <div key={inv.id} style={{
+              {isOpen && c.txs.map(x => (
+                <div key={x.id} style={{
                   display: 'grid', gridTemplateColumns: '1fr auto', gap: 10,
                   alignItems: 'center', padding: '8px 22px 8px 60px',
                   backgroundColor: '#fff', borderBottom: '1px solid #f8fafc',
                   fontSize: 12, color: '#475569',
                 }}>
                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{inv.invoiceNumber}</span>
-                    <span style={{ marginLeft: 8, fontStyle: 'italic', color: '#94a3b8', fontSize: 11 }}>
-                      {fmtDate(inv.date)} · {inv.ageDays}d old · Paid AED {fmt(inv.paidAmount)} of AED {fmt(inv.totalAmount)}
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 800,
+                      backgroundColor: x.direction === 'given' ? '#fff7ed' : '#ecfdf5',
+                      color:            x.direction === 'given' ? '#c2410c' : '#059669',
+                      marginRight: 8, textTransform: 'uppercase', letterSpacing: '.05em',
+                    }}>{x.direction === 'given' ? 'Loan Given' : 'Loan Recovered'}</span>
+                    <span style={{ fontStyle: 'italic', color: '#94a3b8', fontSize: 11 }}>
+                      {fmtDate(x.date)}{x.mode ? ' · ' + x.mode : ''}{x.note ? ' · ' + x.note : ''}
                     </span>
                   </div>
-                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: inv.ageDays > 60 ? '#dc2626' : '#c2410c', textAlign: 'right', minWidth: 180 }}>
-                    <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 3 }}>{CURRENCY}</span>{fmt(inv.remaining)}
+                  <span style={{
+                    fontVariantNumeric: 'tabular-nums', fontWeight: 600,
+                    color: x.direction === 'given' ? '#c2410c' : '#059669',
+                    textAlign: 'right', minWidth: 180,
+                  }}>
+                    {x.direction === 'given' ? '+' : '−'}
+                    <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 3 }}>{CURRENCY}</span>{fmt(x.amount)}
                   </span>
                 </div>
               ))}
@@ -300,18 +429,18 @@ export function AccountsReceivableReport({ invoices }: Props) {
           );
         })}
 
-        {byCustomer.length > 0 && (
+        {byCounterparty.length > 0 && (
           <div style={{ padding: '14px 22px', backgroundColor: '#0f172a', color: '#fff', display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center' }}>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>Total Accounts Receivable</span>
-            <span style={{ fontSize: 16, fontWeight: 900, color: '#fca5a5', fontVariantNumeric: 'tabular-nums', minWidth: 180, textAlign: 'right' }}>
-              <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>{fmt(totals.totalOwed)}
+            <span style={{ fontSize: 14, fontWeight: 800 }}>Total Accounts Receivable (Still Owed to Us)</span>
+            <span style={{ fontSize: 16, fontWeight: 900, color: '#6ee7b7', fontVariantNumeric: 'tabular-nums', minWidth: 180, textAlign: 'right' }}>
+              <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>{fmt(totals.stillOwedToUs)}
             </span>
           </div>
         )}
       </div>
 
       <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', padding: '6px 8px 12px' }}>
-        Shows every invoice with a remaining balance. Age is calculated from the invoice date to today.
+        Loans given (outflow) increase what's owed to us. Recoveries (inflow) reduce it. Aging uses the oldest still-unrecovered Loan Given per borrower (FIFO).
       </div>
     </div>
   );

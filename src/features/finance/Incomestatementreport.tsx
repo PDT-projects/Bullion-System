@@ -19,7 +19,6 @@ import React, { useMemo, useState } from 'react';
 import {
   ChevronRight, TrendingUp, TrendingDown, Package, Percent,
   Download, Calendar, Layers, Minimize2, Maximize2, DollarSign,
-  CheckCircle2, AlertTriangle, MinusCircle,
 } from 'lucide-react';
 import { Transaction } from '../../modules/transactions/models/types';
 
@@ -387,7 +386,7 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
     rows.push('');
     dump(opexSection);
     rows.push('');
-    rows.push(`Operating Income,${operatingIncome.toFixed(2)}`);
+    rows.push(`${operatingIncome >= 0 ? 'Net Profit' : 'Net Loss'},${operatingIncome.toFixed(2)}`);
     rows.push(`Net Margin %,${netMargin.toFixed(2)}`);
 
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
@@ -553,23 +552,14 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
           <TreeSection node={opexSection} expanded={expanded} toggle={toggle}
                         emptyMessage="No operating expenses in this period." />
 
-          {/* Operating Income — the headline number */}
-          <TotalRow label={operatingIncome >= 0 ? 'Operating Income' : 'Operating Loss'}
+          {/* Net Profit / Net Loss — the headline number */}
+          <TotalRow label={operatingIncome >= 0 ? 'Net Profit' : 'Net Loss'}
                     value={operatingIncome}
                     marginPct={netMargin}
                     tone={operatingIncome >= 0 ? 'positive' : 'negative'}
                     highlight />
         </div>
       </div>
-
-      {/* ── Final status banner — big Profit / Loss / Break-Even ──────
-          Sits after the statement so the reader can see the bottom-line
-          verdict at a glance. Color, icon and wording flip with the sign. */}
-      <StatusBanner
-        amount={operatingIncome}
-        margin={netMargin}
-        revenue={totalRevenue}
-      />
 
       {/* ── Balance-sheet items footer ───────────────────────────────── */}
       {excludedNodes.length > 0 && (
@@ -849,106 +839,6 @@ const TotalRow: React.FC<{
         <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
         {fmt(Math.abs(value))}
       </span>
-    </div>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────────────────
-// Final Profit / Loss / Break-Even status banner
-// ─────────────────────────────────────────────────────────────────────────
-const StatusBanner: React.FC<{
-  amount: number;      // operatingIncome (can be negative)
-  margin: number;      // net margin %
-  revenue: number;     // total revenue (used to decide "break-even" vs "no activity")
-}> = ({ amount, margin, revenue }) => {
-
-  // Decide status:
-  //   • revenue = 0 and amount = 0 → "No activity"
-  //   • |amount| < 0.5 AED and revenue > 0 → "Break-Even"
-  //   • amount > 0 → "Profit"
-  //   • amount < 0 → "Loss"
-  const noActivity  = revenue === 0 && amount === 0;
-  const breakEven   = !noActivity && Math.abs(amount) < 0.5;
-  const isProfit    = !noActivity && !breakEven && amount > 0;
-  const isLoss      = !noActivity && !breakEven && amount < 0;
-
-  let bgFrom  = '#f1f5f9';
-  let bgTo    = '#e2e8f0';
-  let accent  = '#64748b';
-  let icon: React.ReactNode = <MinusCircle size={22} />;
-  let label   = 'No activity';
-  let sub     = 'There were no transactions in this period.';
-
-  if (breakEven) {
-    bgFrom = '#eff6ff'; bgTo = '#dbeafe'; accent = '#2563eb';
-    icon   = <MinusCircle size={22} />;
-    label  = 'Break-Even';
-    sub    = 'Revenue exactly offset costs — no profit, no loss.';
-  } else if (isProfit) {
-    bgFrom = '#ecfdf5'; bgTo = '#d1fae5'; accent = '#059669';
-    icon   = <CheckCircle2 size={22} />;
-    label  = 'Profit';
-    sub    = `Net margin ${margin.toFixed(1)}%. The business made money this period.`;
-  } else if (isLoss) {
-    bgFrom = '#fef2f2'; bgTo = '#fee2e2'; accent = '#dc2626';
-    icon   = <AlertTriangle size={22} />;
-    label  = 'Loss';
-    sub    = `Net margin ${margin.toFixed(1)}%. Costs exceeded revenue.`;
-  }
-
-  return (
-    <div style={{
-      background: `linear-gradient(90deg, ${bgFrom} 0%, ${bgTo} 100%)`,
-      border: `1.5px solid ${accent}`,
-      borderRadius: 14,
-      padding: '18px 22px',
-      display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap',
-      boxShadow: `0 4px 12px -6px ${accent}33`,
-    }}>
-      <div style={{
-        width: 52, height: 52, borderRadius: 14,
-        backgroundColor: accent, color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        {icon}
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 11, fontWeight: 800, color: accent,
-          textTransform: 'uppercase', letterSpacing: '.09em',
-          marginBottom: 2,
-        }}>
-          Bottom line
-        </div>
-        <div style={{ fontSize: 20, fontWeight: 900, color: accent, letterSpacing: '-0.01em' }}>
-          {label}
-        </div>
-        <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>
-          {sub}
-        </div>
-      </div>
-
-      {!noActivity && (
-        <div style={{ textAlign: 'right', minWidth: 0 }}>
-          <div style={{
-            fontSize: 10, fontWeight: 800, color: accent, opacity: 0.75,
-            textTransform: 'uppercase', letterSpacing: '.08em',
-          }}>
-            {isProfit ? 'Net Profit' : isLoss ? 'Net Loss' : 'Result'}
-          </div>
-          <div style={{
-            fontSize: 26, fontWeight: 900, color: accent,
-            fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-            letterSpacing: '-0.02em', marginTop: 2,
-          }}>
-            {amount < 0 ? '−' : ''}
-            <span style={{ fontSize: 15, opacity: 0.7, marginRight: 5 }}>{CURRENCY}</span>
-            {fmt(Math.abs(amount))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

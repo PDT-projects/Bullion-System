@@ -1,524 +1,669 @@
-// BankBalanceReport.tsx — self-contained, fetches own data from Firestore
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../api/firebase/firebase';
-import {
-  Download, Eye, Building2, DollarSign, TrendingUp,
-  XCircle, Loader2, Filter, ChevronDown, X, FileText
-} from 'lucide-react';
-import { toast } from 'sonner';
+// Balance Sheet Report — expandable tree
+//
+// Excel-outline style with three top-level sections:
+//   • Assets       — Cash + Banks + Accounts Receivable + Inventory +
+//                    Loans Receivable
+//   • Liabilities  — Accounts Payable + Loans Payable + Pending Bills
+//   • Equity       — Owner's equity (Assets − Liabilities)
+//
+// Each category with underlying detail (per bank, per loan, per invoice)
+// expands to show individual rows.
+//
+// Filters: date preset chips + custom From/To. All filters apply to the
+// underlying transactions used to compute the sheet.
+//
+// Exports: CSV (nested) and PDF (jsPDF, printable A4 layout).
 
-type Bank = {
-  id: string;
-  name: string;
-  balance: number;
-  accountNumber: string;
-  transactions: any[];
+import React, { useMemo, useState } from 'react';
+import { jsPDF } from 'jspdf';
+import {
+  ChevronRight, TrendingUp, TrendingDown, Scale, Calendar,
+  Download, Layers, Minimize2, Maximize2, FileText,
+  Wallet, Landmark, Package, HandCoins, Receipt,
+} from 'lucide-react';
+import { getTransactionTotals } from '../../modules/transactions/models/transactionsService';
+import { Transaction } from '../../modules/transactions/models/types';
+
+// ── Types ──────────────────────────────────────────────────────────────────
+type Bank    = { id: string; name: string; balance: number; accountNumber?: string; };
+type Loan    = { id: string; type: 'Payable' | 'Receivable'; remaining: number; loanAmount: number; paid: number; status: string; borrowerName?: string; lenderName?: string; };
+type Product = { id: string; costPrice: number; stock: number; };
+type Bill    = { id: string; amount: number; status: string; description?: string; };
+
+interface Props {
+  transactions: Transaction[];
+  banks: Bank[];
+  loans: Loan[];
+  products: Product[];
+  bills?: Bill[];
+  onBack?: () => void;
+}
+
+// ── Formatters ─────────────────────────────────────────────────────────────
+const CURRENCY = 'AED';
+const fmt = (n: number) =>
+  (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDate = (iso: string) => {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+  } catch { return iso; }
 };
 
-// ─── Multi-Select Dropdown ────────────────────────────────────────────────────
-function MultiSelectDropdown({
-  options,
-  selected,
-  onChange,
-  placeholder,
-}: {
-  options: string[];
-  selected: string[];
-  onChange: (v: string[]) => void;
-  placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+// ── Tree node type ─────────────────────────────────────────────────────────
+interface TreeNode {
+  id: string;
+  label: string;
+  amount: number;
+  meta?: string;
+  children?: TreeNode[];
+  level: 0 | 1 | 2;
+  tone: 'asset' | 'liability' | 'equity';
+  icon?: React.ReactNode;
+}
 
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+export function BalanceSheetReport({ transactions, banks, loans, products, bills = [], onBack }: Props) {
+
+  // ── Date-range filter with quick presets ──────────────────────────────
+  type Preset = 'all' | 'thisMonth' | 'lastMonth' | 'last3Months' | 'thisYear' | 'custom';
+  const [preset, setPreset] = useState<Preset>('all');
+  const [from, setFrom] = useState<string>('2000-01-01');
+  const [to, setTo]     = useState<string>(() => new Date().toISOString().slice(0, 10));
+
+  const applyPreset = (p: Preset) => {
+    setPreset(p);
+    if (p === 'custom') return;
+    const now = new Date();
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    let f: Date, t: Date;
+    switch (p) {
+      case 'thisMonth':   f = new Date(now.getFullYear(), now.getMonth(), 1); t = now; break;
+      case 'lastMonth':   f = new Date(now.getFullYear(), now.getMonth() - 1, 1); t = new Date(now.getFullYear(), now.getMonth(), 0); break;
+      case 'last3Months': f = new Date(now.getFullYear(), now.getMonth() - 2, 1); t = now; break;
+      case 'thisYear':    f = new Date(now.getFullYear(), 0, 1); t = now; break;
+      case 'all':         f = new Date(2000, 0, 1); t = now; break;
+      default: return;
+    }
+    setFrom(iso(f)); setTo(iso(t));
+  };
+  const onFromChange = (v: string) => { setFrom(v); setPreset('custom'); };
+  const onToChange   = (v: string) => { setTo(v);   setPreset('custom'); };
+
+  // ── Transactions filtered by approval + date range ────────────────────
+  const liquid = useMemo(() => {
+    return (transactions || []).filter(t => {
+      const approved = t.approvalStatus === 'approved' || t.approvalStatus === 'not_required' || !t.approvalStatus;
+      if (!approved) return false;
+      const d = (t.date || '').slice(0, 10);
+      if (!d) return true;
+      return d >= from && d <= to;
+    });
+  }, [transactions, from, to]);
+
+  // ── Compute the balance sheet + detail rows for each category ─────────
+  const sheet = useMemo(() => {
+    // Assets — Cash in hand
+    const cashIn = liquid.filter(t => t.mainCategory === 'Cash Inflow' && t.mode === 'Cash')
+      .reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
+    const cashOut = liquid.filter(t => t.mainCategory === 'Cash Outflow' && t.mode === 'Cash')
+      .reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
+    const cashInHand = Math.max(0, cashIn - cashOut);
+
+    // Bank detail — per-bank rows
+    const bankRows: TreeNode[] = banks.map((b): TreeNode => ({
+      id: `bank-${b.id}`,
+      label: b.name || 'Bank',
+      amount: Number(b.balance) || 0,
+      meta: b.accountNumber ? `Acct ${b.accountNumber}` : undefined,
+      level: 2, tone: 'asset',
+    }));
+    const bankBalance = bankRows.reduce((s, r) => s + r.amount, 0);
+
+    // Accounts receivable — pending inflow (partial + cheque uncleared)
+    const arTxs = liquid.filter(t =>
+      t.mainCategory === 'Cash Inflow' && (t.remainingAmount ?? 0) > 0
+    );
+    const arDetail: TreeNode[] = arTxs.map((t): TreeNode => ({
+      id: `ar-${t.id || t.transactionId}`,
+      label: t.detailCategory || t.paidBy || t.note || 'Receivable',
+      amount: Number(t.remainingAmount) || 0,
+      meta: `${fmtDate(t.date)}${t.subCategory ? ' · ' + t.subCategory : ''}`,
+      level: 2, tone: 'asset',
+    })).sort((a, b) => b.amount - a.amount);
+    const accountsReceivable = arDetail.reduce((s, r) => s + r.amount, 0);
+
+    // Inventory value
+    const inventoryValue = products.reduce((s, p) => s + (p.costPrice || 0) * (p.stock || 0), 0);
+
+    // Loans receivable — per loan
+    const loanRxRows: TreeNode[] = loans
+      .filter(l => l.type === 'Receivable' && l.status !== 'Full')
+      .map((l): TreeNode => ({
+        id: `loanrx-${l.id}`,
+        label: l.borrowerName || l.lenderName || 'Borrower',
+        amount: Number(l.remaining) || 0,
+        meta: `Paid ${fmt(l.paid || 0)} of ${fmt(l.loanAmount || 0)}`,
+        level: 2, tone: 'asset',
+      })).sort((a, b) => b.amount - a.amount);
+    const loansReceivable = loanRxRows.reduce((s, r) => s + r.amount, 0);
+
+    const totalAssets = cashInHand + bankBalance + accountsReceivable + inventoryValue + loansReceivable;
+
+    // Liabilities — Accounts payable (pending outflow)
+    const apTxs = liquid.filter(t =>
+      t.mainCategory === 'Cash Outflow' && (t.remainingAmount ?? 0) > 0
+    );
+    const apDetail: TreeNode[] = apTxs.map((t): TreeNode => ({
+      id: `ap-${t.id || t.transactionId}`,
+      label: t.detailCategory || t.paidTo || t.note || 'Payable',
+      amount: Number(t.remainingAmount) || 0,
+      meta: `${fmtDate(t.date)}${t.subCategory ? ' · ' + t.subCategory : ''}`,
+      level: 2, tone: 'liability',
+    })).sort((a, b) => b.amount - a.amount);
+    const accountsPayable = apDetail.reduce((s, r) => s + r.amount, 0);
+
+    // Loans payable
+    const loanPxRows: TreeNode[] = loans
+      .filter(l => l.type === 'Payable' && l.status !== 'Full')
+      .map((l): TreeNode => ({
+        id: `loanpx-${l.id}`,
+        label: l.lenderName || l.borrowerName || 'Lender',
+        amount: Number(l.remaining) || 0,
+        meta: `Paid ${fmt(l.paid || 0)} of ${fmt(l.loanAmount || 0)}`,
+        level: 2, tone: 'liability',
+      })).sort((a, b) => b.amount - a.amount);
+    const loansPayable = loanPxRows.reduce((s, r) => s + r.amount, 0);
+
+    // Pending bills
+    const billRows: TreeNode[] = (bills || [])
+      .filter(b => b.status === 'Pending' || b.status === 'Overdue')
+      .map((b): TreeNode => ({
+        id: `bill-${b.id}`,
+        label: b.description || 'Bill',
+        amount: Number(b.amount) || 0,
+        meta: b.status,
+        level: 2, tone: 'liability',
+      })).sort((a, b) => b.amount - a.amount);
+    const pendingBills = billRows.reduce((s, r) => s + r.amount, 0);
+
+    const totalLiabilities = accountsPayable + loansPayable + pendingBills;
+    const totalEquity      = totalAssets - totalLiabilities;
+
+    // Assets section tree
+    const assets: TreeNode = {
+      id: 'sec-assets', label: 'Assets', amount: totalAssets, level: 0, tone: 'asset',
+      children: [
+        { id: 'a-cash',    label: 'Cash in Hand',        amount: cashInHand,          level: 1, tone: 'asset', icon: <Wallet size={13} /> },
+        { id: 'a-banks',   label: 'Bank Balances',       amount: bankBalance,         level: 1, tone: 'asset', icon: <Landmark size={13} />,
+          meta: `${bankRows.length} ${bankRows.length === 1 ? 'account' : 'accounts'}`,
+          children: bankRows.length > 0 ? bankRows : undefined },
+        { id: 'a-ar',      label: 'Accounts Receivable', amount: accountsReceivable,  level: 1, tone: 'asset', icon: <HandCoins size={13} />,
+          meta: `${arDetail.length} ${arDetail.length === 1 ? 'entry' : 'entries'}`,
+          children: arDetail.length > 0 ? arDetail : undefined },
+        { id: 'a-inv',     label: 'Inventory Value',     amount: inventoryValue,      level: 1, tone: 'asset', icon: <Package size={13} /> },
+        { id: 'a-loanrx',  label: 'Loans Receivable',    amount: loansReceivable,     level: 1, tone: 'asset', icon: <HandCoins size={13} />,
+          meta: `${loanRxRows.length} ${loanRxRows.length === 1 ? 'loan' : 'loans'}`,
+          children: loanRxRows.length > 0 ? loanRxRows : undefined },
+      ],
     };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
 
-  const toggle = (opt: string) =>
-    onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt]);
+    // Liabilities section
+    const liabilities: TreeNode = {
+      id: 'sec-liab', label: 'Liabilities', amount: totalLiabilities, level: 0, tone: 'liability',
+      children: [
+        { id: 'l-ap',      label: 'Accounts Payable',    amount: accountsPayable,     level: 1, tone: 'liability', icon: <Receipt size={13} />,
+          meta: `${apDetail.length} ${apDetail.length === 1 ? 'entry' : 'entries'}`,
+          children: apDetail.length > 0 ? apDetail : undefined },
+        { id: 'l-loanpx',  label: 'Loans Payable',       amount: loansPayable,        level: 1, tone: 'liability', icon: <HandCoins size={13} />,
+          meta: `${loanPxRows.length} ${loanPxRows.length === 1 ? 'loan' : 'loans'}`,
+          children: loanPxRows.length > 0 ? loanPxRows : undefined },
+        { id: 'l-bills',   label: 'Pending Bills',       amount: pendingBills,        level: 1, tone: 'liability', icon: <FileText size={13} />,
+          meta: `${billRows.length} ${billRows.length === 1 ? 'bill' : 'bills'}`,
+          children: billRows.length > 0 ? billRows : undefined },
+      ],
+    };
 
-  const label =
-    selected.length === 0 ? placeholder :
-    selected.length === 1 ? selected[0] :
-    `${selected.length} selected`;
+    // Equity section
+    const equity: TreeNode = {
+      id: 'sec-equity', label: 'Equity', amount: totalEquity, level: 0, tone: 'equity',
+      children: [
+        { id: 'e-owner', label: "Owner's Equity", amount: totalEquity, level: 1, tone: 'equity',
+          meta: 'Assets − Liabilities' },
+      ],
+    };
 
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between text-sm focus:outline-none focus:ring-2 focus:ring-[#1e293b] focus:border-transparent"
-      >
-        <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-900'}>{label}</span>
-        <ChevronDown size={15} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
+    // Balance check
+    const totalLiabAndEquity = totalLiabilities + totalEquity;
+    const isBalanced = Math.abs(totalAssets - totalLiabAndEquity) < 1;
 
-      {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
-            <button type="button" onClick={() => onChange([...options])} className="text-xs text-[#1e293b] font-medium hover:underline">
-              Select all
-            </button>
-            <button type="button" onClick={() => onChange([])} className="text-xs text-gray-500 hover:underline">
-              Clear
-            </button>
-          </div>
-          <div className="overflow-y-auto">
-            {options.map(opt => (
-              <label key={opt} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(opt)}
-                  onChange={() => toggle(opt)}
-                  className="accent-[#1e293b] w-4 h-4 rounded"
-                />
-                <span className="text-gray-800">{opt}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Pill ─────────────────────────────────────────────────────────────────────
-function Pill({ label, onRemove, colorClass = 'bg-[#1e293b]/10 text-[#1e293b]' }: {
-  label: string; onRemove: () => void; colorClass?: string;
-}) {
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${colorClass}`}>
-      {label}
-      <button type="button" onClick={onRemove} className="hover:opacity-70"><X size={11} /></button>
-    </span>
-  );
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-export function BankBalanceReport() {
-  const [data, setData]         = useState<Bank[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [viewBank, setViewBank] = useState<Bank | null>(null);
-
-  const [filters, setFilters] = useState({
-    banks:         [] as string[],   // multi-select by bank name
-    balanceStatus: [] as string[],   // 'Positive' | 'Negative' | 'Zero'
-    sortBy:        'balance' as 'balance' | 'name',
-    search:        '',
-  });
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const [banksSnap, txSnap] = await Promise.all([
-          getDocs(collection(db, 'banks')),
-          getDocs(collection(db, 'bank_transactions')),
-        ]);
-
-        const txByBank: Record<string, any[]> = {};
-        txSnap.docs.forEach(d => {
-          const t = d.data() as any;
-          if (t.bankId) {
-            if (!txByBank[t.bankId]) txByBank[t.bankId] = [];
-            txByBank[t.bankId].push({ ...t, id: d.id });
-          }
-        });
-
-        const banks: Bank[] = banksSnap.docs.map(d => {
-          const b = d.data() as any;
-          const txns = (txByBank[d.id] || []).sort((a: any, x: any) =>
-            new Date(x.date).getTime() - new Date(a.date).getTime()
-          );
-          return {
-            id:            d.id,
-            name:          b.name           || '—',
-            balance:       Number(b.balance) || 0,
-            accountNumber: b.accountNumber   || b.account || '—',
-            transactions:  txns,
-          };
-        });
-        setData(banks);
-      } catch (err) {
-        console.error('BankBalanceReport fetch error:', err);
-        toast.error('Failed to load bank data');
-      } finally {
-        setIsLoading(false);
+    // Collect all expandable ids for Expand/Collapse All
+    const allExpandableIds: string[] = [];
+    const collect = (n: TreeNode) => {
+      if (n.children && n.children.length > 0) {
+        allExpandableIds.push(n.id);
+        n.children.forEach(collect);
       }
-    })();
-  }, []);
+    };
+    [assets, liabilities, equity].forEach(collect);
 
-  const bankNameOptions = useMemo(() => [...new Set(data.map(b => b.name))].sort(), [data]);
-  const balanceStatusOptions = ['Positive', 'Negative', 'Zero'];
+    return {
+      assets, liabilities, equity,
+      totalAssets, totalLiabilities, totalEquity, totalLiabAndEquity, isBalanced,
+      allExpandableIds,
+    };
+  }, [liquid, banks, loans, products, bills]);
 
-  const filteredData = useMemo(() => {
-    return [...data]
-      .filter(b => {
-        if (filters.search && !b.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
-        if (filters.banks.length > 0 && !filters.banks.includes(b.name)) return false;
-        if (filters.balanceStatus.length > 0) {
-          const status = b.balance > 0 ? 'Positive' : b.balance < 0 ? 'Negative' : 'Zero';
-          if (!filters.balanceStatus.includes(status)) return false;
-        }
-        return true;
-      })
-      .sort((a, b) =>
-        filters.sortBy === 'balance' ? b.balance - a.balance : a.name.localeCompare(b.name)
-      );
-  }, [data, filters]);
+  // ── Expand state ──────────────────────────────────────────────────────
+  // Sections open by default, categories collapsed — same feel as the P&L.
+  const [expanded, setExpanded] = useState<Set<string>>(() =>
+    new Set(['sec-assets', 'sec-liab', 'sec-equity'])
+  );
+  const toggle = (id: string) => setExpanded(prev => {
+    const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
+  const expandAll   = () => setExpanded(new Set(['sec-assets', 'sec-liab', 'sec-equity', ...sheet.allExpandableIds]));
+  const collapseAll = () => setExpanded(new Set());
 
-  const totalBalance  = useMemo(() => filteredData.reduce((s, b) => s + b.balance, 0), [filteredData]);
-  const positiveTotal = useMemo(() => filteredData.filter(b => b.balance > 0).reduce((s, b) => s + b.balance, 0), [filteredData]);
+  // ── CSV export ────────────────────────────────────────────────────────
+  const handleExportCsv = () => {
+    const rows: string[] = [];
+    rows.push(`Balance Sheet,${from} to ${to}`);
+    rows.push('');
+    const dump = (n: TreeNode, indent = 0) => {
+      const pad = '  '.repeat(indent);
+      rows.push(`${pad}${n.label},${n.amount.toFixed(2)}`);
+      if (n.children) n.children.forEach(c => dump(c, indent + 1));
+    };
+    dump(sheet.assets);
+    rows.push('');
+    dump(sheet.liabilities);
+    rows.push('');
+    dump(sheet.equity);
+    rows.push('');
+    rows.push(`Total Liabilities + Equity,${sheet.totalLiabAndEquity.toFixed(2)}`);
+    rows.push(`Balanced,${sheet.isBalanced ? 'yes' : 'no'}`);
 
-  const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
-
-  const handleExportCSV = () => {
-    const headers = ['Bank Name', 'Account Number', 'Balance', 'Status'];
-    const rows = filteredData.map(b => [
-      `"${b.name}"`, `"${b.accountNumber}"`, b.balance,
-      b.balance > 0 ? 'Positive' : b.balance < 0 ? 'Negative' : 'Zero'
-    ].join(','));
-    const csv  = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = `bank-balance-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Bank balance report exported');
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `balance-sheet-${from}-to-${to}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  const hasActiveFilters = filters.banks.length > 0 || filters.balanceStatus.length > 0 || filters.search !== '';
+  // ── PDF export ────────────────────────────────────────────────────────
+  const handleExportPdf = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = 210;
+    const pageH = 297;
+    const marginX = 15;
+    let y = 20;
 
-  const clearAll = () => setFilters({ banks: [], balanceStatus: [], sortBy: 'balance', search: '' });
+    // Header
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageW, 14, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('BALANCE SHEET', pageW / 2, 9, { align: 'center' });
 
-  if (isLoading) return (
-    <div className="flex items-center justify-center py-20 gap-3">
-      <Loader2 size={26} className="text-[#1e293b] animate-spin" />
-      <span className="text-gray-500 text-sm">Loading bank data…</span>
-    </div>
-  );
+    y = 22;
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Period: ${fmtDate(from)}  to  ${fmtDate(to)}`, marginX, y);
+    doc.text(`Generated: ${new Date().toLocaleString('en-GB')}`, pageW - marginX, y, { align: 'right' });
+    y += 4;
+    doc.setDrawColor(203, 213, 225);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 5;
+
+    // Section drawer
+    const drawSection = (title: string, node: TreeNode, headerColor: [number, number, number], amountColor: [number, number, number]) => {
+      // Section title bar
+      doc.setFillColor(...headerColor);
+      doc.rect(marginX, y, pageW - marginX * 2, 7, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.text(title, marginX + 3, y + 5);
+      doc.text(`${CURRENCY} ${fmt(node.amount)}`, pageW - marginX - 3, y + 5, { align: 'right' });
+      y += 10;
+
+      // Category rows
+      doc.setTextColor(30, 41, 59);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      if (node.children) {
+        for (const cat of node.children) {
+          // Page break if needed
+          if (y > pageH - 30) { doc.addPage(); y = 20; }
+          doc.setFont('helvetica', 'bold');
+          doc.text(cat.label, marginX + 4, y);
+          doc.setTextColor(...amountColor);
+          doc.text(`${CURRENCY} ${fmt(cat.amount)}`, pageW - marginX - 3, y, { align: 'right' });
+          doc.setTextColor(30, 41, 59);
+          y += 5;
+
+          // Detail rows
+          if (cat.children) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            for (const d of cat.children) {
+              if (y > pageH - 20) { doc.addPage(); y = 20; }
+              doc.setTextColor(100, 116, 139);
+              const label = d.label + (d.meta ? `  (${d.meta})` : '');
+              const wrapped = doc.splitTextToSize(label, pageW - marginX * 2 - 45);
+              doc.text(wrapped, marginX + 10, y);
+              doc.setTextColor(51, 65, 85);
+              doc.text(`${CURRENCY} ${fmt(d.amount)}`, pageW - marginX - 3, y, { align: 'right' });
+              y += wrapped.length * 3.8 + 1;
+            }
+            doc.setFontSize(9);
+          }
+          y += 1;
+        }
+      }
+      y += 3;
+    };
+
+    drawSection('ASSETS',      sheet.assets,      [5, 150, 105],  [5, 150, 105]);
+    drawSection('LIABILITIES', sheet.liabilities, [220, 38, 38],  [220, 38, 38]);
+    drawSection('EQUITY',      sheet.equity,      [37, 99, 235],  [37, 99, 235]);
+
+    // Balance check footer
+    if (y > pageH - 30) { doc.addPage(); y = 20; }
+    doc.setDrawColor(15, 23, 42);
+    doc.setLineWidth(0.4);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Total Assets', marginX, y);
+    doc.text(`${CURRENCY} ${fmt(sheet.totalAssets)}`, pageW - marginX, y, { align: 'right' });
+    y += 6;
+    doc.text('Total Liabilities + Equity', marginX, y);
+    doc.text(`${CURRENCY} ${fmt(sheet.totalLiabAndEquity)}`, pageW - marginX, y, { align: 'right' });
+    y += 8;
+    // Balanced/Off badge
+    const balColor: [number, number, number] = sheet.isBalanced ? [5, 150, 105] : [220, 38, 38];
+    doc.setFillColor(...balColor);
+    doc.rect(marginX, y, pageW - marginX * 2, 9, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(sheet.isBalanced ? '✓ BALANCED' : '✗ NOT BALANCED', pageW / 2, y + 6, { align: 'center' });
+
+    doc.save(`balance-sheet-${from}-to-${to}.pdf`);
+  };
+
+  // ── UI ────────────────────────────────────────────────────────────────
+  const inp: React.CSSProperties = {
+    padding: '7px 11px', border: '1px solid #e2e8f0', borderRadius: 7,
+    fontSize: 12.5, outline: 'none', backgroundColor: '#fff',
+  };
+  const miniBtn: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    padding: '7px 12px', borderRadius: 7, border: '1px solid #e2e8f0',
+    backgroundColor: '#fff', fontSize: 11.5, fontWeight: 700,
+    cursor: 'pointer', whiteSpace: 'nowrap',
+  };
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 0' }}>
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#1e293b] rounded-lg flex items-center justify-center">
-            <Building2 size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Bank Balance Report</h1>
-            <p className="text-sm text-gray-600">All bank accounts and their current balances</p>
-          </div>
+      {/* ── Filters ────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <label style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 4 }}>Quick range</label>
+          {([
+            ['all',         'All time'],
+            ['thisMonth',   'This month'],
+            ['lastMonth',   'Last month'],
+            ['last3Months', 'Last 3 months'],
+            ['thisYear',    'This year'],
+          ] as [Preset, string][]).map(([id, label]) => {
+            const active = preset === id;
+            return (
+              <button key={id} onClick={() => applyPreset(id)}
+                style={{
+                  padding: '5px 11px', borderRadius: 99,
+                  border: active ? 'none' : '1px solid #e2e8f0',
+                  backgroundColor: active ? '#0f172a' : '#fff',
+                  color: active ? '#fff' : '#334155',
+                  fontSize: 11.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}>{label}</button>
+            );
+          })}
+          {preset === 'custom' && <span style={{ padding: '5px 11px', borderRadius: 99, backgroundColor: '#fef3c7', color: '#92400e', fontSize: 11, fontWeight: 700 }}>Custom range</span>}
         </div>
-        <button
-          onClick={handleExportCSV}
-          className="px-4 py-2 bg-[#10b981] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 text-sm font-medium"
-        >
-          <Download size={16} /> Export CSV
-        </button>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Banks</p>
-              <p className="text-3xl font-bold text-gray-900">{filteredData.length}</p>
-            </div>
-            <div className="w-12 h-12 bg-[#1e293b]/10 rounded-lg flex items-center justify-center">
-              <Building2 size={24} className="text-[#1e293b]" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Balance</p>
-              <p className={`text-3xl font-bold ${totalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                {formatCurrency(totalBalance)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-[#10b981]/10 rounded-lg flex items-center justify-center">
-              <DollarSign size={24} className="text-[#10b981]" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Positive Balance</p>
-              <p className="text-3xl font-bold text-gray-900">{formatCurrency(positiveTotal)}</p>
-            </div>
-            <div className="w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center">
-              <TrendingUp size={24} className="text-emerald-600" />
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <Calendar size={15} color="#64748b" />
+          <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>From</label>
+          <input type="date" value={from} onChange={e => onFromChange(e.target.value)} max={to} style={inp} />
+          <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>To</label>
+          <input type="date" value={to} onChange={e => onToChange(e.target.value)} min={from} style={inp} />
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            <button onClick={expandAll} style={{ ...miniBtn, color: '#334155' }}><Maximize2 size={12} /> Expand All</button>
+            <button onClick={collapseAll} style={{ ...miniBtn, color: '#334155' }}><Minimize2 size={12} /> Collapse All</button>
+            <button onClick={handleExportCsv} style={{ ...miniBtn, color: '#334155' }}><Download size={12} /> Export CSV</button>
+            <button onClick={handleExportPdf} style={{ ...miniBtn, backgroundColor: '#0f172a', color: '#fff', border: 'none' }}><FileText size={12} /> Generate PDF</button>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter size={18} className="text-[#1e293b]" />
-          <h2 className="font-semibold text-gray-900">Filters</h2>
-          {hasActiveFilters && (
-            <button onClick={clearAll} className="ml-auto text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1">
-              <X size={13} /> Clear all
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Search */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
-              <Building2 size={13} /> Search
-            </label>
-            <input
-              type="text"
-              placeholder="Search by bank name…"
-              value={filters.search}
-              onChange={e => setFilters({ ...filters, search: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e293b] focus:border-transparent"
-            />
-          </div>
-
-          {/* Bank multi-select */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
-              <Building2 size={13} /> Bank
-            </label>
-            <MultiSelectDropdown
-              options={bankNameOptions}
-              selected={filters.banks}
-              onChange={v => setFilters({ ...filters, banks: v })}
-              placeholder="All Banks"
-            />
-          </div>
-
-          {/* Balance Status multi-select */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1">
-              <DollarSign size={13} /> Balance Status
-            </label>
-            <MultiSelectDropdown
-              options={balanceStatusOptions}
-              selected={filters.balanceStatus}
-              onChange={v => setFilters({ ...filters, balanceStatus: v })}
-              placeholder="All Statuses"
-            />
-          </div>
-
-          {/* Sort By */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Sort By</label>
-            <select
-              value={filters.sortBy}
-              onChange={e => setFilters({ ...filters, sortBy: e.target.value as 'balance' | 'name' })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e293b] focus:border-transparent"
-            >
-              <option value="balance">Balance (High → Low)</option>
-              <option value="name">Name (A → Z)</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Active filter pills */}
-        {hasActiveFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-gray-500">Active:</span>
-            {filters.search && (
-              <Pill
-                label={`"${filters.search}"`}
-                onRemove={() => setFilters({ ...filters, search: '' })}
-                colorClass="bg-[#1e293b]/10 text-[#1e293b]"
-              />
-            )}
-            {filters.banks.map(b => (
-              <Pill
-                key={b} label={b}
-                onRemove={() => setFilters({ ...filters, banks: filters.banks.filter(x => x !== b) })}
-                colorClass="bg-[#1e293b]/10 text-[#1e293b]"
-              />
-            ))}
-            {filters.balanceStatus.map(s => (
-              <Pill
-                key={s} label={s}
-                onRemove={() => setFilters({ ...filters, balanceStatus: filters.balanceStatus.filter(x => x !== s) })}
-                colorClass={
-                  s === 'Positive' ? 'bg-green-100 text-green-700' :
-                  s === 'Negative' ? 'bg-red-100 text-red-700' :
-                  'bg-gray-100 text-gray-700'
-                }
-              />
-            ))}
-          </div>
-        )}
+      {/* Summary tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12 }}>
+        <Tile icon={<TrendingUp size={18} />}   label="Total Assets"      value={sheet.totalAssets}      fg="#059669" bg="#ecfdf5" />
+        <Tile icon={<TrendingDown size={18} />} label="Total Liabilities" value={sheet.totalLiabilities} fg="#dc2626" bg="#fef2f2" />
+        <Tile icon={<Scale size={18} />}         label="Owner's Equity"    value={sheet.totalEquity}      fg={sheet.totalEquity >= 0 ? '#059669' : '#dc2626'} bg={sheet.totalEquity >= 0 ? '#ecfdf5' : '#fef2f2'} />
+        <Tile icon={<Scale size={18} />}         label={sheet.isBalanced ? 'Balanced' : 'Off Balance'} value={Math.abs(sheet.totalAssets - sheet.totalLiabAndEquity)} fg={sheet.isBalanced ? '#059669' : '#dc2626'} bg={sheet.isBalanced ? '#ecfdf5' : '#fef2f2'} highlight />
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      {/* Statement */}
+      <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid #e2e8f0', background: 'linear-gradient(90deg, #f8fafc 0%, #ffffff 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <h3 className="font-semibold text-gray-900">Bank Accounts</h3>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Showing {filteredData.length} of {data.length} banks
-            </p>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account No.</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Transaction</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredData.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-16 text-center text-gray-500">
-                    <FileText size={48} className="mx-auto mb-4 text-gray-300" />
-                    <p className="text-lg font-medium">No banks found</p>
-                    <p className="text-sm mt-1">Try adjusting your filters</p>
-                  </td>
-                </tr>
-              ) : (
-                filteredData.map((bank, index) => (
-                  <tr key={bank.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100 transition-colors`}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                        <Building2 size={16} className="text-gray-400" />
-                        {bank.name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-600">{bank.accountNumber}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        bank.balance > 0  ? 'bg-green-100 text-green-800' :
-                        bank.balance < 0  ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {formatCurrency(bank.balance)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {bank.transactions[0]
-                        ? new Date(bank.transactions[0].date).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })
-                        : <span className="text-gray-400 italic">No transactions</span>
-                      }
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => setViewBank(bank)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#1e293b] bg-[#1e293b]/10 rounded-lg hover:bg-[#1e293b]/20 transition-colors"
-                      >
-                        <Eye size={13} /> View
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer total */}
-        {filteredData.length > 0 && (
-          <div className="bg-gray-50 border-t-2 border-[#1e293b] px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <DollarSign size={18} className="text-[#1e293b]" />
-                <span className="font-semibold text-gray-900">Total Balance</span>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500">{filteredData.length} bank{filteredData.length !== 1 ? 's' : ''}</p>
-                <p className={`text-2xl font-bold ${totalBalance >= 0 ? 'text-[#1e293b]' : 'text-red-600'}`}>
-                  {formatCurrency(totalBalance)}
-                </p>
-              </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Layers size={16} color="#334155" /> Balance Sheet
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+              As of {fmtDate(to)} — for the period {fmtDate(from)} → {fmtDate(to)}
             </div>
           </div>
-        )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <LegendBadge color="#059669" label="Assets" />
+            <LegendBadge color="#dc2626" label="Liabilities" />
+            <LegendBadge color="#2563eb" label="Equity" />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 22px', backgroundColor: '#fafbfc', borderBottom: '1px solid #e2e8f0', fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+          <span>Category</span>
+          <span style={{ textAlign: 'right', minWidth: 160 }}>Amount ({CURRENCY})</span>
+        </div>
+
+        <div>
+          <TreeBranch node={sheet.assets}      expanded={expanded} toggle={toggle} depth={0} />
+          <SubtotalRow label="Total Assets" value={sheet.totalAssets} tone="asset" />
+
+          <TreeBranch node={sheet.liabilities} expanded={expanded} toggle={toggle} depth={0} />
+          <SubtotalRow label="Total Liabilities" value={sheet.totalLiabilities} tone="liability" />
+
+          <TreeBranch node={sheet.equity}      expanded={expanded} toggle={toggle} depth={0} />
+          <SubtotalRow label="Total Equity" value={sheet.totalEquity} tone="equity" />
+
+          <div style={{
+            padding: '14px 22px',
+            backgroundColor: sheet.isBalanced ? '#0f172a' : '#7f1d1d',
+            color: '#fff',
+            display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 800 }}>
+              {sheet.isBalanced
+                ? '✓ Balanced — Assets = Liabilities + Equity'
+                : `✗ Off balance by AED ${fmt(Math.abs(sheet.totalAssets - sheet.totalLiabAndEquity))}`}
+            </span>
+            <span style={{ fontSize: 15, fontWeight: 900, fontVariantNumeric: 'tabular-nums', minWidth: 180, textAlign: 'right', color: sheet.isBalanced ? '#6ee7b7' : '#fca5a5' }}>
+              <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
+              {fmt(sheet.totalLiabAndEquity)}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Detail Modal */}
-      {viewBank && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-[#1e293b]/10 rounded-lg flex items-center justify-center">
-                  <Building2 size={18} className="text-[#1e293b]" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-900">{viewBank.name}</h3>
-              </div>
-              <button onClick={() => setViewBank(null)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-                <XCircle size={22} className="text-gray-400" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Account Number</p>
-                  <p className="font-mono text-sm font-medium text-gray-900">{viewBank.accountNumber}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Status</p>
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    viewBank.balance > 0 ? 'bg-green-100 text-green-800' :
-                    viewBank.balance < 0 ? 'bg-red-100 text-red-800' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {viewBank.balance > 0 ? 'Positive' : viewBank.balance < 0 ? 'Negative' : 'Zero'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-gray-100">
-                <p className="text-xs text-gray-500 mb-1">Balance</p>
-                <p className={`text-3xl font-bold ${viewBank.balance >= 0 ? 'text-[#1e293b]' : 'text-red-600'}`}>
-                  {formatCurrency(viewBank.balance)}
-                </p>
-              </div>
-
-              <div className="pt-2 border-t border-gray-100">
-                <p className="text-xs text-gray-500 mb-2">Recent Transactions</p>
-                <div className="space-y-2 max-h-44 overflow-y-auto">
-                  {viewBank.transactions.length === 0
-                    ? <p className="text-sm text-gray-400 italic">No transactions</p>
-                    : viewBank.transactions.slice(0, 5).map((tx: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between text-sm p-2.5 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
-                          <p className="text-gray-800 font-medium">{tx.description || tx.note || '—'}</p>
-                        </div>
-                        <span className={`font-semibold text-sm ${(tx.amount || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatCurrency(tx.amount || 0)}
-                        </span>
-                      </div>
-                    ))
-                  }
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', padding: '6px 8px 12px' }}>
+        Assets, Liabilities and Equity are computed from live ledger data for the selected date range. Pending-approval and rejected transactions are excluded.
+      </div>
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Presentational sub-components
+// ─────────────────────────────────────────────────────────────────────────
+const toneColor = (t: TreeNode['tone']) => ({ asset: '#059669', liability: '#dc2626', equity: '#2563eb' }[t]);
+const toneBg    = (t: TreeNode['tone']) => ({ asset: '#ecfdf5', liability: '#fef2f2', equity: '#eff6ff' }[t]);
+
+const Tile: React.FC<{
+  icon: React.ReactNode; label: string; value: number;
+  fg: string; bg: string; highlight?: boolean;
+}> = ({ icon, label, value, fg, bg, highlight }) => (
+  <div style={{
+    backgroundColor: highlight ? fg : '#fff', borderRadius: 12, padding: '16px 18px',
+    border: highlight ? 'none' : '1px solid #e2e8f0',
+    display: 'flex', alignItems: 'center', gap: 14,
+    boxShadow: highlight ? '0 6px 16px -6px rgba(15,23,42,0.15)' : '0 1px 2px rgba(0,0,0,0.03)',
+  }}>
+    <div style={{
+      width: 42, height: 42, borderRadius: 11,
+      backgroundColor: highlight ? 'rgba(255,255,255,0.18)' : bg,
+      color: highlight ? '#fff' : fg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>{icon}</div>
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: highlight ? 'rgba(255,255,255,0.85)' : '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: highlight ? '#fff' : fg, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', marginTop: 2 }}>
+        <span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY}</span>{fmt(value)}
+      </div>
+    </div>
+  </div>
+);
+
+const LegendBadge: React.FC<{ color: string; label: string }> = ({ color, label }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+    <span style={{ width: 8, height: 8, borderRadius: 99, backgroundColor: color, display: 'inline-block' }} />
+    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</span>
+  </div>
+);
+
+const TreeBranch: React.FC<{
+  node: TreeNode;
+  expanded: Set<string>;
+  toggle: (id: string) => void;
+  depth: number;
+}> = ({ node, expanded, toggle, depth }) => {
+  const isOpen = expanded.has(node.id);
+  const hasChildren = !!node.children && node.children.length > 0;
+  return (
+    <>
+      <TreeRow node={node} expanded={expanded} toggle={toggle} />
+      {isOpen && hasChildren && node.children!.map(c => (
+        <TreeBranch key={c.id} node={c} expanded={expanded} toggle={toggle} depth={depth + 1} />
+      ))}
+    </>
+  );
+};
+
+const TreeRow: React.FC<{
+  node: TreeNode;
+  expanded: Set<string>;
+  toggle: (id: string) => void;
+}> = ({ node, expanded, toggle }) => {
+  const isOpen = expanded.has(node.id);
+  const hasChildren = !!node.children && node.children.length > 0;
+  const color = toneColor(node.tone);
+  const bgTone = toneBg(node.tone);
+
+  let rowStyle: React.CSSProperties;
+  if (node.level === 0) {
+    rowStyle = { backgroundColor: bgTone, padding: '14px 22px', fontSize: 13.5, fontWeight: 800, color: '#0f172a', borderBottom: '1px solid #e2e8f0' };
+  } else if (node.level === 1) {
+    const isEmpty = !hasChildren && node.amount === 0;
+    rowStyle = { backgroundColor: isOpen ? '#f8fafc' : '#fff', padding: '10px 22px 10px 42px', fontSize: 12.5, fontWeight: 700, color: '#334155', borderBottom: '1px solid #f1f5f9', opacity: isEmpty ? 0.55 : 1 };
+  } else {
+    rowStyle = { backgroundColor: '#fff', padding: '8px 22px 8px 66px', fontSize: 12, fontWeight: 500, color: '#475569', borderBottom: '1px solid #f8fafc' };
+  }
+  const clickable = hasChildren;
+
+  return (
+    <div
+      onClick={clickable ? () => toggle(node.id) : undefined}
+      style={{
+        ...rowStyle,
+        display: 'grid', gridTemplateColumns: '1fr auto', gap: 10,
+        alignItems: 'center',
+        cursor: clickable ? 'pointer' : 'default',
+        transition: 'background-color 0.12s ease',
+      }}
+      onMouseEnter={e => {
+        if (clickable) (e.currentTarget as HTMLDivElement).style.backgroundColor = node.level === 0 ? bgTone : '#f1f5f9';
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLDivElement).style.backgroundColor = rowStyle.backgroundColor as string;
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        {hasChildren ? (
+          <ChevronRight size={node.level === 0 ? 15 : 13}
+            style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', color, flexShrink: 0 }} />
+        ) : (
+          <span style={{ width: 13, display: 'inline-block', flexShrink: 0 }} />
+        )}
+        {node.icon && <span style={{ color, display: 'flex' }}>{node.icon}</span>}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.label}</span>
+        {node.meta && (
+          <span style={{
+            fontSize: node.level === 0 ? 11 : 10,
+            fontWeight: 500, color: '#94a3b8', marginLeft: 4, whiteSpace: 'nowrap',
+            fontStyle: node.level === 2 ? 'italic' : 'normal',
+          }}>
+            {node.level === 2 ? node.meta : `· ${node.meta}`}
+          </span>
+        )}
+      </div>
+      <span style={{
+        textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+        fontWeight: node.level === 0 ? 800 : node.level === 1 ? 700 : 600,
+        color,
+        fontSize: node.level === 0 ? 14 : node.level === 1 ? 13 : 12,
+        minWidth: 160, paddingLeft: 8,
+      }}>
+        <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
+        {fmt(node.amount)}
+      </span>
+    </div>
+  );
+};
+
+const SubtotalRow: React.FC<{ label: string; value: number; tone: TreeNode['tone'] }> = ({ label, value, tone }) => {
+  const color = toneColor(tone);
+  return (
+    <div style={{
+      backgroundColor: '#f1f5f9',
+      padding: '12px 22px',
+      borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1',
+      display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center',
+    }}>
+      <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a' }}>{label}</span>
+      <span style={{
+        fontSize: 14, fontWeight: 800, color,
+        fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+        minWidth: 160, textAlign: 'right', paddingLeft: 8,
+      }}>
+        <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>{fmt(value)}
+      </span>
+    </div>
+  );
+};

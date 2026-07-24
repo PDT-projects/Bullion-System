@@ -441,27 +441,29 @@ export function CreateInventoryView({
           </select>
         </div>
 
-        {/* ── Cost Price ── */}
+        {/* ── Purchasing Cost (what we paid to buy) ── */}
         <div>
           <CurrencyPriceInput
-            label="Cost Price"
+            label="Purchasing Cost"
             pkrValue={formData.costPrice ?? 0}
             onChange={value => setField('costPrice', value)}
             required
           />
+          <p className="text-xs text-gray-400 mt-1">What this product cost us — used for inventory valuation, never shown on customer invoices.</p>
           {validation.fieldErrors?.costPrice && (
             <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.costPrice}</p>
           )}
         </div>
 
-        {/* ── Sell Price ── */}
+        {/* ── Retail Price (what customers pay — appears on the invoice) ── */}
         <div>
           <CurrencyPriceInput
-            label="Sell Price"
+            label="Retail Price"
             pkrValue={formData.sellPrice ?? 0}
             onChange={value => setField('sellPrice', value)}
             required
           />
+          <p className="text-xs text-gray-400 mt-1">The price shown to customers on their sales invoice.</p>
           {validation.fieldErrors?.sellPrice && (
             <p className="text-red-500 text-sm mt-1">{validation.fieldErrors.sellPrice}</p>
           )}
@@ -837,7 +839,7 @@ export function CreateInventoryView({
           <h4 className="font-semibold text-blue-900 mb-3">Payment Summary</h4>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-blue-700">Cost Price per unit:</span>
+              <span className="text-blue-700">Purchasing Cost per unit:</span>
               <span className="font-semibold text-blue-900">{InventoryService.formatCurrency(formData.costPrice ?? 0)}</span>
             </div>
             <div className="flex justify-between">
@@ -903,8 +905,8 @@ export function CreateInventoryView({
             ['Location',       formData.location || '—'],
             ['Status',         formData.status   || '—'],
             ['Stock',          `${formData.stock} units`],
-            ['Cost Price',     InventoryService.formatCurrency(formData.costPrice ?? 0)],
-            ['Sell Price',     InventoryService.formatCurrency(formData.sellPrice  || 0)],
+            ['Purchasing Cost', InventoryService.formatCurrency(formData.costPrice ?? 0)],
+            ['Retail Price',    InventoryService.formatCurrency(formData.sellPrice  || 0)],
             ['Description',    formData.description || '—'],
             ['Ownership',  (formData as any).ownershipType || 'Owned'],
             // Payment method removed — payments are tracked from the Transactions module.

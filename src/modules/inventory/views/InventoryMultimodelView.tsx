@@ -376,10 +376,10 @@ function ModelCard({
           {hasErr('model') && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 3 }}>{validationErrors[`model_${index}`]}</p>}
         </div>
 
-        {/* Cost Price */}
+        {/* Purchasing Cost (what we paid to buy — never shown to customers) */}
         <div>
           <CurrencyPriceInput
-            label="Cost Price"
+            label="Purchasing Cost"
             pkrValue={e.costPrice ?? 0}
             onChange={value => updateEntry(e.id, { costPrice: value })}
             placeholder="0"
@@ -388,10 +388,10 @@ function ModelCard({
           {hasErr('cost') && <p style={{ color: '#ef4444', fontSize: 11, marginTop: 3 }}>{validationErrors[`cost_${index}`]}</p>}
         </div>
 
-        {/* Sell Price */}
+        {/* Retail Price (what customers see on the invoice) */}
         <div>
           <CurrencyPriceInput
-            label="Sell Price"
+            label="Retail Price"
             pkrValue={e.sellPrice ?? 0}
             onChange={value => updateEntry(e.id, { sellPrice: value })}
             placeholder="0"

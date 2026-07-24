@@ -1,15 +1,18 @@
-// Invoice Module — PDF Generation Service (v5 — Proforma layout)
+// Invoice Module — PDF Generation Service (v6 — Sales Invoice layout)
 //
-// Rewritten to match the reference "GoldXtra"-style proforma invoice layout:
+// GoldXtra-style sales invoice layout:
 //   • Yellow strip + black header bar with brand name
-//   • PROFORMA INVOICE title, right-aligned date + PI #
+//   • SALES INVOICE title, right-aligned date + Inv #
 //   • Company info block (seller)
 //   • Bill To / Ship To dual columns with gold header bars
-//   • Product table (IMAGE | DESCRIPTION | QTY | UNIT PRICE US $ | TOTAL US $)
+//   • Product table (IMAGE | DESCRIPTION | QTY | UNIT PRICE | TOTAL)
 //   • Totals block with gold-highlighted TOTAL row
 //   • Amount in words
-//   • Terms + stamp + beneficiary payment instructions
+//   • Company logo/stamp (opt-in via checkbox on the form)
+//   • Beneficiary payment instructions
 //   • Thank You footer
+//
+// The "Terms & Conditions" block has been removed per product requirements.
 //
 // Same exports as prior versions (generateInvoicePdf / downloadInvoicePdf)
 // so all upstream callers (InventoryDashboardView eye icon, InvoiceListView
@@ -64,26 +67,55 @@ const BENEFICIARY = {
 const CURRENCY_CODE   = 'AED';
 const CURRENCY_SYMBOL = 'AED';
 
-// ── Image loader (kept identical to prior versions — proven with Firebase) ─
+// ── Image loader ────────────────────────────────────────────────────────────
+// Two-stage loader:
+//   1. Fast path: HTMLImageElement + canvas. Handles any browser format
+//      (PNG, JPEG, WebP, GIF, SVG). Requires the image server to send CORS
+//      headers, otherwise canvas gets tainted and toDataURL throws.
+//   2. Fallback: XHR blob → FileReader. Reads bytes directly. Only works for
+//      PNG or JPEG (jsPDF constraint) but avoids the canvas-taint problem.
 interface ImageData { dataUrl: string; format: 'PNG' | 'JPEG'; }
-async function loadImage(src: string): Promise<ImageData | null> {
-  if (!src) return null;
+
+async function loadImageViaCanvas(src: string): Promise<ImageData | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const timeout = setTimeout(() => resolve(null), 15000);
+    img.onload = () => {
+      clearTimeout(timeout);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth  || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx || canvas.width === 0 || canvas.height === 0) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+        resolve({ dataUrl: canvas.toDataURL('image/png'), format: 'PNG' });
+      } catch { resolve(null); }
+    };
+    img.onerror = () => { clearTimeout(timeout); resolve(null); };
+    img.src = src;
+  });
+}
+
+async function loadImageViaXhr(src: string): Promise<ImageData | null> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', src, true);
+    try { xhr.open('GET', src, true); }
+    catch { resolve(null); return; }
     xhr.responseType = 'blob';
-    xhr.timeout = 8000;
+    xhr.timeout = 15000;
     xhr.onload = () => {
       if (xhr.status !== 200) { resolve(null); return; }
       const blob: Blob = xhr.response;
       if (!blob || blob.size === 0) { resolve(null); return; }
-      const reader = new FileReader();
-      reader.onload = () => {
+      const r = new FileReader();
+      r.onload = () => {
         try {
-          const b = new Uint8Array(reader.result as ArrayBuffer);
+          const bytes = new Uint8Array(r.result as ArrayBuffer);
           let format: 'PNG' | 'JPEG';
-          if (b[0] === 0x89 && b[1] === 0x50) format = 'PNG';
-          else if (b[0] === 0xff && b[1] === 0xd8) format = 'JPEG';
+          if (bytes[0] === 0x89 && bytes[1] === 0x50) format = 'PNG';
+          else if (bytes[0] === 0xff && bytes[1] === 0xd8) format = 'JPEG';
           else { resolve(null); return; }
           const r2 = new FileReader();
           r2.onload  = () => resolve(r2.result ? { dataUrl: r2.result as string, format } : null);
@@ -91,13 +123,69 @@ async function loadImage(src: string): Promise<ImageData | null> {
           r2.readAsDataURL(blob);
         } catch { resolve(null); }
       };
-      reader.onerror = () => resolve(null);
-      reader.readAsArrayBuffer(blob);
+      r.onerror = () => resolve(null);
+      r.readAsArrayBuffer(blob);
     };
     xhr.onerror   = () => resolve(null);
     xhr.ontimeout = () => resolve(null);
     xhr.send();
   });
+}
+
+async function loadImage(src: string): Promise<ImageData | null> {
+  if (!src) return null;
+
+  // CRITICAL: Firebase Storage URLs are often displayed in <img> tags earlier
+  // in the app (e.g. the invoice form thumbnail). That first fetch happens
+  // WITHOUT crossOrigin='anonymous', so the browser caches the response
+  // WITHOUT CORS headers. When we later try to load the same URL WITH
+  // crossOrigin='anonymous' for the PDF, the browser serves the cached
+  // (non-CORS) response → canvas gets tainted → toDataURL throws.
+  //
+  // Appending a unique query param forces a fresh network fetch, which
+  // Firebase Storage responds to with proper CORS headers, keeping the
+  // canvas clean. Same-origin URLs (like /BullionStamp.jpeg) are unaffected
+  // because we serve those with default cache/CORS.
+  const cacheBust = (u: string) => {
+    // Skip data: / blob: URLs — they don't hit the network
+    if (u.startsWith('data:') || u.startsWith('blob:')) return u;
+    const sep = u.includes('?') ? '&' : '?';
+    return `${u}${sep}_pdfcb=${Date.now()}`;
+  };
+  const busted = cacheBust(src);
+
+  // Try canvas first (works for any format when the response has CORS headers)
+  const viaCanvas = await loadImageViaCanvas(busted);
+  if (viaCanvas) return viaCanvas;
+  // Fallback: XHR blob (also needs CORS but sometimes succeeds when canvas doesn't)
+  const viaXhr = await loadImageViaXhr(busted);
+  if (viaXhr) return viaXhr;
+  // Last-resort: retry the ORIGINAL URL (no cache-bust). Some CDNs vary on
+  // query params and treat the busted URL as a different resource that 404s.
+  if (busted !== src) {
+    const viaCanvasOriginal = await loadImageViaCanvas(src);
+    if (viaCanvasOriginal) return viaCanvasOriginal;
+    const viaXhrOriginal = await loadImageViaXhr(src);
+    if (viaXhrOriginal) return viaXhrOriginal;
+  }
+  console.warn('[InvoicePdf] All loading strategies failed for:', src);
+  return null;
+}
+
+// Try a list of possible stamp/logo file paths in order and return the first
+// one that loads successfully. Deployments sometimes store the file with a
+// different extension or casing, so we don't want a single hardcoded path to
+// be the single point of failure.
+async function loadStampFromCandidates(paths: string[]): Promise<ImageData | null> {
+  for (const p of paths) {
+    const img = await loadImage(p);
+    if (img) {
+      console.log('[InvoicePdf] Stamp loaded from:', p);
+      return img;
+    }
+  }
+  console.warn('[InvoicePdf] No stamp file found. Tried:', paths.join(', '));
+  return null;
 }
 
 // ── Formatters ──────────────────────────────────────────────────────────────
@@ -187,17 +275,17 @@ function renderHeader(doc: jsPDF): number {
   return 22;  // y-cursor after the header
 }
 
-/** "PROFORMA INVOICE" title + right-aligned date and PI #. */
+/** "SALES INVOICE" title + right-aligned date and Inv #. */
 function renderTitleRow(doc: jsPDF, invoice: Invoice, y: number): number {
   text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
-  doc.text('PROFORMA INVOICE', PAGE_W / 2, y + 6, { align: 'center' });
+  doc.text('SALES INVOICE', PAGE_W / 2, y + 6, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text(`Date: ${formatDateDDMMMYYYY(invoice.date)}`, PAGE_W - MR, y + 3, { align: 'right' });
-  doc.text(`PI # ${invoice.invoiceNumber}`,                PAGE_W - MR, y + 8, { align: 'right' });
+  doc.text(`Inv # ${invoice.invoiceNumber}`,              PAGE_W - MR, y + 8, { align: 'right' });
 
   return y + 15;
 }
@@ -332,7 +420,14 @@ function renderProductRow(
   if (imageData) {
     try {
       doc.addImage(imageData.dataUrl, imageData.format, imgX + 0.5, imgY + 0.5, imgSize - 1, imgSize - 1);
-    } catch { /* image draw failed — leave the placeholder card */ }
+    } catch { /* image draw failed — placeholder card stays */ }
+  } else {
+    // Visible "no image" indicator so it's clear at a glance which product row
+    // is missing image data (vs. an empty box that looks like a rendering bug).
+    text(doc, { r: 156, g: 163, b: 175 });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    doc.text('No image', imgX + imgSize / 2, imgY + imgSize / 2 + 1, { align: 'center' });
   }
 
   // Description
@@ -426,53 +521,61 @@ function renderTotals(doc: jsPDF, invoice: Invoice, y: number): number {
   return wordsY + 8 + 4;
 }
 
-/** Terms & Conditions block on the left + stamp/signature area on the right. */
-function renderTermsAndStamp(doc: jsPDF, invoice: Invoice, y: number, stamp: ImageData | null): number {
-  const blockH = 32;
+/**
+ * Reads the "add logo" flag from the invoice, tolerating several possible
+ * field names since different form versions have used different keys.
+ * Returns true ONLY when one of these fields is strictly true — undefined,
+ * false, null, 0, or an empty string all mean "don't render".
+ *
+ * If the logo is still appearing when the checkbox is unchecked, the form is
+ * saving `true` to whatever field it uses regardless of the checkbox state —
+ * that fix belongs in the form component, not here.
+ */
+function wantsLogo(invoice: Invoice): boolean {
+  const inv = invoice as any;
+  const flags = [inv.digitalStamp, inv.includeLogo, inv.showLogo, inv.addLogo, inv.companyLogo, inv.withLogo];
+  // Truthy check (not strict === true) so "true"/"1"/1/true all work — the
+  // form may serialise the checkbox in any of these forms.
+  return flags.some(v => !!v && v !== 'false' && v !== '0' && v !== 0);
+}
 
-  // Left half — terms
-  text(doc, TEXT_D);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('TERMS & CONDITIONS:', ML, y + 4);
+/**
+ * Renders the company logo/stamp on the right side of the page.
+ * Only draws when `wantsLogo(invoice)` returns true.
+ *
+ * Sizing rules:
+ *   • Reserved block height: 52mm (bigger than the previous 32mm)
+ *   • Logo bounding box: 48mm × 48mm square, right-aligned
+ *   • The image's natural aspect ratio is preserved so a circular source
+ *     (e.g. a round stamp/logo) renders as an actual circle, not stretched.
+ *   • If the source is already square/circular, it fills the box.
+ */
+function renderLogo(doc: jsPDF, invoice: Invoice, y: number, logo: ImageData | null): number {
+  const blockH = 52;
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  const terms = [
-    `Tentative Ship Date: ${formatDateDDMMMYYYY(invoice.date)}`,
-    'Ship Via : DHL',
-    'Payment Terms 100% in Advance',
-    `All Prices listed are in ${CURRENCY_CODE}`,
-  ];
-  let ly = y + 9;
-  for (const t of terms) { doc.text(t, ML, ly); ly += 4.5; }
-
-  // Right half — stamp area (only when the invoice was flagged with
-  // digitalStamp=true at creation time). Strict opt-in — undefined or false
-  // both skip drawing.
-  //
-  // The stamp image is circular. Previously we drew it into a fixed 42×28
-  // box which stretched the round stamp into an ellipse. Now we read the
-  // image's natural dimensions via getImageProperties and scale to fit
-  // inside a square bounding box, preserving aspect ratio so a circular
-  // stamp renders as an actual circle.
-  if (stamp && (invoice as any).digitalStamp === true) {
-    try {
-      const boxMax = Math.min(blockH - 2, 34);   // square-ish bounding box
-      let drawW = boxMax;
-      let drawH = boxMax;
-      try {
-        const props = doc.getImageProperties(stamp.dataUrl);
-        const ratio = props.width / props.height;
-        if (ratio >= 1) { drawW = boxMax; drawH = boxMax / ratio; }
-        else            { drawH = boxMax; drawW = boxMax * ratio; }
-      } catch { /* fall through — use the square defaults if we can't read the dims */ }
-      // Right-align within the reserved 45mm strip, vertically center in block
-      const sX = PAGE_W - MR - drawW;
-      const sY = y + (blockH - drawH) / 2;
-      doc.addImage(stamp.dataUrl, stamp.format, sX, sY, drawW, drawH);
-    } catch { /* stamp failed — no fallback needed */ }
+  if (!logo || !wantsLogo(invoice)) {
+    // No logo requested — just return the y-cursor as if we drew a small gap.
+    // Skipping the full blockH keeps the page tighter when no logo is used.
+    return y + 6;
   }
+
+  try {
+    const boxMax = 48;                            // 48mm square bounding box
+    let drawW = boxMax;
+    let drawH = boxMax;
+    try {
+      const props = doc.getImageProperties(logo.dataUrl);
+      const ratio = props.width / props.height;
+      // Preserve aspect ratio — a circular source stays circular.
+      if (ratio >= 1) { drawW = boxMax; drawH = boxMax / ratio; }
+      else            { drawH = boxMax; drawW = boxMax * ratio; }
+    } catch { /* if we can't read dimensions, use the square defaults */ }
+
+    // Right-aligned, vertically centered within the reserved block
+    const sX = PAGE_W - MR - drawW;
+    const sY = y + (blockH - drawH) / 2;
+    doc.addImage(logo.dataUrl, logo.format, sX, sY, drawW, drawH);
+  } catch { /* draw failed — no fallback needed */ }
 
   return y + blockH;
 }
@@ -515,17 +618,88 @@ function renderThankYou(doc: jsPDF, y: number) {
 // Main entry point
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
+/**
+ * Optional lookup source for enriching product images. Pass an array (or
+ * record) of inventory products keyed by id. If an invoice-product row is
+ * missing imageUrls, we'll look it up here by productId. Solves the case
+ * where an old invoice was saved before imageUrls were captured, but the
+ * inventory record has since been updated with images.
+ */
+export type PdfEnrichSource = Array<{ id: string; imageUrls?: string[] }>
+                            | Record<string, { imageUrls?: string[] }>;
+
+export interface GenerateInvoicePdfOptions {
+  enrichWithProducts?: PdfEnrichSource;
+}
+
+export async function generateInvoicePdf(
+  invoice: Invoice,
+  options: GenerateInvoicePdfOptions = {},
+): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  // Load product images + stamp in parallel so drawing isn't blocked serially.
-  // Skip the stamp fetch entirely when the invoice hasn't opted in — no point
+  // Build a quick lookup map from the enrichment source, if provided.
+  const enrichMap: Record<string, string[]> = {};
+  if (options.enrichWithProducts) {
+    const src = options.enrichWithProducts;
+    if (Array.isArray(src)) {
+      for (const p of src) if (p?.id && Array.isArray(p.imageUrls) && p.imageUrls.length > 0) enrichMap[p.id] = p.imageUrls;
+    } else {
+      for (const [id, p] of Object.entries(src)) if (Array.isArray(p?.imageUrls) && p!.imageUrls!.length > 0) enrichMap[id] = p!.imageUrls!;
+    }
+  }
+
+  // Load product images + logo in parallel so drawing isn't blocked serially.
+  // Skip the logo fetch entirely when the invoice hasn't opted in — no point
   // hitting the network for an asset we won't draw.
+  //
+  // Invoice products carry `imageUrls: string[]` (populated from inventory's
+  // imageUrls at product-selection time). Older invoices may only have a
+  // singular `imageUrl` string. We accept either and use the first available.
+  // As a last resort we look up `enrichMap[productId]` — this rescues
+  // invoices that were saved before imageUrls were being captured.
   const products = invoice.products || [];
-  const wantsStamp = (invoice as any).digitalStamp === true;
-  const [productImages, stampImage] = await Promise.all([
-    Promise.all(products.map((p: any) => p.imageUrl ? loadImage(p.imageUrl) : Promise.resolve(null))),
-    wantsStamp ? loadImage('/BullionStamp.jpeg') : Promise.resolve(null),
+  const shouldLoadLogo = wantsLogo(invoice);
+  const pickImageUrl = (p: any): string | null => {
+    if (Array.isArray(p?.imageUrls) && p.imageUrls.length > 0) return p.imageUrls[0];
+    if (typeof p?.imageUrl === 'string' && p.imageUrl) return p.imageUrl;
+    const enriched = p?.productId && enrichMap[p.productId];
+    if (enriched && enriched.length > 0) return enriched[0];
+    return null;
+  };
+
+  console.log('[InvoicePdf] Generating invoice', (invoice as any).invoiceNumber,
+    '- products:', products.length,
+    '- wantsLogo:', shouldLoadLogo,
+    '- enrichMapSize:', Object.keys(enrichMap).length);
+
+  const [productImages, logoImage] = await Promise.all([
+    Promise.all(products.map(async (p: any, i: number) => {
+      const url = pickImageUrl(p);
+      if (!url) {
+        console.log(`[InvoicePdf] Product #${i + 1} (${p.productName || p.brandName}) has no image URL — imageUrls:`, p.imageUrls, 'imageUrl:', p.imageUrl, 'enriched:', p?.productId ? enrichMap[p.productId] : undefined);
+        return null;
+      }
+      const img = await loadImage(url);
+      if (!img) console.warn(`[InvoicePdf] Product #${i + 1} image failed to load:`, url);
+      else       console.log(`[InvoicePdf] Product #${i + 1} image loaded ok:`, url);
+      return img;
+    })),
+    // Try a series of common filenames/casings so a rename doesn't silently
+    // break the stamp. Add more if your deploy uses a different filename.
+    shouldLoadLogo
+      ? loadStampFromCandidates([
+          '/BullionStamp.jpeg',
+          '/BullionStamp.jpg',
+          '/BullionStamp.png',
+          '/bullionstamp.jpeg',
+          '/bullionstamp.jpg',
+          '/bullionstamp.png',
+          '/bullion-stamp.png',
+          '/stamp.png',
+          '/logo.png',
+        ])
+      : Promise.resolve(null),
   ]);
 
   // ── First page ──────────────────────────────────────────────────────────
@@ -536,8 +710,9 @@ export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
   y = renderProductsHeader(doc, y);
 
   for (let i = 0; i < products.length; i++) {
-    // Rough end-of-content check — reserve ~90mm for totals + terms + beneficiary + thank-you
-    if (y + 26 > PAGE_H - 90) {
+    // Rough end-of-content check — reserve enough space for totals + logo +
+    // beneficiary + thank-you at the bottom.
+    if (y + 26 > PAGE_H - 100) {
       // New page — repeat just the yellow strip + black bar + products header
       renderThankYou(doc, PAGE_H - 7);
       doc.addPage();
@@ -550,7 +725,7 @@ export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
   // ── Trailing sections on the last page ──────────────────────────────────
   y += 4;
   y = renderTotals(doc, invoice, y);
-  y = renderTermsAndStamp(doc, invoice, y, stampImage);
+  y = renderLogo(doc, invoice, y, logoImage);
   y += 2;
   renderBeneficiary(doc, y);
   renderThankYou(doc, PAGE_H - 7);
@@ -558,8 +733,11 @@ export async function generateInvoicePdf(invoice: Invoice): Promise<Blob> {
   return doc.output('blob');
 }
 
-export async function downloadInvoicePdf(invoice: Invoice): Promise<void> {
-  const blob = await generateInvoicePdf(invoice);
+export async function downloadInvoicePdf(
+  invoice: Invoice,
+  options: GenerateInvoicePdfOptions = {},
+): Promise<void> {
+  const blob = await generateInvoicePdf(invoice, options);
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
