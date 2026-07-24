@@ -237,6 +237,13 @@ export const INVOICE_MISC_EXPENSE_CATEGORY = 'Invoice Misc Expense';
  *  AND books the ledger entry — modal must NOT double-book). */
 export const SALES_INVOICE_CATEGORY = 'Sales Invoice';
 
+/** Special Outflow category that opens an invoice-picker for recording supplier
+ *  payments (paying the supplier for goods sold via a specific invoice). Modal
+ *  routes the save through InvoiceSupplierPaymentService.recordPayment which
+ *  updates invoice.supplierPaidAmount / supplierPayments[] AND books the ledger
+ *  entry — modal must NOT double-book. */
+export const SOLD_GOODS_PAYMENT_CATEGORY = 'Sold Goods Payment';
+
 export const SUB_CATEGORIES: Record<string, string[]> = {
   // ── Inflow (money coming in) ─────────────────────────────────────────
   // Matches the reference exactly — three categories, no more. Sub-category
@@ -250,6 +257,8 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
   // ── Outflow (money going out) ────────────────────────────────────────
   // Reorganized into a curated tree that matches the reference UI.
   // The special "Invoice Misc Expense" entry opens the invoice picker.
+  // "Sold Goods Payment" also opens the invoice picker — for paying the
+  // supplier of goods sold via an invoice (see SOLD_GOODS_PAYMENT_CATEGORY).
   'Cash Outflow': [
     'Invoice Misc Expense',           // Special: opens invoice picker
     'Payrolls',
@@ -258,8 +267,7 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
     'Grocery & Stationery',
     'Advertising and Marketing',
     'Purchase Order',
-    'Supplier Payment',
-    'Sold Goods Payment',
+    'Sold Goods Payment',             // Special: opens invoice picker (supplier payment)
     'Logistics & Freight',
     'Bank Charges',
     'Travelling, Accommodations & Food',

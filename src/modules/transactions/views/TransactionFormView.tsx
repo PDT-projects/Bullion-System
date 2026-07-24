@@ -166,6 +166,8 @@ export function TransactionFormView(props: Props) {
     bsMainCategory, bsSubCategory, setBsMainCategory, setBsSubCategory,
     companies, onAddCompany,
     currencyRates,
+    supplierPaymentInvoices, supplierPaymentInvoicesLoading,
+    selectedSupplierInvoiceId, selectSupplierInvoice,
   } = props;
 
   const formatBankCurrency = (props as any).formatBankCurrency ?? fallbackFormatBankCurrency;
@@ -621,6 +623,69 @@ export function TransactionFormView(props: Props) {
                   </div>
                 )}
               </div>
+
+              {/* ── SOLD GOODS PAYMENT: invoice picker ─────────────────────────
+                  Only visible when the Category is "Sold Goods Payment".
+                  Shows invoices with outstanding supplier cost so the user
+                  can select which invoice this payment is against. Selecting
+                  one auto-fills the amount with the remaining supplier owed. */}
+              {item.subCategory === 'Sold Goods Payment' && (
+                <div className="col-span-2">
+                  <label className={lbl}>
+                    Invoice (Supplier owed) <span className="text-red-500">*</span>
+                  </label>
+                  {supplierPaymentInvoicesLoading ? (
+                    <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-500">
+                      <Loader2 size={14} className="animate-spin" /> Loading invoices with outstanding supplier cost...
+                    </div>
+                  ) : supplierPaymentInvoices.length === 0 ? (
+                    <div className="px-3 py-2 border border-amber-200 bg-amber-50 rounded-lg text-sm text-amber-800">
+                      No invoices found with outstanding supplier cost. All suppliers are already paid, or no invoices have supplier cost recorded.
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedSupplierInvoiceId}
+                        onChange={e => selectSupplierInvoice(item.id, e.target.value)}
+                        className={`${inp} ${saveAttempted && !selectedSupplierInvoiceId ? 'border-red-400 ring-1 ring-red-300' : ''}`}
+                      >
+                        <option value="">— Select an invoice to pay supplier for —</option>
+                        {supplierPaymentInvoices.map(inv => (
+                          <option key={inv.id} value={inv.id}>
+                            {inv.invoiceNumber} · {inv.customerName} · Owed AED {inv.outstandingAmount.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {inv.supplierPaymentStatus === 'Partial' ? ' (Partial)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedSupplierInvoiceId && (() => {
+                        const sel = supplierPaymentInvoices.find(r => r.id === selectedSupplierInvoiceId);
+                        if (!sel) return null;
+                        return (
+                          <div className="mt-2 p-3 rounded-lg border border-slate-200 bg-slate-50 text-xs">
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <div className="text-slate-500 font-semibold uppercase tracking-wide" style={{ fontSize: 10 }}>Total supplier cost</div>
+                                <div className="text-slate-900 font-bold text-sm">AED {sel.supplierCostTotal.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                              </div>
+                              <div>
+                                <div className="text-slate-500 font-semibold uppercase tracking-wide" style={{ fontSize: 10 }}>Already paid</div>
+                                <div className="text-emerald-700 font-bold text-sm">AED {sel.supplierPaidAmount.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                              </div>
+                              <div>
+                                <div className="text-slate-500 font-semibold uppercase tracking-wide" style={{ fontSize: 10 }}>Outstanding</div>
+                                <div className="text-red-700 font-bold text-sm">AED {sel.outstandingAmount.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                              </div>
+                            </div>
+                            <div className="mt-2 text-slate-500 italic">
+                              Amount below has been pre-filled with the outstanding balance. Adjust if paying only a portion.
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+                </div>
+              )}
               <div className="col-span-2">
                 <label className={lbl}>Detail Category <span className="text-gray-400 font-normal">(optional)</span></label>
                 <input type="text" value={item.detailCategory} onChange={e => updateItem(item.id, 'detailCategory', e.target.value)}

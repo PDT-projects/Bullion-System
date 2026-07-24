@@ -29,10 +29,11 @@ import { TransactionFirebaseService } from '../models/transactionFirebaseService
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { InvoiceMiscExpenseService } from '../../invoices/models/InvoiceMiscExpenseService';
 import { InvoicePaymentService } from '../../invoices/models/InvoicePaymentService';
+import { calculateSupplierCost } from '../../invoices/models/invoiceService';
 import { Invoice } from '../../invoices/models/types';
 import {
   Transaction, DynamicCategory, SUB_CATEGORIES, CASH_IN_HAND_ID, CASH_IN_HAND_NAME,
-  INVOICE_MISC_EXPENSE_CATEGORY, SALES_INVOICE_CATEGORY,
+  INVOICE_MISC_EXPENSE_CATEGORY, SALES_INVOICE_CATEGORY, SOLD_GOODS_PAYMENT_CATEGORY,
 } from '../models/types';
 
 // ── Props ───────────────────────────────────────────────────────────────────
@@ -98,11 +99,12 @@ export function QuickTransactionModal({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [invoiceId, setInvoiceId] = useState('');
-  const isInvoiceMisc  = type === 'Outflow' && category === INVOICE_MISC_EXPENSE_CATEGORY;
-  const isSalesInvoice = type === 'Inflow'  && category === SALES_INVOICE_CATEGORY;
-  /** Either invoice-linked category — the modal loads invoices + shows the
-   *  picker in both cases, and forks the save flow to the right service. */
-  const needsInvoice = isInvoiceMisc || isSalesInvoice;
+  const isInvoiceMisc     = type === 'Outflow' && category === INVOICE_MISC_EXPENSE_CATEGORY;
+  const isSalesInvoice    = type === 'Inflow'  && category === SALES_INVOICE_CATEGORY;
+  const isSoldGoodsPayment = type === 'Outflow' && category === SOLD_GOODS_PAYMENT_CATEGORY;
+  /** Any invoice-linked category — the modal loads invoices + shows the
+   *  picker in all cases, and forks the save flow to the right service. */
+  const needsInvoice = isInvoiceMisc || isSalesInvoice || isSoldGoodsPayment;
 
   useEffect(() => {
     if (invoices.length > 0 || invoicesLoading) return;
@@ -148,6 +150,19 @@ export function QuickTransactionModal({
     return { total, paid, remaining, payments };
   }, [selectedInvoice]);
 
+  /** Same shape as invoiceStats but for the SUPPLIER side of the invoice —
+   *  what we owe the supplier for the goods on that invoice. Used by the
+   *  Sold Goods Payment fork. */
+  const supplierStats = useMemo(() => {
+    if (!selectedInvoice) return { total: 0, paid: 0, remaining: 0, payments: [] as any[] };
+    const total = Number((selectedInvoice as any).supplierCostTotal) || calculateSupplierCost(selectedInvoice);
+    const supplierPayments = ((selectedInvoice as any).supplierPayments || []) as Array<any>;
+    const paid = Number((selectedInvoice as any).supplierPaidAmount)
+      || supplierPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const remaining = Math.max(0, total - paid);
+    return { total, paid, remaining, payments: supplierPayments };
+  }, [selectedInvoice]);
+
   // Auto-clamp the entered amount if the user typed something above the
   // remaining balance and then picked a different invoice with a smaller cap.
   useEffect(() => {
@@ -156,6 +171,25 @@ export function QuickTransactionModal({
       setTotalAmount(invoiceStats.remaining);
     }
   }, [isSalesInvoice, selectedInvoice, invoiceStats.remaining]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Same auto-clamp for the SUPPLIER side.
+  useEffect(() => {
+    if (!isSoldGoodsPayment || !selectedInvoice) return;
+    if (totalAmount !== '' && Number(totalAmount) > supplierStats.remaining) {
+      setTotalAmount(supplierStats.remaining);
+    }
+  }, [isSoldGoodsPayment, selectedInvoice, supplierStats.remaining]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-fill the amount when the user picks an invoice for Sold Goods
+  // Payment — outstanding supplier balance is the intended payment 99% of
+  // the time. User can still edit down for partial payments.
+  useEffect(() => {
+    if (!isSoldGoodsPayment || !selectedInvoice) return;
+    if (totalAmount !== '' && Number(totalAmount) > 0) return;    // don't overwrite user's own entry
+    if (supplierStats.remaining > 0) {
+      setTotalAmount(supplierStats.remaining);
+    }
+  }, [isSoldGoodsPayment, invoiceId, supplierStats.remaining]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // UI state
   const [accountOpen, setAccountOpen] = useState(false);
@@ -316,6 +350,19 @@ export function QuickTransactionModal({
         return;
       }
     }
+    // Same guard for supplier payment — can't pay more than what's owed.
+    if (isSoldGoodsPayment && selectedInvoice) {
+      if (supplierStats.total === 0) {
+        toast.error('This invoice has no supplier cost — nothing to pay'); return;
+      }
+      if (supplierStats.remaining === 0) {
+        toast.error('Supplier already fully paid for this invoice'); return;
+      }
+      if (Number(totalAmount) > supplierStats.remaining) {
+        toast.error(`Amount cannot exceed supplier balance (AED ${supplierStats.remaining.toLocaleString()})`);
+        return;
+      }
+    }
 
     setSaving(true);
     try {
@@ -393,6 +440,32 @@ export function QuickTransactionModal({
           company:  (branchName || 'Main Office') as any,
         });
         toast.success(`Payment recorded against invoice ${inv.invoiceNumber}`);
+        onSaved();
+        onClose();
+        return;
+      }
+
+      // ── FORK: Sold Goods Payment (paying supplier for invoice goods) ────
+      // InvoicePaymentService.recordSupplierPayment handles both:
+      //   1. Appends to invoice.supplierPayments + recomputes supplierPaidAmount
+      //      + supplierPaymentStatus (Unpaid → Partial → Paid)
+      //   2. Books ONE Outflow transaction with linkedType: 'invoice',
+      //      linkedId: invoiceNumber, subCategory: 'Sold Goods Payment'
+      // Same double-book warning — return early after success.
+      if (isSoldGoodsPayment) {
+        const inv = invoices.find(x => x.id === invoiceId);
+        if (!inv) { toast.error('Selected invoice not found'); setSaving(false); return; }
+        await InvoicePaymentService.recordSupplierPayment({
+          invoice:  inv,
+          amount:   total,
+          mode:     isCash ? 'Cash' : 'Bank',
+          date:     manualDate,
+          bankId:   isCash ? undefined : selectedAccount.id,
+          bankName: isCash ? undefined : selectedAccount.name,
+          note:     description || undefined,
+          company:  (branchName || 'Main Office') as any,
+        });
+        toast.success(`Supplier payment recorded for invoice ${inv.invoiceNumber}`);
         onSaved();
         onClose();
         return;
@@ -640,23 +713,38 @@ export function QuickTransactionModal({
           </div>
 
           {/* ── Invoice picker ──────────────────────────────────────────
-              Shown for two special categories:
+              Shown for three special categories:
                 • Outflow → "Invoice Misc Expense" — routes save through
                   InvoiceMiscExpenseService.recordExpense
                 • Inflow  → "Sales Invoice"       — routes save through
-                  InvoicePaymentService.recordPayment (records customer payment)
-              Panel is tinted orange for the Outflow flow and emerald for
-              the Inflow flow so the two cases look visually distinct.        */}
+                  InvoicePaymentService.recordPayment (customer payment)
+                • Outflow → "Sold Goods Payment"  — routes save through
+                  InvoicePaymentService.recordSupplierPayment (supplier payout)
+              Panel is tinted:
+                • orange for Invoice Misc Expense
+                • emerald for Sales Invoice
+                • sky-blue for Sold Goods Payment                          */}
           {needsInvoice && (() => {
-            const isIn = isSalesInvoice;
-            const borderColor = isIn ? '#a7f3d0' : '#fed7aa';
-            const bg          = isIn ? '#ecfdf5' : '#fff7ed';
-            const accentFg    = isIn ? '#065f46' : '#c2410c';
-            const helperFg    = isIn ? '#166534' : '#9a3412';
+            const borderColor =
+              isSalesInvoice     ? '#a7f3d0' :
+              isSoldGoodsPayment ? '#bae6fd' :
+                                   '#fed7aa';
+            const bg =
+              isSalesInvoice     ? '#ecfdf5' :
+              isSoldGoodsPayment ? '#f0f9ff' :
+                                   '#fff7ed';
+            const accentFg =
+              isSalesInvoice     ? '#065f46' :
+              isSoldGoodsPayment ? '#075985' :
+                                   '#c2410c';
+            const helperFg =
+              isSalesInvoice     ? '#166534' :
+              isSoldGoodsPayment ? '#0c4a6e' :
+                                   '#9a3412';
             return (
               <div style={{ padding: 12, border: `1px solid ${borderColor}`, backgroundColor: bg, borderRadius: 10 }}>
                 <label style={{ ...label, color: accentFg }}>
-                  Link to Invoice <span style={{ color: '#dc2626' }}>*</span>
+                  {isSoldGoodsPayment ? 'Pay supplier for which invoice' : 'Link to Invoice'} <span style={{ color: '#dc2626' }}>*</span>
                 </label>
                 <select
                   value={invoiceId}
@@ -667,45 +755,75 @@ export function QuickTransactionModal({
                   <option value="">
                     {invoicesLoading ? 'Loading invoices…'
                       : (() => {
-                          // For Sales Invoice: only show invoices that still owe something.
-                          // For Invoice Misc Expense: any invoice is a valid target.
-                          const pickable = isIn
+                          // Filter per category:
+                          //   Sales Invoice   → invoices with unpaid balance
+                          //   Sold Goods Pmt  → invoices with unpaid SUPPLIER balance
+                          //   Misc Expense    → any invoice
+                          const pickable = isSalesInvoice
                             ? invoices.filter(i => i.paymentStatus !== 'Full')
-                            : invoices;
+                            : isSoldGoodsPayment
+                              ? invoices.filter(i => {
+                                  const t = Number((i as any).supplierCostTotal) || calculateSupplierCost(i);
+                                  const p = Number((i as any).supplierPaidAmount) || 0;
+                                  return t > 0 && (t - p) > 0.01;
+                                })
+                              : invoices;
                           return pickable.length === 0
-                            ? (isIn ? 'No invoices with pending balance' : 'No invoices found')
+                            ? (isSalesInvoice     ? 'No invoices with pending balance'
+                             : isSoldGoodsPayment ? 'No invoices with unpaid supplier cost'
+                                                  : 'No invoices found')
                             : '— Select invoice —';
                         })()}
                   </option>
                   {invoices
-                    // Hide fully-paid invoices from Sales Invoice — you can't
-                    // record a payment against one that's already settled.
-                    // Misc Expense keeps them all, since expenses can be added
-                    // to a paid invoice too.
-                    .filter(inv => isIn ? inv.paymentStatus !== 'Full' : true)
+                    // Per-category filter (same rules as the placeholder above).
+                    .filter(inv => {
+                      if (isSalesInvoice)     return inv.paymentStatus !== 'Full';
+                      if (isSoldGoodsPayment) {
+                        const t = Number((inv as any).supplierCostTotal) || calculateSupplierCost(inv);
+                        const p = Number((inv as any).supplierPaidAmount) || 0;
+                        return t > 0 && (t - p) > 0.01;
+                      }
+                      return true;
+                    })
                     .map(inv => {
                       // Compose the display label per user spec:
                       //   INV-XXX — CustomerFirstName · AED remaining
-                      // For Sales Invoice we show the REMAINING amount so the
-                      // user knows what's still payable at a glance. For Misc
-                      // Expense we keep showing the full total.
+                      // For Sales Invoice → customer remaining
+                      // For Sold Goods Payment → supplier remaining
+                      // For Misc Expense → full total
                       const firstName = (inv.customerName || '').split(/\s+/)[0].trim();
                       const modelName = (inv.products && inv.products[0]?.modelName) || '';
                       const identity  = firstName || modelName || 'Unknown';
-                      const total     = Number((inv as any).totalAmount) || 0;
-                      const paid      = Number((inv as any).paidAmount) || 0;
-                      const remaining = Math.max(0, total - paid);
-                      const shownAmt  = isIn ? remaining : total;
-                      const partialTag = isIn && paid > 0 ? '  (partial)' : '';
+                      let shownAmt: number;
+                      let partialTag = '';
+                      if (isSoldGoodsPayment) {
+                        const t = Number((inv as any).supplierCostTotal) || calculateSupplierCost(inv);
+                        const p = Number((inv as any).supplierPaidAmount) || 0;
+                        shownAmt = Math.max(0, t - p);
+                        if (p > 0) partialTag = '  (partial)';
+                      } else if (isSalesInvoice) {
+                        const total     = Number((inv as any).totalAmount) || 0;
+                        const paid      = Number((inv as any).paidAmount) || 0;
+                        shownAmt = Math.max(0, total - paid);
+                        if (paid > 0) partialTag = '  (partial)';
+                      } else {
+                        shownAmt = Number((inv as any).totalAmount) || 0;
+                      }
                       const label = `${inv.invoiceNumber} — ${identity} · AED ${shownAmt.toLocaleString()}${partialTag}`;
                       return <option key={inv.id} value={inv.id}>{label}</option>;
                     })}
                 </select>
                 <div style={{ fontSize: 11, color: helperFg, marginTop: 6, lineHeight: 1.4 }}>
-                  {isIn ? (
+                  {isSalesInvoice ? (
                     <>
                       This payment will be recorded against the invoice's <b>payment history</b> AND
                       booked here as an Inflow transaction. Deleting the invoice will reverse both.
+                    </>
+                  ) : isSoldGoodsPayment ? (
+                    <>
+                      This supplier payment will be recorded against the invoice's <b>supplier payment history</b> AND
+                      booked here as an Outflow transaction. The invoice's "Supplier Paid" status will flip to Partial or Paid.
                     </>
                   ) : (
                     <>
@@ -715,6 +833,29 @@ export function QuickTransactionModal({
                     </>
                   )}
                 </div>
+
+                {/* ── Sold Goods Payment: supplier cost summary ── */}
+                {isSoldGoodsPayment && selectedInvoice && (
+                  <div style={{
+                    marginTop: 12, padding: 10,
+                    backgroundColor: '#fff', borderRadius: 8,
+                    border: '1px solid #bae6fd',
+                  }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: supplierStats.payments.length > 0 ? 8 : 0 }}>
+                      <SumCell label="Supplier cost"   value={supplierStats.total}     fg="#0f172a" />
+                      <SumCell label="Already paid"    value={supplierStats.paid}      fg="#059669" />
+                      <SumCell label="Outstanding"     value={supplierStats.remaining} fg={supplierStats.remaining > 0 ? '#c2410c' : '#94a3b8'} bold />
+                    </div>
+                    {supplierStats.payments.length > 0 && (
+                      <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 4 }}>
+                        {supplierStats.payments.length} previous supplier payment{supplierStats.payments.length === 1 ? '' : 's'} on file
+                      </div>
+                    )}
+                    <div style={{ marginTop: 8, fontSize: 11, color: '#0c4a6e', fontStyle: 'italic' }}>
+                      Amount below has been pre-filled with the outstanding supplier balance. Adjust if paying only a portion.
+                    </div>
+                  </div>
+                )}
 
                 {/* ── Sales Invoice payment history + remaining balance ── */}
                 {isSalesInvoice && selectedInvoice && (
@@ -848,27 +989,41 @@ export function QuickTransactionModal({
               <label style={label}>Total Amount <span style={{ color: '#dc2626' }}>*</span></label>
               <input
                 type="number" min={0} step="any"
-                // Cap the total when a Sales Invoice is picked — you can't
-                // record a payment larger than what's still owed. For every
-                // other transaction the max is unrestricted.
-                max={isSalesInvoice && selectedInvoice ? invoiceStats.remaining : undefined}
+                // Cap the total when a Sales Invoice OR Sold Goods Payment
+                // invoice is picked — you can't pay more than what's owed.
+                // For every other transaction the max is unrestricted.
+                max={
+                  isSalesInvoice     && selectedInvoice ? invoiceStats.remaining  :
+                  isSoldGoodsPayment && selectedInvoice ? supplierStats.remaining :
+                  undefined
+                }
                 value={totalAmount}
                 onChange={e => {
                   const raw = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
                   if (raw !== '' && isSalesInvoice && selectedInvoice) {
-                    // Clamp instead of blocking so paste-behavior still lands in a valid state.
                     setTotalAmount(Math.min(Number(raw), invoiceStats.remaining));
+                  } else if (raw !== '' && isSoldGoodsPayment && selectedInvoice) {
+                    setTotalAmount(Math.min(Number(raw), supplierStats.remaining));
                   } else {
                     setTotalAmount(raw);
                   }
                 }}
                 placeholder="0"
-                disabled={isSalesInvoice && selectedInvoice ? invoiceStats.remaining === 0 : false}
+                disabled={
+                  isSalesInvoice     && selectedInvoice ? invoiceStats.remaining  === 0 :
+                  isSoldGoodsPayment && selectedInvoice ? supplierStats.remaining === 0 :
+                  false
+                }
                 style={inp}
               />
               {isSalesInvoice && selectedInvoice && invoiceStats.remaining > 0 && (
                 <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
                   Max <b>AED {invoiceStats.remaining.toLocaleString()}</b> — invoice's remaining balance
+                </div>
+              )}
+              {isSoldGoodsPayment && selectedInvoice && supplierStats.remaining > 0 && (
+                <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                  Max <b>AED {supplierStats.remaining.toLocaleString()}</b> — outstanding supplier balance
                 </div>
               )}
             </div>

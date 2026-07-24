@@ -12,7 +12,11 @@ import { Transaction, TransactionItem, SUB_CATEGORIES, DynamicCategory, PLMainCa
 import { formatCurrency } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
-import { fetchCurrencyRates, convertCurrency, CURRENCY_RATE_FALLBACK } from '../../invoices/models/invoiceService';
+import { fetchCurrencyRates, convertCurrency, CURRENCY_RATE_FALLBACK, calculateSupplierCost } from '../../invoices/models/invoiceService';
+import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
+import { Invoice } from '../../invoices/models/types';
+import { InvoiceSupplierPaymentService, outstandingSupplierCost } from '../../invoices/models/InvoiceSupplierPaymentService';
+import { SOLD_GOODS_PAYMENT_CATEGORY } from '../models/types';
 
 interface BankInfo { id: string; name: string; balance: number; }
 
@@ -118,6 +122,27 @@ export interface UseTransactionFormViewModelReturn {
   setCurrency: (c: SupportedCurrency) => void;
   currencyOptions: CurrencyOption[];
   currencyRates: Record<string, number>;
+  // ── Sold Goods (supplier) Payment picker ──────────────────────────────
+  // When user picks "Sold Goods Payment" as the Category, this picker shows
+  // invoices with outstanding supplier cost. Selecting one auto-fills the
+  // item's amount with the outstanding balance and routes handleSave through
+  // InvoiceSupplierPaymentService (which books the ledger row itself).
+  supplierPaymentInvoices: SupplierPaymentInvoiceOption[];
+  supplierPaymentInvoicesLoading: boolean;
+  selectedSupplierInvoiceId: string;
+  selectSupplierInvoice: (itemId: string, invoiceId: string) => void;
+}
+
+/** One row shown in the Sold Goods Payment invoice picker. */
+export interface SupplierPaymentInvoiceOption {
+  id: string;                        // Firestore doc id
+  invoiceNumber: string;
+  customerName: string;
+  date: string;
+  supplierCostTotal: number;         // total owed to supplier for this invoice
+  supplierPaidAmount: number;        // already paid to supplier so far
+  outstandingAmount: number;         // supplierCostTotal − supplierPaidAmount
+  supplierPaymentStatus: 'Unpaid' | 'Partial' | 'Paid';
 }
 
 const emptyItem = (type: string): TransactionItem => ({
@@ -183,6 +208,13 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
 
   const [chequeNumber, setChequeNumber] = useState('');
   const [chequeDate,   setChequeDate]   = useState('');
+
+  // ── Sold Goods (Supplier) Payment picker state ──────────────────────────
+  const [supplierPaymentInvoices,        setSupplierPaymentInvoices]        = useState<SupplierPaymentInvoiceOption[]>([]);
+  const [supplierPaymentInvoicesLoading, setSupplierPaymentInvoicesLoading] = useState(false);
+  const [selectedSupplierInvoiceId,      setSelectedSupplierInvoiceId]      = useState<string>('');
+  // Full invoice cache keyed by id — needed when we call recordPayment on save.
+  const [supplierInvoiceCache, setSupplierInvoiceCache] = useState<Record<string, Invoice>>({});
   const [chequeBank,   setChequeBank]   = useState('');
 
   // Currency state — default to AED
@@ -409,6 +441,85 @@ const getSuggestedClassification = (
     setTransactionItems(p => p.filter(i => i.id !== itemId)),
   []);
 
+  // ── Sold Goods (Supplier) Payment picker: load invoices with outstanding
+  //     supplier cost. Runs when the user picks "Sold Goods Payment" as the
+  //     Category on any item row, so the load only happens if needed.
+  const needsSupplierInvoices = useMemo(
+    () => transactionItems.some(i => i.subCategory === SOLD_GOODS_PAYMENT_CATEGORY),
+    [transactionItems],
+  );
+
+  useEffect(() => {
+    if (!needsSupplierInvoices)             return;
+    if (supplierPaymentInvoicesLoading)     return;
+    if (supplierPaymentInvoices.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      setSupplierPaymentInvoicesLoading(true);
+      try {
+        const all = await InvoiceFirebaseService.fetchAllInvoices();
+        const cache: Record<string, Invoice> = {};
+        const rows: SupplierPaymentInvoiceOption[] = [];
+        for (const inv of all) {
+          const total = (inv as any).supplierCostTotal || calculateSupplierCost(inv);
+          if (total <= 0) continue;                          // no supplier cost — skip
+          if (inv.status === 'Returned') continue;           // returned invoices aren't payable
+          const paid        = Number((inv as any).supplierPaidAmount) || 0;
+          const outstanding = Math.max(0, total - paid);
+          const status: 'Unpaid' | 'Partial' | 'Paid' =
+            outstanding <= 0.01 ? 'Paid'
+              : paid > 0 ? 'Partial'
+              : 'Unpaid';
+          if (status === 'Paid') continue;                   // fully settled — hide
+          cache[inv.id] = inv;
+          rows.push({
+            id: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            customerName: inv.customerName,
+            date: inv.date,
+            supplierCostTotal: total,
+            supplierPaidAmount: paid,
+            outstandingAmount: outstanding,
+            supplierPaymentStatus: status,
+          });
+        }
+        rows.sort((a, b) => (a.date < b.date ? 1 : -1));     // newest first
+        if (cancelled) return;
+        setSupplierPaymentInvoices(rows);
+        setSupplierInvoiceCache(cache);
+        console.log(`[Transaction VM] Loaded ${rows.length} invoice(s) with outstanding supplier cost`);
+      } catch (err) {
+        console.error('[Transaction VM] Failed to load supplier-payment invoices:', err);
+        toast.error('Could not load invoices for supplier payment');
+      } finally {
+        if (!cancelled) setSupplierPaymentInvoicesLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [needsSupplierInvoices, supplierPaymentInvoicesLoading, supplierPaymentInvoices.length]);
+
+  /** Select an invoice for a Sold Goods Payment row: auto-fills item.amount
+   *  with the outstanding supplier balance and remembers the invoice for save. */
+  const selectSupplierInvoice = useCallback((itemId: string, invoiceId: string) => {
+    setSelectedSupplierInvoiceId(invoiceId);
+    const row = supplierPaymentInvoices.find(r => r.id === invoiceId);
+    if (!row) return;
+    // Auto-fill the amount with what's outstanding to the supplier.
+    setTransactionItems(prev => prev.map(item =>
+      item.id === itemId
+        ? {
+            ...item,
+            amount:         row.outstandingAmount,
+            amountPaid:     row.outstandingAmount,
+            remainingAmount: 0,
+            paymentStatus:  'Full',
+            paidTo:         `Supplier (${row.invoiceNumber})`,
+            note:           item.note || `Supplier payment for invoice ${row.invoiceNumber} — ${row.customerName}`,
+          }
+        : item
+    ));
+  }, [supplierPaymentInvoices]);
+
   // ── Computed totals ─────────────────────────────────────────────────────────
   const totals = useMemo(() => ({
     totalAmount:    transactionItems.reduce((s, i) => s + (i.amount || 0), 0),
@@ -531,6 +642,53 @@ const getSuggestedClassification = (
       } else {
         // ── Create mode ───────────────────────────────────────────────────
         for (const [idx, item] of transactionItems.entries()) {
+          // ── SPECIAL: Sold Goods Payment routes through supplier service ──
+          // If the user picked "Sold Goods Payment" AND an invoice, hand the
+          // whole thing to InvoiceSupplierPaymentService, which atomically
+          // updates the invoice AND books the ledger transaction. Do NOT
+          // fall through to the normal createTransaction below or we'd
+          // double-book the cash movement.
+          if (item.subCategory === SOLD_GOODS_PAYMENT_CATEGORY) {
+            const invForPayment = supplierInvoiceCache[selectedSupplierInvoiceId];
+            if (!invForPayment) {
+              toast.error('Please select an invoice for the supplier payment');
+              setIsSaving(false);
+              return;
+            }
+            const officeObj      = companies.find(c => c.id === office);
+            const companyName    = officeObj ? officeObj.name : office;
+            const effectiveDate  = manualDate.trim() || date;
+            const amountAED      = item.amount;   // stored in AED by CurrencyAmountInput
+            try {
+              const result = await InvoiceSupplierPaymentService.recordPayment({
+                invoice: invForPayment,
+                amount:  amountAED,
+                mode:    paymentMode,
+                date:    effectiveDate,
+                bankId:      paymentMode === 'Bank'   ? selectedBank : undefined,
+                bankName:    paymentMode === 'Bank'
+                  ? banks.find(b => b.id === selectedBank)?.name
+                  : undefined,
+                chequeNumber:  paymentMode === 'Cheque' ? chequeNumber : undefined,
+                chequeDate:    paymentMode === 'Cheque' ? chequeDate   : undefined,
+                chequeBank:    paymentMode === 'Cheque' ? chequeBank   : undefined,
+                note:          item.note,
+                company:       companyName as any,
+              });
+              if (idx === 0) firstTxId = result.transactionId;
+              if (paymentMode === 'Bank' && selectedBank) {
+                const amountPKR = +convertCurrency(amountAED, 'AED', 'PKR', currencyRates as any).toFixed(2);
+                await updateBankBalance(selectedBank, amountPKR, false); // outflow
+              }
+            } catch (err: any) {
+              console.error('[Transaction VM] Supplier payment failed:', err);
+              toast.error(err?.message || 'Supplier payment failed');
+              setIsSaving(false);
+              return;
+            }
+            continue; // Next item — bypass the normal createTransaction below
+          }
+
           const needs = requiresApproval(transactionType, item.subCategory);
           if (idx === 0) needsApprovalFirst = needs;
 
@@ -818,5 +976,10 @@ const getSuggestedClassification = (
     companies, onAddCompany,
     currency, setCurrency, currencyOptions: SUPPORTED_CURRENCIES,
     currencyRates,
+    // Sold Goods (supplier) Payment picker
+    supplierPaymentInvoices,
+    supplierPaymentInvoicesLoading,
+    selectedSupplierInvoiceId,
+    selectSupplierInvoice,
   };
 }
