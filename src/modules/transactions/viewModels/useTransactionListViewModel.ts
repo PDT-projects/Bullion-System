@@ -10,7 +10,9 @@ import {
   filterTransactions, calculateStats, formatCurrency, formatDate,
   formatDateTime, getCategoryColor, exportToCSV, downloadCSV,
 } from '../models/transactionsService';
-import { TransactionFirebaseService } from '../models/transactionFirebaseService';
+import {
+  TransactionFirebaseService, mapTransactionDoc, sortTransactionsNewestFirst,
+} from '../models/transactionFirebaseService';
 import { useAuth } from '../../../providers/context/AuthContext';
 
 export interface UseTransactionListViewModelReturn {
@@ -58,7 +60,23 @@ export function useTransactionListViewModel(): UseTransactionListViewModelReturn
     const unsub = onSnapshot(
       collection(db, 'transactions'),
       (snap) => {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Transaction[];
+        // TWO FIXES HERE:
+        //
+        // 1. mapTransactionDoc instead of a raw spread. This path used to
+        //    return raw Firestore data while refreshTransactions() went through
+        //    the service's mapper, so the same transaction had different shapes
+        //    (and different AMOUNTS, thanks to the legacy-PKR conversion)
+        //    depending on which one populated the store last. Every save called
+        //    refreshTransactions(), so the numbers visibly shifted after saving.
+        //
+        // 2. Sorting. The query has no orderBy, so docs arrive in Firestore
+        //    document-id order — which is why the list showed 25 Jul, 25 Jul,
+        //    27 Jul, 25 Jul, 27 Jul… and why the chronologically-computed
+        //    BALANCE column looked like nonsense against it. Sorting client-side
+        //    rather than adding orderBy('date') to the query is deliberate:
+        //    Firestore silently EXCLUDES documents missing the ordered field,
+        //    so any transaction without a `date` would vanish from the list.
+        const data = sortTransactionsNewestFirst(snap.docs.map(mapTransactionDoc));
         setTransactions(data);
         setIsLoading(false);
       },

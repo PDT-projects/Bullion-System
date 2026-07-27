@@ -4,7 +4,7 @@
 import {
   collection, getDocs, getDoc, addDoc, updateDoc,
   deleteDoc, doc, query, where, runTransaction,
-  onSnapshot, orderBy, Unsubscribe, deleteField,
+  onSnapshot, orderBy, Unsubscribe, deleteField, setDoc,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import { Transaction, PartialPayment, AppNotification, DynamicCategory } from './types';
@@ -15,6 +15,9 @@ const COUNTER_COL      = 'transactionCounters';
 const NOTIF_COLLECTION = 'appNotifications';
 const CATEGORIES_COL   = 'dynamicCategories';
 const COMPANIES_COL    = 'companies';
+const BANKS_COL        = 'banks';
+const SETTINGS_COL     = 'settings';
+const CASH_OPENING_DOC = 'cashOpening';
 
 // ── Deep strip of undefined values ───────────────────────────────────────────
 function deepStripUndefined(value: any): any {
@@ -36,66 +39,87 @@ function deepStripUndefined(value: any): any {
 const PKR_TO_AED = 3.67 / 279.5;
 const pkrToAed = (n: number) => Math.round((n || 0) * PKR_TO_AED * 100) / 100;
 
-function docToTransaction(d: any): Transaction {
+/**
+ * Firestore doc → Transaction.
+ *
+ * TWO THINGS CHANGED HERE, both of which were causing the list and the balance
+ * math to disagree with themselves:
+ *
+ * 1. IT NOW SPREADS `data` FIRST.
+ *    The old version listed fields explicitly and therefore silently DROPPED
+ *    every field added after it was written — accountId, accountType,
+ *    accountName, subCategoryDetail, branchId, branchName, remitterName,
+ *    attachments, attachmentUrl, currency, originalCurrency… Since the list's
+ *    onSnapshot path spread the raw doc but refreshTransactions() went through
+ *    this mapper, the SAME transaction had different fields depending on which
+ *    path last populated the store. getTxAccount() would fall back to the
+ *    legacy mode/bankId branch, the Sub Category column would blank out, and
+ *    running balances would shift. Spreading first makes that class of bug
+ *    impossible.
+ *
+ * 2. LEGACY PKR DETECTION NO LONGER USES A BARE AMOUNT THRESHOLD.
+ *    `legacy = amount > 50000` divided ANY transaction over 50,000 by ~76 on
+ *    read — including brand-new, correctly-stored AED ones. createTransaction
+ *    has always stamped `currency: 'AED'` on new records, so the ABSENCE of
+ *    that field is the reliable signal. The amount threshold is kept as a
+ *    second condition purely to preserve existing behaviour for genuinely old
+ *    records; see the note in the module README about backfilling `currency`
+ *    so this heuristic can be deleted outright.
+ */
+export function mapTransactionDoc(d: any): Transaction {
   const data = d.data ? d.data() : d;
-  const legacy = (data.amount || 0) > 50000;
-  const amt = (n: any) => (n == null ? n : (legacy ? pkrToAed(n) : n));
+
+  const legacy = !data.currency && (Number(data.amount) || 0) > 50000;
+  const amt = (n: any) => (n == null ? n : (legacy ? pkrToAed(Number(n) || 0) : n));
+
   return {
-    id:                   d.id,
+    // Keep every stored field, known or not.
+    ...data,
+
+    id:                   d.id ?? data.id,
+
+    // Defaults for fields the UI assumes are always present.
     transactionId:        data.transactionId        || '',
     date:                 data.date                 || '',
     time:                 data.time                 || '',
     company:              data.company              || '',
     mainCategory:         data.mainCategory         || '',
     subCategory:          data.subCategory          || '',
-    detailCategory:       data.detailCategory,
-    amount:               amt(data.amount           || 0),
     mode:                 data.mode                 || 'Cash',
-    bankName:             data.bankName,
-    bankId:               data.bankId,
-    chequeNumber:         data.chequeNumber,
-    chequeDate:           data.chequeDate,
-    chequeBank:           data.chequeBank,
-    transactionReference: data.transactionReference,
     note:                 data.note                 || '',
-    paidBy:               data.paidBy,
-    paidTo:               data.paidTo,
-    amountPaid:           amt(data.amountPaid),
-    paymentStatus:        data.paymentStatus,
-    remainingAmount:      amt(data.remainingAmount),
-    partialPayments:      (data.partialPayments || []).map((p: any) => ({ ...p, amount: amt(p.amount) })),
-    totalPaid:            amt(data.totalPaid),
-    isFullyCleared:       data.isFullyCleared,
-    linkedType:           data.linkedType,
-    linkedId:             data.linkedId,
-    linkedRef:            data.linkedRef,
-    baseSalary:           data.baseSalary,
-    commission:           data.commission,
-    deductions:           data.deductions,
-    netAmount:            data.netAmount,
-    salaryMonth:          data.salaryMonth,
-    isAdvanceSalary:      data.isAdvanceSalary,
-    loanType:             data.loanType,
-    borrowerName:         data.borrowerName,
-    lenderName:           data.lenderName,
-    expectedReturnDate:   data.expectedReturnDate,
-    dueDate:              data.dueDate,
-    // Approval fields
     approvalStatus:       data.approvalStatus       || 'not_required',
-    approvalToken:        data.approvalToken,
-    approvedAt:           data.approvedAt,
-    rejectedAt:           data.rejectedAt,
-    rejectionReason:      data.rejectionReason,
-    createdAt:            data.createdAt,
-    updatedAt:            data.updatedAt,
-    // P&L classification
-    plMainCategory:       data.plMainCategory,
-    plSubCategory:        data.plSubCategory,
-    // Balance Sheet classification
-    bsMainCategory:       data.bsMainCategory,
-    bsSubCategory:        data.bsSubCategory,
+
+    // Currency-normalized numerics.
+    amount:               amt(data.amount           || 0),
+    amountPaid:           amt(data.amountPaid),
+    remainingAmount:      amt(data.remainingAmount),
+    totalPaid:            amt(data.totalPaid),
+    partialPayments:      (data.partialPayments || []).map((p: any) => ({ ...p, amount: amt(p.amount) })),
   } as Transaction;
 }
+
+/** @deprecated Renamed to `mapTransactionDoc` and exported. */
+const docToTransaction = mapTransactionDoc;
+
+/**
+ * The ONE ordering used for the transactions list: newest first, by date, then
+ * time, then createdAt. Exported so the live onSnapshot subscription and the
+ * one-shot fetch produce identical order — previously the subscription applied
+ * no ordering at all, so the list came back in Firestore document-id order and
+ * the running-balance column (which is computed chronologically) appeared to
+ * jump around at random.
+ */
+export const compareTransactionsNewestFirst = (a: Transaction, b: Transaction): number => {
+  const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
+  if (dateCompare !== 0) return dateCompare;
+  const timeCompare = (b.time || '').localeCompare(a.time || '');
+  if (timeCompare !== 0) return timeCompare;
+  return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+};
+
+/** Sort a transactions array newest-first. Returns a new array. */
+export const sortTransactionsNewestFirst = (list: Transaction[]): Transaction[] =>
+  [...list].sort(compareTransactionsNewestFirst);
 
 function docToNotification(d: any): AppNotification {
   const data = d.data();
@@ -114,13 +138,87 @@ function docToNotification(d: any): AppNotification {
 
 export class TransactionFirebaseService {
 
-  // ── Auto-generate Transaction ID ──────────────────────────────────────────
-  static async generateTransactionId(): Promise<string> {
-    const now = new Date();
-    const dd  = String(now.getDate()).padStart(2, '0');
-    const mm  = String(now.getMonth() + 1).padStart(2, '0');
-    const yy  = String(now.getFullYear()).slice(-2);
-    const key = `${dd}${mm}${yy}`;
+  // ═══════════════════════════════════════════════════════════════════════
+  // Transaction ID — PEEK (read-only) vs COMMIT (atomic increment)
+  // ═══════════════════════════════════════════════════════════════════════
+  //
+  // WHY THE SPLIT EXISTS
+  // --------------------
+  // The old single `generateTransactionId()` incremented the Firestore counter
+  // the moment it was called. QuickTransactionModal called it on mount, so just
+  // OPENING the modal and pressing ✕ burned a number permanently and punched a
+  // hole in the daily sequence (…-004, …-006, …-007).
+  //
+  //   peekNextTransactionId()        → pure read. Safe on mount, safe on every
+  //                                    re-render, safe to cancel. Never consumes.
+  //   subscribeToNextTransactionId() → same, but live: if someone else saves
+  //                                    while your modal is open, the preview
+  //                                    moves to the next free number by itself.
+  //   commitTransactionId()          → the atomic runTransaction increment.
+  //                                    Call ONCE, inside the save path, right
+  //                                    before the document is written.
+  //
+  // Two people previewing the same number is harmless: the commit is a single
+  // atomic runTransaction, so whoever saves first takes it and the second is
+  // handed the next number at commit time. The preview is a hint, the commit
+  // is the truth.
+
+  /** Counter doc key for a given day: DDMMYY. */
+  private static counterKey(date: Date = new Date()): string {
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${dd}${mm}${yy}`;
+  }
+
+  private static formatTxId(key: string, n: number): string {
+    return `TXN-${key}-${String(n).padStart(3, '0')}`;
+  }
+
+  /**
+   * READ-ONLY preview of the next transaction ID. Does NOT consume a number.
+   * Use this for anything the user can still cancel out of.
+   */
+  static async peekNextTransactionId(date: Date = new Date()): Promise<string> {
+    const key = TransactionFirebaseService.counterKey(date);
+    try {
+      const snap = await getDoc(doc(db, COUNTER_COL, key));
+      const n = (snap.exists() ? (snap.data().count || 0) : 0) + 1;
+      return TransactionFirebaseService.formatTxId(key, n);
+    } catch (err) {
+      console.error('[TxId] peek failed — showing …-001 as placeholder:', err);
+      return TransactionFirebaseService.formatTxId(key, 1);
+    }
+  }
+
+  /**
+   * Live READ-ONLY preview. Returns an unsubscribe function — call it on unmount.
+   * Still never consumes a number.
+   */
+  static subscribeToNextTransactionId(
+    callback: (id: string) => void,
+    date: Date = new Date(),
+  ): Unsubscribe {
+    const key = TransactionFirebaseService.counterKey(date);
+    return onSnapshot(
+      doc(db, COUNTER_COL, key),
+      (snap) => {
+        const n = (snap.exists() ? (snap.data()?.count || 0) : 0) + 1;
+        callback(TransactionFirebaseService.formatTxId(key, n));
+      },
+      (err) => {
+        console.error('[TxId] preview subscription failed:', err);
+        callback(TransactionFirebaseService.formatTxId(key, 1));
+      },
+    );
+  }
+
+  /**
+   * CONSUMES the next transaction ID atomically. Only ever call this from a
+   * save path, immediately before writing the transaction document.
+   */
+  static async commitTransactionId(date: Date = new Date()): Promise<string> {
+    const key = TransactionFirebaseService.counterKey(date);
     const ref = doc(db, COUNTER_COL, key);
     try {
       const next = await runTransaction(db, async (txn) => {
@@ -129,11 +227,20 @@ export class TransactionFirebaseService {
         txn.set(ref, { date: key, count: n }, { merge: true });
         return n;
       });
-      return `TXN-${key}-${String(next).padStart(3, '0')}`;
+      return TransactionFirebaseService.formatTxId(key, next);
     } catch (err) {
       console.error('Counter transaction failed, using timestamp fallback:', err);
       return `TXN-${key}-${String(Date.now()).slice(-5)}`;
     }
+  }
+
+  /**
+   * @deprecated Ambiguous name — it always consumed a number even when the
+   * caller only wanted to display one. Kept so existing callers keep compiling.
+   * New code: `peekNextTransactionId()` to show, `commitTransactionId()` to save.
+   */
+  static async generateTransactionId(): Promise<string> {
+    return TransactionFirebaseService.commitTransactionId();
   }
 
   static async transactionIdExists(transactionId: string): Promise<boolean> {
@@ -150,15 +257,7 @@ export class TransactionFirebaseService {
   static async fetchAllTransactions(): Promise<Transaction[]> {
     try {
       const snapshot = await getDocs(collection(db, COLLECTION));
-      const list = snapshot.docs.map(docToTransaction);
-      list.sort((a, b) => {
-        const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
-        if (dateCompare !== 0) return dateCompare;
-        const timeCompare = (b.time || '').localeCompare(a.time || '');
-        if (timeCompare !== 0) return timeCompare;
-        // Final tiebreaker: createdAt timestamp (newest first)
-        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      });
+      const list = sortTransactionsNewestFirst(snapshot.docs.map(mapTransactionDoc));
       console.log(`✅ Fetched ${list.length} transactions`);
       return list;
     } catch (error) {
@@ -512,5 +611,72 @@ export class TransactionFirebaseService {
   /** Delete a company/branch */
   static async deleteCompany(id: string): Promise<void> {
     await deleteDoc(doc(db, COMPANIES_COL, id));
+  }
+
+  // ── Accounts: Cash-in-Hand opening balance + bank list ────────────────────
+  //
+  // The Cash-in-Hand opening balance lives in ONE doc (`settings/cashOpening`)
+  // and is the seed the running-balance math starts from. It used to be read
+  // only inside TransactionListView, which is why the transaction modal's
+  // Account dropdown showed the raw ledger delta and ignored the opening
+  // balance entirely. These helpers make it a shared, live source of truth so
+  // every screen reads the same number.
+
+  /** One-shot read of the Cash-in-Hand opening balance. */
+  static async fetchCashOpening(): Promise<number> {
+    try {
+      const snap = await getDoc(doc(db, SETTINGS_COL, CASH_OPENING_DOC));
+      return snap.exists() ? Number((snap.data() as any).amount) || 0 : 0;
+    } catch (error) {
+      console.error('❌ Error fetching cash opening balance:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Live subscription to the Cash-in-Hand opening balance. Any screen using
+   * this updates the instant the Opening Balances modal saves — no refresh,
+   * no remount, no stale dropdown.
+   */
+  static subscribeToCashOpening(callback: (amount: number) => void): Unsubscribe {
+    return onSnapshot(
+      doc(db, SETTINGS_COL, CASH_OPENING_DOC),
+      (snap) => callback(snap.exists() ? Number((snap.data() as any)?.amount) || 0 : 0),
+      (err) => {
+        console.error('❌ cashOpening subscription failed:', err);
+        callback(0);
+      },
+    );
+  }
+
+  /** Write the Cash-in-Hand opening balance. Merges, so other settings survive. */
+  static async setCashOpening(amount: number): Promise<void> {
+    await setDoc(
+      doc(db, SETTINGS_COL, CASH_OPENING_DOC),
+      { amount: Number(amount) || 0, updatedAt: new Date().toISOString() },
+      { merge: true },
+    );
+  }
+
+  /** Live subscription to the bank list (id, name, opening balance, acct no). */
+  static subscribeToBanks(
+    callback: (banks: { id: string; name: string; balance: number; accountNumber?: string }[]) => void,
+  ): Unsubscribe {
+    return onSnapshot(
+      query(collection(db, BANKS_COL), orderBy('name')),
+      (snap) => callback(snap.docs.map(d => {
+        const b = d.data() as any;
+        return {
+          id:            d.id,
+          name:          b.name || '—',
+          balance:       Number(b.balance) || 0,
+          accountNumber: b.accountNumber,
+        };
+      })),
+      (err) => {
+        console.error('❌ banks subscription failed:', err);
+        callback([]);
+      },
+    );
   }
 }

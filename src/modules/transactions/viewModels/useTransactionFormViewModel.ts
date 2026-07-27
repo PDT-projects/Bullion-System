@@ -15,7 +15,7 @@ import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { fetchCurrencyRates, convertCurrency, CURRENCY_RATE_FALLBACK, calculateSupplierCost } from '../../invoices/models/invoiceService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { Invoice } from '../../invoices/models/types';
-import { InvoiceSupplierPaymentService, outstandingSupplierCost } from '../../invoices/models/InvoiceSupplierPaymentService';
+import { InvoicePaymentService } from '../../invoices/models/InvoicePaymentService';
 import { SOLD_GOODS_PAYMENT_CATEGORY } from '../models/types';
 
 interface BankInfo { id: string; name: string; balance: number; }
@@ -126,7 +126,8 @@ export interface UseTransactionFormViewModelReturn {
   // When user picks "Sold Goods Payment" as the Category, this picker shows
   // invoices with outstanding supplier cost. Selecting one auto-fills the
   // item's amount with the outstanding balance and routes handleSave through
-  // InvoiceSupplierPaymentService (which books the ledger row itself).
+  // InvoicePaymentService.recordSupplierPayment (which books the ledger row
+  // itself — modal must NOT double-book via createTransaction).
   supplierPaymentInvoices: SupplierPaymentInvoiceOption[];
   supplierPaymentInvoicesLoading: boolean;
   selectedSupplierInvoiceId: string;
@@ -213,7 +214,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
   const [supplierPaymentInvoices,        setSupplierPaymentInvoices]        = useState<SupplierPaymentInvoiceOption[]>([]);
   const [supplierPaymentInvoicesLoading, setSupplierPaymentInvoicesLoading] = useState(false);
   const [selectedSupplierInvoiceId,      setSelectedSupplierInvoiceId]      = useState<string>('');
-  // Full invoice cache keyed by id — needed when we call recordPayment on save.
+  // Full invoice cache keyed by id — needed when we call recordSupplierPayment on save.
   const [supplierInvoiceCache, setSupplierInvoiceCache] = useState<Record<string, Invoice>>({});
   const [chequeBank,   setChequeBank]   = useState('');
 
@@ -442,8 +443,8 @@ const getSuggestedClassification = (
   []);
 
   // ── Sold Goods (Supplier) Payment picker: load invoices with outstanding
-  //     supplier cost. Runs when the user picks "Sold Goods Payment" as the
-  //     Category on any item row, so the load only happens if needed.
+  //     supplier cost. Runs lazily when the user picks "Sold Goods Payment"
+  //     as the Category on any item row.
   const needsSupplierInvoices = useMemo(
     () => transactionItems.some(i => i.subCategory === SOLD_GOODS_PAYMENT_CATEGORY),
     [transactionItems],
@@ -642,12 +643,9 @@ const getSuggestedClassification = (
       } else {
         // ── Create mode ───────────────────────────────────────────────────
         for (const [idx, item] of transactionItems.entries()) {
-          // ── SPECIAL: Sold Goods Payment routes through supplier service ──
-          // If the user picked "Sold Goods Payment" AND an invoice, hand the
-          // whole thing to InvoiceSupplierPaymentService, which atomically
-          // updates the invoice AND books the ledger transaction. Do NOT
-          // fall through to the normal createTransaction below or we'd
-          // double-book the cash movement.
+          // ── SPECIAL: Sold Goods Payment routes through the merged supplier
+          // service. Do NOT fall through to the normal createTransaction below
+          // or we'd double-book the cash movement.
           if (item.subCategory === SOLD_GOODS_PAYMENT_CATEGORY) {
             const invForPayment = supplierInvoiceCache[selectedSupplierInvoiceId];
             if (!invForPayment) {
@@ -658,9 +656,9 @@ const getSuggestedClassification = (
             const officeObj      = companies.find(c => c.id === office);
             const companyName    = officeObj ? officeObj.name : office;
             const effectiveDate  = manualDate.trim() || date;
-            const amountAED      = item.amount;   // stored in AED by CurrencyAmountInput
+            const amountAED      = item.amount;
             try {
-              const result = await InvoiceSupplierPaymentService.recordPayment({
+              const result = await InvoicePaymentService.recordSupplierPayment({
                 invoice: invForPayment,
                 amount:  amountAED,
                 mode:    paymentMode,

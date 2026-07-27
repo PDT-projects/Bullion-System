@@ -19,7 +19,8 @@ import {
   PlusCircle, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Search, Clock, RotateCcw,
   History,
 } from 'lucide-react';
-import { collection, getDocs, query, orderBy, doc, setDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { useAccountBalances } from '../viewModels/useAccountBalances';
 import { toast } from 'sonner';
 import { db } from '../../../api/firebase/firebase';
 import {
@@ -28,7 +29,7 @@ import {
 import {
   getTransactionTotals,
   getTxAccount, getTxCategoryPath,
-  computeCashInHandBalance, computeBankBalance, computeMonthlyFlow,
+  computeCashInHandBalance, computeBankBalance, computeMonthlyFlow, computeTotalFlow,
 } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
@@ -66,29 +67,20 @@ export function TransactionListView({
   formatDate,
 }: Props) {
 
-  // ── Bank list (drives Opening Balance, Banks·N, and the Account filter) ──
-  const [banks, setBanks] = useState<{ id: string; name: string; balance: number; accountNumber?: string }[]>([]);
-  const [cashOpening, setCashOpening] = useState<number>(0);
+  // ── Accounts (drives Opening Balance, Banks·N, and the Account filter) ──
+  //
+  // Both the bank list and the Cash-in-Hand opening balance now come from the
+  // shared `useAccountBalances` hook, which is backed by live onSnapshot
+  // subscriptions. This is the same hook TransactionListWrapper feeds into
+  // QuickTransactionModal, so the summary strip here and the Account dropdown
+  // in the transaction popup can no longer disagree about the opening balance.
+  const { banks, cashOpening } = useAccountBalances(transactions);
 
-  // Extracted so the modals can trigger a refresh after edits without a full
-  // page reload. Also loads the cash-in-hand opening balance from the small
-  // settings doc (`settings/cashOpening`) — this is the ONE persistent seed
-  // that the running-balance math needs beyond the bank docs themselves.
-  const refreshAccounts = React.useCallback(async () => {
-    try {
-      const snap = await getDocs(query(collection(db, 'banks'), orderBy('name')));
-      setBanks(snap.docs.map(d => {
-        const b = d.data() as any;
-        return { id: d.id, name: b.name || '—', balance: Number(b.balance) || 0, accountNumber: b.accountNumber };
-      }));
-    } catch { setBanks([]); }
-    try {
-      const { doc: firestoreDoc, getDoc } = await import('firebase/firestore');
-      const cashSnap = await getDoc(firestoreDoc(db, 'settings', 'cashOpening'));
-      setCashOpening(cashSnap.exists() ? Number((cashSnap.data() as any).amount) || 0 : 0);
-    } catch { setCashOpening(0); }
-  }, []);
-  useEffect(() => { refreshAccounts(); }, [refreshAccounts]);
+  // The modals below still call onSaved={refreshAccounts}. Subscriptions make
+  // that redundant — the new value arrives on its own — but the shim is kept so
+  // those call sites don't need to change and so an explicit save still feels
+  // acknowledged.
+  const refreshAccounts = React.useCallback(async () => { /* live via onSnapshot */ }, []);
 
   // ── Modal open state ─────────────────────────────────────────────────
   const [openingModal, setOpeningModal] = useState(false);
@@ -103,8 +95,9 @@ export function TransactionListView({
   const summary = useMemo(() => {
     const monthly = computeMonthlyFlow(transactions);
     // Cash live balance = cash opening seed + cash-mode transactions delta.
-    const cashLedger = computeCashInHandBalance(transactions);
-    const cash    = cashOpening + cashLedger;
+    // computeCashInHandBalance now takes the seed directly, matching how
+    // computeBankBalance has always worked.
+    const cash = computeCashInHandBalance(transactions, cashOpening);
     const bankSum = banks.reduce(
       (sum, b) => sum + computeBankBalance(transactions, b.id, b.balance),
       0,
@@ -212,14 +205,25 @@ export function TransactionListView({
   }, [filteredTransactions, chipCategory, chipSubCategory, chipAccount, chipBranch, settledOnly, pendingOnly, chipType]);
 
   // ── Running balance per account for the BALANCE column ──────────────────
-  // Sort rows chronologically (oldest first) so the running total makes sense,
-  // then compute per-account running totals. Rendered back in the row order the
-  // user sees (newest first). Seeds cash at 0 and each bank at its stored balance.
+  //
+  // Walks the FULL ledger chronologically (oldest first) and records the
+  // running per-account total at each transaction. Rendered back in whatever
+  // order the user is looking at.
+  //
+  // WHY `transactions` AND NOT `rows`: this used to iterate the filtered rows,
+  // so the moment any filter or chip was active the running balance restarted
+  // from the opening seed and skipped every excluded transaction — producing a
+  // "balance" that had never existed in reality. A running balance is a
+  // property of the account's whole history; filtering changes which rows you
+  // SEE, never what the balance WAS at that point.
+  //
+  // Cash is seeded with its opening balance (previously hard-coded to 0, which
+  // made this column disagree with the Cash tile by exactly the opening amount).
   const balanceByRow = useMemo(() => {
-    const seeded: Record<string, number> = { 'cash-in-hand': 0 };
+    const seeded: Record<string, number> = { 'cash-in-hand': cashOpening };
     banks.forEach(b => { seeded[b.id] = b.balance; });
 
-    const chrono = [...rows].sort((a, b) => {
+    const chrono = [...transactions].sort((a, b) => {
       const ka = (a.date || '') + ' ' + (a.time || '');
       const kb = (b.date || '') + ' ' + (b.time || '');
       return ka.localeCompare(kb);
@@ -240,7 +244,7 @@ export function TransactionListView({
       map.set(t.id, next);
     }
     return map;
-  }, [rows, banks]);
+  }, [transactions, banks, cashOpening]);
 
   const hasAnyChipFilter = !!(chipCategory || chipSubCategory || chipAccount || chipBranch || settledOnly || pendingOnly || chipType);
 
@@ -652,6 +656,7 @@ export function TransactionListView({
         <OpeningBalancesModal
           banks={banks}
           cashOpening={cashOpening}
+          transactions={transactions}
           onClose={() => setOpeningModal(false)}
           onSaved={async () => { await refreshAccounts(); setOpeningModal(false); }}
         />
@@ -967,8 +972,17 @@ const ReconcileDetail: React.FC<{
   cashOpening: number;
   summary: { opening: number; inflow: number; outflow: number; cash: number; bankSum: number };
 }> = ({ banks, transactions, cashOpening, summary }) => {
-  // "Total balance" is what the ledger says right now (opening + inflows - outflows).
-  const totalBalance = summary.opening + summary.inflow - summary.outflow;
+  // "Total balance" = opening + every inflow - every outflow, ALL TIME.
+  //
+  // This used to use summary.inflow / summary.outflow, which come from
+  // computeMonthlyFlow() and only cover the CURRENT MONTH — then compared the
+  // result against all-time account balances below. The two only agreed because
+  // every transaction in the system happened to be in the current month; the
+  // first time a transaction rolled over into a new month the panel would have
+  // reported a bogus "Difference" equal to all prior-month activity. Compare
+  // like with like.
+  const allTime = useMemo(() => computeTotalFlow(transactions), [transactions]);
+  const totalBalance = summary.opening + allTime.inflow - allTime.outflow;
   // "Sum of all accounts" is the same number arrived at from the other side —
   // add live cash balance + each bank's live balance. If both numbers agree,
   // the books are balanced.
@@ -986,10 +1000,10 @@ const ReconcileDetail: React.FC<{
 
         {/* Balance at End of Month */}
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 10 }}>Balance at End of Month</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 10 }}>Balance from Opening</div>
           <ReconRow label={<>Opening</>} value={summary.opening} />
-          <ReconRow label={<>+ Inflows</>} value={summary.inflow} tone="inflow" />
-          <ReconRow label={<>− Outflows</>} value={summary.outflow} tone="outflow" />
+          <ReconRow label={<>+ Inflows</>} value={allTime.inflow} tone="inflow" />
+          <ReconRow label={<>− Outflows</>} value={allTime.outflow} tone="outflow" />
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontSize: 12, color: '#64748b' }}>Total balance</span>
             <span style={{ fontSize: 16, fontWeight: 800, color: '#059669' }}>{CURRENCY} {fmt(totalBalance)}</span>
@@ -1087,11 +1101,28 @@ const ReconRow: React.FC<{ label: React.ReactNode; value: number; tone?: 'inflow
 // field.
 // ═══════════════════════════════════════════════════════════════════════════
 const OpeningBalancesModal: React.FC<{
+  /** Needed so each row can show the LIVE balance next to the opening one. */
+  transactions: Transaction[];
   banks: Array<{ id: string; name: string; balance: number }>;
   cashOpening: number;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
-}> = ({ banks, cashOpening, onClose, onSaved }) => {
+}> = ({ banks, cashOpening, transactions, onClose, onSaved }) => {
+  // The row subtitles used to read "Current balance: {opening}" — they were
+  // printing the OPENING balance under a "current" label. That is exactly why
+  // Cash in Hand appeared to be worth 4,060 here while every other surface in
+  // the app said -7,372. Show both, correctly named.
+  const liveCash = useMemo(
+    () => computeCashInHandBalance(transactions, cashOpening),
+    [transactions, cashOpening],
+  );
+  const liveBank = useMemo(
+    () => Object.fromEntries(
+      banks.map(b => [b.id, computeBankBalance(transactions, b.id, b.balance)]),
+    ) as Record<string, number>,
+    [banks, transactions],
+  );
+
   const [cash, setCash] = useState<number>(cashOpening);
   const [bankOpen, setBankOpen] = useState<Record<string, number>>(
     Object.fromEntries(banks.map(b => [b.id, b.balance])),
@@ -1101,8 +1132,9 @@ const OpeningBalancesModal: React.FC<{
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Cash opening → single settings doc
-      await setDoc(doc(db, 'settings', 'cashOpening'), { amount: Number(cash) || 0 }, { merge: true });
+      // Cash opening → single settings doc, written through the service so
+      // there is exactly one writer and one shape for this value.
+      await TransactionFirebaseService.setCashOpening(Number(cash) || 0);
       // Each bank opening → the bank doc's `balance` field
       for (const b of banks) {
         const next = Number(bankOpen[b.id]) || 0;
@@ -1151,7 +1183,9 @@ const OpeningBalancesModal: React.FC<{
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Cash in Hand</div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Current balance: {fmt(cashOpening)}</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>
+                  Opening: {fmt(cashOpening)} · Current: {fmt(liveCash)}
+                </div>
               </div>
             </div>
             <input type="number" step="any" value={cash} onChange={e => setCash(Number(e.target.value) || 0)} style={inp} />
@@ -1166,7 +1200,9 @@ const OpeningBalancesModal: React.FC<{
                 </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{b.name}</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Current balance: {fmt(b.balance)}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Opening: {fmt(b.balance)} · Current: {fmt(liveBank[b.id] ?? b.balance)}
+                  </div>
                 </div>
               </div>
               <input type="number" step="any" value={bankOpen[b.id] ?? 0} onChange={e => setBankOpen(prev => ({ ...prev, [b.id]: Number(e.target.value) || 0 }))} style={inp} />

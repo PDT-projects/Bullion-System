@@ -279,9 +279,18 @@ const realizedAmount = (t: Transaction): number => {
 /**
  * Live balance for the virtual Cash-in-Hand account.
  * Iterates cash-type transactions only, adds inflows, subtracts outflows.
+ *
+ * `seedBalance` is the Cash-in-Hand OPENING balance (settings/cashOpening.amount).
+ * It mirrors how computeBankBalance already seeds from the bank doc's balance.
+ * Callers that omit it get the raw ledger delta — which is exactly the bug that
+ * made the transaction modal's Account dropdown ignore the opening balance, so
+ * pass it everywhere the number is shown to a user.
  */
-export const computeCashInHandBalance = (transactions: Transaction[]): number => {
-  let bal = 0;
+export const computeCashInHandBalance = (
+  transactions: Transaction[],
+  seedBalance = 0,
+): number => {
+  let bal = seedBalance;
   for (const t of transactions) {
     if (!isLiquid(t)) continue;
     if (getTxAccount(t).type !== 'cash') continue;
@@ -315,6 +324,26 @@ export const computeBankBalance = (
  * Inflow / Outflow / Net for a given month (defaults to the current month).
  * Used by the summary bar's "INFLOW · MO" / "OUTFLOW · MO" / "NET · MO" cards.
  */
+/**
+ * Inflow / Outflow / Net across the ENTIRE ledger, no date window.
+ *
+ * The reconcile panel needs this: it adds opening + inflows − outflows and
+ * compares the result against the sum of all account balances, which are
+ * themselves all-time. Feeding it computeMonthlyFlow() only agreed while every
+ * transaction in the system sat inside the current month.
+ */
+export const computeTotalFlow = (
+  transactions: Transaction[],
+): { inflow: number; outflow: number; net: number } => {
+  let inflow = 0, outflow = 0;
+  for (const t of transactions) {
+    if (!isLiquid(t)) continue;
+    if (t.mainCategory === 'Cash Inflow')       inflow  += realizedAmount(t);
+    else if (t.mainCategory === 'Cash Outflow') outflow += realizedAmount(t);
+  }
+  return { inflow, outflow, net: inflow - outflow };
+};
+
 export const computeMonthlyFlow = (
   transactions: Transaction[],
   now: Date = new Date(),

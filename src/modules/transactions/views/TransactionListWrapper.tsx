@@ -2,63 +2,44 @@
 // Intercepts "Add Transaction" to open the QuickTransactionModal popup
 // instead of navigating to a separate page.
 //
-// UPDATED for Phase 3: passes `cashBalance` to the modal so its Account
-// dropdown can show a live Cash-in-Hand balance alongside each bank.
+// FIXED: account balances now come from the shared `useAccountBalances` hook,
+// which seeds Cash-in-Hand with the opening balance stored in
+// `settings/cashOpening`. Previously this file computed
+// `computeCashInHandBalance(vm.transactions)` with no seed, so the modal's
+// Account dropdown showed the raw ledger delta and never reflected the opening
+// balance — even right after the user set or changed it.
+//
+// Also fixed: banks/companies used to load only once the modal was opened
+// (`if (!showModal) return`), so the first render of the dropdown showed an
+// empty list and a 0 balance until the fetch landed. Both are now loaded up
+// front, and banks stay live via onSnapshot.
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import { useTransactionListViewModel } from '../viewModels/useTransactionListViewModel';
+import { useAccountBalances } from '../viewModels/useAccountBalances';
 import { TransactionListView } from './TransactionListView';
 import { QuickTransactionModal } from './QuickTransactionModal';
-import { computeCashInHandBalance, computeBankBalance } from '../models/transactionsService';
 
 export function TransactionListWrapper() {
   const vm = useTransactionListViewModel();
   const [showModal, setShowModal] = useState(false);
-  const [banks, setBanks] = useState<{ id: string; name: string; balance?: number; accountNumber?: string }[]>([]);
   const [companies, setCompanies] = useState<string[]>(['Main Office']);
 
-  // Load banks + companies for the popup
+  // Cash-in-Hand + per-bank balances, live, opening-balance-seeded.
+  const { banksWithLiveBalance, cashBalance } = useAccountBalances(vm.transactions);
+
+  // Branch/company list for the popup. Loaded once on mount rather than on
+  // modal open so the dropdown is populated the instant the modal appears.
   useEffect(() => {
-    if (!showModal) return;
-    getDocs(query(collection(db, 'banks'), orderBy('name')))
-      .then(snap => setBanks(snap.docs.map(d => {
-        const b = d.data() as any;
-        return {
-          id:            d.id,
-          name:          b.name || '—',
-          balance:       Number(b.balance) || 0,
-          accountNumber: b.accountNumber,
-        };
-      })))
-      .catch(() => {});
     getDocs(collection(db, 'companies'))
       .then(snap => {
         const list = snap.docs.map(d => (d.data() as any).name).filter(Boolean);
         setCompanies(list.length ? list : ['Main Office']);
       })
       .catch(() => setCompanies(['Main Office']));
-  }, [showModal]);
-
-  // Cash-in-Hand balance is computed live from the transactions the VM's
-  // onSnapshot subscription is already streaming — no extra query needed.
-  const cashBalance = useMemo(
-    () => computeCashInHandBalance(vm.transactions || []),
-    [vm.transactions],
-  );
-
-  // Bank running balances also derived live. The saved bank's stored balance
-  // (if any) is used as the seed; the ledger delta is added on top so the
-  // Account dropdown reflects reality regardless of whether other modules
-  // updated the bank doc directly.
-  const banksWithLiveBalance = useMemo(
-    () => banks.map(b => ({
-      ...b,
-      balance: computeBankBalance(vm.transactions || [], b.id, b.balance ?? 0),
-    })),
-    [banks, vm.transactions],
-  );
+  }, []);
 
   return (
     <>

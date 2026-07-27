@@ -58,12 +58,21 @@ export function QuickTransactionModal({
   banks = [], cashBalance = 0, companies = [],
 }: Props) {
 
-  // ── Auto TXN ID ──────────────────────────────────────────────────────
-  const [txId, setTxId] = useState('');
+  // ── TXN ID — PREVIEW ONLY until the user actually saves ──────────────
+  //
+  // This used to call generateTransactionId() on mount, which incremented the
+  // Firestore counter immediately. Opening the modal and pressing ✕ therefore
+  // burned that number forever and left a gap in the sequence.
+  //
+  // Now: subscribeToNextTransactionId() is a pure read (and stays live, so if a
+  // colleague saves while this modal is open the preview advances on its own).
+  // The real number is claimed atomically in handleSubmit() via
+  // commitTransactionId(), one line before the document is written. Cancel as
+  // many times as you like — the counter never moves.
+  const [txIdPreview, setTxIdPreview] = useState('');
   useEffect(() => {
-    TransactionFirebaseService.generateTransactionId()
-      .then(setTxId)
-      .catch(() => setTxId(`TXN-${Date.now()}`));
+    const unsub = TransactionFirebaseService.subscribeToNextTransactionId(setTxIdPreview);
+    return () => unsub();
   }, []);
 
   // ── Form state ───────────────────────────────────────────────────────
@@ -330,7 +339,8 @@ export function QuickTransactionModal({
   // ── Submit ───────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     // Validation
-    if (!txId) { toast.error('Transaction ID not ready'); return; }
+    // (No "ID not ready" guard any more — the ID is claimed at write time, so
+    //  a slow/failed preview read must never block a legitimate save.)
     if (!category) { toast.error('Category is required'); return; }
     if (!totalAmount || Number(totalAmount) <= 0) { toast.error('Total amount must be greater than zero'); return; }
     if (selectedAccount.type === 'bank' && !selectedAccount.id) {
@@ -471,6 +481,17 @@ export function QuickTransactionModal({
         return;
       }
 
+      // ── Claim the real transaction number ───────────────────────────
+      // Everything above this line is cancel-safe: no counter has moved yet.
+      // This is the single atomic increment, and it happens only because we are
+      // definitely about to write. The three invoice forks above return early
+      // and never reach it — their services book their own ledger entries.
+      //
+      // The committed ID can differ from txIdPreview if someone else saved in
+      // the meantime. That's correct behaviour, not an error — we just show the
+      // number that was actually assigned.
+      const txId = await TransactionFirebaseService.commitTransactionId();
+
       const legacyMain: 'Cash Inflow' | 'Cash Outflow' =
         type === 'Inflow' ? 'Cash Inflow' : 'Cash Outflow';
 
@@ -566,10 +587,13 @@ export function QuickTransactionModal({
 
         <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Transaction ID */}
+          {/* Transaction ID — preview. The number is only reserved on save. */}
           <div>
             <label style={label}>Transaction ID</label>
-            <input value={txId || 'Generating…'} readOnly style={{ ...inp, fontFamily: 'monospace', color: '#4f46e5', fontWeight: 600 }} />
+            <input value={txIdPreview || 'Loading…'} readOnly style={{ ...inp, fontFamily: 'monospace', color: '#4f46e5', fontWeight: 600 }} />
+            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+              Next available number — reserved only when you submit.
+            </div>
           </div>
 
           {/* Manual Date */}

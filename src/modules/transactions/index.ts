@@ -11,6 +11,8 @@ export {
   getTransactionTotals, isPending, filterTransactions, calculateStats,
   formatCurrency, formatDate, formatDateTime, getCategoryColor, getPaymentStatusColor,
   exportToCSV, downloadCSV,
+  computeCashInHandBalance, computeBankBalance, computeMonthlyFlow,
+  getTxAccount, getTxCategoryPath,
 } from './models/transactionsService';
 
 // ViewModels
@@ -18,6 +20,8 @@ export { useTransactionListViewModel }   from './viewModels/useTransactionListVi
 export { useTransactionFormViewModel }   from './viewModels/useTransactionFormViewModel';
 export { usePendingPaymentsViewModel }   from './viewModels/usePendingPaymentsViewModel';
 export { useTransactionDeleteViewModel } from './viewModels/useTransactionDeleteViewModel';
+export { useAccountBalances }            from './viewModels/useAccountBalances';
+export type { AccountBank, UseAccountBalancesReturn } from './viewModels/useAccountBalances';
 
 // Views
 export { TransactionListView }    from './views/TransactionListView';

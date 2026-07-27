@@ -279,16 +279,13 @@ export function usePendingPaymentsViewModel(): UsePendingPaymentsViewModelReturn
 
       await TransactionFirebaseService.addPartialPayment(selectedTransactionId, newPayment);
 
-      if (paymentData.method === 'Bank' && paymentData.bankId && bank) {
-        const isReceivable = tx.mainCategory === 'Cash Inflow';
-        const newBalance = isReceivable
-          ? bank.balance + paymentData.amount
-          : bank.balance - paymentData.amount;
-        await BankFirebaseService.updateBankBalance(paymentData.bankId, newBalance);
-        setBanks(prev => prev.map(b =>
-          b.id === paymentData.bankId ? { ...b, balance: newBalance } : b
-        ));
-      }
+      // REMOVED: the bank-balance write that used to live here.
+      //
+      // `banks/{id}.balance` is the OPENING balance seed, not a running total.
+      // addPartialPayment above already persists the payment into the ledger,
+      // and computeBankBalance() derives the live balance from opening + ledger.
+      // Writing here as well counted the payment twice and clobbered whatever
+      // opening balance the user had set.
 
       setAllTransactions(prev => prev.map(t => {
         if (t.id !== selectedTransactionId) return t;
