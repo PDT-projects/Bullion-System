@@ -5,7 +5,7 @@
 // Without costing: location is a required field for the single product.
 // Change: `stockInDateManual` field added to formData, passed through URL to payment step.
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -17,11 +17,35 @@ import {
   recalculateAllModels, createEmptyCostingModel,
 } from '../models/costingCalculator';
 import { BrandModelFirebaseService, InventoryFirebaseService } from '../models/InventoryFirebaseService';
+import {
+  fetchModelProfileByName, saveModelProfileByName, applyModelProfile,
+} from '../models/BrandModelService';
 
 const CATEGORIES = [
   'Detection Equipment', 'Security Equipment', 'Imaging Equipment',
   'Surveillance Systems', 'Access Control', 'Other',
 ];
+
+/**
+ * Wait for profile writes to land before the caller navigates away.
+ *
+ * saveModelProfileByName makes three sequential Firestore round-trips (read
+ * brands → read models → write). Firing it without awaiting and then calling
+ * navigate() unmounts the component mid-flight, and the write carrying the
+ * description is frequently lost — while the product itself saves fine, so
+ * nothing looks wrong until the next entry of the same model fails to prefill.
+ *
+ * allSettled, never all: profile bookkeeping must not turn a successful product
+ * save into an error.
+ */
+async function settleProfileWrites(writes: Promise<void>[]): Promise<void> {
+  if (writes.length === 0) return;
+  const results = await Promise.allSettled(writes);
+  const rejected = results.filter(r => r.status === 'rejected').length;
+  if (rejected > 0) {
+    console.warn(`[Inventory] ${rejected} model-profile write(s) failed — descriptions may not prefill next time`);
+  }
+}
 
 export interface SelectedModel {
   modelId: string;
@@ -209,8 +233,52 @@ const [singleModel, setSingleModel] = useState({
   }, []);
 
   // Field setters
+  // Mirrors formData every render so async callbacks can read the CURRENT
+  // values without closing over a stale snapshot or abusing setFormData.
+  const formDataRef = useRef(formData);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
+
   const setBrandName     = useCallback((v: string)        => setFormData(p => ({ ...p, brandName: v })), []);
-  const setModelName     = useCallback((v: string)        => setFormData(p => ({ ...p, modelName: v })), []);
+  // Setting the model name also pulls back everything saved for this brand +
+  // model last time — Category, Description, Retail Price, warranty, location.
+  // That is the whole point of the feature: stop retyping the same product
+  // identity on every restock.
+  //
+  // NON-DESTRUCTIVE: applyModelProfile only writes fields that are still blank.
+  // The lookup is async and the user can easily be typing a Description while
+  // it is in flight, so clobbering would be worse than not prefilling. The
+  // functional setFormData re-reads the LATEST state rather than a copy taken
+  // when the request started, and bails if the model changed again meanwhile.
+  const setModelName = useCallback((v: string) => {
+    setFormData(p => ({ ...p, modelName: v }));
+
+    const modelName = (v || '').trim();
+    if (!modelName) return;
+
+    void (async () => {
+      try {
+        // Read the brand from a ref, NOT by calling setFormData with a no-op
+        // updater. That earlier trick never worked: React does not run the
+        // updater synchronously, and returning `p` unchanged makes it bail out
+        // of the update altogether — so the local variable was still empty on
+        // the next line and this whole prefill returned immediately, every
+        // single time. The ref below mirrors formData on every render, so it
+        // always holds the current brand at the moment the model is picked.
+        const brandName = (formDataRef.current.brandName || '').trim();
+        if (!brandName) return;
+
+        const profile = await fetchModelProfileByName(brandName, modelName);
+        if (!profile) return;
+
+        setFormData(p => {
+          if ((p.modelName || '').trim().toLowerCase() !== modelName.toLowerCase()) return p;
+          return applyModelProfile(p, profile);
+        });
+      } catch (err) {
+        console.error('[Inventory] model profile prefill failed:', err);
+      }
+    })();
+  }, []);
   const setCategory      = useCallback((v: string)        => setFormData(p => ({ ...p, category: v })), []);
   const setCostPrice     = useCallback((v: number)        => setFormData(p => ({ ...p, costPrice: v })), []); // ← FIX: was missing entirely
   const setSellPrice     = useCallback((v: number)        => setFormData(p => ({ ...p, sellPrice: v })), []);
@@ -381,6 +449,10 @@ const [singleModel, setSingleModel] = useState({
       if (costingOption === 'with' && selectedModels && selectedModels.length > 0) {
         let successCount = 0;
         const failed: string[] = [];
+        // Profile writes are gathered and settled after the loop rather than
+        // awaited inside it: one product's slow bookkeeping should not hold up
+        // the next product's save.
+        const profileWrites: Promise<void>[] = [];
         for (const m of selectedModels) {
           try {
             const validSerials = m.serialNumbers.filter(s => s.trim() !== '');
@@ -410,12 +482,41 @@ const [singleModel, setSingleModel] = useState({
               paymentStatus: 'unpaid',
               totalAmount:   (dto.costPrice || 0) * (dto.stock || 0),
             });
+
+            // Remember this product's identity against its model doc so the
+            // next entry of the same brand + model prefills.
+            //
+            // COLLECTED, NOT FIRED-AND-FORGOTTEN. This used to be `void`-ed and
+            // navigate() ran moments later on line ~483. saveModelProfileByName
+            // makes THREE sequential Firestore round-trips (read brands → read
+            // models → write), so the route change unmounted this component
+            // while the write was still in flight and the description never
+            // landed. The product itself saved fine, which is exactly why
+            // nothing looked broken until the next entry failed to prefill.
+            //
+            // The multi-model screen already hit this and fixed it the same way;
+            // this branch was simply missed. Awaited below, before navigate().
+            profileWrites.push(saveModelProfileByName(dto.brandName, dto.modelName, {
+              category:      dto.category,
+              description:   dto.description,
+              sellPrice:     dto.sellPrice,
+              costPrice:     dto.costPrice,
+              warrantyYears: dto.warrantyYears,
+              buyType:       dto.buyType,
+              location:      dto.location,
+            }));
+
             successCount++;
           } catch (err) {
             console.error(`Failed to save model ${m.modelName}:`, err);
             failed.push(m.modelName);
           }
         }
+        // Land every profile write before the route changes. allSettled, not
+        // all: a failed profile write must never turn a successful product save
+        // into an error.
+        await settleProfileWrites(profileWrites);
+
         if (failed.length === 0) {
           toast.success(`✅ ${successCount} product${successCount === 1 ? '' : 's'} added to inventory`);
           navigate('/inventory');
@@ -455,6 +556,22 @@ const [singleModel, setSingleModel] = useState({
         paymentStatus: 'unpaid',
         totalAmount:   (dto.costPrice || 0) * (dto.stock || 0),
       });
+
+      // Awaited for the same reason as the with-costing branch above: navigate()
+      // is on the next line but one, and an un-awaited write does not survive
+      // the unmount.
+      await settleProfileWrites([
+        saveModelProfileByName(dto.brandName, dto.modelName, {
+          category:      dto.category,
+          description:   dto.description,
+          sellPrice:     dto.sellPrice,
+          costPrice:     dto.costPrice,
+          warrantyYears: dto.warrantyYears,
+          buyType:       dto.buyType,
+          location:      dto.location,
+        }),
+      ]);
+
       toast.success('✅ Product added to inventory');
       navigate('/inventory');
     } catch (err) {

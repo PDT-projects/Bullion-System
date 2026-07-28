@@ -5,19 +5,23 @@
 
 import { useState } from 'react';
 import {
-  FileText, BarChart2, TrendingUp, TrendingDown,
+  FileText, BarChart2, Scale,
   ArrowLeft, ChevronRight, Receipt, Package,
 } from 'lucide-react';
 import { useUserPermissions } from '../../modules/user-management/hooks/useUserPermissions';
 import type { Screen } from '../../modules/user-management/models/userService';
 
-// Only these four reports are wired up now. Everything else was removed
+// Only these three reports are wired up now. Everything else was removed
 // per product decision — trimmed to just the core financial statements
-// and receivable/payable positions.
-import { BalanceSheetReport }         from './BalanceSheetReport';
-import { IncomeStatementReport }      from './IncomeStatementReport';
-import { AccountsReceivableReport }   from './AccountsReceivableReport';
-import { AccountsPayableReport }      from './AccountsPayableReport';
+// and the receivable/payable position.
+//
+// AR and AP were previously two separate cards backed by two separate files.
+// They are one report now: they read the same ledger from opposite sides, and
+// keeping them apart meant a counterparty who both owed us money and was owed
+// money by us appeared twice with no way to see the net.
+import { BalanceSheetReport }               from './BalanceSheetReport';
+import { IncomeStatementReport }            from './IncomeStatementReport';
+import { AccountsPayableReceivableReport }  from './AccountsPayableReceivableReport';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,19 +40,18 @@ interface ReportsHubProps {
 // ── Master config — ADD / EDIT / REMOVE reports here only ────────────────────
 
 const SCREEN_MAP: Record<string, Screen> = {
-  // Both AR and AP reuse existing permissions — pick a broad one so anyone
-  // who can see the balance sheet can see them.
-  'income-statement':     'Profit Loss Report',
-  'balance-sheet':        'Balance Sheet Report',
-  'accounts-receivable':  'Balance Sheet Report',
-  'accounts-payable':     'Balance Sheet Report',
+  'income-statement':             'Profit Loss Report',
+  'balance-sheet':                'Balance Sheet Report',
+  // Reuses the balance sheet permission, as the two separate AR/AP cards did.
+  // If you want a dedicated permission, add the literal to the `Screen` union
+  // in user-management/models/userService first — this map is typed against it.
+  'accounts-receivable-payable':  'Balance Sheet Report',
 };
 
 const ALL_REPORT_CARDS = [
-  { id: 'income-statement',     name: 'Income Statement',    description: 'Revenue, COGS, gross profit & operating expenses in P&L format',      icon: BarChart2,    accent: '#0f766e', lightBg: '#f0fdfa', tag: 'Finance' },
-  { id: 'balance-sheet',        name: 'Balance Sheet',       description: 'Assets, liabilities & equity position',                                icon: FileText,     accent: '#2563eb', lightBg: '#eff6ff', tag: 'Finance' },
-  { id: 'accounts-receivable',  name: 'Accounts Receivable', description: 'Outstanding customer invoices with aging & per-customer breakdown',   icon: TrendingUp,   accent: '#c2410c', lightBg: '#fff7ed', tag: 'Cash In' },
-  { id: 'accounts-payable',     name: 'Accounts Payable',    description: 'Outstanding payables by counterparty with running net position',      icon: TrendingDown, accent: '#dc2626', lightBg: '#fef2f2', tag: 'Cash Out' },
+  { id: 'income-statement',            name: 'Income Statement',              description: 'Revenue, COGS, gross profit & operating expenses in P&L format',            icon: BarChart2, accent: '#0f766e', lightBg: '#f0fdfa', tag: 'Finance' },
+  { id: 'balance-sheet',               name: 'Balance Sheet',                 description: 'Assets, liabilities & equity position',                                     icon: FileText,  accent: '#2563eb', lightBg: '#eff6ff', tag: 'Finance' },
+  { id: 'accounts-receivable-payable', name: 'Receivables & Payables',        description: 'What is owed to us and what we owe, by counterparty — with aging and net position', icon: Scale,     accent: '#4f46e5', lightBg: '#eef2ff', tag: 'Cash In / Out' },
 ];
 
 // ── Report renderer — maps id → component ────────────────────────────────────
@@ -60,11 +63,10 @@ function renderReport(
 ): React.ReactNode {
   const { transactions, banks, loans, invoices, products } = props;
   switch (id) {
-    case 'income-statement':     return <IncomeStatementReport    transactions={transactions} invoices={invoices} onBack={onBack} />;
-    case 'balance-sheet':        return <BalanceSheetReport       transactions={transactions} banks={banks} loans={loans} products={products} onBack={onBack} />;
-    case 'accounts-receivable':  return <AccountsReceivableReport transactions={transactions} invoices={invoices} onBack={onBack} />;
-    case 'accounts-payable':     return <AccountsPayableReport    transactions={transactions} invoices={invoices} onBack={onBack} />;
-    default:                     return null;
+    case 'income-statement':            return <IncomeStatementReport           transactions={transactions} invoices={invoices} onBack={onBack} />;
+    case 'balance-sheet':               return <BalanceSheetReport              transactions={transactions} banks={banks} loans={loans} products={products} onBack={onBack} />;
+    case 'accounts-receivable-payable': return <AccountsPayableReceivableReport transactions={transactions} invoices={invoices} onBack={onBack} defaultTab="combined" />;
+    default:                            return null;
   }
 }
 

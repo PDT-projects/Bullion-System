@@ -12,8 +12,8 @@
 //     Remove the call after it runs — it is destructive.
 
 import {
-  collection, getDocs, addDoc, doc, updateDoc,
-  query, orderBy, serverTimestamp, writeBatch,
+  collection, getDocs, getDoc, addDoc, doc, updateDoc,
+  query, orderBy, where, serverTimestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 
@@ -27,12 +27,45 @@ export interface BrandModel {
   models: ModelEntry[];
 }
 
+/**
+ * A model under a brand.
+ *
+ * The profile fields below are the reason "Description doesn't fetch when I add
+ * the same product again": this interface used to stop at costPrice/sellPrice,
+ * and fetchBrands() mapped exactly those two off the Firestore doc. So prices
+ * came back and nothing else could, no matter what was stored.
+ *
+ * WHAT BELONGS HERE: facts about the PRODUCT that survive a restock.
+ * WHAT DOESN'T: serial numbers, quantity, stock-in date, ownership type,
+ * supplier payment state — those describe a BATCH and must stay blank on a new
+ * entry.
+ */
 export interface ModelEntry {
   id:         string;
   brandId:    string;
   name:       string;
   costPrice?: number;
   sellPrice?: number;
+
+  // ── Product profile ────────────────────────────────────────────────────
+  category?:      string;
+  description?:   string;
+  warrantyYears?: number;
+  buyType?:       string;
+  location?:      string;
+  /** ISO timestamp of the purchase that last refreshed costPrice. */
+  lastCostAt?:    string;
+}
+
+/** The profile slice written back after a product saves. */
+export interface ModelProfileInput {
+  category?:      string;
+  description?:   string;
+  costPrice?:     number;
+  sellPrice?:     number;
+  warrantyYears?: number;
+  buyType?:       string;
+  location?:      string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -176,6 +209,14 @@ export async function fetchBrands(): Promise<BrandModel[]> {
     modelsMap[m.brandId].push({
       id: d.id, brandId: m.brandId, name: m.name,
       costPrice: m.costPrice, sellPrice: m.sellPrice,
+      // Carry the whole profile through. Anything not mapped here is invisible
+      // to the UI regardless of what Firestore holds — that was the bug.
+      category:      m.category,
+      description:   m.description,
+      warrantyYears: m.warrantyYears,
+      buyType:       m.buyType,
+      location:      m.location,
+      lastCostAt:    m.lastCostAt,
     });
   });
 
@@ -203,4 +244,422 @@ export async function addModel(brandId: string, modelName: string): Promise<Mode
 
 export async function updateModelPrices(modelId: string, costPrice: number, sellPrice: number): Promise<void> {
   await updateDoc(doc(db, MODELS_COL, modelId), { costPrice, sellPrice });
+}
+
+/**
+ * Persist the product profile onto a model doc. Call AFTER a product saves, so
+ * the next entry of the same brand + model prefills from it.
+ *
+ * This is the write half that never existed: addModel() stores only the name,
+ * and updateModelPrices() only the two prices, so Description and Type had
+ * nowhere to live between entries.
+ *
+ * Empty/undefined values are dropped rather than written, so a blank field on
+ * one entry can't erase a good value saved earlier.
+ *
+ * Never throws — profile bookkeeping must not fail the save that triggered it.
+ */
+export async function updateModelProfile(
+  modelId: string,
+  profile: ModelProfileInput,
+): Promise<void> {
+  if (!modelId) return;
+  try {
+    const now = new Date().toISOString();
+    const body: Record<string, any> = {};
+
+    if (profile.category)             body.category      = profile.category;
+    if (profile.description)          body.description   = profile.description;
+    if (profile.sellPrice)            body.sellPrice     = profile.sellPrice;
+    if (profile.warrantyYears != null) body.warrantyYears = profile.warrantyYears;
+    if (profile.buyType)              body.buyType       = profile.buyType;
+    if (profile.location)             body.location      = profile.location;
+    // Cost is refreshed but timestamped, so the form can offer it as a visible
+    // "last paid X on Y" prompt rather than a silent default. Purchase cost
+    // genuinely moves between restocks, and a stale one accepted unnoticed
+    // corrupts COGS on every entry.
+    if (profile.costPrice != null) { body.costPrice = profile.costPrice; body.lastCostAt = now; }
+
+    if (Object.keys(body).length === 0) return;
+    body.updatedAt = now;
+
+    await updateDoc(doc(db, MODELS_COL, modelId), body);
+    console.log('✅ Model profile saved:', modelId);
+  } catch (err) {
+    console.error('[BrandModelService] updateModelProfile failed:', err);
+  }
+}
+
+/**
+ * Merge a model's profile into form state WITHOUT clobbering anything already
+ * typed. Pure function — no React, no Firestore.
+ *
+ * The lookup that produces `model` is async, so the user can easily be typing a
+ * Description while it is still in flight; overwriting that would be worse than
+ * not prefilling at all. Only blank fields get written.
+ *
+ * costPrice is deliberately NOT applied — surface `model.costPrice` +
+ * `model.lastCostAt` as a hint beside the field instead.
+ */
+export function applyModelProfile<T extends Record<string, any>>(
+  form: T,
+  model: ModelEntry | null | undefined,
+  fieldMap: ModelProfileFieldMap = {},
+): T {
+  if (!model) return form;
+  const next: Record<string, any> = { ...form };
+
+  Object.assign(next, modelProfilePatch(form, model, fieldMap));
+
+  return next as T;
+}
+
+/**
+ * Same merge rule as applyModelProfile, but returns ONLY the fields that would
+ * change, rather than a whole new form object.
+ *
+ * CreateInventoryView is the reason this exists. That view holds no form object
+ * of its own — it receives the ViewModel's generic `setField(name, value)` and
+ * nothing else — so it cannot use the whole-object version above. It needs a
+ * list of writes to perform.
+ *
+ * Returns {} when there is nothing to apply, so callers can skip the writes
+ * entirely and avoid pointless re-renders.
+ *
+ * costPrice is deliberately excluded here, exactly as in applyModelProfile:
+ * purchase cost genuinely moves between restocks, and a stale one accepted
+ * unnoticed corrupts COGS on every entry. Surface `model.costPrice` +
+ * `model.lastCostAt` as a visible hint instead of writing it.
+ */
+/**
+ * Maps a profile field onto a DIFFERENTLY NAMED field on the target form.
+ *
+ * This exists because MultiModelEntry calls the stocking location
+ * `stockingLocation`, not `location`. applyModelProfile() writes `location`
+ * unconditionally, so on the multi-model grid it has always been writing a key
+ * nothing reads — the value lands on the object and the input, bound to
+ * `stockingLocation`, never shows it.
+ */
+export type ModelProfileFieldMap = Partial<Record<ModelProfileField, string>>;
+
+export type ModelProfileField =
+  'category' | 'description' | 'sellPrice' | 'warrantyYears' | 'buyType' | 'location';
+
+const PROFILE_FIELDS: ModelProfileField[] =
+  ['category', 'description', 'sellPrice', 'warrantyYears', 'buyType', 'location'];
+
+export function modelProfilePatch<T extends Record<string, any>>(
+  form: T,
+  model: ModelEntry | null | undefined,
+  fieldMap: ModelProfileFieldMap = {},
+): Partial<T> {
+  if (!model) return {};
+  const blank = (v: any) => v === undefined || v === null || v === '' || v === 0;
+  const patch: Record<string, any> = {};
+  const skipped: string[] = [];
+
+  for (const field of PROFILE_FIELDS) {
+    const target = fieldMap[field] ?? field;
+    const incoming = (model as any)[field];
+    if (!incoming) { skipped.push(`${field}=empty`); continue; }
+    if (!blank(form[target])) { skipped.push(`${target}=already-set`); continue; }
+    patch[target] = incoming;
+  }
+
+  // Left in deliberately. This feature fails silently by nature — a field that
+  // does not fill looks identical whether the profile was missing, the value
+  // was empty, or the form already held something. One line in the console
+  // distinguishes all three without a debugger.
+  console.debug('[BrandModelService] modelProfilePatch', {
+    model: model.name, applied: patch, skipped,
+  });
+
+  return patch as Partial<T>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NAME-BASED PROFILE API
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// WHY THIS EXISTS
+// ---------------
+// updateModelProfile() / applyModelProfile() above both key off a Firestore
+// model doc id. The multi-model inventory flow never captures one — it carries
+// brand and model NAMES only — so those two are unusable from there.
+//
+// Everything below takes names instead and resolves the id internally. Same
+// storage, same docs, no schema difference; only the entry point changes.
+//
+// Matching is trimmed and case-insensitive throughout, so "GoldXtra" typed on
+// one entry and "goldxtra" on the next still resolve to the same model.
+
+const PRODUCTS_COL = 'products';
+
+/** Trimmed, case-insensitive comparison key. */
+const nameKey = (v: string): string => (v || '').trim().toLowerCase();
+
+/**
+ * Resolve a brand + model name pair to its Firestore model doc id.
+ * Returns null when the pair doesn't exist yet.
+ */
+export async function resolveModelId(
+  brandName: string,
+  modelName: string,
+): Promise<string | null> {
+  if (!nameKey(brandName) || !nameKey(modelName)) return null;
+  try {
+    // Brand first. Fetched by exact name, then re-checked case-insensitively,
+    // because Firestore equality filters are case-SENSITIVE and the brand may
+    // have been stored with different casing than the user just typed.
+    const brandsSnap = await getDocs(collection(db, BRANDS_COL));
+    const brandDoc = brandsSnap.docs.find(
+      d => nameKey((d.data() as any).name) === nameKey(brandName),
+    );
+    if (!brandDoc) return null;
+
+    // Then the model under that brand. One equality filter only — adding a
+    // second would need a composite index, and a missing index fails the query
+    // outright at runtime rather than degrading.
+    const modelsSnap = await getDocs(query(
+      collection(db, MODELS_COL), where('brandId', '==', brandDoc.id),
+    ));
+    const modelDoc = modelsSnap.docs.find(
+      d => nameKey((d.data() as any).name) === nameKey(modelName),
+    );
+    return modelDoc ? modelDoc.id : null;
+  } catch (err) {
+    console.error('[BrandModelService] resolveModelId failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Persist a product profile using brand + model NAMES. Call after a product
+ * saves successfully.
+ *
+ * Never throws — profile bookkeeping must not fail the save that triggered it.
+ */
+export async function saveModelProfileByName(
+  brandName: string,
+  modelName: string,
+  profile: ModelProfileInput,
+): Promise<void> {
+  const b = (brandName || '').trim();
+  const m = (modelName || '').trim();
+  if (!b || !m) return;
+
+  try {
+    // ── Resolve or CREATE the brand ────────────────────────────────────────
+    // This function used to bail with a warning when the pair had no docs yet,
+    // which meant any brand or model the user typed fresh — the common case on
+    // a first entry — saved nothing at all. Silently. The product itself was
+    // stored fine, so nothing looked wrong until the next entry failed to
+    // prefill. Create what's missing instead.
+    const brandsSnap = await getDocs(collection(db, BRANDS_COL));
+    let brandDoc = brandsSnap.docs.find(
+      d => nameKey((d.data() as any).name) === nameKey(b),
+    );
+    let brandId: string;
+    if (brandDoc) {
+      brandId = brandDoc.id;
+    } else {
+      const ref = await addDoc(collection(db, BRANDS_COL), {
+        name: b, createdAt: serverTimestamp(),
+      });
+      brandId = ref.id;
+      console.log(`[BrandModelService] created brand "${b}"`);
+    }
+
+    // ── Resolve or CREATE the model ────────────────────────────────────────
+    const modelsSnap = await getDocs(query(
+      collection(db, MODELS_COL), where('brandId', '==', brandId),
+    ));
+    const modelDoc = modelsSnap.docs.find(
+      d => nameKey((d.data() as any).name) === nameKey(m),
+    );
+
+    const now  = new Date().toISOString();
+    const body: Record<string, any> = {};
+    if (profile.category)              body.category      = profile.category;
+    if (profile.description)           body.description   = profile.description;
+    if (profile.sellPrice)             body.sellPrice     = profile.sellPrice;
+    if (profile.warrantyYears != null) body.warrantyYears = profile.warrantyYears;
+    if (profile.buyType)               body.buyType       = profile.buyType;
+    if (profile.location)              body.location      = profile.location;
+    if (profile.costPrice != null) { body.costPrice = profile.costPrice; body.lastCostAt = now; }
+    body.updatedAt = now;
+
+    if (modelDoc) {
+      await updateDoc(doc(db, MODELS_COL, modelDoc.id), body);
+      console.log(`✅ [BrandModelService] profile saved on model "${m}" (${modelDoc.id})`, body);
+    } else {
+      const ref = await addDoc(collection(db, MODELS_COL), {
+        brandId, name: m, createdAt: serverTimestamp(), ...body,
+      });
+      console.log(`✅ [BrandModelService] created model "${m}" with profile (${ref.id})`, body);
+    }
+  } catch (err) {
+    console.error('[BrandModelService] saveModelProfileByName failed:', err);
+  }
+}
+
+/**
+ * Everything known about a brand + model pair, for prefilling a form.
+ * Returns null when the pair has never been entered before.
+ *
+ * THE PRODUCT FALLBACK IS THE IMPORTANT PART. Every model doc you already have
+ * predates the profile fields, so reading the doc alone returns nothing until
+ * each product has been re-saved once. Any gap is therefore filled from the
+ * most recent Product with the same brand + model — and those already carry
+ * description, category and warrantyYears. Prefill works on existing data
+ * immediately: no migration, no backfill, no "save it once first".
+ */
+export async function fetchModelProfileByName(
+  brandName: string,
+  modelName: string,
+): Promise<ModelEntry | null> {
+  if (!nameKey(brandName) || !nameKey(modelName)) return null;
+
+  const compact = (o: Record<string, any>): Record<string, any> =>
+    Object.fromEntries(Object.entries(o).filter(
+      ([, v]) => v !== undefined && v !== null && v !== '',
+    ));
+
+  // (a) The model doc.
+  let fromModel: Record<string, any> = {};
+  let modelId = '';
+  let brandId = '';
+  try {
+    const id = await resolveModelId(brandName, modelName);
+    if (id) {
+      modelId = id;
+      // Was: where('__name__', '==', id). The Firebase JS SDK expects a
+      // DocumentReference or a full path for __name__ comparisons, not a bare
+      // id string — so that query returned nothing every time and the model
+      // doc's profile was silently never read. getDoc is the correct call.
+      const snap = await getDoc(doc(db, MODELS_COL, id));
+      const m = snap.exists() ? (snap.data() as any) : null;
+      if (m) {
+        brandId = m.brandId || '';
+        fromModel = compact({
+          category:      m.category,
+          description:   m.description,
+          sellPrice:     m.sellPrice,
+          costPrice:     m.costPrice,
+          warrantyYears: m.warrantyYears,
+          buyType:       m.buyType,
+          location:      m.location,
+          lastCostAt:    m.lastCostAt,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[BrandModelService] model read failed:', err);
+  }
+
+  // (b) Fallback: newest Product with the same brand + model.
+  let fromProduct: Record<string, any> = {};
+  try {
+    const snap = await getDocs(query(
+      collection(db, PRODUCTS_COL), where('brandName', '==', brandName.trim()),
+    ));
+    const newest = snap.docs
+      .map(d => d.data() as any)
+      .filter(p => nameKey(p.modelName) === nameKey(modelName))
+      .sort((a, b) =>
+        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
+    if (newest) {
+      fromProduct = compact({
+        category:      newest.category,
+        description:   newest.description,
+        sellPrice:     newest.sellPrice,
+        costPrice:     newest.costPrice,
+        warrantyYears: newest.warrantyYears,
+        buyType:       newest.buyType,
+        location:      newest.location,
+        lastCostAt:    newest.createdAt,
+      });
+    }
+  } catch (err) {
+    console.error('[BrandModelService] product fallback failed:', err);
+  }
+
+  const merged = { ...fromProduct, ...fromModel };
+  if (Object.keys(merged).length === 0) return null;
+
+  return {
+    id: modelId, brandId, name: modelName.trim(), ...merged,
+  } as ModelEntry;
+}
+
+/**
+ * Pure helper for the read side when brands are already loaded in memory.
+ * Avoids a round-trip when fetchBrands() output is already on hand.
+ */
+export function findModelByName(
+  brands: BrandModel[],
+  brandName: string,
+  modelName: string,
+): ModelEntry | null {
+  const brand = brands.find(b => nameKey(b.name) === nameKey(brandName));
+  if (!brand) return null;
+  return brand.models.find(m => nameKey(m.name) === nameKey(modelName)) ?? null;
+}
+/**
+ * Every distinct description previously saved for a brand (+ model), newest
+ * first, for the Description dropdown.
+ *
+ * Prefers descriptions written against the exact brand + model. When that pair
+ * has none, it falls back to every description under the brand — a new model
+ * from a familiar brand usually reuses the same boilerplate, and offering it is
+ * more useful than an empty list.
+ *
+ * Blank descriptions are dropped, so products saved with an empty Description
+ * field never appear as an empty row in the dropdown.
+ *
+ * Never throws — a failed lookup returns [] and the field degrades to plain
+ * free text.
+ */
+export async function fetchSavedDescriptions(
+  brandName: string,
+  modelName?: string,
+): Promise<string[]> {
+  const brand = (brandName || '').trim();
+  if (!brand) return [];
+
+  try {
+    const snap = await getDocs(query(
+      collection(db, PRODUCTS_COL), where('brandName', '==', brand),
+    ));
+
+    const rows = snap.docs
+      .map(d => d.data() as any)
+      .filter(p => typeof p.description === 'string' && p.description.trim() !== '');
+
+    const model    = nameKey(modelName || '');
+    const forModel = model ? rows.filter(p => nameKey(p.modelName) === model) : [];
+    const pool     = forModel.length > 0 ? forModel : rows;
+
+    pool.sort((a, b) =>
+      new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    const seen: Set<string> = new Set();
+    const out: string[] = [];
+    for (const p of pool) {
+      const text = String(p.description).trim();
+      const key  = text.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(text);
+      if (out.length >= 25) break;
+    }
+
+    console.debug('[BrandModelService] fetchSavedDescriptions', {
+      brand, model: modelName, found: out.length, scopedToModel: forModel.length > 0,
+    });
+    return out;
+  } catch (err) {
+    console.error('[BrandModelService] fetchSavedDescriptions failed:', err);
+    return [];
+  }
 }

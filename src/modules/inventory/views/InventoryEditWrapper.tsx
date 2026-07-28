@@ -41,10 +41,17 @@ export const InventoryEditWrapper: React.FC = () => {
           category: product.category || '',
           costPrice: product.costPrice ?? 0,
           sellPrice: product.sellPrice ?? 0,
-          buyType: ('Import' as const),
+          // Was hardcoded to 'Import', which silently flipped every Export
+          // product back to Import the moment anyone opened it for editing.
+          buyType: (product.buyType || 'Import') as BuyType,
           warrantyYears: Number(product.warrantyYears) || 0,
           stock: Number(product.stock) || 0,
+          // location was missing from this mapping entirely, so editing a
+          // product wiped its stocking location on save.
+          location: product.location || '',
           description: product.description || '',
+          costingOption: product.costingOption,
+          costing: product.costing,
           paymentMethod: undefined,
           paidAmount: undefined,
           serialNumbers: product.serialNumbers || [],
@@ -128,4 +135,3 @@ export const InventoryEditWrapper: React.FC = () => {
     />
   );
 };
-

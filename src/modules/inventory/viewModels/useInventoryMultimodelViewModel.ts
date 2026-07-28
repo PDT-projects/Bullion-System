@@ -3,7 +3,7 @@
 // "Without Costing" path: select a brand, add multiple models at once.
 // Each model has: modelName, costPrice, sellPrice, category, qty, status,
 //                stockingLocation, dealerPrice, description, serialNumbers.
-// On Next → packages all models into URL params → payment step.
+// On Next → saves every row, then returns to the inventory list.
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { InventoryEntryType, INVENTORY_LOCATIONS, CreateProductDTO } from '../models/types';
 import { BrandModelFirebaseService, InventoryFirebaseService } from '../models/InventoryFirebaseService';
 import { uploadInventoryImages } from '../models/InventoryFirebaseService';
+import { saveModelProfileByName } from '../models/BrandModelService';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 
@@ -180,6 +181,18 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
     setEntries(prev => prev.length > 1 ? prev.filter(e => e.id !== id) : prev);
   }, []);
 
+  // Pure state update. The product-profile prefill that used to live here has
+  // moved into InventoryMultimodelView, for two reasons:
+  //
+  //   1. The free-text model input calls updateEntry on EVERY KEYSTROKE, so a
+  //      lookup hung off `'modelName' in patch` fired once per character —
+  //      nine Firestore round-trips to type "Signum HM", eight of them against
+  //      partial names that match nothing, all resolving out of order. The view
+  //      fires it once, on blur or on dropdown selection.
+  //
+  //   2. applyModelProfile() writes `location`, but this entry type calls that
+  //      field `stockingLocation`. The value landed on a key nothing reads. The
+  //      view passes an explicit field map instead.
   const updateEntry = useCallback((id: string, patch: Partial<MultiModelEntry>) => {
     setEntries(prev => prev.map(e => {
       if (e.id !== id) return e;
@@ -318,12 +331,17 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
 
       let successCount = 0;
       const failed: string[] = [];
+      // Profile writes are collected and settled BEFORE navigating. See the
+      // comment at the await below — this is the reason descriptions were not
+      // coming back on the next entry.
+      const profileWrites: Promise<void>[] = [];
 
       // Sequential — parallel writes on the same brand+model pair could race
       // against the duplicate-serial check inside createProduct.
       for (const e of entries) {
         try {
           const validSerials = e.serialNumbers.filter(s => s.trim() !== '');
+          const description  = (e.description || '').trim();
 
           // Upload images if any (non-blocking failure)
           let imageUrls: string[] = [];
@@ -352,7 +370,7 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
             warrantyYears: 1,
             stock:         e.stockQty,
             location:      e.stockingLocation,
-            description:   e.description,
+            description,
             serialNumbers: validSerials,
             serialCities,
             status:        (e.status as any) || 'New',
@@ -361,17 +379,65 @@ export function useInventoryMultiModelViewModel(): UseInventoryMultiModelViewMod
             imageUrls,
           } as any;
 
+          // ── DIAGNOSTIC — remove once the description issue is resolved ────
+          // Prints exactly what is about to be sent to Firestore. If ENTRY is
+          // empty, the textarea never reached state. If ENTRY has text but DTO
+          // is empty, the DTO build is dropping it. If both have text but the
+          // Firestore doc does not, the running bundle is not this file.
+          console.log(
+            '%c[SAVE] description check',
+            'background:#b91c1c;color:#fff;padding:2px 6px;border-radius:3px',
+            { model: e.modelName, ENTRY: JSON.stringify(e.description), DTO: JSON.stringify(dto.description) },
+          );
+
           // paymentStatus: 'unpaid' — this new item is a payable to be
           // reconciled later from the Transactions module. No paidAmount here.
           await InventoryFirebaseService.createProduct(dto, {
             paymentStatus: 'unpaid',
             totalAmount:   e.costPrice * e.stockQty,
           });
+
+          // Remember this product against its model doc so the next entry of the
+          // same brand + model prefills.
+          //
+          // warrantyYears and buyType are deliberately NOT written from here.
+          // This screen does not collect them — the DTO above hardcodes 1 and
+          // 'Import' — so sending them would overwrite whatever the single-product
+          // screen saved with those two constants, every single time.
+          profileWrites.push(
+            saveModelProfileByName(selectedBrandName, e.modelName, {
+              category:    e.category,
+              description,
+              sellPrice:   e.sellPrice,
+              costPrice:   e.costPrice,
+              location:    e.stockingLocation,
+            })
+          );
+
           successCount++;
         } catch (err) {
           console.error(`Failed to save entry (${e.modelName}):`, err);
           failed.push(e.modelName || `row-${entries.indexOf(e) + 1}`);
         }
+      }
+
+      // THIS AWAIT IS THE FIX for descriptions not persisting.
+      //
+      // These calls used to be fired with `void` and never awaited, then
+      // navigate() ran immediately on the next line. saveModelProfileByName
+      // makes THREE sequential Firestore round-trips (read brands → read models
+      // → write), so it is still mid-flight when the route changes and the
+      // component unmounts. The product itself saved fine, which is why the item
+      // appeared in inventory and nothing looked wrong — but the profile write
+      // carrying the description frequently never landed, so the next entry of
+      // the same model had nothing to fetch back.
+      //
+      // allSettled, not all: a failed profile write must never turn a successful
+      // product save into an error.
+      if (profileWrites.length > 0) {
+        const results = await Promise.allSettled(profileWrites);
+        const rejected = results.filter(r => r.status === 'rejected').length;
+        if (rejected > 0) console.warn(`[Inventory] ${rejected} profile write(s) failed`);
       }
 
       if (failed.length === 0) {

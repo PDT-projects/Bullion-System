@@ -9,6 +9,8 @@
 //   - All other logic (TXN ID, serials, stepper, confirmation) unchanged
 //   - LocationSelector & SerialLocationSelector now imported from shared LocationSelector.tsx
 //     (supports Add New location → persisted to Firestore appConfig/inventoryLocations)
+//   - Picking a brand + model now prefills Type, Description, Retail Price,
+//     Warranty and Location from the last time that pair was entered
 
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
@@ -25,6 +27,8 @@ import {
 } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { BrandModelSelector } from '../components/BrandModelSelector';
+import { fetchModelProfileByName, modelProfilePatch, fetchSavedDescriptions } from '../models/BrandModelService';
+import type { ModelEntry } from '../models/BrandModelService';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 // ── Shared location components (load from Firestore, support Add New) ─────────
 import { LocationSelector, SerialLocationSelector } from './LocationSelector';
@@ -211,6 +215,88 @@ function ImageUploadSection({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+/**
+ * Description input with a picker for descriptions already saved against this
+ * brand + model.
+ *
+ * The multi-model screen has had this for a while; the single-product screen
+ * had a bare textarea, so the only way a description came back here was the
+ * profile prefill silently filling the box. When it did not fire — a new model,
+ * a brand typed with different casing — the user had no way to reach text they
+ * had definitely written before, and retyped it.
+ *
+ * Controlled, unlike the multi-model version. That one needs a ref and
+ * `defaultValue` because its rows re-render from a list; here `formData` is the
+ * single source of truth and React keeps the caret stable on its own.
+ *
+ * The picker only renders when there is something to pick, so a first-ever
+ * entry sees exactly the plain textarea it saw before.
+ */
+function DescriptionField({
+  value,
+  brandName,
+  modelName,
+  onChange,
+}: {
+  value: string;
+  brandName: string;
+  modelName: string;
+  onChange: (v: string) => void;
+}) {
+  const [saved, setSaved]     = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const brand = (brandName || '').trim();
+    if (!brand) { setSaved([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    fetchSavedDescriptions(brand, modelName)
+      .then(list => { if (!cancelled) setSaved(list); })
+      .catch(()  => { if (!cancelled) setSaved([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [brandName, modelName]);
+
+  // One line, enough to tell entries apart in a <select>.
+  const summarise = (text: string) => {
+    const oneLine = text.replace(/\s+/g, ' ').trim();
+    return oneLine.length > 70 ? `${oneLine.slice(0, 70)}…` : oneLine;
+  };
+
+  return (
+    <div className="md:col-span-2">
+      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+
+      {(loading || saved.length > 0) && (
+        <select
+          value=""
+          disabled={loading}
+          onChange={e => { if (e.target.value) onChange(e.target.value); }}
+          className="w-full px-3 py-2 mb-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white cursor-pointer text-sm"
+        >
+          <option value="">
+            {loading
+              ? 'Loading saved descriptions…'
+              : `— Use a saved description (${saved.length}) —`}
+          </option>
+          {saved.map((text, i) => (
+            <option key={i} value={text}>{summarise(text)}</option>
+          ))}
+        </select>
+      )}
+
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        rows={4}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white whitespace-pre-wrap"
+        placeholder="Notes, specs, warranty terms. Press Enter for a new line — each line is preserved."
+      />
+    </div>
+  );
+}
+
 export function CreateInventoryView({
   formData,
   currentStep,
@@ -254,6 +340,59 @@ export function CreateInventoryView({
       .catch(() => {})
       .finally(() => setBanksLoading(false));
   }, [currentStep]);
+
+  // ── Product profile prefill ───────────────────────────────────────────────
+  // Picking a brand + model pulls back what was saved against that pair last
+  // time: Type, Description, Retail Price, Warranty and Location. Without it,
+  // the same product had to be retyped in full on every restock.
+  //
+  // formDataRef mirrors formData on every render so the async branch below
+  // reads the CURRENT values rather than a snapshot taken when the lookup
+  // started. Reading the prop directly inside an async closure would capture
+  // the render it was created in and go stale the moment anything else changes.
+  const formDataRef = useRef(formData);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
+
+  // The model the user most recently picked, lowercased. A lookup that resolves
+  // after they have moved on to a different model is discarded, not applied.
+  const activeModelRef = useRef('');
+
+  // NON-DESTRUCTIVE: modelProfilePatch only returns fields that are still
+  // blank, so anything already typed survives. The lookup is async and someone
+  // can easily be typing a Description while it is in flight — clobbering that
+  // would be worse than not prefilling at all.
+  const applyProfile = (profile: ModelEntry | null | undefined) => {
+    const patch = modelProfilePatch(formDataRef.current, profile);
+    Object.entries(patch).forEach(([field, value]) => setField(field, value));
+  };
+
+  const prefillFromModel = (modelName: string, inMemory?: ModelEntry) => {
+    const model = (modelName || '').trim();
+    activeModelRef.current = model.toLowerCase();
+    if (!model) return;
+
+    // (a) Synchronous pass, from the profile the selector already had loaded.
+    //     fetchBrands() carries the whole profile, so the common case needs no
+    //     round-trip at all and the fields fill the instant the model is picked.
+    applyProfile(inMemory);
+
+    // (b) Async fallback. Model docs created before the profile fields existed
+    //     hold nothing, so fetchModelProfileByName also reads the newest Product
+    //     with the same brand + model. That is what makes this work on data
+    //     already in Firestore — no migration, no "save it once first".
+    void (async () => {
+      try {
+        const brandName = (formDataRef.current.brandName || '').trim();
+        if (!brandName) return;
+        const profile = await fetchModelProfileByName(brandName, model);
+        if (!profile) return;
+        if (activeModelRef.current !== model.toLowerCase()) return;
+        applyProfile(profile);
+      } catch (err) {
+        console.error('[Inventory] model profile prefill failed:', err);
+      }
+    })();
+  };
 
   const selectedMode = PAYMENT_MODES.find(m => m.value === formData.paymentMethod) || null;
   const needsBank    = selectedMode?.needsBank ?? false;
@@ -398,13 +537,17 @@ export function CreateInventoryView({
               setField('brandId', brandId);
               setField('brandName', brandName);
             }}
-            onModelChange={(modelId, modelName, costPrice, sellPrice) => {
+            onModelChange={(modelId, modelName, costPrice, sellPrice, profile) => {
               setField('modelId', modelId);
               setField('modelName', modelName);
               if (typeof sellPrice === 'number' && sellPrice > 0) setField('sellPrice', sellPrice);
               if (typeof costPrice === 'number' && costPrice > 0 && !(formData.costPrice > 0)) {
                 setField('costPrice', costPrice);
               }
+              // Edit mode is excluded on purpose: the form already holds this
+              // product's real values, and quietly filling its blanks would
+              // introduce a change the user never made.
+              if (!isEditMode) prefillFromModel(modelName, profile);
             }}
           />
           {(validation.fieldErrors?.brandName || validation.fieldErrors?.modelName) && (
@@ -507,16 +650,12 @@ export function CreateInventoryView({
         </div>
 
         {/* ── Description ── */}
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <textarea
-            value={formData.description || ''}
-            onChange={e => setField('description', e.target.value)}
-            rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white whitespace-pre-wrap"
-            placeholder="Notes, specs, warranty terms. Press Enter for a new line — each line is preserved."
-          />
-        </div>
+        <DescriptionField
+          value={formData.description || ''}
+          brandName={formData.brandName || ''}
+          modelName={formData.modelName || ''}
+          onChange={v => setField('description', v)}
+        />
       </div>
 
       {/* ── Serial Numbers ── */}

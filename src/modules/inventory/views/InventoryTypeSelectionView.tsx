@@ -17,6 +17,10 @@ import {
   generateInventoryTransactionId,
   uploadInventoryImages,
 } from '../models/InventoryFirebaseService';
+import {
+  fetchModelProfileByName,
+  saveModelProfileByName,
+} from '../models/BrandModelService';
 import { LocationSelector } from './LocationSelector';
 import { CATEGORIES } from '../viewModels/useInventoryMultimodelViewModel';
 import { useNavigate } from 'react-router-dom';
@@ -278,15 +282,48 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
     if (!brandName.trim()) { setModelSuggestionsByRow(prev => ({ ...prev, [rowId]: [] })); return; }
     try {
       const models = await BrandModelFirebaseService.fetchModelsByBrandName(brandName.trim());
+
+      // WHY THIS NO LONGER QUERIES products DIRECTLY
+      // --------------------------------------------
+      // It used to run:
+      //
+      //   where('brandName','==',…) + where('modelName','==',…)
+      //   + orderBy('createdAt','desc') + limit(1)
+      //
+      // Two equality filters plus an orderBy on a THIRD field requires a
+      // composite index. Without one Firestore does not degrade — it rejects
+      // the query outright at runtime. The bare `catch` then swallowed the
+      // error and returned description: '' for every model, every time, with
+      // nothing in the console. That is why descriptions never came back on
+      // this screen no matter what was stored.
+      //
+      // fetchModelProfileByName is built to avoid exactly this: it uses a
+      // single equality filter and narrows in memory. It also reads the model
+      // doc first and falls back to the newest matching product, so it works on
+      // records saved before profiles existed. Its name matching is trimmed and
+      // case-insensitive, which the old query was not — "Garrett" saved once
+      // and "garrett" typed later missed entirely.
       const enriched: ModelSuggestion[] = await Promise.all(models.map(async m => {
         try {
-          const snap = await getDocs(query(collection(db, 'products'), where('brandName', '==', brandName.trim()), where('modelName', '==', m.modelName), orderBy('createdAt', 'desc'), limit(1)));
-          const desc = snap.empty ? '' : (snap.docs[0].data() as any).description || '';
-          return { id: m.id, name: m.modelName, costPrice: m.costPrice, description: desc };
-        } catch { return { id: m.id, name: m.modelName, costPrice: m.costPrice, description: '' }; }
+          const profile = await fetchModelProfileByName(brandName.trim(), m.modelName);
+          return {
+            id: m.id,
+            name: m.modelName,
+            costPrice: m.costPrice,
+            description: profile?.description || '',
+          };
+        } catch (err) {
+          // Logged, not swallowed. A silent empty description is
+          // indistinguishable from "nothing was ever saved".
+          console.warn(`[INV] description lookup failed for ${brandName}/${m.modelName}:`, err);
+          return { id: m.id, name: m.modelName, costPrice: m.costPrice, description: '' };
+        }
       }));
       setModelSuggestionsByRow(prev => ({ ...prev, [rowId]: enriched }));
-    } catch { setModelSuggestionsByRow(prev => ({ ...prev, [rowId]: [] })); }
+    } catch (err) {
+      console.warn('[INV] loadModels failed:', err);
+      setModelSuggestionsByRow(prev => ({ ...prev, [rowId]: [] }));
+    }
   };
 
   // ── Shared fields ─────────────────────────────────────────────────────────
@@ -353,6 +390,11 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
 
     try {
       const manualDateIso = stockInDate ? new Date(stockInDate).toISOString() : undefined;
+      // This screen never wrote a model profile at all — it saved the product
+      // and stopped, so `brandModels` docs stayed bare and there was nothing for
+      // the next entry to read back.
+      const profileWrites: Promise<void>[] = [];
+
       for (const row of rows) {
         // Ensure brand
         let brandId = brandSuggestions.find(b => b.name.toLowerCase() === row.brandName.toLowerCase())?.id || '';
@@ -400,6 +442,19 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           totalAmount,
         };
 
+        // Remember this row's profile against its model doc so the next entry
+        // of the same brand + model prefills. Collected here, settled after the
+        // loop — see the await below.
+        profileWrites.push(
+          saveModelProfileByName(dto.brandName, dto.modelName, {
+            category:    row.category,
+            description: row.description.trim(),
+            sellPrice:   row.sellPrice,
+            costPrice:   row.costPrice,
+            location,
+          })
+        );
+
         console.log('[INV] Calling createProduct...', dto.brandName, dto.modelName, 'serials:', validSerials);
         let created: any;
         try {
@@ -441,6 +496,23 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
               toast.error(`Image upload failed: ${imgErr?.message || 'Unknown error'}. Product saved without image.`);
             }
           }
+        }
+      }
+
+      // AWAITED BEFORE afterSave(). afterSave() either closes the modal or
+      // navigates, and saveModelProfileByName makes three sequential Firestore
+      // round-trips (read brands → read models → write). Un-awaited, it is still
+      // in flight when this component unmounts and the write is dropped — the
+      // product saves fine, so nothing looks wrong until the next entry comes
+      // back blank.
+      //
+      // allSettled, never all: failed profile bookkeeping must not turn a
+      // successful product save into an error.
+      if (profileWrites.length > 0) {
+        const results = await Promise.allSettled(profileWrites);
+        const rejected = results.filter(r => r.status === 'rejected').length;
+        if (rejected > 0) {
+          console.warn(`[INV] ${rejected} model-profile write(s) failed — descriptions may not prefill next time`);
         }
       }
 

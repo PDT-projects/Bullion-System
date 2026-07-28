@@ -8,7 +8,13 @@ import { BrandModelFirebaseService, BrandDoc, ModelDoc } from '../models/Invento
 
 interface BrandModelDropdownProps {
   onBrandChange: (brandId: string, brandName: string) => void;
-  onModelChange: (modelId: string, modelName: string, costPrice: number) => void;
+  /**
+   * `model` carries the whole stored profile — category, description,
+   * warrantyYears, buyType, location — so the parent can prefill the rest of
+   * its form without a second Firestore round-trip. Optional, so existing
+   * callers that only destructure three params keep compiling.
+   */
+  onModelChange: (modelId: string, modelName: string, costPrice: number, model?: ModelDoc) => void;
   defaultBrandId?: string;
   defaultModelId?: string;
   className?: string;
@@ -20,7 +26,7 @@ export const BrandModelDropdown: React.FC<BrandModelDropdownProps> = ({
   const [brandOpen, setBrandOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<BrandDoc | null>(null);
-  const [selectedModel, setSelectedModel] = useState<{ id: string; name: string; costPrice: number } | null>(null);
+  const [selectedModel, setSelectedModel] = useState<{ id: string; name: string; costPrice: number; description?: string } | null>(null);
   const [brands, setBrands] = useState<BrandDoc[]>([]);
   const [models, setModels] = useState<ModelDoc[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(false);
@@ -56,8 +62,8 @@ export const BrandModelDropdown: React.FC<BrandModelDropdownProps> = ({
         const match = fetched.find(m => m.id === defaultModelId);
         if (match) {
           const cp = match.costPrice || 0;
-          setSelectedModel({ id: match.id, name: match.name, costPrice: cp });
-          onModelChange(match.id, match.name, cp);
+          setSelectedModel({ id: match.id, name: match.name, costPrice: cp, description: match.description });
+          onModelChange(match.id, match.name, cp, match);
         }
       }
     } catch { setModels([]); }
@@ -75,9 +81,9 @@ export const BrandModelDropdown: React.FC<BrandModelDropdownProps> = ({
 
   const handleModelSelect = (model: ModelDoc) => {
     const cp = model.costPrice || 0;
-    setSelectedModel({ id: model.id, name: model.name, costPrice: cp });
+    setSelectedModel({ id: model.id, name: model.name, costPrice: cp, description: model.description });
     setModelOpen(false); setModelSearch('');
-    onModelChange(model.id, model.name, cp);
+    onModelChange(model.id, model.name, cp, model);
   };
 
   return (
@@ -207,6 +213,20 @@ export const BrandModelDropdown: React.FC<BrandModelDropdownProps> = ({
               <span className="font-semibold text-gray-800">{selectedModel.name}</span>
               <span className="ml-auto text-xs px-2.5 py-1 rounded-full bg-white border border-blue-200 text-blue-600 font-semibold shadow-sm whitespace-nowrap">
                 PKR {selectedModel.costPrice?.toLocaleString()}
+              </span>
+            </div>
+          )}
+          {/* Saved description. Shown because it is the field users most often
+              assume did not carry over — it is not visible at a glance in the
+              form the way Type or Warranty are. */}
+          {selectedModel?.description && (
+            <div className="flex items-start gap-3 text-sm pt-1 border-t border-blue-100/70">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-100 shrink-0 mt-0.5">
+                <Box className="h-3.5 w-3.5 text-slate-500" />
+              </span>
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider shrink-0 mt-1">Saved</span>
+              <span className="text-gray-600 text-xs leading-relaxed whitespace-pre-wrap line-clamp-3">
+                {selectedModel.description}
               </span>
             </div>
           )}

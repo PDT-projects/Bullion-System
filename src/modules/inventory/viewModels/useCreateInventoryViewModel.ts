@@ -12,6 +12,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { saveModelProfileByName } from '../models/BrandModelService';
 import {
   ProductFormData,
   InventoryEntryStep,
@@ -460,6 +461,36 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
           toast.success(`✅ Inventory saved — ${formData.transactionId}`);
         }
       }
+
+      // ── Remember this model's profile ───────────────────────────────────
+      //
+      // This flow (used by both Add Inventory and Edit Inventory, via
+      // InventoryEditWrapper) read profiles back through CreateInventoryView's
+      // fetchModelProfileByName call but never wrote one. The description
+      // survived only because fetchModelProfileByName falls back to the newest
+      // matching Product — and that fallback matches brandName with a
+      // case-SENSITIVE Firestore equality filter, so "Garrett" saved once and
+      // "garrett" typed the next time found nothing. Writing the profile onto
+      // the model doc makes the lookup reliable, and makes the description
+      // visible to fetchBrands() and the brand/model dropdowns too.
+      //
+      // AWAITED, deliberately. navigate() is on the next line and
+      // saveModelProfileByName makes three sequential Firestore round-trips, so
+      // an un-awaited call does not survive the unmount. The multi-model screen
+      // hit exactly this and left a note about it.
+      //
+      // allSettled semantics via the service itself: saveModelProfileByName
+      // never throws, so profile bookkeeping cannot turn a successful product
+      // save into an error toast.
+      await saveModelProfileByName(formData.brandName, formData.modelName, {
+        category:      formData.category,
+        description:   formData.description,
+        sellPrice:     formData.sellPrice,
+        costPrice,
+        warrantyYears: formData.warrantyYears,
+        buyType:       formData.buyType,
+        location:      formData.location,
+      });
 
       navigate('/inventory/view');
     } catch (error) {

@@ -11,8 +11,11 @@ import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurren
 import {
   UseInventoryMultiModelViewModelReturn,
   CATEGORIES, STOCKING_LOCATIONS, STATUSES, MultiModelEntry,
-} from '../viewModels/useInventoryMultiModelViewModel';
+} from '../viewModels/useInventoryMultimodelViewModel';
 import { LocationSelector, SerialLocationSelector } from './LocationSelector';
+import {
+  fetchModelProfileByName, modelProfilePatch, fetchSavedDescriptions,
+} from '../models/BrandModelService';
 
 interface Props extends UseInventoryMultiModelViewModelReturn {}
 
@@ -243,28 +246,108 @@ function ImageUploadPanel({
 }
 
 // ── Description Field ─────────────────────────────────────────────────────────
-// FULLY UNCONTROLLED: React sets the initial value once via defaultValue and then
-// never touches the DOM node's value again. This makes it immune to parent
-// re-renders — no matter what re-renders upstream while you type, the caret and
-// text stay put. We push the value up to the parent on blur (and on every change
-// too, but since the textarea is uncontrolled, those parent updates can't reset it).
-// `key={entryId}` guarantees the field resets correctly if the row identity changes.
+// The textarea stays UNCONTROLLED while you type — React does not rewrite the
+// DOM node on every keystroke, so the caret cannot jump when something upstream
+// re-renders. That part was right and is kept.
+//
+// What was wrong: `defaultValue` is read once, at mount, and never again. So a
+// description written into the row from anywhere other than this textarea — the
+// profile prefill, the dropdown below — updated the entry in state and was never
+// shown. The value was always arriving; the field just refused to display it.
+// That is the whole "description doesn't fetch" bug.
+//
+// The effect below closes that gap: when `value` changes to something this field
+// did not type, it is pushed into the DOM node directly. Skipped while the field
+// has focus, so an in-flight lookup can never yank text out from under the caret.
 function DescriptionField({
   entryId,
   value,
+  brandName,
+  modelName,
   updateEntry,
 }: {
   entryId: string;
   value: string;
+  brandName: string;
+  modelName: string;
   updateEntry: (id: string, patch: Partial<MultiModelEntry>) => void;
 }) {
+  const areaRef   = React.useRef<HTMLTextAreaElement>(null);
+  const lastTyped = React.useRef(value);
+
+  React.useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    if (value === lastTyped.current) return;      // this field's own keystrokes
+    if (document.activeElement === el) return;    // never interrupt typing
+    el.value = value || '';
+    lastTyped.current = value;
+  }, [value]);
+
+  // ── Saved descriptions, same idea as the brand and model dropdowns ────────
+  const [saved, setSaved]     = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    const brand = (brandName || '').trim();
+    if (!brand) { setSaved([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    fetchSavedDescriptions(brand, modelName)
+      .then(list => { if (!cancelled) setSaved(list); })
+      .catch(()  => { if (!cancelled) setSaved([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [brandName, modelName]);
+
+  const applySaved = (text: string) => {
+    if (!text) return;
+    const el = areaRef.current;
+    if (el) el.value = text;
+    lastTyped.current = text;
+    updateEntry(entryId, { description: text });
+  };
+
+  // One line of a saved description, enough to tell entries apart in a <select>.
+  const summarise = (text: string) => {
+    const oneLine = text.replace(/\s+/g, ' ').trim();
+    return oneLine.length > 70 ? `${oneLine.slice(0, 70)}…` : oneLine;
+  };
+
   return (
     <div style={{ gridColumn: '1 / -1' }}>
       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Description</label>
+
+      {(loading || saved.length > 0) && (
+        <select
+          value=""
+          disabled={loading}
+          onChange={ev => applySaved(ev.target.value)}
+          style={{
+            width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8,
+            fontSize: 13, outline: 'none', color: '#111827', backgroundColor: '#fff',
+            boxSizing: 'border-box', marginBottom: 6, cursor: 'pointer',
+          }}
+        >
+          <option value="">
+            {loading
+              ? 'Loading saved descriptions…'
+              : `— Use a saved description (${saved.length}) —`}
+          </option>
+          {saved.map((text, i) => (
+            <option key={i} value={text}>{summarise(text)}</option>
+          ))}
+        </select>
+      )}
+
       <textarea
+        ref={areaRef}
         key={entryId}
         defaultValue={value}
-        onChange={ev => updateEntry(entryId, { description: ev.target.value })}
+        onChange={ev => {
+          lastTyped.current = ev.target.value;
+          updateEntry(entryId, { description: ev.target.value });
+        }}
         rows={3}
         placeholder="Notes, specs, warranty terms. Press Enter for a new line —&#10;made in USA&#10;3 years warranty"
         style={{
@@ -279,12 +362,13 @@ function DescriptionField({
 
 // ── Model Card ─────────────────────────────────────────────────────────────────
 function ModelCard({
-  entry, index, modelOptions, modelOptionsLoading, validationErrors,
+  entry, index, brandName, modelOptions, modelOptionsLoading, validationErrors,
   updateEntry, removeEntry, setEntrySerial, setEntrySerialCity,
   setEntryImages, removeEntryImage, canRemove,
 }: {
   entry: MultiModelEntry;
   index: number;
+  brandName: string;
   modelOptions: { id: string; modelName: string; costPrice?: number; sellPrice?: number }[];
   modelOptionsLoading: boolean;
   validationErrors: { [k: string]: string };
@@ -298,6 +382,50 @@ function ModelCard({
 }) {
   const e = entry;
   const hasErr = (key: string) => !!validationErrors[`${key}_${index}`];
+
+  // ── Product profile prefill ─────────────────────────────────────────────
+  // Pulls back Type, Description, Retail Price, Warranty and Stocking Location
+  // from the last time this brand + model was entered.
+  //
+  // Driven from the view rather than from updateEntry() in the ViewModel for
+  // two reasons. First, the free-text model input fires updateEntry on every
+  // keystroke, so a lookup hung off it runs once per character — nine requests
+  // to type "Signum HM", eight of them wasted. Second, the row is patched
+  // through `updateEntry`, which is already a prop here, so the lookup needs
+  // nothing the ViewModel has to expose.
+  //
+  // `location` is remapped to `stockingLocation`: that is what this entry type
+  // calls the field, and writing the unmapped name is why location never
+  // appeared here either.
+  const entryRef = React.useRef(e);
+  entryRef.current = e;
+
+  const prefillFromModel = (rawModelName: string) => {
+    const modelName = (rawModelName || '').trim();
+    const brand     = (brandName || '').trim();
+    if (!modelName || !brand) return;
+
+    void (async () => {
+      try {
+        const profile = await fetchModelProfileByName(brand, modelName);
+        if (!profile) {
+          console.debug('[Inventory] no saved profile for', brand, '/', modelName);
+          return;
+        }
+        const current = entryRef.current;
+        // Discard if the row moved to a different model while this was in
+        // flight, otherwise one row's data lands on another's.
+        if ((current.modelName || '').trim().toLowerCase() !== modelName.toLowerCase()) return;
+
+        // NON-DESTRUCTIVE: only fields still blank on the CURRENT row are
+        // written, so anything typed during the lookup survives.
+        const patch = modelProfilePatch(current, profile, { location: 'stockingLocation' });
+        if (Object.keys(patch).length > 0) updateEntry(current.id, patch);
+      } catch (err) {
+        console.error('[Inventory] model profile prefill failed:', err);
+      }
+    })();
+  };
 
   return (
     <div style={{
@@ -343,11 +471,14 @@ function ModelCard({
                 value={modelOptions.find(m => m.modelName === e.modelName)?.id || ''}
                 onChange={ev => {
                   const found = modelOptions.find(m => m.id === ev.target.value);
-                  if (found) updateEntry(e.id, {
-                    modelName: found.modelName,
-                    costPrice: found.costPrice ?? e.costPrice,
-                    sellPrice: found.sellPrice ?? e.sellPrice,
-                  });
+                  if (found) {
+                    updateEntry(e.id, {
+                      modelName: found.modelName,
+                      costPrice: found.costPrice ?? e.costPrice,
+                      sellPrice: found.sellPrice ?? e.sellPrice,
+                    });
+                    prefillFromModel(found.modelName);
+                  }
                   else updateEntry(e.id, { modelName: '' });
                 }}
                 style={{ ...inp, flex: 1 }}
@@ -361,6 +492,7 @@ function ModelCard({
                 placeholder="New model name"
                 value={modelOptions.find(m => m.modelName === e.modelName) ? '' : e.modelName}
                 onChange={ev => updateEntry(e.id, { modelName: ev.target.value })}
+                onBlur={ev => prefillFromModel(ev.target.value)}
                 style={{ ...inp, flex: 1 }}
               />
             </div>
@@ -370,6 +502,7 @@ function ModelCard({
               placeholder="Enter model name"
               value={e.modelName}
               onChange={ev => updateEntry(e.id, { modelName: ev.target.value })}
+              onBlur={ev => prefillFromModel(ev.target.value)}
               style={hasErr('model') ? inpErr : inp}
             />
           )}
@@ -467,6 +600,8 @@ function ModelCard({
         <DescriptionField
           entryId={e.id}
           value={e.description}
+          brandName={brandName}
+          modelName={e.modelName}
           updateEntry={updateEntry}
         />
 
@@ -636,6 +771,7 @@ export const InventoryMultiModelView: React.FC<Props> = ({
               key={entry.id}
               entry={entry}
               index={i}
+              brandName={selectedBrandName}
               modelOptions={modelOptions}
               modelOptionsLoading={modelOptionsLoading}
               validationErrors={validationErrors}

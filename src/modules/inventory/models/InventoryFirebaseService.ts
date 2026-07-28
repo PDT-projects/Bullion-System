@@ -303,7 +303,35 @@ function transformDocToTransfer(docSnap: any): ProductTransfer {
 }
 
 export interface BrandDoc  { id: string; name: string; createdAt?: string; }
-export interface ModelDoc  { id: string; name: string; brandId: string; costPrice?: number; sellPrice?: number; createdAt?: string; }
+/**
+ * A model under a brand.
+ *
+ * The profile fields matter: `brandModels` docs also store category,
+ * description, warrantyYears, buyType and location (written by
+ * BrandModelService.saveModelProfileByName after every product save). This
+ * interface used to stop at the two prices, and transformDocToModel mapped
+ * exactly those two — so every consumer of THIS service saw a model with no
+ * description, no matter what Firestore actually held.
+ *
+ * BrandModelService.ModelEntry describes the same documents. Keep the two in
+ * step; they are two windows onto one collection.
+ */
+export interface ModelDoc  {
+  id: string;
+  name: string;
+  brandId: string;
+  costPrice?: number;
+  sellPrice?: number;
+  createdAt?: string;
+  // ── Product profile ──────────────────────────────────────────────────────
+  category?:      string;
+  description?:   string;
+  warrantyYears?: number;
+  buyType?:       string;
+  location?:      string;
+  /** ISO timestamp of the purchase that last refreshed costPrice. */
+  lastCostAt?:    string;
+}
 
 function transformDocToBrand(docSnap: any): BrandDoc {
   const d = docSnap.data();
@@ -319,6 +347,14 @@ function transformDocToModel(docSnap: any): ModelDoc {
     costPrice: d.costPrice ?? undefined,
     sellPrice: d.sellPrice ?? undefined,
     createdAt: d.createdAt || '',
+    // Anything not mapped here is invisible to the UI regardless of what
+    // Firestore holds. The profile fields were the omission.
+    category:      d.category      ?? undefined,
+    description:   d.description   ?? undefined,
+    warrantyYears: d.warrantyYears ?? undefined,
+    buyType:       d.buyType       ?? undefined,
+    location:      d.location      ?? undefined,
+    lastCostAt:    d.lastCostAt    ?? undefined,
   };
 }
 
