@@ -1,7 +1,7 @@
 // routes.tsx — updated
-// FIX: Added missing Inventory routes — Add Returned Inventory, Damaged
-//      Inventory, and Inventory Report — dashboard linked to these but no
-//      matching route existed (hence "page not opening up").
+// CHANGE: Added /payroll/* unified routes for the merged Payroll module.
+//         Old /salary/* and /commission/* routes kept as redirects for
+//         any bookmarks or links that still point to them.
 
 import React, { useState } from 'react';
 import { createBrowserRouter, useNavigate, Navigate, Outlet } from 'react-router-dom';
@@ -11,9 +11,12 @@ import { ReportsPage } from './features/finance/ReportsPage';
 
 import { EmployeeListWrapper, EmployeeCreateWrapper, EmployeeEditWrapper, EmployeeDeleteWrapper } from './modules/employee';
 import { LoanDashboardWrapper, LoanListWrapper, LoanFormWrapper, LoanPaymentWrapper } from './modules/loans';
-import { SalaryListWrapper, SalaryCreateWrapper, SalaryEditWrapper, SalaryDeleteWrapper, SalaryDashboardWrapper } from './modules/salary';
+
+// ── Payroll (unified) ──────────────────────────────────────────────────────
+import { PayrollDashboardWrapper } from './modules/payroll';
+// Salary + Commission wrappers are used internally by PayrollDashboardWrapper — no direct import needed here
+
 import { BillsListWrapper, BillsCreateWrapper, BillsEditWrapper, BillsDeleteWrapper } from './modules/bills';
-import { CommissionSlabListWrapper, CommissionCalculationWrapper, CommissionReportWrapper } from './modules/commission';
 import {
   BankingDashboardWrapper, BankListWrapper, BankCreateWrapper, BankEditWrapper, BankDeleteWrapper,
   TransferListWrapper, TransferCreateWrapper, CashListWrapper, CashCreateWrapper,
@@ -43,11 +46,15 @@ import { UserManagement } from './modules/user-management';
 import { AssetsManagement } from './modules/assets-management';
 import { ProtectedRoute as ScreenProtectedRoute } from './modules/user-management/components/protectedroute';
 
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
+
+// ─── Page layouts ─────────────────────────────────────────────────────────────
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -84,6 +91,8 @@ function DashboardLayout() {
   return (<AppLayout activeModule="dashboard"><Dashboard /></AppLayout>);
 }
 
+// ─── Route components ─────────────────────────────────────────────────────────
+
 function EmployeeListRoute()   { return <EmployeeListWrapper />; }
 function EmployeeCreateRoute() { return <EmployeeCreateWrapper />; }
 function EmployeeEditRoute()   { return <EmployeeEditWrapper />; }
@@ -98,23 +107,13 @@ function LoanFormPayableRoute()      { return <LoanFormWrapper defaultType="Paya
 function LoanFormReceivableRoute()   { return <LoanFormWrapper defaultType="Receivable" />; }
 function LoanPaymentRoute()          { return <LoanPaymentWrapper />; }
 
-function SalaryListAllRoute()      { return <SalaryListWrapper type="all" title="All Salaries" />; }
-function SalaryListRegularRoute()  { return <SalaryListWrapper type="regular" title="Regular Salaries" />; }
-function SalaryListAdvanceRoute()  { return <SalaryListWrapper type="advance" title="Advance Salaries" />; }
-function SalaryCreateRegularRoute(){ return <SalaryCreateWrapper type="regular" />; }
-function SalaryCreateAdvanceRoute(){ return <SalaryCreateWrapper type="advance" />; }
-function SalaryEditRoute()      { return <SalaryEditWrapper />; }
-function SalaryDeleteRoute()    { return <SalaryDeleteWrapper />; }
-function SalaryDashboardRoute() { return <SalaryDashboardWrapper />; }
+// ── Payroll ────────────────────────────────────────────────────────────────
+function PayrollDashboardRoute() { return <PayrollDashboardWrapper />; }
 
 function BillsListRoute()   { return <BillsListWrapper />; }
 function BillsCreateRoute() { return <BillsCreateWrapper />; }
 function BillsEditRoute()   { return <BillsEditWrapper />; }
 function BillsDeleteRoute() { return <BillsDeleteWrapper />; }
-
-function CommissionSlabsRoute()      { return <CommissionSlabListWrapper />; }
-function CommissionCalculationRoute(){ return <CommissionCalculationWrapper />; }
-function CommissionReportsRoute()    { return <CommissionReportWrapper />; }
 
 function BankingDashboardRoute() { return <BankingDashboardWrapper />; }
 function BankListRoute()         { return <BankListWrapper />; }
@@ -144,16 +143,16 @@ function InventoryAddReturnedRoute()    { return <InventoryReturnWrapper />; }
 function DamagedInventoryRoute()        { return <DamagedInventoryWrapper />; }
 function InventoryReportRoute()         { return <InventoryReportWrapper />; }
 
-function InvoiceListRoute()   { return <InvoiceListWrapper />; }
-function InvoiceFormRoute()   { return <InvoiceFormWrapper />; }
-function InvoiceEditRoute()   { return <InvoiceFormWrapper />; }
-function InvoiceDeleteRoute() { return <InvoiceDeleteWrapper />; }
-function InvoiceReportRoute() { return <InvoiceReportWrapper />; }
+function InvoiceListRoute()     { return <InvoiceListWrapper />; }
+function InvoiceFormRoute()     { return <InvoiceFormWrapper />; }
+function InvoiceEditRoute()     { return <InvoiceFormWrapper />; }
+function InvoiceDeleteRoute()   { return <InvoiceDeleteWrapper />; }
+function InvoiceReportRoute()   { return <InvoiceReportWrapper />; }
 function DeletedInvoicesRoute() { return <DeletedInvoicesWrapper />; }
 
-function AgainstInvoiceRoute()      { return <AgainstInvoiceWrapper />; }
-function DummyInvoiceListRoute()    { return <DummyInvoiceListView />; }
-function DummyInvoiceFormRoute()    { return <DummyInvoiceFormWrapper />; }
+function AgainstInvoiceRoute()   { return <AgainstInvoiceWrapper />; }
+function DummyInvoiceListRoute() { return <DummyInvoiceListView />; }
+function DummyInvoiceFormRoute() { return <DummyInvoiceFormWrapper />; }
 
 function TransactionListRoute()   { return <TransactionListWrapper />; }
 function TransactionCreateRoute() { return <TransactionCreateWrapper />; }
@@ -168,11 +167,14 @@ function BudgetDeleteRoute() { return <BudgetDeleteWrapper />; }
 
 function PayableToFuturisticRoute() { return <PayableToFuturisticWrapper />; }
 
+// ─── Router ───────────────────────────────────────────────────────────────────
+
 export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
-  { path: '/', element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>) },
+  { path: '/login',     element: <LoginPage /> },
+  { path: '/',          element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>) },
   { path: '/dashboard', element: (<ProtectedRoute><DashboardLayout /></ProtectedRoute>) },
 
+  // ── Employees ──────────────────────────────────────────────────────────────
   {
     path: '/employees',
     element: (<ProtectedRoute><OutletLayout activeModule="employees" /></ProtectedRoute>),
@@ -183,35 +185,45 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Employee"><EmployeeDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
+
+  // ── Loans ──────────────────────────────────────────────────────────────────
   {
     path: '/loans',
     element: (<ProtectedRoute><OutletLayout activeModule="loans" /></ProtectedRoute>),
     children: [
-      { index: true,               element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanDashboardRoute /></ScreenProtectedRoute> },
-      { path: 'all',                element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanListRoute /></ScreenProtectedRoute> },
-      { path: 'payable',            element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanListPayableRoute /></ScreenProtectedRoute> },
-      { path: 'receivable',         element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanListReceivableRoute /></ScreenProtectedRoute> },
-      { path: 'new',                element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanFormRoute /></ScreenProtectedRoute> },
-      { path: 'create',             element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanFormRoute /></ScreenProtectedRoute> },
-      { path: 'create-payable',     element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanFormPayableRoute /></ScreenProtectedRoute> },
-      { path: 'create-receivable',  element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanFormReceivableRoute /></ScreenProtectedRoute> },
-      { path: ':id/payment',        element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanPaymentRoute /></ScreenProtectedRoute> },
+      { index: true,              element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanDashboardRoute /></ScreenProtectedRoute> },
+      { path: 'all',              element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanListRoute /></ScreenProtectedRoute> },
+      { path: 'payable',          element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanListPayableRoute /></ScreenProtectedRoute> },
+      { path: 'receivable',       element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanListReceivableRoute /></ScreenProtectedRoute> },
+      { path: 'new',              element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanFormRoute /></ScreenProtectedRoute> },
+      { path: 'create',           element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanFormRoute /></ScreenProtectedRoute> },
+      { path: 'create-payable',   element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanFormPayableRoute /></ScreenProtectedRoute> },
+      { path: 'create-receivable',element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanFormReceivableRoute /></ScreenProtectedRoute> },
+      { path: ':id/payment',      element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanPaymentRoute /></ScreenProtectedRoute> },
     ],
   },
+
+  // ── PAYROLL (unified single page — all navigation is internal via tabs) ───────
   {
-    path: '/salary',
-    element: (<ProtectedRoute><OutletLayout activeModule="salary" /></ProtectedRoute>),
-    children: [
-      { index: true,             element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryDashboardRoute /></ScreenProtectedRoute> },
-      { path: 'all',              element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryListAllRoute /></ScreenProtectedRoute> },
-      { path: 'regular',          element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryListRegularRoute /></ScreenProtectedRoute> },
-      { path: 'advance',          element: <ScreenProtectedRoute requiredScreen="Salary Dashboard"><SalaryListAdvanceRoute /></ScreenProtectedRoute> },
-      { path: 'create-regular',   element: <ScreenProtectedRoute requiredScreen="Create Salary"><SalaryCreateRegularRoute /></ScreenProtectedRoute> },
-      { path: 'create-advance',   element: <ScreenProtectedRoute requiredScreen="Create Salary"><SalaryCreateAdvanceRoute /></ScreenProtectedRoute> },
-      { path: ':id/edit',         element: <ScreenProtectedRoute requiredScreen="Edit Salary"><SalaryEditRoute /></ScreenProtectedRoute> },
-      { path: ':id/delete',       element: <ScreenProtectedRoute requiredScreen="Delete Salary"><SalaryDeleteRoute /></ScreenProtectedRoute> },
-    ],
+    path: '/payroll',
+    element: (
+      <ProtectedRoute>
+        <AppLayout activeModule="payroll">
+          <ScreenProtectedRoute requiredScreen="Salary Dashboard">
+            <PayrollDashboardRoute />
+          </ScreenProtectedRoute>
+        </AppLayout>
+      </ProtectedRoute>
+    ),
   },
+
+  // ── OLD /salary/* and /commission/* — all redirect to /payroll ──────────────
+  { path: '/salary',     element: <Navigate to="/payroll" replace /> },
+  { path: '/salary/*',   element: <Navigate to="/payroll" replace /> },
+  { path: '/commission', element: <Navigate to="/payroll" replace /> },
+  { path: '/commission/*', element: <Navigate to="/payroll" replace /> },
+
+  // ── Bills ──────────────────────────────────────────────────────────────────
   {
     path: '/bills',
     element: (<ProtectedRoute><OutletLayout activeModule="bills" /></ProtectedRoute>),
@@ -222,16 +234,8 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Bill"><BillsDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
-  {
-    path: '/commission',
-    element: (<ProtectedRoute><OutletLayout activeModule="commission" /></ProtectedRoute>),
-    children: [
-      { index: true,       element: <ScreenProtectedRoute requiredScreen="Commission Slabs"><CommissionSlabsRoute /></ScreenProtectedRoute> },
-      { path: 'slabs',     element: <ScreenProtectedRoute requiredScreen="Commission Slabs"><CommissionSlabsRoute /></ScreenProtectedRoute> },
-      { path: 'calculate', element: <ScreenProtectedRoute requiredScreen="Commission Calculation"><CommissionCalculationRoute /></ScreenProtectedRoute> },
-      { path: 'reports',   element: <ScreenProtectedRoute requiredScreen="Commission Reports"><CommissionReportsRoute /></ScreenProtectedRoute> },
-    ],
-  },
+
+  // ── Banking ────────────────────────────────────────────────────────────────
   {
     path: '/banking',
     element: (<ProtectedRoute><OutletLayout activeModule="banking" /></ProtectedRoute>),
@@ -248,6 +252,8 @@ export const router = createBrowserRouter([
       { path: 'activity',         element: <ScreenProtectedRoute requiredScreen="Bank Activity Report"><BankActivityRoute /></ScreenProtectedRoute> },
     ],
   },
+
+  // ── Transactions ───────────────────────────────────────────────────────────
   {
     path: '/transactions',
     element: (<ProtectedRoute><OutletLayout activeModule="transactions" /></ProtectedRoute>),
@@ -259,6 +265,8 @@ export const router = createBrowserRouter([
       { path: 'pending',    element: <ScreenProtectedRoute requiredScreen="Pending Payments"><PendingPaymentsRoute /></ScreenProtectedRoute> },
     ],
   },
+
+  // ── Invoices ───────────────────────────────────────────────────────────────
   {
     path: '/invoices',
     element: (<ProtectedRoute><OutletLayout activeModule="invoices" /></ProtectedRoute>),
@@ -269,11 +277,12 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Invoice"><InvoiceDeleteRoute /></ScreenProtectedRoute> },
       { path: 'reports',    element: <ScreenProtectedRoute requiredScreen="Invoice Reports"><InvoiceReportRoute /></ScreenProtectedRoute> },
       { path: 'deleted',    element: <ScreenProtectedRoute requiredScreen="Deleted Invoices"><DeletedInvoicesRoute /></ScreenProtectedRoute> },
-      { path: 'dummy',        element: <DummyInvoiceListRoute /> },
-      { path: 'dummy/new',    element: <DummyInvoiceFormRoute /> },
-      { path: 'dummy/:id',    element: <DummyInvoiceFormRoute /> },
+      { path: 'dummy',      element: <DummyInvoiceListRoute /> },
+      { path: 'dummy/new',  element: <DummyInvoiceFormRoute /> },
+      { path: 'dummy/:id',  element: <DummyInvoiceFormRoute /> },
     ],
   },
+
   {
     path: '/against-the-invoice',
     element: (
@@ -285,7 +294,7 @@ export const router = createBrowserRouter([
     ),
   },
 
-  // ── Inventory ─────────────────────────────────────────────
+  // ── Inventory ──────────────────────────────────────────────────────────────
   {
     path: '/inventory',
     element: (<ProtectedRoute><OutletLayout activeModule="inventory" /></ProtectedRoute>),
@@ -315,6 +324,8 @@ export const router = createBrowserRouter([
       { path: 'new', element: <ScreenProtectedRoute requiredScreen="Create Product Transfer"><ProductTransferNewRoute /></ScreenProtectedRoute> },
     ],
   },
+
+  // ── Budgets ────────────────────────────────────────────────────────────────
   {
     path: '/budgets',
     element: (<ProtectedRoute><OutletLayout activeModule="budgets" /></ProtectedRoute>),
@@ -325,6 +336,8 @@ export const router = createBrowserRouter([
       { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Budget"><BudgetDeleteRoute /></ScreenProtectedRoute> },
     ],
   },
+
+  // ── Other ──────────────────────────────────────────────────────────────────
   {
     path: '/assets-management',
     element: (<ProtectedRoute><OutletLayout activeModule="assets-management" /></ProtectedRoute>),
