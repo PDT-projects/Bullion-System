@@ -10,7 +10,7 @@ import { useUserPermissions } from '../../modules/user-management/hooks/useUserP
 import {
   TrendingUp, TrendingDown, Wallet, Building2, DollarSign,
   Activity, FileText, AlertCircle, RefreshCw, Loader2, BarChart2,
-  ChevronDown, Check, Package, Percent, ArrowLeftRight,
+  ChevronDown, Check, Package, ArrowLeftRight,
   type LucideIcon,
 } from 'lucide-react';
 import { CurrencyDropdown, CurrencyRows } from './CurrencyPicker';
@@ -469,14 +469,10 @@ export function Dashboard() {
           icon={Package} iconColor="#d97706" iconBg="#fffbeb"
           borderColor="#fde68a" hoverBorder="#f59e0b" hoverBg="#fffbeb"
           onClick={() => navigate('/inventory')} />
-        <QuickAccessCard label="Salaries"
-          icon={DollarSign} iconColor="#0f766e" iconBg="#f0fdfa"
-          borderColor="#99f6e4" hoverBorder="#14b8a6" hoverBg="#f0fdfa"
-          onClick={() => navigate('/salaries')} />
-        <QuickAccessCard label="Commission"
-          icon={Percent} iconColor="#4338ca" iconBg="#eef2ff"
-          borderColor="#c7d2fe" hoverBorder="#6366f1" hoverBg="#eef2ff"
-          onClick={() => navigate('/commission')} />
+        <QuickAccessCard label="Payrolls"
+          icon={DollarSign} iconColor="#0f172a" iconBg="#f1f5f9"
+          borderColor="#e2e8f0" hoverBorder="#0f172a" hoverBg="#f8fafc"
+          onClick={() => navigate('/payroll')} />
         <QuickAccessCard label="Reports"
           icon={BarChart2} iconColor="#1d4ed8" iconBg="#eff6ff"
           borderColor="#bfdbfe" hoverBorder="#3b82f6" hoverBg="#eff6ff"

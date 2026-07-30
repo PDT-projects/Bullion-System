@@ -1,3 +1,7 @@
+// src/modules/payroll/index.ts
+// This is the main entry point imported by routes.tsx:
+// import { PayrollDashboardWrapper } from './modules/payroll';
+
 // Payroll Module - Public API
 // Single unified export replacing separate salary + commission modules
 
