@@ -19,9 +19,10 @@ export class PayrollBatchFirebaseService {
   // ── Batches ────────────────────────────────────────────────────────────────
 
   static async fetchAllBatches(): Promise<PayrollBatch[]> {
-    const q    = query(collection(db, BATCHES_COL), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollBatch));
+    // No orderBy on single field avoids index issues; sort client-side
+    const snap = await getDocs(collection(db, BATCHES_COL));
+    const batches = snap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollBatch));
+    return batches.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   static async fetchBatchById(id: string): Promise<PayrollBatch | null> {
@@ -51,9 +52,23 @@ export class PayrollBatchFirebaseService {
   // ── Rows ───────────────────────────────────────────────────────────────────
 
   static async fetchRowsByBatch(batchId: string): Promise<PayrollBatchRow[]> {
-    const q    = query(collection(db, ROWS_COL), where('batchId', '==', batchId), orderBy('employeeName', 'asc'));
+    // No orderBy — avoids Firestore composite index requirement.
+    // Sort client-side instead.
+    const q    = query(collection(db, ROWS_COL), where('batchId', '==', batchId));
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollBatchRow));
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollBatchRow));
+    return rows.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+  }
+
+  static async fetchAllRows(): Promise<PayrollBatchRow[]> {
+    // Fetch all rows across all batches in one query — no composite index needed
+    const snap = await getDocs(collection(db, ROWS_COL));
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollBatchRow));
+    // Sort newest batch first, then by name within each batch
+    return rows.sort((a, b) => {
+      if (a.salaryMonth !== b.salaryMonth) return b.salaryMonth.localeCompare(a.salaryMonth);
+      return a.employeeName.localeCompare(b.employeeName);
+    });
   }
 
   static async createRow(data: Omit<PayrollBatchRow, 'id'>): Promise<PayrollBatchRow> {
