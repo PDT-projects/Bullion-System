@@ -17,17 +17,19 @@
 
 import React, { useMemo, useState } from 'react';
 import {
-  ChevronRight, TrendingUp, TrendingDown, Percent,
+  ChevronRight, TrendingUp, TrendingDown, Package, Percent,
   Download, Calendar, Layers, Minimize2, Maximize2, DollarSign,
+  CheckCircle2, AlertTriangle, MinusCircle,
 } from 'lucide-react';
 import { Transaction } from '../../modules/transactions/models/types';
 
 interface Props {
   transactions: Transaction[];
-  invoices?:    any[];
+  invoices:     any[];
   onBack?:      () => void;
 }
 
+// Balance-sheet items excluded from P&L calculations
 // Balance-sheet items excluded from P&L calculations
 const EXCLUDED_CATEGORIES = new Set<string>([
   'Account Payable',
@@ -35,8 +37,11 @@ const EXCLUDED_CATEGORIES = new Set<string>([
   'Loan Receivable',
   'Loan Received',
   'Purchase Order',
+  // Supplier settlement — the cost is already recognised in COGS via the
+  // invoice's supplierCostTotal. Paying the supplier only clears the payable,
+  // so booking it as an Operating Expense would count the same cost twice.
+  'Sold Goods Payment',
 ]);
-
 // Complete list of Operating Expense sub-categories the P&L should ALWAYS
 // display — even when no transaction has been booked against them yet.
 // This makes the statement look "complete" so the reader can see the full
@@ -49,7 +54,6 @@ const KNOWN_OPEX_CATEGORIES: string[] = [
   'Grocery & Stationery',
   'Advertising and Marketing',
   'Supplier Payment',
-  'Sold Goods Payment',
   'Logistics & Freight',
   'Bank Charges',
   'Travelling/Accommodations & Food',
@@ -144,7 +148,7 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
   const onToChange   = (v: string) => { setTo(v);   setPreset('custom'); };
 
   // ── Filter data by date range ──────────────────────────────────────────
-  const { txInRange } = useMemo(() => {
+  const { txInRange, invInRange } = useMemo(() => {
     const inRange = (dateStr: string) => {
       if (!dateStr) return false;
       const d = dateStr.slice(0, 10);
@@ -156,13 +160,14 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
       if (ap === 'pending_approval' || ap === 'rejected') return false;
       return true;
     });
-    return { txInRange };
-  }, [transactions, from, to]);
+    const invInRange = (invoices || []).filter(i => inRange(i.date) && i.status !== 'deleted');
+    return { txInRange, invInRange };
+  }, [transactions, invoices, from, to]);
 
   // ── Build the tree ─────────────────────────────────────────────────────
-  const { revenueSection, opexSection, excludedNodes,
-          totalRevenue, totalExpense, operatingIncome,
-          netMargin, allExpandableIds } = useMemo(() => {
+  const { revenueSection, cogsSection, opexSection, excludedNodes,
+          totalRevenue, cogsTotal, totalExpense, grossProfit, operatingIncome,
+          grossMargin, netMargin, allExpandableIds } = useMemo(() => {
 
     // Group inflow + outflow transactions by subCategory, keeping the
     // individual transactions inside for the detail level.
@@ -250,12 +255,71 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
     const totalRevenue = revenueCatNodes.reduce((s, n) => s + n.amount, 0);
     const totalExpense = opexCatNodes.reduce((s, n) => s + n.amount, 0);
 
+    // COGS section — build from invoices, one child per invoice per cost type
+    let supplierTotal = 0;
+    let purchaseTotal = 0;
+    const supplierChildren: TreeNode[] = [];
+    const purchaseChildren: TreeNode[] = [];
+    for (const inv of invInRange) {
+      const sc = Number(inv.supplierCostTotal) || 0;
+      const pc = Number(inv.purchaseCostTotal) || 0;
+      const invLabel = `${inv.invoiceNumber || 'INV-?'} · ${inv.customerName || 'Customer'}`;
+      const invMeta  = fmtDate(inv.date);
+      if (sc > 0) {
+        supplierTotal += sc;
+        supplierChildren.push({
+          id: `cogs-sup-${inv.id || inv.invoiceNumber}`,
+          label: invLabel, amount: sc, meta: invMeta, level: 2, tone: 'cogs',
+        });
+      }
+      if (pc > 0) {
+        purchaseTotal += pc;
+        purchaseChildren.push({
+          id: `cogs-pur-${inv.id || inv.invoiceNumber}`,
+          label: invLabel, amount: pc, meta: invMeta, level: 2, tone: 'cogs',
+        });
+      }
+    }
+    supplierChildren.sort((a, b) => b.amount - a.amount);
+    purchaseChildren.sort((a, b) => b.amount - a.amount);
+
+    // COGS is ALWAYS split into two rows — Supplier Cost + Purchase Cost —
+    // even when one or both are zero for the period. This keeps the P&L
+    // shape consistent and shows the reader both cost pathways at once.
+    const cogsCatNodes: TreeNode[] = [
+      {
+        id: 'cogs-cat-supplier',
+        label: 'Supplier Cost',
+        amount: supplierTotal,
+        meta: supplierChildren.length === 0
+          ? 'no invoices'
+          : `${supplierChildren.length} ${supplierChildren.length === 1 ? 'invoice' : 'invoices'}`,
+        level: 1, tone: 'cogs', children: supplierChildren,
+      },
+      {
+        id: 'cogs-cat-purchase',
+        label: 'Purchase Cost',
+        amount: purchaseTotal,
+        meta: purchaseChildren.length === 0
+          ? 'no invoices'
+          : `${purchaseChildren.length} ${purchaseChildren.length === 1 ? 'invoice' : 'invoices'}`,
+        level: 1, tone: 'cogs', children: purchaseChildren,
+      },
+    ];
+    const cogsTotal = supplierTotal + purchaseTotal;
+
     // Section-level nodes
     const revenueSection: TreeNode = {
       id: 'section-revenue',
       label: 'Revenue', amount: totalRevenue,
       meta: `${revenueCatNodes.length} ${revenueCatNodes.length === 1 ? 'category' : 'categories'}`,
       level: 0, tone: 'revenue', children: revenueCatNodes,
+    };
+    const cogsSection: TreeNode = {
+      id: 'section-cogs',
+      label: 'Cost of Goods Sold', amount: cogsTotal,
+      meta: `${cogsCatNodes.length} ${cogsCatNodes.length === 1 ? 'category' : 'categories'}`,
+      level: 0, tone: 'cogs', children: cogsCatNodes,
     };
     const opexSection: TreeNode = {
       id: 'section-opex',
@@ -264,8 +328,10 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
       level: 0, tone: 'opex', children: opexCatNodes,
     };
 
-    // Aggregates — Revenue minus Operating Expenses = Net Income
-    const operatingIncome = totalRevenue - totalExpense;
+    // Aggregates
+    const grossProfit     = totalRevenue - cogsTotal;
+    const grossMargin     = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    const operatingIncome = grossProfit - totalExpense;
     const netMargin       = totalRevenue > 0 ? (operatingIncome / totalRevenue) * 100 : 0;
 
     // Collect every expandable ID (for Expand All / Collapse All)
@@ -276,16 +342,16 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
       }
     };
     const allExpandableIds: string[] = [];
-    [revenueSection, opexSection].forEach(s => collect(s, allExpandableIds));
+    [revenueSection, cogsSection, opexSection].forEach(s => collect(s, allExpandableIds));
 
     return {
-      revenueSection, opexSection,
+      revenueSection, cogsSection, opexSection,
       excludedNodes: excludedCatNodes,
-      totalRevenue, totalExpense,
-      operatingIncome, netMargin,
+      totalRevenue, cogsTotal, totalExpense,
+      grossProfit, operatingIncome, grossMargin, netMargin,
       allExpandableIds,
     };
-  }, [txInRange]);
+  }, [txInRange, invInRange]);
 
   // ── Expand/collapse state ─────────────────────────────────────────────
   // Only the three top-level SECTIONS (Revenue / COGS / OpEx) are open on
@@ -293,7 +359,7 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
   // clean summary. Click any category chevron to drill into its
   // transactions / per-invoice details.
   const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(['section-revenue', 'section-opex'])
+    () => new Set(['section-revenue', 'section-cogs', 'section-opex'])
   );
 
   const toggle = (id: string) => setExpanded(prev => {
@@ -301,7 +367,7 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const expandAll   = () => setExpanded(new Set(['section-revenue', 'section-opex', ...allExpandableIds]));
+  const expandAll   = () => setExpanded(new Set(['section-revenue', 'section-cogs', 'section-opex', ...allExpandableIds]));
   const collapseAll = () => setExpanded(new Set());
 
   // ── CSV export ────────────────────────────────────────────────────────
@@ -317,9 +383,14 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
     };
     dump(revenueSection);
     rows.push('');
+    dump(cogsSection);
+    rows.push('');
+    rows.push(`Gross Profit,${grossProfit.toFixed(2)}`);
+    rows.push(`Gross Margin %,${grossMargin.toFixed(2)}`);
+    rows.push('');
     dump(opexSection);
     rows.push('');
-    rows.push(`${operatingIncome >= 0 ? 'Net Profit' : 'Net Loss'},${operatingIncome.toFixed(2)}`);
+    rows.push(`Operating Income,${operatingIncome.toFixed(2)}`);
     rows.push(`Net Margin %,${netMargin.toFixed(2)}`);
 
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
@@ -414,9 +485,10 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
       </div>
 
       {/* ── Summary tiles ────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12 }}>
-        <SummaryTile icon={<TrendingUp size={18} />}   label="Revenue"      value={totalRevenue}  fg="#059669" bg="#ecfdf5" />
-        <SummaryTile icon={<TrendingDown size={18} />} label="Op. Expenses" value={totalExpense}   fg="#dc2626" bg="#fef2f2" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12 }}>
+        <SummaryTile icon={<TrendingUp size={18} />}   label="Revenue"   value={totalRevenue}    fg="#059669" bg="#ecfdf5" />
+        <SummaryTile icon={<Package size={18} />}       label="COGS"      value={cogsTotal}       fg="#c2410c" bg="#fff7ed" />
+        <SummaryTile icon={<TrendingDown size={18} />} label="Op. Expenses" value={totalExpense}  fg="#dc2626" bg="#fef2f2" />
         <SummaryTile icon={<Percent size={18} />}
           label={operatingIncome >= 0 ? 'Net Income' : 'Net Loss'}
           value={operatingIncome}
@@ -447,6 +519,7 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <LegendBadge color="#059669" label="Revenue" />
+            <LegendBadge color="#c2410c" label="COGS" />
             <LegendBadge color="#dc2626" label="Expenses" />
           </div>
         </div>
@@ -469,18 +542,37 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
           <TreeSection node={revenueSection} expanded={expanded} toggle={toggle}
                         emptyMessage="No revenue in this period." />
 
+          {/* COGS */}
+          <TreeSection node={cogsSection} expanded={expanded} toggle={toggle}
+                        emptyMessage="No cost of goods sold in this period." />
+
+          {/* Gross Profit total row */}
+          <TotalRow label="Gross Profit"
+                    value={grossProfit}
+                    marginPct={grossMargin}
+                    tone={grossProfit >= 0 ? 'positive' : 'negative'} />
+
           {/* Op Ex */}
           <TreeSection node={opexSection} expanded={expanded} toggle={toggle}
                         emptyMessage="No operating expenses in this period." />
 
-          {/* Net Profit / Net Loss — the headline number */}
-          <TotalRow label={operatingIncome >= 0 ? 'Net Profit' : 'Net Loss'}
+          {/* Operating Income — the headline number */}
+          <TotalRow label={operatingIncome >= 0 ? 'Operating Income' : 'Operating Loss'}
                     value={operatingIncome}
                     marginPct={netMargin}
                     tone={operatingIncome >= 0 ? 'positive' : 'negative'}
                     highlight />
         </div>
       </div>
+
+      {/* ── Final status banner — big Profit / Loss / Break-Even ──────
+          Sits after the statement so the reader can see the bottom-line
+          verdict at a glance. Color, icon and wording flip with the sign. */}
+      <StatusBanner
+        amount={operatingIncome}
+        margin={netMargin}
+        revenue={totalRevenue}
+      />
 
       {/* ── Balance-sheet items footer ───────────────────────────────── */}
       {excludedNodes.length > 0 && (
@@ -760,6 +852,106 @@ const TotalRow: React.FC<{
         <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
         {fmt(Math.abs(value))}
       </span>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Final Profit / Loss / Break-Even status banner
+// ─────────────────────────────────────────────────────────────────────────
+const StatusBanner: React.FC<{
+  amount: number;      // operatingIncome (can be negative)
+  margin: number;      // net margin %
+  revenue: number;     // total revenue (used to decide "break-even" vs "no activity")
+}> = ({ amount, margin, revenue }) => {
+
+  // Decide status:
+  //   • revenue = 0 and amount = 0 → "No activity"
+  //   • |amount| < 0.5 AED and revenue > 0 → "Break-Even"
+  //   • amount > 0 → "Profit"
+  //   • amount < 0 → "Loss"
+  const noActivity  = revenue === 0 && amount === 0;
+  const breakEven   = !noActivity && Math.abs(amount) < 0.5;
+  const isProfit    = !noActivity && !breakEven && amount > 0;
+  const isLoss      = !noActivity && !breakEven && amount < 0;
+
+  let bgFrom  = '#f1f5f9';
+  let bgTo    = '#e2e8f0';
+  let accent  = '#64748b';
+  let icon: React.ReactNode = <MinusCircle size={22} />;
+  let label   = 'No activity';
+  let sub     = 'There were no transactions in this period.';
+
+  if (breakEven) {
+    bgFrom = '#eff6ff'; bgTo = '#dbeafe'; accent = '#2563eb';
+    icon   = <MinusCircle size={22} />;
+    label  = 'Break-Even';
+    sub    = 'Revenue exactly offset costs — no profit, no loss.';
+  } else if (isProfit) {
+    bgFrom = '#ecfdf5'; bgTo = '#d1fae5'; accent = '#059669';
+    icon   = <CheckCircle2 size={22} />;
+    label  = 'Profit';
+    sub    = `Net margin ${margin.toFixed(1)}%. The business made money this period.`;
+  } else if (isLoss) {
+    bgFrom = '#fef2f2'; bgTo = '#fee2e2'; accent = '#dc2626';
+    icon   = <AlertTriangle size={22} />;
+    label  = 'Loss';
+    sub    = `Net margin ${margin.toFixed(1)}%. Costs exceeded revenue.`;
+  }
+
+  return (
+    <div style={{
+      background: `linear-gradient(90deg, ${bgFrom} 0%, ${bgTo} 100%)`,
+      border: `1.5px solid ${accent}`,
+      borderRadius: 14,
+      padding: '18px 22px',
+      display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap',
+      boxShadow: `0 4px 12px -6px ${accent}33`,
+    }}>
+      <div style={{
+        width: 52, height: 52, borderRadius: 14,
+        backgroundColor: accent, color: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        {icon}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 11, fontWeight: 800, color: accent,
+          textTransform: 'uppercase', letterSpacing: '.09em',
+          marginBottom: 2,
+        }}>
+          Bottom line
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 900, color: accent, letterSpacing: '-0.01em' }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>
+          {sub}
+        </div>
+      </div>
+
+      {!noActivity && (
+        <div style={{ textAlign: 'right', minWidth: 0 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 800, color: accent, opacity: 0.75,
+            textTransform: 'uppercase', letterSpacing: '.08em',
+          }}>
+            {isProfit ? 'Net Profit' : isLoss ? 'Net Loss' : 'Result'}
+          </div>
+          <div style={{
+            fontSize: 26, fontWeight: 900, color: accent,
+            fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+            letterSpacing: '-0.02em', marginTop: 2,
+          }}>
+            {amount < 0 ? '−' : ''}
+            <span style={{ fontSize: 15, opacity: 0.7, marginRight: 5 }}>{CURRENCY}</span>
+            {fmt(Math.abs(amount))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
