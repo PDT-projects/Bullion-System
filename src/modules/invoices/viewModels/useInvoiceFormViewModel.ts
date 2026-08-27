@@ -56,13 +56,13 @@ export function branchFromValue(value: string): string {
 export function getCurrencyFromBranch(branch: string): InvoiceCurrency {
   switch (branch) {
     case 'Saudia': return 'SAR';
-    case 'Chad':   return 'CAD';
-    default:       return 'AED';
+    case 'Chad': return 'CAD';
+    default: return 'AED';
   }
 }
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
-interface Bank    { id: string; name: string; accountNumber: string; balance: number; }
+interface Bank { id: string; name: string; accountNumber: string; balance: number; }
 
 export interface UseInvoiceFormViewModelReturn {
   formData: Partial<Invoice>;
@@ -151,8 +151,8 @@ async function saveCountryCities(data: Record<string, string[]>): Promise<void> 
 // live in the inventory module; this fallback chain is non-destructive (missing
 // fields yield 0). >>> CONFIRM these names with inventory and trim the chain. <<<
 function extractCost(p: any): { supplierCost: number; purchaseCost: number } {
-  const isCredit    = p.ownershipType === 'Credit';
-  const isOwned     = !p.ownershipType || p.ownershipType === 'Owned';
+  const isCredit = p.ownershipType === 'Credit';
+  const isOwned = !p.ownershipType || p.ownershipType === 'Owned';
   const costFallback = Number(p.costPrice ?? p.cost ?? 0) || 0;
 
   const rawSupplier = Number(p.supplierCost ?? p.supplierPrice ?? p.supplierRate ?? 0) || 0;
@@ -174,22 +174,22 @@ function extractCost(p: any): { supplierCost: number; purchaseCost: number } {
 // ── Product-row serialiser (guarantees imageUrls + cost are always present) ────
 function mapToInvoiceProductRow(ip: InvoiceProduct): InvoiceProduct {
   return {
-    id:            ip.id,
-    productId:     ip.productId,
-    productName:   ip.productName,
-    brandName:     ip.brandName,
-    modelName:     ip.modelName,
-    category:      ip.category,
-    description:   ip.description,
-    quantity:      ip.quantity,
-    price:         ip.price,
-    total:         ip.total,
+    id: ip.id,
+    productId: ip.productId,
+    productName: ip.productName,
+    brandName: ip.brandName,
+    modelName: ip.modelName,
+    category: ip.category,
+    description: ip.description,
+    quantity: ip.quantity,
+    price: ip.price,
+    total: ip.total,
     serialNumbers: ip.serialNumbers || [],
-    serialCities:  ip.serialCities  || {},
-    currency:      ip.currency      || 'AED',
-    imageUrls:     Array.isArray(ip.imageUrls) && ip.imageUrls.length > 0 ? ip.imageUrls : [],
-    supplierCost:  ip.supplierCost || 0,
-    purchaseCost:  ip.purchaseCost || 0,
+    serialCities: ip.serialCities || {},
+    currency: ip.currency || 'AED',
+    imageUrls: Array.isArray(ip.imageUrls) && ip.imageUrls.length > 0 ? ip.imageUrls : [],
+    supplierCost: ip.supplierCost || 0,
+    purchaseCost: ip.purchaseCost || 0,
   };
 }
 
@@ -199,26 +199,26 @@ function mapRawToProductInfo(p: any): ProductInfo {
   // paths (multi-model view, wizard, quick-add modal) have historically
   // saved under slightly different keys.
   let imageUrls: string[] = [];
-  if (Array.isArray(p.imageUrls) && p.imageUrls.length > 0)      imageUrls = p.imageUrls;
-  else if (Array.isArray(p.images) && p.images.length > 0)        imageUrls = p.images;
-  else if (Array.isArray(p.photos) && p.photos.length > 0)        imageUrls = p.photos;
-  else if (Array.isArray(p.pictures) && p.pictures.length > 0)    imageUrls = p.pictures;
-  else if (typeof p.imageUrl === 'string' && p.imageUrl)          imageUrls = [p.imageUrl];
-  else if (typeof p.image === 'string' && p.image)                imageUrls = [p.image];
+  if (Array.isArray(p.imageUrls) && p.imageUrls.length > 0) imageUrls = p.imageUrls;
+  else if (Array.isArray(p.images) && p.images.length > 0) imageUrls = p.images;
+  else if (Array.isArray(p.photos) && p.photos.length > 0) imageUrls = p.photos;
+  else if (Array.isArray(p.pictures) && p.pictures.length > 0) imageUrls = p.pictures;
+  else if (typeof p.imageUrl === 'string' && p.imageUrl) imageUrls = [p.imageUrl];
+  else if (typeof p.image === 'string' && p.image) imageUrls = [p.image];
 
   return {
-    id:            p.id,
-    brandName:     p.brandName || p.brand || '',
-    modelName:     p.modelName || p.model || '',
-    category:      p.category  || '',
-    sellPrice:     p.sellPrice || p.salePrice || p.price || 0,
+    id: p.id,
+    brandName: p.brandName || p.brand || '',
+    modelName: p.modelName || p.model || '',
+    category: p.category || '',
+    sellPrice: p.sellPrice || p.salePrice || p.price || 0,
     supplierCost,
     purchaseCost,
-    stock:         typeof p.stock === 'number' ? p.stock : (p.serialNumbers?.length ?? 0),
+    stock: typeof p.stock === 'number' ? p.stock : (p.serialNumbers?.length ?? 0),
     serialNumbers: p.serialNumbers || [],
-    serialCities:  p.serialCities  || {},
-    serialStatus:  p.serialStatus  || {},
-    description:   p.description    || '',
+    serialCities: p.serialCities || {},
+    serialStatus: p.serialStatus || {},
+    description: p.description || '',
     imageUrls,
   };
 }
@@ -238,20 +238,20 @@ function customerToSuggestion(c: CustomerRecord): Invoice {
 // ── Main ViewModel ─────────────────────────────────────────────────────────────
 export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const navigate = useNavigate();
-  const { id }   = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();
 
-  const [allProducts,      setAllProducts]      = useState<ProductInfo[]>([]);
-  const [productsLoading,  setProductsLoading]  = useState(true);
-  const [activeEmployees,  setActiveEmployees]  = useState<Employee[]>([]);
-  const [banks,            setBanks]            = useState<Bank[]>([]);
-  const [savedCustomers,   setSavedCustomers]   = useState<CustomerRecord[]>([]);
-  const [editingInvoice,   setEditingInvoice]   = useState<Invoice | null>(null);
-  const [isLoading,        setIsLoading]        = useState(true);
-  const [isSaving,         setIsSaving]         = useState(false);
-  const [pdfGenerating,    setPdfGenerating]    = useState(false);
+  const [allProducts, setAllProducts] = useState<ProductInfo[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [activeEmployees, setActiveEmployees] = useState<Employee[]>([]);
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [savedCustomers, setSavedCustomers] = useState<CustomerRecord[]>([]);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  const [invoiceCompany,   setInvoiceCompany]   = useState<TxCompany>(makeBranchValue(DEFAULT_BRANCHES[0]));
-  const [branches,         setBranches]         = useState<string[]>(DEFAULT_BRANCHES);
+  const [invoiceCompany, setInvoiceCompany] = useState<TxCompany>(makeBranchValue(DEFAULT_BRANCHES[0]));
+  const [branches, setBranches] = useState<string[]>(DEFAULT_BRANCHES);
   const [salespersonLocationsList, setSalespersonLocationsList] = useState<string[]>(salespersonLocations);
   const [savedSalespersons, setSavedSalespersons] = useState<string[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<InvoiceCurrency[]>(['AED']);
@@ -277,9 +277,9 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     digitalStamp: false,
   });
 
-  const [selectedProducts,    setSelectedProducts]    = useState<InvoiceProduct[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<InvoiceProduct[]>([]);
   const [customerSuggestions, setCustomerSuggestions] = useState<Invoice[]>([]);
-  const [showSuggestions,     setShowSuggestions]     = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // ── FAST initial load — only the essentials block render ───────────────────
   useEffect(() => {
@@ -350,13 +350,13 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           .map(mapRawToProductInfo);
         setAllProducts(infos);
         // Diagnostic: how many products have images? Which don't?
-        const withImg    = infos.filter(p => p.imageUrls && p.imageUrls.length > 0);
+        const withImg = infos.filter(p => p.imageUrls && p.imageUrls.length > 0);
         const withoutImg = infos.filter(p => !p.imageUrls || p.imageUrls.length === 0);
         console.log(`[Invoice] Loaded ${infos.length} products —`,
-                    `${withImg.length} have images, ${withoutImg.length} have none.`);
+          `${withImg.length} have images, ${withoutImg.length} have none.`);
         if (withoutImg.length > 0 && withoutImg.length <= 20) {
           console.log('[Invoice] Products without images:',
-                      withoutImg.map(p => `${p.brandName} ${p.modelName} (${p.id})`));
+            withoutImg.map(p => `${p.brandName} ${p.modelName} (${p.id})`));
         }
       })
       .catch(err => {
@@ -367,13 +367,13 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
 
     EmployeeFirebaseService.fetchAllEmployees()
       .then(emps => { if (!cancelled) setActiveEmployees((emps as any[]).filter(e => e.status === 'active')); })
-      .catch(() => {});
+      .catch(() => { });
     BankFirebaseService.fetchAllBanks()
       .then(list => { if (!cancelled) setBanks(list as any[]); })
-      .catch(() => {});
+      .catch(() => { });
     CustomerFirebaseService.fetchAllCustomers()
       .then(list => { if (!cancelled) setSavedCustomers(list); })
-      .catch(() => {});
+      .catch(() => { });
     return () => { cancelled = true; };
   }, []);
 
@@ -381,14 +381,14 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   useEffect(() => {
     if (!editingInvoice || allProducts.length === 0) return;
     setSelectedProducts(prev => prev.map(ip => {
-      const needsImg  = !Array.isArray(ip.imageUrls) || ip.imageUrls.length === 0;
+      const needsImg = !Array.isArray(ip.imageUrls) || ip.imageUrls.length === 0;
       const needsCost = !ip.supplierCost && !ip.purchaseCost;
       if (!needsImg && !needsCost) return ip;
       const src = allProducts.find(p => p.id === ip.productId);
       if (!src) return ip;
       return {
         ...ip,
-        imageUrls:    needsImg  ? (src.imageUrls || []) : ip.imageUrls,
+        imageUrls: needsImg ? (src.imageUrls || []) : ip.imageUrls,
         supplierCost: needsCost ? (src.supplierCost || 0) : ip.supplierCost,
         purchaseCost: needsCost ? (src.purchaseCost || 0) : ip.purchaseCost,
       };
@@ -496,7 +496,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
   const handleCustomerSelect = useCallback((customer: Invoice) => {
     // Also sanitize saved customer data in case legacy records have mixed content.
     setFormData({
-      customerName:  sanitizeNameInput(customer.customerName || ''),
+      customerName: sanitizeNameInput(customer.customerName || ''),
       customerPhone: sanitizePhoneInput(customer.customerPhone || ''),
       customerPhone2: sanitizePhoneInput(customer.customerPhone2 || ''),
       customerCNIC: customer.customerCNIC,
@@ -534,9 +534,9 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
           };
         }
         case 'quantity': return updateProductQuantity(p, value);
-        case 'price':    return updateProductPrice(p, value);
+        case 'price': return updateProductPrice(p, value);
         case 'currency': return { ...p, currency: value };
-        default:         return { ...p, [field]: value };
+        default: return { ...p, [field]: value };
       }
     }));
   }, [allProducts]);
@@ -572,19 +572,25 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     collectionMethod: undefined,
   }), []);
 
-  const generateAndSavePdf = useCallback(async (savedInvoice: Invoice): Promise<void> => {
+    const generateAndSavePdf = useCallback(async (savedInvoice: Invoice): Promise<void> => {
     setPdfGenerating(true);
     try {
+      console.log('🔎 [DEBUG] allProducts.length =', allProducts.length,
+                  '| with images =', allProducts.filter((p: any) => p.imageUrls?.length > 0).length,
+                  '| row imageUrls =', (savedInvoice.products?.[0] as any)?.imageUrls);
       const pdfBlob = await generateInvoicePdf(savedInvoice, { enrichWithProducts: allProducts });
-      const pdfUrl  = await (InvoiceFirebaseService as any).uploadInvoicePdf?.(savedInvoice.id, pdfBlob);
-      if (pdfUrl) await (InvoiceFirebaseService as any).savePdfUrl?.(savedInvoice.id, pdfUrl);
+            // No `as any` and no optional call. Both used to hide the fact that these
+      // methods did not exist: the cast silenced the type error and `?.()`
+      // swallowed it at runtime, so the upload silently never happened.
+      const pdfUrl = await InvoiceFirebaseService.uploadInvoicePdf(savedInvoice.id, pdfBlob);
+      await InvoiceFirebaseService.savePdfUrl(savedInvoice.id, pdfUrl);
     } catch (err) {
       console.error('PDF cloud upload failed:', err);
       toast.error('Invoice saved but PDF cloud upload failed.');
     } finally {
       setPdfGenerating(false);
     }
-  }, []);
+  }, [allProducts]);
 
   const handleDownloadPdf = useCallback(async () => {
     setIsDownloadingPdf(true);
@@ -617,7 +623,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     // browser autofill, or rapid typing before the validation runs.
     const sanitizedFormData = {
       ...formData,
-      customerName:  sanitizeNameInput(formData.customerName  || ''),
+      customerName: sanitizeNameInput(formData.customerName || ''),
       customerPhone: sanitizePhoneInput(formData.customerPhone || ''),
       customerPhone2: sanitizePhoneInput(formData.customerPhone2 || ''),
     };
@@ -625,7 +631,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     if (!validation.isValid) { toast.error(validation.error || 'Validation failed'); return; }
     // Propagate sanitized values back to formData before the write.
     setFormData({
-      customerName:  sanitizedFormData.customerName,
+      customerName: sanitizedFormData.customerName,
       customerPhone: sanitizedFormData.customerPhone,
       customerPhone2: sanitizedFormData.customerPhone2,
     });
@@ -667,47 +673,47 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
       } as Partial<Invoice>;
 
       const invoiceData: Omit<Invoice, 'id'> = {
-        invoiceNumber:          formData.invoiceNumber!,
-        date:                   formData.date!,
-        customerName:           sanitizedFormData.customerName!,
-        customerPhone:          sanitizedFormData.customerPhone!,
-        customerPhone2:         sanitizedFormData.customerPhone2,
-        customerCNIC:           formData.customerCNIC!,
-        customerProvince:       formData.customerProvince || '',
-        customerCity:           formData.customerCity     || '',
-        customerAddress:        formData.customerAddress,
-        warrantyLocation:       formData.warrantyLocation,
-        products:               productRows,
-        exchangeWarrantyNote:   formData.exchangeWarrantyNote || '',
-        deliveryStatus:         formData.deliveryStatus || 'Self-collect',
+        invoiceNumber: formData.invoiceNumber!,
+        date: formData.date!,
+        customerName: sanitizedFormData.customerName!,
+        customerPhone: sanitizedFormData.customerPhone!,
+        customerPhone2: sanitizedFormData.customerPhone2,
+        customerCNIC: formData.customerCNIC!,
+        customerProvince: formData.customerProvince || '',
+        customerCity: formData.customerCity || '',
+        customerAddress: formData.customerAddress,
+        warrantyLocation: formData.warrantyLocation,
+        products: productRows,
+        exchangeWarrantyNote: formData.exchangeWarrantyNote || '',
+        deliveryStatus: formData.deliveryStatus || 'Self-collect',
         deliveryReceivedStatus: editingInvoice?.deliveryReceivedStatus || 'Pending',
-        totalAmount:            total,
+        totalAmount: total,
         // Always created UNPAID — payment happens from the list afterwards.
-        status:                 editingInvoice ? (editingInvoice.status || 'Unpaid') : 'Unpaid',
-        payments:               editingInvoice?.payments || [],
-        paidAmount:             editingInvoice?.paidAmount || 0,
-        remainingAmount:        editingInvoice ? (editingInvoice.remainingAmount ?? total) : total,
-        paymentStatus:          editingInvoice?.paymentStatus || 'Unpaid',
-        salesperson:            formData.salesperson,
-        salespersonLocation:    formData.salespersonLocation,
-        clientDealBy:           formData.clientDealBy,
-        referralBy:             formData.referralBy,
-        createdBy:              formData.createdBy,
-        collectionMethod:       formData.collectionMethod,
-        deductionCharges:       formData.deductionCharges || 0,
-        cargoAmount:            formData.cargoAmount   || 0,
-        cargoCurrency:          formData.cargoCurrency || 'AED',
-        customsAmount:          formData.customsAmount || 0,
-        customsCurrency:        formData.customsCurrency || 'AED',
-        agentDetails:           formData.agentDetails  || '',
-        agentAmount:            formData.agentAmount   || 0,
-        agentCurrency:          formData.agentCurrency || 'AED',
-        supplierCostTotal:      calculateSupplierCost(baseInvoice),
-        purchaseCostTotal:      calculatePurchaseCost(baseInvoice),
-        miscExpense:            calculateMiscExpense(baseInvoice),
-        digitalStamp:           formData.digitalStamp,
-        branch:                 branchFromValue(invoiceCompany),
-        selectedCurrencies:     selectedCurrencies,
+        status: editingInvoice ? (editingInvoice.status || 'Unpaid') : 'Unpaid',
+        payments: editingInvoice?.payments || [],
+        paidAmount: editingInvoice?.paidAmount || 0,
+        remainingAmount: editingInvoice ? (editingInvoice.remainingAmount ?? total) : total,
+        paymentStatus: editingInvoice?.paymentStatus || 'Unpaid',
+        salesperson: formData.salesperson,
+        salespersonLocation: formData.salespersonLocation,
+        clientDealBy: formData.clientDealBy,
+        referralBy: formData.referralBy,
+        createdBy: formData.createdBy,
+        collectionMethod: formData.collectionMethod,
+        deductionCharges: formData.deductionCharges || 0,
+        cargoAmount: formData.cargoAmount || 0,
+        cargoCurrency: formData.cargoCurrency || 'AED',
+        customsAmount: formData.customsAmount || 0,
+        customsCurrency: formData.customsCurrency || 'AED',
+        agentDetails: formData.agentDetails || '',
+        agentAmount: formData.agentAmount || 0,
+        agentCurrency: formData.agentCurrency || 'AED',
+        supplierCostTotal: calculateSupplierCost(baseInvoice),
+        purchaseCostTotal: calculatePurchaseCost(baseInvoice),
+        miscExpense: calculateMiscExpense(baseInvoice),
+        digitalStamp: formData.digitalStamp,
+        branch: branchFromValue(invoiceCompany),
+        selectedCurrencies: selectedCurrencies,
       } as any;
 
       let saved: Invoice;
@@ -778,11 +784,9 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
         // NOTE: no transaction is booked here — invoices are Unpaid on creation.
         toast.success('Invoice created — downloading PDF…');
       }
-
-      try { await downloadInvoicePdf(toCustomerInvoice(saved)); }
+try { await downloadInvoicePdf(toCustomerInvoice(saved), { enrichWithProducts: allProducts }); }
       catch { toast.error('Invoice saved but PDF download failed'); }
       generateAndSavePdf(saved);
-
       // Commission only fires once an invoice is actually Paid (won't trigger here).
       if (saved.status === 'Paid' && saved.salesperson) {
         autoCalculateCommissionOnInvoiceSave(saved.id, invoiceData.createdBy || 'Admin')
@@ -797,7 +801,7 @@ export function useInvoiceFormViewModel(): UseInvoiceFormViewModelReturn {
     } finally {
       setIsSaving(false);
     }
-  }, [formData, selectedProducts, total, isEditing, editingInvoice, countryCities, navigate, generateAndSavePdf, toCustomerInvoice, invoiceCompany, selectedCurrencies]);
+  }, [formData, selectedProducts, total, isEditing, editingInvoice, countryCities, navigate, generateAndSavePdf, toCustomerInvoice, invoiceCompany, selectedCurrencies, allProducts]);
 
   const handleCancel = useCallback(() => navigate('/invoices'), [navigate]);
 

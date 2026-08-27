@@ -249,10 +249,21 @@ export function InventoryDashboardView({
   const [invoicePreviewUrl,    setInvoicePreviewUrl]    = useState<string | null>(null);
   const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
   const [invoicePreviewNumber, setInvoicePreviewNumber] = useState<string>('');
-  const [invoicePreviewInvoice, setInvoicePreviewInvoice] = useState<any>(null);
+    const [invoicePreviewInvoice, setInvoicePreviewInvoice] = useState<any>(null);
 
-  const openInvoicePreview = useCallback(async (invoiceNumber: string) => {
-    if (!invoiceNumber) return;
+  // Invoices saved before product images existed have no imageUrls on their
+  // rows. Passing the live product list lets the PDF generator look the image
+  // up by productId and render it anyway.
+  const [pdfProducts, setPdfProducts] = useState<any[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    InventoryFirebaseService.fetchAllProducts()
+      .then(list => { if (!cancelled) setPdfProducts(list as any[]); })
+      .catch(err => console.warn('[InventoryDashboard] PDF product fetch failed:', err));
+    return () => { cancelled = true; };
+  }, []);
+
+  const openInvoicePreview = useCallback(async (invoiceNumber: string) => {  if (!invoiceNumber) return;
     setInvoicePreviewNumber(invoiceNumber);
     setInvoicePreviewLoading(true);
     try {
@@ -263,18 +274,17 @@ export function InventoryDashboardView({
         return;
       }
       setInvoicePreviewInvoice(inv);
-      const blob = await generateInvoicePdf(inv as any);
+            const blob = await generateInvoicePdf(inv as any, { enrichWithProducts: pdfProducts });
       const url  = URL.createObjectURL(blob);
       setInvoicePreviewUrl(url);
     } catch (err) {
       console.error('[InventoryDashboard] Invoice PDF preview failed:', err);
       toast.error('Failed to open invoice PDF');
       setInvoicePreviewNumber('');
-    } finally {
+       } finally {
       setInvoicePreviewLoading(false);
     }
-  }, []);
-
+  }, [pdfProducts]);
   const closeInvoicePreview = useCallback(() => {
     if (invoicePreviewUrl) URL.revokeObjectURL(invoicePreviewUrl);
     setInvoicePreviewUrl(null);

@@ -951,27 +951,61 @@ export class BrandModelFirebaseService {
     }
   }
 
-  static async createBrand(name: string): Promise<BrandDoc> {
+    static async createBrand(name: string): Promise<BrandDoc> {
     try {
-      const now    = new Date().toISOString();
-      const docRef = await addDoc(collection(db, BRANDS_COLLECTION), { name, createdAt: now });
-      return { id: docRef.id, name, createdAt: now };
+      const now  = new Date().toISOString();
+      const want = name.trim();
+      const key  = want.toLowerCase();
+
+      // Firestore equality is case-sensitive, so "Nokta", "nokta" and "NOKTA"
+      // used to become three separate brands — each with its own models and
+      // its own slice of the stock. Match in memory before creating.
+      const snap = await getDocs(collection(db, BRANDS_COLLECTION));
+      const existing = snap.docs.find(
+        d => String((d.data() as any).name || '').trim().toLowerCase() === key,
+      );
+      if (existing) {
+        const d = existing.data() as any;
+        return { id: existing.id, name: d.name || want, createdAt: d.createdAt || '' };
+      }
+
+      const docRef = await addDoc(collection(db, BRANDS_COLLECTION), { name: want, createdAt: now });
+      return { id: docRef.id, name: want, createdAt: now };
     } catch (error) {
       throw new Error('Failed to create brand in Firestore');
     }
   }
-
-  static async createModel(brandId: string, name: string, costPrice?: number, sellPrice?: number): Promise<ModelDoc> {
+    static async createModel(brandId: string, name: string, costPrice?: number, sellPrice?: number): Promise<ModelDoc> {
     try {
-      const now    = new Date().toISOString();
-      const data   = stripUndefined({ name, brandId, costPrice, sellPrice, createdAt: now });
+      const now  = new Date().toISOString();
+      const want = name.trim();
+      const key  = want.toLowerCase();
+
+      // Same case-sensitivity trap as createBrand — one equality filter on
+      // brandId (which is exact), then match the name in memory.
+      const snap = await getDocs(
+        query(collection(db, MODELS_COLLECTION), where('brandId', '==', brandId)),
+      );
+      const existing = snap.docs.find(
+        d => String((d.data() as any).name || '').trim().toLowerCase() === key,
+      );
+      if (existing) {
+        const d = existing.data() as any;
+        return {
+          id: existing.id, name: d.name || want, brandId,
+          costPrice: d.costPrice ?? costPrice,
+          sellPrice: d.sellPrice ?? sellPrice,
+          createdAt: d.createdAt || '',
+        };
+      }
+
+      const data   = stripUndefined({ name: want, brandId, costPrice, sellPrice, createdAt: now });
       const docRef = await addDoc(collection(db, MODELS_COLLECTION), data);
-      return { id: docRef.id, name, brandId, costPrice, sellPrice, createdAt: now };
+      return { id: docRef.id, name: want, brandId, costPrice, sellPrice, createdAt: now };
     } catch (error) {
       throw new Error('Failed to create model in Firestore');
     }
   }
-
   static async saveCostingBrandAndModels(
     brandName: string,
     models: Array<{ modelName: string; costPrice?: number }>
@@ -1002,10 +1036,17 @@ export class BrandModelFirebaseService {
   ): Promise<Array<{ id: string; modelName: string; costPrice?: number; sellPrice?: number }>> {
     try {
       if (!brandName.trim()) return [];
-      const bq    = query(collection(db, BRANDS_COLLECTION), where('name', '==', brandName.trim()));
-      const bSnap = await getDocs(bq);
-      if (bSnap.empty) return [];
-      const brandId = bSnap.docs[0].id;
+            // Firestore equality is case-sensitive and has no case-insensitive
+      // operator. A brand stored as "Nokta" therefore missed entirely when the
+      // user typed "nokta", and the empty result was indistinguishable from
+      // "this brand has no models". Read the brand list and match in memory.
+      const key   = brandName.trim().toLowerCase();
+      const bSnap = await getDocs(collection(db, BRANDS_COLLECTION));
+      const match = bSnap.docs.find(
+        d => String((d.data() as any).name || '').trim().toLowerCase() === key,
+      );
+      if (!match) return [];
+      const brandId = match.id;
       const mq    = query(collection(db, MODELS_COLLECTION), where('brandId', '==', brandId));
       const mSnap = await getDocs(mq);
       const models: Array<{ id: string; modelName: string; costPrice?: number; sellPrice?: number }> = [];
@@ -1013,9 +1054,10 @@ export class BrandModelFirebaseService {
         const data = d.data() as any;
         models.push({ id: d.id, modelName: data.name || '', costPrice: data.costPrice ?? undefined, sellPrice: data.sellPrice ?? undefined });
       });
-      models.sort((a, b) => a.modelName.localeCompare(b.modelName));
+            models.sort((a, b) => a.modelName.localeCompare(b.modelName));
       return models;
     } catch (error) {
+      console.warn('[INV] fetchModelsByBrandName failed for', brandName, error);
       return [];
     }
   }

@@ -27,7 +27,15 @@ import { useNavigate } from 'react-router-dom';
 
 interface BankOption { id: string; name: string; balance: number; }
 interface BrandSuggestion { id: string; name: string; }
-interface ModelSuggestion { id: string; name: string; costPrice?: number; description?: string; }
+interface ModelSuggestion {
+  id: string;
+  name: string;
+  costPrice?: number;
+  description?: string;
+  category?: string;
+  sellPrice?: number;
+  lastCostAt?: string;
+}
 
 // ── Product row type ───────────────────────────────────────────────────────
 interface ProductRow {
@@ -39,9 +47,15 @@ interface ProductRow {
   quantity: number;
   costPrice: number;   // Purchasing / supplier cost — internal only
   sellPrice: number;   // Retail price — what customers see on the invoice
-  serials: string[]; // one per slot
+    serials: string[]; // one per slot
+  // Stock settings are PER PRODUCT. A single shipment can land different
+  // models in different branches, so location/condition/date cannot be
+  // shared across rows.
+    location: string;
+  status: string;
+  stockInDate: string;
+  images: File[];
 }
-
 const S = {
   card: { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px' } as React.CSSProperties,
   label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 } as React.CSSProperties,
@@ -61,9 +75,8 @@ const PAYMENT_MODES = [
 ];
 
 function newRow(): ProductRow {
-  return { id: Math.random().toString(36).slice(2), brandName: '', modelName: '', category: '', description: '', quantity: 1, costPrice: 0, sellPrice: 0, serials: [] };
+return { id: Math.random().toString(36).slice(2), brandName: '', modelName: '', category: '', description: '', quantity: 1, costPrice: 0, sellPrice: 0, serials: [], location: '', status: 'New', stockInDate: '', images: [] };
 }
-
 // ── Brand/model autocomplete for a single row ──────────────────────────────
 function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, onBrandSelect, onModelSelect, error, isCredit }: {
   row: ProductRow;
@@ -93,9 +106,18 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
     ? brandSuggestions.filter(b => b.name.toLowerCase().includes(row.brandName.toLowerCase()))
     : brandSuggestions;
   const filteredModels = row.modelName.trim()
-    ? modelSuggestions.filter(m => m.name.toLowerCase().includes(row.modelName.toLowerCase()))
+        ? modelSuggestions.filter(m => m.name.toLowerCase().includes(row.modelName.toLowerCase()))
     : modelSuggestions;
 
+  // A typed name that matches nothing on file is about to create a NEW brand or
+  // model on save. Surfacing that as an explicit row makes the consequence
+  // visible — a stray space or typo used to create a silent duplicate.
+  const typedBrand = row.brandName.trim();
+  const typedModel = row.modelName.trim();
+  const showAddBrand = typedBrand.length > 0 &&
+    !brandSuggestions.some(b => b.name.trim().toLowerCase() === typedBrand.toLowerCase());
+  const showAddModel = typedModel.length > 0 && typedBrand.length > 0 &&
+    !modelSuggestions.some(m => m.name.trim().toLowerCase() === typedModel.toLowerCase());
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={S.grid2}>
@@ -108,14 +130,22 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
               onFocus={() => setOpenBrand(true)}
               placeholder="Type brand…" autoComplete="off"
               style={S.inp(!!error?.brand)} />
-            {openBrand && filteredBrands.length > 0 && (
+                        {openBrand && (filteredBrands.length > 0 || showAddBrand) && (
               <div style={{ position: 'absolute', top: 'calc(100% + 3px)', left: 0, right: 0, zIndex: 99, backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, boxShadow: '0 8px 20px rgba(0,0,0,0.12)', maxHeight: 180, overflowY: 'auto' }}>
                 {filteredBrands.map(b => (
                   <div key={b.id} onMouseDown={e => { e.preventDefault(); onChange('brandName', b.name); onBrandSelect(b.name); setOpenBrand(false); }}
                     style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: '#111827' }}
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>{b.name}</div>
+                                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>{b.name}</div>
                 ))}
+                {showAddBrand && (
+                  <div onMouseDown={e => { e.preventDefault(); onBrandSelect(row.brandName.trim()); setOpenBrand(false); }}
+                    style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: '#2563eb', fontWeight: 600, borderTop: filteredBrands.length ? '1px solid #f1f5f9' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>
+                    <Plus size={13} /> Add "{row.brandName.trim()}" as new brand
+                  </div>
+                )}
               </div>
             )}
             {error?.brand && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.brand}</p>}
@@ -131,7 +161,7 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
               onFocus={() => setOpenModel(true)}
               placeholder="Type model…" autoComplete="off"
               style={S.inp(!!error?.model)} />
-            {openModel && filteredModels.length > 0 && (
+              {openModel && (filteredModels.length > 0 || showAddModel) && (
               <div style={{ position: 'absolute', top: 'calc(100% + 3px)', left: 0, right: 0, zIndex: 99, backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, boxShadow: '0 8px 20px rgba(0,0,0,0.12)', maxHeight: 180, overflowY: 'auto' }}>
                 {filteredModels.map(m => (
                   <div key={m.id} onMouseDown={e => { e.preventDefault(); onChange('modelName', m.name); onModelSelect(m.name, m); setOpenModel(false); }}
@@ -139,9 +169,17 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>
                     <div style={{ fontWeight: 600 }}>{m.name}</div>
-                    {m.costPrice ? <div style={{ fontSize: 11, color: '#94a3b8' }}>AED {m.costPrice.toLocaleString()}</div> : null}
+                                        {m.costPrice ? <div style={{ fontSize: 11, color: '#94a3b8' }}>AED {m.costPrice.toLocaleString()}</div> : null}
                   </div>
                 ))}
+                {showAddModel && (
+                  <div onMouseDown={e => { e.preventDefault(); setOpenModel(false); }}
+                    style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: '#2563eb', fontWeight: 600, borderTop: filteredModels.length ? '1px solid #f1f5f9' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>
+                    <Plus size={13} /> Add "{row.modelName.trim()}" as new model
+                  </div>
+                )}
               </div>
             )}
             {error?.model && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.model}</p>}
@@ -251,7 +289,52 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
     </div>
   );
 }
+// ── Per-product image picker ──────────────────────────────────────────────
+// Each row owns its own File[] plus its own input ref and drag state. A single
+// shared ref would target whichever picker rendered last, so clicking row 2's
+// dropzone opened row 1's file dialog.
+function ProductImages({ images, onChange }: {
+  images: File[];
+  onChange: (next: File[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const add = (files: FileList | File[]) =>
+    onChange([...images, ...Array.from(files).filter(f => f.type.startsWith('image/'))]);
 
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed #e2e8f0' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <ImagePlus size={14} /> Product Images <span style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>(optional)</span>
+      </div>
+      <div onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); add(e.dataTransfer.files); }}
+        onClick={() => inputRef.current?.click()}
+        style={{ border: `2px dashed ${dragging ? '#6366f1' : '#d1d5db'}`, borderRadius: 10, padding: '16px', textAlign: 'center', cursor: 'pointer', backgroundColor: dragging ? '#f0f4ff' : '#f9fafb', marginBottom: images.length ? 12 : 0 }}>
+        <ImagePlus size={19} color={dragging ? '#6366f1' : '#94a3b8'} style={{ margin: '0 auto 5px' }} />
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#6b7280' }}>Click or drag &amp; drop images</p>
+        <input ref={inputRef} type="file" multiple accept="image/*" style={{ display: 'none' }}
+          onChange={e => { add(e.target.files || []); e.target.value = ''; }} />
+      </div>
+      {images.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {images.map((file, i) => {
+            const url = URL.createObjectURL(file);
+            return (
+              <div key={i} style={{ position: 'relative', width: 68, height: 68, borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                <img src={url} alt="" onLoad={() => URL.revokeObjectURL(url)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <button type="button" onClick={e => { e.stopPropagation(); onChange(images.filter((_, j) => j !== i)); }}
+                  style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17, borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                  <X size={9} color="#fff" strokeWidth={3} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 // ── Main component ────────────────────────────────────────────────────────────
 export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onClose?: () => void }> = ({ onClose }) => {
   const navigate  = useNavigate();
@@ -274,14 +357,38 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
   const [brandSuggestions, setBrandSuggestions] = useState<BrandSuggestion[]>([]);
   const [modelSuggestionsByRow, setModelSuggestionsByRow] = useState<Record<string, ModelSuggestion[]>>({});
 
-  useEffect(() => {
+    useEffect(() => {
     BrandModelFirebaseService.fetchAllBrands().then(setBrandSuggestions).catch(() => {});
   }, []);
 
-  const loadModels = async (rowId: string, brandName: string) => {
+  // Brand lookup runs on every keystroke. Two guards keep that sane:
+  //   modelReqRef   — a per-row request counter. A response whose id no longer
+  //                   matches the latest one is discarded, so a slow reply for
+  //                   "Nokt" can never overwrite a fresh reply for "Nokta".
+  //   modelTimerRef — 350ms debounce, so typing a 5-letter brand fires one
+  //                   lookup instead of five.
+  const [costHint, setCostHint] = useState<Record<string, string>>({});
+
+  const modelReqRef   = useRef<Record<string, number>>({});
+  const modelTimerRef = useRef<Record<string, any>>({});
+
+  const loadModelsDebounced = (rowId: string, brandName: string) => {
+    clearTimeout(modelTimerRef.current[rowId]);
+    modelTimerRef.current[rowId] = setTimeout(() => loadModels(rowId, brandName), 350);
+  };
+
+  useEffect(() => () => {
+    Object.values(modelTimerRef.current).forEach(t => clearTimeout(t));
+  }, []);
+
+    const loadModels = async (rowId: string, brandName: string) => {
+    const reqId = (modelReqRef.current[rowId] || 0) + 1;
+    modelReqRef.current[rowId] = reqId;
+
     if (!brandName.trim()) { setModelSuggestionsByRow(prev => ({ ...prev, [rowId]: [] })); return; }
     try {
-      const models = await BrandModelFirebaseService.fetchModelsByBrandName(brandName.trim());
+            const models = await BrandModelFirebaseService.fetchModelsByBrandName(brandName.trim());
+      if (modelReqRef.current[rowId] !== reqId) return;
 
       // WHY THIS NO LONGER QUERIES products DIRECTLY
       // --------------------------------------------
@@ -310,7 +417,10 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
             id: m.id,
             name: m.modelName,
             costPrice: m.costPrice,
-            description: profile?.description || '',
+                       description: profile?.description || '',
+            category:   profile?.category   || '',
+            sellPrice:  profile?.sellPrice  || 0,
+            lastCostAt: profile?.lastCostAt || '',
           };
         } catch (err) {
           // Logged, not swallowed. A silent empty description is
@@ -319,21 +429,18 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           return { id: m.id, name: m.modelName, costPrice: m.costPrice, description: '' };
         }
       }));
+            if (modelReqRef.current[rowId] !== reqId) return;
       setModelSuggestionsByRow(prev => ({ ...prev, [rowId]: enriched }));
     } catch (err) {
       console.warn('[INV] loadModels failed:', err);
-      setModelSuggestionsByRow(prev => ({ ...prev, [rowId]: [] }));
+      if (modelReqRef.current[rowId] === reqId)
+        setModelSuggestionsByRow(prev => ({ ...prev, [rowId]: [] }));
     }
   };
 
   // ── Shared fields ─────────────────────────────────────────────────────────
-  const [location,     setLocation]     = useState('');
-  const [status,       setStatus]       = useState('New');
-  const [stockInDate,  setStockInDate]  = useState('');
-  const [images,       setImages]       = useState<File[]>([]);
-  const imageInputRef                   = useRef<HTMLInputElement>(null);
-  const [imgDragging,  setImgDragging]  = useState(false);
-
+  
+  
   // NOTE: Payment collection has been removed from the add-inventory flow.
   // Every new item is saved as `paymentStatus: 'unpaid'` and reconciled later
   // from the Transactions / Payables module. The `Credit` / `Owned` ownership
@@ -376,7 +483,9 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
 
       if (Object.keys(e).length) errs[r.id] = e;
     });
-    if (!location.trim()) { toast.error('Location is required'); hasErr = true; }
+       rows.forEach((r, i) => {
+      if (!r.location.trim()) { toast.error(`Product ${i + 1}: location is required`); hasErr = true; }
+    });
     if (hasErr) {
       setRowErrors(errs);
       if (Object.values(errs).some((e: any) => e.serials || e.quantity)) {
@@ -389,7 +498,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
     setSaveError('');
 
     try {
-      const manualDateIso = stockInDate ? new Date(stockInDate).toISOString() : undefined;
+            // manualDateIso is now derived per row inside the loop below.
       // This screen never wrote a model profile at all — it saved the product
       // and stopped, so `brandModels` docs stayed bare and there was nothing for
       // the next entry to read back.
@@ -412,7 +521,8 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
         const validSerials = row.serials.filter(s => s.trim());
         const stock = validSerials.length || row.quantity;
         const seededCities: Record<string, string> = {};
-        if (location) validSerials.forEach(s => { seededCities[s] = location; });
+                const manualDateIso = row.stockInDate ? new Date(row.stockInDate).toISOString() : undefined;
+        if (row.location) validSerials.forEach(s => { seededCities[s] = row.location; });
 
         const dto: any = {
           brandName: row.brandName.trim(), modelName: row.modelName.trim(),
@@ -420,9 +530,9 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           // Purchasing cost is internal only. Retail (sellPrice) is what flows to
           // the invoice — see updateProductWithSelection in invoiceService.ts.
           costPrice: row.costPrice, sellPrice: row.sellPrice,
-          buyType: 'Import', warrantyYears: 0, stock, location,
+          buyType: 'Import', warrantyYears: 0, stock, location: row.location,
           serialNumbers: validSerials, serialCities: seededCities,
-          status: status as any, isDamaged: false, costingOption: 'without',
+                    status: row.status as any, isDamaged: false, costingOption: 'without',
           ownershipType: ownership,
           // Payment collection removed — supplier balance is still recorded for
           // Credit-ownership so it shows in Payables, but no amount-paid /
@@ -450,8 +560,8 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
             category:    row.category,
             description: row.description.trim(),
             sellPrice:   row.sellPrice,
-            costPrice:   row.costPrice,
-            location,
+                        costPrice:   row.costPrice,
+            location:    row.location,
           })
         );
 
@@ -461,7 +571,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           created = await InventoryFirebaseService.createProduct(dto, payInfo);
           console.log('[INV] ✅ Created product:', created?.id, 'full object:', created);
         } catch (createErr: any) {
-          console.error('[INV] ❌ createProduct failed:', createErr?.message, createErr);
+          console.error('[INV] âŒ createProduct failed:', createErr?.message, createErr);
           throw createErr;
         }
 
@@ -473,18 +583,18 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
         // Now: we attach the batch of images to EVERY product in the batch
         //   (each product ends up with the same imageUrls), and we scream in
         //   the console + a toast if anything at all fails.
-        if (images.length > 0) {
+        if (row.images.length > 0) {
           const createdId = created?.id;
           if (!createdId) {
-            console.error('[INV] ❌ Cannot upload images: created product has no .id. created =', created);
+            console.error('[INV] âŒ Cannot upload images: created product has no .id. created =', created);
             toast.error('Product saved but images could not be linked (no product id returned).');
           } else {
             try {
-              console.log('[INV] Uploading', images.length, 'image(s) for product', createdId);
-              const urls = await uploadInventoryImages(images, createdId);
+              console.log('[INV] Uploading', row.images.length, 'image(s) for product', createdId);
+            const urls = await uploadInventoryImages(row.images, createdId);
               console.log('[INV] uploadInventoryImages returned:', urls);
               if (!Array.isArray(urls) || urls.length === 0) {
-                console.error('[INV] ❌ uploadInventoryImages returned empty/invalid:', urls);
+                console.error('[INV] âŒ uploadInventoryImages returned empty/invalid:', urls);
                 toast.error('Image upload returned no URLs. Check Storage rules / network.');
               } else {
                 await InventoryFirebaseService.updateProduct(createdId, { imageUrls: urls } as any);
@@ -492,7 +602,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
               }
             } catch (imgErr: any) {
               // Loud — the user was seeing this fail silently.
-              console.error('[INV] ❌ Image upload FAILED for product', createdId, ':', imgErr);
+              console.error('[INV] âŒ Image upload FAILED for product', createdId, ':', imgErr);
               toast.error(`Image upload failed: ${imgErr?.message || 'Unknown error'}. Product saved without image.`);
             }
           }
@@ -524,7 +634,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
       const msg = err?.message || 'Failed to save inventory';
       setSaveError(msg);
       toast.error(msg);
-      alert(`❌ Save failed: ${msg}`);
+      alert(`âŒ Save failed: ${msg}`);
     } finally {
       setSaving(false);
     }
@@ -595,100 +705,69 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
               row={row}
               onChange={(field, val) => {
                 updateRow(row.id, field, val);
-                if (field === 'brandName') loadModels(row.id, val);
+                                if (field === 'brandName') loadModelsDebounced(row.id, val);
+                if (field === 'costPrice') setCostHint(prev => ({ ...prev, [row.id]: '' }));
               }}
               brandSuggestions={brandSuggestions}
               modelSuggestions={modelSuggestionsByRow[row.id] || []}
               onBrandSelect={name => loadModels(row.id, name)}
-              onModelSelect={(name, model) => {
-                if (model?.costPrice && model.costPrice > 0) updateRow(row.id, 'costPrice', model.costPrice);
+                            onModelSelect={(name, model) => {
                 if (model?.description) updateRow(row.id, 'description', model.description);
+                if (model?.category)    updateRow(row.id, 'category',    model.category);
+                if (model?.sellPrice && model.sellPrice > 0) updateRow(row.id, 'sellPrice', model.sellPrice);
+                if (model?.costPrice && model.costPrice > 0) {
+                  updateRow(row.id, 'costPrice', model.costPrice);
+                  setCostHint(prev => ({ ...prev, [row.id]: model.lastCostAt || 'previous purchase' }));
+                }
               }}
-              error={rowErrors[row.id]}
+                           error={rowErrors[row.id]}
               isCredit={isCredit}
             />
+
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed #e2e8f0' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 10 }}>Stock Settings</div>
+              <div style={S.grid2}>
+                <div>
+                  <label style={S.label}>Location <span style={{ color: '#ef4444' }}>*</span></label>
+                  <LocationSelector value={row.location} onChange={v => updateRow(row.id, 'location', v)} label="" placeholder="Select location" />
+                </div>
+                <div>
+                  <label style={S.label}>Condition</label>
+                  <div style={{ position: 'relative' }}>
+                    <select value={row.status} onChange={e => updateRow(row.id, 'status', e.target.value)}
+                      style={{ ...S.inp(), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
+                      {['New','Used'].map(sv => <option key={sv} value={sv}>{sv}</option>)}
+                    </select>
+                    <ChevronDown size={13} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} />
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <label style={S.label}>Stock-In Date</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', backgroundColor: '#f1f5f9', borderRadius: 8, marginBottom: 6, border: '1px solid #e2e8f0' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#22c55e', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Auto</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                  <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 'auto' }}>recorded on save</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input type="date" value={row.stockInDate} onChange={e => updateRow(row.id, 'stockInDate', e.target.value)} style={{ ...S.inp(), flex: 1 }} />
+                  {row.stockInDate && <button type="button" onClick={() => updateRow(row.id, 'stockInDate', '')} style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={12} /></button>}
+                </div>
+                            </div>
+            </div>
+
+            <ProductImages images={row.images} onChange={next => updateRow(row.id, 'images', next)} />
           </div>
         ))}
-
         {/* ── Add Another Product ── */}
         <button type="button" onClick={addRow}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 10, border: '2px dashed #cbd5e1', backgroundColor: '#f8fafc', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#64748b', transition: 'all 0.15s' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#0f172a'; (e.currentTarget as HTMLElement).style.color = '#0f172a'; (e.currentTarget as HTMLElement).style.backgroundColor = '#f1f5f9'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#cbd5e1'; (e.currentTarget as HTMLElement).style.color = '#64748b'; (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'; }}>
           <Plus size={16} /> Add Another Product
-        </button>
-
-        {/* ── Shared settings ── */}
-        <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>Stock Settings</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={S.grid2}>
-              <div>
-                <label style={S.label}>Location <span style={{ color: '#ef4444' }}>*</span></label>
-                <LocationSelector value={location} onChange={setLocation} label="" placeholder="Select location" />
-              </div>
-              <div>
-                <label style={S.label}>Condition</label>
-                <div style={{ position: 'relative' }}>
-                  <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...S.inp(), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
-                    {/* Condition list intentionally limited to New / Used.
-                        In Transit / Returned / Damaged are not user-selectable
-                        at add-time — those states are set by other flows
-                        (transfer, invoice return, damage report). */}
-                    {['New','Used'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <ChevronDown size={13} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} />
-                </div>
-              </div>
-            </div>
-            {/* Stock-in date */}
-            <div>
-              <label style={S.label}>Stock-In Date</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', backgroundColor: '#f1f5f9', borderRadius: 8, marginBottom: 6, border: '1px solid #e2e8f0' }}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#22c55e', flexShrink: 0 }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Auto</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 'auto' }}>recorded on save</span>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input type="date" value={stockInDate} onChange={e => setStockInDate(e.target.value)} style={{ ...S.inp(), flex: 1 }} />
-                {stockInDate && <button type="button" onClick={() => setStockInDate('')} style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={12} /></button>}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Images ── */}
-        <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ImagePlus size={15} /> Product Images <span style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>(optional)</span>
-          </div>
-          <div onDragOver={e => { e.preventDefault(); setImgDragging(true); }} onDragLeave={() => setImgDragging(false)}
-            onDrop={e => { e.preventDefault(); setImgDragging(false); Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).forEach(f => setImages(prev => [...prev, f])); }}
-            onClick={() => imageInputRef.current?.click()}
-            style={{ border: `2px dashed ${imgDragging ? '#6366f1' : '#d1d5db'}`, borderRadius: 10, padding: '18px', textAlign: 'center', cursor: 'pointer', backgroundColor: imgDragging ? '#f0f4ff' : '#f9fafb', marginBottom: images.length ? 12 : 0 }}>
-            <ImagePlus size={20} color={imgDragging ? '#6366f1' : '#94a3b8'} style={{ margin: '0 auto 5px' }} />
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#6b7280' }}>Click or drag & drop images</p>
-            <input ref={imageInputRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={e => { Array.from(e.target.files||[]).filter(f => f.type.startsWith('image/')).forEach(f => setImages(prev => [...prev, f])); e.target.value = ''; }} />
-          </div>
-          {images.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {images.map((file, i) => {
-                const url = URL.createObjectURL(file);
-                return (
-                  <div key={i} style={{ position: 'relative', width: 68, height: 68, borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                    <img src={url} alt="" onLoad={() => URL.revokeObjectURL(url)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <button type="button" onClick={e => { e.stopPropagation(); setImages(prev => prev.filter((_, j) => j !== i)); }} style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17, borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                      <X size={9} color="#fff" strokeWidth={3} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── Payment (removed) ──
+        </button>         
+                {/* Payment (removed)
             Payment collection UI removed from this flow. All new items are
             saved as unpaid and reconciled from the Transactions module.
             The Credit / Owned toggle is kept above so the item shows in
@@ -717,7 +796,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
       <div style={{ flexShrink: 0, backgroundColor: '#fff', borderTop: '1px solid #e2e8f0', padding: '14px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {saveError && (
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8 }}>
-            <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>âš ï¸</span>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>Save Failed</div>
               <div style={{ fontSize: 12, color: '#dc2626' }}>{saveError}</div>

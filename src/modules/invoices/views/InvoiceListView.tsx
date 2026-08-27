@@ -33,9 +33,12 @@ interface Props {
   viewingInvoice: Invoice | null;
   isLoading: boolean;
   onSearch: (searchTerm: string) => void;
-  onStatusFilter: (status: 'all' | 'Paid' | 'Unpaid') => void;
-  onCityFilter: (city: string) => void;
-  onSalespersonFilter: (sp: string) => void;
+    // Multi-select filters — the ViewModel and InvoiceMultiFilter both work
+  // with arrays. These signatures were left over from the old single-select
+  // dropdowns and no longer matched either side.
+  onStatusFilter: (statuses: string[]) => void;
+  onCityFilter: (cities: string[]) => void;
+  onSalespersonFilter: (salespersons: string[]) => void;
   onDateFromFilter: (date: string) => void;
   onDateToFilter: (date: string) => void;
   onClearFilters: () => void;
@@ -1038,6 +1041,24 @@ export function InvoiceListView({
   banks, paymentInvoice, isRecordingPayment, openPayment, closePayment, submitPayment,
 }: Props) {
 
+  // ── Inventory products for PDF image enrichment ──────────────────────────
+  // Older invoices were saved before product images existed, so their rows
+  // have no imageUrls. Passing the live product list lets the PDF generator
+  // look the image up by productId and render it anyway.
+  const [pdfProducts, setPdfProducts] = useState<any[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    InventoryFirebaseService.fetchAllProducts()
+      .then(list => {
+        if (cancelled) return;
+        setPdfProducts(list as any[]);
+        const withImg = (list as any[]).filter(p => p.imageUrls?.length > 0).length;
+        console.log(`[InvoiceList] PDF products loaded: ${(list as any[]).length}, ${withImg} with images`);
+      })
+      .catch(err => console.warn('[InvoiceList] PDF product fetch failed:', err));
+    return () => { cancelled = true; };
+  }, []);
+
   const spName = (idOrName: string | undefined): string => {
     if (!idOrName) return '—';
     if (salespersonMap[idOrName]) return salespersonMap[idOrName];
@@ -1057,7 +1078,7 @@ export function InvoiceListView({
     if (generatingPdf.has(invoice.id)) return;
     setGeneratingPdf(prev => new Set(prev).add(invoice.id));
     try {
-      await downloadInvoicePdf(invoice);
+           await downloadInvoicePdf(invoice, { enrichWithProducts: pdfProducts });
     } catch (err) {
       console.error('PDF generation failed:', err);
       toast.error('PDF download failed. Please try again.');
@@ -1075,14 +1096,14 @@ export function InvoiceListView({
     setPreviewLoading(true);
     setPreviewUrl(null);
     try {
-      const blob = await generateInvoicePdf(invoice);
+           const blob = await generateInvoicePdf(invoice, { enrichWithProducts: pdfProducts });
       setPreviewUrl(URL.createObjectURL(blob));
     } catch {
       toast.error('Failed to generate PDF preview');
-    } finally {
+       } finally {
       setPreviewLoading(false);
     }
-  }, []);
+  }, [pdfProducts]);
 
   const closePdfPreview = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);

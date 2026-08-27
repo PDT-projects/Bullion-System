@@ -116,11 +116,12 @@ export interface Product {
   costingTotalCustomsValue?: number;
   costingTotalFreightValue?: number;
   costingShipmentTotalUSD?: number;
-  costingConsignmentValue?: number;
+    costingConsignmentValue?: number;
   costingTotalValueOfBrand?: number;
   costingModelsJson?: string;
+  /** Firebase Storage download URLs for this product's photos. */
+  imageUrls?: string[];
 }
-
 
 
 
@@ -173,6 +174,7 @@ export interface CreateProductDTO {
   supplierPaymentChannel?: PaymentChannel;
   serialStockInDates?: { [serialNumber: string]: string };
   serialStockInDatesManual?: { [serialNumber: string]: string };
+  imageUrls?: string[];
 }
 
 export interface ProductFormData {
@@ -248,9 +250,10 @@ export interface UpdateProductDTO {
   supplierPaidAmount?: number;
   supplierPaymentChannel?: PaymentChannel;
   serialStockInDates?: { [serialNumber: string]: string };
-  serialStockInDatesManual?: { [serialNumber: string]: string };
+    serialStockInDatesManual?: { [serialNumber: string]: string };
   serialSoldDates?: { [serialNumber: string]: string };
   serialInvoiceNumbers?: { [serialNumber: string]: string };
+  imageUrls?: string[];
 }
 
 export interface CreateTransferDTO {

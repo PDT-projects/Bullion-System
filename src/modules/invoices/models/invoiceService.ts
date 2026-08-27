@@ -240,13 +240,21 @@ export const filterInvoices = (invoices: Invoice[], filters: InvoiceFilters): In
           !inv.customerName.toLowerCase().includes(s) &&
           !inv.customerPhone.includes(s)) return false;
     }
-    if (filters.statusFilter !== 'all' && inv.status !== filters.statusFilter) return false;
+    // Multi-select: an empty array means "no filter". A non-empty array
+    // matches when the invoice's value is one of the selected options.
+    const st = filters.statusFilter;
+    if (Array.isArray(st) && st.length > 0 && !st.includes(inv.status)) return false;
+
     if (filters.dateFrom && inv.date < filters.dateFrom) return false;
     if (filters.dateTo   && inv.date > filters.dateTo)   return false;
-    if (filters.cityFilter && inv.customerCity !== filters.cityFilter) return false;
-    if (filters.salespersonFilter && inv.salesperson !== filters.salespersonFilter) return false;
+
+    const ct = filters.cityFilter;
+    if (Array.isArray(ct) && ct.length > 0 && !ct.includes(inv.customerCity || '')) return false;
+
+    const sp = filters.salespersonFilter;
+    if (Array.isArray(sp) && sp.length > 0 && !sp.includes(inv.salesperson || '')) return false;
     return true;
-  });
+  })
 
 export const calculateInvoiceStats = (invoices: Invoice[]): InvoiceStats => {
   const totalMiscExpense   = invoices.reduce((s, i) => s + calculateMiscExpense(i), 0);

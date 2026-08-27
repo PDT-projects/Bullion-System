@@ -558,9 +558,21 @@ export async function fetchModelProfileByName(
   }
 
   // (b) Fallback: newest Product with the same brand + model.
+    // (b) Fallback: newest Product with the same brand + model.
+  //
+  // This reads EVERY product of the brand and filters in memory. On a brand
+  // with 40 products that is 40 documents — and loadModels used to call this
+  // once per model, so a 6-model brand pulled 240 documents on every lookup.
+  // It only exists for records saved before model profiles were written, so
+  // skip it entirely once the model doc already answered.
   let fromProduct: Record<string, any> = {};
+  const modelDocIsComplete =
+    fromModel.category !== undefined && fromModel.description !== undefined;
+  if (modelDocIsComplete) {
+    return { id: modelId, brandId, name: modelName.trim(), ...fromModel } as ModelEntry;
+  }
   try {
-    const snap = await getDocs(query(
+       const snap = await getDocs(query(
       collection(db, PRODUCTS_COL), where('brandName', '==', brandName.trim()),
     ));
     const newest = snap.docs
