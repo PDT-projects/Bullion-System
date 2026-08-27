@@ -35,6 +35,7 @@ import {
   Transaction, DynamicCategory, SUB_CATEGORIES, CASH_IN_HAND_ID, CASH_IN_HAND_NAME,
   INVOICE_MISC_EXPENSE_CATEGORY, SALES_INVOICE_CATEGORY, SOLD_GOODS_PAYMENT_CATEGORY,
 } from '../models/types';
+import { computeSubCategoryRemaining } from '../models/transactionsService';
 
 // ── Props ───────────────────────────────────────────────────────────────────
 interface Props {
@@ -44,6 +45,12 @@ interface Props {
   banks?: { id: string; name: string; balance?: number; accountNumber?: string }[];
   /** Live Cash-in-Hand balance (computed from transactions in the parent). */
   cashBalance?: number;
+  /**
+   * Live transactions list. Used only to show the outstanding balance under a
+   * selected Receivable/Payable sub-category. Optional so wrappers that don't
+   * pass it keep working — the hint simply doesn't render.
+   */
+  transactions?: Transaction[];
   /** Legacy prop kept so existing wrappers keep compiling — mapped to branches. */
   companies?: string[];
 }
@@ -55,7 +62,7 @@ const MAX_DESC = 120;
 // ── Main ────────────────────────────────────────────────────────────────────
 export function QuickTransactionModal({
   onClose, onSaved,
-  banks = [], cashBalance = 0, companies = [],
+  banks = [], cashBalance = 0, companies = [], transactions = [],
 }: Props) {
 
   // ── TXN ID — PREVIEW ONLY until the user actually saves ──────────────
@@ -253,6 +260,13 @@ export function QuickTransactionModal({
       sc => sc.type === 'subCategoryDetail' && sc.parentCategory === category,
     );
   }, [subCats, category]);
+
+  // Outstanding balance for the picked sub-category (Receivable/Payable only).
+  // Null for every other category — nothing renders in that case.
+  const subCategoryBalance = useMemo(
+    () => computeSubCategoryRemaining(transactions, category, subCategory),
+    [transactions, category, subCategory],
+  );
 
   // Reset dependent selections when parent changes
   useEffect(() => { setCategory(''); setSubCategory(''); }, [type]);
@@ -666,7 +680,15 @@ export function QuickTransactionModal({
                       ? 'No sub-categories yet'
                       : '— None —'}
                 </option>
-                {availableSubCategories.map(sc => <option key={sc.id} value={sc.name}>{sc.name}</option>)}
+                {availableSubCategories.map(sc => {
+                  // Suffix each option with its own outstanding balance so every
+                  // counterparty's position is visible the moment the list opens —
+                  // no need to select one first. Plain text only: <option> cannot
+                  // carry colour or markup, so the number rides along in the label.
+                  const bal = computeSubCategoryRemaining(transactions, category, sc.name);
+                  const suffix = bal ? ` — ${bal.remaining.toLocaleString()} remaining` : '';
+                  return <option key={sc.id} value={sc.name}>{sc.name}{suffix}</option>;
+                })}
               </select>
               <button
                 onClick={() => setEditSubCatMode(v => !v)}
@@ -685,6 +707,16 @@ export function QuickTransactionModal({
                 <Plus size={12} /> Add
               </button>
             </div>
+
+            {/* Only surfaced when the number looks wrong — a negative balance
+                means the opening entry is missing its sub-category, and that
+                needs saying out loud rather than shown as a minus sign. */}
+            {subCategoryBalance && subCategoryBalance.remaining < 0 && (
+              <div style={{ fontSize: 11, marginTop: 4, color: '#b91c1c' }}>
+                Over-settled by {Math.abs(subCategoryBalance.remaining).toLocaleString()} — check
+                whether the opening entry is missing its sub-category.
+              </div>
+            )}
 
             {/* Inline add */}
             {showAddSubCat && (

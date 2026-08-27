@@ -52,6 +52,7 @@ export function TransactionListWrapper() {
           banks={banksWithLiveBalance}
           companies={companies}
           cashBalance={cashBalance}
+          transactions={vm.transactions}
           onClose={() => setShowModal(false)}
           onSaved={() => {
             setShowModal(false);

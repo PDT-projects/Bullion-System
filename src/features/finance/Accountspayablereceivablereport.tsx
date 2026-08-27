@@ -1,23 +1,26 @@
-// Accounts Payable & Receivable — unified report
-// Replaces AccountsPayableReport.tsx + AccountsReceivableReport.tsx
+// Payables & Receivables — full record register
 //
-// WHY MERGED
-// ──────────
-// AP and AR are the same ledger viewed from two sides. Keeping them apart meant
-// two copies of the classifier, two copies of the date filter, two copies of the
-// CSV exporter — and no way to see that a counterparty who owes us 50,000 is
-// also owed 30,000 by us. The combined view nets that out.
+// FIELD MAPPING — the trap in this schema
+// ───────────────────────────────────────
+// The Transaction field names do not mean what they say:
 //
-// CLASSIFICATION MODEL
-// ────────────────────
-// A transaction lands in this report when we can determine its SIDE:
+//   t.subCategory        → holds the CATEGORY      ("Account Receivable")
+//   t.subCategoryDetail  → holds the SUB-CATEGORY  ("loan to sana")
 //
-//   receivable → someone owes us
-//   payable    → we owe someone
+// Reading subCategory for both columns makes the Sub-Category column repeat the
+// category on every row and hides the counterparty names entirely. The names are
+// the whole point of the column, so this mapping is load-bearing.
 //
-// The side comes from the transaction's classification fields, never from the
-// cash direction. The EFFECT (does the balance go up or down?) comes from the
-// cash direction:
+// RECEIVED vs PAID
+// ────────────────
+// Driven by the cash direction, never by the side. An Outflow is money leaving,
+// so it fills Amount Paid; an Inflow fills Amount Received. Putting an Outflow's
+// figure under Amount Received makes every lending row read as income.
+//
+// SIDE vs EFFECT
+// ──────────────
+// SIDE (receivable/payable) comes from the category text. EFFECT (does the
+// balance rise or fall) comes from the cash direction:
 //
 //   ┌─────────────┬──────────────┬──────────────┐
 //   │             │ Cash Outflow │ Cash Inflow  │
@@ -26,1790 +29,893 @@
 //   │ payable     │  DECREASE    │  INCREASE    │  we repay → they lend
 //   └─────────────┴──────────────┴──────────────┘
 //
-// This 2×2 is what the old files got wrong. They hardcoded one keyword list per
-// direction, so `Cash Outflow + "Account Payable"` (paying down a payable — the
-// single most common AP movement) matched nothing and was silently dropped, as
-// was `Cash Outflow + "Account Receivable"`. Both are now handled.
+// AMOUNT BASIS
+// ────────────
+// Money that actually moved (totalPaid / amountPaid) — the same basis as
+// computeCashInHandBalance and the Sub Category hint in QuickTransactionModal.
+// An entry of Total 20,000 / Received 10,000 moves cash by 10,000, so it must
+// move this ledger by 10,000 too, or one entry shifts two numbers differently.
 //
-// BALANCE vs PERIOD
-// ─────────────────
-// AP/AR are point-in-time balances, not period flows. The old reports applied a
-// date range to the balance itself, so picking "This month" on a loan advanced
-// in January and repaid in March showed a repayment with no matching advance and
-// reported the counterparty as overpaid. Here the date controls are:
-//
-//   As of      — balances include every movement up to this date
-//   Activity   — movements before this date fold into an Opening balance
-//
-// Closing = Opening + Increases − Decreases, which always ties out.
-//
-// SIGN CONVENTION
-// ───────────────
-// Throughout the combined view, positive is in our favour: a positive net means
-// the counterparty owes us, negative means we owe them.
+// SOURCES
+// ───────
+//   1. Transactions whose category resolves to a receivable/payable side.
+//   2. Invoices still carrying a balance — a receivable from the day it is
+//      issued. Fully-paid invoices are skipped: their payments already appear
+//      as transactions, so counting both would double them.
 
 import React, { useMemo, useState } from 'react';
-import {
-  ChevronRight, TrendingUp, TrendingDown, Users, Clock, AlertTriangle,
-  Download, Calendar, Layers, Minimize2, Maximize2, Scale, Search, Info,
-  Receipt, Wallet, FileText,
-} from 'lucide-react';
+import { Download, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Calendar, X } from 'lucide-react';
 import { Transaction } from '../../modules/transactions/models/types';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Props
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Grouped views (one row per counterparty). */
-export type ArApTab = 'combined' | 'receivable' | 'payable';
-/** All views, including the flat transaction ledger. */
-export type ArApView = 'ledger' | ArApTab;
 
 interface Props {
   transactions: Transaction[];
-  /**
-   * Invoice records. Used to fill the Invoice Details column with the customer
-   * name and outstanding balance. Optional — without it the report falls back
-   * to whatever the transaction itself carries in `detailCategory` /
-   * `remainingAmount`, which the bridge service already populates.
-   */
-  invoices?: any[];
-  onBack?: () => void;
-  /** Which view opens first. */
-  defaultTab?: ArApView;
-  /** Display currency label. */
-  currency?: string;
-  /**
-   * Wires the "Record Payment" column to your existing payment flow. Left
-   * unset, the column renders the row's status as read-only text instead of an
-   * action, so the report is never a dead button.
-   */
-  onRecordPayment?: (row: LedgerRow) => void;
+  invoices?:    any[];
+  /** All bank accounts, including ones with no activity yet. Needed so the
+   *  Account filter can list an account that exists but has no records — a
+   *  dropdown built only from the data silently hides those. */
+  banks?:       any[];
+  /** Accepted for ReportsHub compatibility — the hub renders its own back
+   *  button above this view, so the page does not render a second one. */
+  onBack?:      () => void;
+  /** Accepted for ReportsHub compatibility; the register has no tabs. */
+  defaultTab?:  string;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Domain types
-// ─────────────────────────────────────────────────────────────────────────────
 
 type Side = 'receivable' | 'payable';
-type Effect = 'increase' | 'decrease';
-type Bucket = 'current' | '1-30' | '31-60' | '61-90' | '90+';
-type Basis = 'settled' | 'gross';
 
-interface Movement {
-  id: string;
-  txnRef: string;
-  date: string;
-  side: Side;
-  effect: Effect;
-  amount: number;
-  grossAmount: number;
-  counterparty: string;
-  counterpartyKey: string;
-  category: string;
-  mode?: string;
-  note?: string;
-  dueDate?: string;
-  isPartial: boolean;
-  company?: string;
+interface Row {
+  key:           string;
+  date:          string;
+  /** Tie-breaker for same-day entries. The document id is random, so ordering
+   *  by it puts a repayment before the loan it repays and the running balance
+   *  opens with a figure that never existed. Time + the sequence baked into
+   *  TXN-240826-005 restores the order things actually happened in. */
+  seq:           string;
+  flow:          'Inflow' | 'Outflow' | '';
+  category:      string;
+  subCategory:   string;   // the NAME — loan to sana, abc …
+  invoiceDetails: string;
+  amount:        number;
+  received:      number;
+  paid:          number;
+  remRecv:       number;
+  remPay:        number;
+  totalRecv:     number;
+  totalPay:      number;
+  dueDate:       string;
+  status:        string;
+  partialTxn:    boolean;   // this entry's own amount was only part-settled
+  remarks:       string;
+  txnType:       string;
+  refNo:         string;
+  counterparty:  string;
+  account:       string;
+  branch:        string;
+  side:          Side;
 }
 
-interface AgingLots {
-  buckets: Record<Bucket, number>;
-  oldestAgeDays: number;
+// ── Classification ──────────────────────────────────────────────────────────
+const sideOf = (v: unknown): Side | null => {
+  const c = String(v || '').trim().toLowerCase();
+  if (c.includes('receivable')) return 'receivable';
+  if (c.includes('payable'))    return 'payable';
+  return null;
+};
+
+const isCommitted = (t: any): boolean => {
+  const s = t?.approvalStatus;
+  return !s || s === 'approved' || s === 'not_required';
+};
+
+const movedAmount = (t: any): number => {
+  const hasFields =
+    t?.totalPaid !== undefined || t?.amountPaid !== undefined || t?.paymentStatus !== undefined;
+  if (!hasFields) return Number(t?.amount) || 0;
+  return Number(t?.totalPaid ?? t?.amountPaid ?? 0) || 0;
+};
+
+/** subCategoryDetail is picked from a dropdown, so it is spelled consistently. */
+const nameOf = (t: any): string => {
+  const detail = String(t?.subCategoryDetail || '').trim();
+  if (detail) return detail;
+  const free = String(t?.paidBy || t?.paidTo || t?.remitterName || '').trim();
+  return free || 'Unassigned';
+};
+
+const iso = (d: unknown): string => {
+  const s = String(d || '');
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const p = new Date(s);
+  return isNaN(p.getTime()) ? '' : p.toISOString().slice(0, 10);
+};
+
+const aed = (n: number): string =>
+  `AED ${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// ── Register construction ───────────────────────────────────────────────────
+function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
+  const raw: Row[] = [];
+
+  for (const t of (transactions || []) as any[]) {
+    if (!isCommitted(t)) continue;
+
+    const side = sideOf(t.subCategory) || sideOf(t.detailCategory);
+    if (!side) continue;
+
+    const moved = movedAmount(t);
+    if (moved === 0) continue;
+
+    const isInflow = t.mainCategory === 'Cash Inflow';
+    const raises   = side === 'receivable' ? !isInflow : isInflow;
+    const signed   = raises ? moved : -moved;
+
+    const face      = Number(t.amount) || 0;
+    const isPartial = t.paymentStatus === 'Partial';
+    const pending   = isPartial ? Math.max(0, face - moved) : 0;
+
+    raw.push({
+      key:            `t-${t.id || t.transactionId}`,
+      date:           iso(t.date),
+      seq:            `${String(t.time || '')}|${String(t.transactionId || '')}`,
+      flow:           isInflow ? 'Inflow' : 'Outflow',
+      category:       String(t.subCategory || '—'),        // see FIELD MAPPING
+      subCategory:    nameOf(t),                            // see FIELD MAPPING
+      invoiceDetails: t.linkedType === 'invoice' && pending > 0
+                        ? `${t.linkedId || ''} · ${aed(pending)} pending`
+                        : '',
+      amount:         face,
+      received:       isInflow  ? moved : 0,                // see RECEIVED vs PAID
+      paid:           !isInflow ? moved : 0,
+      remRecv:        side === 'receivable' ? signed : 0,
+      remPay:         side === 'payable'    ? signed : 0,
+      totalRecv:      0,
+      totalPay:       0,
+      dueDate:        iso(t.dueDate),
+      status:         '',            // set after running totals — see below
+      partialTxn:     isPartial,
+      remarks:        String(t.note || t.detailCategory || ''),
+      txnType:        t.linkedType === 'invoice'   ? 'Invoice'
+                    : t.linkedType === 'inventory' ? 'Inventory'
+                    : 'Manual',
+      refNo:          String(t.linkedId || t.transactionId || ''),
+      counterparty:   nameOf(t),
+      account:        String(t.accountName || t.bankName || (t.mode === 'Cash' ? 'Cash in Hand' : '') || '—'),
+      branch:         String(t.branchName || t.company || '—'),
+      side,
+    });
+  }
+
+  for (const inv of (invoices || []) as any[]) {
+    const total = Number(inv?.totalAmount) || 0;
+    if (total === 0) continue;
+    const paid        = Number(inv?.paidAmount) || 0;
+    const outstanding = total - paid;
+    if (outstanding <= 0.01) continue;
+
+    const name  = String(inv?.customerName || '').trim() || 'Unknown';
+    const phone = String(inv?.customerPhone || '').trim();
+
+    raw.push({
+      key:            `i-${inv.id || inv.invoiceNumber}`,
+      date:           iso(inv.date || inv.invoiceDate || inv.createdAt),
+      seq:            `|${String(inv.invoiceNumber || '')}`,
+      flow:           '',
+      category:       'A/C Receivable',
+      subCategory:    name,
+      invoiceDetails: `${inv.invoiceNumber || ''} · ${name} · ${aed(outstanding)} pending`,
+      amount:         total,
+      received:       paid,
+      paid:           0,
+      remRecv:        outstanding,
+      remPay:         0,
+      totalRecv:      0,
+      totalPay:       0,
+      dueDate:        iso(inv.dueDate),
+      status:         '',
+      partialTxn:     paid > 0,
+      remarks:        phone ? `Invoice · ${phone}` : 'Invoice',
+      txnType:        'Invoice',
+      refNo:          String(inv.invoiceNumber || ''),
+      // Phone keeps two same-named customers apart.
+      counterparty:   phone ? `${name} (${phone})` : name,
+      account:        '—',
+      branch:         String(inv.branch || inv.location || '—'),
+      side:           'receivable',
+    });
+  }
+
+  // Running totals must be computed in date order, otherwise the balances
+  // describe a sequence of events that never happened.
+  raw.sort((a, b) =>
+    (a.date || '').localeCompare(b.date || '') || a.seq.localeCompare(b.seq) || a.key.localeCompare(b.key));
+  const rr = new Map<string, number>();
+  const rp = new Map<string, number>();
+  for (const r of raw) {
+    rr.set(r.counterparty, (rr.get(r.counterparty) || 0) + r.remRecv);
+    rp.set(r.counterparty, (rp.get(r.counterparty) || 0) + r.remPay);
+    r.totalRecv = rr.get(r.counterparty)!;
+    r.totalPay  = rp.get(r.counterparty)!;
+
+    // Status reflects the POSITION, not the single entry. Marking a row
+    // "All Cleared" while the person still owes 1,400 is the one thing this
+    // column must never do. Partial still wins as a label, because a
+    // part-settled entry is worth calling out even mid-sequence.
+    const balance = r.totalRecv - r.totalPay;
+    r.status = r.partialTxn
+      ? 'Partial'
+      : Math.abs(balance) < 0.01 ? 'Cleared' : 'Outstanding';
+  }
+  return raw;
 }
 
-interface SideBalance {
-  opening: number;
-  increases: number;
-  decreases: number;
-  closing: number;
-  movements: Movement[];
-  aging: AgingLots;
+// ── Column definitions — one source of truth for header, filter and cell ────
+type Align = 'left' | 'right';
+interface Col {
+  id:     string;
+  label:  string;
+  align:  Align;
+  /** Filter value for a row. Empty string means "no value". */
+  val:    (r: Row) => string;
+  /** Rendered cell. */
+  cell:   (r: Row) => React.ReactNode;
 }
 
-interface PartyRow {
-  key: string;
-  name: string;
-  receivable: SideBalance;
-  payable: SideBalance;
-  /** Positive = they owe us. Negative = we owe them. */
-  net: number;
-  movementCount: number;
-}
-
-const EMPTY_BUCKETS = (): Record<Bucket, number> =>
-  ({ current: 0, '1-30': 0, '31-60': 0, '61-90': 0, '90+': 0 });
-
-const emptySide = (): SideBalance => ({
-  opening: 0, increases: 0, decreases: 0, closing: 0,
-  movements: [], aging: { buckets: EMPTY_BUCKETS(), oldestAgeDays: 0 },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Classification vocabulary
-//
-// Sorted longest-first at module load so the most specific phrase always wins.
-// "loan repayment received" must beat "loan repayment", or money coming back to
-// us gets booked as us paying someone down.
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface SideToken { token: string; side: Side }
-
-// Declared before sorting: calling .sort() on the literal defeats contextual
-// typing, so `side` would widen to `string` and fail the SideToken annotation.
-const SIDE_TOKEN_LIST: SideToken[] = [
-  // ── Receivable: someone owes us ────────────────────────────────────────────
-  { token: 'loan repayment received', side: 'receivable' },
-  { token: 'loan paid to employee',   side: 'receivable' },
-  { token: 'accounts receivable',     side: 'receivable' },
-  { token: 'account receivable',      side: 'receivable' },
-  { token: 'loans receivable',        side: 'receivable' },
-  { token: 'loan receivable',         side: 'receivable' },
-  { token: 'loan disbursed',          side: 'receivable' },
-  { token: 'loan recovered',          side: 'receivable' },
-  { token: 'loan recovery',           side: 'receivable' },
-  { token: 'loan collected',          side: 'receivable' },
-  { token: 'advance given',           side: 'receivable' },
-  { token: 'loan issued',             side: 'receivable' },
-  { token: 'loan given',              side: 'receivable' },
-  { token: 'receivable',              side: 'receivable' },
-
-  // ── Payable: we owe someone ────────────────────────────────────────────────
-  { token: 'loan received - from employee', side: 'payable' },
-  { token: 'loan received - from company',  side: 'payable' },
-  { token: 'accounts payable',        side: 'payable' },
-  { token: 'account payable',         side: 'payable' },
-  { token: 'loan repayment',          side: 'payable' },
-  { token: 'loans payable',           side: 'payable' },
-  { token: 'loan borrowed',           side: 'payable' },
-  { token: 'loan received',           side: 'payable' },
-  { token: 'loan returned',           side: 'payable' },
-  { token: 'loan payable',            side: 'payable' },
-  { token: 'loan payback',            side: 'payable' },
-  { token: 'loan repaid',             side: 'payable' },
-  { token: 'loan taken',              side: 'payable' },
-  { token: 'payable',                 side: 'payable' },
+const COLS: Col[] = [
+  { id: 'date',        label: 'Date',                 align: 'left',
+    val: r => r.date,
+    cell: r => r.date || '—' },
+  { id: 'flow',        label: 'Flow',                 align: 'left',
+    val: r => r.flow,
+    cell: r => r.flow
+      ? <span style={{ fontWeight: 700, color: r.flow === 'Inflow' ? '#059669' : '#dc2626' }}>{r.flow}</span>
+      : '—' },
+  { id: 'category',    label: 'Category',             align: 'left',
+    val: r => r.category,
+    cell: r => <span style={{ fontWeight: 700, color: r.side === 'receivable' ? '#059669' : '#dc2626' }}>
+      {r.category}</span> },
+  { id: 'subCategory', label: 'Sub-Category',         align: 'left',
+    val: r => r.subCategory,
+    cell: r => <span style={{ fontWeight: 600, color: '#0f172a' }}>{r.subCategory}</span> },
+  { id: 'invoice',     label: 'Invoice Details',      align: 'left',
+    val: r => r.invoiceDetails,
+    cell: r => r.invoiceDetails
+      ? <span style={{ color: '#0369a1' }}>{r.invoiceDetails}</span> : '—' },
+  { id: 'amount',      label: 'Amount',               align: 'right',
+    val: r => (r.amount ? aed(r.amount) : ''),
+    cell: r => aed(r.amount) },
+  { id: 'received',    label: 'Amount Received',      align: 'right',
+    val: r => (r.received ? aed(r.received) : ''),
+    cell: r => <span style={{ fontWeight: r.received ? 700 : 400, color: r.received ? '#059669' : '#94a3b8' }}>
+      {aed(r.received)}</span> },
+  { id: 'paid',        label: 'Amount Paid',          align: 'right',
+    val: r => (r.paid ? aed(r.paid) : ''),
+    cell: r => <span style={{ fontWeight: r.paid ? 700 : 400, color: r.paid ? '#dc2626' : '#94a3b8' }}>
+      {aed(r.paid)}</span> },
+  { id: 'remRecv',     label: 'Remaining Receivable', align: 'right',
+    val: r => (r.remRecv ? aed(r.remRecv) : ''),
+    cell: r => <span style={{ color: r.remRecv < 0 ? '#b91c1c' : r.remRecv ? '#059669' : '#94a3b8' }}>
+      {aed(r.remRecv)}</span> },
+  { id: 'remPay',      label: 'Remaining Payable',    align: 'right',
+    val: r => (r.remPay ? aed(r.remPay) : ''),
+    cell: r => <span style={{ color: r.remPay < 0 ? '#b91c1c' : r.remPay ? '#dc2626' : '#94a3b8' }}>
+      {aed(r.remPay)}</span> },
+  { id: 'totalRecv',   label: 'Total Receivable',     align: 'right',
+    val: r => (r.totalRecv ? aed(r.totalRecv) : ''),
+    cell: r => <span style={{ fontWeight: 700, color: '#047857' }}>{aed(r.totalRecv)}</span> },
+  { id: 'totalPay',    label: 'Total Payable',        align: 'right',
+    val: r => (r.totalPay ? aed(r.totalPay) : ''),
+    cell: r => <span style={{ fontWeight: 700, color: '#b45309' }}>{aed(r.totalPay)}</span> },
+  { id: 'dueDate',     label: 'Due Date',             align: 'left',
+    val: r => r.dueDate,
+    cell: r => r.dueDate || '—' },
+  { id: 'status',      label: 'Payment Status',       align: 'left',
+    val: r => r.status,
+    cell: r => <span style={{
+      display: 'inline-block', padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700,
+      backgroundColor: r.status === 'Cleared' ? '#ecfdf5' : r.status === 'Partial' ? '#fffbeb' : '#fef2f2',
+      color:           r.status === 'Cleared' ? '#047857' : r.status === 'Partial' ? '#b45309' : '#b91c1c',
+    }}>{r.status}</span> },
+  { id: 'remarks',     label: 'Remarks',              align: 'left',
+    val: r => r.remarks,
+    cell: r => r.remarks || '—' },
+  { id: 'txnType',     label: 'Transaction Type',     align: 'left',
+    val: r => r.txnType,
+    cell: r => r.txnType },
+  { id: 'refNo',       label: 'Reference No.',        align: 'left',
+    val: r => r.refNo,
+    cell: r => <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#4f46e5' }}>{r.refNo || '—'}</span> },
+  { id: 'counterparty', label: 'Counterparty',        align: 'left',
+    val: r => r.counterparty,
+    cell: r => r.counterparty },
+  { id: 'account',     label: 'Account',              align: 'left',
+    val: r => r.account,
+    cell: r => r.account },
+  { id: 'branch',      label: 'Branch',               align: 'left',
+    val: r => r.branch,
+    cell: r => r.branch },
 ];
 
-const SIDE_TOKENS: SideToken[] =
-  [...SIDE_TOKEN_LIST].sort((a, b) => b.token.length - a.token.length);
+// Columns that get a filter chip. Deliberately a subset: the table still shows
+// every column, but filtering by a free-form value (Remarks) or by a derived
+// running figure (Total Receivable per row) produces dropdowns with one option
+// per row, which narrow nothing. Dates are handled by range pickers instead of
+// chips — an exact-date dropdown is almost never what someone wants.
+const CHIP_IDS = [
+  'flow', 'category', 'subCategory', 'received', 'paid',
+  'totalRecv', 'totalPay', 'status', 'refNo', 'account',
+] as const;
 
-// Sub-categories that are loan-shaped but carry no side of their own
-// ('Official Loan', 'Personal loan', 'Other loan - Full', …). These fall through
-// to the structured-field resolver below.
-const AMBIGUOUS_LOAN = /\bloan\b/;
+// ── Component ───────────────────────────────────────────────────────────────
+export function AccountsPayableReceivableReport({ transactions, invoices, banks }: Props) {
+  const [sel, setSel]           = useState<Record<string, string>>({});
+  const [openChip, setOpenChip] = useState<string | null>(null);
+  const [range, setRange] = useState({ from: '', to: '' });
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-const CASH_IN_TOKENS  = ['received', 'recovered', 'recovery', 'collected', 'borrowed', 'taken', 'inflow', 'credit'];
-const CASH_OUT_TOKENS = ['given', 'issued', 'disbursed', 'repaid', 'returned', 'payback', 'paid', 'outflow', 'debit'];
+  // Any click outside an open panel dismisses it. Without this the panel stays
+  // open behind the next one the user reaches for.
+  React.useEffect(() => {
+    if (!openChip) return;
+    const close = () => setOpenChip(null);
+    // Deferred so the click that opened the panel doesn't immediately close it.
+    const id = window.setTimeout(() => document.addEventListener('click', close), 0);
+    return () => { window.clearTimeout(id); document.removeEventListener('click', close); };
+  }, [openChip]);
 
-// Approval states that must never reach a financial statement.
-const EXCLUDED_APPROVAL = new Set(['pending_approval', 'rejected']);
+  const allRows = useMemo(() => buildRows(transactions, invoices || []), [transactions, invoices]);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Primitives
-// ─────────────────────────────────────────────────────────────────────────────
-
-const num = (v: any): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const numOrNull = (v: any): number | null => {
-  if (v === null || v === undefined || v === '') return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-};
-
-const fmt = (n: number) =>
-  num(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const fmtDate = (iso: string) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
-};
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-const daysBetween = (iso: string, ref: string): number => {
-  if (!iso) return 0;
-  const a = new Date(iso), b = new Date(ref);
-  if (isNaN(a.getTime()) || isNaN(b.getTime())) return 0;
-  return Math.max(0, Math.floor((b.getTime() - a.getTime()) / 86_400_000));
-};
-
-const norm = (v: any) => String(v ?? '').trim().toLowerCase();
-
-const cleanName = (v: any): string => String(v ?? '').trim().replace(/\s+/g, ' ');
-
-const bucketOf = (ageDays: number): Bucket =>
-  ageDays <= 0  ? 'current' :
-  ageDays <= 30 ? '1-30'    :
-  ageDays <= 60 ? '31-60'   :
-  ageDays <= 90 ? '61-90'   : '90+';
-
-const csvCell = (v: any): string => {
-  const s = String(v ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Classification engine
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Only structured classification fields are scanned. The old reports walked
- * EVERY string on the transaction — including `note`, `paidBy`, `paidTo` and
- * `company` — so a note reading "cleared before the loan given last month"
- * booked a receivable, and a supplier literally named "Payable Traders" became
- * a lender. Notes are for humans; categories are for the ledger.
- */
-const classificationText = (t: any): string => [
-  t.subCategory, t.subCategoryDetail, t.detailCategory,
-  t.mainCategory, t.plSubCategory, t.bsSubCategory,
-].filter(Boolean).map(norm).join(' | ');
-
-/** Longest-match wins — see the SIDE_TOKENS comment. */
-const sideFromText = (text: string): Side | null => {
-  for (const t of SIDE_TOKENS) if (text.includes(t.token)) return t.side;
-  return null;
-};
-
-/**
- * Cash direction. `mainCategory` is authoritative when it says Inflow/Outflow,
- * but the schema has a THIRD main category — 'Loan' — and the old reports
- * returned null for it, silently discarding every transaction filed under the
- * one category most likely to belong in this report.
- */
-export const detectDirection = (t: any): 'inflow' | 'outflow' | null => {
-  const main = norm(t.mainCategory);
-  if (main.includes('outflow')) return 'outflow';
-  if (main.includes('inflow'))  return 'inflow';
-
-  // mainCategory === 'Loan' (or anything else): read the verb off the category path.
-  const text = classificationText(t);
-  const inHit  = CASH_IN_TOKENS.find(k => text.includes(k));
-  const outHit = CASH_OUT_TOKENS.find(k => text.includes(k));
-  if (inHit && !outHit)  return 'inflow';
-  if (outHit && !inHit)  return 'outflow';
-
-  // Last resort: who was on the other end of the money.
-  const paidTo = cleanName(t.paidTo), paidBy = cleanName(t.paidBy);
-  if (paidTo && !paidBy) return 'outflow';
-  if (paidBy && !paidTo) return 'inflow';
-  return null;
-};
-
-/** Side resolution, most-trustworthy signal first. */
-const detectSide = (t: any, direction: 'inflow' | 'outflow' | null): Side | null => {
-  // 1. Explicit structured field written by the loans module.
-  const lt = norm(t.loanType);
-  if (lt === 'receivable') return 'receivable';
-  if (lt === 'payable')    return 'payable';
-
-  // 2. Category vocabulary.
-  const text = classificationText(t);
-  const fromText = sideFromText(text);
-  if (fromText) return fromText;
-
-  // 3. Loan-shaped but unsided ('Official Loan', 'Personal loan', 'Other loan…').
-  const isLoanish = norm(t.linkedType) === 'loan' || AMBIGUOUS_LOAN.test(text);
-  if (!isLoanish) return null;
-
-  if (cleanName(t.borrowerName)) return 'receivable';
-  if (cleanName(t.lenderName))   return 'payable';
-
-  // Money out on a loan = we lent it. Money in = we borrowed it.
-  if (direction === 'outflow') return 'receivable';
-  if (direction === 'inflow')  return 'payable';
-  return null;
-};
-
-/**
- * How much money actually moved.
- *
- * `amount` is the face value of the obligation. When a transaction is only
- * partially settled, the cash that changed hands is `amountPaid` / `totalPaid` /
- * the sum of `partialPayments`. The old reports always used `amount`, which
- * overstated both sides of the ledger on every partial payment in the system.
- *
- * The report exposes this as the "Basis" toggle: `gross` values the obligation,
- * `settled` values the cash. Settled is the default because that is what
- * reconciles against bank and cash balances.
- */
-export const settledAmount = (t: any): number => {
-  const gross = num(t.amount);
-  const partialSum = Array.isArray(t.partialPayments)
-    ? t.partialPayments.reduce((s: number, p: any) => s + num(p?.amount), 0)
-    : 0;
-
-  const totalPaid  = numOrNull(t.totalPaid);
-  const amountPaid = numOrNull(t.amountPaid);
-  const best = Math.max(partialSum, totalPaid ?? 0, amountPaid ?? 0);
-
-  if (norm(t.paymentStatus) === 'partial') {
-    // A partial with no recorded payment figure is bad data; fall back to gross
-    // rather than dropping the obligation off the report entirely.
-    return best > 0 ? best : gross;
-  }
-  // Fully settled or untracked: prefer a recorded figure, else face value.
-  if (totalPaid !== null || amountPaid !== null || partialSum > 0) {
-    return best > 0 ? best : gross;
-  }
-  return gross;
-};
-
-/** Counterparty name, chosen by which end of the transaction they sat on. */
-const detectCounterparty = (t: any, side: Side, effect: Effect): string => {
-  const named = side === 'receivable' ? cleanName(t.borrowerName) : cleanName(t.lenderName);
-  if (named) return named;
-
-  // Receivable increase / payable decrease = money left us → the recipient.
-  // Receivable decrease / payable increase = money reached us → the sender.
-  const moneyLeftUs = effect === (side === 'receivable' ? 'increase' : 'decrease');
-
-  const candidate = moneyLeftUs
-    ? cleanName(t.paidTo) || cleanName(t.accountablePerson) || cleanName(t.employeeName)
-    : cleanName(t.paidBy) || cleanName(t.remitterName) || cleanName(t.employeeName);
-
-  // Deliberately NOT falling back to `company` or `note`. `company` is the
-  // branch that booked the entry, not the counterparty — using it collapsed
-  // every unnamed entry into a fake "Bullion Electronics - Dubai" debtor. `note`
-  // is free text, so it shattered one real counterparty into a dozen rows.
-  return candidate || 'Unallocated';
-};
-
-const isExcluded = (t: any): boolean => {
-  if (EXCLUDED_APPROVAL.has(norm(t.approvalStatus))) return true;
-  // Deletes are soft — the list view calls them "archived". Archived rows stay
-  // in the collection, so a report that does not filter them double-counts.
-  if (t.isDeleted === true || t.deleted === true || t.archived === true) return true;
-  if (t.deletedAt) return true;
-  if (norm(t.status) === 'deleted' || norm(t.status) === 'archived') return true;
-  return false;
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Aging — FIFO lot consumption
-//
-// Decreases are applied against increases oldest-first. Whatever remains open is
-// aged individually, so a party with a 90-day-old 10,000 and a fresh 50,000 shows
-// 10,000 in the 90+ bucket and 50,000 in Current — not 60,000 in one bucket,
-// which is what bucketing the whole net by the oldest date produced before.
-// ─────────────────────────────────────────────────────────────────────────────
-
-function computeAging(movements: Movement[], opening: number, asOf: string): AgingLots {
-  const buckets = EMPTY_BUCKETS();
-  let oldestAgeDays = 0;
-
-  const increases = movements
-    .filter(m => m.effect === 'increase')
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  const decreaseTotal = movements
-    .filter(m => m.effect === 'decrease')
-    .reduce((s, m) => s + m.amount, 0);
-
-  // An opening balance is an aggregate with no lot detail. Treat it as the
-  // oldest lot so it is consumed first and aged against the window start.
-  const lots: { date: string; dueDate?: string; amount: number }[] = [];
-  if (opening > 0) lots.push({ date: '', amount: opening });
-  for (const m of increases) lots.push({ date: m.date, dueDate: m.dueDate, amount: m.amount });
-
-  let toConsume = decreaseTotal;
-  for (const lot of lots) {
-    if (toConsume >= lot.amount) { toConsume -= lot.amount; continue; }
-    const open = lot.amount - toConsume;
-    toConsume = 0;
-
-    // A due date means age is days PAST DUE — an invoice due next month is not
-    // overdue no matter how long ago it was raised.
-    const anchor = lot.dueDate || lot.date;
-    const age = anchor ? daysBetween(anchor, asOf) : 0;
-    const effectiveAge = lot.dueDate && new Date(lot.dueDate) > new Date(asOf) ? 0 : age;
-
-    buckets[bucketOf(effectiveAge)] += open;
-    if (effectiveAge > oldestAgeDays) oldestAgeDays = effectiveAge;
-  }
-
-  return { buckets, oldestAgeDays };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Ledger builder
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface Ledger {
-  parties: PartyRow[];
-  totals: {
-    receivable: number;
-    payable: number;
-    net: number;
-    partyCount: number;
-    receivableParties: number;
-    payableParties: number;
-    overdue: number;
-    critical: number;
-  };
-  aging: { receivable: Record<Bucket, number>; payable: Record<Bucket, number> };
-  diagnostics: { skippedPendingApproval: number; unclassifiedLoanLike: number; unallocated: number };
-}
-
-export function buildLedger(
-  transactions: Transaction[],
-  opts: { from: string; asOf: string; basis: Basis },
-): Ledger {
-  const { from, asOf, basis } = opts;
-
-  const inWindow: Movement[] = [];
-  const priorBySideAndParty = new Map<string, number>();  // `${key}|${side}` → signed prior balance
-  const partyNames = new Map<string, string>();
-
-  let skippedPendingApproval = 0;
-  let unclassifiedLoanLike = 0;
-
-  for (const raw of transactions || []) {
-    const t = raw as any;
-
-    if (EXCLUDED_APPROVAL.has(norm(t.approvalStatus))) { skippedPendingApproval++; continue; }
-    if (isExcluded(t)) continue;
-
-    const direction = detectDirection(t);
-    const side = detectSide(t, direction);
-
-    if (!side) continue;
-    if (!direction) {
-      // Recognisably a loan/AR/AP entry, but we cannot tell which way the money
-      // went. Surfaced in the diagnostics chip instead of vanishing silently.
-      unclassifiedLoanLike++;
-      continue;
+  // Each dropdown lists only values that actually occur, so no option can ever
+  // return an empty table.
+  const options = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    for (const c of COLS) {
+      m[c.id] = Array.from(new Set(allRows.map(c.val).filter(v => v && v !== '—'))).sort();
     }
+    // Union with every known account so a bank with no entries yet still
+    // appears — picking it and seeing nothing is a useful answer.
+    const names = [
+      'Cash in Hand',
+      ...(banks || []).map(b => String(b?.name || '').trim()).filter(Boolean),
+    ];
+    m.account = Array.from(new Set([...m.account, ...names])).sort();
+    return m;
+  }, [allRows, banks]);
 
-    const date = String(t.date || '').slice(0, 10);
-    if (!date || date > asOf) continue;
-
-    const effect: Effect =
-      side === 'receivable'
-        ? (direction === 'outflow' ? 'increase' : 'decrease')
-        : (direction === 'inflow'  ? 'increase' : 'decrease');
-
-    const gross = num(t.amount);
-    const amount = basis === 'gross' ? gross : settledAmount(t);
-    if (amount === 0) continue;
-
-    const name = detectCounterparty(t, side, effect);
-    const key = name.toLowerCase();
-    if (!partyNames.has(key)) partyNames.set(key, name);
-
-    if (date < from) {
-      // Folds into the opening balance rather than being discarded.
-      const pk = `${key}|${side}`;
-      const signed = effect === 'increase' ? amount : -amount;
-      priorBySideAndParty.set(pk, (priorBySideAndParty.get(pk) || 0) + signed);
-      continue;
+  // Built from allRows, never from the filtered set. A history that changed
+  // shape depending on the active filters would be misleading — the point of
+  // opening a row is to see everything that happened with that person.
+  const history = useMemo(() => {
+    const m = new Map<string, Row[]>();
+    for (const r of allRows) {
+      const list = m.get(r.counterparty);
+      if (list) list.push(r);
+      else m.set(r.counterparty, [r]);
     }
+    return m;
+  }, [allRows]);
 
-    inWindow.push({
-      id: String(t.id || `${t.transactionId}-${date}-${amount}`),
-      txnRef: String(t.transactionId || ''),
-      date,
-      side,
-      effect,
-      amount,
-      grossAmount: gross,
-      counterparty: name,
-      counterpartyKey: key,
-      category: String(t.subCategoryDetail || t.subCategory || t.detailCategory || ''),
-      mode: t.mode,
-      note: t.note,
-      dueDate: t.dueDate || t.expectedReturnDate || undefined,
-      isPartial: norm(t.paymentStatus) === 'partial',
-      company: t.branchName || t.company,
-    });
-  }
-
-  inWindow.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-
-  // Every party that has either window activity or an opening balance.
-  const keys = new Set<string>([
-    ...inWindow.map(m => m.counterpartyKey),
-    ...Array.from(priorBySideAndParty.keys()).map(k => k.split('|')[0]),
-  ]);
-
-  const parties: PartyRow[] = Array.from(keys).map(key => {
-    const name = partyNames.get(key) || key;
-    const mine = inWindow.filter(m => m.counterpartyKey === key);
-
-    const build = (side: Side): SideBalance => {
-      const movements = mine.filter(m => m.side === side);
-      const opening = priorBySideAndParty.get(`${key}|${side}`) || 0;
-      const increases = movements.filter(m => m.effect === 'increase').reduce((s, m) => s + m.amount, 0);
-      const decreases = movements.filter(m => m.effect === 'decrease').reduce((s, m) => s + m.amount, 0);
-      const closing = opening + increases - decreases;
-      return {
-        opening, increases, decreases, closing, movements,
-        aging: closing > 0
-          ? computeAging(movements, opening, asOf)
-          : { buckets: EMPTY_BUCKETS(), oldestAgeDays: 0 },
-      };
-    };
-
-    const receivable = build('receivable');
-    const payable = build('payable');
-
-    return {
-      key, name, receivable, payable,
-      net: receivable.closing - payable.closing,
-      movementCount: mine.length,
-    };
-  }).sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || a.name.localeCompare(b.name));
-
-  const aging = { receivable: EMPTY_BUCKETS(), payable: EMPTY_BUCKETS() };
-  for (const p of parties) {
-    (Object.keys(aging.receivable) as Bucket[]).forEach(b => {
-      aging.receivable[b] += p.receivable.aging.buckets[b];
-      aging.payable[b]    += p.payable.aging.buckets[b];
-    });
-  }
-
-  // Only positive closings roll into the headline totals. A negative receivable
-  // is an overpayment, not a negative asset, and netting it against real
-  // receivables would understate what is actually collectable.
-  const receivable = parties.reduce((s, p) => s + Math.max(0, p.receivable.closing), 0);
-  const payable    = parties.reduce((s, p) => s + Math.max(0, p.payable.closing), 0);
-
-  const overdueOf = (b: Record<Bucket, number>) => b['1-30'] + b['31-60'] + b['61-90'] + b['90+'];
-
-  return {
-    parties,
-    totals: {
-      receivable, payable, net: receivable - payable,
-      partyCount: parties.length,
-      receivableParties: parties.filter(p => p.receivable.closing > 0).length,
-      payableParties:    parties.filter(p => p.payable.closing > 0).length,
-      overdue:  overdueOf(aging.receivable) + overdueOf(aging.payable),
-      critical: aging.receivable['90+'] + aging.payable['90+'],
-    },
-    aging,
-    diagnostics: {
-      skippedPendingApproval,
-      unclassifiedLoanLike,
-      unallocated: parties.filter(p => p.key === 'unallocated').length,
-    },
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Flat ledger rows — the spreadsheet column layout
-//
-// One row per transaction, in the order the reference sheet specifies:
-//
-//   Date · Flow · Category · Sub-Category · Invoice Details · Amount ·
-//   Amount Received · Amount Paid · Remaining Receivable · Remaining Payable ·
-//   Total Receivable · Total Payable · Due Date · Record Payment ·
-//   Payment Status · Remarks       (+ Transaction Type and Reference No.)
-//
-// Receivable and Payable are interleaved in one table rather than split across
-// two sheets — Category tells you which side a row is on, and the paired
-// columns keep the two readable side by side.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export type RowStatus = 'All Cleared' | 'Partial' | 'Pending';
-
-export interface LedgerRow {
-  id: string;
-  /** The original transaction, so `onRecordPayment` can act on it. */
-  source: Transaction;
-
-  date: string;                 // A  Transaction Date
-  flow: 'Inflow' | 'Outflow';   // B  Flow
-  category: 'A/C Receivable' | 'A/C Payable';  // C  Category
-  subCategory: string;          // D  Sub-Category
-  invoiceNumber?: string;       // E  Invoice Details …
-  invoiceParty?: string;        // E  … name
-  invoiceRemaining?: number;    // E  … remaining (only when Pending/Partial)
-  amount: number;               // F  Amount
-  amountReceived: number;       // G  Amount Received
-  amountPaid: number;           // H  Amount Paid
-  remainingReceivable: number | null;  // I
-  remainingPayable: number | null;     // J
-  totalReceivable: number;      // K  running cumulative
-  totalPayable: number;         // L  running cumulative
-  dueDate?: string;             // M  Due Date
-  status: RowStatus;            // O  Payment Status
-  remarks: string;              // P  Remarks
-
-  transactionType: string;      // Transaction Type  (Invoice / Loan / Manual …)
-  referenceNo: string;          // Reference No.     (INV-1001 / TXN-…)
-
-  side: Side;
-  /** increase = obligation raised, decrease = obligation settled. */
-  effect: Effect;
-  /** True when the transaction carries its own settlement figures. */
-  hasExplicitSettlement: boolean;
-  counterparty: string;
-  daysOverdue: number;
-}
-
-/** Index invoices by every plausible key so lookup survives schema drift. */
-function indexInvoices(invoices?: any[]): Map<string, any> {
-  const map = new Map<string, any>();
-  for (const inv of invoices || []) {
-    if (!inv || typeof inv !== 'object') continue;
-    for (const k of [inv.invoiceNumber, inv.invoiceNo, inv.number, inv.id, inv.transactionId]) {
-      const key = norm(k);
-      if (key) map.set(key, inv);
+  const rows = useMemo(() => allRows.filter(r => {
+    // A row with no date can't satisfy a range, so it drops out rather than
+    // silently passing every filter.
+    if (range.from && (!r.date || r.date < range.from)) return false;
+    if (range.to   && (!r.date || r.date > range.to))   return false;
+    for (const c of COLS) {
+      const want = sel[c.id];
+      if (want && c.val(r) !== want) return false;
     }
-  }
-  return map;
-}
+    return true;
+  }), [allRows, sel, range]);
 
-export function buildRows(
-  transactions: Transaction[],
-  opts: { from: string; asOf: string; basis: Basis; invoices?: any[] },
-): LedgerRow[] {
-  const { from, asOf, basis } = opts;
-  const invoiceMap = indexInvoices(opts.invoices);
-  const rows: LedgerRow[] = [];
+  // Newest first for reading; running totals were already fixed above.
+  const view = useMemo(() => [...rows].reverse(), [rows]);
 
-  for (const raw of transactions || []) {
-    const t = raw as any;
-    if (isExcluded(t)) continue;
-
-    const direction = detectDirection(t);
-    const side = detectSide(t, direction);
-    if (!side || !direction) continue;
-
-    const date = String(t.date || '').slice(0, 10);
-    if (!date || date > asOf || date < from) continue;
-
-    const gross = num(t.amount);
-    const settled = settledAmount(t);
-    const value = basis === 'gross' ? gross : settled;
-    if (value === 0 && gross === 0) continue;
-
-    const effect: Effect =
-      side === 'receivable'
-        ? (direction === 'outflow' ? 'increase' : 'decrease')
-        : (direction === 'inflow'  ? 'increase' : 'decrease');
-
-    // Remaining on the obligation — NOT the same thing as the cash that moved.
-    //
-    // Two kinds of row exist and they need different treatment:
-    //
-    //  • Self-settling rows (invoices). The transaction carries its own
-    //    settlement: amount 700, amountPaid 700, remainingAmount 0. Everything
-    //    needed is on the record, so read it off directly.
-    //
-    //  • Pure raises (a loan given, with no payment fields set at all). The
-    //    obligation is 100% outstanding until a *separate* recovery transaction
-    //    reduces it. Reading `gross - settled` here would give 0 and wrongly
-    //    report the loan as cleared — these are resolved by FIFO in the pass
-    //    below, against the counterparty's later repayments.
-    const explicitRemaining = numOrNull(t.remainingAmount);
-    const hasExplicitSettlement =
-      explicitRemaining !== null ||
-      numOrNull(t.amountPaid) !== null ||
-      numOrNull(t.totalPaid) !== null ||
-      (Array.isArray(t.partialPayments) && t.partialPayments.length > 0);
-
-    const remaining = effect === 'decrease' ? 0
-      : hasExplicitSettlement ? Math.max(0, explicitRemaining ?? (gross - settled))
-      : gross;   // provisional — the FIFO pass below nets this down
-
-    // Invoice details. Prefer the invoice record; fall back to what the bridge
-    // service wrote into detailCategory ("Invoice: INV-1001 — Acme Ltd").
-    const linkRef = String(t.linkedRef || t.linkedId || '');
-    const inv = invoiceMap.get(norm(linkRef));
-    const isInvoice = norm(t.linkedType) === 'invoice' || /^inv[-y]?-/i.test(linkRef);
-
-    let invoiceNumber: string | undefined;
-    let invoiceParty: string | undefined;
-    if (isInvoice || inv) {
-      invoiceNumber = String(inv?.invoiceNumber || inv?.invoiceNo || linkRef || '') || undefined;
-      invoiceParty =
-        cleanName(inv?.customerName || inv?.customer || inv?.partyName || inv?.supplierName) ||
-        (String(t.detailCategory || '').split('—')[1] || '').trim() ||
-        undefined;
+  const totals = useMemo(() => {
+    let amount = 0, received = 0, paid = 0, recv = 0, pay = 0;
+    for (const r of rows) {
+      amount += r.amount; received += r.received; paid += r.paid;
+      recv += r.remRecv;  pay += r.remPay;
     }
+    return { amount, received, paid, recv, pay };
+  }, [rows]);
 
-    const dueDate = t.dueDate || t.expectedReturnDate || undefined;
+  // Outstanding record counts for the two headline cards.
+  const counts = useMemo(() => ({
+    recv: rows.filter(r => r.remRecv > 0).length,
+    pay:  rows.filter(r => r.remPay  > 0).length,
+  }), [rows]);
 
-    rows.push({
-      id: String(t.id || `${t.transactionId}-${date}-${gross}`),
-      source: raw,
-      date,
-      flow: direction === 'inflow' ? 'Inflow' : 'Outflow',
-      category: side === 'receivable' ? 'A/C Receivable' : 'A/C Payable',
-      subCategory: String(t.subCategoryDetail || t.subCategory || t.detailCategory || '—'),
-      invoiceNumber,
-      invoiceParty,
-      invoiceRemaining: undefined,   // set in the finalisation pass
-      amount: gross,
-      amountReceived: direction === 'inflow'  ? value : 0,
-      amountPaid:     direction === 'outflow' ? value : 0,
-      remainingReceivable: side === 'receivable' ? remaining : null,
-      remainingPayable:    side === 'payable'    ? remaining : null,
-      totalReceivable: 0,
-      totalPayable: 0,
-      dueDate,
-      status: 'Pending',
-      remarks: String(t.note || ''),
-      transactionType: t.linkedType
-        ? String(t.linkedType).charAt(0).toUpperCase() + String(t.linkedType).slice(1)
-        : 'Manual',
-      referenceNo: String(t.linkedRef || t.linkedId || t.transactionId || ''),
-      side,
-      effect,
-      hasExplicitSettlement,
-      counterparty: detectCounterparty(t, side, effect),
-      daysOverdue: 0,
-    });
-  }
+  const reversed = useMemo(
+    () => rows.filter(r => r.remRecv < 0 || r.remPay < 0).length, [rows]);
 
-  // Running totals only mean anything in date order, so the ledger sorts oldest
-  // first. K and L accumulate the receivable / payable raised to date.
-  rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-
-  // ── FIFO netting ───────────────────────────────────────────────────────────
-  // Pure raises (no settlement figures on the record) start fully outstanding.
-  // Consume them oldest-first with the counterparty's repayments on that side,
-  // so a loan given in January and half repaid in March reports half remaining
-  // rather than either zero or the full amount.
-  const groups = new Map<string, LedgerRow[]>();
-  for (const r of rows) {
-    const k = `${r.counterparty.toLowerCase()}|${r.side}`;
-    (groups.get(k) || groups.set(k, []).get(k)!).push(r);
-  }
-
-  for (const group of groups.values()) {
-    // Repayments only offset raises that were not already self-settled.
-    let pool = group
-      .filter(r => r.effect === 'decrease')
-      .reduce((s, r) => s + (r.side === 'receivable' ? r.amountReceived : r.amountPaid), 0);
-
-    for (const r of group) {
-      if (r.effect !== 'increase' || r.hasExplicitSettlement) continue;
-      const outstanding = Math.max(0, r.amount - pool);
-      pool = Math.max(0, pool - r.amount);
-      if (r.side === 'receivable') r.remainingReceivable = outstanding;
-      else                         r.remainingPayable = outstanding;
-    }
-  }
-
-  // ── Derived presentation fields ────────────────────────────────────────────
-  let runR = 0, runP = 0;
-  for (const r of rows) {
-    if (r.effect === 'increase') {
-      if (r.side === 'receivable') runR += r.amount; else runP += r.amount;
-    }
-    r.totalReceivable = runR;
-    r.totalPayable = runP;
-
-    const remaining = (r.side === 'receivable' ? r.remainingReceivable : r.remainingPayable) ?? 0;
-
-    // Status describes the obligation, not the cash. A row with nothing settled
-    // is Pending even if money moved, because on a raise the money moving IS
-    // the obligation being created.
-    r.status =
-      r.effect === 'decrease' || remaining <= 0.005 ? 'All Cleared'
-      : remaining >= r.amount - 0.005              ? 'Pending'
-      : 'Partial';
-
-    // The sheet shows the outstanding balance on the invoice only while the
-    // payment is Pending or Partial; a cleared row shows the reference alone.
-    r.invoiceRemaining = r.status === 'All Cleared' ? undefined : remaining;
-
-    r.daysOverdue = r.dueDate && remaining > 0 && new Date(r.dueDate) < new Date(asOf)
-      ? daysBetween(r.dueDate, asOf)
-      : 0;
-  }
-
-  return rows;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
-
-type Preset = 'all' | 'thisMonth' | 'lastMonth' | 'last3Months' | 'thisYear' | 'custom';
-
-const ALL_TIME_START = '2000-01-01';
-
-export function AccountsPayableReceivableReport({
-  transactions,
-  invoices,
-  defaultTab = 'ledger',
-  currency = 'AED',
-  onRecordPayment,
-}: Props) {
-  const [view, setView]       = useState<ArApView>(defaultTab);
-  // The grouped views narrow on this; `ledger` borrows the combined layout for
-  // its summary tiles and aging matrix.
-  const tab: ArApTab = view === 'ledger' ? 'combined' : view;
-  const setTab = (v: ArApTab) => setView(v);
-  const [preset, setPreset]   = useState<Preset>('all');
-  const [from, setFrom]       = useState<string>(ALL_TIME_START);
-  const [asOf, setAsOf]       = useState<string>(today);
-  const [basis, setBasis]     = useState<Basis>('settled');
-  const [search, setSearch]   = useState('');
-  const [hideSettled, setHideSettled] = useState(true);
-  const [sideFilter, setSideFilter]     = useState<'all' | Side>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | RowStatus>('all');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  const applyPreset = (p: Preset) => {
-    setPreset(p);
-    if (p === 'custom') return;
-    const now = new Date();
-    const iso = (d: Date) => d.toISOString().slice(0, 10);
-    switch (p) {
-      case 'thisMonth':   setFrom(iso(new Date(now.getFullYear(), now.getMonth(), 1)));     setAsOf(iso(now)); break;
-      case 'lastMonth':   setFrom(iso(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setAsOf(iso(new Date(now.getFullYear(), now.getMonth(), 0))); break;
-      case 'last3Months': setFrom(iso(new Date(now.getFullYear(), now.getMonth() - 2, 1))); setAsOf(iso(now)); break;
-      case 'thisYear':    setFrom(iso(new Date(now.getFullYear(), 0, 1)));                  setAsOf(iso(now)); break;
-      case 'all':         setFrom(ALL_TIME_START);                                          setAsOf(iso(now)); break;
-    }
-  };
-
-  const ledgerRows = useMemo(
-    () => buildRows(transactions, { from, asOf, basis, invoices }),
-    [transactions, from, asOf, basis, invoices],
-  );
-
-  const visibleRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return ledgerRows.filter(r => {
-      if (sideFilter !== 'all' && r.side !== sideFilter) return false;
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-      if (!q) return true;
-      return [r.counterparty, r.subCategory, r.referenceNo, r.invoiceNumber, r.invoiceParty, r.remarks]
-        .some(v => String(v || '').toLowerCase().includes(q));
-    });
-  }, [ledgerRows, sideFilter, statusFilter, search]);
-
-  const ledger = useMemo(
-    () => buildLedger(transactions, { from, asOf, basis }),
-    [transactions, from, asOf, basis],
-  );
-
-  const visibleParties = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return ledger.parties.filter(p => {
-      if (q && !p.name.toLowerCase().includes(q)) return false;
-
-      const rel =
-        tab === 'receivable' ? p.receivable.closing !== 0 || p.receivable.movements.length > 0 :
-        tab === 'payable'    ? p.payable.closing !== 0    || p.payable.movements.length > 0 :
-        true;
-      if (!rel) return false;
-
-      if (hideSettled) {
-        const balance =
-          tab === 'receivable' ? p.receivable.closing :
-          tab === 'payable'    ? p.payable.closing    : p.net;
-        if (Math.abs(balance) < 0.005) return false;
-      }
-      return true;
-    });
-  }, [ledger.parties, search, tab, hideSettled]);
-
-  const toggle = (key: string) => setExpanded(prev => {
-    const n = new Set(prev);
-    n.has(key) ? n.delete(key) : n.add(key);
-    return n;
-  });
-  const expandAll   = () => setExpanded(new Set(visibleParties.map(p => p.key)));
-  const collapseAll = () => setExpanded(new Set());
+  const activeCount =
+    Object.values(sel).filter(Boolean).length +
+    Object.values(range).filter(Boolean).length;
 
   const handleExport = () => {
-    const rows: string[] = [];
-    rows.push(['Accounts Payable & Receivable'].map(csvCell).join(','));
-    rows.push(['Activity from', from, 'As of', asOf, 'Basis', basis, 'Currency', currency].map(csvCell).join(','));
-    rows.push('');
-
-    // Ledger view exports the sheet layout, column for column.
-    if (view === 'ledger') {
-      rows.push([
-        'Transaction Date', 'Flow', 'Category', 'Sub-Category', 'Invoice Details',
-        'Amount', 'Amount Received', 'Amount Paid', 'Remaining Receivable', 'Remaining Payable',
-        'Total Receivable', 'Total Payable', 'Due Date', 'Payment Status', 'Remarks',
-        'Transaction Type', 'Reference No.',
-      ].map(csvCell).join(','));
-
-      for (const r of visibleRows) {
-        const invoiceDetails = [
-          r.invoiceNumber, r.invoiceParty,
-          r.invoiceRemaining !== undefined && r.invoiceRemaining > 0 ? `remaining ${r.invoiceRemaining.toFixed(2)}` : '',
-        ].filter(Boolean).join(' · ');
-
-        rows.push([
-          r.date, r.flow, r.category, r.subCategory, invoiceDetails,
-          r.amount.toFixed(2), r.amountReceived.toFixed(2), r.amountPaid.toFixed(2),
-          r.remainingReceivable === null ? '' : r.remainingReceivable.toFixed(2),
-          r.remainingPayable === null ? '' : r.remainingPayable.toFixed(2),
-          r.totalReceivable.toFixed(2), r.totalPayable.toFixed(2),
-          r.dueDate || '', r.status, r.remarks,
-          r.transactionType, r.referenceNo,
-        ].map(csvCell).join(','));
-      }
-
-      const blobL = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-      const aL = document.createElement('a');
-      aL.href = URL.createObjectURL(blobL);
-      aL.download = `receivables-payables-ledger-${asOf}.csv`;
-      document.body.appendChild(aL); aL.click(); document.body.removeChild(aL);
-      URL.revokeObjectURL(aL.href);
-      return;
-    }
-
-    rows.push(['Counterparty', 'Receivable Opening', 'Receivable Increase', 'Receivable Decrease',
-               'Receivable Closing', 'Payable Opening', 'Payable Increase', 'Payable Decrease',
-               'Payable Closing', 'Net Position', 'Oldest Open (days)'].map(csvCell).join(','));
-    for (const p of visibleParties) {
-      rows.push([
-        p.name,
-        p.receivable.opening.toFixed(2), p.receivable.increases.toFixed(2),
-        p.receivable.decreases.toFixed(2), p.receivable.closing.toFixed(2),
-        p.payable.opening.toFixed(2), p.payable.increases.toFixed(2),
-        p.payable.decreases.toFixed(2), p.payable.closing.toFixed(2),
-        p.net.toFixed(2),
-        String(Math.max(p.receivable.aging.oldestAgeDays, p.payable.aging.oldestAgeDays)),
-      ].map(csvCell).join(','));
-    }
-
-    rows.push('');
-    rows.push(['Movements'].map(csvCell).join(','));
-    rows.push(['Counterparty', 'Txn Ref', 'Date', 'Side', 'Effect', 'Category',
-               'Amount', 'Gross Amount', 'Partial', 'Mode', 'Branch', 'Due Date', 'Note'].map(csvCell).join(','));
-    for (const p of visibleParties) {
-      for (const m of [...p.receivable.movements, ...p.payable.movements]) {
-        rows.push([
-          p.name, m.txnRef, m.date, m.side, m.effect, m.category,
-          m.amount.toFixed(2), m.grossAmount.toFixed(2), m.isPartial ? 'yes' : 'no',
-          m.mode || '', m.company || '', m.dueDate || '', m.note || '',
-        ].map(csvCell).join(','));
-      }
-    }
-
-    rows.push('');
-    rows.push(['Aging', 'Current', '1-30', '31-60', '61-90', '90+', 'Total'].map(csvCell).join(','));
-    (['receivable', 'payable'] as const).forEach(s => {
-      const b = ledger.aging[s];
-      const total = b.current + b['1-30'] + b['31-60'] + b['61-90'] + b['90+'];
-      rows.push([s, b.current, b['1-30'], b['31-60'], b['61-90'], b['90+'], total]
-        .map(v => (typeof v === 'number' ? v.toFixed(2) : v)).map(csvCell).join(','));
-    });
-
-    rows.push('');
-    rows.push(['Total Receivable', ledger.totals.receivable.toFixed(2)].map(csvCell).join(','));
-    rows.push(['Total Payable', ledger.totals.payable.toFixed(2)].map(csvCell).join(','));
-    rows.push(['Net Position', ledger.totals.net.toFixed(2)].map(csvCell).join(','));
-
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [
+      COLS.map(c => esc(c.label)).join(','),
+      ...view.map(r => COLS.map(c => esc(c.val(r))).join(',')),
+    ].join('\n');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `accounts-payable-receivable-${asOf}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = `payables-receivables-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
     URL.revokeObjectURL(a.href);
   };
 
-  const cur = (n: number, opts?: { sign?: boolean }) => (
-    <>
-      {opts?.sign && n !== 0 && (n > 0 ? '+' : '−')}
-      <span style={{ opacity: 0.55, fontSize: '0.8em', marginRight: 3 }}>{currency}</span>
-      {fmt(Math.abs(n))}
-    </>
-  );
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 6, padding: 5, backgroundColor: '#f1f5f9', borderRadius: 11, width: 'fit-content' }}>
-        {([
-          ['ledger',     'Ledger',      <Receipt size={13} key="r" />],
-          ['combined',   'Combined',    <Scale size={13} key="s" />],
-          ['receivable', 'Receivables', <TrendingUp size={13} key="u" />],
-          ['payable',    'Payables',    <TrendingDown size={13} key="d" />],
-        ] as [ArApView, string, React.ReactNode][]).map(([id, label, icon]) => {
-          const active = view === id;
-          return (
-            <button key={id} onClick={() => setView(id)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '7px 15px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                backgroundColor: active ? '#fff' : 'transparent',
-                color: active ? '#0f172a' : '#64748b',
-                fontSize: 12.5, fontWeight: 700,
-                boxShadow: active ? '0 1px 3px rgba(15,23,42,0.10)' : 'none',
-                transition: 'all .12s ease',
-              }}>{icon} {label}</button>
-          );
-        })}
-      </div>
-
-      {/* ── Controls ───────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '14px 16px', backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <label style={LABEL}>Activity period</label>
-          {([['all', 'All time'], ['thisMonth', 'This month'], ['lastMonth', 'Last month'], ['last3Months', 'Last 3 months'], ['thisYear', 'This year']] as [Preset, string][]).map(([id, label]) => {
-            const active = preset === id;
-            return (
-              <button key={id} onClick={() => applyPreset(id)}
-                style={{
-                  padding: '5px 11px', borderRadius: 99,
-                  border: active ? 'none' : '1px solid #e2e8f0',
-                  backgroundColor: active ? '#0f172a' : '#fff',
-                  color: active ? '#fff' : '#334155',
-                  fontSize: 11.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-                }}>{label}</button>
-            );
-          })}
-          {preset === 'custom' && <span style={{ padding: '5px 11px', borderRadius: 99, backgroundColor: '#fef3c7', color: '#92400e', fontSize: 11, fontWeight: 700 }}>Custom</span>}
-
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, padding: 3, backgroundColor: '#f1f5f9', borderRadius: 8 }}>
-            {([['settled', 'Amount settled'], ['gross', 'Gross amount']] as [Basis, string][]).map(([id, label]) => (
-              <button key={id} onClick={() => setBasis(id)} title={
-                id === 'settled'
-                  ? 'Value each entry by the cash that actually moved (partial payments respected)'
-                  : 'Value each entry by the full face value of the obligation'
-              }
-                style={{
-                  padding: '5px 11px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                  backgroundColor: basis === id ? '#fff' : 'transparent',
-                  color: basis === id ? '#0f172a' : '#64748b',
-                  fontSize: 11, fontWeight: 700,
-                  boxShadow: basis === id ? '0 1px 2px rgba(15,23,42,0.08)' : 'none',
-                }}>{label}</button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
-          <Calendar size={15} color="#64748b" />
-          <label style={LABEL}>From</label>
-          <input type="date" value={from} max={asOf} style={INPUT}
-            onChange={e => { setFrom(e.target.value); setPreset('custom'); }} />
-          <label style={{ ...LABEL, color: '#0f172a' }}>As of</label>
-          <input type="date" value={asOf} min={from} style={{ ...INPUT, fontWeight: 700 }}
-            onChange={e => { setAsOf(e.target.value); setPreset('custom'); }} />
-
-          <div style={{ position: 'relative' }}>
-            <Search size={13} color="#94a3b8" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Find counterparty"
-              style={{ ...INPUT, paddingLeft: 28, width: 190 }} />
-          </div>
-
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
-            <input type="checkbox" checked={hideSettled} onChange={e => setHideSettled(e.target.checked)} style={{ cursor: 'pointer' }} />
-            Hide settled
-          </label>
-
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-            <button onClick={expandAll}   style={MINI_BTN}><Maximize2 size={12} /> Expand all</button>
-            <button onClick={collapseAll} style={MINI_BTN}><Minimize2 size={12} /> Collapse all</button>
-            <button onClick={handleExport} style={{ ...MINI_BTN, backgroundColor: '#0f172a', color: '#fff', border: 'none' }}><Download size={12} /> Export CSV</button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Diagnostics ────────────────────────────────────────────────────── */}
-      {(ledger.diagnostics.unclassifiedLoanLike > 0 ||
-        ledger.diagnostics.skippedPendingApproval > 0 ||
-        ledger.diagnostics.unallocated > 0) && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '10px 14px', borderRadius: 10, backgroundColor: '#fffbeb', border: '1px solid #fde68a' }}>
-          <Info size={14} color="#b45309" style={{ marginTop: 1, flexShrink: 0 }} />
-          <div style={{ fontSize: 11.5, color: '#78350f', lineHeight: 1.6 }}>
-            {ledger.diagnostics.skippedPendingApproval > 0 && (
-              <div><strong>{ledger.diagnostics.skippedPendingApproval}</strong> transaction(s) excluded — pending approval or rejected.</div>
-            )}
-            {ledger.diagnostics.unclassifiedLoanLike > 0 && (
-              <div><strong>{ledger.diagnostics.unclassifiedLoanLike}</strong> loan-related transaction(s) excluded — the cash direction could not be determined. Set the main category to Cash Inflow or Cash Outflow on these entries.</div>
-            )}
-            {ledger.diagnostics.unallocated > 0 && (
-              <div>Some entries have no counterparty and are grouped under <strong>Unallocated</strong>. Fill in Paid By / Paid To to split them out.</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Summary tiles ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
-        <Tile icon={<TrendingUp size={18} />} label="Total Receivable" sub={`${ledger.totals.receivableParties} debtor(s)`}
-              value={ledger.totals.receivable} currency={currency} fg="#059669" bg="#ecfdf5" />
-        <Tile icon={<TrendingDown size={18} />} label="Total Payable" sub={`${ledger.totals.payableParties} creditor(s)`}
-              value={ledger.totals.payable} currency={currency} fg="#dc2626" bg="#fef2f2" />
-        <Tile icon={<Scale size={18} />}
-              label={ledger.totals.net >= 0 ? 'Net Position (in our favour)' : 'Net Position (we owe)'}
-              sub={`${ledger.totals.partyCount} counterpart${ledger.totals.partyCount === 1 ? 'y' : 'ies'}`}
-              value={Math.abs(ledger.totals.net)} currency={currency}
-              fg={ledger.totals.net >= 0 ? '#059669' : '#b91c1c'}
-              bg={ledger.totals.net >= 0 ? '#ecfdf5' : '#fef2f2'} highlight />
-        <Tile icon={<Clock size={18} />} label="Overdue" sub="past due, both sides"
-              value={ledger.totals.overdue} currency={currency} fg="#c2410c" bg="#fff7ed" />
-        <Tile icon={<AlertTriangle size={18} />} label="Critical" sub="over 90 days"
-              value={ledger.totals.critical} currency={currency} fg="#b91c1c" bg="#fef2f2" />
-      </div>
-
-      {/* ── Aging matrix ───────────────────────────────────────────────────── */}
-      <div style={CARD}>
-        <div style={CARD_HEAD}>
-          <Clock size={15} color="#334155" />
-          <span>Aging</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginLeft: 4 }}>
-            open items as of {fmtDate(asOf)} · FIFO · due dates respected where set
-          </span>
-        </div>
-        <AgingMatrix aging={ledger.aging} currency={currency} tab={tab} />
-      </div>
-
-      {/* ── Flat transaction ledger ────────────────────────────────────────── */}
-      {view === 'ledger' && (
-        <div style={CARD}>
-          <div style={{ ...CARD_HEAD, flexWrap: 'wrap' }}>
-            <Receipt size={15} color="#334155" />
-            <span>Transaction ledger</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginLeft: 4 }}>
-              {visibleRows.length} row{visibleRows.length === 1 ? '' : 's'} · oldest first so running totals accumulate
-            </span>
-
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-              {([['all', 'All'], ['receivable', 'Receivable'], ['payable', 'Payable']] as ['all' | Side, string][]).map(([id, label]) => (
-                <button key={id} onClick={() => setSideFilter(id)}
-                  style={{
-                    padding: '4px 10px', borderRadius: 99, cursor: 'pointer',
-                    border: sideFilter === id ? 'none' : '1px solid #e2e8f0',
-                    backgroundColor: sideFilter === id ? '#0f172a' : '#fff',
-                    color: sideFilter === id ? '#fff' : '#475569',
-                    fontSize: 10.5, fontWeight: 700,
-                  }}>{label}</button>
-              ))}
-              <span style={{ width: 1, height: 16, backgroundColor: '#e2e8f0' }} />
-              {([['all', 'Any status'], ['Pending', 'Pending'], ['Partial', 'Partial'], ['All Cleared', 'Cleared']] as ['all' | RowStatus, string][]).map(([id, label]) => (
-                <button key={id} onClick={() => setStatusFilter(id)}
-                  style={{
-                    padding: '4px 10px', borderRadius: 99, cursor: 'pointer',
-                    border: statusFilter === id ? 'none' : '1px solid #e2e8f0',
-                    backgroundColor: statusFilter === id ? '#334155' : '#fff',
-                    color: statusFilter === id ? '#fff' : '#475569',
-                    fontSize: 10.5, fontWeight: 700,
-                  }}>{label}</button>
-              ))}
+      {/* ── Header ───────────────────────────────────────────────────── */}
+      {/* No back button here — ReportsHub already renders one above this view,
+          and two stacked "Back to Reports" buttons read as a bug. */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Payables &amp; Receivables</div>
+            <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
+              Complete payable and receivable records
             </div>
           </div>
-
-          <LedgerTable
-            rows={visibleRows}
-            currency={currency}
-            onRecordPayment={onRecordPayment}
-          />
+          <button onClick={handleExport} style={S.primary}>
+            <Download size={13} /> Export CSV
+          </button>
         </div>
-      )}
-
-      {/* ── Counterparty ledger ────────────────────────────────────────────── */}
-      {view !== 'ledger' && (
-      <div style={CARD}>
-        <div style={CARD_HEAD}>
-          <Layers size={15} color="#334155" />
-          <span>
-            {tab === 'combined' ? 'Position by counterparty'
-              : tab === 'receivable' ? 'Receivables by debtor'
-              : 'Payables by creditor'}
-          </span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginLeft: 4 }}>
-            {visibleParties.length} row{visibleParties.length === 1 ? '' : 's'}
-          </span>
-        </div>
-
-        <div style={{ ...GRID(tab), ...HEADER_ROW }}>
-          <span>Counterparty</span>
-          {tab === 'combined' ? (
-            <>
-              <span style={RIGHT}>Receivable</span>
-              <span style={RIGHT}>Payable</span>
-              <span style={RIGHT}>Net position</span>
-            </>
-          ) : (
-            <>
-              <span style={RIGHT}>Opening</span>
-              <span style={RIGHT}>Increase</span>
-              <span style={RIGHT}>Decrease</span>
-              <span style={RIGHT}>Closing</span>
-            </>
-          )}
-        </div>
-
-        {visibleParties.length === 0 ? (
-          <EmptyState tab={tab} hideSettled={hideSettled} />
-        ) : visibleParties.map(p => (
-          <PartyBlock
-            key={p.key}
-            party={p}
-            tab={tab}
-            currency={currency}
-            isOpen={expanded.has(p.key)}
-            onToggle={() => toggle(p.key)}
-          />
-        ))}
-
-        {visibleParties.length > 0 && (
-          <div style={{ ...GRID(tab), padding: '14px 22px', backgroundColor: '#0f172a', color: '#fff', alignItems: 'center' }}>
-            <span style={{ fontSize: 13.5, fontWeight: 800 }}>
-              {tab === 'combined' ? 'Net position' : tab === 'receivable' ? 'Total receivable' : 'Total payable'}
-            </span>
-            {tab === 'combined' ? (
-              <>
-                <span style={{ ...TOTAL_CELL, color: '#6ee7b7' }}>{cur(ledger.totals.receivable)}</span>
-                <span style={{ ...TOTAL_CELL, color: '#fca5a5' }}>{cur(ledger.totals.payable)}</span>
-                <span style={{ ...TOTAL_CELL, color: ledger.totals.net >= 0 ? '#6ee7b7' : '#fca5a5', fontSize: 15 }}>
-                  {cur(ledger.totals.net, { sign: true })}
-                </span>
-              </>
-            ) : (
-              <>
-                <span style={{ ...TOTAL_CELL, color: '#cbd5e1' }}>
-                  {cur(visibleParties.reduce((s, p) => s + p[tab].opening, 0))}
-                </span>
-                <span style={{ ...TOTAL_CELL, color: '#cbd5e1' }}>
-                  {cur(visibleParties.reduce((s, p) => s + p[tab].increases, 0))}
-                </span>
-                <span style={{ ...TOTAL_CELL, color: '#cbd5e1' }}>
-                  {cur(visibleParties.reduce((s, p) => s + p[tab].decreases, 0))}
-                </span>
-                <span style={{ ...TOTAL_CELL, color: tab === 'receivable' ? '#6ee7b7' : '#fca5a5', fontSize: 15 }}>
-                  {cur(visibleParties.reduce((s, p) => s + Math.max(0, p[tab].closing), 0))}
-                </span>
-              </>
-            )}
-          </div>
-        )}
       </div>
+
+      {/* ── Two headline cards ───────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
+        <HeadCard label="Total Receivable" value={totals.recv} count={counts.recv}
+                  fg="#059669" border="#a7f3d0" />
+        <HeadCard label="Total Payable"    value={totals.pay}  count={counts.pay}
+                  fg="#dc2626" border="#fecaca" />
+      </div>
+
+      {reversed > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 13px',
+          backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 9,
+          fontSize: 12, color: '#991b1b', lineHeight: 1.55,
+        }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            {reversed} {reversed === 1 ? 'record has' : 'records have'} a reversed sign — the flow is
+            the opposite of what its category means. Usually money lent was saved as Inflow instead
+            of Outflow.
+          </span>
+        </div>
       )}
 
-      <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', padding: '4px 8px 14px', lineHeight: 1.7 }}>
-        {view === 'ledger'
-          ? <>Total Receivable and Total Payable are running cumulative totals, which is why the ledger is ordered oldest first.
-              Remaining amounts appear on the invoice only while a payment is Pending or Partial.</>
-          : <>Closing = Opening + Increases − Decreases, computed from every entry up to {fmtDate(asOf)}.
-              Receivables rise on cash out and fall on cash in; payables do the reverse.
-              Positive net means the counterparty owes us.</>}
-        {' '}Values shown on the <strong>{basis === 'settled' ? 'amount settled' : 'gross amount'}</strong> basis.
+      {/* ── Filters ──────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+        {/* One range, on the transaction date. A second range for Due Date read
+            as being asked for the same thing twice, and due dates are rarely
+            filled in on manual entries anyway. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <DateRange
+            from={range.from} to={range.to}
+            onFrom={v => setRange(p => ({ ...p, from: v }))}
+            onTo={v => setRange(p => ({ ...p, to: v }))}
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {COLS.filter(c => (CHIP_IDS as readonly string[]).includes(c.id)).map(c => (
+            <div key={c.id} style={{ position: 'relative' }}>
+              <FilterChip
+                label={sel[c.id] ? `${c.label}: ${short(sel[c.id])}` : c.label}
+                active={!!sel[c.id]}
+                onClick={() => setOpenChip(openChip === c.id ? null : c.id)}
+              />
+              {openChip === c.id && (
+                <ListPanel
+                  title={c.label}
+                  // Status carries the old scope toggle, so its "no filter"
+                  // option is worded as the choice it replaces.
+                  allLabel={c.id === 'status' ? 'All records' : 'All'}
+                  options={options[c.id]}
+                  value={sel[c.id] || ''}
+                  onPick={v => { setSel(p => ({ ...p, [c.id]: v })); setOpenChip(null); }}
+                />
+              )}
+            </div>
+          ))}
+
+          {activeCount > 0 && (
+            <button
+              onClick={() => {
+                setSel({});
+                setRange({ from: '', to: '' });
+                setOpenChip(null);
+              }}
+              style={S.ghost}
+            >
+              <RotateCcw size={12} /> Reset
+            </button>
+          )}
+
+          <div style={{ marginLeft: 'auto', fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
+            Showing {view.length} / {allRows.length} records
+          </div>
+        </div>
+      </div>
+
+      {/* ── Register ─────────────────────────────────────────────────── */}
+      <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
+          Payable / Receivable Records
+        </div>
+        <div style={{ maxHeight: '68vh', overflow: 'auto', position: 'relative' }}>
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12, minWidth: 2400 }}>
+            <thead>
+              <tr>
+                {/* Expander and Date are frozen: scrolled right, every other
+                    column looks the same, and there is no way to tell which row
+                    you are reading. */}
+                <th style={{ ...S.th, ...S.stickyHead, ...S.freeze0, zIndex: 4, width: 36 }} />
+                <th style={{
+                  ...S.th, ...S.stickyHead, ...S.freeze1, zIndex: 4, textAlign: 'left',
+                  boxShadow: 'inset 0 -1px 0 #e2e8f0, 1px 0 0 #e2e8f0',
+                }}>
+                  {COLS[0].label}
+                </th>
+                {COLS.slice(1).map(c => (
+                  <th key={c.id} style={{ ...S.th, ...S.stickyHead, textAlign: c.align }}>{c.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {view.length === 0 && (
+                <tr>
+                  <td colSpan={COLS.length + 1} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
+                    {allRows.length === 0
+                      ? 'No records yet. A transaction appears here when its Category is Account Receivable or Account Payable, or when an invoice has a balance outstanding.'
+                      : 'No records match these filters.'}
+                  </td>
+                </tr>
+              )}
+              {view.map((r, i) => {
+                const isOpen = expanded === r.key;
+                const rowBg  = isOpen ? '#eef2ff' : i % 2 ? '#fafbfc' : '#fff';
+                return (
+                  <React.Fragment key={r.key}>
+                    <tr style={{ backgroundColor: rowBg, borderTop: '1px solid #f1f5f9' }}>
+                      <td style={{ ...S.td, ...S.freeze0, textAlign: 'center', backgroundColor: rowBg }}>
+                        <button
+                          onClick={() => setExpanded(isOpen ? null : r.key)}
+                          title={isOpen ? 'Hide history' : `Show all history for ${r.counterparty}`}
+                          style={{
+                            border: 'none', background: 'transparent', cursor: 'pointer',
+                            color: isOpen ? '#4f46e5' : '#94a3b8', padding: 2,
+                            display: 'inline-flex', transform: isOpen ? 'rotate(90deg)' : 'none',
+                            transition: 'transform .15s',
+                          }}
+                        >
+                          <ChevronRight size={15} />
+                        </button>
+                      </td>
+                      <td style={{ ...S.td, ...S.freeze1, backgroundColor: rowBg, whiteSpace: 'nowrap' }}>
+                        {COLS[0].cell(r)}
+                      </td>
+                      {COLS.slice(1).map(c => (
+                        <td key={c.id} style={{
+                          ...S.td, textAlign: c.align,
+                          ...(c.align === 'right' ? { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } : {}),
+                        }}>{c.cell(r)}</td>
+                      ))}
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={COLS.length + 1} style={{ padding: 0, backgroundColor: '#f8fafc' }}>
+                          <div style={{ position: 'sticky', left: 0, width: 'min(1400px, 96vw)' }}>
+                          <HistoryPanel
+                            counterparty={r.counterparty}
+                            rows={history.get(r.counterparty) || []}
+                          />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            {view.length > 0 && (
+              <tfoot>
+                <tr style={{ backgroundColor: '#0f172a' }}>
+                  <td style={{ ...S.td, ...S.freeze0, backgroundColor: '#0f172a' }} />
+                  {COLS.map(c => {
+                    const map: Record<string, number> = {
+                      amount: totals.amount, received: totals.received, paid: totals.paid,
+                      remRecv: totals.recv, remPay: totals.pay,
+                    };
+                    return (
+                      <td key={c.id} style={{
+                        ...S.td, color: '#fff', fontWeight: 800, textAlign: c.align,
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {c.id === 'date' ? 'Filtered Total'
+                          : c.id in map ? aed(map[c.id])
+                          : ''}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
+        Total Receivable and Total Payable are running balances per counterparty, carried forward in
+        date order. Amounts follow money that actually moved, so a partly-received entry contributes
+        only what was received — the same basis as the Cash in Hand balance. Pending and rejected
+        transactions are excluded.
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-components
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Pieces ──────────────────────────────────────────────────────────────────
 
-const LEDGER_COLS =
-  '96px 74px 116px 150px 190px ' +      // Date · Flow · Category · Sub-Category · Invoice
-  '104px 104px 96px 112px 104px ' +     // Amount · Received · Paid · Rem. Recv · Rem. Pay
-  '110px 104px 96px 118px 100px 160px'; // Tot Recv · Tot Pay · Due · Record · Status · Remarks
-
-const LedgerTable: React.FC<{
-  rows: LedgerRow[];
-  currency: string;
-  onRecordPayment?: (row: LedgerRow) => void;
-}> = ({ rows, currency, onRecordPayment }) => {
-
-  const money = (n: number | null, tone?: string) =>
-    n === null || n === undefined ? <span style={{ color: '#cbd5e1' }}>—</span>
-    : n === 0 ? <span style={{ color: '#cbd5e1' }}>—</span>
-    : <span style={{ color: tone || '#334155' }}>
-        <span style={{ opacity: 0.5, fontSize: '0.78em', marginRight: 2 }}>{currency}</span>{fmt(n)}
-      </span>;
-
-  const statusTone: Record<RowStatus, { bg: string; fg: string }> = {
-    'All Cleared': { bg: '#ecfdf5', fg: '#059669' },
-    'Partial':     { bg: '#fef3c7', fg: '#92400e' },
-    'Pending':     { bg: '#fef2f2', fg: '#dc2626' },
-  };
-
-  if (rows.length === 0) {
-    return (
-      <div style={{ padding: '44px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 13.5, color: '#64748b', fontWeight: 600 }}>No matching entries.</div>
-        <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 8, maxWidth: 520, margin: '8px auto 0', lineHeight: 1.7 }}>
-          Rows appear here when a transaction is categorised as a receivable or a payable —
-          Loan Given, Loan Received, Account Receivable, Account Payable, or anything under the Loan category.
-        </div>
-      </div>
-    );
-  }
-
+/** FROM / TO pair in one bordered pill, matching the reference layout. */
+function DateRange({ from, to, onFrom, onTo }: {
+  from: string; to: string;
+  onFrom: (v: string) => void; onTo: (v: string) => void;
+}) {
+  const on = !!(from || to);
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ minWidth: 1780 }}>
-
-        {/* Header */}
-        <div style={{ display: 'grid', gridTemplateColumns: LEDGER_COLS, ...HEADER_ROW, padding: '9px 16px' }}>
-          <span>Date</span>
-          <span>Flow</span>
-          <span>Category</span>
-          <span>Sub-Category</span>
-          <span>Invoice Details</span>
-          <span style={RIGHT}>Amount</span>
-          <span style={RIGHT}>Amount Received</span>
-          <span style={RIGHT}>Amount Paid</span>
-          <span style={RIGHT}>Remaining Receivable</span>
-          <span style={RIGHT}>Remaining Payable</span>
-          <span style={RIGHT}>Total Receivable</span>
-          <span style={RIGHT}>Total Payable</span>
-          <span>Due Date</span>
-          <span>Record Payment</span>
-          <span>Payment Status</span>
-          <span>Remarks</span>
-        </div>
-
-        {/* Rows */}
-        {rows.map((r, i) => {
-          const isR = r.category === 'A/C Receivable';
-          const tone = statusTone[r.status];
-          return (
-            <div key={r.id} style={{
-              display: 'grid', gridTemplateColumns: LEDGER_COLS, alignItems: 'center',
-              padding: '9px 16px', fontSize: 11.5, color: '#334155',
-              backgroundColor: i % 2 ? '#fcfcfd' : '#fff',
-              borderBottom: '1px solid #f1f5f9',
-              borderLeft: `3px solid ${isR ? '#059669' : '#dc2626'}`,
-            }}>
-              <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{fmtDate(r.date)}</span>
-
-              <span style={{
-                fontSize: 10, fontWeight: 800, letterSpacing: '.03em',
-                color: r.flow === 'Inflow' ? '#059669' : '#dc2626',
-              }}>{r.flow}</span>
-
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: isR ? '#059669' : '#dc2626', whiteSpace: 'nowrap' }}>
-                {r.category}
-              </span>
-
-              <span style={ELLIPSIS} title={r.subCategory}>{r.subCategory}</span>
-
-              {/* Invoice Details — number, party, and the remaining balance while unpaid */}
-              <span style={{ ...ELLIPSIS, fontSize: 11 }}
-                    title={[r.invoiceNumber, r.invoiceParty].filter(Boolean).join(' · ')}>
-                {r.invoiceNumber || r.invoiceParty ? (
-                  <>
-                    {r.invoiceNumber && (
-                      <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 700, color: '#4f46e5' }}>
-                        {r.invoiceNumber}
-                      </span>
-                    )}
-                    {r.invoiceParty && <span style={{ color: '#475569' }}> · {r.invoiceParty}</span>}
-                    {r.invoiceRemaining !== undefined && r.invoiceRemaining > 0 && (
-                      <span style={{ color: '#b45309', fontWeight: 700 }}> · bal {fmt(r.invoiceRemaining)}</span>
-                    )}
-                  </>
-                ) : <span style={{ color: '#cbd5e1' }}>—</span>}
-              </span>
-
-              <span style={NUM}>{money(r.amount, '#0f172a')}</span>
-              <span style={NUM}>{money(r.amountReceived, '#059669')}</span>
-              <span style={NUM}>{money(r.amountPaid, '#dc2626')}</span>
-              <span style={NUM}>{money(r.remainingReceivable, '#c2410c')}</span>
-              <span style={NUM}>{money(r.remainingPayable, '#c2410c')}</span>
-              <span style={{ ...NUM, fontWeight: 700 }}>{money(r.totalReceivable, '#059669')}</span>
-              <span style={{ ...NUM, fontWeight: 700 }}>{money(r.totalPayable, '#dc2626')}</span>
-
-              <span style={{ whiteSpace: 'nowrap', color: r.daysOverdue > 0 ? '#dc2626' : '#64748b', fontWeight: r.daysOverdue > 0 ? 700 : 500 }}>
-                {r.dueDate ? fmtDate(r.dueDate) : <span style={{ color: '#cbd5e1' }}>—</span>}
-                {r.daysOverdue > 0 && <span style={{ fontSize: 9.5, display: 'block' }}>{r.daysOverdue}d overdue</span>}
-              </span>
-
-              {/* Record Payment — an action only when the caller wired one up */}
-              <span>
-                {r.status === 'All Cleared' ? (
-                  <span style={{ fontSize: 10, color: '#94a3b8' }}>—</span>
-                ) : onRecordPayment ? (
-                  <button onClick={() => onRecordPayment(r)}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '4px 9px', borderRadius: 6, cursor: 'pointer',
-                      border: 'none', backgroundColor: '#4f46e5', color: '#fff',
-                      fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
-                    }}>
-                    <Wallet size={11} /> Record
-                  </button>
-                ) : (
-                  <span style={{ fontSize: 9.5, color: '#94a3b8', fontStyle: 'italic' }}>not wired</span>
-                )}
-              </span>
-
-              <span>
-                <span style={{
-                  padding: '2px 8px', borderRadius: 99, fontSize: 9.5, fontWeight: 800,
-                  backgroundColor: tone.bg, color: tone.fg, whiteSpace: 'nowrap',
-                }}>{r.status}</span>
-              </span>
-
-              <span style={{ ...ELLIPSIS, fontSize: 11, color: '#64748b' }} title={r.remarks}>
-                {r.remarks || <span style={{ color: '#cbd5e1' }}>—</span>}
-                <span style={{ display: 'block', fontSize: 9.5, color: '#cbd5e1' }}>
-                  {r.transactionType}{r.referenceNo ? ` · ${r.referenceNo}` : ''}
-                </span>
-              </span>
-            </div>
-          );
-        })}
-
-        {/* Footer totals */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: LEDGER_COLS, alignItems: 'center',
-          padding: '12px 16px', backgroundColor: '#0f172a', color: '#fff', fontSize: 12,
-        }}>
-          <span style={{ fontWeight: 800, gridColumn: 'span 5' }}>
-            <FileText size={12} style={{ verticalAlign: -2, marginRight: 6 }} />
-            {rows.length} row{rows.length === 1 ? '' : 's'}
-          </span>
-          <span style={{ ...NUM, fontWeight: 800 }}>{fmt(rows.reduce((s, r) => s + r.amount, 0))}</span>
-          <span style={{ ...NUM, fontWeight: 800, color: '#6ee7b7' }}>{fmt(rows.reduce((s, r) => s + r.amountReceived, 0))}</span>
-          <span style={{ ...NUM, fontWeight: 800, color: '#fca5a5' }}>{fmt(rows.reduce((s, r) => s + r.amountPaid, 0))}</span>
-          <span style={{ ...NUM, fontWeight: 800, color: '#fdba74' }}>{fmt(rows.reduce((s, r) => s + (r.remainingReceivable || 0), 0))}</span>
-          <span style={{ ...NUM, fontWeight: 800, color: '#fdba74' }}>{fmt(rows.reduce((s, r) => s + (r.remainingPayable || 0), 0))}</span>
-          <span style={{ ...NUM, fontWeight: 800, color: '#6ee7b7' }}>{fmt(rows.length ? rows[rows.length - 1].totalReceivable : 0)}</span>
-          <span style={{ ...NUM, fontWeight: 800, color: '#fca5a5' }}>{fmt(rows.length ? rows[rows.length - 1].totalPayable : 0)}</span>
-          <span style={{ gridColumn: 'span 4' }} />
-        </div>
-      </div>
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 8,
+      padding: '6px 12px', borderRadius: 10,
+      border: `1px solid ${on ? '#4f46e5' : '#e2e8f0'}`,
+      backgroundColor: '#fff', whiteSpace: 'nowrap',
+    }}>
+      <Calendar size={14} color={on ? '#4f46e5' : '#94a3b8'} />
+      <span style={S.rangeLbl}>From</span>
+      <input type="date" value={from} onChange={e => onFrom(e.target.value)} style={S.rangeInput} />
+      <span style={S.rangeLbl}>to</span>
+      <input type="date" value={to} onChange={e => onTo(e.target.value)} style={S.rangeInput} />
+      {on && (
+        <button onClick={() => { onFrom(''); onTo(''); }} title="Clear"
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', display: 'inline-flex' }}>
+          <X size={13} />
+        </button>
+      )}
     </div>
   );
-};
+}
 
-const ELLIPSIS: React.CSSProperties = {
-  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0,
-};
+/** Chip labels sit on one line, so a long value is truncated rather than
+ *  allowed to push the whole row into wrapping. */
+const short = (v: string): string => (v.length > 16 ? `${v.slice(0, 15)}…` : v);
 
-const NUM: React.CSSProperties = {
-  textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-};
-
-const PartyBlock: React.FC<{
-  party: PartyRow; tab: ArApTab; currency: string; isOpen: boolean; onToggle: () => void;
-}> = ({ party: p, tab, currency, isOpen, onToggle }) => {
-  const movements = tab === 'combined'
-    ? [...p.receivable.movements, ...p.payable.movements].sort((a, b) => (a.date < b.date ? 1 : -1))
-    : p[tab].movements;
-
-  const age = tab === 'combined'
-    ? Math.max(p.receivable.aging.oldestAgeDays, p.payable.aging.oldestAgeDays)
-    : p[tab].aging.oldestAgeDays;
-
-  const focus = tab === 'combined' ? p.net : p[tab].closing;
-  const settled = Math.abs(focus) < 0.005;
-
-  const focusColor =
-    settled ? '#64748b'
-    : tab === 'payable' ? (focus > 0 ? '#dc2626' : '#059669')
-    : focus > 0 ? (age > 60 ? '#dc2626' : age > 0 ? '#c2410c' : '#059669') : '#0284c7';
-
-  const cur = (n: number, sign?: boolean) => (
-    <>
-      {sign && n !== 0 && (n > 0 ? '+' : '−')}
-      <span style={{ opacity: 0.55, fontSize: '0.8em', marginRight: 3 }}>{currency}</span>
-      {fmt(Math.abs(n))}
-    </>
+function FilterChip({ label, active, onClick }: {
+  label: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onClick(); }}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '7px 13px', borderRadius: 99,
+        border: `1px solid ${active ? '#4f46e5' : '#e2e8f0'}`,
+        backgroundColor: active ? '#4f46e5' : '#fff',
+        color: active ? '#fff' : '#334155',
+        fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+      }}
+    >
+      {label} <ChevronDown size={12} />
+    </button>
   );
+}
+
+function ListPanel({ title, options, value, onPick, allLabel = 'All' }: {
+  title: string; options: string[]; value: string;
+  onPick: (v: string) => void; allLabel?: string | null;
+}) {
+  return (
+    <div
+      onClick={e => e.stopPropagation()}
+      style={{
+        position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 20,
+        minWidth: 220, maxWidth: 340, maxHeight: 320, overflowY: 'auto',
+        backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
+        boxShadow: '0 12px 28px rgba(15,23,42,0.14)',
+      }}
+    >
+      <div style={{
+        padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#64748b',
+        backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+        position: 'sticky', top: 0,
+      }}>
+        {title}
+      </div>
+      {allLabel !== null && (
+        <PanelRow label={allLabel} selected={!value} onClick={() => onPick('')} muted />
+      )}
+      {options.length === 0 && (
+        <div style={{ padding: '12px', fontSize: 12, color: '#94a3b8' }}>No values yet</div>
+      )}
+      {options.map(o => (
+        <PanelRow key={o} label={o} selected={value === o} onClick={() => onPick(o)} />
+      ))}
+    </div>
+  );
+}
+
+function PanelRow({ label, selected, onClick, muted }: {
+  label: string; selected: boolean; onClick: () => void; muted?: boolean;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: '9px 12px', fontSize: 12, cursor: 'pointer',
+        backgroundColor: selected ? '#eef2ff' : '#fff',
+        color: muted ? '#64748b' : '#0f172a',
+        fontWeight: selected ? 700 : 400,
+        borderBottom: '1px solid #f8fafc',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+/** Everything that ever happened with one counterparty, oldest first, with a
+ *  running balance so the closing position is traceable line by line. */
+function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[] }) {
+  // Oldest first here, unlike the main register — a running balance only reads
+  // correctly downwards.
+  const ordered = [...rows].sort((a, b) =>
+    (a.date || '').localeCompare(b.date || '') || a.seq.localeCompare(b.seq) || a.key.localeCompare(b.key));
+  const last  = ordered[ordered.length - 1];
+  const recv  = last?.totalRecv ?? 0;
+  const pay   = last?.totalPay  ?? 0;
+  const net   = recv - pay;
 
   return (
-    <>
-      <div onClick={onToggle} style={{
-        ...GRID(tab), alignItems: 'center', padding: '11px 22px',
-        backgroundColor: isOpen ? '#f8fafc' : '#fff',
-        borderBottom: '1px solid #f1f5f9', cursor: 'pointer',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <ChevronRight size={14} style={{ flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s ease', color: focusColor }} />
-          <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {p.name}
-          </span>
-          <span style={{ fontSize: 10.5, color: '#94a3b8', whiteSpace: 'nowrap' }}>
-            · {movements.length} {movements.length === 1 ? 'entry' : 'entries'}
-            {age > 0 && !settled && <> · oldest open {age}d</>}
-          </span>
-          {settled && <span style={PILL_SETTLED}>Settled</span>}
-        </div>
-
-        {tab === 'combined' ? (
-          <>
-            <span style={{ ...CELL, color: p.receivable.closing > 0 ? '#059669' : '#cbd5e1' }}>{cur(p.receivable.closing)}</span>
-            <span style={{ ...CELL, color: p.payable.closing > 0 ? '#dc2626' : '#cbd5e1' }}>{cur(p.payable.closing)}</span>
-            <span style={{ ...CELL, color: focusColor, fontWeight: 800 }}>{cur(p.net, true)}</span>
-          </>
-        ) : (
-          <>
-            <span style={{ ...CELL, color: '#94a3b8' }}>{cur(p[tab].opening)}</span>
-            <span style={{ ...CELL, color: '#334155' }}>{cur(p[tab].increases)}</span>
-            <span style={{ ...CELL, color: '#334155' }}>{cur(p[tab].decreases)}</span>
-            <span style={{ ...CELL, color: focusColor, fontWeight: 800 }}>{cur(p[tab].closing)}</span>
-          </>
-        )}
+    <div style={{ padding: '14px 18px 18px 46px', borderTop: '1px solid #e2e8f0' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{counterparty}</span>
+        <span style={{ fontSize: 11, color: '#94a3b8' }}>
+          {ordered.length} record{ordered.length === 1 ? '' : 's'}
+        </span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: net >= 0 ? '#047857' : '#dc2626' }}>
+          {net === 0
+            ? 'Settled — nothing outstanding'
+            : net > 0
+              ? `${aed(net)} to receive`
+              : `${aed(Math.abs(net))} to pay`}
+        </span>
       </div>
 
-      {isOpen && (
-        <>
-          {(tab === 'combined' ? p.receivable.opening + p.payable.opening : p[tab].opening) !== 0 && (
-            <div style={{ ...MOVEMENT_ROW, backgroundColor: '#fafbfc' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', fontStyle: 'italic' }}>
-                Opening balance brought forward
-              </span>
-              <span style={{ ...CELL, fontSize: 12, color: '#64748b' }}>
-                {cur(tab === 'combined' ? p.receivable.opening - p.payable.opening : p[tab].opening, true)}
-              </span>
-            </div>
-          )}
-
-          {movements.length === 0 ? (
-            <div style={{ ...MOVEMENT_ROW, color: '#94a3b8', fontSize: 11.5, fontStyle: 'italic' }}>
-              No movements in the selected period.
-            </div>
-          ) : movements.map(m => {
-            const up = m.effect === 'increase';
-            const tone = m.side === 'receivable'
-              ? (up ? { bg: '#ecfdf5', fg: '#059669' } : { bg: '#eff6ff', fg: '#0284c7' })
-              : (up ? { bg: '#fef2f2', fg: '#dc2626' } : { bg: '#ecfdf5', fg: '#059669' });
-
-            const label = m.side === 'receivable'
-              ? (up ? 'Receivable raised' : 'Received from them')
-              : (up ? 'Payable raised' : 'Paid to them');
-
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, backgroundColor: '#fff', borderRadius: 8, overflow: 'hidden' }}>
+        <thead>
+          <tr style={{ backgroundColor: '#f1f5f9' }}>
+            {['Date', 'Flow', 'Category', 'Sub-Category', 'Reference', 'Amount',
+              'Received', 'Paid', 'Remaining Amount', 'Status'].map((h, i) => (
+              <th key={h} style={{
+                padding: '7px 10px', fontSize: 9.5, fontWeight: 800, color: '#64748b',
+                letterSpacing: '.05em', textTransform: 'uppercase',
+                textAlign: h === 'Status' ? 'center'
+                         : i >= 5 && i <= 7 ? 'right'
+                         : 'left',
+                whiteSpace: 'nowrap',
+                ...(h === 'Remaining Amount' ? { paddingLeft: 28 } : {}),
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {ordered.map(h => {
+            const bal = h.totalRecv - h.totalPay;
+            const remainingLabel =
+              Math.abs(bal) < 0.01 ? '—'
+              : bal > 0            ? `${aed(bal)} to receive`
+                                   : `${aed(Math.abs(bal))} to pay`;
             return (
-              <div key={m.id} style={MOVEMENT_ROW}>
-                <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-                  <span style={{
-                    padding: '2px 8px', borderRadius: 99, fontSize: 9.5, fontWeight: 800,
-                    backgroundColor: tone.bg, color: tone.fg, whiteSpace: 'nowrap',
-                    textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0,
-                  }}>{label}</span>
-                  <span style={{ fontSize: 11.5, color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {fmtDate(m.date)}
-                    {m.txnRef && <span style={{ color: '#94a3b8', fontFamily: 'ui-monospace, monospace', fontSize: 10.5 }}> · {m.txnRef}</span>}
-                    {m.category && <> · {m.category}</>}
-                    {m.mode && <span style={{ color: '#94a3b8' }}> · {m.mode}</span>}
-                    {m.isPartial && <span style={PILL_PARTIAL}>Partial</span>}
-                    {m.dueDate && <span style={{ color: '#b45309' }}> · due {fmtDate(m.dueDate)}</span>}
-                    {m.note && <span style={{ color: '#94a3b8', fontStyle: 'italic' }}> · {m.note}</span>}
-                  </span>
-                </div>
-                <span style={{ ...CELL, fontSize: 12, fontWeight: 600, color: tone.fg }}>
-                  {up ? '+' : '−'}
-                  <span style={{ opacity: 0.55, fontSize: '0.8em', marginRight: 3 }}>{currency}</span>
-                  {fmt(m.amount)}
-                </span>
-              </div>
+              <tr key={h.key} style={{ borderTop: '1px solid #f8fafc' }}>
+                <td style={S.hTd}>{h.date || '—'}</td>
+                <td style={{ ...S.hTd, fontWeight: 700, color: h.flow === 'Inflow' ? '#059669' : h.flow ? '#dc2626' : '#cbd5e1' }}>
+                  {h.flow || '—'}
+                </td>
+                <td style={S.hTd}>{h.category}</td>
+                <td style={S.hTd}>{h.subCategory}</td>
+                <td style={{ ...S.hTd, fontFamily: 'monospace', fontSize: 10.5, color: '#4f46e5' }}>{h.refNo || '—'}</td>
+                <td style={S.hNum}>{aed(h.amount)}</td>
+                <td style={{ ...S.hNum, color: h.received ? '#059669' : '#cbd5e1' }}>{aed(h.received)}</td>
+                <td style={{ ...S.hNum, color: h.paid ? '#dc2626' : '#cbd5e1' }}>{aed(h.paid)}</td>
+                <td style={{
+                  ...S.hTd, fontWeight: 800, paddingLeft: 28,
+                  color: Math.abs(bal) < 0.01 ? '#94a3b8' : bal > 0 ? '#047857' : '#dc2626',
+                }}>{remainingLabel}</td>
+                <td style={{ ...S.hTd, textAlign: 'center' }}>{h.status}</td>
+              </tr>
             );
           })}
-        </>
-      )}
-    </>
+        </tbody>
+      </table>
+
+      <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 7 }}>
+        Full history for this counterparty — filters above do not narrow it.
+        Remaining Amount is what is still outstanding after each entry, and which
+        way it goes. Status follows that figure, so a row reads Cleared only when
+        nothing at all is left with this person.
+      </div>
+    </div>
   );
-};
+}
 
-const AgingMatrix: React.FC<{
-  aging: { receivable: Record<Bucket, number>; payable: Record<Bucket, number> };
-  currency: string; tab: ArApTab;
-}> = ({ aging, currency, tab }) => {
-  const cols: [Bucket, string][] = [
-    ['current', 'Current'], ['1-30', '1–30 days'], ['31-60', '31–60 days'],
-    ['61-90', '61–90 days'], ['90+', '90+ days'],
-  ];
-  const rows: [Side, string, string][] = [
-    ['receivable', 'Receivable', '#059669'],
-    ['payable',    'Payable',    '#dc2626'],
-  ];
-  const visible = tab === 'combined' ? rows : rows.filter(r => r[0] === tab);
-  const totalOf = (b: Record<Bucket, number>) => cols.reduce((s, [k]) => s + b[k], 0);
-
+function HeadCard({ label, value, count, fg, border }: {
+  label: string; value: number; count: number; fg: string; border: string;
+}) {
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: `130px repeat(${cols.length}, minmax(96px,1fr)) 120px`, minWidth: 720 }}>
-        <div style={AGING_HEAD} />
-        {cols.map(([k, label]) => <div key={k} style={{ ...AGING_HEAD, textAlign: 'right' }}>{label}</div>)}
-        <div style={{ ...AGING_HEAD, textAlign: 'right', color: '#334155' }}>Total</div>
-
-        {visible.map(([side, label, color]) => (
-          <React.Fragment key={side}>
-            <div style={{ ...AGING_CELL, fontWeight: 800, color: '#0f172a', textAlign: 'left' }}>
-              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, backgroundColor: color, marginRight: 7 }} />
-              {label}
-            </div>
-            {cols.map(([k]) => (
-              <div key={k} style={{ ...AGING_CELL, color: aging[side][k] > 0 ? (k === '90+' ? '#b91c1c' : '#475569') : '#cbd5e1' }}>
-                {fmt(aging[side][k])}
-              </div>
-            ))}
-            <div style={{ ...AGING_CELL, fontWeight: 800, color }}>
-              <span style={{ opacity: 0.55, fontSize: '0.8em', marginRight: 3 }}>{currency}</span>
-              {fmt(totalOf(aging[side]))}
-            </div>
-          </React.Fragment>
-        ))}
-
-        {tab === 'combined' && (
-          <>
-            <div style={{ ...AGING_CELL, fontWeight: 800, color: '#0f172a', textAlign: 'left', borderTop: '1px solid #e2e8f0' }}>Net</div>
-            {cols.map(([k]) => {
-              const v = aging.receivable[k] - aging.payable[k];
-              return (
-                <div key={k} style={{ ...AGING_CELL, borderTop: '1px solid #e2e8f0', fontWeight: 700, color: v === 0 ? '#cbd5e1' : v > 0 ? '#059669' : '#dc2626' }}>
-                  {v !== 0 && (v > 0 ? '+' : '−')}{fmt(Math.abs(v))}
-                </div>
-              );
-            })}
-            <div style={{ ...AGING_CELL, borderTop: '1px solid #e2e8f0', fontWeight: 800, color: '#0f172a' }}>
-              <span style={{ opacity: 0.55, fontSize: '0.8em', marginRight: 3 }}>{currency}</span>
-              {fmt(totalOf(aging.receivable) - totalOf(aging.payable))}
-            </div>
-          </>
-        )}
+    <div style={{ padding: '18px 22px', backgroundColor: '#fff', border: `1px solid ${border}`, borderRadius: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: '.07em', textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 28, fontWeight: 800, color: fg, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
+        {aed(value)}
+      </div>
+      <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+        {count} outstanding record{count === 1 ? '' : 's'}
       </div>
     </div>
   );
+}
+
+const S = {
+  th: {
+    padding: '11px 12px', fontSize: 10, fontWeight: 800, color: '#64748b',
+    textTransform: 'uppercase' as const, letterSpacing: '.05em', whiteSpace: 'nowrap' as const,
+  },
+  td: { padding: '11px 12px', color: '#334155', verticalAlign: 'top' as const },
+
+  /** Header row pins to the top of the scroll container. */
+  stickyHead: {
+    position: 'sticky' as const, top: 0, zIndex: 3,
+    backgroundColor: '#f8fafc',
+    boxShadow: 'inset 0 -1px 0 #e2e8f0',
+  },
+  /** Expander column — outermost frozen column. */
+  freeze0: {
+    position: 'sticky' as const, left: 0, zIndex: 2, width: 36,
+  },
+  /** Date column, parked immediately right of the 36px expander. Higher
+   *  z-index than the scrolling cells so they pass underneath it. */
+  freeze1: {
+    position: 'sticky' as const, left: 36, zIndex: 2, minWidth: 108,
+    boxShadow: '1px 0 0 #e2e8f0',
+  },
+  hTd: { padding: '7px 10px', color: '#334155', whiteSpace: 'nowrap' as const },
+  rangeLbl: {
+    fontSize: 10, fontWeight: 800, color: '#64748b',
+    letterSpacing: '.06em', textTransform: 'uppercase' as const,
+  },
+  rangeInput: {
+    border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px',
+    fontSize: 12, color: '#0f172a', backgroundColor: '#fff', outline: 'none',
+  },
+  hNum: {
+    padding: '7px 10px', color: '#334155', textAlign: 'right' as const,
+    fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const,
+  },
+  ghost: {
+    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 13px',
+    border: '1px solid #e2e8f0', borderRadius: 9, backgroundColor: '#fff',
+    color: '#334155', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const,
+  },
+  primary: {
+    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 15px',
+    border: 'none', borderRadius: 9, backgroundColor: '#0f172a',
+    color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const,
+  },
 };
-
-const EmptyState: React.FC<{ tab: ArApTab; hideSettled: boolean }> = ({ tab, hideSettled }) => (
-  <div style={{ padding: '44px 24px', textAlign: 'center' }}>
-    <div style={{ fontSize: 13.5, color: '#64748b', fontWeight: 600 }}>
-      {hideSettled ? 'Nothing outstanding in this period.' : 'No matching entries in this period.'}
-    </div>
-    <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 8, lineHeight: 1.7, maxWidth: 560, margin: '8px auto 0' }}>
-      {hideSettled
-        ? 'Every counterparty is settled. Untick “Hide settled” to see closed positions.'
-        : tab === 'payable'
-          ? 'Payables come from Cash Inflow entries categorised Loan Received or Account Payable, and fall on Cash Outflow entries categorised Loan Repaid or Account Payable.'
-          : 'Receivables come from Cash Outflow entries categorised Loan Given, Loan Receivable or Account Receivable, and fall on Cash Inflow entries categorised Loan Recovered or Account Receivable.'}
-    </div>
-  </div>
-);
-
-const Tile: React.FC<{
-  icon: React.ReactNode; label: string; sub?: string; value: number;
-  currency: string; fg: string; bg: string; highlight?: boolean;
-}> = ({ icon, label, sub, value, currency, fg, bg, highlight }) => (
-  <div style={{
-    backgroundColor: highlight ? fg : '#fff', borderRadius: 12, padding: '15px 17px',
-    border: highlight ? 'none' : '1px solid #e2e8f0',
-    display: 'flex', alignItems: 'center', gap: 13, minWidth: 0,
-    boxShadow: highlight ? '0 6px 16px -6px rgba(15,23,42,0.20)' : '0 1px 2px rgba(0,0,0,0.03)',
-  }}>
-    <div style={{
-      width: 40, height: 40, borderRadius: 11, flexShrink: 0,
-      backgroundColor: highlight ? 'rgba(255,255,255,0.18)' : bg,
-      color: highlight ? '#fff' : fg,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>{icon}</div>
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, color: highlight ? 'rgba(255,255,255,0.88)' : '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: highlight ? '#fff' : fg, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', marginTop: 2 }}>
-        <span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{currency}</span>{fmt(value)}
-      </div>
-      {sub && <div style={{ fontSize: 10, color: highlight ? 'rgba(255,255,255,0.7)' : '#94a3b8', marginTop: 1 }}>{sub}</div>}
-    </div>
-  </div>
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared style tokens
-// ─────────────────────────────────────────────────────────────────────────────
-
-const GRID = (tab: ArApTab): React.CSSProperties => ({
-  display: 'grid',
-  gridTemplateColumns: tab === 'combined'
-    ? 'minmax(220px,1fr) 150px 150px 170px'
-    : 'minmax(220px,1fr) 130px 130px 130px 160px',
-  gap: 10,
-});
-
-const RIGHT: React.CSSProperties = { textAlign: 'right' };
-
-const CELL: React.CSSProperties = {
-  textAlign: 'right', fontSize: 13, fontWeight: 700,
-  fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-};
-
-const TOTAL_CELL: React.CSSProperties = {
-  textAlign: 'right', fontSize: 14, fontWeight: 900,
-  fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-};
-
-const HEADER_ROW: React.CSSProperties = {
-  padding: '9px 22px', backgroundColor: '#fafbfc', borderBottom: '1px solid #e2e8f0',
-  fontSize: 9.5, fontWeight: 800, color: '#94a3b8',
-  textTransform: 'uppercase', letterSpacing: '.08em',
-};
-
-const MOVEMENT_ROW: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: '1fr 170px', gap: 10, alignItems: 'center',
-  padding: '7px 22px 7px 52px', backgroundColor: '#fff',
-  borderBottom: '1px solid #f8fafc',
-};
-
-const CARD: React.CSSProperties = {
-  backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden',
-};
-
-const CARD_HEAD: React.CSSProperties = {
-  padding: '13px 22px', borderBottom: '1px solid #e2e8f0',
-  background: 'linear-gradient(90deg, #f8fafc 0%, #ffffff 100%)',
-  display: 'flex', alignItems: 'center', gap: 8,
-  fontSize: 14, fontWeight: 800, color: '#0f172a',
-};
-
-const AGING_HEAD: React.CSSProperties = {
-  padding: '9px 14px', backgroundColor: '#fafbfc', borderBottom: '1px solid #e2e8f0',
-  fontSize: 9.5, fontWeight: 800, color: '#94a3b8',
-  textTransform: 'uppercase', letterSpacing: '.06em',
-};
-
-const AGING_CELL: React.CSSProperties = {
-  padding: '11px 14px', fontSize: 12.5, textAlign: 'right',
-  fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-};
-
-const LABEL: React.CSSProperties = {
-  fontSize: 10.5, fontWeight: 800, color: '#94a3b8',
-  textTransform: 'uppercase', letterSpacing: '.06em',
-};
-
-const INPUT: React.CSSProperties = {
-  padding: '7px 11px', border: '1px solid #e2e8f0', borderRadius: 7,
-  fontSize: 12.5, outline: 'none', backgroundColor: '#fff', color: '#0f172a',
-};
-
-const MINI_BTN: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 5,
-  padding: '7px 12px', borderRadius: 7, border: '1px solid #e2e8f0',
-  backgroundColor: '#fff', fontSize: 11.5, fontWeight: 700, color: '#334155',
-  cursor: 'pointer', whiteSpace: 'nowrap',
-};
-
-const PILL_SETTLED: React.CSSProperties = {
-  padding: '1px 7px', borderRadius: 99, fontSize: 9, fontWeight: 800,
-  backgroundColor: '#f1f5f9', color: '#94a3b8',
-  textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0,
-};
-
-const PILL_PARTIAL: React.CSSProperties = {
-  padding: '1px 6px', borderRadius: 99, fontSize: 9, fontWeight: 800,
-  backgroundColor: '#fef3c7', color: '#92400e', marginLeft: 6,
-  textTransform: 'uppercase', letterSpacing: '.04em',
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Backward-compatible exports
-//
-// Keeps existing imports in ReportsPage working. Delete these once the hub is
-// updated to a single menu entry.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const AccountsReceivableReport: React.FC<Props> = props =>
-  <AccountsPayableReceivableReport {...props} defaultTab="receivable" />;
-
-export const AccountsPayableReport: React.FC<Props> = props =>
-  <AccountsPayableReceivableReport {...props} defaultTab="payable" />;
 
 export default AccountsPayableReceivableReport;

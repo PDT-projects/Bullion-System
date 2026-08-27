@@ -361,3 +361,80 @@ export const computeMonthlyFlow = (
   }
   return { inflow, outflow, net: inflow - outflow };
 };
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-category outstanding balance
+//
+// Sub-categories under Account Receivable / Account Payable are used to name a
+// counterparty ("Loan to Khalid"). Unlike the free-text Paid By / Paid To
+// fields, a sub-category is always PICKED from a dropdown, so the same person
+// is always spelled the same way — which makes it a reliable grouping key.
+//
+// Uses realizedAmount() — the SAME basis as computeCashInHandBalance. This
+// matters: entering Total 20,000 / Received 10,000 moves cash by 10,000, so the
+// counterparty balance must move by 10,000 too. Using the face `amount` here
+// made a single entry shift the two numbers by different amounts, which reads
+// as a bug to anyone comparing them. The unpaid remainder isn't owed yet —
+// nobody has handed it over.
+//
+// Legacy rows written before totalPaid existed fall back to `amount`, so an
+// old loan doesn't silently read as never having left the drawer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Which side of the ledger a CATEGORY (transaction.subCategory) sits on. */
+export const sideOfCategory = (category: string): 'receivable' | 'payable' | null => {
+  const c = String(category || '').trim().toLowerCase();
+  if (c.includes('receivable')) return 'receivable';
+  if (c.includes('payable'))    return 'payable';
+  return null;
+};
+
+/** Money that actually moved, falling back to face value for legacy rows. */
+const movedAmount = (t: Transaction): number => {
+  const hasPaymentFields =
+    t.totalPaid !== undefined || t.amountPaid !== undefined || t.paymentStatus !== undefined;
+  return hasPaymentFields ? realizedAmount(t) : (Number(t.amount) || 0);
+};
+
+/**
+ * Outstanding balance for one sub-category (i.e. one counterparty).
+ *
+ * Receivable: money OUT raises it (we lent), money IN lowers it (they repaid).
+ * Payable:    money IN raises it (we borrowed), money OUT lowers it (we repaid).
+ *
+ * @returns null when the category has no side (e.g. "Sales Invoice") or no
+ *          sub-category is selected — callers should render nothing.
+ */
+export const computeSubCategoryRemaining = (
+  transactions: Transaction[],
+  category: string,
+  subCategory: string,
+): { remaining: number; given: number; returned: number; count: number } | null => {
+  const side = sideOfCategory(category);
+  if (!side || !subCategory) return null;
+
+  const target = String(subCategory).trim().toLowerCase();
+  let raises = 0, lowers = 0, count = 0;
+
+  for (const t of transactions || []) {
+    if (!isLiquid(t)) continue;
+    if (String(t.subCategoryDetail || '').trim().toLowerCase() !== target) continue;
+    if (sideOfCategory(t.subCategory) !== side) continue;
+
+    const amount = movedAmount(t);
+    if (amount === 0) continue;
+
+    const isInflow = t.mainCategory === 'Cash Inflow';
+    const raisesBalance = side === 'receivable' ? !isInflow : isInflow;
+
+    if (raisesBalance) raises += amount;
+    else               lowers += amount;
+    count++;
+  }
+
+  return {
+    remaining: raises - lowers,
+    given:     raises,
+    returned:  lowers,
+    count,
+  };
+};

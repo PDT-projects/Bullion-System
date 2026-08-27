@@ -567,8 +567,10 @@ export function TransactionListView({
 
       {/* ── Table ───────────────────────────────────────────────────────── */}
       <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+        <div style={{ maxHeight: '68vh', overflow: 'auto', position: 'relative' }}>
+          {/* borderSpacing 0 with separate borders: sticky headers are
+              unreliable under border-collapse. */}
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 1200 }}>
             <thead>
               <tr style={{ backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b' }}>
                 {(['Txn ID','Date','Manual Date','Type','Category','Sub Category','Account','Amount'] as const).map(h => (
@@ -603,7 +605,7 @@ export function TransactionListView({
                   const running = balanceByRow.get(t.id) ?? 0;
 
                   return (
-                    <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <tr key={t.id} style={{ boxShadow: 'inset 0 -1px 0 #f1f5f9' }}>
                       <TdCell mono color="#4f46e5" weight={700}>{t.transactionId}</TdCell>
                       <TdCell>{formatDate(t.date)}</TdCell>
                       <TdCell>{t.date ? formatDate(t.date) : '—'}</TdCell>
@@ -879,7 +881,13 @@ const ThCell: React.FC<{
       padding: '12px 12px',
       textAlign: align || 'left',
       fontSize: 12, fontWeight: 600,
-      color: toneFg, backgroundColor: toneBg, whiteSpace: 'nowrap',
+      color: toneFg, whiteSpace: 'nowrap',
+      position: 'sticky', top: 0, zIndex: 3,
+      // The tone tints are translucent. A sticky cell needs an opaque backdrop
+      // or the rows scrolling underneath show straight through it, so the tint
+      // is layered over the solid header colour instead of replacing it.
+      backgroundColor: '#0f172a',
+      backgroundImage: `linear-gradient(${toneBg}, ${toneBg})`,
     }}>
       {children}
     </th>
