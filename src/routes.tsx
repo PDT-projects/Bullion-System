@@ -45,6 +45,7 @@ import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
 import { UserManagement } from './modules/user-management';
 import { AssetsManagement } from './modules/assets-management';
+import { PurchasedOrdersView, ShipmentCreateView, ShipmentDetailsView } from './modules/purchased-orders';
 import { ProtectedRoute as ScreenProtectedRoute } from './modules/user-management/components/protectedroute';
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
@@ -320,6 +321,15 @@ export const router = createBrowserRouter([
       { path: 'add-existing',               element: <ScreenProtectedRoute requiredScreen="Inventory Add Existing"><InventoryAddExistingRoute /></ScreenProtectedRoute> },
       { path: 'deleted',                    element: <ScreenProtectedRoute requiredScreen="Deleted Inventory"><DeletedInventoryRoute /></ScreenProtectedRoute> },
       { path: ':id/edit',                   element: <ScreenProtectedRoute requiredScreen="Inventory View"><InventoryEditWrapper /></ScreenProtectedRoute> },
+    ],
+  },
+  {
+    path: '/purchased-orders',
+    element: (<ProtectedRoute><OutletLayout activeModule="purchased-orders" /></ProtectedRoute>),
+    children: [
+      { index: true, element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><PurchasedOrdersView /></ScreenProtectedRoute> },
+      { path: 'new', element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><ShipmentCreateView /></ScreenProtectedRoute> },
+      { path: ':id', element: <ScreenProtectedRoute requiredScreen="Inventory Dashboard"><ShipmentDetailsView /></ScreenProtectedRoute> },
     ],
   },
   {

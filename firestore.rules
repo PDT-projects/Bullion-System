@@ -5,6 +5,9 @@ service cloud.firestore {
 
     // ==================== COMMON FUNCTIONS ====================
 
+           
+    
+
     function isAuth() {
       return request.auth != null;
     }
@@ -34,10 +37,13 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
-    match /registration_otps/{email} {
-      allow read, write: if true;
+  match /registration_otps/{email} {
+      // Written, read and deleted only by the OTP Cloud Functions, which use
+      // the Admin SDK and bypass rules entirely. No client needs either
+      // operation, so no client gets one — the passcodes are stored in plain
+      // text and were previously world-readable and world-writable.
+      allow read, write: if false;
     }
-
     match /appNotifications/{notifId} {
       // Anyone (even unauthenticated) can CREATE a notification.
       // This is needed so that the registration flow can write the admin
@@ -67,8 +73,24 @@ service cloud.firestore {
 
     // ==================== TRANSACTIONS ====================
 
-    match /transactions/{txnId} {
-      allow read, write: if isAuth();
+       match /transactions/{txnId} {
+      allow read: if isAuth();
+
+      // Structure only — type and presence. No enum check on mainCategory:
+      // MAIN_CATEGORIES in types.ts lists three values, but the code writes
+      // five (Bills, Inventory Purchase and Salary are missing from it).
+      // Enforcing the documented list here would reject transactions the app
+      // legitimately creates today.
+      allow create: if isAuth()
+        && isNumber('amount')
+        && isNonEmptyString('date');
+
+      // Partial updates carry only the changed keys, so amount may be absent.
+      // Check it only when it is present.
+      allow update: if isAuth()
+        && (!hasField('amount') || isNumber('amount'));
+
+      allow delete: if isAuth();
     }
 
     match /deleted_transactions/{txnId} {
@@ -78,7 +100,10 @@ service cloud.firestore {
     // ==================== BILLS ====================
 
     match /bills/{billId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      allow create: if isAuth() && isNumber('amount');
+      allow update: if isAuth() && (!hasField('amount') || isNumber('amount'));
+      allow delete: if isAuth();
     }
 
     match /billBranches/{docId} {
@@ -87,8 +112,15 @@ service cloud.firestore {
 
     // ==================== INVOICES ====================
 
-    match /invoices/{invoiceId} {
-      allow read, write: if isAuth();
+        match /invoices/{invoiceId} {
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && isNonEmptyString('invoiceNumber')
+        && isNonEmptyString('date')
+        && isNumber('totalAmount');
+      allow update: if isAuth()
+        && (!hasField('totalAmount') || isNumber('totalAmount'));
+      allow delete: if isAuth();
     }
 
     match /deleted_invoices/{invoiceId} {
@@ -102,9 +134,11 @@ service cloud.firestore {
     // ==================== SALARIES & PAYROLL ====================
 
     match /salaries/{salaryId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      allow create: if isAuth() && isNumber('amount');
+      allow update: if isAuth() && (!hasField('amount') || isNumber('amount'));
+      allow delete: if isAuth();
     }
-
     match /salary/{document} {
       allow read, write: if isAuth();
     }
@@ -125,8 +159,14 @@ service cloud.firestore {
 
     // ==================== BANKS & CASH ====================
 
-    match /banks/{bankId} {
-      allow read, write: if isAuth();
+        match /banks/{bankId} {
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && isNonEmptyString('name')
+        && isNumber('balance');
+      allow update: if isAuth()
+        && (!hasField('balance') || isNumber('balance'));
+      allow delete: if isAuth();
     }
 
     match /bank_transfers/{transferId} {
@@ -215,7 +255,14 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
-    match /payable_to_futuristic/{docId} {
+        match /payable_to_futuristic/{docId} {
+      allow read, write: if isAuth();
+    }
+
+    match /purchasedOrders/{docId} {
+      // Structural checks deferred: the module validates on the service layer
+      // (validateShipment runs inside create and update), and the field set is
+      // still settling. Tighten once the shape is stable.
       allow read, write: if isAuth();
     }
 
