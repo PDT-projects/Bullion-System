@@ -192,7 +192,6 @@ export type AppNotificationType =
   | 'transaction_rejected'
   | 'payment_pending'
   | 'payment_cleared'
-  | 'user_registration_pending'
   | 'info';
 
 export interface AppNotification {
@@ -202,9 +201,6 @@ export interface AppNotification {
   message: string;
   transactionId?: string;       // Firestore doc id
   transactionRef?: string;      // human-readable TXN-XXXXXX
-  userId?: string;              // for user registration notifications
-  userEmail?: string;           // registering user's email
-  userName?: string;            // registering user's name
   isRead: boolean;
   createdAt: string;
   expiresAt?: string;
@@ -254,7 +250,6 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
   // handling picks up the finer-grained distinctions (Loan / Commission /
   // Other are managed as user-added Sub-categories per parent).
   'Cash Inflow': [
-    'Sales Invoice',                  // Special: opens invoice picker
     'Account Payable',
     'Account Receivable',
   ],
@@ -266,7 +261,6 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
   'Cash Outflow': [
     'Invoice Misc Expense',           // Special: opens invoice picker
     'Payrolls',
-    'Loan Receivable',
     'Utility Bills & Rents',
     'Grocery & Stationery',
     'Advertising and Marketing',

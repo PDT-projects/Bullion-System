@@ -21,7 +21,7 @@ import type { Screen } from '../../modules/user-management/models/userService';
 // money by us appeared twice with no way to see the net.
 import { BalanceSheetReport }               from './BalanceSheetReport';
 import { IncomeStatementReport }            from './IncomeStatementReport';
-import { AccountsPayableReceivableReport }  from './AccountsPayableReceivableReport';
+import { AccountsPayableReceivableReport }  from './Accountspayablereceivablereport';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -65,7 +65,7 @@ function renderReport(
   switch (id) {
     case 'income-statement':            return <IncomeStatementReport           transactions={transactions} invoices={invoices} onBack={onBack} />;
     case 'balance-sheet':               return <BalanceSheetReport              transactions={transactions} banks={banks} loans={loans} products={products} onBack={onBack} />;
-    case 'accounts-receivable-payable': return <AccountsPayableReceivableReport transactions={transactions} invoices={invoices} onBack={onBack} defaultTab="combined" />;
+    case 'accounts-receivable-payable': return <AccountsPayableReceivableReport transactions={transactions} invoices={invoices} banks={banks} onBack={onBack} defaultTab="combined" />;
     default:                            return null;
   }
 }
