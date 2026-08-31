@@ -42,9 +42,23 @@
 //   2. Invoices still carrying a balance — a receivable from the day it is
 //      issued. Fully-paid invoices are skipped: their payments already appear
 //      as transactions, so counting both would double them.
+//
+//   3. Supplier cost on invoices — what we owe the producer for the goods we
+//      just sold. One invoice raises TWO obligations: the customer owes us the
+//      sale price, and we owe the supplier the cost of those goods. Both belong
+//      on this page.
+//
+//      Read straight off the invoice (supplierCostTotal / supplierPayments),
+//      the same fields the "Sold Goods Payment" flow in the transaction form
+//      writes to. No separate collection, no bridge, no second setup step —
+//      if the invoice records a supplier cost, the payable exists.
+//
+//      Each supplier payment becomes its own row, so the expanded view shows a
+//      real history rather than one aggregate figure. Grouped PER INVOICE, so
+//      expanding INV-1002 shows only that invoice's position.
 
 import React, { useMemo, useState } from 'react';
-import { Download, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Calendar, X } from 'lucide-react';
+import { Download, RotateCcw, ChevronDown, ChevronRight, Calendar, X } from 'lucide-react';
 import { Transaction } from '../../modules/transactions/models/types';
 
 interface Props {
@@ -80,8 +94,17 @@ interface Row {
   paid:          number;
   remRecv:       number;
   remPay:        number;
+  /** FINAL balance for this counterparty — same on every row of the group.
+   *  The register is read row by row, and a row that showed the mid-sequence
+   *  figure said "Outstanding · 15,200" on an invoice that had already been
+   *  paid in full, contradicting both the summary cards and its own expanded
+   *  panel. */
   totalRecv:     number;
   totalPay:      number;
+  /** Balance immediately after THIS entry. Used only by the expanded panel,
+   *  where a running figure is the whole point. */
+  runRecv:       number;
+  runPay:        number;
   dueDate:       string;
   status:        string;
   partialTxn:    boolean;   // this entry's own amount was only part-settled
@@ -170,6 +193,8 @@ function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
       remPay:         side === 'payable'    ? signed : 0,
       totalRecv:      0,
       totalPay:       0,
+      runRecv:        0,
+      runPay:         0,
       dueDate:        iso(t.dueDate),
       status:         '',            // set after running totals — see below
       partialTxn:     isPartial,
@@ -210,6 +235,8 @@ function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
       remPay:         0,
       totalRecv:      0,
       totalPay:       0,
+      runRecv:        0,
+      runPay:         0,
       dueDate:        iso(inv.dueDate),
       status:         '',
       partialTxn:     paid > 0,
@@ -224,6 +251,99 @@ function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
     });
   }
 
+  // ── Source 3: supplier cost on invoices — what we owe the producer ────
+  for (const inv of (invoices || []) as any[]) {
+    // supplierCostTotal is a snapshot written at invoice creation, but older
+    // invoices predate it and leave it blank while their product lines still
+    // carry the per-unit cost. Reading only the snapshot silently reported
+    // those invoices as owing nothing, so fall back to the same sum the
+    // snapshot is built from.
+    const supplierTotal =
+      Number(inv?.supplierCostTotal) ||
+      (Array.isArray(inv?.products)
+        ? inv.products.reduce(
+            (sum: number, p: any) => sum + (Number(p?.supplierCost) || 0) * (Number(p?.quantity) || 0),
+            0,
+          )
+        : 0);
+    if (supplierTotal === 0) continue;   // nothing owed on this invoice
+
+    const invNo    = String(inv.invoiceNumber || '').trim();
+    const invDate  = iso(inv.date || inv.invoiceDate || inv.createdAt);
+    // Per-invoice grouping key: expanding one invoice must not pull in others.
+    // Futuristic is the producer these goods come from. Named explicitly
+    // rather than "Supplier" so the row says who is actually owed.
+    const party    = invNo ? `Futuristic — ${invNo}` : `Futuristic — ${inv.id}`;
+    const payments = Array.isArray(inv.supplierPayments) ? inv.supplierPayments : [];
+
+    // The obligation itself, dated with the invoice.
+    raw.push({
+      key:            `s-${inv.id || invNo}`,
+      date:           invDate,
+      seq:            `|${invNo}`,
+      flow:           '',
+      category:       'A/C Payable',
+      subCategory:    'Futuristic',
+      invoiceDetails: `${invNo} · goods cost · ${aed(supplierTotal)}`,
+      amount:         supplierTotal,
+      received:       0,
+      paid:           0,
+      remRecv:        0,
+      remPay:         supplierTotal,
+      totalRecv:      0,
+      totalPay:       0,
+      runRecv:        0,
+      runPay:         0,
+      dueDate:        iso(inv.supplierDueDate),
+      status:         '',
+      partialTxn:     false,
+      remarks:        `Owed to Futuristic for goods on ${invNo}`,
+      txnType:        'Invoice',
+      refNo:          invNo,
+      counterparty:   party,
+      account:        '—',
+      branch:         String(inv.branch || inv.customerCity || '—'),
+      side:           'payable',
+    });
+
+    // One row per payment made, so the expanded view is a real history rather
+    // than a single netted figure. These are NOT read from the transactions
+    // collection: recordSupplierPayment books them under "Sold Goods Payment",
+    // which resolves to no side, so counting both would be impossible anyway.
+    payments.forEach((p: any, i: number) => {
+      const amt = Number(p?.amount) || 0;
+      if (amt === 0) return;
+      raw.push({
+        key:            `sp-${inv.id || invNo}-${p?.id || i}`,
+        date:           iso(p?.date) || invDate,
+        seq:            `${String(p?.date || '')}|${String(p?.id || i)}`,
+        flow:           'Outflow',
+        category:       'A/C Payable',
+        subCategory:    'Futuristic',
+        invoiceDetails: `${invNo} · payment`,
+        amount:         amt,
+        received:       0,
+        paid:           amt,
+        remRecv:        0,
+        remPay:         -amt,          // payment reduces what we owe
+        totalRecv:      0,
+        totalPay:       0,
+        runRecv:        0,
+        runPay:         0,
+        dueDate:        '',
+        status:         '',
+        partialTxn:     false,
+        remarks:        String(p?.note || `Paid to Futuristic via ${p?.mode || 'Cash'}`),
+        txnType:        'Invoice',
+        refNo:          invNo,
+        counterparty:   party,
+        account:        String(p?.bankName || (p?.mode === 'Cash' ? 'Cash in Hand' : '') || '—'),
+        branch:         String(inv.branch || inv.customerCity || '—'),
+        side:           'payable',
+      });
+    });
+  }
+
   // Running totals must be computed in date order, otherwise the balances
   // describe a sequence of events that never happened.
   raw.sort((a, b) =>
@@ -233,18 +353,25 @@ function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
   for (const r of raw) {
     rr.set(r.counterparty, (rr.get(r.counterparty) || 0) + r.remRecv);
     rp.set(r.counterparty, (rp.get(r.counterparty) || 0) + r.remPay);
-    r.totalRecv = rr.get(r.counterparty)!;
-    r.totalPay  = rp.get(r.counterparty)!;
-
-    // Status reflects the POSITION, not the single entry. Marking a row
-    // "All Cleared" while the person still owes 1,400 is the one thing this
-    // column must never do. Partial still wins as a label, because a
-    // part-settled entry is worth calling out even mid-sequence.
-    const balance = r.totalRecv - r.totalPay;
-    r.status = r.partialTxn
-      ? 'Partial'
-      : Math.abs(balance) < 0.01 ? 'Cleared' : 'Outstanding';
+    // Balance immediately after this entry — the panel's running column.
+    r.runRecv = rr.get(r.counterparty)!;
+    r.runPay  = rp.get(r.counterparty)!;
   }
+
+  // Second pass: every row of a group carries that group's CLOSING position.
+  // A row showing its mid-sequence figure read "Outstanding · 15,200" on an
+  // invoice already paid in full — contradicting the summary cards and its own
+  // expanded panel on the same screen.
+  for (const r of raw) {
+    r.totalRecv = rr.get(r.counterparty) || 0;
+    r.totalPay  = rp.get(r.counterparty) || 0;
+
+    const balance = r.totalRecv - r.totalPay;
+    r.status = Math.abs(balance) < 0.01
+      ? 'Cleared'
+      : r.partialTxn ? 'Partial' : 'Outstanding';
+  }
+
   return raw;
 }
 
@@ -346,11 +473,25 @@ const CHIP_IDS = [
 ] as const;
 
 // ── Component ───────────────────────────────────────────────────────────────
-export function AccountsPayableReceivableReport({ transactions, invoices, banks }: Props) {
+export function AccountsPayableReceivableReport({
+  transactions, invoices, banks,
+}: Props) {
   const [sel, setSel]           = useState<Record<string, string>>({});
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [range, setRange] = useState({ from: '', to: '' });
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Live width of the table's scroll viewport, used to size the expanded panel.
+  const scrollBoxRef = React.useRef<HTMLDivElement>(null);
+  const [panelWidth, setPanelWidth] = useState(0);
+  React.useEffect(() => {
+    const el = scrollBoxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setPanelWidth(el.clientWidth));
+    ro.observe(el);
+    setPanelWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
 
   // Any click outside an open panel dismisses it. Without this the panel stays
   // open behind the next one the user reaches for.
@@ -362,7 +503,10 @@ export function AccountsPayableReceivableReport({ transactions, invoices, banks 
     return () => { window.clearTimeout(id); document.removeEventListener('click', close); };
   }, [openChip]);
 
-  const allRows = useMemo(() => buildRows(transactions, invoices || []), [transactions, invoices]);
+  const allRows = useMemo(
+    () => buildRows(transactions, invoices || []),
+    [transactions, invoices],
+  );
 
   // Each dropdown lists only values that actually occur, so no option can ever
   // return an empty table.
@@ -418,15 +562,6 @@ export function AccountsPayableReceivableReport({ transactions, invoices, banks 
     return { amount, received, paid, recv, pay };
   }, [rows]);
 
-  // Outstanding record counts for the two headline cards.
-  const counts = useMemo(() => ({
-    recv: rows.filter(r => r.remRecv > 0).length,
-    pay:  rows.filter(r => r.remPay  > 0).length,
-  }), [rows]);
-
-  const reversed = useMemo(
-    () => rows.filter(r => r.remRecv < 0 || r.remPay < 0).length, [rows]);
-
   const activeCount =
     Object.values(sel).filter(Boolean).length +
     Object.values(range).filter(Boolean).length;
@@ -445,47 +580,16 @@ export function AccountsPayableReceivableReport({ transactions, invoices, banks 
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
       {/* ── Header ───────────────────────────────────────────────────── */}
-      {/* No back button here — ReportsHub already renders one above this view,
-          and two stacked "Back to Reports" buttons read as a bug. */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Payables &amp; Receivables</div>
-            <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
-              Complete payable and receivable records
-            </div>
-          </div>
-          <button onClick={handleExport} style={S.primary}>
-            <Download size={13} /> Export CSV
-          </button>
-        </div>
+      {/* Compact by design: ReportsHub already prints the report name above
+          this, and the filters are what the page is actually used through. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4 }}>
+        <button onClick={handleExport} style={S.primary}>
+          <Download size={13} /> Export CSV
+        </button>
       </div>
-
-      {/* ── Two headline cards ───────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
-        <HeadCard label="Total Receivable" value={totals.recv} count={counts.recv}
-                  fg="#059669" border="#a7f3d0" />
-        <HeadCard label="Total Payable"    value={totals.pay}  count={counts.pay}
-                  fg="#dc2626" border="#fecaca" />
-      </div>
-
-      {reversed > 0 && (
-        <div style={{
-          display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 13px',
-          backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 9,
-          fontSize: 12, color: '#991b1b', lineHeight: 1.55,
-        }}>
-          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>
-            {reversed} {reversed === 1 ? 'record has' : 'records have'} a reversed sign — the flow is
-            the opposite of what its category means. Usually money lent was saved as Inflow instead
-            of Outflow.
-          </span>
-        </div>
-      )}
 
       {/* ── Filters ──────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -547,7 +651,7 @@ export function AccountsPayableReceivableReport({ transactions, invoices, banks 
         <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
           Payable / Receivable Records
         </div>
-        <div style={{ maxHeight: '68vh', overflow: 'auto', position: 'relative' }}>
+        <div ref={scrollBoxRef} style={{ maxHeight: '68vh', overflow: 'auto', position: 'relative' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12, minWidth: 2400 }}>
             <thead>
               <tr>
@@ -609,7 +713,7 @@ export function AccountsPayableReceivableReport({ transactions, invoices, banks 
                     {isOpen && (
                       <tr>
                         <td colSpan={COLS.length + 1} style={{ padding: 0, backgroundColor: '#f8fafc' }}>
-                          <div style={{ position: 'sticky', left: 0, width: 'min(1400px, 96vw)' }}>
+                          <div style={{ position: 'sticky', left: 0, width: panelWidth || undefined }}>
                           <HistoryPanel
                             counterparty={r.counterparty}
                             rows={history.get(r.counterparty) || []}
@@ -775,12 +879,18 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
   const ordered = [...rows].sort((a, b) =>
     (a.date || '').localeCompare(b.date || '') || a.seq.localeCompare(b.seq) || a.key.localeCompare(b.key));
   const last  = ordered[ordered.length - 1];
-  const recv  = last?.totalRecv ?? 0;
-  const pay   = last?.totalPay  ?? 0;
+  const recv  = last?.runRecv ?? 0;
+  const pay   = last?.runPay  ?? 0;
   const net   = recv - pay;
 
   return (
-    <div style={{ padding: '14px 18px 18px 46px', borderTop: '1px solid #e2e8f0' }}>
+    <div style={{
+      padding: '14px 18px 18px 46px',
+      borderTop: '1px solid #e2e8f0',
+      // Without border-box the 64px of horizontal padding is ADDED to the
+      // measured width, putting the panel right back outside the viewport.
+      boxSizing: 'border-box',
+    }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
         <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{counterparty}</span>
         <span style={{ fontSize: 11, color: '#94a3b8' }}>
@@ -795,7 +905,8 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
         </span>
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, backgroundColor: '#fff', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+      <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', fontSize: 11.5, backgroundColor: '#fff' }}>
         <thead>
           <tr style={{ backgroundColor: '#f1f5f9' }}>
             {['Date', 'Flow', 'Category', 'Sub-Category', 'Reference', 'Amount',
@@ -814,11 +925,18 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
         </thead>
         <tbody>
           {ordered.map(h => {
-            const bal = h.totalRecv - h.totalPay;
+            const bal = h.runRecv - h.runPay;   // running, not closing
             const remainingLabel =
               Math.abs(bal) < 0.01 ? '—'
               : bal > 0            ? `${aed(bal)} to receive`
                                    : `${aed(Math.abs(bal))} to pay`;
+            // Follows the RUNNING figure in the column beside it. Using the
+            // row's closing status here put "Cleared" next to "3,400 to pay"
+            // on the same line — the day the money was still owed.
+            const rowStatus =
+              Math.abs(bal) < 0.01 ? 'Cleared'
+              : h.partialTxn       ? 'Partial'
+                                   : 'Outstanding';
             return (
               <tr key={h.key} style={{ borderTop: '1px solid #f8fafc' }}>
                 <td style={S.hTd}>{h.date || '—'}</td>
@@ -835,36 +953,24 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
                   ...S.hTd, fontWeight: 800, paddingLeft: 28,
                   color: Math.abs(bal) < 0.01 ? '#94a3b8' : bal > 0 ? '#047857' : '#dc2626',
                 }}>{remainingLabel}</td>
-                <td style={{ ...S.hTd, textAlign: 'center' }}>{h.status}</td>
+                <td style={{
+                  ...S.hTd, textAlign: 'center',
+                  color: rowStatus === 'Cleared' ? '#047857'
+                       : rowStatus === 'Partial' ? '#b45309' : '#b91c1c',
+                  fontWeight: 600,
+                }}>{rowStatus}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      </div>
 
       <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 7 }}>
         Full history for this counterparty — filters above do not narrow it.
         Remaining Amount is what is still outstanding after each entry, and which
         way it goes. Status follows that figure, so a row reads Cleared only when
         nothing at all is left with this person.
-      </div>
-    </div>
-  );
-}
-
-function HeadCard({ label, value, count, fg, border }: {
-  label: string; value: number; count: number; fg: string; border: string;
-}) {
-  return (
-    <div style={{ padding: '18px 22px', backgroundColor: '#fff', border: `1px solid ${border}`, borderRadius: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: '.07em', textTransform: 'uppercase' }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: fg, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-        {aed(value)}
-      </div>
-      <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-        {count} outstanding record{count === 1 ? '' : 's'}
       </div>
     </div>
   );
