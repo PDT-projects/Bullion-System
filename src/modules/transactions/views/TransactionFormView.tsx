@@ -6,7 +6,7 @@ import {
   Upload, Calculator, User, Users, CheckCircle, AlertCircle, Repeat, Loader2,
   Hash, Edit2, Check, X, CreditCard, Lock, BarChart2,
 } from 'lucide-react';
-import { SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory } from '../models/types';
+import { SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory, SOLD_GOODS_PAYMENT_CATEGORY } from '../models/types';
 import { UseTransactionFormViewModelReturn } from '../viewModels/useTransactionFormViewModel';
 import { SUPPORTED_CURRENCIES, SupportedCurrency } from '../viewModels/useTransactionFormViewModel';
 import { convertCurrency } from '../../invoices/models/invoiceService';
@@ -629,7 +629,7 @@ export function TransactionFormView(props: Props) {
                   Shows invoices with outstanding supplier cost so the user
                   can select which invoice this payment is against. Selecting
                   one auto-fills the amount with the remaining supplier owed. */}
-              {item.subCategory === 'Sold Goods Payment' && (
+              {item.subCategory === SOLD_GOODS_PAYMENT_CATEGORY && (
                 <div className="col-span-2">
                   <label className={lbl}>
                     Invoice (Supplier owed) <span className="text-red-500">*</span>

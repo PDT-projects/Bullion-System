@@ -3,10 +3,11 @@
 // Both Dashboard.tsx (Reports tab) and ReportsPage.tsx import this component.
 // To add/remove/update any report: edit THIS file only. Changes reflect everywhere.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   FileText, BarChart2, Scale,
-  ArrowLeft, ChevronRight, Receipt, Package,
+  ChevronRight, Receipt, Package,
 } from 'lucide-react';
 import { useUserPermissions } from '../../modules/user-management/hooks/useUserPermissions';
 import type { Screen } from '../../modules/user-management/models/userService';
@@ -33,7 +34,8 @@ interface ReportsHubProps {
   invoices:     any[];
   commissions:  any[];
   products:     any[];
-  // Optional: override the back button label (Dashboard uses "← Back to Reports Hub")
+  /** Accepted for call-site compatibility; the header no longer shows a back
+   *  button, since the sidebar's Reports entry already returns here. */
   backLabel?:   string;
 }
 
@@ -73,9 +75,17 @@ function renderReport(
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ReportsHub(props: ReportsHubProps) {
-  const { transactions, products, backLabel = 'Back to Reports' } = props;
+  const { transactions, products } = props;
   const { hasPermission } = useUserPermissions();
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
+
+  // Which report is open is component state, not part of the URL. Clicking
+  // "Reports" in the sidebar while already on /reports does not remount this
+  // component, so without this the click appeared to do nothing — the open
+  // report just stayed open. Re-navigating to the same path now returns to the
+  // card grid, which is what pressing a nav item is expected to do.
+  const location = useLocation();
+  useEffect(() => { setSelectedReport(null); }, [location.key]);
 
   const accessibleCards = ALL_REPORT_CARDS.filter(card => {
     const screen = SCREEN_MAP[card.id];
@@ -86,43 +96,15 @@ export function ReportsHub(props: ReportsHubProps) {
   if (selectedReport) {
     const card = accessibleCards.find(c => c.id === selectedReport);
     return (
-      <div style={{ padding: '4px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <button
-            onClick={() => setSelectedReport(null)}
-            onMouseEnter={e => {
-              const el = e.currentTarget;
-              el.style.backgroundColor = '#4338ca';
-              el.style.boxShadow = '0 4px 12px rgba(79,70,229,0.35)';
-              el.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={e => {
-              const el = e.currentTarget;
-              el.style.backgroundColor = '#334155';
-              el.style.boxShadow = '0 2px 6px rgba(79,70,229,0.25)';
-              el.style.transform = 'translateY(0)';
-            }}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7,
-              padding: '9px 18px', borderRadius: 9,
-              border: 'none', backgroundColor: '#334155',
-              cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#fff',
-              boxShadow: '0 2px 6px rgba(79,70,229,0.25)',
-              transition: 'all 0.15s ease', letterSpacing: '0.01em',
-            }}
-          >
-            <ArrowLeft size={14} strokeWidth={2.5} />
-            {backLabel}
-          </button>
-          {card && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: card.lightBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <card.icon size={16} color={card.accent} />
-              </div>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{card.name}</span>
+      <div style={{ padding: 0 }}>
+        {card && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: card.lightBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <card.icon size={16} color={card.accent} />
             </div>
-          )}
-        </div>
+            <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{card.name}</span>
+          </div>
+        )}
         {renderReport(selectedReport, props, () => setSelectedReport(null))}
       </div>
     );

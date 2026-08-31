@@ -242,7 +242,7 @@ export const SALES_INVOICE_CATEGORY = 'Sales Invoice';
  *  routes the save through InvoiceSupplierPaymentService.recordPayment which
  *  updates invoice.supplierPaidAmount / supplierPayments[] AND books the ledger
  *  entry — modal must NOT double-book. */
-export const SOLD_GOODS_PAYMENT_CATEGORY = 'Sold Goods Payment';
+export const SOLD_GOODS_PAYMENT_CATEGORY = 'Supplier Cost';
 
 export const SUB_CATEGORIES: Record<string, string[]> = {
   // ── Inflow (money coming in) ─────────────────────────────────────────
@@ -265,7 +265,7 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
     'Grocery & Stationery',
     'Advertising and Marketing',
     'Purchase Order',
-    'Sold Goods Payment',             // Special: opens invoice picker (supplier payment)
+    'Supplier Cost',                  // Special: opens invoice picker (supplier payment)
     'Logistics & Freight',
     'Bank Charges',
     'Travelling, Accommodations & Food',

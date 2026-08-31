@@ -52,26 +52,45 @@ export function Sidebar() {
     ? { background: '#0f172a', color: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }
     : { color: '#6b7280' };
 
+  const [hovered, setHovered] = useState(false);
+
   return (
-    <div className="w-64 bg-white border-r border-gray-100 flex flex-col h-full">
-      <div className="p-6 border-b border-gray-100">
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="relative h-full flex-shrink-0"
+      style={{ width: 56 }}
+    >
+      <div
+        className="bg-white border-r border-gray-100 flex flex-col h-full absolute top-0 left-0 overflow-hidden"
+        style={{
+          width: hovered ? 256 : 56,
+          transition: 'width .18s ease',
+          zIndex: 40,
+          boxShadow: hovered ? '4px 0 20px rgba(15,23,42,0.10)' : 'none',
+        }}
+      >
+      <div className="p-4 border-b border-gray-100 whitespace-nowrap">
         <NavLink to="/dashboard" className="font-bold text-xl text-slate-800 tracking-tight">
-          Bullion Electronics
+          {hovered ? 'Bullion Electronics' : 'B'}
         </NavLink>
       </div>
 
-      <nav className="flex-1 p-3 overflow-y-auto">
+      <nav
+        className="flex-1 py-3 overflow-y-auto overflow-x-hidden"
+        style={{ paddingLeft: hovered ? 12 : 8, paddingRight: hovered ? 12 : 8, transition: 'padding .18s ease' }}
+      >
         {/* Dashboard */}
         <NavLink to="/dashboard" end className={linkClass} style={linkStyle}>
-          <LayoutDashboard size={17} />
-          <span>Dashboard</span>
+          <LayoutDashboard size={17} style={{ flexShrink: 0 }} />
+          <span style={{ opacity: hovered ? 1 : 0, transition: 'opacity .12s', whiteSpace: 'nowrap' }}>Dashboard</span>
         </NavLink>
 
         {/* Reports */}
         {(role === 'super_admin' || hasAnyReportPermission) && (
           <NavLink to="/reports" className={linkClass} style={linkStyle}>
-            <BarChart2 size={17} />
-            <span>Reports</span>
+            <BarChart2 size={17} style={{ flexShrink: 0 }} />
+            <span style={{ opacity: hovered ? 1 : 0, transition: 'opacity .12s', whiteSpace: 'nowrap' }}>Reports</span>
           </NavLink>
         )}
 
@@ -85,8 +104,8 @@ export function Sidebar() {
             if (!canSee(item.id)) return null;
             return (
               <NavLink key={item.id} to={item.path} className={linkClass} style={linkStyle}>
-                <Icon size={17} />
-                <span>{item.name}</span>
+                <Icon size={17} style={{ flexShrink: 0 }} />
+                <span style={{ opacity: hovered ? 1 : 0, transition: 'opacity .12s', whiteSpace: 'nowrap' }}>{item.name}</span>
               </NavLink>
             );
           }
@@ -103,15 +122,15 @@ export function Sidebar() {
                 className="w-full flex items-center justify-between px-3 py-2.5 text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-xl transition-all"
               >
                 <div className="flex items-center gap-4">
-                  <Icon size={17} />
-                  <span className="font-bold text-sm">{item.name}</span>
+                  <Icon size={17} style={{ flexShrink: 0 }} />
+                  <span className="font-bold text-sm" style={{ opacity: hovered ? 1 : 0, transition: 'opacity .12s', whiteSpace: 'nowrap' }}>{item.name}</span>
                 </div>
-                {isOpen
+                {hovered && isOpen
                   ? <ChevronDown  size={14} className="text-gray-400" />
                   : <ChevronRight size={14} className="text-gray-400" />}
               </button>
 
-              {isOpen && (
+              {hovered && isOpen && (
                 <div className="mt-0.5 space-y-0.5 border-l-2 border-gray-100 pl-3 ml-[22px]">
                   {visibleChildren.map(c => (
                     <NavLink
@@ -119,8 +138,8 @@ export function Sidebar() {
                       className="w-full flex items-center gap-4 px-3 py-2 rounded-lg transition-all text-sm font-medium"
                       style={linkStyle}
                     >
-                      <c.icon size={14} />
-                      <span>{c.name}</span>
+                      <c.icon size={14} style={{ flexShrink: 0 }} />
+                      <span style={{ opacity: hovered ? 1 : 0, transition: 'opacity .12s', whiteSpace: 'nowrap' }}>{c.name}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -129,6 +148,7 @@ export function Sidebar() {
           );
         })}
       </nav>
+      </div>
     </div>
   );
 }

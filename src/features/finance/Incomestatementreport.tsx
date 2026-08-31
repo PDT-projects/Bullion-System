@@ -49,7 +49,8 @@ const KNOWN_OPEX_CATEGORIES: string[] = [
   'Grocery & Stationery',
   'Advertising and Marketing',
   'Supplier Payment',
-  'Sold Goods Payment',
+  'Supplier Cost',
+  'Sold Goods Payment',   // pre-rename label — old rows still carry it
   'Logistics & Freight',
   'Bank Charges',
   'Travelling/Accommodations & Food',
