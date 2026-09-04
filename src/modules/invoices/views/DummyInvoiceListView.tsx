@@ -5,7 +5,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Eye, FileText, Loader2, Download } from 'lucide-react';
 import { downloadInvoicePdf, generateInvoicePdf } from '../models/invoicePdfService';
-import { DummyInvoice } from '../models/DummyInvoiceFirebaseService';
 import { DummyInvoiceFirebaseService, DummyInvoice, DummyInvoiceType } from '../models/DummyInvoiceFirebaseService';
 import { toast } from 'sonner';
 

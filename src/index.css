@@ -2152,3 +2152,55 @@ html {
   syntax: "*";
   inherits: false
 }
+
+/* â”€â”€ Wide tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   A table inside overflow-x-auto puts its horizontal scrollbar at the bottom of
+   the TABLE. With thirty rows you scroll the page down to reach the bar, drag
+   sideways, then scroll back up to the row you were reading. The invoice list
+   is twenty-one columns wide, so this costs a lot.
+
+   Giving the container its own height moves the bar to the bottom of the
+   VIEWPORT, where it is always in reach, and a sticky header means scrolling
+   down never loses the column names.
+
+   Applied by adding `scroll-table` beside the existing `overflow-x-auto`. */
+
+.scroll-table {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
+  scrollbar-width: thin;                 /* Firefox */
+}
+
+.scroll-table::-webkit-scrollbar        { height: 10px; width: 10px; }
+.scroll-table::-webkit-scrollbar-track  { background: #f1f5f9; }
+.scroll-table::-webkit-scrollbar-thumb  { background: #cbd5e1; border-radius: 5px; }
+.scroll-table::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* The background sits on the cell, not the row: a <tr> cannot be positioned,
+   so a transparent th would let rows scroll underneath it. */
+.scroll-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f9fafb;
+}
+
+/* Opt-in, because it only helps when the first column identifies the row.
+   On a table whose first cell is a checkbox it pins the wrong thing. */
+.scroll-table-pinned tbody td:first-child,
+.scroll-table-pinned thead th:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  /* A shadow rather than a border â€” a border would shift every column by a
+     pixel and misalign the header from the body. */
+  box-shadow: 2px 0 4px rgba(15, 23, 42, 0.06);
+}
+.scroll-table-pinned thead th:first-child {
+  z-index: 3;
+  background: #f9fafb;
+}
+
+/* Short tables where an inner scroll area would look odd. */
+.scroll-table-auto { max-height: none; overflow-y: visible; }

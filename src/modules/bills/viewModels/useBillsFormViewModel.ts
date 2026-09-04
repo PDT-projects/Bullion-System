@@ -185,6 +185,7 @@ export function useBillsFormViewModel(): UseBillsFormViewModelReturn {
         type:           'billCategory',
         parentCategory: 'Bills',
         name:           trimmed,
+        createdAt:      new Date().toISOString(),
       });
       setDynamicCategories(prev => [...prev, { id: created.id, name: trimmed, createdAt: created.createdAt }]);
       toast.success(`Category "${trimmed}" added`);

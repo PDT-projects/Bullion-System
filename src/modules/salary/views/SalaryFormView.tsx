@@ -29,11 +29,11 @@ interface SalaryTransaction {
   paidBy: string;
   transactionBy: string;
   mode: 'Cash' | 'Bank' | 'Cheque';
-  bankId: string;
-  bankName: string;
-  chequeNumber: string;
-  chequeDate: string;
-  chequeBank: string;
+  bankId?: string;
+  bankName?: string;
+  chequeNumber?: string;
+  chequeDate?: string;
+  chequeBank?: string;
   imageUrl: string;
   paymentStatus: 'Full' | 'Partial';
   remainingAmount: number;

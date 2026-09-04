@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Transaction, Bank, PartialPayment } from '../../App';
+import type { Transaction, PartialPayment } from '../../modules/transactions/models/types';
+import type { Bank } from '../../modules/banking/models/types';
 import {   Eye, Edit, Trash2, X, Check, AlertCircle, Clock, DollarSign, Plus, Filter, Download, Printer } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 type PendingPaymentsProps = {
   transactions: Transaction[];

@@ -39,6 +39,10 @@ interface Props {
   onStatusFilter: (statuses: string[]) => void;
   onCityFilter: (cities: string[]) => void;
   onSalespersonFilter: (salespersons: string[]) => void;
+  onBrandFilter: (brands: string[]) => void;
+  onModelFilter: (models: string[]) => void;
+  brandOptions: string[];
+  modelOptions: string[];
   onDateFromFilter: (date: string) => void;
   onDateToFilter: (date: string) => void;
   onClearFilters: () => void;
@@ -319,6 +323,9 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [savingSp,     setSavingSp]     = React.useState(false);
   const [delivery,     setDelivery]     = React.useState('Self-collect');
   const [addStamp,     setAddStamp]     = React.useState(false);
+  // Defaults to true so a user who never touches it gets the behaviour every
+  // invoice has had until now.
+  const [showImages,   setShowImages]   = React.useState(true);
   const [shipping,     setShipping]     = React.useState<number | ''>('');
   const [discount,     setDiscount]     = React.useState<number | ''>('');
   const [saving,       setSaving]       = React.useState(false);
@@ -542,7 +549,8 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         deductionCharges: discountNum,
         cargoAmount:      shippingNum,
         customsAmount: 0, agentAmount: 0,
-        selectedCurrencies: ['AED'], branch: '', digitalStamp: addStamp,
+                selectedCurrencies: ['AED'], branch: '', digitalStamp: addStamp,
+        showProductImages: showImages,
         products: invoiceProducts,
       } as any);
 
@@ -998,12 +1006,43 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                   </svg>
                 )}
               </span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: addStamp ? '#111827' : '#64748b' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: addStamp ? '#111827' : '#64748b' }}>
                 Include digital stamp on PDF
               </span>
             </label>
-          </div>
 
+            {/* Some customers want the product photo, others read it as
+                clutter. With this off the PDF removes the image column
+                entirely rather than leaving a blank gutter down every row. */}
+            <label
+              onClick={() => setShowImages(v => !v)}
+              style={{
+                marginTop: 8, marginLeft: 8,
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', borderRadius: 8,
+                border: `1.5px solid ${showImages ? '#111827' : '#e2e8f0'}`,
+                backgroundColor: showImages ? '#f8fafc' : '#fff',
+                cursor: 'pointer', userSelect: 'none',
+              }}
+            >
+              <span style={{
+                width: 16, height: 16, borderRadius: 4,
+                border: `1.5px solid ${showImages ? '#111827' : '#cbd5e1'}`,
+                backgroundColor: showImages ? '#111827' : '#fff',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                {showImages && (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6.5L4.5 9L10 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: showImages ? '#111827' : '#64748b' }}>
+                Show product images on PDF
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Footer */}
@@ -1031,6 +1070,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 export function InvoiceListView({
   invoices, filteredInvoices, stats, filters, viewingInvoice, isLoading,
   onSearch, onStatusFilter, onCityFilter, onSalespersonFilter,
+  onBrandFilter, onModelFilter, brandOptions, modelOptions,
   onDateFromFilter, onDateToFilter, onClearFilters,
   availableCities, availableSalespersons,
   salespersonMap = {},
@@ -1118,7 +1158,9 @@ export function InvoiceListView({
     (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : filters.statusFilter !== 'all') ||
     !!filters.dateFrom || !!filters.dateTo ||
     (Array.isArray(filters.cityFilter) ? filters.cityFilter.length > 0 : !!filters.cityFilter) ||
-    (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : !!filters.salespersonFilter);
+    (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : !!filters.salespersonFilter) ||
+    (Array.isArray(filters.brandFilter) && filters.brandFilter.length > 0) ||
+    (Array.isArray(filters.modelFilter) && filters.modelFilter.length > 0);
 
   if (isLoading) {
     return (
@@ -1169,7 +1211,20 @@ export function InvoiceListView({
             </button>
           )}
         </div>
-        <div className="flex flex-wrap gap-3 items-start">
+                <div className="flex flex-wrap gap-3 items-start">
+          {/* Search reaches the product lines now — brand, model, category and
+              every serial number — so it needs somewhere to be typed. */}
+          <div style={{ display:'flex', flexDirection:'column', gap:4, minWidth:280, flex:'1 1 280px' }}>
+            <label style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.06em' }}>Search</label>
+            <input
+              type="text"
+              value={filters.searchTerm}
+              onChange={e => onSearch(e.target.value)}
+              placeholder="Invoice no, customer, brand, model or serial…"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900"
+            />
+          </div>
+
           <InvoiceMultiFilter label="Status"
             selected={Array.isArray(filters.statusFilter) ? filters.statusFilter as string[] : []}
             onChange={v => onStatusFilter(v as any)}
@@ -1183,6 +1238,19 @@ export function InvoiceListView({
             onChange={v => onSalespersonFilter(v)}
             options={availableSalespersons}
             displayName={sp => spName(sp)} />
+            
+          {/* Brand and model are stored separately on every line but were only
+              ever shown joined, so neither could be filtered on. Models narrow
+              to the selected brands — the full list is too long to be usable. */}
+          <InvoiceMultiFilter label="Brand"
+            selected={filters.brandFilter}
+            onChange={v => onBrandFilter(v)}
+            options={brandOptions} />
+          <InvoiceMultiFilter label="Model"
+            selected={filters.modelFilter}
+            onChange={v => onModelFilter(v)}
+            options={modelOptions} />
+
           <div style={{ display:'flex', flexDirection:'column', gap:4, minWidth:130 }}>
             <label style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.06em' }}>From Date</label>
             <input type="date" value={filters.dateFrom} onChange={e => onDateFromFilter(e.target.value)}
@@ -1198,7 +1266,7 @@ export function InvoiceListView({
 
       {/* ── Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-table">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -1206,13 +1274,13 @@ export function InvoiceListView({
                   <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll}
                     className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-gray-800" title="Select all filtered" />
                 </th>
-                {[
+                  {[
                   'Invoice #', 'Date', 'Customer', 'Branch / Location',
-                  'Salesperson', 'Products', 'Amount (AED)',
+                  'Salesperson', 'Brand', 'Model', 'Amount (AED)',
                   'Supplier Cost', 'Purchase Cost',
                   'Shipping', 'Discount', 'Misc Exp',
                   'Net Sale', 'Paid', 'Amount Left',
-                  'Delivery', 'Status', 'Actions',
+                  'Delivery', 'Payment', 'Status', 'Actions',
                 ].map(h => (
                   <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
@@ -1221,7 +1289,7 @@ export function InvoiceListView({
             <tbody className="divide-y divide-gray-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={19} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={20} className="px-4 py-14 text-center text-gray-400">
                     <FileText className="mx-auto mb-3 text-gray-300" size={44} />
                     <p className="font-medium text-gray-500">No invoices found</p>
                     <p className="text-xs mt-1">
@@ -1294,20 +1362,49 @@ export function InvoiceListView({
                     ) : <span className="text-gray-300 text-sm">—</span>}
                   </td>
 
-                  <td className="px-3 py-3" style={{ maxWidth: 200 }}>
+                                       {/* Brand — its own column.
+                      productName is `${brandName} ${modelName}`, and model names
+                      here often repeat the brand, which is how "FISHER FISHER F11"
+                      appeared. Both are stored separately, so each gets a column
+                      and the model drops the brand when it already leads with it. */}
+                  <td className="px-3 py-3" style={{ maxWidth: 120 }}>
                     {invoice.products.map((p: any, pi: number) => (
-                      <div key={pi} style={{ marginBottom: pi < invoice.products.length - 1 ? 4 : 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
-                          {p.productName || p.modelName || '—'}
-                        </div>
-                        {p.serialNumbers?.length > 0 && (
-                          <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
-                            {p.serialNumbers.slice(0, 2).join(', ')}{p.serialNumbers.length > 2 ? ` +${p.serialNumbers.length - 2}` : ''}
-                          </div>
-                        )}
+                      <div key={pi} style={{
+                        marginBottom: pi < invoice.products.length - 1 ? 4 : 0,
+                        fontSize: 12, fontWeight: 700, color: '#0f172a',
+                        whiteSpace: 'nowrap', overflow: 'hidden',
+                        textOverflow: 'ellipsis', maxWidth: 110,
+                      }}>
+                        {(p.brandName || '').trim() || '—'}
                       </div>
                     ))}
                   </td>
+
+                  <td className="px-3 py-3" style={{ maxWidth: 190 }}>
+                    {invoice.products.map((p: any, pi: number) => {
+                      const brand = (p.brandName || '').trim();
+                      const model = (p.modelName || '').trim();
+                      const modelShort = brand && model.toLowerCase().startsWith(brand.toLowerCase())
+                        ? model.slice(brand.length).trim()
+                        : model;
+                      return (
+                        <div key={pi} style={{ marginBottom: pi < invoice.products.length - 1 ? 4 : 0 }}>
+                          <div style={{ fontSize: 12, color: '#0f172a', whiteSpace: 'nowrap',
+                                        overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
+                            {modelShort || p.productName || '—'}
+                          </div>
+                          {p.serialNumbers?.length > 0 && (
+                            <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace',
+                                          whiteSpace: 'nowrap', overflow: 'hidden',
+                                          textOverflow: 'ellipsis', maxWidth: 180 }}>
+                              {p.serialNumbers.slice(0, 2).join(', ')}{p.serialNumbers.length > 2 ? ` +${p.serialNumbers.length - 2}` : ''}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </td>
+                  
 
                   <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">
                     {formatDisplay(invoice.totalAmount)}
@@ -1436,7 +1533,7 @@ export function InvoiceListView({
                 <tfoot>
                   <tr style={{ backgroundColor: '#0f172a' }}>
                     {/* Label cell */}
-                    <td colSpan={7} style={{ padding: '0' }}>
+                    <td colSpan={8} style={{ padding: '0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
                         <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.08em' }}>
                           {hasSelection ? `${src.length} selected` : `All ${src.length}`}
@@ -1501,7 +1598,7 @@ export function InvoiceListView({
                       </div>
                     </td>
                     {/* COGS grand total displayed here — no per-row column above, just the sum at the end */}
-                    <td colSpan={3} style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b' }}>
+                    <td colSpan={4} style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>COGS Total</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#c4b5fd' }}>
                         {tCogs > 0 ? formatDisplay(tCogs) : '—'}
@@ -1618,9 +1715,16 @@ export function InvoiceListView({
                     <tbody>
                       {viewingInvoice.products.map((p, i) => (
                         <tr key={i} className="border-b border-gray-100 last:border-0">
-                          <td className="px-3 py-2.5">
-                            <p className="font-medium text-gray-900">{p.productName}</p>
-                            {p.brandName && <p className="text-xs text-gray-400">{p.brandName} · {p.modelName}</p>}
+                                                    <td className="px-3 py-2.5">
+                            {/* Same brand-repeat problem as the list table. */}
+                            <p className="font-medium text-gray-900">{(p.brandName || '').trim() || p.productName}</p>
+                            {(() => {
+                              const brand = (p.brandName || '').trim();
+                              const model = (p.modelName || '').trim();
+                              const short = brand && model.toLowerCase().startsWith(brand.toLowerCase())
+                                ? model.slice(brand.length).trim() : model;
+                              return short ? <p className="text-xs text-gray-500">{short}</p> : null;
+                            })()}
                             {p.category && <p className="text-xs text-gray-400">{p.category}</p>}
                           </td>
                           <td className="px-3 py-2.5 text-gray-700">{p.quantity} × {formatDisplay(p.price)}</td>

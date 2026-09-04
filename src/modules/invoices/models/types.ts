@@ -60,6 +60,14 @@ export interface Invoice {
   customerCNIC: string;
   customerProvince: string;
   customerCity: string;
+  /**
+   * Whether product images appear on this invoice's PDF.
+   *
+   * Optional and read as `!== false`, so an invoice issued before this setting
+   * existed keeps showing images. Making it required, or defaulting to false,
+   * would silently change every invoice already in the system.
+   */
+  showProductImages?: boolean;
   customerAddress?: string;
   warrantyLocation?: string;
   products: InvoiceProduct[];
@@ -196,6 +204,12 @@ export interface InvoiceFilters {
   dateTo: string;
   cityFilter: string[];
   salespersonFilter: string[];
+  // Brand and model are stored separately on every invoice line but were only
+  // ever shown joined into productName, so neither could be filtered on. A
+  // brand filter is what someone reaches for when asked "how many Noktas did we
+  // sell in August".
+  brandFilter: string[];
+  modelFilter: string[];
 }
 
 export interface InvoiceStats {

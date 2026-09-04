@@ -43,6 +43,7 @@ export interface Bill {
   note: string;
   imageUrl: string;
   paymentStatus: 'Full' | 'Partial';
+  currency?: string;
   createdAt?: string;
   updatedAt?: string;
 }

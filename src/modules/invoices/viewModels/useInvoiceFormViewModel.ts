@@ -40,7 +40,7 @@ import { InventoryFirebaseService } from '../../inventory/models/InventoryFireba
 import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/Commissionautoservice';
-import { TxCompany } from '../../transactions/models/transactionBridgeService';
+import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { createFuturisticPayablesFromInvoice } from '../../Payable-to-futuristic/models/futuristicPayableBridge';
 
 // Default branches — always available even before Firestore loads

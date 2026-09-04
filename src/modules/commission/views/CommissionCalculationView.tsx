@@ -14,7 +14,7 @@
 //   - A subtle exchange-rate note is shown in the calculation form header.
 
 import { useState, useRef, useEffect } from 'react';
-import { formatDual, formatAED, formatPKR, PKR_TO_AED } from '../models/currencyUtils';
+import { formatDual, formatAED, formatPKR, PKR_TO_AED } from '../models/CurrencyUtils';
 import {
   Calculator, X, Maximize2, Minimize2, Check,
   AlertCircle, Edit2, Save, XCircle, FileText,

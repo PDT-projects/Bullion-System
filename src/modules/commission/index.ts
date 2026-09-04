@@ -18,7 +18,7 @@ export type {
 } from './models/types';
 
 // Services
-export { CommissionFirebaseService } from './models/commissionFirebaseService';
+export { CommissionFirebaseService } from './models/Commissionfirebaseservice';
 export {
   formatCurrency,
   formatMonth,

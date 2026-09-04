@@ -45,8 +45,8 @@ interface CreateInventoryViewProps {
   isSubmitting: boolean;
   isEditMode: boolean;
   editingId: string | null;
-  isFetchingProduct: boolean;
-  isGeneratingTxnId: boolean;
+  isFetchingProduct?: boolean;
+  isGeneratingTxnId?: boolean;
   serialInput: string;
   serialCity: string;
   setField: (field: string, value: any) => void;

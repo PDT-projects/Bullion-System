@@ -234,11 +234,31 @@ export const getUniqueCustomers = (invoices: Invoice[]): CustomerSuggestion[] =>
 
 export const filterInvoices = (invoices: Invoice[], filters: InvoiceFilters): Invoice[] =>
   invoices.filter(inv => {
-    if (filters.searchTerm) {
-      const s = filters.searchTerm.toLowerCase();
-      if (!inv.invoiceNumber.toLowerCase().includes(s) &&
-          !inv.customerName.toLowerCase().includes(s) &&
-          !inv.customerPhone.includes(s)) return false;
+    if (filters.searchTerm.trim()) {
+      // Search reaches the product lines as well as the header.
+      //
+      // It used to cover only invoice number, customer name and phone. A
+      // customer ringing about "the Nokta I bought" gives a brand, and a
+      // warranty claim gives a serial number — neither could find the invoice.
+      // Serials matter most: they are the only thing that identifies one unit.
+      const s = filters.searchTerm.trim().toLowerCase();
+      const haystack: Array<string | undefined> = [
+        inv.invoiceNumber,
+        inv.customerName,
+        inv.customerPhone,
+        inv.customerPhone2,
+        inv.customerCity,
+        inv.customerProvince,
+        inv.salesperson,
+        inv.branch,
+        inv.referralBy,
+        inv.clientDealBy,
+      ];
+      for (const p of inv.products || []) {
+        haystack.push(p.productName, p.brandName, p.modelName, p.category);
+        for (const sn of p.serialNumbers || []) haystack.push(sn);
+      }
+      if (!haystack.some(v => v && v.toLowerCase().includes(s))) return false;
     }
     // Multi-select: an empty array means "no filter". A non-empty array
     // matches when the invoice's value is one of the selected options.
@@ -253,8 +273,48 @@ export const filterInvoices = (invoices: Invoice[], filters: InvoiceFilters): In
 
     const sp = filters.salespersonFilter;
     if (Array.isArray(sp) && sp.length > 0 && !sp.includes(inv.salesperson || '')) return false;
+
+    // Brand and model match on ANY line. An invoice with a Nokta and a Garrett
+    // belongs in both brand filters — requiring every line to match would hide
+    // most mixed invoices, which is the opposite of what the filter is for.
+    const br = filters.brandFilter;
+    if (Array.isArray(br) && br.length > 0
+        && !(inv.products || []).some(p => br.includes((p.brandName || '').trim()))) return false;
+
+    const md = filters.modelFilter;
+    if (Array.isArray(md) && md.length > 0
+        && !(inv.products || []).some(p => md.includes((p.modelName || '').trim()))) return false;
+
     return true;
   })
+
+/**
+ * Every brand that appears on an invoice line, for the filter dropdown.
+ *
+ * Built from the invoices rather than the product catalogue on purpose: a brand
+ * that has never been sold does not belong in a filter, and one that has been
+ * discontinued still does.
+ */
+export const collectInvoiceBrands = (invoices: Invoice[]): string[] =>
+  Array.from(new Set(
+    invoices.flatMap(i => (i.products || []).map(p => (p.brandName || '').trim()))
+            .filter(Boolean),
+  )).sort((a, b) => a.localeCompare(b));
+
+/**
+ * Models, optionally narrowed to the brands currently selected.
+ *
+ * Without the narrowing the model list is every model ever sold, which for this
+ * catalogue is unusable.
+ */
+export const collectInvoiceModels = (invoices: Invoice[], brands: string[] = []): string[] =>
+  Array.from(new Set(
+    invoices
+      .flatMap(i => i.products || [])
+      .filter(p => brands.length === 0 || brands.includes((p.brandName || '').trim()))
+      .map(p => (p.modelName || '').trim())
+      .filter(Boolean),
+  )).sort((a, b) => a.localeCompare(b));
 
 export const calculateInvoiceStats = (invoices: Invoice[]): InvoiceStats => {
   const totalMiscExpense   = invoices.reduce((s, i) => s + calculateMiscExpense(i), 0);

@@ -1,2 +1,2 @@
 // modules/Payable-to-futuristic/index.ts
-export { PayableToFuturisticWrapper } from './views/PayableToFuturisticWrapper';
+export { PayableToFuturisticWrapper } from './views/payableToFuturisticWrapper';

@@ -6,7 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Bill } from '../models/types';
 import { BillsService } from '../models/billsService';
-import { BillsFirebaseService } from '../models/billsFirebaseService';
+import { BillsFirebaseService } from '../models/Billsfirebaseservice';
 
 interface UseBillsDeleteViewModelReturn {
   bill: Bill | null;

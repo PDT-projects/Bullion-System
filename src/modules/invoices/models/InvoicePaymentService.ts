@@ -23,7 +23,7 @@ import { Invoice, InvoicePayment, PaymentMode } from './types';
 import { calculateMiscExpense, calculateSupplierCost } from './invoiceService';
 import { TransactionFirebaseService } from '../../transactions/models/transactionFirebaseService';
 import { Transaction } from '../../transactions/models/types';
-import { TxCompany } from '../../transactions/models/transactionBridgeService';
+import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 
 const INVOICES_COLLECTION = 'invoices';

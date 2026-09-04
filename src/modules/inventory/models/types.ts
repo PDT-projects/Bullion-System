@@ -14,7 +14,7 @@ export type OwnershipType = 'Credit' | 'Owned';
 export type SupplierPaymentStatus = 'Unpaid' | 'Partial' | 'Cleared';
 export type PaymentChannel = 'Cash' | 'Bank' | 'Cheque' | 'Credit';
 export type CostingOption = 'with' | 'without';
-export type InventoryEntryType = 'in-stock' | 'on-order';
+export type InventoryEntryType = 'in-stock' | 'on-order' | 'credit' | 'payment';
 export type InventoryEntryStep = 'details' | 'payment' | 'confirmation';
 
 // Canonical location list — single source of truth used across inventory + transfers
@@ -59,13 +59,14 @@ export interface Product {
   brandName: string;
   modelName: string;
   category: string;
-  costPrice: number;
+  costPrice?: number;
   sellPrice: number;
   buyType: BuyType;
   warrantyYears: number;
   stock: number;
   // Primary stocking location — set at entry time, updated on transfer receipt
   location?: string;
+  transactionId?: string;
   serialNumbers: string[];
   serialCities: { [serialNumber: string]: string };
   serialStatus?: { [serialNumber: string]: SerialStatus };
@@ -157,6 +158,7 @@ export interface CreateProductDTO {
   warrantyYears: number;
   stock: number;
   location?: string;           // ← new: primary stocking location
+  transactionId?: string;
   serialNumbers: string[];
   serialCities: { [serialNumber: string]: string };
   description: string;
@@ -178,10 +180,12 @@ export interface CreateProductDTO {
 }
 
 export interface ProductFormData {
-  currentStep: number;
+  currentStep: InventoryEntryStep | number;
   costingOption?: CostingOption;
   brandName: string;
+  brandId?: string;
   modelName: string;
+  modelId?: string;
   category: string;
   costPrice?: number;
   sellPrice: number;
@@ -201,6 +205,8 @@ export interface ProductFormData {
   paidAmount?: number;
   paymentMethod?: 'Cash' | 'Bank' | 'Cheque' | 'Credit';
   bankId?: string;
+  bankName?: string;
+  imageUrls?: string[];
 }
 
 export interface ProductTransfer {
@@ -224,8 +230,13 @@ export interface ProductTransfer {
   receiptName?: string;
   receiptType?: string;
   receiptDataUrl?: string;
+  // Entered on the transfer form and used by ProductTransferView to show the
+  // per-unit cost of moving stock. They were passed to createTransfer but
+  // never listed in its write, so the value was discarded on every transfer.
+  shipmentCost?: number;
+  costPerUnit?: number;
+  transferItems?: any;
 }
-
 export interface UpdateProductDTO {
   brandName?: string;
   modelName?: string;
@@ -236,6 +247,7 @@ export interface UpdateProductDTO {
   warrantyYears?: number;
   stock?: number;
   location?: string;           // ← new
+  transactionId?: string;
   serialNumbers?: string[];
   serialCities?: { [serialNumber: string]: string };
   serialStatus?: { [serialNumber: string]: SerialStatus };
@@ -250,7 +262,7 @@ export interface UpdateProductDTO {
   supplierPaidAmount?: number;
   supplierPaymentChannel?: PaymentChannel;
   serialStockInDates?: { [serialNumber: string]: string };
-    serialStockInDatesManual?: { [serialNumber: string]: string };
+  serialStockInDatesManual?: { [serialNumber: string]: string };
   serialSoldDates?: { [serialNumber: string]: string };
   serialInvoiceNumbers?: { [serialNumber: string]: string };
   imageUrls?: string[];
@@ -264,6 +276,9 @@ export interface CreateTransferDTO {
   serialNumbers: string[];
   transferDate: string;
   notes?: string;
+  shipmentCost?: number;
+  costPerUnit?: number;
+  transferItems?: any;
 }
 
 export interface ProductFilters {

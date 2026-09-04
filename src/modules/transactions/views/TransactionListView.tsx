@@ -171,8 +171,8 @@ export function TransactionListView({
     if (t.approvalStatus === 'pending_approval') return true;
     if (t.approvalStatus === 'rejected') return true;
     if (t.paymentStatus === 'Partial') return true;
-    const { remaining } = getTransactionTotals(t);
-    if (remaining > 0) return true;
+    const { remainingAmount } = getTransactionTotals(t);
+    if (remainingAmount > 0) return true;
     return false;
   };
 
@@ -182,7 +182,7 @@ export function TransactionListView({
     [filteredTransactions],
   );
   const pendingTotal = useMemo(
-    () => filteredTransactions.reduce((s, t) => s + (isPending(t) ? getTransactionTotals(t).remaining : 0), 0),
+    () => filteredTransactions.reduce((s, t) => s + (isPending(t) ? getTransactionTotals(t).remainingAmount : 0), 0),
     [filteredTransactions],
   );
 
@@ -599,7 +599,7 @@ export function TransactionListView({
                 rows.map(t => {
                   const cat = getTxCategoryPath(t);
                   const acc = getTxAccount(t);
-                  const { totalPaid, remaining } = getTransactionTotals(t);
+                  const { totalPaid, remainingAmount } = getTransactionTotals(t);
                   const isIn  = t.mainCategory === 'Cash Inflow';
                   const isOut = t.mainCategory === 'Cash Outflow';
                   const running = balanceByRow.get(t.id) ?? 0;
@@ -628,7 +628,7 @@ export function TransactionListView({
                       <TdCell num tone="inflow"  bold>{isIn  ? fmt(totalPaid) : '—'}</TdCell>
                       <TdCell num tone="outflow" bold>{isOut ? fmt(totalPaid) : '—'}</TdCell>
                       <TdCell num>{fmt(running)}</TdCell>
-                      <TdCell num tone={remaining > 0 ? 'outflow' : undefined}>{remaining > 0 ? fmt(remaining) : '—'}</TdCell>
+                      <TdCell num tone={remainingAmount > 0 ? 'outflow' : undefined}>{remainingAmount > 0 ? fmt(remainingAmount) : '—'}</TdCell>
                       <TdCell>
                         <StatusBadge status={t.paymentStatus} approvalStatus={t.approvalStatus} />
                       </TdCell>

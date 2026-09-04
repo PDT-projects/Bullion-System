@@ -182,10 +182,17 @@ service cloud.firestore {
     }
 
     match /cash_transactions/{docId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      allow create: if isAuth() && isNumber('amount') && isNonEmptyString('date');
+      allow update: if isAuth() && (!hasField('amount') || isNumber('amount'));
+      allow delete: if isAuth();
     }
 
     match /cashInHand/{docId} {
+      // Left open deliberately. This holds a running balance per location,
+      // written by several flows (ATI settlement, cash entries, transfers) with
+      // different field sets. No single shape could be asserted here without
+      // rejecting one of them. The balance is guarded in the service layer.
       allow read, write: if isAuth();
     }
 
@@ -196,7 +203,21 @@ service cloud.firestore {
     }
 
     match /products/{productId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      // brandName, sellPrice and stock are written on every create
+      // (InventoryFirebaseService.createProduct). costPrice is deliberately not
+      // checked: it defaults to 0 via `dto.costPrice ?? 0`, so a create with no
+      // cost is legitimate.
+      allow create: if isAuth()
+        && isNonEmptyString('brandName')
+        && isNumber('sellPrice')
+        && isNumber('stock');
+      // Serial moves, sales and transfers all update stock alone, so the field
+      // is checked only when the write carries it.
+      allow update: if isAuth()
+        && (!hasField('sellPrice') || isNumber('sellPrice'))
+        && (!hasField('stock')     || isNumber('stock'));
+      allow delete: if isAuth();
     }
 
     match /deleted_products/{document} {
@@ -236,17 +257,39 @@ service cloud.firestore {
     }
 
     match /commissions/{commissionId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && isNonEmptyString('salesperson')
+        && isNumber('totalSales');
+      allow update: if isAuth()
+        && (!hasField('totalSales') || isNumber('totalSales'));
+      allow delete: if isAuth();
     }
 
     match /budgets/{budgetId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && isNonEmptyString('subCategory')
+        && isNumber('budgetLimit');
+      allow update: if isAuth()
+        && (!hasField('budgetLimit') || isNumber('budgetLimit'))
+        && (!hasField('spent')       || isNumber('spent'));
+      allow delete: if isAuth();
     }
 
     // ==================== LOANS ====================
 
     match /loans/{loanId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && isNonEmptyString('receiverName')
+        && isNumber('loanAmount');
+      // Repayments write paid and remaining without resending loanAmount.
+      allow update: if isAuth()
+        && (!hasField('loanAmount') || isNumber('loanAmount'))
+        && (!hasField('paid')       || isNumber('paid'))
+        && (!hasField('remaining')  || isNumber('remaining'));
+      allow delete: if isAuth();
     }
 
     // ==================== ASSETS & PURCHASES ====================
@@ -255,7 +298,11 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
-        match /payable_to_futuristic/{docId} {
+    match /payable_to_futuristic/{docId} {
+      // Left open deliberately. The amount is stored as an `amounts` OBJECT
+      // (aed/usd/pkr), not a number field, so isNumber('amount') would reject
+      // every write. Tightening this needs a rule that reaches into the nested
+      // map, which is worth doing once the shape settles.
       allow read, write: if isAuth();
     }
 

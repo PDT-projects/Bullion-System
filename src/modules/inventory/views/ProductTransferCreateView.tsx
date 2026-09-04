@@ -219,7 +219,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
             <div className="p-5 space-y-4">
               {transferItems.map((it, idx) => (
                 <ItemPicker
-                  key={it.id}
+                  key={`${it.productId}-${idx}`}
                   index={idx}
                   productId={it.productId}
                   selectedSerials={it.selectedSerials}

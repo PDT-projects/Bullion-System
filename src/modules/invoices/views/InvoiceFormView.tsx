@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Plus, Trash2, X, Hash, Truck, User, CreditCard,
+
+    Image as ImageIcon,Plus, Trash2, X, Hash, Truck, User, CreditCard,
   Loader2, FileDown, Stamp, Package, Globe, ChevronDown,
 } from 'lucide-react';
 import { Invoice, InvoiceProduct, ProductInfo } from '../models/types';
@@ -751,7 +752,7 @@ export function InvoiceFormView({
               </div>
             </div>
 
-            {/* Digital Stamp + Exchange Note (warranty language kept neutral) */}
+                        {/* Digital Stamp + Product Images + Exchange Note */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
               <div className="flex items-center h-10">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -762,7 +763,26 @@ export function InvoiceFormView({
                   <span className="text-xs font-medium text-gray-700">Digital Stamp on PDF</span>
                 </label>
               </div>
-              <div className="col-span-3">
+
+              {/* Some customers want the product photo, others read it as
+                  clutter. Checked when the field is anything but false, so an
+                  invoice created before this existed keeps showing images —
+                  testing `=== true` would tick nothing on every old invoice
+                  while the PDF still printed the pictures. */}
+              <div className="flex items-center h-10">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox"
+                    checked={formData.showProductImages !== false}
+                    onChange={() => setFormData({
+                      showProductImages: formData.showProductImages === false,
+                    })}
+                    className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-slate-600" />
+                  <ImageIcon size={12} className="text-gray-500" />
+                  <span className="text-xs font-medium text-gray-700">Product Images on PDF</span>
+                </label>
+              </div>
+
+              <div className="col-span-2">
                 <label className={lbl}>Exchange Note</label>
                 <textarea value={formData.exchangeWarrantyNote || ''}
                   onChange={e => setFormData({ exchangeWarrantyNote: e.target.value })}

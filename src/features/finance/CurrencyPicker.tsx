@@ -133,6 +133,13 @@ export function CurrencyDropdown({
   );
 }
 
+export interface CurrencyRowsProps {
+  extras: CurrencyCode[];
+  pkrAmount?: number;
+  rates?: RateMap;
+  dark?: boolean;
+}
+
 export function CurrencyRows({ extras, pkrAmount, rates }: CurrencyRowsProps) {
   if (extras.length === 0) return null;
   return (

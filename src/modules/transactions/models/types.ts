@@ -87,7 +87,7 @@ export interface Transaction {
   bsMainCategory?: BSMainCategory;
   bsSubCategory?: string;
   // Linked record info
-  linkedType?: 'salary' | 'loan' | 'bill' | 'invoice' | 'commission' | 'manual';
+  linkedType?: 'salary' | 'loan' | 'bill' | 'invoice' | 'commission' | 'manual' | 'inventory';
   linkedId?: string;
   linkedRef?: string;
   // Salary fields
@@ -96,6 +96,9 @@ export interface Transaction {
   deductions?: number;
   netAmount?: number;
   salaryMonth?: string;
+  salaryCurrency?: string;
+  salaryAED?: number;
+  salaryPKR?: number;
   isAdvanceSalary?: boolean;
   advanceAmount?: number;
   // Loan fields
@@ -106,6 +109,9 @@ export interface Transaction {
   dueDate?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Bill fields
+  billMonth?: string;
+  imageUrl?: string;
 
   // ────────────────────────────────────────────────────────────────
   // Phase 1 — NEW fields (all optional, backward-compat with legacy)
@@ -192,6 +198,7 @@ export type AppNotificationType =
   | 'transaction_rejected'
   | 'payment_pending'
   | 'payment_cleared'
+  | 'user_registration_pending'
   | 'info';
 
 export interface AppNotification {
@@ -201,11 +208,16 @@ export interface AppNotification {
   message: string;
   transactionId?: string;       // Firestore doc id
   transactionRef?: string;      // human-readable TXN-XXXXXX
+  // NotificationBell renders a registration approval card from these three.
+  // They were written and read at runtime but absent from the type, so every
+  // reference to them read as an error.
+  userId?: string;              // for user registration notifications
+  userEmail?: string;           // registering user's email
+  userName?: string;            // registering user's name
   isRead: boolean;
   createdAt: string;
   expiresAt?: string;
 }
-
 // ── Company / Branch (user-managed, stored in Firestore /companies) ───────────
 export interface Company {
   id: string;
@@ -293,7 +305,7 @@ export interface DynamicCategory {
   //                                          e.g. Category='Utilities' → SubCat='Electricity Bill'
   // 'plMainCategory' / 'plSubCategory'     → P&L category tree
   // 'bsMainCategory' / 'bsSubCategory'     → Balance Sheet category tree
-  type: 'mainCategory' | 'subCategory' | 'subCategoryDetail' | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory';
+  type: 'mainCategory' | 'subCategory' | 'subCategoryDetail' | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory' | 'billCategory';
   // For 'subCategory' this is the parent mainCategory ('Cash Inflow' / 'Cash Outflow' / 'Loan').
   // For 'subCategoryDetail' this is the parent subCategory string.
   parentCategory?: string;

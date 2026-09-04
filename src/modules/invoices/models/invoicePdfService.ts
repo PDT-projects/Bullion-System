@@ -333,7 +333,9 @@ function renderBillShipTo(doc: jsPDF, invoice: Invoice, y: number): number {
   const cName  = invoice.customerName  || '—';
   const phone1 = invoice.customerPhone || '';
   const cCity  = invoice.customerCity  || '';
-  const cProv  = invoice.customerProvince || invoice.customerCountry || '';
+  // customerCountry was never a field on Invoice, so the fallback silently did
+  // nothing and the province printed empty whenever it was blank.
+  const cProv  = invoice.customerProvince || '';
   const cAddr  = invoice.customerAddress || '';
 
   const infoLines = [
@@ -363,23 +365,36 @@ function renderBillShipTo(doc: jsPDF, invoice: Invoice, y: number): number {
 }
 
 // ── Product table ──────────────────────────────────────────────────────────
-const COL = {
-  image: { x: ML,          w: 30 },
-  desc:  { x: ML + 30,     w: 90 },
-  qty:   { x: ML + 120,    w: 20 },
-  unit:  { x: ML + 140,    w: 27 },
-  total: { x: ML + 167,    w: 27 },
-} as const;
+/**
+ * Column layout, built for the width actually available.
+ *
+ * With images off the image column is not left blank — it is removed and the
+ * description takes the space. A 30mm empty gutter on every row reads as a
+ * rendering fault rather than a choice.
+ */
+function columns(withImages: boolean) {
+  const imgW  = withImages ? 30 : 0;
+  const extra = withImages ? 0 : 30;      // width the description reclaims
+  return {
+    withImages,
+    image: { x: ML,                       w: imgW },
+    desc:  { x: ML + imgW,                w: 90 + extra },
+    qty:   { x: ML + imgW + 90 + extra,   w: 20 },
+    unit:  { x: ML + imgW + 110 + extra,  w: 27 },
+    total: { x: ML + imgW + 137 + extra,  w: 27 },
+  };
+}
+type Columns = ReturnType<typeof columns>;
 
 /** Yellow header row for the product table. */
-function renderProductsHeader(doc: jsPDF, y: number): number {
+function renderProductsHeader(doc: jsPDF, y: number, COL: Columns): number {
   const h = 9;
   box(doc, ML, y, CONTENT_W, h, { fill: GOLD });
 
   text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('IMAGE',           COL.image.x + COL.image.w / 2, y + 6, { align: 'center' });
+  if (COL.withImages) doc.text('IMAGE', COL.image.x + COL.image.w / 2, y + 6, { align: 'center' });
   doc.text('DESCRIPTION',     COL.desc.x + 4,                y + 6);
   doc.text('QTY',             COL.qty.x + COL.qty.w / 2,     y + 6, { align: 'center' });
   doc.text(`UNIT PRICE ${CURRENCY_SYMBOL}`, COL.unit.x + COL.unit.w / 2,  y + 6, { align: 'center' });
@@ -391,7 +406,7 @@ function renderProductsHeader(doc: jsPDF, y: number): number {
 /** One product row. Returns the y-cursor after the row. */
 function renderProductRow(
   doc: jsPDF, product: any, y: number,
-  imageData: ImageData | null, rowIdx: number,
+  imageData: ImageData | null, rowIdx: number, COL: Columns,
 ): number {
   const ROW_H = 24;
 
@@ -404,30 +419,31 @@ function renderProductRow(
   stroke(doc, LINE);
   doc.setLineWidth(0.15);
   doc.line(ML, y, ML, y + ROW_H);                                        // left
-  doc.line(COL.desc.x,  y, COL.desc.x,  y + ROW_H);
+  if (COL.withImages) doc.line(COL.desc.x, y, COL.desc.x, y + ROW_H);
   doc.line(COL.qty.x,   y, COL.qty.x,   y + ROW_H);
   doc.line(COL.unit.x,  y, COL.unit.x,  y + ROW_H);
   doc.line(COL.total.x, y, COL.total.x, y + ROW_H);
   doc.line(PAGE_W - MR, y, PAGE_W - MR, y + ROW_H);                      // right
   doc.line(ML, y + ROW_H, PAGE_W - MR, y + ROW_H);                       // bottom
 
-  // Product image — small card with border
-  const imgPad = 2;
-  const imgSize = ROW_H - imgPad * 2;
-  const imgX = COL.image.x + (COL.image.w - imgSize) / 2;
-  const imgY = y + imgPad;
-  box(doc, imgX, imgY, imgSize, imgSize, { fill: { r: 245, g: 245, b: 245 }, border: LINE, borderWidth: 0.1 });
-  if (imageData) {
+  // Product image — drawn flat on the page, no card and no border.
+  //
+  // The grey box and hairline outline existed to make an empty slot look
+  // deliberate. A product photo reads better against the page than inside a
+  // frame, and a row with no photo is better shown as empty space than as a
+  // box announcing "No image".
+  if (COL.withImages && imageData) {
+    const imgPad  = 2;
+    const imgSize = ROW_H - imgPad * 2;
+    const imgX    = COL.image.x + (COL.image.w - imgSize) / 2;
+    const imgY    = y + imgPad;
     try {
-      doc.addImage(imageData.dataUrl, imageData.format, imgX + 0.5, imgY + 0.5, imgSize - 1, imgSize - 1);
-    } catch { /* image draw failed — placeholder card stays */ }
-  } else {
-    // Visible "no image" indicator so it's clear at a glance which product row
-    // is missing image data (vs. an empty box that looks like a rendering bug).
-    text(doc, { r: 156, g: 163, b: 175 });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6);
-    doc.text('No image', imgX + imgSize / 2, imgY + imgSize / 2 + 1, { align: 'center' });
+      // White fill behind the image so a transparent PNG lands on white
+      // rather than on whatever the zebra tint put under the row.
+      doc.setFillColor(255, 255, 255);
+      doc.rect(imgX, imgY, imgSize, imgSize, 'F');
+      doc.addImage(imageData.dataUrl, imageData.format, imgX, imgY, imgSize, imgSize);
+    } catch { /* nothing drawn — the row simply has no picture */ }
   }
 
   // Description
@@ -630,6 +646,11 @@ export type PdfEnrichSource = Array<{ id: string; imageUrls?: string[] }>
 
 export interface GenerateInvoicePdfOptions {
   enrichWithProducts?: PdfEnrichSource;
+  /**
+   * Overrides the invoice's own showProductImages, for a preview toggle.
+   * Leave unset and the invoice decides.
+   */
+  showProductImages?: boolean;
 }
 
 export async function generateInvoicePdf(
@@ -707,7 +728,14 @@ export async function generateInvoicePdf(
   y = renderTitleRow(doc, invoice, y);
   y = renderSellerInfo(doc, y);
   y = renderBillShipTo(doc, invoice, y);
-  y = renderProductsHeader(doc, y);
+  // The invoice's own setting wins; the option is an override for previews.
+  // `!== false` because undefined means an invoice issued before this setting
+  // existed, and those must keep showing images.
+  const showImages = options.showProductImages
+    ?? ((invoice as any).showProductImages !== false);
+  const COL = columns(showImages);
+
+  y = renderProductsHeader(doc, y, COL);
 
   for (let i = 0; i < products.length; i++) {
     // Rough end-of-content check — reserve enough space for totals + logo +
@@ -717,9 +745,9 @@ export async function generateInvoicePdf(
       renderThankYou(doc, PAGE_H - 7);
       doc.addPage();
       y = renderHeader(doc);
-      y = renderProductsHeader(doc, y + 3);
+      y = renderProductsHeader(doc, y + 3, COL);
     }
-    y = renderProductRow(doc, products[i], y, productImages[i], i);
+    y = renderProductRow(doc, products[i], y, showImages ? productImages[i] : null, i, COL);
   }
 
   // ── Trailing sections on the last page ──────────────────────────────────

@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
-import { Product } from '../App';
+import type { Product } from '../../modules/inventory/models/types';
 import { Package, MapPin, Calendar, Filter, Download, BarChart3, Eye, X, Hash, DollarSign, FileText, TrendingUp, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';

@@ -36,6 +36,7 @@ export interface CommissionAutoResult {
   slabFrom:             number;
   slabTo:               number;
   city:                 string;
+  salaryMonth?:         string;
   breakdown:            CommissionCityBreakdown[];
   hasMatch:             boolean;
   noSlabCities:         string[];

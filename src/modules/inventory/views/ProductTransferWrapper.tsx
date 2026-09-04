@@ -21,7 +21,7 @@ export const ProductTransferWrapper: React.FC = () => {
       stats={viewModel.stats}
       onAdd={() => navigate('/product-transfer/new')}
       onView={t => viewModel.setViewTransfer(t)}
-      onMarkReceived={t => viewModel.handleMarkReceived(t)}
+      onMarkReceived={(t, receiverName) => viewModel.handleMarkReceived(t, receiverName)}
       onDelete={id => viewModel.handleDeleteTransfer(id)}
       onCloseView={() => viewModel.setViewTransfer(null)}
       formatDateTime={viewModel.formatDateTime}

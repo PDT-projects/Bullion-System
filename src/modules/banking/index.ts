@@ -18,7 +18,7 @@ export type {
 
 export { BankingService, CASH_LOCATIONS } from './models/bankingService';
 export { BankFirebaseService } from './models/bankFirebaseService';
-export { TransferFirebaseService } from './models/transferFirebaseService';
+export { TransferFirebaseService } from './models/Transferfirebaseservice';
 export { CashFirebaseService } from './models/cashFirebaseService';
 
 export { useBankListViewModel } from './viewModels/useBankListViewModel';

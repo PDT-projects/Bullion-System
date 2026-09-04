@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Transaction, Bank } from '../../App';
+import type { Transaction } from '../../modules/transactions/models/types';
+import type { Bank } from '../../modules/banking/models/types';
 import { Plus, Eye, Trash2, X, Printer, Download, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { toast } from 'sonner';
 

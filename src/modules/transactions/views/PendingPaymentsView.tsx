@@ -26,7 +26,7 @@ function CurrencyRows({ extras, pkrAmount, rates }: { extras: CurrencyCode[]; pk
         <div key={code} className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1 text-xs text-gray-400">
             <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-1 py-0.5 rounded leading-none">
-              {getCurrencyMeta(code).countryCode}
+              {getCurrencyMeta(code).flag}
             </span>
             {code}
           </span>

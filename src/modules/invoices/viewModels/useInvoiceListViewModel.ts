@@ -21,12 +21,13 @@ import {
 } from '../models/types';
 import {
   calculateInvoiceStats, summarizeInvoices, formatCurrency, formatDate,
+  collectInvoiceBrands, collectInvoiceModels,
 } from '../models/invoiceService';
 import { InvoiceFirebaseService } from '../models/InvoiceFirebaseService';
 import { InvoicePaymentService } from '../models/InvoicePaymentService';
 import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
-import { TxCompany } from '../../transactions/models/transactionBridgeService';
+import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { useAuth } from '../../../providers/context/AuthContext';
 
 const ALLOWED_CITIES = ['Saudia', 'Chad'] as const;
@@ -69,6 +70,10 @@ export interface UseInvoiceListViewModelReturn {
   onStatusFilter: (statuses: string[]) => void;
   onCityFilter: (city: string[]) => void;
   onSalespersonFilter: (sp: string[]) => void;
+  onBrandFilter: (brands: string[]) => void;
+  onModelFilter: (models: string[]) => void;
+  brandOptions: string[];
+  modelOptions: string[];
   onDateFromFilter: (date: string) => void;
   onDateToFilter: (date: string) => void;
   onClearFilters: () => void;
@@ -108,7 +113,7 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filters, setFilters] = useState<InvoiceFilters>({
     searchTerm: '', statusFilter: [] as string[], dateFrom: '', dateTo: '',
-    cityFilter: [], salespersonFilter: [],
+    cityFilter: [], salespersonFilter: [], brandFilter: [], modelFilter: [],
   });
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -163,13 +168,21 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
     let result = [...invoices];
     if (filters.searchTerm.trim()) {
       const term = filters.searchTerm.toLowerCase();
-      result = result.filter(inv =>
-        inv.invoiceNumber.toLowerCase().includes(term) ||
-        inv.customerName.toLowerCase().includes(term) ||
-        inv.customerPhone.includes(term) ||
-        (inv.customerPhone2 ?? '').includes(term) ||
-        (inv.salesperson ?? '').toLowerCase().includes(term) ||
-        (inv.customerCity ?? '').toLowerCase().includes(term));
+      // Search reaches the product lines. A customer ringing about "the Nokta
+      // I bought" gives a brand, and a warranty claim gives a serial — neither
+      // could find its invoice before.
+      result = result.filter(inv => {
+        const haystack = [
+          inv.invoiceNumber, inv.customerName, inv.customerPhone,
+          inv.customerPhone2, inv.salesperson, inv.customerCity,
+          inv.branch, inv.referralBy,
+          ...(inv.products || []).flatMap((p: any) => [
+            p.productName, p.brandName, p.modelName, p.category,
+            ...(p.serialNumbers || []),
+          ]),
+        ];
+        return haystack.some(v => (v || '').toString().toLowerCase().includes(term));
+      });
     }
     if (Array.isArray(filters.statusFilter) ? filters.statusFilter.length > 0 : (filters.statusFilter !== 'all' && filters.statusFilter !== '')) {
       const statuses = Array.isArray(filters.statusFilter) ? filters.statusFilter : [filters.statusFilter];
@@ -185,12 +198,31 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
       const sps = Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter : [filters.salespersonFilter];
       result = result.filter(inv => {
         const name = salespersonMap[inv.salesperson ?? ''] || inv.salesperson || '';
-        return sps.includes(name);
+          return sps.includes(name);
       });
     }
+
+    // Brand and model match on ANY line. An invoice holding a Nokta and a
+    // Garrett belongs in both brand filters — requiring every line to match
+    // would hide mixed invoices, which is the opposite of what a filter is for.
+    // Compared case-insensitively because the same brand is stored with
+    // different casing across older records.
+    if (Array.isArray(filters.brandFilter) && filters.brandFilter.length > 0) {
+      const wanted = filters.brandFilter.map(b => b.trim().toLowerCase());
+      result = result.filter(inv =>
+        (inv.products || []).some((p: any) =>
+          wanted.includes((p.brandName || '').trim().toLowerCase())));
+    }
+
+    if (Array.isArray(filters.modelFilter) && filters.modelFilter.length > 0) {
+      const wanted = filters.modelFilter.map(m => m.trim().toLowerCase());
+      result = result.filter(inv =>
+        (inv.products || []).some((p: any) =>
+          wanted.includes((p.modelName || '').trim().toLowerCase())));
+    }
+
     return result;
   }, [invoices, filters, salespersonMap]);
-
   const stats: InvoiceStats = useMemo(() => calculateInvoiceStats(invoices), [invoices]);
 
   // ── Selection ─────────────────────────────────────────────────────────────
@@ -244,9 +276,30 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
   const onStatusFilter = useCallback((statusFilter: string[]) => setFilters(p => ({ ...p, statusFilter })), []);
   const onCityFilter = useCallback((cityFilter: string[]) => setFilters(p => ({ ...p, cityFilter })), []);
   const onSalespersonFilter = useCallback((salespersonFilter: string[]) => setFilters(p => ({ ...p, salespersonFilter })), []);
+
+  // Changing the brand clears the model selection. The model list is narrowed
+  // by brand, so a model left selected from a brand no longer chosen would
+  // filter everything out with nothing on screen explaining why.
+  const onBrandFilter = useCallback((brandFilter: string[]) =>
+    setFilters(p => ({ ...p, brandFilter, modelFilter: [] })), []);
+  const onModelFilter = useCallback((modelFilter: string[]) =>
+    setFilters(p => ({ ...p, modelFilter })), []);
   const onDateFromFilter = useCallback((dateFrom: string) => setFilters(p => ({ ...p, dateFrom })), []);
   const onDateToFilter = useCallback((dateTo: string) => setFilters(p => ({ ...p, dateTo })), []);
-  const onClearFilters = useCallback(() => setFilters({ searchTerm: '', statusFilter: [], dateFrom: '', dateTo: '', cityFilter: [], salespersonFilter: [] }), []);
+  const onClearFilters = useCallback(() => setFilters({
+    searchTerm: '', statusFilter: [], dateFrom: '', dateTo: '',
+    cityFilter: [], salespersonFilter: [], brandFilter: [], modelFilter: [],
+  }), []);
+
+  // Dropdown options come from the invoices themselves, not the product
+  // catalogue: a brand never sold does not belong in the filter, and one since
+  // discontinued still does. Models narrow to the selected brands, because the
+  // full model list for this catalogue is too long to be usable.
+  const brandOptions = useMemo(() => collectInvoiceBrands(invoices), [invoices]);
+  const modelOptions = useMemo(
+    () => collectInvoiceModels(invoices, filters.brandFilter),
+    [invoices, filters.brandFilter],
+  );
 
   const onViewInvoice = useCallback((invoice: Invoice) => setViewingInvoice(invoice), []);
   const onCloseView = useCallback(() => setViewingInvoice(null), []);
@@ -293,6 +346,7 @@ export function useInvoiceListViewModel(): UseInvoiceListViewModelReturn {
   return {
     invoices, filteredInvoices, stats, filters, viewingInvoice, isLoading,
     onSearch, onStatusFilter, onCityFilter, onSalespersonFilter,
+    onBrandFilter, onModelFilter, brandOptions, modelOptions,
     onDateFromFilter, onDateToFilter, onClearFilters,
     availableCities, availableSalespersons, salespersonMap,
     onViewInvoice, onCloseView, onEditInvoice, onCreateInvoice,

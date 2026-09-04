@@ -20,7 +20,7 @@ import type { Screen } from '../../modules/user-management/models/userService';
 // keeping them apart meant a counterparty who both owed us money and was owed
 // money by us appeared twice with no way to see the net.
 import { BalanceSheetReport }               from './BalanceSheetReport';
-import { IncomeStatementReport }            from './IncomeStatementReport';
+import { IncomeStatementReport }            from './Incomestatementreport';
 import { AccountsPayableReceivableReport }  from './Accountspayablereceivablereport';
 
 // ── Types ─────────────────────────────────────────────────────────────────────

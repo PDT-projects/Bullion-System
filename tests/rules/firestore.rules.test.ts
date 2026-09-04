@@ -290,17 +290,113 @@ describe('salaries', () => {
   });
 });
 
+describe('products', () => {
+  const valid = { brandName: 'Nokta', sellPrice: 500, stock: 10 };
+
+  it('accepts a valid create', async () => {
+    await assertSucceeds(addDoc(collection(authed(), 'products'), valid));
+  });
+
+  it('rejects an empty brand name', async () => {
+    await assertFails(addDoc(collection(authed(), 'products'), { ...valid, brandName: '' }));
+  });
+
+  it('rejects a sellPrice that is a string', async () => {
+    await assertFails(addDoc(collection(authed(), 'products'), { ...valid, sellPrice: '500' }));
+  });
+
+  it('rejects a missing stock', async () => {
+    await assertFails(addDoc(collection(authed(), 'products'), { brandName: 'Nokta', sellPrice: 500 }));
+  });
+
+  // costPrice defaults to 0 in createProduct, so a create without it is valid.
+  it('accepts a create with no costPrice', async () => {
+    await assertSucceeds(addDoc(collection(authed(), 'products'), valid));
+  });
+
+  // Serial moves, sales and transfers all update stock alone.
+  it('accepts a stock-only update', async () => {
+    await seed('products', 'p1', valid);
+    await assertSucceeds(updateDoc(doc(authed(), 'products', 'p1'), { stock: 9 }));
+  });
+
+  it('accepts an update that carries neither price nor stock', async () => {
+    await seed('products', 'p1', valid);
+    await assertSucceeds(updateDoc(doc(authed(), 'products', 'p1'), { serialStatus: { A1: 'Sold' } }));
+  });
+
+  it('rejects an update that sets stock to a string', async () => {
+    await seed('products', 'p1', valid);
+    await assertFails(updateDoc(doc(authed(), 'products', 'p1'), { stock: 'nine' }));
+  });
+});
+
+describe('loans', () => {
+  const valid = { receiverName: 'Test', loanAmount: 50000, paid: 0, remaining: 50000 };
+
+  it('accepts a valid create', async () => {
+    await assertSucceeds(addDoc(collection(authed(), 'loans'), valid));
+  });
+
+  it('rejects a missing loanAmount', async () => {
+    await assertFails(addDoc(collection(authed(), 'loans'), { receiverName: 'Test' }));
+  });
+
+  // Repayments write paid and remaining without resending loanAmount.
+  it('accepts a repayment update', async () => {
+    await seed('loans', 'l1', valid);
+    await assertSucceeds(updateDoc(doc(authed(), 'loans', 'l1'), { paid: 10000, remaining: 40000 }));
+  });
+});
+
+describe('budgets', () => {
+  const valid = { subCategory: 'Fuel', budgetLimit: 5000, spent: 0 };
+
+  it('accepts a valid create', async () => {
+    await assertSucceeds(addDoc(collection(authed(), 'budgets'), valid));
+  });
+
+  it('rejects a budgetLimit that is a string', async () => {
+    await assertFails(addDoc(collection(authed(), 'budgets'), { ...valid, budgetLimit: '5000' }));
+  });
+
+  it('accepts a spent-only update', async () => {
+    await seed('budgets', 'b1', valid);
+    await assertSucceeds(updateDoc(doc(authed(), 'budgets', 'b1'), { spent: 1200 }));
+  });
+});
+
+describe('commissions', () => {
+  const valid = { salesperson: 'emp1', totalSales: 100000, calculatedCommissionAmount: 2000 };
+
+  it('accepts a valid create', async () => {
+    await assertSucceeds(addDoc(collection(authed(), 'commissions'), valid));
+  });
+
+  it('rejects an empty salesperson', async () => {
+    await assertFails(addDoc(collection(authed(), 'commissions'), { ...valid, salesperson: '' }));
+  });
+});
+
+describe('cash_transactions', () => {
+  const valid = { amount: 1000, date: '2026-08-31', mode: 'Cash' };
+
+  it('accepts a valid create', async () => {
+    await assertSucceeds(addDoc(collection(authed(), 'cash_transactions'), valid));
+  });
+
+  it('rejects an empty date', async () => {
+    await assertFails(addDoc(collection(authed(), 'cash_transactions'), { ...valid, date: '' }));
+  });
+});
+
 describe('collections left unchanged still work', () => {
   // These carry no structural checks yet. The point of testing them is to prove
   // the change did not tighten anything by accident.
   it.each([
-    ['products',              { brandName: 'Nokta', sellPrice: 100 }],
     ['employees',             { name: 'Test Employee' }],
-    ['loans',                 { receiverName: 'Test', loanAmount: 5000 }],
     ['assets',                { name: 'Laptop', value: 3000 }],
     ['purchasedOrders',       { shipmentNumber: 'SHP-001' }],
-    ['budgets',               { subCategory: 'Fuel', budgetLimit: 1000 }],
-    ['commissions',           { amount: 500 }],
     ['payable_to_futuristic', { amount: 200 }],
   ])('%s accepts a signed-in create', async (col, data) => {
     await assertSucceeds(addDoc(collection(authed(), col), data as any));

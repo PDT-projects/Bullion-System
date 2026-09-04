@@ -6,7 +6,7 @@
 import { Download, Filter, FileText, TrendingUp, DollarSign, CheckCircle, Receipt, Link, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 import type { Commission, CommissionFilter, CommissionStats } from '../models/types';
 import type { SalaryLinkStatus } from '../viewModels/useCommissionReportViewModel';
-import { formatDual, formatAED, formatPKR } from '../models/currencyUtils';
+import { formatDual, formatAED, formatPKR } from '../models/CurrencyUtils';
 
 interface CommissionReportViewProps {
   commissions:         Commission[];

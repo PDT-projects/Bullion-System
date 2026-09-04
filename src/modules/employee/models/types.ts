@@ -13,7 +13,7 @@ export interface Employee {
   email: string;
   joinDate: string;
   status: 'active' | 'inactive';
-  location: 'Karachi' | 'Islamabad' | 'Lahore';
+  location: 'Karachi' | 'Islamabad' | 'Lahore' | 'Dubai' | 'Saudia' | 'Chad' | 'Sudan' | string;
   accountNumber: string;
   bankName: string;
   accountTitle: string;
@@ -35,7 +35,7 @@ export interface CreateEmployeeDTO {
   email: string;
   joinDate: string;
   status: 'active' | 'inactive';
-  location: 'Karachi' | 'Islamabad' | 'Lahore';
+  location: 'Karachi' | 'Islamabad' | 'Lahore' | 'Dubai' | 'Saudia' | 'Chad' | 'Sudan' | string;
   accountNumber: string;
   bankName: string;
   accountTitle: string;

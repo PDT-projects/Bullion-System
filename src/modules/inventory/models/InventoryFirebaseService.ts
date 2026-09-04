@@ -91,7 +91,7 @@ export async function deleteInventoryImage(url: string): Promise<void> {
 import type {
   Product, ProductTransfer, CreateProductDTO, UpdateProductDTO,
   CreateTransferDTO, ProductStatus, SerialStatus, CostingInfo,
-  DamagedProduct, InventoryReportRow,
+  DamagedProduct, InventoryReportRow, PaymentChannel, SupplierPaymentStatus,
 } from './types';
 
 // ==================== COLLECTION NAMES ====================
@@ -236,6 +236,9 @@ function transformDocToTransfer(docSnap: any): ProductTransfer {
     receiptName:    d.receiptName    || undefined,
     receiptType:    d.receiptType    || undefined,
     receiptDataUrl: d.receiptDataUrl || undefined,
+    shipmentCost:   d.shipmentCost   ?? undefined,
+    costPerUnit:    d.costPerUnit    ?? undefined,
+    transferItems:  d.transferItems  || undefined,
     createdAt:      d.createdAt      || '',
     receivedAt:     d.receivedAt     || undefined,
   };
@@ -828,6 +831,52 @@ export class InventoryFirebaseService {
   }
 
   static isConnected(): boolean { return !!db; }
+
+  static async generateTransactionId(): Promise<string> {
+    const now      = new Date();
+    const dd       = String(now.getDate()).padStart(2, '0');
+    const mm       = String(now.getMonth() + 1).padStart(2, '0');
+    const yy       = String(now.getFullYear()).slice(-2);
+    const datePart = `${dd}${mm}${yy}`;
+    const counterRef = doc(db, 'counters', `inventory_txn_${datePart}`);
+    const nextCount = await runTransaction(db, async (txn) => {
+      const snap    = await txn.get(counterRef);
+      const current = snap.exists() ? (snap.data().count as number) : 0;
+      const next    = current + 1;
+      txn.set(counterRef, { count: next, date: datePart }, { merge: true });
+      return next;
+    });
+    return `TXN-${datePart}-${String(nextCount).padStart(3, '0')}`;
+  }
+
+  static async fetchPayableProducts(): Promise<Product[]> {
+    try {
+      const all = await InventoryFirebaseService.fetchAllProducts();
+      return all.filter(p => p.ownershipType === 'Credit' && (p.supplierPaymentStatus !== 'Cleared' || ((p.supplierCost || 0) - (p.supplierPaidAmount || 0) > 0)));
+    } catch (error) {
+      console.error('Failed to fetch payable products:', error);
+      throw error;
+    }
+  }
+
+  static async recordSupplierPayment(
+    productId: string,
+    paidAmount: number,
+    channel: PaymentChannel
+  ): Promise<void> {
+    const product = await InventoryFirebaseService.fetchProductById(productId);
+    if (!product) throw new Error('Product not found');
+    const newPaidAmount = (product.supplierPaidAmount || 0) + paidAmount;
+    const remaining = Math.max(0, (product.supplierCost || 0) - newPaidAmount);
+    const status: SupplierPaymentStatus = remaining <= 0 ? 'Cleared' : 'Partial';
+    await updateDoc(doc(db, PRODUCTS_COLLECTION, productId), {
+      supplierPaidAmount: newPaidAmount,
+      supplierRemainingAmount: remaining,
+      supplierPaymentStatus: status,
+      supplierPaymentChannel: channel,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 }
 
 // ==================== TRANSFER SERVICE ====================
@@ -870,9 +919,15 @@ export class TransferFirebaseService {
         quantity: dto.quantity, serialNumbers: dto.serialNumbers,
         date: dto.transferDate, transferDate: dto.transferDate,
         status: 'In Transit' as const, transferredBy: dto.transferredBy,
-        note: dto.note, notes: dto.notes,
+                note: dto.note, notes: dto.notes,
         receiptName: dto.receiptName, receiptType: dto.receiptType,
-        receiptDataUrl: dto.receiptDataUrl, createdAt: now,
+        receiptDataUrl: dto.receiptDataUrl,
+        // Previously omitted, so the cost the user entered on the form was
+        // dropped here and never reached Firestore.
+        shipmentCost: dto.shipmentCost,
+        costPerUnit: dto.costPerUnit,
+        transferItems: dto.transferItems,
+        createdAt: now,
       });
       const docRef = await addDoc(collection(db, TRANSFERS_COLLECTION), data);
       return transformDocToTransfer(await getDoc(docRef));
@@ -920,6 +975,7 @@ export class TransferFirebaseService {
       throw new Error('Failed to delete transfer from Firestore');
     }
   }
+
 }
 
 // ==================== BRAND / MODEL SERVICE ====================
@@ -1062,20 +1118,4 @@ export class BrandModelFirebaseService {
     }
   }
 
-  static async generateTransactionId(): Promise<string> {
-    const now      = new Date();
-    const dd       = String(now.getDate()).padStart(2, '0');
-    const mm       = String(now.getMonth() + 1).padStart(2, '0');
-    const yy       = String(now.getFullYear()).slice(-2);
-    const datePart = `${dd}${mm}${yy}`;
-    const counterRef = doc(db, 'counters', `inventory_txn_${datePart}`);
-    const nextCount = await runTransaction(db, async (txn) => {
-      const snap    = await txn.get(counterRef);
-      const current = snap.exists() ? (snap.data().count as number) : 0;
-      const next    = current + 1;
-      txn.set(counterRef, { count: next, date: datePart }, { merge: true });
-      return next;
-    });
-    return `TXN-${datePart}-${String(nextCount).padStart(3, '0')}`;
-  }
 }

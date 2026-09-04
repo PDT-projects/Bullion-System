@@ -15,7 +15,7 @@ import { db } from '../../../api/firebase/firebase';
 import { Invoice } from './types';
 import { TransactionFirebaseService } from '../../transactions/models/transactionFirebaseService';
 import { Transaction } from '../../transactions/models/types';
-import { TxCompany } from '../../transactions/models/transactionBridgeService';
+import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 
 const INVOICES_COLLECTION = 'invoices';
 
@@ -171,7 +171,7 @@ export class InvoiceMiscExpenseService {
       linkedType:      'invoice',
       linkedId:        invoice.invoiceNumber,
       linkedRef:       invoice.invoiceNumber,
-      plMainCategory:  'Cost of Goods Sold',
+      plMainCategory:  'Cost of Goods Sold (COGS)',
       plSubCategory:   category,
       bsMainCategory:  'Assets',
       bsSubCategory:   mode === 'Cash' ? 'Cash & Cash Equivalents' : 'Bank Balances',

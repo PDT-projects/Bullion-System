@@ -428,8 +428,8 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
                             {inv.paymentStatus && (
                               <span style={{
                                 fontSize: '10px', padding: '1px 7px', borderRadius: '999px', fontWeight: 600,
-                                background: inv.paymentStatus === 'Paid' ? '#dcfce7' : inv.paymentStatus === 'Partial' ? '#fef9c3' : '#fee2e2',
-                                color:      inv.paymentStatus === 'Paid' ? '#15803d' : inv.paymentStatus === 'Partial' ? '#92400e' : '#b91c1c',
+                                background: inv.paymentStatus === 'Full' ? '#dcfce7' : inv.paymentStatus === 'Partial' ? '#fef9c3' : '#fee2e2',
+                                color:      inv.paymentStatus === 'Full' ? '#15803d' : inv.paymentStatus === 'Partial' ? '#92400e' : '#b91c1c',
                               }}>
                                 {inv.paymentStatus}
                               </span>

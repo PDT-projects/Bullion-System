@@ -562,7 +562,7 @@ export function NotificationBell(_props: Props) {
                     for (const n of notifications) {
                       await TransactionFirebaseService.deleteNotification(n.id);
                     }
-                    setNotifications([]);
+                    setDbNotifications([]);  
                   }}
                   style={{
                     fontSize:     '12px',

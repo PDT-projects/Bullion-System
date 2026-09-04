@@ -6,11 +6,11 @@ export interface SalaryTransaction {
   paidBy: string;
   transactionBy: string;
   mode: 'Cash' | 'Bank' | 'Cheque';
-  bankId: string;           // ← new: Firestore bank ID for balance update
-  bankName: string;
-  chequeNumber: string;     // ← new
-  chequeDate: string;       // ← new
-  chequeBank: string;       // ← new: bank name on the cheque
+  bankId?: string;           // ← new: Firestore bank ID for balance update
+  bankName?: string;
+  chequeNumber?: string;     // ← new
+  chequeDate?: string;       // ← new
+  chequeBank?: string;       // ← new: bank name on the cheque
   imageUrl: string;
   paymentStatus: 'Full' | 'Partial';
   remainingAmount: number;

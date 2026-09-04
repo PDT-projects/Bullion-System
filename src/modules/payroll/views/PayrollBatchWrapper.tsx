@@ -1,6 +1,6 @@
 // Payroll Batch Wrapper - wires ViewModel to View
 
-import { usePayrollBatchViewModel } from '../viewModels/usePayrollBatchViewModel';
+import { usePayrollBatchViewModel } from '../viewModels/UsePayrollBatchViewModel';
 import { PayrollBatchView } from './PayrollBatchView';
 
 export function PayrollBatchWrapper() {

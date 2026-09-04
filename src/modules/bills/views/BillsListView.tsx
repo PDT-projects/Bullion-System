@@ -11,7 +11,7 @@ import {
   ChevronDown, Check, Loader2, AlertCircle, RefreshCw,
 } from 'lucide-react';
 import { CurrencyDropdown } from '../../../features/finance/CurrencyPicker';
-import { RateMap, useCurrencyRates, fmtCurrency, getCurrencyMeta } from '../../../features/finance/currencyUtils';
+import { CurrencyCode, RateMap, useCurrencyRates, fmtCurrency, getCurrencyMeta } from '../../../features/finance/currencyUtils';
 
 interface BillsListViewProps {
   bills: Bill[];
@@ -44,14 +44,14 @@ interface BillsListViewProps {
 // Use shared currency utilities (AED primary display). Rates and formatting
 // are provided by `useCurrencyRates` and `fmtCurrency` from currencyUtils.
 
-const convertFromAED = (amount: number, target: string, rates: RateMap): number =>
-  target === 'AED' ? amount : (amount / rates.AED) * (rates as any)[target];
+const convertFromAED = (amount: number, target: CurrencyCode, rates: RateMap): number =>
+  target === 'AED' ? amount : (amount / rates.AED) * rates[target];
 
 // Local dropdown removed — uses shared CurrencyDropdown imported above.
 
 // ─── Secondary currency rows ──────────────────────────────────────────────────
 
-function CurrencyRows({ extras, aedAmount, rates }: { extras: string[]; aedAmount: number; rates: RateMap }) {
+function CurrencyRows({ extras, aedAmount, rates }: { extras: CurrencyCode[]; aedAmount: number; rates: RateMap }) {
   if (extras.length === 0) return null;
   return (
     <div className="mt-1.5 flex flex-col gap-0.5">
@@ -96,8 +96,8 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
   getCategoryColor, getCategoryIconName,
 }) => {
   // ── Currency state — AED primary, PKR secondary by default ──
-  const primaryCurrency: string = 'AED';
-  const extraCurrencies: string[] = [];
+  const primaryCurrency: CurrencyCode = 'AED';
+  const extraCurrencies: CurrencyCode[] = [];
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
 
   const fmtPrimary = (aed: number) =>
@@ -349,7 +349,7 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
                     <p className="font-bold">{fmtPrimary(aed)}</p>
                     {extraCurrencies.map(code => (
                       <p key={code} className="text-[10px] opacity-60 mt-0.5">
-                        {fmtAmount(convertFromAED(aed, code, rates), getMeta(code))}
+                        {fmtCurrency(convertFromAED(aed, code, rates), code)}
                       </p>
                     ))}
                   </div>
@@ -417,7 +417,7 @@ export const BillsListView: React.FC<BillsListViewProps> = ({
                     <span className="text-2xl font-bold" style={{ color: CHARCOAL }}>{fmtPrimary(viewingSlip.amountPaid ?? viewingSlip.amount)}</span>
                     {extraCurrencies.map(code => (
                       <p key={code} className="text-xs text-gray-500 mt-0.5">
-                        {fmtAmount(convertFromAED(viewingSlip.amountPaid ?? viewingSlip.amount, code, rates), getMeta(code))}
+                        {fmtCurrency(convertFromAED(viewingSlip.amountPaid ?? viewingSlip.amount, code, rates), code)}
                       </p>
                     ))}
                   </div>

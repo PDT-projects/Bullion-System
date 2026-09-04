@@ -123,6 +123,8 @@ export interface LoanValidationErrors {
   bankId?: string;
   receiverType?: string;
   receiverName?: string;
+  receiverId?: string;
+  receiverPhone?: string;
 }
 
 export interface LoanFormState {

@@ -39,8 +39,8 @@ const CURRENCIES: CurrencyMeta[] = [
   { code: 'SAR', label: 'Saudi Riyal',     flag: '🇸🇦', locale: 'en-US', decimals: 2 },
 ];
 
-type RateMap = Record<CurrencyCode, number>;
-const FALLBACK_RATES: RateMap = { PKR: 279.5, CAD: 1.38, AED: 3.67, SAR: 3.75 };
+type RateMap = Record<CurrencyCode, number> & { USD: number };
+const FALLBACK_RATES: RateMap = { PKR: 279.5, CAD: 1.38, AED: 3.67, SAR: 3.75, USD: 1 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -106,7 +106,7 @@ function useCurrencyRates() {
       const res  = await fetch('https://open.er-api.com/v6/latest/USD');
       const data = await res.json();
       if (data.result === 'success') {
-        setRates({ PKR: data.rates.PKR, CAD: data.rates.CAD, AED: data.rates.AED, SAR: data.rates.SAR });
+        setRates({ PKR: data.rates.PKR, CAD: data.rates.CAD, AED: data.rates.AED, SAR: data.rates.SAR, USD: data.rates.USD || 1 });
         setLastUpdated(new Date());
         setError(false);
       } else throw new Error();
@@ -261,7 +261,6 @@ function SmallStatCard({ label, countValue, pkrAmount = 0, primary, extras, rate
         extras={pkrAmount !== 0 ? rowExtras : []}
         pkrAmount={pkrAmount}
         rates={rates}
-        subtitleSuffix={subtitleSuffix}
       />
     </div>
   );
