@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, ChevronDown, ChevronRight, Package, FileText,
-  DollarSign, BarChart2, ArrowLeftRight, FilePlus, List,
+  Building2,LayoutDashboard, ChevronDown, ChevronRight, Package, FileText,  DollarSign, BarChart2, ArrowLeftRight, FilePlus, List,
+  Users, Landmark, Receipt, Calculator, HandCoins, Boxes,
+  Layers, ShieldCheck,Ship,
 } from 'lucide-react';
 
 import { useAuth } from '../providers/context/AuthContext';
@@ -10,39 +12,90 @@ import { useUserPermissions } from '../modules/user-management/hooks/useUserPerm
 import type { Screen } from '../modules/user-management/models/userService';
 
 const SCREEN_PERMISSIONS: Record<string, Screen> = {
-  'inventory-entry':  'Inventory Dashboard',
-  'invoices':         'Invoices List',
-  'dummy-invoices':   'Invoices List',
-  'payroll':          'Salary Dashboard',
-  'transactions-list':'Transaction List',
-  'banking-overview': 'Banking Dashboard',
-  'bank-accounts':    'Bank Accounts List',
-  'transfers':        'Bank Transfers List',
-  'cash-in-hand':     'Cash List',
-  'bank-activity':    'Bank Activity Report',
+  'dashboard': 'Dashboard',
+  'inventory-entry': 'Inventory Dashboard',
+  'purchased-orders': 'Inventory Dashboard',
+  'invoices': 'Invoices List',
+  'dummy-invoices': 'Dummy Invoices',
+  'against-invoice': 'Against Invoice',
+  'payroll': 'Salary Dashboard',
+  'transactions-list': 'Transaction List',
+  'banking': 'Banking Dashboard',
+  'bank-accounts': 'Bank Accounts List',
+  'transfers': 'Bank Transfers List',
+  'cash-in-hand': 'Cash List',
+  'bank-activity': 'Bank Activity Report',
+  'employees': 'Employees List',
+  'loans': 'Loans Dashboard',
+  'bills': 'Bills List',
+  'budgets': 'Budgets List',
+  'assets': 'Assets Management',
+  'payable-futuristic': 'Payable to Futuristic',
+  'user-management': 'User Management',
 };
 
-const menuItems = [
-  { id: 'transactions-list', name: 'Transactions', icon: ArrowLeftRight, path: '/transactions' },
-  { id: 'inventory-entry',   name: 'Inventory',    icon: Package,        path: '/inventory'    },
+// Two shapes live in this list: a flat link, and a parent that owns children.
+// Without an explicit union TypeScript infers one shape with `children`
+// optional, and the `'children' in item` check below cannot narrow it — so
+// `item.children` reads as possibly undefined.
+interface MenuLeaf {
+  id: string;
+  name: string;
+  icon: LucideIcon;
+  path: string;
+}
+
+interface MenuParent {
+  id: string;
+  name: string;
+  icon: LucideIcon;
+  children: MenuLeaf[];
+}
+
+type MenuItem = MenuLeaf | MenuParent;
+
+const menuItems: MenuItem[] = [
+  { id: 'transactions-list', name: 'Transactions', icon: ArrowLeftRight, path: '/transactions' },  { id: 'inventory-entry', name: 'Inventory', icon: Package, path: '/inventory' },
+  { id: 'purchased-orders', name: 'Purchased Orders', icon: Ship, path: '/purchased-orders' },
   {
     id: 'invoices', name: 'Invoices', icon: FileText,
     children: [
-      { id: 'invoices',       name: 'All Invoices',   icon: List,     path: '/invoices'       },
+      { id: 'invoices', name: 'All Invoices', icon: List, path: '/invoices' },
       { id: 'dummy-invoices', name: 'Dummy Invoices', icon: FilePlus, path: '/invoices/dummy' },
+      { id: 'against-invoice', name: 'Against Invoice', icon: Receipt, path: '/against-the-invoice' },
     ],
   },
-  // ── Single flat Payrolls entry — tab navigation lives inside the module ──
+  {
+    id: 'banking', name: 'Banking', icon: Landmark,
+    children: [
+      { id: 'banking', name: 'Overview', icon: Landmark, path: '/banking' },
+      { id: 'bank-accounts', name: 'Bank Accounts', icon: List, path: '/banking/banks' },
+      { id: 'transfers', name: 'Transfers', icon: ArrowLeftRight, path: '/banking/transfers' },
+      { id: 'cash-in-hand', name: 'Cash Ledger', icon: DollarSign, path: '/banking/cash' },
+    ],
+  },
   { id: 'payroll', name: 'Payrolls', icon: DollarSign, path: '/payroll' },
+  { id: 'employees', name: 'Employees', icon: Users, path: '/employees' },
+  { id: 'loans', name: 'Loans & Advances', icon: HandCoins, path: '/loans' },
+  { id: 'bills', name: 'Bills', icon: Receipt, path: '/bills' },
+  { id: 'budgets', name: 'Budgets', icon: Calculator, path: '/budgets' },
+  { id: 'assets', name: 'Assets', icon: Boxes, path: '/assets-management' },
+  { id: 'payable-futuristic', name: 'Futuristic Payables', icon: Layers, path: '/payable-to-futuristic' },
+  { id: 'user-management', name: 'User Management', icon: ShieldCheck, path: '/user-management' },
 ];
 
 export function Sidebar() {
-  const [expanded, setExpanded]    = useState<string[]>([]);
-  const { role, permissions }      = useAuth();
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const { role, permissions } = useAuth();
   const { hasAnyReportPermission } = useUserPermissions();
 
-  const canSee = (id: string) =>
-    role === 'super_admin' || !SCREEN_PERMISSIONS[id] || permissions.includes(SCREEN_PERMISSIONS[id]);
+  const canSee = (id: string) => {
+    if (role === 'super_admin') return true;
+    if (id === 'user-management') return false;
+    const requiredScreen = SCREEN_PERMISSIONS[id];
+    if (!requiredScreen) return true;
+    return permissions.includes(requiredScreen);
+  };
 
   const toggle = (id: string) =>
     setExpanded(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -81,10 +134,12 @@ export function Sidebar() {
         style={{ paddingLeft: hovered ? 12 : 8, paddingRight: hovered ? 12 : 8, transition: 'padding .18s ease' }}
       >
         {/* Dashboard */}
-        <NavLink to="/dashboard" end className={linkClass} style={linkStyle}>
-          <LayoutDashboard size={17} style={{ flexShrink: 0 }} />
-          <span style={{ opacity: hovered ? 1 : 0, transition: 'opacity .12s', whiteSpace: 'nowrap' }}>Dashboard</span>
-        </NavLink>
+        {canSee('dashboard') && (
+          <NavLink to="/dashboard" end className={linkClass} style={linkStyle}>
+            <LayoutDashboard size={17} style={{ flexShrink: 0 }} />
+            <span style={{ opacity: hovered ? 1 : 0, transition: 'opacity .12s', whiteSpace: 'nowrap' }}>Dashboard</span>
+          </NavLink>
+        )}
 
         {/* Reports */}
         {(role === 'super_admin' || hasAnyReportPermission) && (
@@ -99,7 +154,7 @@ export function Sidebar() {
         {menuItems.map(item => {
           const Icon = item.icon;
 
-          // ── Flat item (no children) ──────────────────────────────────────
+          // ── Flat item (no children) ──────────────────────────────
           if (!('children' in item)) {
             if (!canSee(item.id)) return null;
             return (
@@ -110,7 +165,7 @@ export function Sidebar() {
             );
           }
 
-          // ── Dropdown item ────────────────────────────────────────────────
+          // ── Dropdown item ─────────────────────────────────────────
           const visibleChildren = item.children.filter(c => canSee(c.id));
           if (visibleChildren.length === 0) return null;
           const isOpen = expanded.includes(item.id);
@@ -126,7 +181,7 @@ export function Sidebar() {
                   <span className="font-bold text-sm" style={{ opacity: hovered ? 1 : 0, transition: 'opacity .12s', whiteSpace: 'nowrap' }}>{item.name}</span>
                 </div>
                 {hovered && isOpen
-                  ? <ChevronDown  size={14} className="text-gray-400" />
+                  ? <ChevronDown size={14} className="text-gray-400" />
                   : <ChevronRight size={14} className="text-gray-400" />}
               </button>
 
