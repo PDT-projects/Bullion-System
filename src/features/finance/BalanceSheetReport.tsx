@@ -1,7 +1,7 @@
 // BalanceSheetReport.tsx
 // Computes balance sheet figures from live Firestore data.
-// Assets = Cash + Banks + Inventory + Loans Receivable + Accounts Receivable
-// Liabilities = Accounts Payable + Loans Payable + Pending Bills
+// Assets = Cash + Banks + Inventory + Accounts Receivable
+// Liabilities = Accounts Payable
 // Equity = Assets − Liabilities (accounting identity)
 //
 // Each line item is expandable — click to see the underlying rows.
@@ -61,8 +61,7 @@ const formatCurrency = (amount: number) =>
 //   SIDE   from the category text ("…Receivable" / "…Payable")
 //   EFFECT from the cash direction — receivable rises on outflow, payable on inflow
 //   AMOUNT is money that actually moved, matching the cash balance
-// Balances net PER COUNTERPARTY, then only positives are summed on each side:
-// someone we happen to owe belongs in liabilities, not as a negative asset.
+// Balances net PER COUNTERPARTY, then only positives are summed on each side.
 const sideOfCat = (v: unknown): 'receivable' | 'payable' | null => {
   const c = String(v || '').trim().toLowerCase();
   if (c.includes('receivable')) return 'receivable';
@@ -108,8 +107,7 @@ function buildArApRows(txns: any[], invoices: any[]) {
   }
 
   // An issued invoice is a receivable from the day it goes out, and its supplier
-  // cost a payable — neither exists as a transaction until money moves, so
-  // reading transactions alone missed both.
+  // cost a payable — neither exists as a transaction until money moves.
   for (const inv of invoices || []) {
     const total = Number(inv?.totalAmount) || 0;
     const outstanding = total - (Number(inv?.paidAmount) || 0);
@@ -250,9 +248,7 @@ const DetailTable = ({
 );
 
 export function BalanceSheetReport({ transactions, banks, loans, products, bills, invoices = [], onBack }: BalanceSheetReportProps) {
-  // Bills were a prop nobody ever passed, so Pending Bills always read AED 0 no
-  // matter how many unpaid bills existed. Fetched here when the caller does not
-  // supply them, rather than threading a new prop through every call site.
+  // Bills were a prop nobody ever passed, so Pending Bills always read AED 0.
   const [fetchedBills, setFetchedBills] = useState<Bill[]>([]);
   useEffect(() => {
     if (bills) return;
@@ -263,7 +259,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     return () => { alive = false; };
   }, [bills]);
   const billsList = bills ?? fetchedBills;
-
   const [showBSClassified, setShowBSClassified] = useState(true);
   const [expandedSubs,     setExpandedSubs]     = useState<Set<string>>(new Set());
   const [expandedRows,     setExpandedRows]     = useState<Set<string>>(new Set());
@@ -289,7 +284,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
   // ── Filter state ────────────────────────────────────────────────────────────
   type FilterMode = 'alltime' | 'yearly' | 'monthly' | 'custom';
-  const [filterMode,        setFilterMode]        = useState<FilterMode>('alltime');
+  const [filterMode] = useState<FilterMode>('custom');   // only mode left
   const [selectedYears,     setSelectedYears]     = useState<number[]>([]);
   const [selectedMonths,    setSelectedMonths]    = useState<string[]>([]);
   const [customFrom,        setCustomFrom]        = useState('');
@@ -323,7 +318,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const isDateFiltered  = filterMode !== 'alltime';
 
   const resetFilters = () => {
-    setFilterMode('alltime'); setSelectedYears([]); setSelectedMonths([]);
+    setSelectedYears([]); setSelectedMonths([]);
     setCustomFrom(''); setCustomTo(''); setSelectedLocations([]);
   };
 
@@ -437,9 +432,9 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
   // ── Underlying detail lists (used both for expansion & PDF) ─────────────────
   const details = useMemo(() => {
-    // Cash in Hand — cash-account rows. Matched on the account, not the legacy
-    // `mode` field: newer transactions record accountType/accountId and may
-    // leave `mode` unset, so `mode === 'Cash'` quietly dropped them.
+    // Cash in Hand — Cash-mode transactions from the filtered set
+    // Matched on the account, not the legacy `mode` field: newer transactions
+    // record accountType/accountId and may leave `mode` unset.
     const isCashRow = (t: any) =>
       t?.accountType === 'cash' ||
       t?.accountId === 'cash-in-hand' ||
@@ -449,11 +444,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     const cashIn  = cashInflowTxns.reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
     const cashOut = cashOutflowTxns.reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
 
-    // Previously "Cash Inflow rows with a leftover" / "Cash Outflow rows with a
-    // leftover". That measured a part-settled single entry, not what anyone is
-    // owed — so a fully-collected Account Receivable transaction counted as
-    // nothing and the payable side read AED 0, while the Payables & Receivables
-    // register showed real balances. Same data, two reports, two answers.
+    // Accounts Receivable / Payable — from filtered transactions with remaining amount
     const arAp = buildArApRows(liquid, invoices);
     const receivableTxns = arAp.receivableTxns;
     const payableTxns    = arAp.payableTxns;
@@ -464,7 +455,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
     // Bills — current snapshot
     // Bill has no `status` field — it carries paymentStatus and remainingAmount.
-    // Filtering on b.status matched nothing, ever.
     const pendingBillsList = billsList.filter(b => {
       const remaining = Number((b as any).remainingAmount);
       if (!isNaN(remaining)) return remaining > 0.01;
@@ -491,7 +481,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const bs = useMemo(() => {
     // ── ASSETS ──────────────────────────────────────────────────────────────
     // Math.max(0, …) reported AED 0 whenever outflows exceeded inflows, hiding
-    // the real position and silently breaking Assets = Liabilities + Equity.
+    // the real position and breaking Assets = Liabilities + Equity.
     const cashInHand = details.cashIn - details.cashOut;
 
     // Bank balance: from banks collection — current snapshot
@@ -512,7 +502,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       .filter(([sub]) => !knownAssetBuckets.has(sub))
       .reduce((sum, [, entry]) => sum + entry.total, 0);
 
-    const totalCurrentAssets = cashInHand + bankBalance + accountsReceivable + inventoryValue + loansReceivable + classifiedAssets;
+    const totalCurrentAssets = cashInHand + bankBalance + accountsReceivable + inventoryValue + classifiedAssets;
     const totalFixedAssets   = 0;
     const totalAssets        = totalCurrentAssets + totalFixedAssets;
 
@@ -522,8 +512,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     const loansPayable = details.loansPayableList
       .reduce((s, l) => s + (l.remaining || 0), 0);
 
-    // The liability is what is still owed, not face value: summing b.amount
-    // counted a half-paid bill at full price.
     const pendingBills = details.pendingBillsList.reduce((s, b) => {
       const remaining = Number((b as any).remainingAmount);
       if (!isNaN(remaining)) return s + remaining;
@@ -535,7 +523,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       .filter(([sub]) => !knownLiabilityBuckets.has(sub))
       .reduce((sum, [, entry]) => sum + entry.total, 0);
 
-    const totalCurrentLiabilities = accountsPayable + loansPayable + pendingBills + classifiedLiabilities;
+    const totalCurrentLiabilities = accountsPayable + classifiedLiabilities;
     const totalLiabilities        = totalCurrentLiabilities;
 
     // ── EQUITY ───────────────────────────────────────────────────────────────
@@ -666,10 +654,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         ${detailTable(['Product', 'Cost Price', 'Stock', 'Value'], invRows)}
       </div>
 
-      <div class="item">
-        <div class="item-hdr"><span>Loans Receivable<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.assets.loansReceivable)}</span></div>
-        ${detailTable(['Borrower', 'Loan', 'Paid', 'Remaining'], loanRxRows)}
-      </div>
 
       <div class="subtotal"><span>Total Current Assets</span><span>${fmt(bs.assets.totalCurrentAssets)}</span></div>
       <div class="total"><span>TOTAL ASSETS</span><span>${fmt(bs.assets.totalAssets)}</span></div>
@@ -683,15 +667,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         ${detailTable(['Date', 'Company', 'Total', 'Outstanding'], apRows)}
       </div>
 
-      <div class="item">
-        <div class="item-hdr"><span>Loans Payable<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.liabilities.loansPayable)}</span></div>
-        ${detailTable(['Lender', 'Loan', 'Paid', 'Remaining'], loanPayRows)}
-      </div>
 
-      <div class="item">
-        <div class="item-hdr"><span>Pending Bills<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.liabilities.pendingBills)}</span></div>
-        ${detailTable(['Vendor', 'Due', 'Status', 'Amount'], billRows)}
-      </div>
 
       <div class="subtotal"><span>Total Current Liabilities</span><span>${fmt(bs.liabilities.totalCurrentLiabilities)}</span></div>
       <div class="total liab"><span>TOTAL LIABILITIES</span><span>${fmt(bs.liabilities.totalLiabilities)}</span></div>
@@ -734,20 +710,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Balance Sheet</h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            Computed from live data · {activePeriodLabel()}
-            {selectedLocations.length > 0 && (
-              <span className="ml-2 text-purple-600 font-medium">· {selectedLocations.join(', ')}</span>
-            )}
-            {bsClassifiedCount > 0 && (
-              <span className="ml-2 inline-flex items-center gap-1 text-slate-800">
-                <Tag size={12} /> {bsClassifiedCount} manually classified
-              </span>
-            )}
-          </p>
-        </div>
+        <h1 className="text-3xl font-bold text-gray-900">Balance Sheet</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={generatePDF}
@@ -792,155 +755,40 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             </span>
             <span>Generate PDF</span>
           </button>
+          <button onClick={onBack}
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors text-sm font-medium">
+            <ArrowLeft size={16} /> Back to Reports Hub
+          </button>
         </div>
       </div>
 
-      {/* ── Filter Panel ── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-slate-800" />
-            <h2 className="font-semibold text-gray-900">Filters</h2>
-            {hasActiveFilter && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-slate-800">Active</span>
-            )}
-          </div>
-          {hasActiveFilter && (
-            <button onClick={resetFilters} className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
-              <X size={12} /> Reset all
-            </button>
-          )}
-        </div>
-
-        {/* ── Location filter ── */}
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <MapPin size={13} className="text-purple-500" />
-            <span className="text-xs font-semibold text-gray-700">Location / Branch</span>
-            {selectedLocations.length > 0 && (
-              <button onClick={() => setSelectedLocations([])} className="text-xs text-red-400 hover:text-red-600 ml-auto">Clear</button>
-            )}
-          </div>
-          <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-            <button onClick={() => setSelectedLocations([])} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',background:selectedLocations.length===0?'#1e293b':'#ffffff',color:selectedLocations.length===0?'#ffffff':'#374151',borderColor:selectedLocations.length===0?'#1e293b':'#d1d5db'}}>
-              All Locations
-            </button>
-            {LOCATIONS.map(loc => (
-              <button key={loc} onClick={() => toggleLocation(loc)} style={{padding:'6px 16px',fontSize:'12px',fontWeight:600,borderRadius:'8px',border:'1px solid',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',background:selectedLocations.includes(loc)?'#1e293b':'#ffffff',color:selectedLocations.includes(loc)?'#ffffff':'#374151',borderColor:selectedLocations.includes(loc)?'#1e293b':'#d1d5db'}}>
-                <MapPin size={11} style={{color:'inherit'}} />
-                <span>{loc}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="border-t border-gray-100" />
-
-        {/* ── Period filter ── */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Calendar size={13} className="text-slate-600" />
-            <span className="text-xs font-semibold text-gray-700">Period</span>
-          </div>
-          <div className="flex gap-2 flex-wrap mb-3">
-            <button style={modeBtnStyle('alltime')} onClick={() => setFilterMode('alltime')}>All Time</button>
-            <button style={modeBtnStyle('yearly')}  onClick={() => setFilterMode('yearly')}>By Year</button>
-            <button style={modeBtnStyle('monthly')} onClick={() => setFilterMode('monthly')}>By Month</button>
-            <button style={modeBtnStyle('custom')}  onClick={() => setFilterMode('custom')}>Custom Range</button>
-          </div>
-
-          {filterMode === 'yearly' && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500">Select one or more years</span>
-                {selectedYears.length > 0 && <button onClick={() => setSelectedYears([])} className="text-xs text-red-400 hover:text-red-600">Clear</button>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {availableYears.map(y => (
-                  <button key={y} onClick={() => toggleYear(y)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                      selectedYears.includes(y) ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-700 border-gray-300 hover:border-slate-600'
-                    }`}>{y}</button>
-                ))}
-                {availableYears.length === 0 && <p className="text-xs text-gray-400 italic">No data available</p>}
-              </div>
-              {selectedYears.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {[...selectedYears].sort().map(y => (
-                    <span key={y} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-slate-800 text-xs rounded-full">
-                      {y}<button onClick={() => toggleYear(y)}><X size={9} /></button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {filterMode === 'monthly' && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500">Select one or more months</span>
-                {selectedMonths.length > 0 && <button onClick={() => setSelectedMonths([])} className="text-xs text-red-400 hover:text-red-600">Clear</button>}
-              </div>
-              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
-                {availableMonths.map(ym => (
-                  <button key={ym} onClick={() => toggleMonth(ym)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                      selectedMonths.includes(ym) ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-700 border-gray-300 hover:border-slate-600'
-                    }`}>{monthLabel(ym)}</button>
-                ))}
-                {availableMonths.length === 0 && <p className="text-xs text-gray-400 italic">No data available</p>}
-              </div>
-              {selectedMonths.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {[...selectedMonths].sort().map(ym => (
-                    <span key={ym} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-slate-800 text-xs rounded-full">
-                      {monthLabel(ym)}<button onClick={() => toggleMonth(ym)}><X size={9} /></button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {filterMode === 'custom' && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">From</label>
-                <input type="date" value={customFrom} max={customTo || undefined} onChange={e => setCustomFrom(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-600 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">To</label>
-                <input type="date" value={customTo} min={customFrom || undefined} onChange={e => setCustomTo(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-600 text-sm" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Active filter summary */}
-        <div className="pt-3 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500">
-          <Calendar size={11} className="text-slate-500 flex-shrink-0" />
-          <span>
-            Period: <strong className="text-gray-700">{activePeriodLabel()}</strong>
-            {selectedLocations.length > 0 && (
-              <> · Location: <strong className="text-purple-600">{selectedLocations.join(', ')}</strong></>
-            )}
-            {' '}· <strong className="text-gray-700">{liquid.length}</strong> transactions
-          </span>
-        </div>
+      {/* One date range, nothing else. The old panel carried location chips,
+          four period modes, year and month pickers and a summary line — five
+          rows of controls above a report people open to read two numbers. */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 10,
+        padding: '8px 14px', borderRadius: 10,
+        border: `1px solid ${customFrom || customTo ? '#4f46e5' : '#e2e8f0'}`,
+        backgroundColor: '#fff', whiteSpace: 'nowrap',
+      }}>
+        <Calendar size={14} color={customFrom || customTo ? '#4f46e5' : '#94a3b8'} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+          Due Date from
+        </span>
+        <input type="date" value={customFrom} max={customTo || undefined}
+          onChange={e => setCustomFrom(e.target.value)}
+          style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12, color: '#0f172a', outline: 'none' }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '.06em', textTransform: 'uppercase' }}>to</span>
+        <input type="date" value={customTo} min={customFrom || undefined}
+          onChange={e => setCustomTo(e.target.value)}
+          style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12, color: '#0f172a', outline: 'none' }} />
+        {(customFrom || customTo) && (
+          <button onClick={() => { setCustomFrom(''); setCustomTo(''); }} title="Clear"
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', display: 'inline-flex' }}>
+            <X size={13} />
+          </button>
+        )}
       </div>
-
-      {isDateFiltered && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3 text-xs flex items-start gap-2">
-          <span className="text-base leading-none">ℹ️</span>
-          <span>
-            Cash flows, receivables and payables reflect the selected date range.
-            <strong> Bank balances, inventory, loans, and pending bills</strong> are current snapshots and cannot be historically reconstructed from the data model.
-          </span>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* ── ASSETS ── */}
@@ -1047,28 +895,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               ) : <EmptyDetail text="No products with stock value." />}
             </ExpandableRow>
 
-            {/* Loans Receivable */}
-            <ExpandableRow
-              label="Loans Receivable"
-              value={bs.assets.loansReceivable}
-              expanded={expandedRows.has('loansReceivable')}
-              onToggle={() => toggleRow('loansReceivable')}
-              hasDetails={details.loansReceivableList.length > 0}
-              note="current snapshot"
-            >
-              {details.loansReceivableList.length > 0 ? (
-                <DetailTable
-                  headers={['Borrower', 'Loan', 'Paid', 'Remaining']}
-                  rows={details.loansReceivableList.map(l => [
-                    l.personName || l.borrowerName || l.description || l.id,
-                    formatCurrency(l.loanAmount || 0),
-                    formatCurrency(l.paid || 0),
-                    formatCurrency(l.remaining || 0),
-                  ])}
-                />
-              ) : <EmptyDetail text="No outstanding loans receivable." />}
-            </ExpandableRow>
-
           </div>
           <SubTotal label="Total Current Assets" value={bs.assets.totalCurrentAssets} colorClass="bg-blue-50" />
 
@@ -1110,50 +936,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                   ])}
                 />
               ) : <EmptyDetail text="No outstanding payables in this period." />}
-            </ExpandableRow>
-
-            {/* Loans Payable */}
-            <ExpandableRow
-              label="Loans Payable (Outstanding)"
-              value={bs.liabilities.loansPayable}
-              expanded={expandedRows.has('loansPayable')}
-              onToggle={() => toggleRow('loansPayable')}
-              hasDetails={details.loansPayableList.length > 0}
-              note="current snapshot"
-            >
-              {details.loansPayableList.length > 0 ? (
-                <DetailTable
-                  headers={['Lender', 'Loan', 'Paid', 'Remaining']}
-                  rows={details.loansPayableList.map(l => [
-                    l.personName || l.lenderName || l.description || l.id,
-                    formatCurrency(l.loanAmount || 0),
-                    formatCurrency(l.paid || 0),
-                    formatCurrency(l.remaining || 0),
-                  ])}
-                />
-              ) : <EmptyDetail text="No outstanding loans payable." />}
-            </ExpandableRow>
-
-            {/* Pending Bills */}
-            <ExpandableRow
-              label="Pending Bills"
-              value={bs.liabilities.pendingBills}
-              expanded={expandedRows.has('pendingBills')}
-              onToggle={() => toggleRow('pendingBills')}
-              hasDetails={details.pendingBillsList.length > 0}
-              note="current snapshot"
-            >
-              {details.pendingBillsList.length > 0 ? (
-                <DetailTable
-                  headers={['Vendor', 'Due Date', 'Status', 'Amount']}
-                  rows={details.pendingBillsList.map(b => [
-                    b.vendor || b.description || b.id,
-                    b.dueDate || '—',
-                    b.status,
-                    formatCurrency(b.amount),
-                  ])}
-                />
-              ) : <EmptyDetail text="No pending bills." />}
             </ExpandableRow>
 
           </div>

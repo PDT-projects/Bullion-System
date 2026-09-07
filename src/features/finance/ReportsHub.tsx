@@ -35,6 +35,8 @@ interface ReportsHubProps {
   commissions:  any[];
   products:     any[];
   // Optional: override the back button label (Dashboard uses "← Back to Reports Hub")
+  /** Accepted for call-site compatibility; the header no longer renders a back
+   *  button, since the sidebar's Reports entry already returns here. */
   backLabel?:   string;
 }
 
@@ -78,10 +80,8 @@ export function ReportsHub(props: ReportsHubProps) {
   const { hasPermission } = useUserPermissions();
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
 
-  // Which report is open is component state, not part of the URL. Pressing
-  // "Reports" in the sidebar while already on /reports does not remount this
-  // component, so the open report simply stayed open and the click looked
-  // dead. Re-navigating to the same path now returns to the card grid.
+  // Which report is open is component state, not part of the URL, so pressing
+  // the sidebar's Reports entry from inside a report did nothing.
   const location = useLocation();
   useEffect(() => { setSelectedReport(null); }, [location.key]);
 
@@ -94,17 +94,7 @@ export function ReportsHub(props: ReportsHubProps) {
   if (selectedReport) {
     const card = accessibleCards.find(c => c.id === selectedReport);
     return (
-      <div style={{ padding: '4px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-          {card && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: card.lightBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <card.icon size={16} color={card.accent} />
-              </div>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{card.name}</span>
-            </div>
-          )}
-        </div>
+      <div style={{ padding: 0 }}>
         {renderReport(selectedReport, props, () => setSelectedReport(null))}
       </div>
     );
