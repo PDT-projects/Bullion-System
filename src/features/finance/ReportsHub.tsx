@@ -21,7 +21,7 @@ import type { Screen } from '../../modules/user-management/models/userService';
 // keeping them apart meant a counterparty who both owed us money and was owed
 // money by us appeared twice with no way to see the net.
 import { BalanceSheetReport }               from './BalanceSheetReport';
-import { IncomeStatementReport }            from './IncomeStatementReport';
+import { IncomeStatementReport }            from './Incomestatementreport';
 import { AccountsPayableReceivableReport }  from './Accountspayablereceivablereport';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -34,8 +34,7 @@ interface ReportsHubProps {
   invoices:     any[];
   commissions:  any[];
   products:     any[];
-  /** Accepted for call-site compatibility; the header no longer shows a back
-   *  button, since the sidebar's Reports entry already returns here. */
+  // Optional: override the back button label (Dashboard uses "← Back to Reports Hub")
   backLabel?:   string;
 }
 
@@ -66,7 +65,7 @@ function renderReport(
   const { transactions, banks, loans, invoices, products } = props;
   switch (id) {
     case 'income-statement':            return <IncomeStatementReport           transactions={transactions} invoices={invoices} onBack={onBack} />;
-    case 'balance-sheet':               return <BalanceSheetReport              transactions={transactions} banks={banks} loans={loans} products={products} onBack={onBack} />;
+    case 'balance-sheet':               return <BalanceSheetReport              transactions={transactions} banks={banks} loans={loans} products={products} invoices={invoices} onBack={onBack} />;
     case 'accounts-receivable-payable': return <AccountsPayableReceivableReport transactions={transactions} invoices={invoices} banks={banks} onBack={onBack} defaultTab="combined" />;
     default:                            return null;
   }
@@ -79,11 +78,10 @@ export function ReportsHub(props: ReportsHubProps) {
   const { hasPermission } = useUserPermissions();
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
 
-  // Which report is open is component state, not part of the URL. Clicking
+  // Which report is open is component state, not part of the URL. Pressing
   // "Reports" in the sidebar while already on /reports does not remount this
-  // component, so without this the click appeared to do nothing — the open
-  // report just stayed open. Re-navigating to the same path now returns to the
-  // card grid, which is what pressing a nav item is expected to do.
+  // component, so the open report simply stayed open and the click looked
+  // dead. Re-navigating to the same path now returns to the card grid.
   const location = useLocation();
   useEffect(() => { setSelectedReport(null); }, [location.key]);
 
@@ -96,15 +94,17 @@ export function ReportsHub(props: ReportsHubProps) {
   if (selectedReport) {
     const card = accessibleCards.find(c => c.id === selectedReport);
     return (
-      <div style={{ padding: 0 }}>
-        {card && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: card.lightBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <card.icon size={16} color={card.accent} />
+      <div style={{ padding: '4px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          {card && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: card.lightBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <card.icon size={16} color={card.accent} />
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{card.name}</span>
             </div>
-            <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{card.name}</span>
-          </div>
-        )}
+          )}
+        </div>
         {renderReport(selectedReport, props, () => setSelectedReport(null))}
       </div>
     );

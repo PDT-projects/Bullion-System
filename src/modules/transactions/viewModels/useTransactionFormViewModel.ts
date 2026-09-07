@@ -59,6 +59,7 @@ export interface UseTransactionFormViewModelReturn {
   setChequeBank: (v: string) => void;
   manualDate: string;
   setManualDate: (v: string) => void;
+  isPayableReceivable: boolean;
   enableMultiple: boolean;
   transactionItems: TransactionItem[];
   transactionId: string;
@@ -150,8 +151,14 @@ const emptyItem = (type: string): TransactionItem => ({
   id: Date.now().toString(),
   mainCategory: type, subCategory: '', detailCategory: '',
   amount: 0, amountPaid: 0, remainingAmount: 0,
-  paymentStatus: 'Full', paidBy: '', paidTo: '', note: '',
+  paymentStatus: 'Full', paidBy: '', paidTo: '', note: '', dueDate: '',
 });
+
+/** Sub-categories that represent a Payable/Receivable entry. When any item in
+ *  the form has one of these selected: the Location/Branch field is hidden
+ *  (not applicable) and the Note/Description field is relabeled to
+ *  "Purpose of Loan". */
+export const PAYABLE_RECEIVABLE_SUB_CATEGORIES = new Set(['Account Payable', 'Account Receivable']);
 
 /** Generate a secure random token for approval email links */
 function generateToken(): string {
@@ -309,6 +316,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
               paidBy:          tx.paidBy          || '',
               paidTo:          tx.paidTo          || '',
               note:            tx.note            || '',
+              dueDate:         tx.dueDate         || '',
             }]);
           }
         } else {
@@ -548,10 +556,19 @@ const getSuggestedClassification = (
     [currency]
   );
 
+  // ── Payable/Receivable detection ────────────────────────────────────────────
+  // When any item's sub-category is Account Payable/Account Receivable, the
+  // Location/Branch field is not applicable and gets hidden, and the
+  // Note/Description field is relabeled to "Purpose of Loan" in the view.
+  const isPayableReceivable = useMemo(
+    () => transactionItems.some(item => PAYABLE_RECEIVABLE_SUB_CATEGORIES.has(item.subCategory)),
+    [transactionItems]
+  );
+
   // ── Validation ──────────────────────────────────────────────────────────────
   const validate = useCallback(() => {
     const errors: string[] = [];
-    if (!office) errors.push('Select an office/branch');
+    if (!office && !isPayableReceivable) errors.push('Select an office/branch');
     if (!date)   errors.push('Select a date');
     for (const [i, item] of transactionItems.entries()) {
       const n = transactionItems.length > 1 ? ` (item ${i + 1})` : '';
@@ -561,6 +578,7 @@ const getSuggestedClassification = (
         if (item.amountPaid < 0)             errors.push(`Amount paid cannot be negative${n}`);
         if (item.amountPaid > item.amount)   errors.push(`Amount paid cannot exceed total amount${n}`);
       }
+      if (!editingTx && !item.receipt)      errors.push(`Evidence attachment is required${n}`);
     }
     if (paymentMode === 'Bank'   && !selectedBank)          errors.push('Select a bank for bank transactions');
     if (paymentMode === 'Cheque' && !chequeNumber.trim())   errors.push('Enter the cheque number');
@@ -570,7 +588,7 @@ const getSuggestedClassification = (
       errors.push('Classification required: select at least a P&L category or a Balance Sheet category (with sub-category)');
     }
     return errors;
-  }, [office, date, transactionItems, paymentMode, selectedBank, chequeNumber, transactionType, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory]);
+  }, [office, date, transactionItems, paymentMode, selectedBank, chequeNumber, transactionType, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory, isPayableReceivable, editingTx]);
 
   const updateBankBalance = useCallback(async (bankId: string, amount: number, isInflow: boolean) => {
     if (!bankId) return;
@@ -619,6 +637,7 @@ const getSuggestedClassification = (
           paidBy:          item.paidBy,
           paidTo:          item.paidTo,
           note:            item.note,
+          dueDate:         item.dueDate || undefined,
           mode:            paymentMode,
           bankId:          paymentMode === 'Bank' ? selectedBank : undefined,
           chequeNumber:    paymentMode === 'Cheque' ? chequeNumber : undefined,
@@ -741,6 +760,7 @@ const getSuggestedClassification = (
             paidBy:          item.paidBy,
             paidTo:          item.paidTo,
             note:            item.note,
+            dueDate:         item.dueDate || undefined,
             mode:            paymentMode,
             bankId:          paymentMode === 'Bank'    ? selectedBank  : undefined,
             chequeNumber:    paymentMode === 'Cheque'  ? chequeNumber  : undefined,
@@ -963,6 +983,7 @@ const getSuggestedClassification = (
     setEnableMultiple, updateItem, addItem, removeItem,
     handleSave, handleCancel,
     manualDate, setManualDate,
+    isPayableReceivable,
     formatCurrency: formatCurrencyLocal,
     formatDateDisplay,
     duplicateIdError, setDuplicateIdError,

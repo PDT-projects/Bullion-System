@@ -7,7 +7,8 @@
 // Each line item is expandable — click to see the underlying rows.
 // A "Generate PDF" button prints the currently filtered view.
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { BillsFirebaseService } from '../../modules/bills/models/Billsfirebaseservice';
 import { resolveBSBucket, getTransactionTotals } from '../../modules/transactions/models/transactionsService';
 import type { Transaction } from '../../modules/transactions/models/types';
 import {
@@ -40,6 +41,10 @@ type BalanceSheetReportProps = {
   products: Product[];
   onBack: () => void;
   bills?: Bill[];
+  /** Needed for the receivable/payable figures: an unpaid invoice is money owed
+   *  to us, and its supplier cost is money we owe — neither exists as a
+   *  transaction until someone actually pays. */
+  invoices?: any[];
 };
 
 const formatCurrency = (amount: number) =>
@@ -50,6 +55,98 @@ const formatCurrency = (amount: number) =>
 // Products can arrive with the display name under any of several field names.
 // Try each in priority order before falling back to the id.
 // NOTE: `description` is intentionally NOT in this list — it's not a name.
+// ── Receivable / Payable ledger ─────────────────────────────────────────────
+// Deliberately mirrors Accountspayablereceivablereport so the two pages cannot
+// disagree:
+//   SIDE   from the category text ("…Receivable" / "…Payable")
+//   EFFECT from the cash direction — receivable rises on outflow, payable on inflow
+//   AMOUNT is money that actually moved, matching the cash balance
+// Balances net PER COUNTERPARTY, then only positives are summed on each side:
+// someone we happen to owe belongs in liabilities, not as a negative asset.
+const sideOfCat = (v: unknown): 'receivable' | 'payable' | null => {
+  const c = String(v || '').trim().toLowerCase();
+  if (c.includes('receivable')) return 'receivable';
+  if (c.includes('payable'))    return 'payable';
+  return null;
+};
+
+const movedOf = (t: any): number => {
+  const hasFields =
+    t?.totalPaid !== undefined || t?.amountPaid !== undefined || t?.paymentStatus !== undefined;
+  if (!hasFields) return Number(t?.amount) || 0;
+  return Number(t?.totalPaid ?? t?.amountPaid ?? 0) || 0;
+};
+
+const partyOf = (t: any): string =>
+  String(t?.subCategoryDetail || '').trim() ||
+  String(t?.paidBy || t?.paidTo || t?.remitterName || '').trim() ||
+  'Unassigned';
+
+function buildArApRows(txns: any[], invoices: any[]) {
+  const recv = new Map<string, number>();
+  const pay  = new Map<string, number>();
+  const receivableTxns: any[] = [];
+  const payableTxns:    any[] = [];
+
+  for (const t of txns || []) {
+    const side = sideOfCat(t.subCategory) || sideOfCat(t.detailCategory);
+    if (!side) continue;
+    const moved = movedOf(t);
+    if (moved === 0) continue;
+
+    const isInflow = t.mainCategory === 'Cash Inflow';
+    const signed   = (side === 'receivable' ? !isInflow : isInflow) ? moved : -moved;
+    const party    = partyOf(t);
+
+    if (side === 'receivable') {
+      recv.set(party, (recv.get(party) || 0) + signed);
+      receivableTxns.push(t);
+    } else {
+      pay.set(party, (pay.get(party) || 0) + signed);
+      payableTxns.push(t);
+    }
+  }
+
+  // An issued invoice is a receivable from the day it goes out, and its supplier
+  // cost a payable — neither exists as a transaction until money moves, so
+  // reading transactions alone missed both.
+  for (const inv of invoices || []) {
+    const total = Number(inv?.totalAmount) || 0;
+    const outstanding = total - (Number(inv?.paidAmount) || 0);
+    if (total > 0 && outstanding > 0.01) {
+      const name  = String(inv?.customerName || 'Unknown').trim();
+      const phone = String(inv?.customerPhone || '').trim();
+      const key   = phone ? `${name} (${phone})` : name;
+      recv.set(key, (recv.get(key) || 0) + outstanding);
+      receivableTxns.push({ ...inv, remainingAmount: outstanding });
+    }
+
+    const supplierTotal =
+      Number(inv?.supplierCostTotal) ||
+      (Array.isArray(inv?.products)
+        ? inv.products.reduce(
+            (sum: number, p: any) => sum + (Number(p?.supplierCost) || 0) * (Number(p?.quantity) || 0), 0)
+        : 0);
+    if (supplierTotal > 0) {
+      const payments = Array.isArray(inv?.supplierPayments) ? inv.supplierPayments : [];
+      const supplierPaid = payments.reduce((sum: number, p: any) => sum + (Number(p?.amount) || 0), 0)
+        || Number(inv?.supplierPaidAmount) || 0;
+      const owed = supplierTotal - supplierPaid;
+      if (owed > 0.01) {
+        const key = `Futuristic — ${inv.invoiceNumber || inv.id}`;
+        pay.set(key, (pay.get(key) || 0) + owed);
+        payableTxns.push({ ...inv, remainingAmount: owed });
+      }
+    }
+  }
+
+  const sumPositive = (m: Map<string, number>) =>
+    [...m.values()].reduce((s, v) => s + (v > 0 ? v : 0), 0);
+
+  return { receivableTxns, payableTxns,
+           totals: { receivable: sumPositive(recv), payable: sumPositive(pay) } };
+}
+
 const productDisplayName = (p: Product): string => {
   const cand =
     p.name || p.productName || p.product_name ||
@@ -152,7 +249,21 @@ const DetailTable = ({
   </div>
 );
 
-export function BalanceSheetReport({ transactions, banks, loans, products, bills = [], onBack }: BalanceSheetReportProps) {
+export function BalanceSheetReport({ transactions, banks, loans, products, bills, invoices = [], onBack }: BalanceSheetReportProps) {
+  // Bills were a prop nobody ever passed, so Pending Bills always read AED 0 no
+  // matter how many unpaid bills existed. Fetched here when the caller does not
+  // supply them, rather than threading a new prop through every call site.
+  const [fetchedBills, setFetchedBills] = useState<Bill[]>([]);
+  useEffect(() => {
+    if (bills) return;
+    let alive = true;
+    BillsFirebaseService.fetchAllBills()
+      .then(list => { if (alive) setFetchedBills(list as Bill[]); })
+      .catch(err => console.error('[BalanceSheet] bills fetch failed:', err));
+    return () => { alive = false; };
+  }, [bills]);
+  const billsList = bills ?? fetchedBills;
+
   const [showBSClassified, setShowBSClassified] = useState(true);
   const [expandedSubs,     setExpandedSubs]     = useState<Set<string>>(new Set());
   const [expandedRows,     setExpandedRows]     = useState<Set<string>>(new Set());
@@ -326,22 +437,39 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
   // ── Underlying detail lists (used both for expansion & PDF) ─────────────────
   const details = useMemo(() => {
-    // Cash in Hand — Cash-mode transactions from the filtered set
-    const cashInflowTxns  = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && t.mode === 'Cash');
-    const cashOutflowTxns = liquid.filter(t => t.mainCategory === 'Cash Outflow' && t.mode === 'Cash');
+    // Cash in Hand — cash-account rows. Matched on the account, not the legacy
+    // `mode` field: newer transactions record accountType/accountId and may
+    // leave `mode` unset, so `mode === 'Cash'` quietly dropped them.
+    const isCashRow = (t: any) =>
+      t?.accountType === 'cash' ||
+      t?.accountId === 'cash-in-hand' ||
+      (t?.accountType === undefined && t?.mode === 'Cash');
+    const cashInflowTxns  = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && isCashRow(t));
+    const cashOutflowTxns = liquid.filter(t => t.mainCategory === 'Cash Outflow' && isCashRow(t));
     const cashIn  = cashInflowTxns.reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
     const cashOut = cashOutflowTxns.reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
 
-    // Accounts Receivable / Payable — from filtered transactions with remaining amount
-    const receivableTxns = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && (t.remainingAmount ?? 0) > 0);
-    const payableTxns    = liquid.filter(t => t.mainCategory === 'Cash Outflow' && (t.remainingAmount ?? 0) > 0);
+    // Previously "Cash Inflow rows with a leftover" / "Cash Outflow rows with a
+    // leftover". That measured a part-settled single entry, not what anyone is
+    // owed — so a fully-collected Account Receivable transaction counted as
+    // nothing and the payable side read AED 0, while the Payables & Receivables
+    // register showed real balances. Same data, two reports, two answers.
+    const arAp = buildArApRows(liquid, invoices);
+    const receivableTxns = arAp.receivableTxns;
+    const payableTxns    = arAp.payableTxns;
 
     // Loans — current snapshot (unaffected by date range because loans have no txn date field)
     const loansReceivableList = loans.filter(l => l.type === 'Receivable' && l.status !== 'Full');
     const loansPayableList    = loans.filter(l => l.type === 'Payable'    && l.status !== 'Full');
 
     // Bills — current snapshot
-    const pendingBillsList = bills.filter(b => b.status === 'Pending' || b.status === 'Overdue');
+    // Bill has no `status` field — it carries paymentStatus and remainingAmount.
+    // Filtering on b.status matched nothing, ever.
+    const pendingBillsList = billsList.filter(b => {
+      const remaining = Number((b as any).remainingAmount);
+      if (!isNaN(remaining)) return remaining > 0.01;
+      return (Number((b as any).amount) || 0) - (Number((b as any).amountPaid) || 0) > 0.01;
+    });
 
     // Inventory — current snapshot
     const inventoryList = products
@@ -354,22 +482,23 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
     return {
       cashInflowTxns, cashOutflowTxns, cashIn, cashOut,
-      receivableTxns, payableTxns,
+      receivableTxns, payableTxns, arApTotals: arAp.totals,
       loansReceivableList, loansPayableList,
       pendingBillsList, inventoryList,
     };
-  }, [liquid, loans, bills, products]);
+  }, [liquid, loans, billsList, products, invoices]);
 
   const bs = useMemo(() => {
     // ── ASSETS ──────────────────────────────────────────────────────────────
-    const cashInHand = Math.max(0, details.cashIn - details.cashOut);
+    // Math.max(0, …) reported AED 0 whenever outflows exceeded inflows, hiding
+    // the real position and silently breaking Assets = Liabilities + Equity.
+    const cashInHand = details.cashIn - details.cashOut;
 
     // Bank balance: from banks collection — current snapshot
     const bankBalance = banks.reduce((s, b) => s + (b.balance || 0), 0);
 
     // Accounts receivable — from filtered transactions
-    const accountsReceivable = details.receivableTxns
-      .reduce((s, t) => s + (t.remainingAmount ?? 0), 0);
+    const accountsReceivable = details.arApTotals.receivable;
 
     // Inventory value
     const inventoryValue = details.inventoryList.reduce((s, p) => s + p.value, 0);
@@ -388,14 +517,18 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     const totalAssets        = totalCurrentAssets + totalFixedAssets;
 
     // ── LIABILITIES ──────────────────────────────────────────────────────────
-    const accountsPayable = details.payableTxns
-      .reduce((s, t) => s + (t.remainingAmount ?? 0), 0);
+    const accountsPayable = details.arApTotals.payable;
 
     const loansPayable = details.loansPayableList
       .reduce((s, l) => s + (l.remaining || 0), 0);
 
-    const pendingBills = details.pendingBillsList
-      .reduce((s, b) => s + b.amount, 0);
+    // The liability is what is still owed, not face value: summing b.amount
+    // counted a half-paid bill at full price.
+    const pendingBills = details.pendingBillsList.reduce((s, b) => {
+      const remaining = Number((b as any).remainingAmount);
+      if (!isNaN(remaining)) return s + remaining;
+      return s + ((Number((b as any).amount) || 0) - (Number((b as any).amountPaid) || 0));
+    }, 0);
 
     const knownLiabilityBuckets = new Set(['Accounts Payable', 'Short-term Loans']);
     const classifiedLiabilities = Array.from(classifiedBS.get('Liabilities & Equity')?.entries() || [])
@@ -658,10 +791,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               <FileDown size={15} strokeWidth={2.5} />
             </span>
             <span>Generate PDF</span>
-          </button>
-          <button onClick={onBack}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors text-sm font-medium">
-            <ArrowLeft size={16} /> Back to Reports Hub
           </button>
         </div>
       </div>

@@ -95,6 +95,7 @@ export function QuickTransactionModal({
   const [amountReceived, setAmountReceived] = useState<number | ''>('');
   const [remitterName, setRemitterName] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Dropdown-managed data
@@ -118,6 +119,10 @@ export function QuickTransactionModal({
   const isInvoiceMisc     = type === 'Outflow' && category === INVOICE_MISC_EXPENSE_CATEGORY;
   const isSalesInvoice    = type === 'Inflow'  && category === SALES_INVOICE_CATEGORY;
   const isSoldGoodsPayment = type === 'Outflow' && category === SOLD_GOODS_PAYMENT_CATEGORY;
+  // Payable/Receivable: hides Branch and relabels the description field to
+  // "Purpose of Loan". Applies whenever the selected Category is Account
+  // Payable or Account Receivable, for either Inflow or Outflow.
+  const isPayableReceivable = category === 'Account Payable' || category === 'Account Receivable';
   /** Any invoice-linked category — the modal loads invoices + shows the
    *  picker in all cases, and forks the save flow to the right service. */
   const needsInvoice = isInvoiceMisc || isSalesInvoice || isSoldGoodsPayment;
@@ -357,6 +362,7 @@ export function QuickTransactionModal({
     //  a slow/failed preview read must never block a legitimate save.)
     if (!category) { toast.error('Category is required'); return; }
     if (!totalAmount || Number(totalAmount) <= 0) { toast.error('Total amount must be greater than zero'); return; }
+    if (!attachment) { toast.error('Evidence attachment is required'); return; }
     if (selectedAccount.type === 'bank' && !selectedAccount.id) {
       toast.error('Pick a valid bank account'); return;
     }
@@ -548,6 +554,7 @@ export function QuickTransactionModal({
         branchName:        branchName || undefined,
         remitterName:      type === 'Inflow' && remitterName ? remitterName : undefined,
         attachmentUrl:     dataUrl,       // undefined when no file — stripped by deepStripUndefined on write
+        dueDate:           dueDate || undefined,
       } as Omit<Transaction, 'id'>;
 
       await TransactionFirebaseService.createTransaction(txData);
@@ -976,7 +983,7 @@ export function QuickTransactionModal({
 
           {/* Description */}
           <div>
-            <label style={label}>(Max 120 Characters)</label>
+            <label style={label}>{isPayableReceivable ? 'Purpose of Loan' : '(Max 120 Characters)'}</label>
             <input
               value={description}
               onChange={e => setDescription(e.target.value.slice(0, MAX_DESC))}
@@ -988,7 +995,8 @@ export function QuickTransactionModal({
             </div>
           </div>
 
-          {/* Branch */}
+          {/* Branch — hidden when the Category is Account Payable/Account Receivable */}
+          {!isPayableReceivable && (
           <div>
             <label style={label}>Branch</label>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -1037,6 +1045,18 @@ export function QuickTransactionModal({
                 </button>
               </div>
             )}
+          </div>
+          )}
+
+          {/* Due Date */}
+          <div>
+            <label style={label}>Due Date <span style={{ color: '#94a3b8', fontWeight: 500 }}>(optional)</span></label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              style={inp}
+            />
           </div>
 
           {/* Amounts */}
@@ -1108,12 +1128,12 @@ export function QuickTransactionModal({
             </div>
           )}
 
-          {/* Attachment */}
+          {/* Evidence */}
           <div>
-            <label style={label}>Attachment / Receipt <span style={{ color: '#94a3b8', fontWeight: 500 }}>(optional)</span></label>
+            <label style={label}>Evidence <span style={{ color: '#dc2626' }}>*</span></label>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 12px', border: `1px dashed ${attachment ? '#65a30d' : '#cbd5e1'}`,
+              padding: '10px 12px', border: `1px dashed ${attachment ? '#65a30d' : '#dc2626'}`,
               borderRadius: 8, backgroundColor: attachment ? '#f7fee7' : '#f8fafc',
             }}>
               <label style={{

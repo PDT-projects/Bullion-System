@@ -17,7 +17,7 @@ import {
   Plus, Trash2, X, Filter as FilterIcon, Check,
   ChevronDown, Wallet, Landmark, TrendingUp, TrendingDown, Loader2,
   PlusCircle, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Search, Clock, RotateCcw,
-  History,
+  History, Eye, Download as DownloadIcon,
 } from 'lucide-react';
 import { collection, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useAccountBalances } from '../viewModels/useAccountBalances';
@@ -89,6 +89,7 @@ export function TransactionListView({
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
   const [isDeleting,    setIsDeleting]    = useState(false);
   const [historyTx,     setHistoryTx]     = useState<Transaction | null>(null);
+  const [evidenceTx,    setEvidenceTx]    = useState<Transaction | null>(null);
   const [detailPanelOpen, setDetailPanelOpen] = useState(false);
 
   // ── Summary metrics (all live-computed from `transactions`) ──────────────
@@ -580,17 +581,18 @@ export function TransactionListView({
                 <ThCell tone="outflow">Cash Out</ThCell>
                 <ThCell>Balance</ThCell>
                 <ThCell>Balance Due</ThCell>
+                <ThCell>Evidence</ThCell>
                 <ThCell>Status</ThCell>
                 <ThCell align="right">Actions</ThCell>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={14} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
+                <tr><td colSpan={15} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
                   <Loader2 size={18} style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle' }} /> Loading…
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={14} style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                <tr><td colSpan={15} style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
                   {transactions.length === 0
                     ? <>No transactions yet — click <b>"+ Add Transaction"</b> to record one.</>
                     : 'No transactions match the current filters.'}
@@ -629,6 +631,20 @@ export function TransactionListView({
                       <TdCell num tone="outflow" bold>{isOut ? fmt(totalPaid) : '—'}</TdCell>
                       <TdCell num>{fmt(running)}</TdCell>
                       <TdCell num tone={remaining > 0 ? 'outflow' : undefined}>{remaining > 0 ? fmt(remaining) : '—'}</TdCell>
+                      <TdCell>
+                        {evidenceOf(t)
+                          ? (
+                            <button
+                              onClick={() => setEvidenceTx(t)}
+                              title="View evidence"
+                              style={{
+                                border: 'none', background: 'transparent', cursor: 'pointer',
+                                color: '#4f46e5', padding: 2, display: 'inline-flex',
+                              }}
+                            ><Eye size={14} /></button>
+                          )
+                          : <span style={{ color: '#cbd5e1' }}>—</span>}
+                      </TdCell>
                       <TdCell>
                         <StatusBadge status={t.paymentStatus} approvalStatus={t.approvalStatus} />
                       </TdCell>
@@ -670,6 +686,9 @@ export function TransactionListView({
           onClose={() => setBanksModal(false)}
           onSaved={async () => { await refreshAccounts(); }}
         />
+      )}
+      {evidenceTx && (
+        <EvidenceModal tx={evidenceTx} onClose={() => setEvidenceTx(null)} />
       )}
       {deletedModal && (
         <DeletedTransactionsModal
@@ -1902,3 +1921,78 @@ const HistoryRow: React.FC<{
     </div>
   );
 };
+/** The evidence data-url for a row, whichever field it was stored in.
+ *  Newer rows carry attachmentUrl; older ones only have attachments[0].dataUrl.
+ *  Reading just one of them left half the rows looking like they had no proof. */
+function evidenceOf(t: any): { url: string; name: string; type: string } | null {
+  const first = Array.isArray(t?.attachments) ? t.attachments[0] : null;
+  const url   = String(t?.attachmentUrl || first?.dataUrl || '');
+  if (!url) return null;
+  return {
+    url,
+    name: String(first?.name || `evidence-${t?.transactionId || 'file'}`),
+    type: String(first?.type || (url.startsWith('data:application/pdf') ? 'application/pdf' : 'image')),
+  };
+}
+
+/** Full-size look at a row's evidence. Images render inline; PDFs go in an
+ *  iframe — one method for both left a blank frame on PDFs, which reads as
+ *  broken rather than as the wrong viewer. */
+function EvidenceModal({ tx, onClose }: { tx: any; onClose: () => void }) {
+  const ev = evidenceOf(tx);
+  if (!ev) return null;
+  const isPdf = ev.type.includes('pdf') || ev.url.startsWith('data:application/pdf');
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)',
+        zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: isPdf ? '80vw' : 'auto', maxWidth: '92vw', maxHeight: '90vh',
+          backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+        }}
+      >
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 12, padding: '12px 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0,
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Evidence</div>
+            <div style={{ fontSize: 11, color: '#94a3b8' }}>{tx.transactionId} · {ev.name}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <a href={ev.url} download={ev.name}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px',
+                borderRadius: 7, border: '1px solid #e2e8f0', backgroundColor: '#fff',
+                color: '#334155', fontSize: 12, fontWeight: 700, textDecoration: 'none',
+              }}
+            ><DownloadIcon size={13} /> Download</a>
+            <button onClick={onClose}
+              style={{
+                width: 30, height: 30, borderRadius: 7, border: '1px solid #e2e8f0',
+                backgroundColor: '#f8fafc', cursor: 'pointer', color: '#64748b',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            ><X size={15} /></button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto', backgroundColor: '#f8fafc', minHeight: 200 }}>
+          {isPdf
+            ? <iframe src={ev.url} title="Evidence" style={{ width: '100%', height: '78vh', border: 'none' }} />
+            : <img src={ev.url} alt="Evidence" style={{ display: 'block', maxWidth: '88vw', maxHeight: '78vh' }} />}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}

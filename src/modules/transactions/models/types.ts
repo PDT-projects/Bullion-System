@@ -154,6 +154,7 @@ export interface TransactionItem {
   paidTo: string;
   note: string;
   receipt?: File | null;
+  dueDate?: string;
 }
 
 export interface TransactionFilters {

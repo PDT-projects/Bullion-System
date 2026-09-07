@@ -6,10 +6,11 @@ import {
   Upload, Calculator, User, Users, CheckCircle, AlertCircle, Repeat, Loader2,
   Hash, Edit2, Check, X, CreditCard, Lock, BarChart2,
 } from 'lucide-react';
-import { SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory, SOLD_GOODS_PAYMENT_CATEGORY } from '../models/types';
+import { SUB_CATEGORIES, TransactionItem, DynamicCategory, PL_CATEGORIES, PLMainCategory, BS_CATEGORIES, BSMainCategory } from '../models/types';
 import { UseTransactionFormViewModelReturn } from '../viewModels/useTransactionFormViewModel';
-import { SUPPORTED_CURRENCIES, SupportedCurrency } from '../viewModels/useTransactionFormViewModel';
+import { SUPPORTED_CURRENCIES, SupportedCurrency, PAYABLE_RECEIVABLE_SUB_CATEGORIES } from '../viewModels/useTransactionFormViewModel';
 import { convertCurrency } from '../../invoices/models/invoiceService';
+import { sanitizeNameInput, validateName } from '../../../utils/validators';
 
 interface Props extends UseTransactionFormViewModelReturn {}
 
@@ -148,7 +149,7 @@ function CurrencyAmountInput({
 
 export function TransactionFormView(props: Props) {
   const {
-    office, date, manualDate, transactionType, paymentMode, selectedBank,
+    office, date, manualDate, transactionType, paymentMode, selectedBank, isPayableReceivable,
     chequeNumber, chequeDate, chequeBank,
     setChequeNumber, setChequeDate, setChequeBank,
     setManualDate, enableMultiple, transactionItems,
@@ -351,50 +352,52 @@ export function TransactionFormView(props: Props) {
             <Building2 className="w-5 h-5 text-slate-800" /> General Information
           </h3>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={lbl}>Location/Branch *</label>
-              {addingCompany ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    autoFocus
-                    value={newCompanyName}
-                    onChange={e => setNewCompanyName(e.target.value)}
-                    placeholder="New location name..."
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') { handleAddCompany(); }
-                      if (e.key === 'Escape') { setAddingCompany(false); setNewCompanyName(''); }
-                    }}
-                    className="flex-1 px-3 py-2 border border-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
-                  />
-                  <button type="button" disabled={savingCompany || !newCompanyName.trim()}
-                    onClick={handleAddCompany}
-                    style={{padding:"8px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}>
-                    {savingCompany ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-                  </button>
-                  <button type="button"
-                    onClick={() => { setAddingCompany(false); setNewCompanyName(''); }}
-                    style={{padding:"8px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}>
-                    <X size={15} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <select value={office} onChange={e => setOffice(e.target.value)} className={`flex-1 ${inp}`}>
-                    {companies.map((c: {id: string; name: string}) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                  <button
-                    type="button"
-                    title="Add new location"
-                    onClick={() => { setAddingCompany(true); setNewCompanyName(''); }}
-                    style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}
-                  >
-                    <Plus size={15} />
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="space-y-3">
+            {!isPayableReceivable && (
+              <div>
+                <label className={lbl}>Location/Branch *</label>
+                {addingCompany ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newCompanyName}
+                      onChange={e => setNewCompanyName(e.target.value)}
+                      placeholder="New location name..."
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { handleAddCompany(); }
+                        if (e.key === 'Escape') { setAddingCompany(false); setNewCompanyName(''); }
+                      }}
+                      className="flex-1 px-3 py-2 border border-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
+                    />
+                    <button type="button" disabled={savingCompany || !newCompanyName.trim()}
+                      onClick={handleAddCompany}
+                      style={{padding:"8px", borderRadius:"8px", background:"#1e293b", color:"white", border:"none", cursor:"pointer"}}>
+                      {savingCompany ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                    </button>
+                    <button type="button"
+                      onClick={() => { setAddingCompany(false); setNewCompanyName(''); }}
+                      style={{padding:"8px", borderRadius:"8px", background:"#f3f4f6", color:"#6b7280", border:"none", cursor:"pointer"}}>
+                      <X size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <select value={office} onChange={e => setOffice(e.target.value)} className={`flex-1 ${inp}`}>
+                      {companies.map((c: {id: string; name: string}) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      title="Add new location"
+                      onClick={() => { setAddingCompany(true); setNewCompanyName(''); }}
+                      style={{padding:"8px", borderRadius:"8px", background:"#f8fafc", color:"#1e293b", border:"1px solid #bbf7d0", cursor:"pointer", flexShrink:0}}
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className={`space-y-3 ${isPayableReceivable ? 'col-span-2' : ''}`}>
               <div>
                 <label className={lbl}>
                   Automatic Date <span className="text-xs font-normal text-gray-400 ml-1">(today)</span>
@@ -414,6 +417,15 @@ export function TransactionFormView(props: Props) {
                   className={inp}
                 />
                 <p className="text-xs text-gray-400 mt-1">Leave blank to use the automatic date. If set, this value will overwrite the auto date when saving.</p>
+              </div>
+              <div>
+                <label className={lbl}>Due Date <span className="text-gray-400 font-normal">(optional)</span></label>
+                <input
+                  type="date"
+                  value={transactionItems[0]?.dueDate || ''}
+                  onChange={e => updateItem(transactionItems[0]?.id, 'dueDate', e.target.value)}
+                  className={inp}
+                />
               </div>
             </div>
           </div>
@@ -629,7 +641,7 @@ export function TransactionFormView(props: Props) {
                   Shows invoices with outstanding supplier cost so the user
                   can select which invoice this payment is against. Selecting
                   one auto-fills the amount with the remaining supplier owed. */}
-              {item.subCategory === SOLD_GOODS_PAYMENT_CATEGORY && (
+              {item.subCategory === 'Sold Goods Payment' && (
                 <div className="col-span-2">
                   <label className={lbl}>
                     Invoice (Supplier owed) <span className="text-red-500">*</span>
@@ -796,8 +808,8 @@ export function TransactionFormView(props: Props) {
                     <span className="flex items-center justify-center pl-3 pr-2 text-gray-400 shrink-0">
                       <User size={14} />
                     </span>
-                    <input type="text" value={item.paidBy} onChange={e => updateItem(item.id, 'paidBy', e.target.value)}
-                      placeholder="Who paid"
+                    <input type="text" value={item.paidBy || ''} onChange={e => updateItem(item.id, 'paidBy', sanitizeNameInput(e.target.value))}
+                      placeholder="Who paid (letters only)"
                       className="flex-1 py-2 pr-3 text-sm bg-transparent outline-none placeholder-gray-400" />
                   </div>
                 </div>
@@ -807,8 +819,8 @@ export function TransactionFormView(props: Props) {
                     <span className="flex items-center justify-center pl-3 pr-2 text-gray-400 shrink-0">
                       <User size={14} />
                     </span>
-                    <input type="text" value={item.paidTo} onChange={e => updateItem(item.id, 'paidTo', e.target.value)}
-                      placeholder="Who received"
+                    <input type="text" value={item.paidTo || ''} onChange={e => updateItem(item.id, 'paidTo', sanitizeNameInput(e.target.value))}
+                      placeholder="Who received (letters only)"
                       className="flex-1 py-2 pr-3 text-sm bg-transparent outline-none placeholder-gray-400" />
                   </div>
                 </div>
@@ -817,23 +829,29 @@ export function TransactionFormView(props: Props) {
 
             {/* Note */}
             <div className="border-t pt-4 mb-4">
-              <label className={lbl}>Note / Description <span className="text-gray-400 font-normal">(optional)</span></label>
+              <label className={lbl}>
+                {PAYABLE_RECEIVABLE_SUB_CATEGORIES.has(item.subCategory)
+                  ? 'Purpose of Loan'
+                  : <>Note / Description <span className="text-gray-400 font-normal">(optional)</span></>}
+              </label>
               <textarea value={item.note} onChange={e => updateItem(item.id, 'note', e.target.value)}
                 rows={2} placeholder="Add details..." className={`${inp} resize-none`} />
             </div>
 
-            {/* Receipt */}
+            {/* Evidence */}
             <div className="border-t pt-4">
-              <label className={lbl}>Receipt / Image <span className="text-gray-400 font-normal">(optional)</span></label>
-              <label style={{display:"flex", alignItems:"center", gap:"8px", padding:"8px 16px", border:"2px dashed #d1d5db", borderRadius:"8px", cursor:"pointer"}}>
+              <label className={lbl}>Evidence *</label>
+              <label style={{display:"flex", alignItems:"center", gap:"8px", padding:"8px 16px", border:`2px dashed ${saveAttempted && !item.receipt ? '#f87171' : '#d1d5db'}`, borderRadius:"8px", cursor:"pointer"}}>
                 <Upload size={16} className="text-gray-400" />
-                <span className="text-sm text-gray-500">Upload Image</span>
+                <span className="text-sm text-gray-500">Upload Evidence</span>
                 <input type="file" accept="image/*" onChange={e => updateItem(item.id, 'receipt', e.target.files?.[0] || null)} className="hidden" />
               </label>
-              {item.receipt && (
+              {item.receipt ? (
                 <p className="text-xs text-slate-800 mt-1 flex items-center gap-1">
                   <CheckCircle size={12} /> {(item.receipt as File).name}
                 </p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">Evidence is required to save this transaction.</p>
               )}
             </div>
           </div>
@@ -1207,14 +1225,23 @@ export function TransactionFormView(props: Props) {
         {saveAttempted && !isSaving && (
           (() => {
             const errs: string[] = [];
-            if (!office) errs.push('Select a location/branch');
+            if (!office && !isPayableReceivable) errs.push('Select a location/branch');
             if (!date)   errs.push('Select a date');
-            transactionItems.forEach((item, i) => {
-              const n = transactionItems.length > 1 ? ` (item ${i + 1})` : '';
-              if (!item.subCategory)               errs.push(`Sub category is required${n}`);
-              if (!item.amount || item.amount <= 0) errs.push(`Amount must be greater than 0${n}`);
-              if (!isInflow && item.amountPaid > item.amount) errs.push(`Amount paid cannot exceed total${n}`);
-            });
+              transactionItems.forEach((item, i) => {
+                const n = transactionItems.length > 1 ? ` (item ${i + 1})` : '';
+                if (!item.subCategory)               errs.push(`Sub category is required${n}`);
+                if (!item.amount || item.amount <= 0) errs.push(`Amount must be greater than 0${n}`);
+                if (!isInflow && item.amountPaid > item.amount) errs.push(`Amount paid cannot exceed total${n}`);
+                if (!isEditing && !item.receipt)     errs.push(`Evidence is required${n}`);
+                if (item.paidBy?.trim()) {
+                  const pbVal = validateName(item.paidBy, 'Paid By', false);
+                  if (!pbVal.isValid) errs.push(`${pbVal.error}${n}`);
+                }
+                if (item.paidTo?.trim()) {
+                  const ptVal = validateName(item.paidTo, 'Paid To', false);
+                  if (!ptVal.isValid) errs.push(`${ptVal.error}${n}`);
+                }
+              });
             if (!hasClassification) errs.push('Select at least a P&L category or a Balance Sheet category (with sub-category)');
             if (paymentMode === 'Bank' && !selectedBank)          errs.push('Select a bank for bank transactions');
             if (paymentMode === 'Cheque' && !chequeNumber.trim()) errs.push('Enter the cheque number');
