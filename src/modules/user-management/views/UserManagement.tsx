@@ -10,14 +10,11 @@ import {
   createUser,
   getAllUsers,
   deleteUser,
-  approveUser,
-  rejectUser,
-  updateUserPermissions,
+    updateUserPermissions,
   updateUserBranch,
   type UserData,
   type Screen,
   ALL_SCREEN_GROUPS,
-  VIEW_ONLY_SCREENS
 } from '../models/userService';
 
 import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
@@ -147,11 +144,6 @@ export function UserManagement() {
     }
   };
 
-  const handleSelectViewOnly = () => {
-    setPermissions([...VIEW_ONLY_SCREENS]);
-    toast.info('View-only screens selected');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError('');
@@ -186,25 +178,13 @@ export function UserManagement() {
     }
   };
 
-  const handleQuickApproveViewOnly = async (user: UserData) => {
-    try {
-      const branch = user.branch || 'Saudia';
-      await approveUser(user.uid, branch, VIEW_ONLY_SCREENS, getCurrentUserEmail());
-      await clearPendingUserNotifications(user.uid);
-      toast.success(`User "${user.email}" approved with View-Only permissions!`);
-      await fetchUsers();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to approve user');
-    }
-  };
-
   const handleOpenApproveModal = (user: UserData) => {
     setApprovingUser({
       uid: user.uid,
       email: user.email,
       fullName: user.fullName,
       branch: user.branch || 'Saudia',
-      permissions: user.permissions && user.permissions.length > 0 ? [...user.permissions] : [...VIEW_ONLY_SCREENS],
+      permissions: user.permissions && user.permissions.length > 0 ? [...user.permissions] : [],
     });
   };
 
@@ -351,11 +331,10 @@ export function UserManagement() {
         <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              activeTab === 'pending'
-                ? 'bg-amber-500 text-white shadow-md'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all"
+            style={activeTab === 'pending'
+              ? { backgroundColor: '#fef3c7', color: '#0f172a', border: '2px solid #d97706', boxShadow: 'inset 0 -2px 0 #d97706' }
+              : { backgroundColor: '#ffffff', color: '#475569', border: '1px solid #e5e7eb' }}
           >
             <Clock size={16} />
             Pending Approvals
@@ -368,11 +347,10 @@ export function UserManagement() {
 
           <button
             onClick={() => setActiveTab('active')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              activeTab === 'active'
-                ? 'bg-slate-800 text-white shadow-md'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all"
+            style={activeTab === 'active'
+              ? { backgroundColor: '#e2e8f0', color: '#0f172a', border: '2px solid #64748b', boxShadow: 'inset 0 -2px 0 #64748b' }
+              : { backgroundColor: '#ffffff', color: '#475569', border: '1px solid #e5e7eb' }}
           >
             <Users size={16} />
             Active Users ({activeUsers.length})
@@ -380,11 +358,10 @@ export function UserManagement() {
 
           <button
             onClick={() => setActiveTab('create')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              activeTab === 'create'
-                ? 'bg-slate-800 text-white shadow-md'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all"
+            style={activeTab === 'create'
+              ? { backgroundColor: '#e2e8f0', color: '#0f172a', border: '2px solid #64748b', boxShadow: 'inset 0 -2px 0 #64748b' }
+              : { backgroundColor: '#ffffff', color: '#475569', border: '1px solid #e5e7eb' }}
           >
             <UserPlus size={16} />
             Add New User
@@ -447,17 +424,10 @@ export function UserManagement() {
 
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
-                          onClick={() => handleQuickApproveViewOnly(user)}
-                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
-                          title="Grant view-only access to all dashboards and reports"
-                        >
-                          <Check size={14} /> Quick Approve (View-Only)
-                        </button>
-                        <button
                           onClick={() => handleOpenApproveModal(user)}
                           className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
                         >
-                          <UserCheck size={14} /> Custom Approve & Branch
+                          <UserCheck size={14} /> Approve & Set Access
                         </button>
                         <button
                           onClick={() => handleRejectUser(user.uid, user.email)}
@@ -589,16 +559,7 @@ export function UserManagement() {
                         <div className="p-5 border-t border-gray-200 bg-gray-50 space-y-5">
                           <div className="flex items-center justify-between">
                             <h3 className="font-semibold text-gray-800 text-sm">Edit Screen Access & Permissions</h3>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setEditingUser({ ...editingUser, permissions: [...VIEW_ONLY_SCREENS] })}
-                                className="text-xs px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg hover:bg-amber-200 transition-colors"
-                              >
-                                Set View-Only Access
-                              </button>
-                              <span className="text-xs text-gray-500">{editingUser.permissions.length} screens selected</span>
-                            </div>
+                            <span className="text-xs text-gray-500">{editingUser.permissions.length} screens selected</span>
                           </div>
 
                           {/* Branch selector in edit */}
@@ -673,7 +634,7 @@ export function UserManagement() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="p-6 space-y-6" autoComplete="off">
               {generalError && (
                 <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
                   <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
@@ -691,6 +652,10 @@ export function UserManagement() {
                   <label className="text-sm font-semibold text-gray-700">Email Address</label>
                   <input
                     type="email"
+                    name="new-user-email"
+                    autoComplete="off"
+                    readOnly
+                    onFocus={e => { e.currentTarget.readOnly = false; }}
                     placeholder="user@bullion.com"
                     value={formData.email}
                     onChange={e => setFormData({ ...formData, email: e.target.value })}
@@ -709,6 +674,10 @@ export function UserManagement() {
                   <div style={{ position: 'relative' }}>
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      name="new-user-password"
+                      autoComplete="new-password"
+                      readOnly
+                      onFocus={e => { e.currentTarget.readOnly = false; }}
                       placeholder="At least 6 characters"
                       value={formData.password}
                       onChange={e => setFormData({ ...formData, password: e.target.value })}
@@ -772,13 +741,6 @@ export function UserManagement() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSelectViewOnly}
-                      className="text-xs px-3 py-1.5 bg-amber-100 text-amber-900 hover:bg-amber-200 font-bold rounded-lg transition-colors"
-                    >
-                      Select View-Only Screens
-                    </button>
                     {permissions.length > 0 && (
                       <button type="button" onClick={() => setPermissions([])} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
                         <X size={12} /> Clear all
@@ -798,7 +760,12 @@ export function UserManagement() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-6 py-2.5 font-bold text-sm rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                  style={{
+                    backgroundColor: isSubmitting ? '#e2e8f0' : '#cbd5e1',
+                    color: '#0f172a',
+                    border: '2px solid #475569',
+                  }}
                 >
                   {isSubmitting ? 'Creating...' : <><UserPlus size={16} /> Create User</>}
                 </button>
@@ -855,13 +822,6 @@ export function UserManagement() {
                   <label className="text-sm font-semibold text-gray-700">
                     Screen Access Permissions ({approvingUser.permissions.length} selected)
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setApprovingUser({ ...approvingUser, permissions: [...VIEW_ONLY_SCREENS] })}
-                    className="text-xs px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-lg hover:bg-amber-200"
-                  >
-                    Reset to View-Only Screens
-                  </button>
                 </div>
                 <PermissionGrid
                   selectedPermissions={approvingUser.permissions}
