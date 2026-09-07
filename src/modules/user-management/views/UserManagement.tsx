@@ -10,14 +10,11 @@ import {
   createUser,
   getAllUsers,
   deleteUser,
-  approveUser,
-  rejectUser,
-  updateUserPermissions,
+    updateUserPermissions,
   updateUserBranch,
   type UserData,
   type Screen,
   ALL_SCREEN_GROUPS,
-  VIEW_ONLY_SCREENS
 } from '../models/userService';
 
 import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
@@ -147,11 +144,6 @@ export function UserManagement() {
     }
   };
 
-  const handleSelectViewOnly = () => {
-    setPermissions([...VIEW_ONLY_SCREENS]);
-    toast.info('View-only screens selected');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError('');
@@ -186,25 +178,13 @@ export function UserManagement() {
     }
   };
 
-  const handleQuickApproveViewOnly = async (user: UserData) => {
-    try {
-      const branch = user.branch || 'Saudia';
-      await approveUser(user.uid, branch, VIEW_ONLY_SCREENS, getCurrentUserEmail());
-      await clearPendingUserNotifications(user.uid);
-      toast.success(`User "${user.email}" approved with View-Only permissions!`);
-      await fetchUsers();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to approve user');
-    }
-  };
-
   const handleOpenApproveModal = (user: UserData) => {
     setApprovingUser({
       uid: user.uid,
       email: user.email,
       fullName: user.fullName,
       branch: user.branch || 'Saudia',
-      permissions: user.permissions && user.permissions.length > 0 ? [...user.permissions] : [...VIEW_ONLY_SCREENS],
+      permissions: user.permissions && user.permissions.length > 0 ? [...user.permissions] : [],
     });
   };
 
@@ -444,17 +424,10 @@ export function UserManagement() {
 
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
-                          onClick={() => handleQuickApproveViewOnly(user)}
-                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
-                          title="Grant view-only access to all dashboards and reports"
-                        >
-                          <Check size={14} /> Quick Approve (View-Only)
-                        </button>
-                        <button
                           onClick={() => handleOpenApproveModal(user)}
                           className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
                         >
-                          <UserCheck size={14} /> Custom Approve & Branch
+                          <UserCheck size={14} /> Approve & Set Access
                         </button>
                         <button
                           onClick={() => handleRejectUser(user.uid, user.email)}
@@ -586,16 +559,7 @@ export function UserManagement() {
                         <div className="p-5 border-t border-gray-200 bg-gray-50 space-y-5">
                           <div className="flex items-center justify-between">
                             <h3 className="font-semibold text-gray-800 text-sm">Edit Screen Access & Permissions</h3>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setEditingUser({ ...editingUser, permissions: [...VIEW_ONLY_SCREENS] })}
-                                className="text-xs px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg hover:bg-amber-200 transition-colors"
-                              >
-                                Set View-Only Access
-                              </button>
-                              <span className="text-xs text-gray-500">{editingUser.permissions.length} screens selected</span>
-                            </div>
+                            <span className="text-xs text-gray-500">{editingUser.permissions.length} screens selected</span>
                           </div>
 
                           {/* Branch selector in edit */}
@@ -777,19 +741,6 @@ export function UserManagement() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSelectViewOnly}
-                      className="text-xs px-3.5 py-2 font-bold rounded-lg transition-colors flex items-center gap-1.5"
-                      style={{
-                        backgroundColor: '#fde68a', color: '#0f172a',
-                        border: '2px solid #b45309', boxShadow: '0 1px 3px rgba(0,0,0,.12)',
-                        cursor: 'pointer',
-                      }}
-                      title="Tick every view-only screen at once"
-                    >
-                      <Eye size={13} /> Select View-Only Screens
-                    </button>
                     {permissions.length > 0 && (
                       <button type="button" onClick={() => setPermissions([])} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
                         <X size={12} /> Clear all
@@ -871,13 +822,6 @@ export function UserManagement() {
                   <label className="text-sm font-semibold text-gray-700">
                     Screen Access Permissions ({approvingUser.permissions.length} selected)
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setApprovingUser({ ...approvingUser, permissions: [...VIEW_ONLY_SCREENS] })}
-                    className="text-xs px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-lg hover:bg-amber-200"
-                  >
-                    Reset to View-Only Screens
-                  </button>
                 </div>
                 <PermissionGrid
                   selectedPermissions={approvingUser.permissions}
