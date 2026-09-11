@@ -20,3 +20,7 @@ dist/
 # IDE
 .vscode/
 .idea/
+
+# firebase
+scripts/serviceAccountKey.json
+scripts/backups/

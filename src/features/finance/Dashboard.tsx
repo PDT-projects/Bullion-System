@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserPermissions } from '../../modules/user-management/hooks/useUserPermissions';
 import {
-  TrendingUp, TrendingDown, Wallet, Building2, DollarSign,
+  TrendingUp, TrendingDown, Wallet, Building2,
   Activity, FileText, AlertCircle, RefreshCw, Loader2, BarChart2,
   ChevronDown, Check, Package, ArrowLeftRight,
   type LucideIcon,
@@ -468,10 +468,6 @@ export function Dashboard() {
           icon={Package} iconColor="#d97706" iconBg="#fffbeb"
           borderColor="#fde68a" hoverBorder="#f59e0b" hoverBg="#fffbeb"
           onClick={() => navigate('/inventory')} />
-        <QuickAccessCard label="Payrolls"
-          icon={DollarSign} iconColor="#0f172a" iconBg="#f1f5f9"
-          borderColor="#e2e8f0" hoverBorder="#0f172a" hoverBg="#f8fafc"
-          onClick={() => navigate('/payroll')} />
         <QuickAccessCard label="Reports"
           icon={BarChart2} iconColor="#1d4ed8" iconBg="#eff6ff"
           borderColor="#bfdbfe" hoverBorder="#3b82f6" hoverBg="#eff6ff"

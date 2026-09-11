@@ -4,14 +4,17 @@ import { toast } from 'sonner';
 import {
   Trash2, Edit2, ChevronDown, ChevronUp, AlertCircle,
   Eye, EyeOff, UserPlus, Users, X, Check, Shield,
-  Clock, CheckCircle, XCircle, UserCheck
+  Clock, CheckCircle, XCircle, UserCheck, RotateCcw, Loader2
 } from 'lucide-react';
+import { factoryReset, countAllRecords, type ResetProgress } from '../models/factoryResetService';
 import {
   createUser,
   getAllUsers,
   deleteUser,
     updateUserPermissions,
   updateUserBranch,
+  approveUser,
+  rejectUser,
   type UserData,
   type Screen,
   ALL_SCREEN_GROUPS,
@@ -44,6 +47,43 @@ interface ApprovingUser {
 }
 
 export function UserManagement() {
+  // ── Factory reset ──────────────────────────────────────────────────────
+  // Gated on super_admin: this wipes every record in the system, and the
+  // screen itself is reachable by anyone whose permissions include it.
+  const [resetOpen,     setResetOpen]     = useState(false);
+  const [resetCounts,   setResetCounts]   = useState<{ total: number; perCollection: Record<string, number> } | null>(null);
+  const [resetCounting, setResetCounting] = useState(false);
+  const [resetConfirm,  setResetConfirm]  = useState('');
+  const [resetting,     setResetting]     = useState(false);
+  const [resetStep,     setResetStep]     = useState('');
+  const [resetDone,     setResetDone]     = useState<ResetProgress[] | null>(null);
+
+  const openReset = async () => {
+    setResetOpen(true); setResetConfirm(''); setResetDone(null);
+    setResetCounting(true);
+    try { setResetCounts(await countAllRecords()); }
+    catch { setResetCounts(null); }
+    finally { setResetCounting(false); }
+  };
+
+  const runReset = async () => {
+    setResetting(true); setResetStep('Starting…');
+    try {
+      const results = await factoryReset((p, i, total) => {
+        setResetStep(`${i} / ${total} · ${p.collection} — ${p.deleted} deleted`);
+      });
+      setResetDone(results);
+      const failed  = results.filter(r => r.error);
+      const deleted = results.reduce((s, r) => s + r.deleted, 0);
+      if (failed.length === 0) toast.success(`System cleared — ${deleted} records deleted`);
+      else toast.warning(`${deleted} deleted · ${failed.length} collection(s) blocked — see the list`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Factory reset failed');
+    } finally {
+      setResetting(false); setResetStep('');
+    }
+  };
+
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'pending' | 'active' | 'create'>('active');
   const [formData, setFormData] = useState<FormState>({ email: '', password: '', branch: '' });
@@ -319,12 +359,24 @@ export function UserManagement() {
             </h1>
             <p className="text-gray-500 text-sm mt-1">Approve registered users, manage branch access, and control read/write permissions</p>
           </div>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            ← Back to Dashboard
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Super-admin only. Placed apart from the tabs and coloured as a
+                danger action so it is never confused with a normal control. */}
+            <button
+                onClick={openReset}
+                title="Delete every record in the system"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors shadow-sm"
+                style={{ backgroundColor: '#fee2e2', color: '#7f1d1d', border: '2px solid #b91c1c' }}
+              >
+                <RotateCcw size={15} /> Factory Reset
+              </button>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+            >
+              ← Back to Dashboard
+            </button>
+          </div>
         </div>
 
         {/* Tabs Bar */}
@@ -856,6 +908,148 @@ export function UserManagement() {
         )}
 
       </div>
+
+      {/* ── Factory reset confirmation ───────────────────────────────────── */}
+      {resetOpen && (
+        <div
+          onClick={() => !resetting && setResetOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.65)',
+            zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 560, maxHeight: '88vh', overflowY: 'auto',
+              backgroundColor: '#fff', borderRadius: 14,
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.55)',
+            }}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #fecaca', backgroundColor: '#fef2f2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 800, color: '#7f1d1d' }}>
+                <AlertCircle size={18} /> Factory Reset
+              </div>
+              <div style={{ fontSize: 12, color: '#991b1b', marginTop: 3 }}>
+                Deletes every record in the system. This cannot be undone.
+              </div>
+            </div>
+
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+              {/* Finished — show what happened, including anything blocked. */}
+              {resetDone ? (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                    {resetDone.reduce((s, r) => s + r.deleted, 0).toLocaleString()} records deleted
+                  </div>
+                  {resetDone.filter(r => r.error).length > 0 && (
+                    <div style={{ padding: 12, backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>
+                        These could not be cleared — usually a missing security rule:
+                      </div>
+                      {resetDone.filter(r => r.error).map(r => (
+                        <div key={r.collection} style={{ fontSize: 11, color: '#78350f' }}>
+                          · {r.collection} — {r.error}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: '#64748b' }}>
+                    Reload the page to see the empty system.
+                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    style={{ padding: '10px 16px', borderRadius: 8, border: '2px solid #475569',
+                             backgroundColor: '#e2e8f0', color: '#0f172a', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
+                  >
+                    Reload
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12.5, color: '#334155', lineHeight: 1.6 }}>
+                    Transactions, invoices, inventory, banks, customers, employees,
+                    counters and every other record will be permanently removed.
+                    <br /><br />
+                    <b>Kept:</b> user accounts and their permissions — removing those
+                    would lock everyone out, including you. Code, screens and settings
+                    are not touched.
+                  </div>
+
+                  {resetCounting ? (
+                    <div style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Counting records…
+                    </div>
+                  ) : resetCounts && (
+                    <div style={{ padding: 12, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, maxHeight: 160, overflowY: 'auto' }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
+                        {resetCounts.total.toLocaleString()} records will be deleted
+                      </div>
+                      {Object.entries(resetCounts.perCollection).map(([c, n]) => (
+                        <div key={c} style={{ fontSize: 11, color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{c}</span><span style={{ fontWeight: 700 }}>{n}</span>
+                        </div>
+                      ))}
+                      {resetCounts.total === 0 && (
+                        <div style={{ fontSize: 11, color: '#94a3b8' }}>Nothing to delete — the system is already empty.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Typing the word is the last guard. A plain OK button is far
+                      too easy to hit by reflex for something irreversible. */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#7f1d1d', marginBottom: 5 }}>
+                      Type RESET to confirm
+                    </label>
+                    <input
+                      value={resetConfirm}
+                      onChange={e => setResetConfirm(e.target.value)}
+                      disabled={resetting}
+                      placeholder="RESET"
+                      style={{ width: '100%', padding: '10px 12px', border: '2px solid #fecaca',
+                               borderRadius: 8, fontSize: 14, fontWeight: 700, letterSpacing: '.1em',
+                               color: '#0f172a', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {resetting && (
+                    <div style={{ fontSize: 12, color: '#7f1d1d', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                      {resetStep}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => setResetOpen(false)}
+                      disabled={resetting}
+                      style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #e2e8f0',
+                               backgroundColor: '#fff', color: '#334155', fontWeight: 700, fontSize: 13,
+                               cursor: resetting ? 'not-allowed' : 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={runReset}
+                      disabled={resetting || resetConfirm !== 'RESET'}
+                      style={{ padding: '10px 18px', borderRadius: 8, border: '2px solid #b91c1c',
+                               backgroundColor: resetConfirm === 'RESET' && !resetting ? '#fee2e2' : '#f1f5f9',
+                               color: resetConfirm === 'RESET' && !resetting ? '#7f1d1d' : '#94a3b8',
+                               fontWeight: 800, fontSize: 13,
+                               cursor: resetConfirm === 'RESET' && !resetting ? 'pointer' : 'not-allowed',
+                               borderColor: resetConfirm === 'RESET' && !resetting ? '#b91c1c' : '#cbd5e1' }}
+                    >
+                      {resetting ? 'Deleting…' : 'Delete everything'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

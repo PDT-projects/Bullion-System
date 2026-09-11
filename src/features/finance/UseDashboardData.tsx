@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { TransactionFirebaseService } from '../../modules/transactions/models/transactionFirebaseService';
-import { calculateStats } from '../../modules/transactions/models/transactionsService';
+import { calculateStats, computeBankBalance } from '../../modules/transactions/models/transactionsService';
 import { Transaction } from '../../modules/transactions/models/types';
 import type { TransactionStats } from '../../modules/transactions/models/types';
 import { CashFirebaseService } from '../../modules/banking/models/cashFirebaseService';
@@ -145,8 +145,26 @@ export function useDashboardData(): DashboardData {
   // Stats cards show current month figures only
   const rawStats = calculateStats(currentMonthTransactions);
 
+  // FIX: `banks` state above is the RAW Firestore doc — just the stored
+  // opening balance, with no transactions applied. Every screen that reads
+  // `banks` from this hook (Balance Sheet's "Bank Balance", the Dashboard's
+  // bank total, the AR/AP report) was therefore showing the OPENING balance
+  // forever, never the live one — e.g. a bank seeded at 90,000 that had
+  // 6,000 net paid out via transactions still showed 90,000 everywhere that
+  // used this hook, while the Transactions page (which calls
+  // computeBankBalance itself) correctly showed 84,000. `banksLive` applies
+  // the same ledger-delta math every other live balance in the app uses, so
+  // all of them finally agree.
+  const banksLive = useMemo(
+    () => banks.map((b: any) => ({
+      ...b,
+      balance: computeBankBalance(transactions, b.id, b.balance || 0),
+    })),
+    [banks, transactions],
+  );
+
   const PKR_RATE = 279.5; const AED_RATE = 3.67;
-  const totalBankBalance = banks.reduce((sum, b: any) => {
+  const totalBankBalance = banksLive.reduce((sum, b: any) => {
     const bal = b.balance || 0;
     const inAed = (b.currency === "PKR" || b.accountCurrency === "PKR") ? (bal / PKR_RATE * AED_RATE) : bal;
     return sum + inAed;
@@ -234,7 +252,7 @@ export function useDashboardData(): DashboardData {
   }, [loadCashLedger]);
 
   return {
-    transactions, banks, loans, invoices, commissions, products,
+    transactions, banks: banksLive, loans, invoices, commissions, products,
     stats,
     monthlyChartData,
     loading,

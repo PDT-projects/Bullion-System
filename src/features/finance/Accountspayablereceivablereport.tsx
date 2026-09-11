@@ -419,19 +419,17 @@ const COLS: Col[] = [
     cell: r => <span style={{ fontWeight: r.paid ? 700 : 400, color: r.paid ? '#dc2626' : '#94a3b8' }}>
       {aed(r.paid)}</span> },
   { id: 'remRecv',     label: 'Remaining Receivable', align: 'right',
-    val: r => (r.remRecv ? aed(r.remRecv) : ''),
-    cell: r => <span style={{ color: r.remRecv < 0 ? '#b91c1c' : r.remRecv ? '#059669' : '#94a3b8' }}>
-      {aed(r.remRecv)}</span> },
-  { id: 'remPay',      label: 'Remaining Payable',    align: 'right',
-    val: r => (r.remPay ? aed(r.remPay) : ''),
-    cell: r => <span style={{ color: r.remPay < 0 ? '#b91c1c' : r.remPay ? '#dc2626' : '#94a3b8' }}>
-      {aed(r.remPay)}</span> },
-  { id: 'totalRecv',   label: 'Total Receivable',     align: 'right',
+    // Shows the counterparty's NET outstanding balance (same value on every
+    // row for that party), not this single transaction's own signed delta —
+    // a lone inflow/outflow row showing a negative "remaining" confused
+    // users into thinking money was owed in reverse.
     val: r => (r.totalRecv ? aed(r.totalRecv) : ''),
-    cell: r => <span style={{ fontWeight: 700, color: '#047857' }}>{aed(r.totalRecv)}</span> },
-  { id: 'totalPay',    label: 'Total Payable',        align: 'right',
+    cell: r => <span style={{ color: r.totalRecv < 0 ? '#b91c1c' : r.totalRecv ? '#059669' : '#94a3b8' }}>
+      {aed(r.totalRecv)}</span> },
+  { id: 'remPay',      label: 'Remaining Payable',    align: 'right',
     val: r => (r.totalPay ? aed(r.totalPay) : ''),
-    cell: r => <span style={{ fontWeight: 700, color: '#b45309' }}>{aed(r.totalPay)}</span> },
+    cell: r => <span style={{ color: r.totalPay < 0 ? '#b91c1c' : r.totalPay ? '#dc2626' : '#94a3b8' }}>
+      {aed(r.totalPay)}</span> },
   { id: 'dueDate',     label: 'Due Date',             align: 'left',
     val: r => r.dueDate,
     cell: r => r.dueDate || '—' },
@@ -464,12 +462,12 @@ const COLS: Col[] = [
 
 // Columns that get a filter chip. Deliberately a subset: the table still shows
 // every column, but filtering by a free-form value (Remarks) or by a derived
-// running figure (Total Receivable per row) produces dropdowns with one option
-// per row, which narrow nothing. Dates are handled by range pickers instead of
-// chips — an exact-date dropdown is almost never what someone wants.
+// running figure (Remaining Receivable per row) produces dropdowns with one
+// option per row, which narrow nothing. Dates are handled by range pickers
+// instead of chips — an exact-date dropdown is almost never what someone wants.
 const CHIP_IDS = [
   'flow', 'category', 'subCategory', 'received', 'paid',
-  'totalRecv', 'totalPay', 'status', 'refNo', 'account',
+  'status', 'refNo', 'account',
 ] as const;
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -754,7 +752,7 @@ export function AccountsPayableReceivableReport({
       </div>
 
       <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
-        Total Receivable and Total Payable are running balances per counterparty, carried forward in
+        Remaining Receivable and Remaining Payable are running balances per counterparty, carried forward in
         date order. Amounts follow money that actually moved, so a partly-received entry contributes
         only what was received — the same basis as the Cash in Hand balance. Pending and rejected
         transactions are excluded.

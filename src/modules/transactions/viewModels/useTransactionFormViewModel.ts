@@ -619,20 +619,24 @@ const getSuggestedClassification = (
 
         // CurrencyAmountInput in the View always stores AED in item.amount /
         // item.amountPaid, regardless of which currency the user typed in.
-        // Firestore's `amount` field is PKR-canonical (used by dashboards,
-        // reports, etc.), so it must be converted here — not stored as-is.
-        const amountPKR     = +convertCurrency(item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
-        const amountPaidPKR = +convertCurrency(item.amountPaid || 0, 'AED', 'PKR', currencyRates as any).toFixed(2);
-        const remainingPKR  = Math.max(0, amountPKR - amountPaidPKR);
+        // Firestore's `amount` field is AED-canonical (used by dashboards,
+        // Balance Sheet, reports, etc.) — save it as-is, no PKR conversion.
+        // (Previously this was converted to PKR here, which meant every
+        // amount you typed got scaled ~76x before landing in Firestore,
+        // and every report reading `amount` back out treated that inflated
+        // number as if it were already AED.)
+        const amountAED     = +Number(item.amount).toFixed(2);
+        const amountPaidAED = +Number(item.amountPaid || 0).toFixed(2);
+        const remainingAED  = Math.max(0, amountAED - amountPaidAED);
 
         const updatedData: Partial<Transaction> = {
           date:            effectiveDate,
           mainCategory:    transactionType,
           subCategory:     item.subCategory,
           detailCategory:  item.detailCategory,
-          amount:          amountPKR,
-          amountPaid:      amountPaidPKR,
-          remainingAmount: remainingPKR,
+          amount:          amountAED,
+          amountPaid:      amountPaidAED,
+          remainingAmount: remainingAED,
           paymentStatus:   item.paymentStatus,
           paidBy:          item.paidBy,
           paidTo:          item.paidTo,
@@ -657,7 +661,7 @@ const getSuggestedClassification = (
         firstTxId = editingTx.transactionId || editingTx.id;
 
         if (paymentMode === 'Bank') {
-          await updateBankBalance(selectedBank, amountPKR, isInflow);
+          await updateBankBalance(selectedBank, amountAED, isInflow);
         }
       } else {
         // ── Create mode ───────────────────────────────────────────────────
@@ -694,8 +698,7 @@ const getSuggestedClassification = (
               });
               if (idx === 0) firstTxId = result.transactionId;
               if (paymentMode === 'Bank' && selectedBank) {
-                const amountPKR = +convertCurrency(amountAED, 'AED', 'PKR', currencyRates as any).toFixed(2);
-                await updateBankBalance(selectedBank, amountPKR, false); // outflow
+                await updateBankBalance(selectedBank, amountAED, false); // outflow
               }
             } catch (err: any) {
               console.error('[Transaction VM] Supplier payment failed:', err);
@@ -733,15 +736,14 @@ const getSuggestedClassification = (
 
           // CurrencyAmountInput in the View always stores AED in item.amount /
           // item.amountPaid, regardless of which currency the user typed in.
-          // Firestore's `amount` field is PKR-canonical (used by dashboards,
-          // reports, etc.), so it must be converted here before saving —
-          // otherwise an AED value gets saved as if it were already PKR.
+          // Firestore's `amount` field is AED-canonical (used by dashboards,
+          // Balance Sheet, reports, etc.) — save it as-is, no PKR conversion.
           const inputCurrency  = (item as any).inputCurrency || 'AED';
-          const amountPKR      = +convertCurrency(item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
-          const amountPaidPKR  = +convertCurrency(item.amountPaid || item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
-          const remainingPKR   = item.remainingAmount
-            ? +convertCurrency(item.remainingAmount, 'AED', 'PKR', currencyRates as any).toFixed(2)
-            : Math.max(0, amountPKR - amountPaidPKR);
+          const amountAED2     = +Number(item.amount).toFixed(2);
+          const amountPaidAED  = +Number(item.amountPaid || item.amount).toFixed(2);
+          const remainingAED   = item.remainingAmount
+            ? +Number(item.remainingAmount).toFixed(2)
+            : Math.max(0, amountAED2 - amountPaidAED);
 
           const effectiveDate = manualDate.trim() || date;
           const txData: Omit<Transaction, 'id'> = {
@@ -751,11 +753,11 @@ const getSuggestedClassification = (
             mainCategory:    transactionType,
             subCategory:     item.subCategory,
             detailCategory:  item.detailCategory,
-            // PKR-converted amounts are the authoritative stored values;
-            // originals (as typed, in inputCurrency) are preserved below.
-            amount:          amountPKR,
-            amountPaid:      amountPaidPKR,
-            remainingAmount: remainingPKR,
+            // AED is the authoritative stored value now; originals (as typed,
+            // in inputCurrency) are preserved below for display fidelity.
+            amount:          amountAED2,
+            amountPaid:      amountPaidAED,
+            remainingAmount: remainingAED,
             paymentStatus:   item.paymentStatus,
             paidBy:          item.paidBy,
             paidTo:          item.paidTo,
@@ -784,7 +786,7 @@ const getSuggestedClassification = (
           if (idx === 0) firstTxId = resolvedId;
 
           if (paymentMode === 'Bank' && selectedBank) {
-            await updateBankBalance(selectedBank, amountPKR, isInflow);
+            await updateBankBalance(selectedBank, amountAED2, isInflow);
           }
         }
       }

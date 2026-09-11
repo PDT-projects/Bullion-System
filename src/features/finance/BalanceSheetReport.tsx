@@ -8,7 +8,7 @@
 // A "Generate PDF" button prints the currently filtered view.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { BillsFirebaseService } from '../../modules/bills/models/Billsfirebaseservice';
+import { CashFirebaseService } from '../../modules/banking/models/cashFirebaseService';
 import { resolveBSBucket, getTransactionTotals } from '../../modules/transactions/models/transactionsService';
 import type { Transaction } from '../../modules/transactions/models/types';
 import {
@@ -30,10 +30,10 @@ type Product = {
   label?: string; displayName?: string; display_name?: string;
   product?: string;
   sku?: string; code?: string; description?: string;
+  ownershipType?: 'Credit' | 'Owned';
   [key: string]: any;
 };
-type Bill    = { id: string; amount: number; status: string; vendor?: string; description?: string; dueDate?: string; };
-
+type Bill    = { id: string; amount: number; status?: string; vendor?: string; description?: string; dueDate?: string; };
 type BalanceSheetReportProps = {
   transactions: Transaction[];
   banks: Bank[];
@@ -249,16 +249,29 @@ const DetailTable = ({
 
 export function BalanceSheetReport({ transactions, banks, loans, products, bills, invoices = [], onBack }: BalanceSheetReportProps) {
   // Bills were a prop nobody ever passed, so Pending Bills always read AED 0.
-  const [fetchedBills, setFetchedBills] = useState<Bill[]>([]);
+  const billsList = bills ?? [];
+  // Cash in Hand must match the app's single source of truth (Dashboard /
+  // Cash-in-Hand page): opening balance + the 'cash_transactions' ledger,
+  // merged with any 'transactions' docs paid via Cash mode. Previously this
+  // report only looked at the filtered `transactions` collection, silently
+  // dropping the opening balance and every cash_transactions-only entry —
+  // which is why Cash in Hand could show a wrong (even negative) figure that
+  // didn't match the real balance shown elsewhere in the app.
+  const [cashLedgerTxns, setCashLedgerTxns] = useState<any[]>([]);
+  const [cashOpeningBalance, setCashOpeningBalance] = useState(0);
   useEffect(() => {
-    if (bills) return;
     let alive = true;
-    BillsFirebaseService.fetchAllBills()
-      .then(list => { if (alive) setFetchedBills(list as Bill[]); })
-      .catch(err => console.error('[BalanceSheet] bills fetch failed:', err));
+    Promise.all([
+      CashFirebaseService.fetchAllCashTransactions(),
+      CashFirebaseService.fetchAllCashRecords(),
+    ]).then(([txns, records]) => {
+      if (!alive) return;
+      setCashLedgerTxns(txns);
+      setCashOpeningBalance(records[0]?.balance || 0);
+    }).catch(err => console.error('[BalanceSheet] cash ledger fetch failed:', err));
     return () => { alive = false; };
-  }, [bills]);
-  const billsList = bills ?? fetchedBills;
+  }, []);
+
   const [showBSClassified, setShowBSClassified] = useState(true);
   const [expandedSubs,     setExpandedSubs]     = useState<Set<string>>(new Set());
   const [expandedRows,     setExpandedRows]     = useState<Set<string>>(new Set());
@@ -432,17 +445,34 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
   // ── Underlying detail lists (used both for expansion & PDF) ─────────────────
   const details = useMemo(() => {
-    // Cash in Hand — Cash-mode transactions from the filtered set
-    // Matched on the account, not the legacy `mode` field: newer transactions
-    // record accountType/accountId and may leave `mode` unset.
-    const isCashRow = (t: any) =>
-      t?.accountType === 'cash' ||
-      t?.accountId === 'cash-in-hand' ||
-      (t?.accountType === undefined && t?.mode === 'Cash');
-    const cashInflowTxns  = liquid.filter(t => t.mainCategory === 'Cash Inflow'  && isCashRow(t));
-    const cashOutflowTxns = liquid.filter(t => t.mainCategory === 'Cash Outflow' && isCashRow(t));
-    const cashIn  = cashInflowTxns.reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
-    const cashOut = cashOutflowTxns.reduce((s, t) => s + getTransactionTotals(t).totalPaid, 0);
+    // Cash in Hand — a point-in-time balance (like Bank Balance), not a
+    // period total, so it is built from the FULL (unfiltered) transaction
+    // set — the date/location filters on this page apply to flows, not to
+    // a snapshot balance.
+    //
+    // Source = 'cash_transactions' ledger + any 'transactions' doc paid via
+    // Cash mode, merged and deduped exactly like useDashboardData /
+    // useCashListViewModel do (the same sale can land in both collections
+    // under different ids — "Invoice / Sale" + "Product sale received").
+    const cashModeTxns = transactions.filter((t: any) => t.mode === 'Cash');
+    const cashKeyOf = (t: any) => {
+      const ref = (t.note || '').trim().toLowerCase();
+      return ref ? `${ref}__${t.amount}` : `id__${t.id}`;
+    };
+    const seenCashKeys = new Set<string>();
+    const mergedCashTxns: any[] = [];
+    for (const t of [...cashLedgerTxns, ...cashModeTxns]) {
+      const key = cashKeyOf(t);
+      if (!seenCashKeys.has(key)) { seenCashKeys.add(key); mergedCashTxns.push(t); }
+    }
+    const cashInflowTxns  = mergedCashTxns.filter(t => t.mainCategory === 'Cash Inflow');
+    const cashOutflowTxns = mergedCashTxns.filter(t => t.mainCategory === 'Cash Outflow');
+    // Plain `amount`, matching BankingService.calculateCashStats — the same
+    // figure the Dashboard and Cash-in-Hand page compute, not the invoice
+    // totalPaid figure (cash_transactions docs don't carry payment-plan
+    // fields, so totalPaid would wrongly read as 0 for them).
+    const cashIn  = cashInflowTxns.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const cashOut = cashOutflowTxns.reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
     // Accounts Receivable / Payable — from filtered transactions with remaining amount
     const arAp = buildArApRows(liquid, invoices);
@@ -476,22 +506,45 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       loansReceivableList, loansPayableList,
       pendingBillsList, inventoryList,
     };
-  }, [liquid, loans, billsList, products, invoices]);
+  }, [liquid, transactions, cashLedgerTxns, loans, billsList, products, invoices]);
 
   const bs = useMemo(() => {
     // ── ASSETS ──────────────────────────────────────────────────────────────
     // Math.max(0, …) reported AED 0 whenever outflows exceeded inflows, hiding
     // the real position and breaking Assets = Liabilities + Equity.
-    const cashInHand = details.cashIn - details.cashOut;
+    // Opening balance included — see the cash ledger fetch above. Without it
+    // this figure could read a plausible-looking but wrong (even negative)
+    // number that didn't match the Dashboard / Cash-in-Hand page.
+    const cashInHand = cashOpeningBalance + details.cashIn - details.cashOut;
 
-    // Bank balance: from banks collection — current snapshot
-    const bankBalance = banks.reduce((s, b) => s + (b.balance || 0), 0);
+    // Bank balance: from banks collection — current snapshot.
+    // Any account still stored in PKR is converted to AED, matching the
+    // conversion useDashboardData applies for the stat cards — without this,
+    // an unmigrated PKR balance would be added to the AED total as-is and
+    // wildly overstate (or understate) the real position.
+    const PKR_RATE = 279.5, AED_RATE = 3.67;
+    const bankBalance = banks.reduce((s, b: any) => {
+      const bal = b.balance || 0;
+      const inAed = (b.currency === 'PKR' || b.accountCurrency === 'PKR')
+        ? (bal / PKR_RATE * AED_RATE) : bal;
+      return s + inAed;
+    }, 0);
 
     // Accounts receivable — from filtered transactions
     const accountsReceivable = details.arApTotals.receivable;
 
-    // Inventory value
-    const inventoryValue = details.inventoryList.reduce((s, p) => s + p.value, 0);
+    // Inventory value — split by ownership type.
+    // 'Owned' (Against Payment) inventory was already paid for at entry, so it's
+    // just an asset. 'Credit' inventory is also an asset (we hold the stock),
+    // but its cost is still owed to the supplier — hence it also creates a
+    // matching liability below (see inventoryCredit under LIABILITIES).
+    const inventoryOwned  = details.inventoryList
+      .filter(p => p.ownershipType !== 'Credit')
+      .reduce((s, p) => s + p.value, 0);
+    const inventoryCredit = details.inventoryList
+      .filter(p => p.ownershipType === 'Credit')
+      .reduce((s, p) => s + p.value, 0);
+    const inventoryValue  = inventoryOwned + inventoryCredit;
 
     // Loans receivable
     const loansReceivable = details.loansReceivableList.reduce((s, l) => s + (l.remaining || 0), 0);
@@ -523,7 +576,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       .filter(([sub]) => !knownLiabilityBuckets.has(sub))
       .reduce((sum, [, entry]) => sum + entry.total, 0);
 
-    const totalCurrentLiabilities = accountsPayable + classifiedLiabilities;
+    const totalCurrentLiabilities = accountsPayable + inventoryCredit + classifiedLiabilities;
     const totalLiabilities        = totalCurrentLiabilities;
 
     // ── EQUITY ───────────────────────────────────────────────────────────────
@@ -533,18 +586,18 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     return {
       assets: {
         cashInHand, bankBalance, accountsReceivable,
-        inventoryValue, loansReceivable,
+        inventoryValue, inventoryOwned, inventoryCredit, loansReceivable,
         totalCurrentAssets, totalFixedAssets, totalAssets,
       },
       liabilities: {
-        accountsPayable, loansPayable, pendingBills,
+        accountsPayable, inventoryCredit, loansPayable, pendingBills,
         totalCurrentLiabilities, totalLiabilities,
       },
       equity: { totalEquity },
       totalLiabilitiesAndEquity,
       balanced: Math.abs(totalAssets - totalLiabilitiesAndEquity) < 1,
     };
-  }, [details, banks, classifiedBS]);
+  }, [details, banks, classifiedBS, cashOpeningBalance]);
 
   // ── PDF generation ─────────────────────────────────────────────────────────
   const generatePDF = () => {
@@ -578,12 +631,19 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     };
 
     const cashRows: (string | number)[][] = [
-      ...details.cashInflowTxns.map(t => [(t.date || '').slice(0, 10), 'Inflow', t.company || '—', fmt(getTransactionTotals(t).totalPaid)]),
-      ...details.cashOutflowTxns.map(t => [(t.date || '').slice(0, 10), 'Outflow', t.company || '—', `- ${fmt(getTransactionTotals(t).totalPaid)}`]),
+      ['—', 'Opening Balance', '—', fmt(cashOpeningBalance)],
+      ...details.cashInflowTxns.map(t => [(t.date || '').slice(0, 10), 'Inflow', t.company || '—', fmt(Number(t.amount) || 0)]),
+      ...details.cashOutflowTxns.map(t => [(t.date || '').slice(0, 10), 'Outflow', t.company || '—', `- ${fmt(Number(t.amount) || 0)}`]),
     ];
-    const bankRows      = banks.map(b => [b.name || '—', b.accountNumber ? '****' + b.accountNumber.slice(-4) : '—', fmt(b.balance || 0)]);
+    const bankRows      = banks.map((b: any) => {
+      const isPKR = b.currency === 'PKR' || b.accountCurrency === 'PKR';
+      const bal = b.balance || 0;
+      const inAed = isPKR ? (bal / 279.5 * 3.67) : bal;
+      return [b.name || '—', b.accountNumber ? '****' + b.accountNumber.slice(-4) : '—', fmt(inAed)];
+    });
     const arRows        = details.receivableTxns.map(t => [(t.date || '').slice(0, 10), t.company || '—', fmt(t.amount || 0), fmt(t.remainingAmount || 0)]);
-    const invRows       = details.inventoryList.map(p => [p.displayName, fmt(p.costPrice || 0), (p.stock || 0), fmt(p.value)]);
+    const invRows       = details.inventoryList.map(p => [p.displayName, p.ownershipType === 'Credit' ? 'On Credit' : 'Payment Received', fmt(p.costPrice || 0), (p.stock || 0), fmt(p.value)]);
+    const invCreditRows = details.inventoryList.filter(p => p.ownershipType === 'Credit').map(p => [p.displayName, fmt(p.costPrice || 0), (p.stock || 0), fmt(p.value)]);
     const loanRxRows    = details.loansReceivableList.map(l => [l.personName || l.borrowerName || l.description || l.id, fmt(l.loanAmount || 0), fmt(l.paid || 0), fmt(l.remaining || 0)]);
     const apRows        = details.payableTxns.map(t => [(t.date || '').slice(0, 10), t.company || '—', fmt(t.amount || 0), fmt(t.remainingAmount || 0)]);
     const loanPayRows   = details.loansPayableList.map(l => [l.personName || l.lenderName || l.description || l.id, fmt(l.loanAmount || 0), fmt(l.paid || 0), fmt(l.remaining || 0)]);
@@ -651,7 +711,11 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
       <div class="item">
         <div class="item-hdr"><span>Inventory Stock Value<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.assets.inventoryValue)}</span></div>
-        ${detailTable(['Product', 'Cost Price', 'Stock', 'Value'], invRows)}
+        <div style="display:flex;justify-content:space-between;font-size:8.5px;color:#475569;margin-bottom:2px">
+          <span>Payment Received: <strong>${fmt(bs.assets.inventoryOwned)}</strong></span>
+          <span>On Credit: <strong>${fmt(bs.assets.inventoryCredit)}</strong></span>
+        </div>
+        ${detailTable(['Product', 'Ownership', 'Cost Price', 'Stock', 'Value'], invRows)}
       </div>
 
 
@@ -667,7 +731,10 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         ${detailTable(['Date', 'Company', 'Total', 'Outstanding'], apRows)}
       </div>
 
-
+      <div class="item">
+        <div class="item-hdr"><span>Inventory On Credit<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.liabilities.inventoryCredit)}</span></div>
+        ${detailTable(['Product', 'Cost Price', 'Stock', 'Value'], invCreditRows)}
+      </div>
 
       <div class="subtotal"><span>Total Current Liabilities</span><span>${fmt(bs.liabilities.totalCurrentLiabilities)}</span></div>
       <div class="total liab"><span>TOTAL LIABILITIES</span><span>${fmt(bs.liabilities.totalLiabilities)}</span></div>
@@ -805,9 +872,11 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               expanded={expandedRows.has('cashInHand')}
               onToggle={() => toggleRow('cashInHand')}
               hasDetails={details.cashInflowTxns.length + details.cashOutflowTxns.length > 0}
+              note="current snapshot"
             >
-              <div className="text-xs text-gray-600 mb-2 flex justify-between">
-                <span>Cash Inflows (mode = Cash): <strong className="text-green-700">{formatCurrency(details.cashIn)}</strong></span>
+              <div className="text-xs text-gray-600 mb-2 flex justify-between flex-wrap gap-1">
+                <span>Opening Balance: <strong className="text-gray-900">{formatCurrency(cashOpeningBalance)}</strong></span>
+                <span>Cash Inflows: <strong className="text-green-700">{formatCurrency(details.cashIn)}</strong></span>
                 <span>Cash Outflows: <strong className="text-red-700">{formatCurrency(details.cashOut)}</strong></span>
               </div>
               {(details.cashInflowTxns.length + details.cashOutflowTxns.length) > 0 ? (
@@ -818,17 +887,17 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                       (t.date || '').slice(0, 10),
                       'Inflow',
                       t.company || '—',
-                      formatCurrency(getTransactionTotals(t).totalPaid),
+                      formatCurrency(Number(t.amount) || 0),
                     ]),
                     ...details.cashOutflowTxns.map(t => [
                       (t.date || '').slice(0, 10),
                       'Outflow',
                       t.company || '—',
-                      `- ${formatCurrency(getTransactionTotals(t).totalPaid)}`,
+                      `- ${formatCurrency(Number(t.amount) || 0)}`,
                     ]),
                   ]}
                 />
-              ) : <EmptyDetail text="No cash-mode transactions in this period." />}
+              ) : <EmptyDetail text="No cash transactions on record." />}
             </ExpandableRow>
 
             {/* Bank Balance */}
@@ -842,12 +911,17 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             >
               {banks.length > 0 ? (
                 <DetailTable
-                  headers={['Bank', 'Account', 'Balance']}
-                  rows={banks.map(b => [
-                    b.name || '—',
-                    b.accountNumber ? '****' + b.accountNumber.slice(-4) : '—',
-                    formatCurrency(b.balance || 0),
-                  ])}
+                  headers={['Bank', 'Account', 'Balance (AED)']}
+                  rows={banks.map((b: any) => {
+                    const isPKR = b.currency === 'PKR' || b.accountCurrency === 'PKR';
+                    const bal = b.balance || 0;
+                    const inAed = isPKR ? (bal / 279.5 * 3.67) : bal;
+                    return [
+                      b.name || '—',
+                      b.accountNumber ? '****' + b.accountNumber.slice(-4) : '—',
+                      isPKR ? `${formatCurrency(inAed)} (PKR ${bal.toLocaleString()})` : formatCurrency(bal),
+                    ];
+                  })}
                 />
               ) : <EmptyDetail text="No bank accounts on file." />}
             </ExpandableRow>
@@ -882,17 +956,53 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               hasDetails={details.inventoryList.length > 0}
               note="current snapshot"
             >
-              {details.inventoryList.length > 0 ? (
-                <DetailTable
-                  headers={['Product', 'Cost Price', 'Stock', 'Value']}
-                  rows={details.inventoryList.map(p => [
-                    p.displayName,
-                    formatCurrency(p.costPrice || 0),
-                    (p.stock || 0),
-                    formatCurrency(p.value),
-                  ])}
-                />
-              ) : <EmptyDetail text="No products with stock value." />}
+              <div className="space-y-0">
+                {/* Payment Received — its own dropdown with history */}
+                <ExpandableRow
+                  label="Payment Received"
+                  value={bs.assets.inventoryOwned}
+                  expanded={expandedRows.has('inventoryOwned')}
+                  onToggle={() => toggleRow('inventoryOwned')}
+                  hasDetails={details.inventoryList.some(p => p.ownershipType !== 'Credit')}
+                >
+                  {details.inventoryList.some(p => p.ownershipType !== 'Credit') ? (
+                    <DetailTable
+                      headers={['Product', 'Cost Price', 'Stock', 'Value']}
+                      rows={details.inventoryList
+                        .filter(p => p.ownershipType !== 'Credit')
+                        .map(p => [
+                          p.displayName,
+                          formatCurrency(p.costPrice || 0),
+                          (p.stock || 0),
+                          formatCurrency(p.value),
+                        ])}
+                    />
+                  ) : <EmptyDetail text="No inventory paid for against payment." />}
+                </ExpandableRow>
+
+                {/* On Credit — its own dropdown with history */}
+                <ExpandableRow
+                  label="On Credit"
+                  value={bs.assets.inventoryCredit}
+                  expanded={expandedRows.has('inventoryCreditAsset')}
+                  onToggle={() => toggleRow('inventoryCreditAsset')}
+                  hasDetails={details.inventoryList.some(p => p.ownershipType === 'Credit')}
+                >
+                  {details.inventoryList.some(p => p.ownershipType === 'Credit') ? (
+                    <DetailTable
+                      headers={['Product', 'Cost Price', 'Stock', 'Value']}
+                      rows={details.inventoryList
+                        .filter(p => p.ownershipType === 'Credit')
+                        .map(p => [
+                          p.displayName,
+                          formatCurrency(p.costPrice || 0),
+                          (p.stock || 0),
+                          formatCurrency(p.value),
+                        ])}
+                    />
+                  ) : <EmptyDetail text="No inventory taken on credit." />}
+                </ExpandableRow>
+              </div>
             </ExpandableRow>
 
           </div>
@@ -936,6 +1046,30 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                   ])}
                 />
               ) : <EmptyDetail text="No outstanding payables in this period." />}
+            </ExpandableRow>
+
+            {/* Inventory On Credit */}
+            <ExpandableRow
+              label="Inventory On Credit"
+              value={bs.liabilities.inventoryCredit}
+              expanded={expandedRows.has('inventoryCreditLiability')}
+              onToggle={() => toggleRow('inventoryCreditLiability')}
+              hasDetails={details.inventoryList.some(p => p.ownershipType === 'Credit')}
+              note="current snapshot"
+            >
+              {details.inventoryList.some(p => p.ownershipType === 'Credit') ? (
+                <DetailTable
+                  headers={['Product', 'Cost Price', 'Stock', 'Value']}
+                  rows={details.inventoryList
+                    .filter(p => p.ownershipType === 'Credit')
+                    .map(p => [
+                      p.displayName,
+                      formatCurrency(p.costPrice || 0),
+                      (p.stock || 0),
+                      formatCurrency(p.value),
+                    ])}
+                />
+              ) : <EmptyDetail text="No inventory taken on credit." />}
             </ExpandableRow>
 
           </div>

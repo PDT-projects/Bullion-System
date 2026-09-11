@@ -6,7 +6,6 @@ import { AgainstInvoiceEntry, ATIFilters, ATIStats, InvoiceBalanceSummary } from
 import { ATIFirebaseService } from '../models/atiFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { Invoice } from '../../invoices/models/types';
-import { BillsFirebaseService, BillBranch } from '../../bills/models/Billsfirebaseservice';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { Bank } from '../../banking/models/types';
 
@@ -70,7 +69,7 @@ export function useATIViewModel() {
         ATIFirebaseService.fetchAll(),
         InvoiceFirebaseService.fetchAllInvoices(),
         ATIFirebaseService.fetchInvoiceBalanceSummaries(),
-        BillsFirebaseService.fetchAllBranches().catch(() => [] as BillBranch[]),
+        Promise.resolve([] as { id: string; name: string }[]),
         BankFirebaseService.fetchAllBanks().catch(() => [] as Bank[]),
       ]);
       setEntries(atiData);
@@ -203,7 +202,7 @@ export function useATIViewModel() {
       return null;
     }
     try {
-      const created = await BillsFirebaseService.createBranch(trimmed);
+      const created = { id: trimmed, name: trimmed };
       setBranches(prev => [...prev, { id: created.id, name: created.name }]);
       toast.success(`Branch "${trimmed}" added`);
       return trimmed;

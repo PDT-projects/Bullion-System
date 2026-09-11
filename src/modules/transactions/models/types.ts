@@ -79,15 +79,22 @@ export interface Transaction {
   totalPaid?: number;
   isFullyCleared?: boolean;
   depositedToBank?: boolean;
-  attachments?: Attachment[];
+      attachments?: Attachment[];
+  // Bill-specific fields
+  billMonth?: string;
+  imageUrl?: string;
+   // Salary-specific fields
+  salaryCurrency?: string;
+  salaryAED?: number;
+  salaryPKR?: number;
   // Profit & Loss classification
   plMainCategory?: PLMainCategory;
   plSubCategory?: string;
   // Balance Sheet classification
   bsMainCategory?: BSMainCategory;
   bsSubCategory?: string;
-  // Linked record info
-  linkedType?: 'salary' | 'loan' | 'bill' | 'invoice' | 'commission' | 'manual';
+    // Linked record info
+  linkedType?: 'salary' | 'loan' | 'bill' | 'invoice' | 'commission' | 'manual' | 'inventory';
   linkedId?: string;
   linkedRef?: string;
   // Salary fields
@@ -193,6 +200,7 @@ export type AppNotificationType =
   | 'transaction_rejected'
   | 'payment_pending'
   | 'payment_cleared'
+  | 'user_registration_pending'
   | 'info';
 
 export interface AppNotification {
@@ -200,8 +208,11 @@ export interface AppNotification {
   type: AppNotificationType;
   title: string;
   message: string;
-  transactionId?: string;       // Firestore doc id
-  transactionRef?: string;      // human-readable TXN-XXXXXX
+  transactionId?: string;
+  transactionRef?: string;
+  userId?: string;
+  userEmail?: string;
+  userName?: string;
   isRead: boolean;
   createdAt: string;
   expiresAt?: string;
@@ -294,8 +305,7 @@ export interface DynamicCategory {
   //                                          e.g. Category='Utilities' → SubCat='Electricity Bill'
   // 'plMainCategory' / 'plSubCategory'     → P&L category tree
   // 'bsMainCategory' / 'bsSubCategory'     → Balance Sheet category tree
-  type: 'mainCategory' | 'subCategory' | 'subCategoryDetail' | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory';
-  // For 'subCategory' this is the parent mainCategory ('Cash Inflow' / 'Cash Outflow' / 'Loan').
+  type: 'mainCategory' | 'subCategory' | 'subCategoryDetail' | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory' | 'billCategory';  // For 'subCategory' this is the parent mainCategory ('Cash Inflow' / 'Cash Outflow' / 'Loan').
   // For 'subCategoryDetail' this is the parent subCategory string.
   parentCategory?: string;
   name: string;
