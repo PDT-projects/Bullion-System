@@ -101,6 +101,7 @@ export function QuickTransactionModal({
   const [amountReceived, setAmountReceived] = useState<number | ''>('');
   const [remitterName, setRemitterName] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Dropdown-managed data
@@ -124,8 +125,6 @@ export function QuickTransactionModal({
   const isInvoiceMisc     = type === 'Outflow' && category === INVOICE_MISC_EXPENSE_CATEGORY;
   const isSalesInvoice    = type === 'Inflow'  && category === SALES_INVOICE_CATEGORY;
   const isSoldGoodsPayment = type === 'Outflow' && category === SOLD_GOODS_PAYMENT_CATEGORY;
-
-  // ── Purchase Order: shipment picker ────────────────────────────────────────
   const isPurchaseOrder = type === 'Outflow' && category === PURCHASE_ORDER_CATEGORY;
 
   const [poSubKind, setPoSubKind]     = useState<PurchaseOrderSubKind>('Customs');
@@ -146,23 +145,12 @@ export function QuickTransactionModal({
       .finally(() => setShipLoading(false));
   }, [isPurchaseOrder]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Which shipments are offered, and the two gates are opposite.
-   *
-   * A supplier payment needs receiving finalised, because what is owed is built
-   * on received quantity and is not settled until then. A charge needs costing
-   * NOT finalised, because adding one afterwards would restate a landed cost
-   * someone has already used.
-   */
   const eligibleShipments = useMemo(() => {
     if (!isPurchaseOrder) return [];
     if (isSupplierPay) {
       return shipments.filter(sh =>
         sh.receivingStatus === 'Complete' && supplierRemaining(sh) > 0);
     }
-    // The picker lists a shipment under a kind until someone declares that kind
-    // finished. Costing finalisation no longer drives this — it has its own job,
-    // and it cannot happen until all four kinds are closed anyway.
     return shipments.filter(sh =>
       sh.status !== 'Cancelled' && !isChargeKindClosed(sh, poSubKind as ChargeKind));
   }, [isPurchaseOrder, isSupplierPay, shipments]);
@@ -172,18 +160,17 @@ export function QuickTransactionModal({
     [eligibleShipments, shipmentId],
   );
 
-  // Changing the sub-kind changes the list, so a shipment selected under the
-  // old one may no longer be offered. Clearing it is better than leaving a
-  // selection the dropdown cannot show.
   useEffect(() => { setShipmentId(''); }, [poSubKind]);
 
-  // Default the amount to what is still owed. It is the figure being settled
-  // nine times out of ten, and it stays editable for a part payment.
   useEffect(() => {
     if (!isSupplierPay || !selectedShipment) return;
     setTotalAmount(supplierRemaining(selectedShipment));
   }, [isSupplierPay, shipmentId]); // eslint-disable-line react-hooks/exhaustive-deps
-  /** Any invoice-linked category — the modal loads invoices + shows the
+
+  // Payable/Receivable: hides Branch and relabels the description field to
+  // "Purpose of Loan". Applies whenever the selected Category is Account
+  // Payable or Account Receivable, for either Inflow or Outflow.
+  const isPayableReceivable = category === 'Account Payable' || category === 'Account Receivable';  /** Any invoice-linked category — the modal loads invoices + shows the
    *  picker in all cases, and forks the save flow to the right service. */
   const needsInvoice = isInvoiceMisc || isSalesInvoice || isSoldGoodsPayment;
 
@@ -422,6 +409,7 @@ export function QuickTransactionModal({
     //  a slow/failed preview read must never block a legitimate save.)
     if (!category) { toast.error('Category is required'); return; }
     if (!totalAmount || Number(totalAmount) <= 0) { toast.error('Total amount must be greater than zero'); return; }
+    if (!attachment) { toast.error('Evidence attachment is required'); return; }
     if (selectedAccount.type === 'bank' && !selectedAccount.id) {
       toast.error('Pick a valid bank account'); return;
     }
@@ -626,6 +614,7 @@ export function QuickTransactionModal({
         branchName:        branchName || undefined,
         remitterName:      type === 'Inflow' && remitterName ? remitterName : undefined,
         attachmentUrl:     dataUrl,       // undefined when no file — stripped by deepStripUndefined on write
+        dueDate:           dueDate || undefined,
       } as Omit<Transaction, 'id'>;
 
       await TransactionFirebaseService.createTransaction(txData);
@@ -1192,7 +1181,7 @@ export function QuickTransactionModal({
 
           {/* Description */}
           <div>
-            <label style={label}>(Max 120 Characters)</label>
+            <label style={label}>{isPayableReceivable ? 'Purpose of Loan' : '(Max 120 Characters)'}</label>
             <input
               value={description}
               onChange={e => setDescription(e.target.value.slice(0, MAX_DESC))}
@@ -1204,7 +1193,8 @@ export function QuickTransactionModal({
             </div>
           </div>
 
-          {/* Branch */}
+          {/* Branch — hidden when the Category is Account Payable/Account Receivable */}
+          {!isPayableReceivable && (
           <div>
             <label style={label}>Branch</label>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -1253,6 +1243,18 @@ export function QuickTransactionModal({
                 </button>
               </div>
             )}
+          </div>
+          )}
+
+          {/* Due Date */}
+          <div>
+            <label style={label}>Due Date <span style={{ color: '#94a3b8', fontWeight: 500 }}>(optional)</span></label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              style={inp}
+            />
           </div>
 
           {/* Amounts */}
@@ -1324,12 +1326,12 @@ export function QuickTransactionModal({
             </div>
           )}
 
-          {/* Attachment */}
+          {/* Evidence */}
           <div>
-            <label style={label}>Attachment / Receipt <span style={{ color: '#94a3b8', fontWeight: 500 }}>(optional)</span></label>
+            <label style={label}>Evidence <span style={{ color: '#dc2626' }}>*</span></label>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 12px', border: `1px dashed ${attachment ? '#65a30d' : '#cbd5e1'}`,
+              padding: '10px 12px', border: `1px dashed ${attachment ? '#65a30d' : '#dc2626'}`,
               borderRadius: 8, backgroundColor: attachment ? '#f7fee7' : '#f8fafc',
             }}>
               <label style={{

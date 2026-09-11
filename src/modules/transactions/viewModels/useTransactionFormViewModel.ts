@@ -59,6 +59,7 @@ export interface UseTransactionFormViewModelReturn {
   setChequeBank: (v: string) => void;
   manualDate: string;
   setManualDate: (v: string) => void;
+  isPayableReceivable: boolean;
   enableMultiple: boolean;
   transactionItems: TransactionItem[];
   transactionId: string;
@@ -150,8 +151,14 @@ const emptyItem = (type: string): TransactionItem => ({
   id: Date.now().toString(),
   mainCategory: type, subCategory: '', detailCategory: '',
   amount: 0, amountPaid: 0, remainingAmount: 0,
-  paymentStatus: 'Full', paidBy: '', paidTo: '', note: '',
+  paymentStatus: 'Full', paidBy: '', paidTo: '', note: '', dueDate: '',
 });
+
+/** Sub-categories that represent a Payable/Receivable entry. When any item in
+ *  the form has one of these selected: the Location/Branch field is hidden
+ *  (not applicable) and the Note/Description field is relabeled to
+ *  "Purpose of Loan". */
+export const PAYABLE_RECEIVABLE_SUB_CATEGORIES = new Set(['Account Payable', 'Account Receivable']);
 
 /** Generate a secure random token for approval email links */
 function generateToken(): string {
@@ -309,6 +316,7 @@ export function useTransactionFormViewModel(): UseTransactionFormViewModelReturn
               paidBy:          tx.paidBy          || '',
               paidTo:          tx.paidTo          || '',
               note:            tx.note            || '',
+              dueDate:         tx.dueDate         || '',
             }]);
           }
         } else {
@@ -548,10 +556,19 @@ const getSuggestedClassification = (
     [currency]
   );
 
+  // ── Payable/Receivable detection ────────────────────────────────────────────
+  // When any item's sub-category is Account Payable/Account Receivable, the
+  // Location/Branch field is not applicable and gets hidden, and the
+  // Note/Description field is relabeled to "Purpose of Loan" in the view.
+  const isPayableReceivable = useMemo(
+    () => transactionItems.some(item => PAYABLE_RECEIVABLE_SUB_CATEGORIES.has(item.subCategory)),
+    [transactionItems]
+  );
+
   // ── Validation ──────────────────────────────────────────────────────────────
   const validate = useCallback(() => {
     const errors: string[] = [];
-    if (!office) errors.push('Select an office/branch');
+    if (!office && !isPayableReceivable) errors.push('Select an office/branch');
     if (!date)   errors.push('Select a date');
     for (const [i, item] of transactionItems.entries()) {
       const n = transactionItems.length > 1 ? ` (item ${i + 1})` : '';
@@ -561,6 +578,7 @@ const getSuggestedClassification = (
         if (item.amountPaid < 0)             errors.push(`Amount paid cannot be negative${n}`);
         if (item.amountPaid > item.amount)   errors.push(`Amount paid cannot exceed total amount${n}`);
       }
+      if (!editingTx && !item.receipt)      errors.push(`Evidence attachment is required${n}`);
     }
     if (paymentMode === 'Bank'   && !selectedBank)          errors.push('Select a bank for bank transactions');
     if (paymentMode === 'Cheque' && !chequeNumber.trim())   errors.push('Enter the cheque number');
@@ -570,7 +588,7 @@ const getSuggestedClassification = (
       errors.push('Classification required: select at least a P&L category or a Balance Sheet category (with sub-category)');
     }
     return errors;
-  }, [office, date, transactionItems, paymentMode, selectedBank, chequeNumber, transactionType, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory]);
+  }, [office, date, transactionItems, paymentMode, selectedBank, chequeNumber, transactionType, plMainCategory, plSubCategory, bsMainCategory, bsSubCategory, isPayableReceivable, editingTx]);
 
   const updateBankBalance = useCallback(async (bankId: string, amount: number, isInflow: boolean) => {
     if (!bankId) return;
@@ -601,24 +619,29 @@ const getSuggestedClassification = (
 
         // CurrencyAmountInput in the View always stores AED in item.amount /
         // item.amountPaid, regardless of which currency the user typed in.
-        // Firestore's `amount` field is PKR-canonical (used by dashboards,
-        // reports, etc.), so it must be converted here — not stored as-is.
-        const amountPKR     = +convertCurrency(item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
-        const amountPaidPKR = +convertCurrency(item.amountPaid || 0, 'AED', 'PKR', currencyRates as any).toFixed(2);
-        const remainingPKR  = Math.max(0, amountPKR - amountPaidPKR);
+        // Firestore's `amount` field is AED-canonical (used by dashboards,
+        // Balance Sheet, reports, etc.) — save it as-is, no PKR conversion.
+        // (Previously this was converted to PKR here, which meant every
+        // amount you typed got scaled ~76x before landing in Firestore,
+        // and every report reading `amount` back out treated that inflated
+        // number as if it were already AED.)
+        const amountAED     = +Number(item.amount).toFixed(2);
+        const amountPaidAED = +Number(item.amountPaid || 0).toFixed(2);
+        const remainingAED  = Math.max(0, amountAED - amountPaidAED);
 
         const updatedData: Partial<Transaction> = {
           date:            effectiveDate,
           mainCategory:    transactionType,
           subCategory:     item.subCategory,
           detailCategory:  item.detailCategory,
-          amount:          amountPKR,
-          amountPaid:      amountPaidPKR,
-          remainingAmount: remainingPKR,
+          amount:          amountAED,
+          amountPaid:      amountPaidAED,
+          remainingAmount: remainingAED,
           paymentStatus:   item.paymentStatus,
           paidBy:          item.paidBy,
           paidTo:          item.paidTo,
           note:            item.note,
+          dueDate:         item.dueDate || undefined,
           mode:            paymentMode,
           bankId:          paymentMode === 'Bank' ? selectedBank : undefined,
           chequeNumber:    paymentMode === 'Cheque' ? chequeNumber : undefined,
@@ -638,7 +661,7 @@ const getSuggestedClassification = (
         firstTxId = editingTx.transactionId || editingTx.id;
 
         if (paymentMode === 'Bank') {
-          await updateBankBalance(selectedBank, amountPKR, isInflow);
+          await updateBankBalance(selectedBank, amountAED, isInflow);
         }
       } else {
         // ── Create mode ───────────────────────────────────────────────────
@@ -675,8 +698,7 @@ const getSuggestedClassification = (
               });
               if (idx === 0) firstTxId = result.transactionId;
               if (paymentMode === 'Bank' && selectedBank) {
-                const amountPKR = +convertCurrency(amountAED, 'AED', 'PKR', currencyRates as any).toFixed(2);
-                await updateBankBalance(selectedBank, amountPKR, false); // outflow
+                await updateBankBalance(selectedBank, amountAED, false); // outflow
               }
             } catch (err: any) {
               console.error('[Transaction VM] Supplier payment failed:', err);
@@ -714,15 +736,14 @@ const getSuggestedClassification = (
 
           // CurrencyAmountInput in the View always stores AED in item.amount /
           // item.amountPaid, regardless of which currency the user typed in.
-          // Firestore's `amount` field is PKR-canonical (used by dashboards,
-          // reports, etc.), so it must be converted here before saving —
-          // otherwise an AED value gets saved as if it were already PKR.
+          // Firestore's `amount` field is AED-canonical (used by dashboards,
+          // Balance Sheet, reports, etc.) — save it as-is, no PKR conversion.
           const inputCurrency  = (item as any).inputCurrency || 'AED';
-          const amountPKR      = +convertCurrency(item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
-          const amountPaidPKR  = +convertCurrency(item.amountPaid || item.amount, 'AED', 'PKR', currencyRates as any).toFixed(2);
-          const remainingPKR   = item.remainingAmount
-            ? +convertCurrency(item.remainingAmount, 'AED', 'PKR', currencyRates as any).toFixed(2)
-            : Math.max(0, amountPKR - amountPaidPKR);
+          const amountAED2     = +Number(item.amount).toFixed(2);
+          const amountPaidAED  = +Number(item.amountPaid || item.amount).toFixed(2);
+          const remainingAED   = item.remainingAmount
+            ? +Number(item.remainingAmount).toFixed(2)
+            : Math.max(0, amountAED2 - amountPaidAED);
 
           const effectiveDate = manualDate.trim() || date;
           const txData: Omit<Transaction, 'id'> = {
@@ -732,15 +753,16 @@ const getSuggestedClassification = (
             mainCategory:    transactionType,
             subCategory:     item.subCategory,
             detailCategory:  item.detailCategory,
-            // PKR-converted amounts are the authoritative stored values;
-            // originals (as typed, in inputCurrency) are preserved below.
-            amount:          amountPKR,
-            amountPaid:      amountPaidPKR,
-            remainingAmount: remainingPKR,
+            // AED is the authoritative stored value now; originals (as typed,
+            // in inputCurrency) are preserved below for display fidelity.
+            amount:          amountAED2,
+            amountPaid:      amountPaidAED,
+            remainingAmount: remainingAED,
             paymentStatus:   item.paymentStatus,
             paidBy:          item.paidBy,
             paidTo:          item.paidTo,
             note:            item.note,
+            dueDate:         item.dueDate || undefined,
             mode:            paymentMode,
             bankId:          paymentMode === 'Bank'    ? selectedBank  : undefined,
             chequeNumber:    paymentMode === 'Cheque'  ? chequeNumber  : undefined,
@@ -764,7 +786,7 @@ const getSuggestedClassification = (
           if (idx === 0) firstTxId = resolvedId;
 
           if (paymentMode === 'Bank' && selectedBank) {
-            await updateBankBalance(selectedBank, amountPKR, isInflow);
+            await updateBankBalance(selectedBank, amountAED2, isInflow);
           }
         }
       }
@@ -963,6 +985,7 @@ const getSuggestedClassification = (
     setEnableMultiple, updateItem, addItem, removeItem,
     handleSave, handleCancel,
     manualDate, setManualDate,
+    isPayableReceivable,
     formatCurrency: formatCurrencyLocal,
     formatDateDisplay,
     duplicateIdError, setDuplicateIdError,

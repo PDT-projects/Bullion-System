@@ -249,21 +249,10 @@ export function InventoryDashboardView({
   const [invoicePreviewUrl,    setInvoicePreviewUrl]    = useState<string | null>(null);
   const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
   const [invoicePreviewNumber, setInvoicePreviewNumber] = useState<string>('');
-    const [invoicePreviewInvoice, setInvoicePreviewInvoice] = useState<any>(null);
+  const [invoicePreviewInvoice, setInvoicePreviewInvoice] = useState<any>(null);
 
-  // Invoices saved before product images existed have no imageUrls on their
-  // rows. Passing the live product list lets the PDF generator look the image
-  // up by productId and render it anyway.
-  const [pdfProducts, setPdfProducts] = useState<any[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    InventoryFirebaseService.fetchAllProducts()
-      .then(list => { if (!cancelled) setPdfProducts(list as any[]); })
-      .catch(err => console.warn('[InventoryDashboard] PDF product fetch failed:', err));
-    return () => { cancelled = true; };
-  }, []);
-
-  const openInvoicePreview = useCallback(async (invoiceNumber: string) => {  if (!invoiceNumber) return;
+  const openInvoicePreview = useCallback(async (invoiceNumber: string) => {
+    if (!invoiceNumber) return;
     setInvoicePreviewNumber(invoiceNumber);
     setInvoicePreviewLoading(true);
     try {
@@ -274,17 +263,18 @@ export function InventoryDashboardView({
         return;
       }
       setInvoicePreviewInvoice(inv);
-            const blob = await generateInvoicePdf(inv as any, { enrichWithProducts: pdfProducts });
+      const blob = await generateInvoicePdf(inv as any);
       const url  = URL.createObjectURL(blob);
       setInvoicePreviewUrl(url);
     } catch (err) {
       console.error('[InventoryDashboard] Invoice PDF preview failed:', err);
       toast.error('Failed to open invoice PDF');
       setInvoicePreviewNumber('');
-       } finally {
+    } finally {
       setInvoicePreviewLoading(false);
     }
-  }, [pdfProducts]);
+  }, []);
+
   const closeInvoicePreview = useCallback(() => {
     if (invoicePreviewUrl) URL.revokeObjectURL(invoicePreviewUrl);
     setInvoicePreviewUrl(null);
@@ -514,18 +504,20 @@ export function InventoryDashboardView({
                 No inventory items match your filters.
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <div style={{ maxHeight: '68vh', overflow: 'auto', position: 'relative' }}>
+                {/* borderSpacing 0 with separate borders — sticky headers are
+                    unreliable under border-collapse. */}
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 10 }}>
+                    <tr>
                       {/* Checkbox all */}
-                      <th style={{ padding: '9px 12px', width: 36, textAlign: 'center' }}>
+                      <th style={{ padding: '9px 12px', width: 36, textAlign: 'center', backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 10 }}>
                         <input type="checkbox" checked={allChecked} ref={el => { if (el) el.indeterminate = !allChecked && someChecked; }}
                           onChange={toggleAll}
                           style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#fff' }} />
                       </th>
                       {HEADERS.slice(1).map(h => (
-                        <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#fff', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                        <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#fff', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 10 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -537,7 +529,7 @@ export function InventoryDashboardView({
                       const condS = conditionStyle(r.condition);
                       return (
                         <tr key={key}
-                          style={{ borderBottom: idx < displayed.length - 1 ? '1px solid #f1f5f9' : 'none', backgroundColor: checked ? '#f0f9ff' : idx % 2 === 1 ? '#fafafa' : '#fff', transition: 'background 0.1s' }}
+                          style={{ boxShadow: idx < displayed.length - 1 ? 'inset 0 -1px 0 #f1f5f9' : 'none', backgroundColor: checked ? '#f0f9ff' : idx % 2 === 1 ? '#fafafa' : '#fff', transition: 'background 0.1s' }}
                           onMouseEnter={e => { if (!checked) (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = checked ? '#f0f9ff' : idx % 2 === 1 ? '#fafafa' : '#fff'; }}
                         >

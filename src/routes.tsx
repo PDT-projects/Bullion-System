@@ -1,5 +1,4 @@
 // routes.tsx — updated
-// CHANGE: Added /payroll/* unified routes for the merged Payroll module.
 //         Old /salary/* and /commission/* routes kept as redirects for
 //         any bookmarks or links that still point to them.
 
@@ -11,13 +10,7 @@ import { Dashboard } from './features/finance/Dashboard';
 import { ReportsPage } from './features/finance/ReportsPage';
 
 import { EmployeeListWrapper, EmployeeCreateWrapper, EmployeeEditWrapper, EmployeeDeleteWrapper } from './modules/employee';
-import { LoanDashboardWrapper, LoanListWrapper, LoanFormWrapper, LoanPaymentWrapper } from './modules/loans';
 
-// ── Payroll (unified) ──────────────────────────────────────────────────────
-import { PayrollDashboardWrapper } from './modules/payroll';
-// Salary + Commission wrappers are used internally by PayrollDashboardWrapper — no direct import needed here
-
-import { BillsListWrapper, BillsCreateWrapper, BillsEditWrapper, BillsDeleteWrapper } from './modules/bills';
 import {
   BankingDashboardWrapper, BankListWrapper, BankCreateWrapper, BankEditWrapper, BankDeleteWrapper,
   TransferListWrapper, TransferCreateWrapper, CashListWrapper, CashCreateWrapper,
@@ -37,14 +30,12 @@ import {
   TransactionListWrapper, TransactionCreateWrapper, TransactionEditWrapper,
   TransactionDeleteWrapper, PendingPaymentsWrapper,
 } from './modules/transactions';
-import { BudgetListWrapper, BudgetCreateWrapper, BudgetEditWrapper, BudgetDeleteWrapper } from './modules/budget';
 import { BankActivityView } from './modules/banking/views/BankActivityView';
 import { PayableToFuturisticWrapper } from './modules/Payable-to-futuristic';
 import { Sidebar }  from './layouts/Sidebar';
 import { TopBar }   from './layouts/TopBar';
 import { useAuth }  from './providers/context/AuthContext';
 import { UserManagement } from './modules/user-management';
-import { AssetsManagement } from './modules/assets-management';
 import { PurchasedOrdersView, ShipmentCreateView, ShipmentDetailsView } from './modules/purchased-orders';
 import { ProtectedRoute as ScreenProtectedRoute } from './modules/user-management/components/protectedroute';
 
@@ -104,23 +95,6 @@ function EmployeeCreateRoute() { return <EmployeeCreateWrapper />; }
 function EmployeeEditRoute()   { return <EmployeeEditWrapper />; }
 function EmployeeDeleteRoute() { return <EmployeeDeleteWrapper />; }
 
-function LoanDashboardRoute()        { return <LoanDashboardWrapper />; }
-function LoanListRoute()             { return <LoanListWrapper />; }
-function LoanListPayableRoute()      { return <LoanListWrapper defaultType="Payable" />; }
-function LoanListReceivableRoute()   { return <LoanListWrapper defaultType="Receivable" />; }
-function LoanFormRoute()             { return <LoanFormWrapper />; }
-function LoanFormPayableRoute()      { return <LoanFormWrapper defaultType="Payable" />; }
-function LoanFormReceivableRoute()   { return <LoanFormWrapper defaultType="Receivable" />; }
-function LoanPaymentRoute()          { return <LoanPaymentWrapper />; }
-
-// ── Payroll ────────────────────────────────────────────────────────────────
-function PayrollDashboardRoute() { return <PayrollDashboardWrapper />; }
-
-function BillsListRoute()   { return <BillsListWrapper />; }
-function BillsCreateRoute() { return <BillsCreateWrapper />; }
-function BillsEditRoute()   { return <BillsEditWrapper />; }
-function BillsDeleteRoute() { return <BillsDeleteWrapper />; }
-
 function BankingDashboardRoute() { return <BankingDashboardWrapper />; }
 function BankListRoute()         { return <BankListWrapper />; }
 function BankCreateRoute()       { return <BankCreateWrapper />; }
@@ -166,10 +140,6 @@ function TransactionEditRoute()   { return <TransactionEditWrapper />; }
 function TransactionDeleteRoute() { return <TransactionDeleteWrapper />; }
 function PendingPaymentsRoute()   { return <PendingPaymentsWrapper />; }
 
-function BudgetListRoute()   { return <BudgetListWrapper />; }
-function BudgetCreateRoute() { return <BudgetCreateWrapper />; }
-function BudgetEditRoute()   { return <BudgetEditWrapper />; }
-function BudgetDeleteRoute() { return <BudgetDeleteWrapper />; }
 
 function PayableToFuturisticRoute() { return <PayableToFuturisticWrapper />; }
 
@@ -194,53 +164,10 @@ export const router = createBrowserRouter([
   },
 
   // ── Loans ──────────────────────────────────────────────────────────────────
-  {
-    path: '/loans',
-    element: (<ProtectedRoute><OutletLayout activeModule="loans" /></ProtectedRoute>),
-    children: [
-      { index: true,              element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanDashboardRoute /></ScreenProtectedRoute> },
-      { path: 'all',              element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanListRoute /></ScreenProtectedRoute> },
-      { path: 'payable',          element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanListPayableRoute /></ScreenProtectedRoute> },
-      { path: 'receivable',       element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanListReceivableRoute /></ScreenProtectedRoute> },
-      { path: 'new',              element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanFormRoute /></ScreenProtectedRoute> },
-      { path: 'create',           element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanFormRoute /></ScreenProtectedRoute> },
-      { path: 'create-payable',   element: <ScreenProtectedRoute requiredScreen="Loans Payable"><LoanFormPayableRoute /></ScreenProtectedRoute> },
-      { path: 'create-receivable',element: <ScreenProtectedRoute requiredScreen="Loans Receivable"><LoanFormReceivableRoute /></ScreenProtectedRoute> },
-      { path: ':id/payment',      element: <ScreenProtectedRoute requiredScreen="Loans Dashboard"><LoanPaymentRoute /></ScreenProtectedRoute> },
-    ],
-  },
 
-  // ── PAYROLL (unified single page — all navigation is internal via tabs) ───────
-  {
-    path: '/payroll',
-    element: (
-      <ProtectedRoute>
-        <AppLayout activeModule="payroll">
-          <ScreenProtectedRoute requiredScreen="Salary Dashboard">
-            <PayrollDashboardRoute />
-          </ScreenProtectedRoute>
-        </AppLayout>
-      </ProtectedRoute>
-    ),
-  },
-
-  // ── OLD /salary/* and /commission/* — all redirect to /payroll ──────────────
-  { path: '/salary',     element: <Navigate to="/payroll" replace /> },
-  { path: '/salary/*',   element: <Navigate to="/payroll" replace /> },
-  { path: '/commission', element: <Navigate to="/payroll" replace /> },
-  { path: '/commission/*', element: <Navigate to="/payroll" replace /> },
 
   // ── Bills ──────────────────────────────────────────────────────────────────
-  {
-    path: '/bills',
-    element: (<ProtectedRoute><OutletLayout activeModule="bills" /></ProtectedRoute>),
-    children: [
-      { index: true,        element: <ScreenProtectedRoute requiredScreen="Bills List"><BillsListRoute /></ScreenProtectedRoute> },
-      { path: 'create',     element: <ScreenProtectedRoute requiredScreen="Create Bill"><BillsCreateRoute /></ScreenProtectedRoute> },
-      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Bill"><BillsEditRoute /></ScreenProtectedRoute> },
-      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Bill"><BillsDeleteRoute /></ScreenProtectedRoute> },
-    ],
-  },
+ 
 
   // ── Banking ────────────────────────────────────────────────────────────────
   {
@@ -341,24 +268,7 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // ── Budgets ────────────────────────────────────────────────────────────────
-  {
-    path: '/budgets',
-    element: (<ProtectedRoute><OutletLayout activeModule="budgets" /></ProtectedRoute>),
-    children: [
-      { index: true,        element: <ScreenProtectedRoute requiredScreen="Budgets List"><BudgetListRoute /></ScreenProtectedRoute> },
-      { path: 'create',     element: <ScreenProtectedRoute requiredScreen="Create Budget"><BudgetCreateRoute /></ScreenProtectedRoute> },
-      { path: ':id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Budget"><BudgetEditRoute /></ScreenProtectedRoute> },
-      { path: ':id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Budget"><BudgetDeleteRoute /></ScreenProtectedRoute> },
-    ],
-  },
-
   // ── Other ──────────────────────────────────────────────────────────────────
-  {
-    path: '/assets-management',
-    element: (<ProtectedRoute><OutletLayout activeModule="assets-management" /></ProtectedRoute>),
-    children: [{ index: true, element: <ScreenProtectedRoute requiredScreen="Assets Management"><AssetsManagement /></ScreenProtectedRoute> }],
-  },
   {
     path: '/user-management',
     element: (<ProtectedRoute><OutletLayout activeModule="user-management" /></ProtectedRoute>),

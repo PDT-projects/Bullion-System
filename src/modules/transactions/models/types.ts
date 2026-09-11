@@ -79,7 +79,14 @@ export interface Transaction {
   totalPaid?: number;
   isFullyCleared?: boolean;
   depositedToBank?: boolean;
-  attachments?: Attachment[];
+      attachments?: Attachment[];
+  // Bill-specific fields
+  billMonth?: string;
+  imageUrl?: string;
+   // Salary-specific fields
+  salaryCurrency?: string;
+  salaryAED?: number;
+  salaryPKR?: number;
   // Profit & Loss classification
   plMainCategory?: PLMainCategory;
   plSubCategory?: string;
@@ -188,6 +195,7 @@ export interface TransactionItem {
   paidTo: string;
   note: string;
   receipt?: File | null;
+  dueDate?: string;
 }
 
 export interface TransactionFilters {
@@ -234,14 +242,11 @@ export interface AppNotification {
   type: AppNotificationType;
   title: string;
   message: string;
-  transactionId?: string;       // Firestore doc id
-  transactionRef?: string;      // human-readable TXN-XXXXXX
-  // NotificationBell renders a registration approval card from these three.
-  // They were written and read at runtime but absent from the type, so every
-  // reference to them read as an error.
-  userId?: string;              // for user registration notifications
-  userEmail?: string;           // registering user's email
-  userName?: string;            // registering user's name
+  transactionId?: string;
+  transactionRef?: string;
+  userId?: string;
+  userEmail?: string;
+  userName?: string;
   isRead: boolean;
   createdAt: string;
   expiresAt?: string;
@@ -283,7 +288,7 @@ export const SALES_INVOICE_CATEGORY = 'Sales Invoice';
  *  routes the save through InvoiceSupplierPaymentService.recordPayment which
  *  updates invoice.supplierPaidAmount / supplierPayments[] AND books the ledger
  *  entry — modal must NOT double-book. */
-export const SOLD_GOODS_PAYMENT_CATEGORY = 'Sold Goods Payment';
+export const SOLD_GOODS_PAYMENT_CATEGORY = 'Supplier Cost';
 
 /**
  * Special Outflow category that opens a shipment picker.
@@ -337,7 +342,7 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
     'Grocery & Stationery',
     'Advertising and Marketing',
     'Purchase Order',
-    'Sold Goods Payment',             // Special: opens invoice picker (supplier payment)
+    'Supplier Cost',                  // Special: opens invoice picker (supplier payment)
     'Logistics & Freight',
     'Bank Charges',
     'Travelling, Accommodations & Food',

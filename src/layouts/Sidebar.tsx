@@ -3,8 +3,8 @@ import { NavLink } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   Building2,LayoutDashboard, ChevronDown, ChevronRight, Package, FileText,  DollarSign, BarChart2, ArrowLeftRight, FilePlus, List,
-  Users, Landmark, Receipt, Calculator, HandCoins, Boxes,
-  Layers, ShieldCheck,Ship,
+  Landmark, Receipt,
+  ShieldCheck, Ship,
 } from 'lucide-react';
 
 import { useAuth } from '../providers/context/AuthContext';
@@ -18,7 +18,6 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'invoices': 'Invoices List',
   'dummy-invoices': 'Dummy Invoices',
   'against-invoice': 'Against Invoice',
-  'payroll': 'Salary Dashboard',
   'transactions-list': 'Transaction List',
   'banking': 'Banking Dashboard',
   'bank-accounts': 'Bank Accounts List',
@@ -28,8 +27,6 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'employees': 'Employees List',
   'loans': 'Loans Dashboard',
   'bills': 'Bills List',
-  'budgets': 'Budgets List',
-  'assets': 'Assets Management',
   'payable-futuristic': 'Payable to Futuristic',
   'user-management': 'User Management',
 };
@@ -74,13 +71,6 @@ const menuItems: MenuItem[] = [
       { id: 'cash-in-hand', name: 'Cash Ledger', icon: DollarSign, path: '/banking/cash' },
     ],
   },
-  { id: 'payroll', name: 'Payrolls', icon: DollarSign, path: '/payroll' },
-  { id: 'employees', name: 'Employees', icon: Users, path: '/employees' },
-  { id: 'loans', name: 'Loans & Advances', icon: HandCoins, path: '/loans' },
-  { id: 'bills', name: 'Bills', icon: Receipt, path: '/bills' },
-  { id: 'budgets', name: 'Budgets', icon: Calculator, path: '/budgets' },
-  { id: 'assets', name: 'Assets', icon: Boxes, path: '/assets-management' },
-  { id: 'payable-futuristic', name: 'Futuristic Payables', icon: Layers, path: '/payable-to-futuristic' },
   { id: 'user-management', name: 'User Management', icon: ShieldCheck, path: '/user-management' },
 ];
 

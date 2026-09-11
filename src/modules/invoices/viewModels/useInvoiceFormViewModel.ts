@@ -39,7 +39,6 @@ import { generateInvoicePdf, downloadInvoicePdf } from '../models/invoicePdfServ
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 import { EmployeeFirebaseService } from '../../employee/models/employeeFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
-import { autoCalculateCommissionOnInvoiceSave } from '../../commission/models/Commissionautoservice';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { createFuturisticPayablesFromInvoice } from '../../Payable-to-futuristic/models/futuristicPayableBridge';
 
@@ -789,8 +788,6 @@ try { await downloadInvoicePdf(toCustomerInvoice(saved), { enrichWithProducts: a
       generateAndSavePdf(saved);
       // Commission only fires once an invoice is actually Paid (won't trigger here).
       if (saved.status === 'Paid' && saved.salesperson) {
-        autoCalculateCommissionOnInvoiceSave(saved.id, invoiceData.createdBy || 'Admin')
-          .catch(err => console.warn('[AutoCommission] Background failed:', err));
       }
 
       await new Promise<void>(resolve => setTimeout(resolve, 300));

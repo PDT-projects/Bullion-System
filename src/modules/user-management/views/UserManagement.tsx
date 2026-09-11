@@ -4,20 +4,20 @@ import { toast } from 'sonner';
 import {
   Trash2, Edit2, ChevronDown, ChevronUp, AlertCircle,
   Eye, EyeOff, UserPlus, Users, X, Check, Shield,
-  Clock, CheckCircle, XCircle, UserCheck
+  Clock, CheckCircle, XCircle, UserCheck, RotateCcw, Loader2
 } from 'lucide-react';
+import { factoryReset, countAllRecords, type ResetProgress } from '../models/factoryResetService';
 import {
   createUser,
   getAllUsers,
   deleteUser,
+    updateUserPermissions,
+  updateUserBranch,
   approveUser,
   rejectUser,
-  updateUserPermissions,
-  updateUserBranch,
   type UserData,
   type Screen,
   ALL_SCREEN_GROUPS,
-  VIEW_ONLY_SCREENS
 } from '../models/userService';
 
 import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
@@ -47,6 +47,43 @@ interface ApprovingUser {
 }
 
 export function UserManagement() {
+  // ── Factory reset ──────────────────────────────────────────────────────
+  // Gated on super_admin: this wipes every record in the system, and the
+  // screen itself is reachable by anyone whose permissions include it.
+  const [resetOpen,     setResetOpen]     = useState(false);
+  const [resetCounts,   setResetCounts]   = useState<{ total: number; perCollection: Record<string, number> } | null>(null);
+  const [resetCounting, setResetCounting] = useState(false);
+  const [resetConfirm,  setResetConfirm]  = useState('');
+  const [resetting,     setResetting]     = useState(false);
+  const [resetStep,     setResetStep]     = useState('');
+  const [resetDone,     setResetDone]     = useState<ResetProgress[] | null>(null);
+
+  const openReset = async () => {
+    setResetOpen(true); setResetConfirm(''); setResetDone(null);
+    setResetCounting(true);
+    try { setResetCounts(await countAllRecords()); }
+    catch { setResetCounts(null); }
+    finally { setResetCounting(false); }
+  };
+
+  const runReset = async () => {
+    setResetting(true); setResetStep('Starting…');
+    try {
+      const results = await factoryReset((p, i, total) => {
+        setResetStep(`${i} / ${total} · ${p.collection} — ${p.deleted} deleted`);
+      });
+      setResetDone(results);
+      const failed  = results.filter(r => r.error);
+      const deleted = results.reduce((s, r) => s + r.deleted, 0);
+      if (failed.length === 0) toast.success(`System cleared — ${deleted} records deleted`);
+      else toast.warning(`${deleted} deleted · ${failed.length} collection(s) blocked — see the list`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Factory reset failed');
+    } finally {
+      setResetting(false); setResetStep('');
+    }
+  };
+
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'pending' | 'active' | 'create'>('active');
   const [formData, setFormData] = useState<FormState>({ email: '', password: '', branch: '' });
@@ -147,11 +184,6 @@ export function UserManagement() {
     }
   };
 
-  const handleSelectViewOnly = () => {
-    setPermissions([...VIEW_ONLY_SCREENS]);
-    toast.info('View-only screens selected');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError('');
@@ -186,25 +218,13 @@ export function UserManagement() {
     }
   };
 
-  const handleQuickApproveViewOnly = async (user: UserData) => {
-    try {
-      const branch = user.branch || 'Saudia';
-      await approveUser(user.uid, branch, VIEW_ONLY_SCREENS, getCurrentUserEmail());
-      await clearPendingUserNotifications(user.uid);
-      toast.success(`User "${user.email}" approved with View-Only permissions!`);
-      await fetchUsers();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to approve user');
-    }
-  };
-
   const handleOpenApproveModal = (user: UserData) => {
     setApprovingUser({
       uid: user.uid,
       email: user.email,
       fullName: user.fullName,
       branch: user.branch || 'Saudia',
-      permissions: user.permissions && user.permissions.length > 0 ? [...user.permissions] : [...VIEW_ONLY_SCREENS],
+      permissions: user.permissions && user.permissions.length > 0 ? [...user.permissions] : [],
     });
   };
 
@@ -339,23 +359,34 @@ export function UserManagement() {
             </h1>
             <p className="text-gray-500 text-sm mt-1">Approve registered users, manage branch access, and control read/write permissions</p>
           </div>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            ← Back to Dashboard
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Super-admin only. Placed apart from the tabs and coloured as a
+                danger action so it is never confused with a normal control. */}
+            <button
+                onClick={openReset}
+                title="Delete every record in the system"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors shadow-sm"
+                style={{ backgroundColor: '#fee2e2', color: '#7f1d1d', border: '2px solid #b91c1c' }}
+              >
+                <RotateCcw size={15} /> Factory Reset
+              </button>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+            >
+              ← Back to Dashboard
+            </button>
+          </div>
         </div>
 
         {/* Tabs Bar */}
         <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              activeTab === 'pending'
-                ? 'bg-amber-500 text-white shadow-md'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all"
+            style={activeTab === 'pending'
+              ? { backgroundColor: '#fef3c7', color: '#0f172a', border: '2px solid #d97706', boxShadow: 'inset 0 -2px 0 #d97706' }
+              : { backgroundColor: '#ffffff', color: '#475569', border: '1px solid #e5e7eb' }}
           >
             <Clock size={16} />
             Pending Approvals
@@ -368,11 +399,10 @@ export function UserManagement() {
 
           <button
             onClick={() => setActiveTab('active')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              activeTab === 'active'
-                ? 'bg-slate-800 text-white shadow-md'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all"
+            style={activeTab === 'active'
+              ? { backgroundColor: '#e2e8f0', color: '#0f172a', border: '2px solid #64748b', boxShadow: 'inset 0 -2px 0 #64748b' }
+              : { backgroundColor: '#ffffff', color: '#475569', border: '1px solid #e5e7eb' }}
           >
             <Users size={16} />
             Active Users ({activeUsers.length})
@@ -380,11 +410,10 @@ export function UserManagement() {
 
           <button
             onClick={() => setActiveTab('create')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              activeTab === 'create'
-                ? 'bg-slate-800 text-white shadow-md'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all"
+            style={activeTab === 'create'
+              ? { backgroundColor: '#e2e8f0', color: '#0f172a', border: '2px solid #64748b', boxShadow: 'inset 0 -2px 0 #64748b' }
+              : { backgroundColor: '#ffffff', color: '#475569', border: '1px solid #e5e7eb' }}
           >
             <UserPlus size={16} />
             Add New User
@@ -447,17 +476,10 @@ export function UserManagement() {
 
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
-                          onClick={() => handleQuickApproveViewOnly(user)}
-                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
-                          title="Grant view-only access to all dashboards and reports"
-                        >
-                          <Check size={14} /> Quick Approve (View-Only)
-                        </button>
-                        <button
                           onClick={() => handleOpenApproveModal(user)}
                           className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5"
                         >
-                          <UserCheck size={14} /> Custom Approve & Branch
+                          <UserCheck size={14} /> Approve & Set Access
                         </button>
                         <button
                           onClick={() => handleRejectUser(user.uid, user.email)}
@@ -589,16 +611,7 @@ export function UserManagement() {
                         <div className="p-5 border-t border-gray-200 bg-gray-50 space-y-5">
                           <div className="flex items-center justify-between">
                             <h3 className="font-semibold text-gray-800 text-sm">Edit Screen Access & Permissions</h3>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setEditingUser({ ...editingUser, permissions: [...VIEW_ONLY_SCREENS] })}
-                                className="text-xs px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg hover:bg-amber-200 transition-colors"
-                              >
-                                Set View-Only Access
-                              </button>
-                              <span className="text-xs text-gray-500">{editingUser.permissions.length} screens selected</span>
-                            </div>
+                            <span className="text-xs text-gray-500">{editingUser.permissions.length} screens selected</span>
                           </div>
 
                           {/* Branch selector in edit */}
@@ -673,7 +686,7 @@ export function UserManagement() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="p-6 space-y-6" autoComplete="off">
               {generalError && (
                 <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
                   <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
@@ -691,6 +704,10 @@ export function UserManagement() {
                   <label className="text-sm font-semibold text-gray-700">Email Address</label>
                   <input
                     type="email"
+                    name="new-user-email"
+                    autoComplete="off"
+                    readOnly
+                    onFocus={e => { e.currentTarget.readOnly = false; }}
                     placeholder="user@bullion.com"
                     value={formData.email}
                     onChange={e => setFormData({ ...formData, email: e.target.value })}
@@ -709,6 +726,10 @@ export function UserManagement() {
                   <div style={{ position: 'relative' }}>
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      name="new-user-password"
+                      autoComplete="new-password"
+                      readOnly
+                      onFocus={e => { e.currentTarget.readOnly = false; }}
                       placeholder="At least 6 characters"
                       value={formData.password}
                       onChange={e => setFormData({ ...formData, password: e.target.value })}
@@ -772,13 +793,6 @@ export function UserManagement() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSelectViewOnly}
-                      className="text-xs px-3 py-1.5 bg-amber-100 text-amber-900 hover:bg-amber-200 font-bold rounded-lg transition-colors"
-                    >
-                      Select View-Only Screens
-                    </button>
                     {permissions.length > 0 && (
                       <button type="button" onClick={() => setPermissions([])} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
                         <X size={12} /> Clear all
@@ -798,7 +812,12 @@ export function UserManagement() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-6 py-2.5 font-bold text-sm rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                  style={{
+                    backgroundColor: isSubmitting ? '#e2e8f0' : '#cbd5e1',
+                    color: '#0f172a',
+                    border: '2px solid #475569',
+                  }}
                 >
                   {isSubmitting ? 'Creating...' : <><UserPlus size={16} /> Create User</>}
                 </button>
@@ -855,13 +874,6 @@ export function UserManagement() {
                   <label className="text-sm font-semibold text-gray-700">
                     Screen Access Permissions ({approvingUser.permissions.length} selected)
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setApprovingUser({ ...approvingUser, permissions: [...VIEW_ONLY_SCREENS] })}
-                    className="text-xs px-3 py-1 bg-amber-100 text-amber-900 font-bold rounded-lg hover:bg-amber-200"
-                  >
-                    Reset to View-Only Screens
-                  </button>
                 </div>
                 <PermissionGrid
                   selectedPermissions={approvingUser.permissions}
@@ -896,6 +908,148 @@ export function UserManagement() {
         )}
 
       </div>
+
+      {/* ── Factory reset confirmation ───────────────────────────────────── */}
+      {resetOpen && (
+        <div
+          onClick={() => !resetting && setResetOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.65)',
+            zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 560, maxHeight: '88vh', overflowY: 'auto',
+              backgroundColor: '#fff', borderRadius: 14,
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.55)',
+            }}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #fecaca', backgroundColor: '#fef2f2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 800, color: '#7f1d1d' }}>
+                <AlertCircle size={18} /> Factory Reset
+              </div>
+              <div style={{ fontSize: 12, color: '#991b1b', marginTop: 3 }}>
+                Deletes every record in the system. This cannot be undone.
+              </div>
+            </div>
+
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+              {/* Finished — show what happened, including anything blocked. */}
+              {resetDone ? (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                    {resetDone.reduce((s, r) => s + r.deleted, 0).toLocaleString()} records deleted
+                  </div>
+                  {resetDone.filter(r => r.error).length > 0 && (
+                    <div style={{ padding: 12, backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>
+                        These could not be cleared — usually a missing security rule:
+                      </div>
+                      {resetDone.filter(r => r.error).map(r => (
+                        <div key={r.collection} style={{ fontSize: 11, color: '#78350f' }}>
+                          · {r.collection} — {r.error}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: '#64748b' }}>
+                    Reload the page to see the empty system.
+                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    style={{ padding: '10px 16px', borderRadius: 8, border: '2px solid #475569',
+                             backgroundColor: '#e2e8f0', color: '#0f172a', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
+                  >
+                    Reload
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12.5, color: '#334155', lineHeight: 1.6 }}>
+                    Transactions, invoices, inventory, banks, customers, employees,
+                    counters and every other record will be permanently removed.
+                    <br /><br />
+                    <b>Kept:</b> user accounts and their permissions — removing those
+                    would lock everyone out, including you. Code, screens and settings
+                    are not touched.
+                  </div>
+
+                  {resetCounting ? (
+                    <div style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Counting records…
+                    </div>
+                  ) : resetCounts && (
+                    <div style={{ padding: 12, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, maxHeight: 160, overflowY: 'auto' }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
+                        {resetCounts.total.toLocaleString()} records will be deleted
+                      </div>
+                      {Object.entries(resetCounts.perCollection).map(([c, n]) => (
+                        <div key={c} style={{ fontSize: 11, color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{c}</span><span style={{ fontWeight: 700 }}>{n}</span>
+                        </div>
+                      ))}
+                      {resetCounts.total === 0 && (
+                        <div style={{ fontSize: 11, color: '#94a3b8' }}>Nothing to delete — the system is already empty.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Typing the word is the last guard. A plain OK button is far
+                      too easy to hit by reflex for something irreversible. */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#7f1d1d', marginBottom: 5 }}>
+                      Type RESET to confirm
+                    </label>
+                    <input
+                      value={resetConfirm}
+                      onChange={e => setResetConfirm(e.target.value)}
+                      disabled={resetting}
+                      placeholder="RESET"
+                      style={{ width: '100%', padding: '10px 12px', border: '2px solid #fecaca',
+                               borderRadius: 8, fontSize: 14, fontWeight: 700, letterSpacing: '.1em',
+                               color: '#0f172a', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {resetting && (
+                    <div style={{ fontSize: 12, color: '#7f1d1d', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                      {resetStep}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => setResetOpen(false)}
+                      disabled={resetting}
+                      style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #e2e8f0',
+                               backgroundColor: '#fff', color: '#334155', fontWeight: 700, fontSize: 13,
+                               cursor: resetting ? 'not-allowed' : 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={runReset}
+                      disabled={resetting || resetConfirm !== 'RESET'}
+                      style={{ padding: '10px 18px', borderRadius: 8, border: '2px solid #b91c1c',
+                               backgroundColor: resetConfirm === 'RESET' && !resetting ? '#fee2e2' : '#f1f5f9',
+                               color: resetConfirm === 'RESET' && !resetting ? '#7f1d1d' : '#94a3b8',
+                               fontWeight: 800, fontSize: 13,
+                               cursor: resetConfirm === 'RESET' && !resetting ? 'pointer' : 'not-allowed',
+                               borderColor: resetConfirm === 'RESET' && !resetting ? '#b91c1c' : '#cbd5e1' }}
+                    >
+                      {resetting ? 'Deleting…' : 'Delete everything'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

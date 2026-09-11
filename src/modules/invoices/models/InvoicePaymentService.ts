@@ -22,7 +22,7 @@ import { db } from '../../../api/firebase/firebase';
 import { Invoice, InvoicePayment, PaymentMode } from './types';
 import { calculateMiscExpense, calculateSupplierCost } from './invoiceService';
 import { TransactionFirebaseService } from '../../transactions/models/transactionFirebaseService';
-import { Transaction } from '../../transactions/models/types';
+import { Transaction, SOLD_GOODS_PAYMENT_CATEGORY } from '../../transactions/models/types';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
@@ -392,7 +392,7 @@ export class InvoicePaymentService {
       time,
       company,
       mainCategory:    'Cash Outflow',
-      subCategory:     'Sold Goods Payment',
+      subCategory:     SOLD_GOODS_PAYMENT_CATEGORY,
       detailCategory:  `Supplier payment #${seq} — Invoice ${invoice.invoiceNumber} (${invoice.customerName})`,
       amount:          payment.amount,
       mode,
