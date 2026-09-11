@@ -17,7 +17,6 @@
 // Writes BOTH the new Phase 1 fields (accountId / accountType / subCategoryDetail
 // / branchId / remitterName / attachmentUrl) AND the legacy ones (mainCategory /
 // subCategory / mode / bankId / company) so nothing downstream breaks.
-
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -34,7 +33,14 @@ import { Invoice } from '../../invoices/models/types';
 import {
   Transaction, DynamicCategory, SUB_CATEGORIES, CASH_IN_HAND_ID, CASH_IN_HAND_NAME,
   INVOICE_MISC_EXPENSE_CATEGORY, SALES_INVOICE_CATEGORY, SOLD_GOODS_PAYMENT_CATEGORY,
+  PURCHASE_ORDER_CATEGORY, PURCHASE_ORDER_SUB_KINDS,
+  type PurchaseOrderSubKind,
 } from '../models/types';
+import {
+  PurchasedOrderFirebaseService, supplierRemaining, supplierPayable, chargeTotals,
+  isChargeKindClosed,
+} from '../../purchased-orders';
+import type { Shipment, ChargeKind } from '../../purchased-orders';
 import { computeSubCategoryRemaining } from '../models/transactionsService';
 
 // ── Props ───────────────────────────────────────────────────────────────────
@@ -118,6 +124,65 @@ export function QuickTransactionModal({
   const isInvoiceMisc     = type === 'Outflow' && category === INVOICE_MISC_EXPENSE_CATEGORY;
   const isSalesInvoice    = type === 'Inflow'  && category === SALES_INVOICE_CATEGORY;
   const isSoldGoodsPayment = type === 'Outflow' && category === SOLD_GOODS_PAYMENT_CATEGORY;
+
+  // ── Purchase Order: shipment picker ────────────────────────────────────────
+  const isPurchaseOrder = type === 'Outflow' && category === PURCHASE_ORDER_CATEGORY;
+
+  const [poSubKind, setPoSubKind]     = useState<PurchaseOrderSubKind>('Customs');
+  const [shipments, setShipments]     = useState<Shipment[]>([]);
+  const [shipmentsLoading, setShipLoading] = useState(false);
+  const [shipmentId, setShipmentId]   = useState('');
+
+  /** 'Shipment' settles the goods; the rest add to the landed cost. */
+  const isSupplierPay = isPurchaseOrder && poSubKind === 'Shipment';
+
+  useEffect(() => {
+    if (!isPurchaseOrder) return;
+    if (shipments.length > 0 || shipmentsLoading) return;
+    setShipLoading(true);
+    PurchasedOrderFirebaseService.fetchAll()
+      .then(setShipments)
+      .catch(() => toast.error('Could not load shipments'))
+      .finally(() => setShipLoading(false));
+  }, [isPurchaseOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Which shipments are offered, and the two gates are opposite.
+   *
+   * A supplier payment needs receiving finalised, because what is owed is built
+   * on received quantity and is not settled until then. A charge needs costing
+   * NOT finalised, because adding one afterwards would restate a landed cost
+   * someone has already used.
+   */
+  const eligibleShipments = useMemo(() => {
+    if (!isPurchaseOrder) return [];
+    if (isSupplierPay) {
+      return shipments.filter(sh =>
+        sh.receivingStatus === 'Complete' && supplierRemaining(sh) > 0);
+    }
+    // The picker lists a shipment under a kind until someone declares that kind
+    // finished. Costing finalisation no longer drives this — it has its own job,
+    // and it cannot happen until all four kinds are closed anyway.
+    return shipments.filter(sh =>
+      sh.status !== 'Cancelled' && !isChargeKindClosed(sh, poSubKind as ChargeKind));
+  }, [isPurchaseOrder, isSupplierPay, shipments]);
+
+  const selectedShipment = useMemo(
+    () => eligibleShipments.find(sh => sh.id === shipmentId) || null,
+    [eligibleShipments, shipmentId],
+  );
+
+  // Changing the sub-kind changes the list, so a shipment selected under the
+  // old one may no longer be offered. Clearing it is better than leaving a
+  // selection the dropdown cannot show.
+  useEffect(() => { setShipmentId(''); }, [poSubKind]);
+
+  // Default the amount to what is still owed. It is the figure being settled
+  // nine times out of ten, and it stays editable for a part payment.
+  useEffect(() => {
+    if (!isSupplierPay || !selectedShipment) return;
+    setTotalAmount(supplierRemaining(selectedShipment));
+  }, [isSupplierPay, shipmentId]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Any invoice-linked category — the modal loads invoices + shows the
    *  picker in all cases, and forks the save flow to the right service. */
   const needsInvoice = isInvoiceMisc || isSalesInvoice || isSoldGoodsPayment;
@@ -374,6 +439,19 @@ export function QuickTransactionModal({
         return;
       }
     }
+    if (isPurchaseOrder) {
+      if (!shipmentId) {
+        toast.error('Pick which shipment this payment belongs to'); return;
+      }
+      if (isSupplierPay && selectedShipment) {
+        const left = supplierRemaining(selectedShipment);
+        if (Number(totalAmount) > left + 0.01) {
+          toast.error(`Only AED ${left.toLocaleString()} is outstanding on this shipment`);
+          return;
+        }
+      }
+    }
+
     // Same guard for supplier payment — can't pay more than what's owed.
     if (isSoldGoodsPayment && selectedInvoice) {
       if (supplierStats.total === 0) {
@@ -551,6 +629,43 @@ export function QuickTransactionModal({
       } as Omit<Transaction, 'id'>;
 
       await TransactionFirebaseService.createTransaction(txData);
+
+      // The ledger entry is written first so the charge can carry its id. A
+      // charge pointing at an entry that failed to save would be worse than an
+      // entry with no charge, which the shipment panel makes obvious.
+      //
+      // A failure here leaves the money recorded and the shipment not updated,
+      // so it is reported rather than swallowed — the charge can then be added
+      // by hand from the shipment.
+      if (isPurchaseOrder && shipmentId) {
+        try {
+          if (isSupplierPay) {
+            await PurchasedOrderFirebaseService.recordSupplierPayment(shipmentId, {
+              amount: total,
+              date: manualDate,
+              description: description || 'Payment to supplier',
+              transactionId: txId,
+              transactionRef: txId,
+              bankName: isCash ? undefined : selectedAccount?.name,
+            });
+          } else {
+            await PurchasedOrderFirebaseService.addCharge(shipmentId, {
+              kind: poSubKind as 'Customs' | 'Freight' | 'Tax' | 'Other',
+              amount: total,
+              date: manualDate,
+              description: description || `${poSubKind} paid`,
+              transactionId: txId,
+              transactionRef: txId,
+              bankName: isCash ? undefined : selectedAccount?.name,
+            });
+          }
+        } catch (linkErr: any) {
+          toast.error(
+            `Transaction ${txId} saved, but the shipment was not updated: ${linkErr?.message || 'unknown error'}`,
+          );
+        }
+      }
+
       toast.success(`Transaction ${txId} recorded`);
       onSaved();
       onClose();
@@ -780,6 +895,107 @@ export function QuickTransactionModal({
                 • orange for Invoice Misc Expense
                 • emerald for Sales Invoice
                 • sky-blue for Sold Goods Payment                          */}
+          {/* ── Purchase Order: sub-kind, then the shipment it belongs to ──
+              The two halves have opposite gates. A supplier payment needs
+              receiving finalised, because what is owed is built on received
+              quantity. A charge needs costing NOT finalised, because adding one
+              afterwards would restate a landed cost someone has used. */}
+          {isPurchaseOrder && (
+            <div style={{ padding: 14, borderRadius: 10, border: '1.5px solid #c7d2fe', backgroundColor: '#eef2ff' }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#3730a3', marginBottom: 10 }}>
+                What is this payment for?
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {PURCHASE_ORDER_SUB_KINDS.map(k => {
+                  const on = poSubKind === k;
+                  return (
+                    <button key={k} type="button" onClick={() => setPoSubKind(k)}
+                      style={{ padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                               cursor: 'pointer', border: `1.5px solid ${on ? '#4338ca' : '#c7d2fe'}`,
+                               backgroundColor: on ? '#4338ca' : '#fff', color: on ? '#fff' : '#4338ca' }}>
+                      {k}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#3730a3', display: 'block', marginBottom: 4 }}>
+                Shipment
+              </label>
+              <select value={shipmentId} onChange={e => setShipmentId(e.target.value)}
+                style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '1px solid #c7d2fe',
+                         fontSize: 13, backgroundColor: '#fff', cursor: 'pointer' }}>
+                <option value="">
+                  {shipmentsLoading ? 'Loading shipments…'
+                    : eligibleShipments.length === 0
+                      ? (isSupplierPay
+                          ? 'No shipment has a finalised receipt with an outstanding balance'
+                          : 'Every shipment has its costing finalised')
+                      : '— select shipment —'}
+                </option>
+                {eligibleShipments.map(sh => (
+                  <option key={sh.id} value={sh.id}>
+                    {sh.shipmentNumber} · {sh.supplierName}
+                    {isSupplierPay ? ` — AED ${supplierRemaining(sh).toLocaleString()} left` : ''}
+                  </option>
+                ))}
+              </select>
+
+              {/* What the picked shipment currently stands at. Shown so the
+                  amount above can be checked against it before saving. */}
+              {selectedShipment && (
+                <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8,
+                              backgroundColor: '#fff', border: '1px solid #c7d2fe',
+                              display: 'grid', gridTemplateColumns: '1fr auto', gap: 5,
+                              fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                  {isSupplierPay ? (
+                    <>
+                      <span style={{ color: '#64748b' }}>Owed for received goods</span>
+                      <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                        AED {supplierPayable(selectedShipment).toLocaleString()}
+                      </span>
+                      <span style={{ color: '#64748b' }}>Already paid</span>
+                      <span style={{ fontWeight: 700, color: '#15803d' }}>
+                        AED {(Number(selectedShipment.supplierPaidAmount) || 0).toLocaleString()}
+                      </span>
+                      <span style={{ color: '#3730a3', fontWeight: 700, paddingTop: 4, borderTop: '1px solid #eef2ff' }}>
+                        Remaining
+                      </span>
+                      <span style={{ fontWeight: 800, color: '#b45309', paddingTop: 4, borderTop: '1px solid #eef2ff' }}>
+                        AED {supplierRemaining(selectedShipment).toLocaleString()}
+                      </span>
+                    </>
+                  ) : (() => {
+                    const ct = chargeTotals(selectedShipment);
+                    return (
+                      <>
+                        <span style={{ color: '#64748b' }}>Customs so far</span>
+                        <span style={{ fontWeight: 700, color: ct.customs > 0 ? '#0f172a' : '#cbd5e1' }}>
+                          AED {ct.customs.toLocaleString()}
+                        </span>
+                        <span style={{ color: '#64748b' }}>Freight so far</span>
+                        <span style={{ fontWeight: 700, color: ct.freight > 0 ? '#0f172a' : '#cbd5e1' }}>
+                          AED {ct.freight.toLocaleString()}
+                        </span>
+                        <span style={{ color: '#64748b' }}>Tax · Other</span>
+                        <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                          AED {(ct.tax + ct.other).toLocaleString()}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              <p style={{ fontSize: 11, color: '#4338ca', margin: '10px 0 0' }}>
+                {isSupplierPay
+                  ? 'Only shipments whose goods receipt is finalised and still owe money are listed. What is owed covers the goods; customs and freight are recorded separately.'
+                  : 'Only shipments whose costing is not yet finalised are listed. This charge is added to the shipment and the landed cost recalculates.'}
+              </p>
+            </div>
+          )}
+
           {needsInvoice && (() => {
             const borderColor =
               isSalesInvoice     ? '#a7f3d0' :

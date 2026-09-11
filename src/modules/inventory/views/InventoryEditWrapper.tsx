@@ -132,6 +132,18 @@ export const InventoryEditWrapper: React.FC = () => {
       addImages={viewModel.addImages}
       removeImage={viewModel.removeImage}
       removeExistingImage={viewModel.removeExistingImage}
+            source={viewModel.source}
+      setSource={viewModel.setSource}
+      shipments={viewModel.shipments}
+      shipmentsLoading={viewModel.shipmentsLoading}
+      selectedShipmentId={viewModel.selectedShipmentId}
+      setSelectedShipmentId={viewModel.setSelectedShipmentId}
+      shipmentLines={viewModel.shipmentLines}
+      selectedLineId={viewModel.selectedLineId}
+      setSelectedLineId={viewModel.setSelectedLineId}
+      selectedLine={viewModel.selectedLine}
+      marginPercent={viewModel.marginPercent}
+      setMarginPercent={viewModel.setMarginPercent}
     />
   );
 };

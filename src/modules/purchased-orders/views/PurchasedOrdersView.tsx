@@ -12,7 +12,7 @@ import { usePurchasedOrdersViewModel } from '../viewModels/usePurchasedOrdersVie
 import {
   calculateShipmentCosting, shipmentPriority, PRIORITY_LABEL, money,
 } from '../models/purchasedOrderService';
-import { Shipment, SHIPMENT_STATUSES, DisplayCurrency, SHIPMENT_CURRENCIES } from '../models/types';
+import { Shipment, SHIPMENT_STATUSES, DisplayCurrency } from '../models/types';
 import { seedDemoShipments } from '../models/seedDemoShipments';
 
 const S = {
@@ -126,8 +126,9 @@ export const PurchasedOrdersView: React.FC = () => {
   const navigate = useNavigate();
   const vm = usePurchasedOrdersViewModel();
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  // Display only. Every figure is stored and calculated in AED.
-  const [view, setView] = useState<DisplayCurrency>('AED');
+  // Everything is AED. The display-currency toggle was removed; the constant
+  // stays because money() takes a target, and AED to AED is a no-op.
+  const view: DisplayCurrency = 'AED';
   const [seeding, setSeeding] = useState(false);
 
   // Demo data, offered only when the collection is empty so it cannot be
@@ -161,13 +162,6 @@ export const PurchasedOrdersView: React.FC = () => {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Purchased Orders</div>
           <div style={{ fontSize: 11, color: '#64748b' }}>Track imported shipments, customs, freight and landed product costs.</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>View in</span>
-          <select value={view} onChange={e => setView(e.target.value as DisplayCurrency)}
-            style={{ padding: '6px 9px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 12, cursor: 'pointer' }}>
-            {SHIPMENT_CURRENCIES.map(x => <option key={x} value={x}>{x}</option>)}
-          </select>
         </div>
         <button type="button" onClick={() => vm.refresh()} disabled={vm.isLoading}
           style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569' }}>

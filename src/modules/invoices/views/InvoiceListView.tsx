@@ -19,6 +19,7 @@ import { Invoice, InvoiceStats, InvoiceFilters, InvoiceSelectionSummary, Payment
 import {
   calculateSupplierCost, calculatePurchaseCost, calculateMiscExpense,
   calculateNetAmount, calculatePaidAmount, calculateRemainingAmount,
+  extractCost,
 } from '../models/invoiceService';
 import { downloadInvoicePdf, generateInvoicePdf } from '../models/invoicePdfService';
 import { useInvoiceFormViewModel } from '../viewModels/useInvoiceFormViewModel';
@@ -519,6 +520,12 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       const validLines = lines.filter(l => l.productId);
       const invoiceProducts = validLines.map((l, i) => {
         const p = products.find((x: any) => x.id === l.productId);
+        // FIX: was reading p?.purchaseCost directly — that field doesn't exist
+        // on Product (the real field is costPrice), so purchase cost was
+        // always 0 here for Owned stock, and the Credit/Owned distinction was
+        // ignored entirely. extractCost() is the same ownership-aware mapping
+        // the main invoice form uses.
+        const { supplierCost, purchaseCost } = p ? extractCost(p) : { supplierCost: 0, purchaseCost: 0 };
         return {
           id: String(i), productId: l.productId,
           productName: p ? `${p.brandName} ${p.modelName}` : '',
@@ -526,8 +533,8 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
           category: p?.category || '', description: p?.description || '',
           quantity: l.qty, price: l.price, total: l.qty * l.price,
           serialNumbers: l.serial ? [l.serial] : [], currency: 'AED',
-          supplierCost: p?.supplierCost || 0,
-          purchaseCost: p?.purchaseCost || 0,
+          supplierCost,
+          purchaseCost,
           ownershipType: p?.ownershipType,
         };
       });
@@ -543,8 +550,8 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         status: 'Unpaid', paymentStatus: 'unpaid',
         collectionMethod: 'Unpaid', payments: [],
         paidAmount: 0, remainingAmount: total, totalAmount: total,
-        supplierCostTotal: invoiceProducts.reduce((s, p) => s + (p.supplierCost||0)*p.quantity, 0),
-        purchaseCostTotal: invoiceProducts.reduce((s, p) => s + (p.purchaseCost||0)*p.quantity, 0),
+        supplierCostTotal: calculateSupplierCost({ products: invoiceProducts as any }),
+        purchaseCostTotal: calculatePurchaseCost({ products: invoiceProducts as any }),
         miscExpense: 0,
         deductionCharges: discountNum,
         cargoAmount:      shippingNum,
@@ -569,7 +576,8 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       const invoiceNumberForLink = vm.formData.invoiceNumber || '';
       const { doc, getDoc, updateDoc } = await import('firebase/firestore');
       const { db } = await import('../../../api/firebase/firebase');
-      for (const l of validLines) {
+      for (let li = 0; li < validLines.length; li++) {
+        const l = validLines[li];
         try {
           const prodRef = doc(db, 'products', l.productId);
           const snap = await getDoc(prodRef);
@@ -589,10 +597,23 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
           }
           if (targetSerials.length === 0) continue;
 
-          // 1) Per-serial metadata via the canonical helper (records invoice #)
+          // FIX: this call previously omitted paymentStatus/supplierCost
+          // entirely, so serialInvoiceSupplierCost / serialInvoicePaymentStatus
+          // never got written for a sale made through this screen — the
+          // Inventory Report and Payables view had nothing to show for it.
+          // Every invoice created here starts 'Unpaid' (see status: 'Unpaid'
+          // above), so the snapshot status is always 'Unpaid' at this point,
+          // matching the main invoice form's behaviour.
+          const rowCost = invoiceProducts[li];
           await InventoryFirebaseService.markSerialsSold(
             l.productId,
-            targetSerials.map(s => ({ serial: s, invoiceNumber: invoiceNumberForLink, soldDate })),
+            targetSerials.map(s => ({
+              serial: s,
+              invoiceNumber: invoiceNumberForLink,
+              soldDate,
+              paymentStatus: 'Unpaid',
+              supplierCost: rowCost?.supplierCost || rowCost?.purchaseCost || 0,
+            })),
             soldDate,
           );
 

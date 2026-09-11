@@ -87,7 +87,9 @@ export interface Transaction {
   bsMainCategory?: BSMainCategory;
   bsSubCategory?: string;
   // Linked record info
-  linkedType?: 'salary' | 'loan' | 'bill' | 'invoice' | 'commission' | 'manual' | 'inventory';
+  // 'inventory' is written by TransactionBridgeService when a purchase is
+  // booked from the Inventory module.
+  linkedType?: 'salary' | 'loan' | 'bill' | 'invoice' | 'commission' | 'inventory' | 'manual';
   linkedId?: string;
   linkedRef?: string;
   // Salary fields
@@ -96,9 +98,6 @@ export interface Transaction {
   deductions?: number;
   netAmount?: number;
   salaryMonth?: string;
-  salaryCurrency?: string;
-  salaryAED?: number;
-  salaryPKR?: number;
   isAdvanceSalary?: boolean;
   advanceAmount?: number;
   // Loan fields
@@ -109,9 +108,6 @@ export interface Transaction {
   dueDate?: string;
   createdAt?: string;
   updatedAt?: string;
-  // Bill fields
-  billMonth?: string;
-  imageUrl?: string;
 
   // ────────────────────────────────────────────────────────────────
   // Phase 1 — NEW fields (all optional, backward-compat with legacy)
@@ -128,6 +124,38 @@ export interface Transaction {
 
   /** Third-level category tag under `subCategory`. User-defined per Category (see DynamicCategory type 'subCategoryDetail'). */
   subCategoryDetail?: string;
+
+  /**
+   * Links an import payment to the shipment it belongs to.
+   *
+   * Set only when subCategory is PURCHASE_ORDER_CATEGORY. Kept so a ledger
+   * entry and the charge or payment it produced can be reconciled, and so
+   * deleting the entry can reverse the other side.
+   */
+  shipmentId?: string;
+  shipmentNumber?: string;
+
+  /** Which month a utility bill covers, e.g. '2026-08'. Set by the Bills module. */
+  billMonth?: string;
+
+  /** Receipt or slip image, shown in the Bills viewer. */
+  imageUrl?: string;
+
+  /** Currency the salary was agreed in, when it differs from the ledger's. */
+  salaryCurrency?: string;
+
+  /**
+   * The salary converted to AED at the rate used on the day.
+   *
+   * Stored alongside salaryCurrency rather than recomputed, so a rate change
+   * next month cannot restate a payroll run that has already been paid.
+   */
+  salaryAED?: number;
+
+  /** Same, in PKR. Both are stored because payroll is reviewed in either. */
+  salaryPKR?: number;
+  /** 'Shipment' pays the supplier; the rest add to the landed cost. */
+  shipmentPaymentKind?: 'Shipment' | 'Customs' | 'Freight' | 'Tax' | 'Other';
 
   /** Unified account reference. `'cash-in-hand'` for the virtual cash account, otherwise a bank doc id. */
   accountId?: string;
@@ -218,6 +246,7 @@ export interface AppNotification {
   createdAt: string;
   expiresAt?: string;
 }
+
 // ── Company / Branch (user-managed, stored in Firestore /companies) ───────────
 export interface Company {
   id: string;
@@ -255,6 +284,37 @@ export const SALES_INVOICE_CATEGORY = 'Sales Invoice';
  *  updates invoice.supplierPaidAmount / supplierPayments[] AND books the ledger
  *  entry — modal must NOT double-book. */
 export const SOLD_GOODS_PAYMENT_CATEGORY = 'Sold Goods Payment';
+
+/**
+ * Special Outflow category that opens a shipment picker.
+ *
+ * Which shipments are offered depends on the sub-kind chosen beneath it, and
+ * the two halves have opposite gates:
+ *
+ *   Shipment                     receiving IS finalised, and money is still owed
+ *   Customs/Freight/Tax/Other    costing is NOT finalised
+ *
+ * They are opposite because what is owed to the supplier is built on received
+ * quantity — unsettled until receiving is finalised — while a charge added
+ * after costing is signed off would restate a landed cost someone has used.
+ *
+ * The save routes through PurchasedOrderFirebaseService, which writes the
+ * charge or the payment. The modal books the ledger entry itself, so unlike
+ * the invoice categories above there is no double-book risk: the shipment
+ * service does not touch the ledger.
+ */
+export const PURCHASE_ORDER_CATEGORY = 'Purchase Order';
+
+/**
+ * 'Shipment' settles the goods and goes to the supplier. The other four add to
+ * what the goods cost and go to the clearing agent or the government. Two
+ * payments against the same shipment on the same day are not interchangeable,
+ * so the kind is stored rather than inferred from a label users can rename.
+ */
+export const PURCHASE_ORDER_SUB_KINDS = [
+  'Shipment', 'Customs', 'Freight', 'Tax', 'Other',
+] as const;
+export type PurchaseOrderSubKind = typeof PURCHASE_ORDER_SUB_KINDS[number];
 
 export const SUB_CATEGORIES: Record<string, string[]> = {
   // ── Inflow (money coming in) ─────────────────────────────────────────
@@ -305,12 +365,18 @@ export interface DynamicCategory {
   //                                          e.g. Category='Utilities' → SubCat='Electricity Bill'
   // 'plMainCategory' / 'plSubCategory'     → P&L category tree
   // 'bsMainCategory' / 'bsSubCategory'     → Balance Sheet category tree
-  type: 'mainCategory' | 'subCategory' | 'subCategoryDetail' | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory' | 'billCategory';
+  type: 'mainCategory' | 'subCategory' | 'subCategoryDetail' | 'billCategory'
+      | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory';
   // For 'subCategory' this is the parent mainCategory ('Cash Inflow' / 'Cash Outflow' / 'Loan').
   // For 'subCategoryDetail' this is the parent subCategory string.
   parentCategory?: string;
   name: string;
-  createdAt: string;
+  /**
+   * Optional because the callers that add a category on the fly — the bills
+   * form is one — let Firestore stamp it on write. Requiring it here made a
+   * valid create fail typecheck while the document it produced was correct.
+   */
+  createdAt?: string;
 }
 
 // ── Profit & Loss Categories ───────────────────────────────────────────────────

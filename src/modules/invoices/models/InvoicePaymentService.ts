@@ -25,6 +25,7 @@ import { TransactionFirebaseService } from '../../transactions/models/transactio
 import { Transaction } from '../../transactions/models/types';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
+import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 
 const INVOICES_COLLECTION = 'invoices';
 
@@ -139,6 +140,23 @@ export class InvoicePaymentService {
       await this.bookPaymentTransaction(current, payment, paymentSeq, remainingAmount, company);
     } catch (err) {
       console.warn('[InvoicePaymentService] transaction booking failed (non-blocking):', err);
+    }
+
+    // 2b) Sync the new payment status onto every sold serial in Inventory.
+    // FIX: this call didn't exist before — Inventory's "Sold Goods Payment"
+    // status was written once at sale time and never touched again, so it
+    // stayed 'Unpaid' forever even after the invoice was fully paid. Errors
+    // here are logged but don't block the payment itself, matching how the
+    // rest of this function treats its non-critical side effects.
+    for (const ip of (current.products || [])) {
+      if (!ip.productId || !Array.isArray(ip.serialNumbers)) continue;
+      const soldSerials = ip.serialNumbers.filter(s => s && s.trim());
+      if (soldSerials.length === 0) continue;
+      try {
+        await InventoryFirebaseService.updateSerialPaymentStatus(ip.productId, soldSerials, status as 'Paid' | 'Partial' | 'Unpaid');
+      } catch (err) {
+        console.warn('[InvoicePaymentService] inventory payment-status sync failed (non-blocking):', err);
+      }
     }
 
     // 3) Optionally credit the receiving bank.

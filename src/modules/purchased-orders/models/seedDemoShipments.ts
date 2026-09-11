@@ -22,12 +22,12 @@ const AED_PER_USD = 3.67;
 
 let seq = 0;
 const line = (
-  sku: string, productName: string, modelName: string,
+  productName: string, modelName: string,
   quantity: number, unitPrice: number,
   received = 0, discountPercent = 0, uom: UnitOfMeasure = 'EA',
 ): ShipmentLine => ({
   id: `seed-${Date.now().toString(36)}-${seq++}`,
-  sku, productName, modelName, uom,
+  productName, modelName, uom,
   quantity, unitPrice, discountPercent, receivedQuantity: received,
 });
 
@@ -66,18 +66,18 @@ export function buildDemoShipments(): CreateShipmentDTO[] {
       otherCharges: 0,
       salesTaxAmount: 0,
       lines: [
-        line('NOK-FDX',        'Nokta Findx',                       'Findx',            25, 90),
-        line('NOK-FDXP',       'Nokta Findx Pro',                   'Findx Pro',        25, 102),
-        line('NOK-SCORE',      'Nokta Score',                       'Score',            15, 215),
-        line('NOK-SC3PP',      'Nokta Score 3 Pro Pack',            'Score 3 Pro Pack', 10, 303),
-        line('NOK-SPLX-SX28',  'Nokta Simplex Lite with SX28 Coil', 'Simplex Lite',     15, 155),
-        line('NOK-SPLX-ULTRA', 'Nokta Simplex Ultra',               'Simplex Ultra',    15, 180),
-        line('NOK-LEGEND',     'Nokta The Legend',                  'The Legend',       10, 350),
-        line('NOK-IMPACT-PRO', 'Nokta Impact Pro',                  'Impact Pro',       30, 350),
-        line('NOK-IM45-COIL',  'IM45 Search Coil 15 x 17.5 Black',  'IM45 Coil',         5, 145),
-        line('NOK-PTR',        'Nokta Pointer',                     'Pointer',          10, 50),
-        line('NOK-PULSEDIVE',  'Pulsedive Scuba Detector Yellow',   'Pulsedive',        10, 115),
-        line('NOK-ACCUPOINT',  'Nokta Accupoint Pinpointer',        'Accupoint',         5, 85),
+        line('Nokta Findx',                       'Findx',            25, 90),
+        line('Nokta Findx Pro',                   'Findx Pro',        25, 102),
+        line('Nokta Score',                       'Score',            15, 215),
+        line('Nokta Score 3 Pro Pack',            'Score 3 Pro Pack', 10, 303),
+        line('Nokta Simplex Lite with SX28 Coil', 'Simplex Lite',     15, 155),
+        line('Nokta Simplex Ultra',               'Simplex Ultra',    15, 180),
+        line('Nokta The Legend',                  'The Legend',       10, 350),
+        line('Nokta Impact Pro',                  'Impact Pro',       30, 350),
+        line('IM45 Search Coil 15 x 17.5 Black',  'IM45 Coil',         5, 145),
+        line('Nokta Pointer',                     'Pointer',          10, 50),
+        line('Pulsedive Scuba Detector Yellow',   'Pulsedive',        10, 115),
+        line('Nokta Accupoint Pinpointer',        'Accupoint',         5, 85),
       ],
       notes:
         'Consolidated Q1 order. Costing sheet reconciled against the supplier '
@@ -111,10 +111,10 @@ export function buildDemoShipments(): CreateShipmentDTO[] {
       otherCharges: 0,
       salesTaxAmount: 0,
       lines: [
-        line('GAR-ACE400I', 'Garrett ACE 400I', 'ACE 400I',  5, 252.67,  5),
-        line('GAR-ACE300I', 'Garrett ACE 300I', 'ACE 300I', 15, 190.55, 15),
-        line('GAR-ACE200I', 'Garrett ACE 200I', 'ACE 200I', 15, 127.03,  8),
-        line('GAR-APEX',    'Garrett ACE Apex', 'ACE Apex', 10, 351.49,  0),
+        line('Garrett ACE 400I', 'ACE 400I',  5, 252.67,  5),
+        line('Garrett ACE 300I', 'ACE 300I', 15, 190.55, 15),
+        line('Garrett ACE 200I', 'ACE 200I', 15, 127.03,  8),
+        line('Garrett ACE Apex', 'ACE Apex', 10, 351.49,  0),
       ],
       notes: 'Air freight prepaid by supplier. 28 of 45 units received; balance at the forwarder.',
     },
@@ -147,15 +147,15 @@ export function buildDemoShipments(): CreateShipmentDTO[] {
       otherCharges: 0,
       salesTaxAmount: 0,
       lines: [
-        line('F11',             'Fisher F11 MD',            'F11',         20, 118),
-        line('F22-11DD',        'Fisher F22 MD',            'F22',         15, 142),
-        line('F44-11DD',        'Fisher F44 MD',            'F44',         15, 159),
-        line('F75',             'Fisher F75 MD',            'F75',         10, 359),
-        line('GOLDBUG',         'Fisher Goldbug MD',        'Goldbug',      3, 157),
-        line('ETEK-SKD',        'Teknetics Eurotek MD',     'Eurotek',     20,  95),
-        line('ETEKPRO11DD-SKD', 'Teknetics Eurotek Pro MD', 'Eurotek Pro', 15, 138),
-        line('ALPHA',           'Teknetics Alpha 2000 MD',  'Alpha 2000',  15, 102),
-        line('T2',              'Teknetics T2 MD',          'T2',          10, 264),
+        line('Fisher F11 MD',            'F11',         20, 118),
+        line('Fisher F22 MD',            'F22',         15, 142),
+        line('Fisher F44 MD',            'F44',         15, 159),
+        line('Fisher F75 MD',            'F75',         10, 359),
+        line('Fisher Goldbug MD',        'Goldbug',      3, 157),
+        line('Teknetics Eurotek MD',     'Eurotek',     20,  95),
+        line('Teknetics Eurotek Pro MD', 'Eurotek Pro', 15, 138),
+        line('Teknetics Alpha 2000 MD',  'Alpha 2000',  15, 102),
+        line('Teknetics T2 MD',          'T2',          10, 264),
       ],
       notes:
         'Proforma 481224. Sale amount USD 19,076.00, freight collect. '

@@ -86,6 +86,28 @@ export interface Product {
   serialStockInDatesManual?: { [serialNumber: string]: string };
   serialSoldDates?: { [serialNumber: string]: string };
   serialInvoiceNumbers?: { [serialNumber: string]: string };
+  /**
+   * The invoice's payment status, per serial.
+   *
+   * "Sold Goods Payment" on the report is money coming in from a customer. It
+   * was reading supplierPaymentStatus — money going out to a supplier, and only
+   * present on Credit stock — so on Owned stock the column was always blank. It
+   * was named for one thing and read another.
+   */
+  serialInvoicePaymentStatus?: { [serialNumber: string]: 'Paid' | 'Partial' | 'Unpaid' };
+  /** Supplier cost snapshotted on the invoice line that sold this unit. */
+  serialInvoiceSupplierCost?:  { [serialNumber: string]: number };
+    /**
+   * Landed cost of each serial, frozen at stock-in.
+   *
+   * costPrice stays as the product-level weighted average so everything reading
+   * it today keeps working. This map is what a sale reads when it wants the
+   * true cost of the unit it sold — two units of the same model bought on
+   * different shipments cost different amounts, and averaging hides that.
+   */
+  serialCostPrice?:  { [serialNumber: string]: number };
+  /** Which shipment each serial came off. */
+  serialShipmentId?: { [serialNumber: string]: string };
 
   // Payable configuration (optional)
   enablePayable?: boolean;
@@ -174,11 +196,30 @@ export interface CreateProductDTO {
   supplierPaymentStatus?: SupplierPaymentStatus;
   supplierPaidAmount?: number;
   supplierPaymentChannel?: PaymentChannel;
-  serialStockInDates?: { [serialNumber: string]: string };
+    serialStockInDates?: { [serialNumber: string]: string };
   serialStockInDatesManual?: { [serialNumber: string]: string };
+  serialSoldDates?: { [serialNumber: string]: string };
+  serialInvoiceNumbers?: { [serialNumber: string]: string };
+  /**
+   * The invoice's payment status, per serial.
+   */
+  serialInvoicePaymentStatus?: { [serialNumber: string]: 'Paid' | 'Partial' | 'Unpaid' };
+  /** Supplier cost snapshotted on the invoice line that sold this unit. */
+  serialInvoiceSupplierCost?:  { [serialNumber: string]: number };
+
+  // Written when the product is created from a shipment stock-in. The cost sits
+  // on the serial because two units of the same model bought on different
+  // shipments cost different amounts, and averaging on the way in hides that.
+  serialCostPrice?:  { [serialNumber: string]: number };
+  serialShipmentId?: { [serialNumber: string]: string };
+
+  // The ids beside the names, so a product created from a shipment carries the
+  // brand's identity rather than only its text.
+  brandId?: string;
+  modelId?: string;
+
   imageUrls?: string[];
 }
-
 export interface ProductFormData {
   currentStep: InventoryEntryStep | number;
   costingOption?: CostingOption;
@@ -208,6 +249,7 @@ export interface ProductFormData {
   bankName?: string;
   imageUrls?: string[];
 }
+
 
 export interface ProductTransfer {
   id: string;
@@ -265,6 +307,14 @@ export interface UpdateProductDTO {
   serialStockInDatesManual?: { [serialNumber: string]: string };
   serialSoldDates?: { [serialNumber: string]: string };
   serialInvoiceNumbers?: { [serialNumber: string]: string };
+  /**
+   * The invoice's payment status, per serial.
+   */
+  serialInvoicePaymentStatus?: { [serialNumber: string]: 'Paid' | 'Partial' | 'Unpaid' };
+  /** Supplier cost snapshotted on the invoice line that sold this unit. */
+  serialInvoiceSupplierCost?:  { [serialNumber: string]: number };
+  serialCostPrice?:  { [serialNumber: string]: number };
+  serialShipmentId?: { [serialNumber: string]: string };
   imageUrls?: string[];
 }
 

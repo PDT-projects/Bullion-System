@@ -9,7 +9,7 @@
 //   - ID shown as read-only on Payment step; edit mode preserves original ID
 //   - isGeneratingTxnId returned so View can gate the Next button
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { saveModelProfileByName } from '../models/BrandModelService';
@@ -37,8 +37,28 @@ function generateFallbackTxnId(): string {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Default margin on stock brought in from a shipment. Editable per stock-in. */
+export const DEFAULT_MARGIN_PERCENT = 25;
+
 export interface UseCreateInventoryViewModelReturn {
   currentStep: InventoryEntryStep;
+
+  // ── Stock in from a shipment ──────────────────────────────────────────────
+  // Two paths through one screen. 'shipment' fixes the cost from the landed
+  // figure and deducts the units; 'manual' is the form as it was.
+  source: 'manual' | 'shipment';
+  setSource: (s: 'manual' | 'shipment') => void;
+  shipments: Shipment[];
+  shipmentsLoading: boolean;
+  selectedShipmentId: string;
+  setSelectedShipmentId: (id: string) => void;
+  shipmentLines: StockInLine[];
+  selectedLineId: string;
+  setSelectedLineId: (id: string) => void;
+  selectedLine: StockInLine | null;
+  marginPercent: number;
+  setMarginPercent: (n: number) => void;
+
   formData: ProductFormData;
   validation: ValidationResult;
   isSubmitting: boolean;
@@ -65,6 +85,13 @@ export interface UseCreateInventoryViewModelReturn {
   handleCancel: () => void;
   loadFromExisting: (existingData: ProductFormData, docId: string) => void;
 }
+
+import { PurchasedOrderFirebaseService } from '../../purchased-orders/models/purchasedOrderFirebaseService';
+import type { Shipment } from '../../purchased-orders/models/types';
+import {
+  stockInLines, stockInFromShipment, suggestedSellPrice, checkSellPrice,
+  type StockInLine,
+} from '../models/shipmentStockIn';
 
 const EMPTY_FORM: ProductFormData = {
   brandId:       '',
@@ -104,6 +131,64 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
   const [validation,        setValidation]         = useState<ValidationResult>({ isValid: true, fieldErrors: {} });
   const [isSubmitting,      setIsSubmitting]       = useState(false);
   const [selectedImages,    setSelectedImages]      = useState<File[]>([]);
+
+  const [source, setSource] = useState<'manual' | 'shipment'>('manual');
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [shipmentsLoading, setShipmentsLoading] = useState(false);
+  const [selectedShipmentId, setSelectedShipmentId] = useState('');
+  const [selectedLineId, setSelectedLineId] = useState('');
+  const [marginPercent, setMarginPercent] = useState(DEFAULT_MARGIN_PERCENT);
+
+  // Loaded once, when the shipment path is first chosen. Nobody opening this
+  // screen to type a product by hand should wait for a collection read.
+  useEffect(() => {
+    if (source !== 'shipment' || shipments.length > 0 || shipmentsLoading) return;
+    setShipmentsLoading(true);
+    PurchasedOrderFirebaseService.fetchAll()
+      .then(list => setShipments(list.filter(sh => sh.status !== 'Cancelled')))
+      .catch(() => toast.error('Could not load shipments'))
+      .finally(() => setShipmentsLoading(false));
+  }, [source]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedShipment = useMemo(
+    () => shipments.find(sh => sh.id === selectedShipmentId) || null,
+    [shipments, selectedShipmentId],
+  );
+
+  /** Only lines with something left. A row reading 0 remaining cannot be acted on. */
+  const shipmentLines = useMemo(
+    () => (selectedShipment ? stockInLines(selectedShipment) : []),
+    [selectedShipment],
+  );
+
+  const selectedLine = useMemo(
+    () => shipmentLines.find(l => l.lineId === selectedLineId) || null,
+    [shipmentLines, selectedLineId],
+  );
+
+  // Changing the shipment invalidates the line, and the line drives the cost.
+  useEffect(() => { setSelectedLineId(''); }, [selectedShipmentId]);
+
+  /**
+   * Picking a line fills the form from the shipment.
+   *
+   * Cost comes from the landed figure and is not editable — it is the whole
+   * point of stocking in from a shipment. The sell price is a suggestion at the
+   * current margin and stays editable, with a floor at cost.
+   */
+  useEffect(() => {
+    if (!selectedLine || !selectedShipment) return;
+    setFormData(prev => ({
+      ...prev,
+      brandName: selectedShipment.brandName,
+      brandId:   selectedShipment.brandId,
+      modelName: selectedLine.modelName || selectedLine.productName,
+      costPrice: selectedLine.landedUnitCost,
+      sellPrice: suggestedSellPrice(selectedLine.landedUnitCost, marginPercent),
+      buyType:   'Import',
+      status:    'Available',
+    }));
+  }, [selectedLineId, marginPercent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Generate TXN ID on mount — CREATE mode only ───────────────────────────
   // InventoryFirebaseService.generateTransactionId() owns the db reference
@@ -309,7 +394,64 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
   }, []);
 
   // ── SUBMIT ────────────────────────────────────────────────────────────────
+  /**
+   * Stock in from a shipment.
+   *
+   * A separate path, not a flag inside the manual one. It writes to two
+   * collections and freezes a cost; folding that into a branch of the ordinary
+   * submit is how the two quietly diverge.
+   */
+  const submitFromShipment = useCallback(async () => {
+    if (!selectedShipment || !selectedLine) {
+      toast.error('Pick a shipment and a product line'); return;
+    }
+    const serials = (formData.serialNumbers || []).map(x => x.trim()).filter(Boolean);
+    if (serials.length === 0) { toast.error('Add the serial numbers'); return; }
+    if (serials.length > selectedLine.remaining) {
+      toast.error(`Only ${selectedLine.remaining} unit${selectedLine.remaining === 1 ? '' : 's'} remain on this line`);
+      return;
+    }
+    const priceCheck = checkSellPrice(formData.sellPrice, selectedLine.landedUnitCost);
+    if (!priceCheck.allowed) { toast.error(priceCheck.reason!); return; }
+
+    setIsSubmitting(true);
+    try {
+      const res = await stockInFromShipment({
+        shipmentId: selectedShipment.id,
+        lineId:     selectedLine.lineId,
+        serials,
+        sellPrice:  formData.sellPrice,
+        location:   formData.location,
+        category:   formData.category,
+        warrantyYears: formData.warrantyYears,
+        description:   formData.description,
+      });
+
+      // Images are a separate, non-blocking step, the same as the manual path:
+      // stock that exists matters more than a photo that failed to upload.
+      if (selectedImages.length > 0) {
+        try {
+          const urls = await uploadInventoryImages(selectedImages, res.productId);
+          if (urls.length) await InventoryFirebaseService.updateProduct(res.productId, { imageUrls: urls });
+        } catch {
+          toast.warning('Stock added, but the images could not be uploaded');
+        }
+      }
+
+      toast.success(
+        `${serials.length} unit${serials.length === 1 ? '' : 's'} stocked in at ${res.landedUnitCost.toFixed(2)}`
+        + (res.created ? ' — new product created' : ''),
+      );
+      navigate('/inventory');
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not stock in from the shipment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [selectedShipment, selectedLine, formData, selectedImages, navigate]);
+
   const handleSubmit = useCallback(async () => {
+    if (source === 'shipment') { await submitFromShipment(); return; }
     if (!validateCurrentStep()) return;
     setIsSubmitting(true);
 
@@ -502,9 +644,13 @@ export function useCreateInventoryViewModel(): UseCreateInventoryViewModelReturn
   }, [validateCurrentStep, formData, navigate, isEditMode, editingId]);
 
   const handleCancel = useCallback(() => navigate('/inventory'), [navigate]);
-
   return {
     currentStep,
+    source, setSource,
+    shipments, shipmentsLoading,
+    selectedShipmentId, setSelectedShipmentId,
+    shipmentLines, selectedLineId, setSelectedLineId, selectedLine,
+    marginPercent, setMarginPercent,
     formData,
     validation,
     isSubmitting,

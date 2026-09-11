@@ -445,7 +445,65 @@ export class InventoryFirebaseService {
       throw new Error('Failed to create product in Firestore');
     }
   }
+     /**
+   * Add serials to a product that already exists.
+   *
+   * A second batch from a shipment is not a new product — it is the same model,
+   * bought later at a different landed cost. The serials join the array, the
+   * cost goes on the serial, and costPrice becomes the weighted average so
+   * every report that reads it keeps a sensible number.
+   */
+  static async addSerialsToProduct(id: string, batch: {
+    serials: string[]; landedUnitCost: number; shipmentId: string;
+    shipmentNumber?: string; location: string; sellPrice?: number;
+    costingFields?: Record<string, number>;
+  }): Promise<void> {
+    const ref  = doc(db, PRODUCTS_COLLECTION, id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Product not found');
+    const p = snap.data() as Product;
 
+    const existing = p.serialNumbers || [];
+    const clash    = batch.serials.filter(s => existing.includes(s));
+    if (clash.length) throw new Error(`Serial ${clash[0]} is already on this product`);
+
+    const serialNumbers = [...existing, ...batch.serials];
+    const now = new Date().toISOString();
+
+    // Weighted average across both batches. The per-serial map holds the truth;
+    // this keeps every report that reads costPrice showing a sensible number.
+    const oldQty  = existing.length;
+    const oldCost = Number(p.costPrice) || 0;
+    const newQty  = batch.serials.length;
+    const costPrice = serialNumbers.length > 0
+      ? Math.round(((oldQty * oldCost + newQty * batch.landedUnitCost) / serialNumbers.length) * 100) / 100
+      : batch.landedUnitCost;
+
+    const add = <T,>(map: Record<string, T> | undefined, v: T) => ({
+      ...(map || {}),
+      ...Object.fromEntries(batch.serials.map(s => [s, v])),
+    });
+
+    await updateDoc(ref, stripUndefined({
+      serialNumbers,
+      stock: serialNumbers.length,
+      costPrice,
+      // Only raised, never lowered: a later batch costing more should not drop
+      // the price of stock already on the shelf.
+      sellPrice: batch.sellPrice && batch.sellPrice > (Number(p.sellPrice) || 0)
+        ? batch.sellPrice : p.sellPrice,
+
+      serialCities:       add(p.serialCities, batch.location),
+      serialStatus:       add(p.serialStatus, 'Available' as any),
+      serialStockInDates: add(p.serialStockInDates, now.slice(0, 10)),
+      serialCostPrice:    add((p as any).serialCostPrice, batch.landedUnitCost),
+      serialShipmentId:   add((p as any).serialShipmentId, batch.shipmentId),
+
+      status: 'Available',
+      ...(batch.costingFields || {}),
+      updatedAt: now,
+    }));
+  }
   static async updateProduct(id: string, dto: UpdateProductDTO): Promise<Product> {
     try {
       console.log('🔥 Updating product:', id);
@@ -460,9 +518,23 @@ export class InventoryFirebaseService {
           costingModelsJson: JSON.stringify(c.models), costing: c,
         });
       }
-      const updateData: Record<string, any> = {
-        updatedAt: now, costPrice: dto.costPrice ?? 0, description: dto.description ?? '',
-      };
+      /**
+       * Only what the caller actually sent.
+       *
+       * costPrice and description were unconditional with a `?? 0` and a `?? ''`
+       * behind them, so a partial update — attaching an image, say — wrote a
+       * cost of zero and a blank description over whatever the product had.
+       *
+       * The product was created with 315, the image upload called this a moment
+       * later with only { imageUrls }, and 315 became 0. Nothing reported it:
+       * both writes succeeded, and only the report showed the damage.
+       *
+       * Every other field below was already guarded this way. These two were
+       * not.
+       */
+      const updateData: Record<string, any> = { updatedAt: now };
+      if (dto.costPrice   !== undefined) updateData.costPrice   = dto.costPrice;
+      if (dto.description !== undefined) updateData.description = dto.description;
       if (dto.brandName     !== undefined) updateData.brandName     = dto.brandName;
       if (dto.modelName     !== undefined) updateData.modelName     = dto.modelName;
       if (dto.category      !== undefined) updateData.category      = dto.category;
@@ -617,7 +689,13 @@ export class InventoryFirebaseService {
 
   static async markSerialsSold(
     productId: string,
-    sales: Array<{ serial: string; invoiceNumber: string; soldDate?: string }>,
+    sales: Array<{
+      serial: string;
+      invoiceNumber: string;
+      soldDate?: string;
+      paymentStatus?: 'Paid' | 'Partial' | 'Unpaid';
+      supplierCost?: number;
+    }>,
     soldDate?: string,
   ): Promise<void> {
     if (!productId || !sales || sales.length === 0) return;
@@ -631,15 +709,25 @@ export class InventoryFirebaseService {
       const nextStatus:   Record<string, any> = { ...(p.serialStatus         || {}) };
       const nextSoldDate: Record<string, any> = { ...(p.serialSoldDates      || {}) };
       const nextInvoice:  Record<string, any> = { ...(p.serialInvoiceNumbers || {}) };
+      // Written here rather than on the product, because two units of the same
+      // model can leave on different invoices with different terms.
+      const nextPayStat:  Record<string, any> = { ...((p as any).serialInvoicePaymentStatus || {}) };
+      const nextSupCost:  Record<string, any> = { ...((p as any).serialInvoiceSupplierCost  || {}) };
       for (const s of sales) {
         if (!s.serial) continue;
         nextStatus[s.serial]   = 'Sold';
         nextSoldDate[s.serial] = s.soldDate || fallbackDate;
         nextInvoice[s.serial]  = s.invoiceNumber || '';
+        if (s.paymentStatus !== undefined) nextPayStat[s.serial] = s.paymentStatus;
+        if (s.supplierCost  !== undefined) nextSupCost[s.serial] = s.supplierCost;
       }
       await updateDoc(ref, {
-        serialStatus: nextStatus, serialSoldDates: nextSoldDate,
-        serialInvoiceNumbers: nextInvoice, updatedAt: now,
+        serialStatus: nextStatus,
+        serialSoldDates: nextSoldDate,
+        serialInvoiceNumbers: nextInvoice,
+        serialInvoicePaymentStatus: nextPayStat,
+        serialInvoiceSupplierCost:  nextSupCost,
+        updatedAt: now,
       });
       console.log(`✅ Marked ${sales.length} serial(s) as Sold on product ${productId}`);
     } catch (error) {
@@ -817,9 +905,17 @@ export class InventoryFirebaseService {
           currentStatus: serialStatus === 'Sold' ? 'Sold' : 'In Stock',
           soldDate:      serial ? p.serialSoldDates?.[serial]      : undefined,
           invoiceNumber: serial ? p.serialInvoiceNumbers?.[serial] : undefined,
-          supplierCost:            p.ownershipType === 'Credit' ? p.supplierCost            : undefined,
+          // Supplier cost from the invoice that sold this unit when there is
+          // one, falling back to the product's own figure. On Owned stock the
+          // product has none, which is why this column was always blank.
+          supplierCost:            (serial ? (p as any).serialInvoiceSupplierCost?.[serial] : undefined)
+                                   ?? (p.ownershipType === 'Credit' ? p.supplierCost : undefined),
           purchasingCost:          p.ownershipType === 'Owned'  ? p.costPrice               : undefined,
-          supplierPaymentStatus:   p.ownershipType === 'Credit' ? p.supplierPaymentStatus   : undefined,
+          // The invoice's payment status — which is what "Sold Goods Payment"
+          // means. The supplier one stays as a fallback so Credit stock that has
+          // not been sold still shows something.
+          supplierPaymentStatus:   (serial ? (p as any).serialInvoicePaymentStatus?.[serial] : undefined)
+                                   ?? (p.ownershipType === 'Credit' ? p.supplierPaymentStatus : undefined),
           supplierPaidAmount:      p.ownershipType === 'Credit' ? p.supplierPaidAmount      : undefined,
           supplierRemainingAmount: p.ownershipType === 'Credit' && p.supplierCost !== undefined
             ? Math.max(0, (p.supplierCost || 0) - (p.supplierPaidAmount || 0)) : undefined,

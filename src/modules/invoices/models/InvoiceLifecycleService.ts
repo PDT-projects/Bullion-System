@@ -87,25 +87,31 @@ async function reverseInvoiceEffects(inv: Invoice): Promise<InvoiceReversalSumma
       const nextSerials = Array.from(new Set([...(p.serialNumbers || []), ...validSerials]));
 
       // Wipe the per-serial sold metadata so the report stops showing them as Sold
-      const nextStatus:  Record<string, any> = { ...(p.serialStatus         || {}) };
-      const nextSold:    Record<string, any> = { ...(p.serialSoldDates      || {}) };
-      const nextInvMap:  Record<string, any> = { ...(p.serialInvoiceNumbers || {}) };
+      const nextStatus:  Record<string, any> = { ...(p.serialStatus               || {}) };
+      const nextSold:    Record<string, any> = { ...(p.serialSoldDates            || {}) };
+      const nextInvMap:  Record<string, any> = { ...(p.serialInvoiceNumbers       || {}) };
+      const nextPayStat: Record<string, any> = { ...(p.serialInvoicePaymentStatus || {}) };
+      const nextSupCost: Record<string, any> = { ...(p.serialInvoiceSupplierCost  || {}) };
       validSerials.forEach(s => {
         delete nextStatus[s];
         delete nextSold[s];
         delete nextInvMap[s];
+        delete nextPayStat[s];
+        delete nextSupCost[s];
       });
 
       await updateDoc(pRef, {
-        serialNumbers:        nextSerials,
+        serialNumbers:              nextSerials,
         // stock is recomputed from the array — safer than relying on the
         // pre-delete quantity, which could have drifted if other serials
         // were sold/damaged in the meantime
-        stock:                nextSerials.length,
-        serialStatus:         nextStatus,
-        serialSoldDates:      nextSold,
-        serialInvoiceNumbers: nextInvMap,
-        updatedAt:            now,
+        stock:                      nextSerials.length,
+        serialStatus:               nextStatus,
+        serialSoldDates:            nextSold,
+        serialInvoiceNumbers:       nextInvMap,
+        serialInvoicePaymentStatus: nextPayStat,
+        serialInvoiceSupplierCost:  nextSupCost,
+        updatedAt:                  now,
       });
       summary.serialsRestored += validSerials.length;
       summary.productsAffected += 1;

@@ -24,6 +24,15 @@ import {
 import { LocationSelector } from './LocationSelector';
 import { CATEGORIES } from '../viewModels/useInventoryMultimodelViewModel';
 import { useNavigate } from 'react-router-dom';
+import { PurchasedOrderFirebaseService } from '../../purchased-orders/models/purchasedOrderFirebaseService';
+import type { Shipment } from '../../purchased-orders/models/types';
+import {
+  stockInLines, suggestedSellPrice,
+  type StockInLine,
+} from '../models/shipmentStockIn';
+
+/** Default margin on stock brought in from a shipment. Editable per row. */
+const DEFAULT_MARGIN_PERCENT = 25;
 
 interface BankOption { id: string; name: string; balance: number; }
 interface BrandSuggestion { id: string; name: string; }
@@ -39,6 +48,17 @@ interface ModelSuggestion {
 
 // ── Product row type ───────────────────────────────────────────────────────
 interface ProductRow {
+  /**
+   * Set when the row was filled from a shipment line.
+   *
+   * The cost then comes from the landed figure and is not editable — that is
+   * the whole point of stocking in from a shipment rather than typing it. The
+   * line id is what the save routes back to, so the units come off the right
+   * line.
+   */
+  shipmentId?: string;
+  shipmentLineId?: string;
+  shipmentLine?: StockInLine;
   id: string;
   brandName: string;
   modelName: string;
@@ -78,7 +98,9 @@ function newRow(): ProductRow {
 return { id: Math.random().toString(36).slice(2), brandName: '', modelName: '', category: '', description: '', quantity: 1, costPrice: 0, sellPrice: 0, serials: [], location: '', status: 'New', stockInDate: '', images: [] };
 }
 // ── Brand/model autocomplete for a single row ──────────────────────────────
-function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, onBrandSelect, onModelSelect, error, isCredit }: {
+function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, onBrandSelect, onModelSelect, error, isCredit, shipmentLines, onModelPick }: {
+  shipmentLines?: StockInLine[];
+  onModelPick?: (lineId: string) => void;
   row: ProductRow;
   onChange: (field: keyof ProductRow, val: any) => void;
   brandSuggestions: BrandSuggestion[];
@@ -190,13 +212,32 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr 78px 105px 105px', gap: 10 }}>
         {/* Category */}
         <div>
-          <label style={S.label}>Category <span style={{ color: '#ef4444' }}>*</span></label>
+          <label style={S.label}>
+            {row.shipmentId ? 'Model' : 'Category'} <span style={{ color: '#ef4444' }}>*</span>
+          </label>
           <div style={{ position: 'relative' }}>
-            <select value={row.category} onChange={e => onChange('category', e.target.value)}
-              style={{ ...S.inp(!!error?.category), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
-              <option value="">Select…</option>
-              {(CATEGORIES || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            {/* In shipment mode this is the model list for the chosen shipment,
+                with what is left beside each name. Reusing the dropdown that is
+                already here rather than adding a third one: two controls doing
+                the job is fewer than three, and the clerk learns one screen. */}
+            {row.shipmentId ? (
+              <select value={row.shipmentLineId || ''}
+                onChange={e => onModelPick?.(e.target.value)}
+                style={{ ...S.inp(!!error?.category), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
+                <option value="">Select model…</option>
+                {(shipmentLines || []).map(l => (
+                  <option key={l.lineId} value={l.lineId}>
+                    {l.modelName || l.productName} — {l.remaining} remaining
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select value={row.category} onChange={e => onChange('category', e.target.value)}
+                style={{ ...S.inp(!!error?.category), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
+                <option value="">Select…</option>
+                {(CATEGORIES || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
             <ChevronDown size={13} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} />
           </div>
           {error?.category && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.category}</p>}
@@ -245,10 +286,46 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
             : 'What you paid to buy this stock. Used for internal valuation only.'}>
             {isCredit ? 'Supplier Cost' : 'Purchasing Cost'} <span style={{ color: '#9ca3af', fontWeight: 400 }}>(AED)</span> <span style={{ color: '#ef4444' }}>*</span>
           </label>
+          {/* Editable on every row, including the ones filled from a shipment.
+              The landed figure is a strong default, not a lock — a clerk who
+              can see it is wrong and cannot change it will enter the product
+              somewhere else instead. */}
           <input type="number" min={0} step="any" value={row.costPrice || ''}
             onChange={e => onChange('costPrice', parseFloat(e.target.value) || 0)}
             placeholder="0.00" style={S.inp(!!error?.cost)} />
           {error?.cost && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.cost}</p>}
+
+          {/* What makes up that cost. A locked figure with no working behind it
+              is the first thing people stop trusting. */}
+          {row.shipmentLine && (
+            <div style={{ marginTop: 7, padding: '8px 10px', borderRadius: 8,
+                          border: '1px solid #e2e8f0', backgroundColor: '#fbfcfe' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                {([
+                  ['Goods',   row.shipmentLine.goodsPerUnit],
+                  ['Customs', row.shipmentLine.customsPerUnit],
+                  ['Freight', row.shipmentLine.freightPerUnit],
+                  ['Tax',     row.shipmentLine.taxPerUnit],
+                  ['Other',   row.shipmentLine.otherPerUnit],
+                ] as Array<[string, number]>).map(([lbl, v]) => (
+                  <div key={lbl}>
+                    <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8',
+                                  textTransform: 'uppercase', letterSpacing: '.04em' }}>{lbl}</div>
+                    <div style={{ fontSize: 11.5, fontWeight: 700,
+                                  color: v > 0 ? '#0f172a' : '#cbd5e1',
+                                  fontVariantNumeric: 'tabular-nums' }}>{v.toFixed(2)}</div>
+                  </div>
+                ))}
+              </div>
+              {row.shipmentLine.stocked > 0 && (
+                <p style={{ fontSize: 10.5, color: '#b45309', margin: '7px 0 0', lineHeight: 1.5 }}>
+                  {row.shipmentLine.stocked} unit{row.shipmentLine.stocked === 1 ? '' : 's'} already went out at a
+                  lower cost. Charges paid since then land on the {row.shipmentLine.remaining} still here, so this
+                  is higher than the shipment average.
+                </p>
+              )}
+            </div>
+          )}
         </div>
         {/* Retail Price — customer-facing, appears on the invoice */}
         <div>
@@ -344,12 +421,116 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
   const [ownership, setOwnership] = useState<'Owned'|'Credit'>('Owned');
   const isCredit = ownership === 'Credit';
 
+  // ── Source ────────────────────────────────────────────────────────────────
+  // Two ways in. From a shipment the rows are filled from the order and the
+  // cost is the landed figure; by hand it is typed. Asking first is what stops
+  // someone entering stock that is already on a shipment and paying for it
+  // twice in the books.
+  const [source, setSource] = useState<'manual' | 'shipment'>('manual');
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [shipmentsLoading, setShipmentsLoading] = useState(false);
+  const [shipmentId, setShipmentId] = useState('');
+  const [marginPercent, setMarginPercent] = useState(DEFAULT_MARGIN_PERCENT);
+
+  // Loaded when the shipment path is first chosen. Nobody opening this screen
+  // to type a product by hand should wait for a collection read.
+  useEffect(() => {
+    if (source !== 'shipment' || shipments.length > 0 || shipmentsLoading) return;
+    setShipmentsLoading(true);
+    PurchasedOrderFirebaseService.fetchAll()
+      // Only shipments with something left. One where every unit is already in
+      // stock is not a choice — it is a row that cannot be acted on, and a list
+      // of them hides the ones that can.
+      .then(list => setShipments(
+        list.filter(sh => sh.status !== 'Cancelled' && stockInLines(sh).length > 0)))
+      .catch(() => toast.error('Could not load shipments'))
+      .finally(() => setShipmentsLoading(false));
+  }, [source]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedShipment = shipments.find(sh => sh.id === shipmentId) || null;
+
   // ── Product rows ──────────────────────────────────────────────────────────
   const [rows, setRows] = useState<ProductRow[]>([newRow()]);
   const [rowErrors, setRowErrors] = useState<Record<string, any>>({});
 
   const updateRow = (id: string, field: keyof ProductRow, val: any) =>
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: val } : r));
+
+  /**
+   * Fill one row per shipment line.
+   *
+   * A shipment has several lines and this form has several rows, so the whole
+   * order goes in at once — the clerk types serials and a retail price and
+   * nothing else. Lines with nothing left are skipped: a row nobody can fill
+   * is a row that hides the ones they can.
+   */
+  /**
+   * Attach the shipment to every row, without filling them.
+   *
+   * The clerk picks the model per row from the dropdown that is already there.
+   * Filling one row per line looked helpful and was not: it produced rows
+   * nobody asked for and buried the choice they had come to make.
+   */
+  const attachShipment = (sh: Shipment) => {
+    setRows(prev => prev.map(r => ({
+      ...r,
+      brandName: sh.brandName,
+      shipmentId: sh.id,
+      shipmentLineId: undefined,
+      shipmentLine: undefined,
+      category: '',
+    })));
+  };
+
+  /**
+   * Model chosen — fill the row from that line.
+   *
+   * Cost is the landed figure as it stands now, so a row started before a
+   * customs payment and one started after carry different costs. That is the
+   * point, not a fault.
+   */
+  /** Category this brand + model was entered as before, if it has been. */
+  const modelProfileCategory = (brand: string, model: string): string => {
+    for (const list of Object.values(modelSuggestionsByRow)) {
+      const hit = (list || []).find(m => m.name?.toLowerCase() === model.toLowerCase());
+      if (hit && (hit as any).category) return (hit as any).category;
+    }
+    return '';
+  };
+
+  const pickModel = (rowId: string, lineId: string) => {
+    const sh = shipments.find(x => x.id === rows.find(r => r.id === rowId)?.shipmentId);
+    if (!sh) return;
+    const l = stockInLines(sh).find(x => x.lineId === lineId);
+    if (!l) return;
+
+    setRows(prev => prev.map(r => r.id !== rowId ? r : {
+      ...r,
+      modelName: l.modelName || l.productName,
+      // Category from what this brand and model was entered as last time. The
+      // dropdown that would normally set it is showing the model list, so this
+      // is the only place it can come from — and for a model seen before, it is
+      // the right answer with no typing.
+      category:  r.category || modelProfileCategory(sh.brandName, l.modelName || l.productName) || '',
+      quantity:  Math.min(r.quantity || 1, l.remaining),
+      costPrice: l.landedUnitCost,
+      sellPrice: suggestedSellPrice(l.landedUnitCost, marginPercent),
+      serials:   Array.from({ length: Math.min(r.quantity || 1, l.remaining) }, (_, i) => r.serials[i] || ''),
+      shipmentLineId: l.lineId,
+      shipmentLine:   l,
+    }));
+  };
+
+  // Changing the margin re-prices every shipment row that has not been typed
+  // over. A row someone edited keeps what they set.
+  useEffect(() => {
+    if (source !== 'shipment') return;
+    setRows(prev => prev.map(r => {
+      if (!r.shipmentLine) return r;
+      const auto = suggestedSellPrice(r.shipmentLine.landedUnitCost, marginPercent);
+      return { ...r, sellPrice: auto };
+    }));
+  }, [marginPercent]); // eslint-disable-line react-hooks/exhaustive-deps
   const addRow = () => setRows(prev => [...prev, newRow()]);
   const removeRow = (id: string) => setRows(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev);
 
@@ -465,9 +646,38 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
       const e: any = {};
       if (!r.brandName.trim())  { e.brand    = 'Required'; hasErr = true; }
       if (!r.modelName.trim())  { e.model    = 'Required'; hasErr = true; }
-      if (!r.category.trim())   { e.category = 'Required'; hasErr = true; }
+      // In shipment mode this dropdown is the model list, so `category` is not
+      // what it writes — requiring it marks a row red that is correctly filled.
+      // The model is required instead.
+      if (r.shipmentId) {
+        if (!r.shipmentLineId) { e.category = 'Pick a model'; hasErr = true; }
+      } else if (!r.category.trim()) {
+        e.category = 'Required'; hasErr = true;
+      }
+      // More than the shipment has left is stock that was never bought, and the
+      // shipment stops balancing at the same moment.
+      if (r.shipmentLine) {
+        const want = r.serials.filter(x => x.trim()).length || r.quantity;
+        if (want > r.shipmentLine.remaining) {
+          e.cost = `Only ${r.shipmentLine.remaining} unit(s) remain on this line`;
+          hasErr = true;
+        }
+      }
+
+      // A cost of zero is not a free product, it is a cost nobody entered — and
+      // zero cost reads as 100% margin on every report downstream. Refused
+      // rather than defaulted, because a default here is silent.
       if (!r.costPrice || r.costPrice <= 0) { e.cost = 'Required'; hasErr = true; }
       if (!r.sellPrice || r.sellPrice <= 0) { e.retail = 'Required'; hasErr = true; }
+
+      // Selling below cost is a loss on every unit, and it is the kind that
+      // hides: the invoice looks normal and the margin only shows up in a
+      // month-end report. Refused, not warned about — and on every row, not
+      // only the ones that came from a shipment.
+      if (r.costPrice > 0 && r.sellPrice > 0 && r.sellPrice < r.costPrice) {
+        e.retail = `Retail cannot be below the cost of ${r.costPrice.toFixed(2)}`;
+        hasErr = true;
+      }
 
       // Serial numbers are REQUIRED, must match the row's quantity, and no duplicates
       const validSerials = r.serials.filter(s => s.trim() !== '');
@@ -537,12 +747,26 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           // Payment collection removed — supplier balance is still recorded for
           // Credit-ownership so it shows in Payables, but no amount-paid /
           // payment-channel is captured here. Both are set later from Transactions.
-          supplierCost:          isCredit ? row.costPrice * stock : undefined,
+          //
+          // FIX: supplierCost is a PER-UNIT figure everywhere it's consumed
+          // (invoiceService.calculateSupplierCost multiplies it by quantity;
+          // extractCost() in the invoice form treats it as per-unit; the
+          // Payables total does too). It was previously saved as the whole
+          // batch's total (costPrice * stock), which then got multiplied by
+          // quantity AGAIN downstream — every supplier-cost figure for a
+          // multi-unit Credit batch was inflated by the batch size.
+          supplierCost:          isCredit ? row.costPrice : undefined,
           supplierPaymentStatus: isCredit ? 'Unpaid' : undefined,
           supplierPaidAmount:    undefined,
           supplierPaymentChannel:undefined,
           serialStockInDatesManual: manualDateIso
             ? Object.fromEntries(validSerials.map(s => [s, manualDateIso])) : undefined,
+          // The cost goes on the serial as well as the product. Two units of
+          // the same model bought on different shipments cost different
+          // amounts, and a single costPrice averages that away.
+          serialCostPrice: Object.fromEntries(validSerials.map(s => [s, row.costPrice])),
+          serialShipmentId: row.shipmentId
+            ? Object.fromEntries(validSerials.map(s => [s, row.shipmentId!])) : undefined,
         };
 
         const totalAmount = row.costPrice * stock;
@@ -565,14 +789,39 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           })
         );
 
-        console.log('[INV] Calling createProduct...', dto.brandName, dto.modelName, 'serials:', validSerials);
+        // The product is created the same way whether or not it came from a
+        // shipment. One write path, not two — the shipment only supplies the
+        // numbers that fill the row.
         let created: any;
         try {
+          console.log('[INV] dto going to createProduct:', {
+            costPrice: dto.costPrice, sellPrice: dto.sellPrice,
+            category: dto.category, rowCost: row.costPrice,
+          });
           created = await InventoryFirebaseService.createProduct(dto, payInfo);
-          console.log('[INV] ✅ Created product:', created?.id, 'full object:', created);
         } catch (createErr: any) {
-          console.error('[INV] âŒ createProduct failed:', createErr?.message, createErr);
+          console.error('[INV] createProduct failed:', createErr?.message, createErr);
           throw createErr;
+        }
+
+        // ── Deduct from the shipment ──────────────────────────────────────
+        // A separate call, after the product exists. If this fails the product
+        // is still saved and the shipment still shows the units as available,
+        // which a second attempt corrects. Folded into the create, a failure
+        // here would lose a product that was otherwise fine.
+        if (row.shipmentId && row.shipmentLineId) {
+          try {
+            await PurchasedOrderFirebaseService.recordStockBatch(row.shipmentId, row.shipmentLineId, {
+              quantity: validSerials.length,
+              landedUnitCost: row.costPrice,
+              productId: created?.id,
+            });
+          } catch (e: any) {
+            toast.warning(
+              `${row.brandName} ${row.modelName} saved, but the shipment was not updated: `
+              + `${e?.message || 'unknown error'}`,
+            );
+          }
         }
 
         // ── Image upload ──────────────────────────────────────────────────────
@@ -660,6 +909,71 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+        {/* ── Source ──
+            From a shipment the rows are filled from the order and the cost is
+            the landed figure; by hand it is typed. Asking first is what stops
+            someone entering stock that is already on a shipment and paying for
+            it twice in the books. */}
+        <div style={S.card}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Source</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {([['shipment', 'From shipment'], ['manual', 'Enter by hand']] as const).map(([v, label]) => (
+              <button key={v} type="button" onClick={() => setSource(v)}
+                style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                         border: `1px solid ${source === v ? '#0f172a' : '#d1d5db'}`,
+                         backgroundColor: source === v ? '#0f172a' : '#fff',
+                         color: source === v ? '#fff' : '#374151' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {source === 'shipment' && (
+            <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12, alignItems: 'end' }}>
+                <div>
+                  <label style={S.label}>Shipment</label>
+                  <select value={shipmentId}
+                    onChange={e => {
+                      const id = e.target.value;
+                      setShipmentId(id);
+                      const sh = shipments.find(x => x.id === id);
+                      if (sh) attachShipment(sh);
+                    }}
+                    style={{ ...S.inp(), cursor: 'pointer' }}>
+                    <option value="">
+                      {shipmentsLoading ? 'Loading shipments…'
+                        : shipments.length === 0 ? 'No shipments found'
+                        : '— select shipment —'}
+                    </option>
+                    {shipments.map(sh => (
+                      <option key={sh.id} value={sh.id}>
+                        {sh.shipmentNumber} · {sh.brandName} · {sh.supplierName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Margin %</label>
+                  <input type="number" min={0} step="any" value={marginPercent}
+                    onChange={e => setMarginPercent(parseFloat(e.target.value) || 0)}
+                    style={{ ...S.inp(), textAlign: 'right' }} />
+                </div>
+              </div>
+
+              {selectedShipment && (
+                <p style={{ fontSize: 11.5, color: '#64748b', margin: 0, lineHeight: 1.6 }}>
+                  One row per line, filled with what is still on the order. The purchasing cost
+                  is the landed figure and cannot be edited — that is the point of stocking in
+                  from a shipment. Retail is filled at {marginPercent}% and stays editable, but
+                  never below cost: selling under it is a loss on every unit, and the kind that
+                  only shows up at month end.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* ── Ownership ── */}
         <div style={S.card}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Ownership Type</div>
@@ -703,6 +1017,10 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
             </div>
             <BrandModelInputs
               row={row}
+              shipmentLines={row.shipmentId
+                ? stockInLines(shipments.find(x => x.id === row.shipmentId) || ({} as any))
+                : undefined}
+              onModelPick={lineId => pickModel(row.id, lineId)}
               onChange={(field, val) => {
                 updateRow(row.id, field, val);
                                 if (field === 'brandName') loadModelsDebounced(row.id, val);

@@ -91,6 +91,40 @@ export function convertCurrency(
 export const calculateTotal = (products: InvoiceProduct[]): number =>
   products.reduce((sum, p) => sum + p.total, 0);
 
+// ── Cost extraction seam ──────────────────────────────────────────────────────
+// Reads supplier/purchase cost from an inventory product. The exact field names
+// live in the inventory module; this fallback chain is non-destructive (missing
+// fields yield 0).
+//
+// SHARED on purpose: this used to be duplicated (and, in QuickInvoiceModal's
+// case, re-implemented incorrectly — it read a `purchaseCost` field that does
+// not exist on Product, and skipped the ownership check entirely) across every
+// screen that creates an invoice. One function, one place to fix.
+export function extractCost(p: any): { supplierCost: number; purchaseCost: number } {
+  const isCredit = p.ownershipType === 'Credit';
+  const isOwned = !p.ownershipType || p.ownershipType === 'Owned';
+  const costFallback = Number(p.costPrice ?? p.cost ?? 0) || 0;
+
+  const rawSupplier = Number(p.supplierCost ?? p.supplierPrice ?? p.supplierRate ?? 0) || 0;
+  const rawPurchase = Number(p.purchaseCost ?? p.purchasePrice ?? p.landedCost ?? p.buyingPrice ?? 0) || 0;
+
+  // Both, not one or the other.
+  //
+  // A product stocked in from a shipment is Owned, and the shipment still
+  // tracks what is owed to the supplier — zeroing one of them throws away a
+  // figure that exists. The fallback still goes to whichever matches the
+  // ownership, so nothing that worked before changes.
+  if (isCredit) {
+    return { supplierCost: rawSupplier || costFallback, purchaseCost: rawPurchase };
+  }
+  if (isOwned) {
+    return { supplierCost: rawSupplier, purchaseCost: rawPurchase || costFallback };
+  }
+  // Unknown ownership — use whichever is set, prefer purchase cost
+  if (rawSupplier > 0 && rawPurchase === 0) return { supplierCost: rawSupplier, purchaseCost: 0 };
+  return { supplierCost: 0, purchaseCost: rawPurchase || costFallback };
+}
+
 // ── Cost / expense / net helpers ───────────────────────────────────────────
 // Miscellaneous expense = every non-product charge on the invoice.
 export const calculateMiscExpense = (inv: Partial<Invoice>): number =>

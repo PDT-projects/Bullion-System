@@ -365,6 +365,38 @@ export class TransactionFirebaseService {
       }
       const data = snap.data() as any;
 
+      // A ledger entry linked to a shipment has a second half — a charge or a
+      // supplier payment. Deleting the entry without reversing it would leave
+      // the costing sheet holding a figure the ledger no longer has.
+      //
+      // Refused outright once the costing is finalised: the landed cost is a
+      // number someone has used, and a deletion moving it silently is how a
+      // figure that was right on Monday is wrong on Friday with nothing
+      // recording why. Reopen the costing first.
+      if (data.shipmentId) {
+        const { PurchasedOrderFirebaseService } = await import(
+          '../../purchased-orders/models/purchasedOrderFirebaseService'
+        );
+        const shipment = await PurchasedOrderFirebaseService.fetchById(data.shipmentId);
+
+        if (shipment) {
+          const isSupplierPay = data.shipmentPaymentKind === 'Shipment';
+
+          if (!isSupplierPay && shipment.costingStatus === 'Complete') {
+            throw new Error(
+              `This payment is part of shipment ${shipment.shipmentNumber}, whose costing is finalised. `
+              + 'Reopen the costing before deleting it.',
+            );
+          }
+
+          if (isSupplierPay) {
+            await PurchasedOrderFirebaseService.removeSupplierPaymentByTransaction(shipment.id, id);
+          } else {
+            await PurchasedOrderFirebaseService.removeChargeByTransaction(shipment.id, id);
+          }
+        }
+      }
+
       const archive = deepStripUndefined({
         ...data,
         originalId:     id,

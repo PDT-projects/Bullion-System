@@ -36,6 +36,9 @@ import { CATEGORIES } from '../viewModels/useInventoryMultimodelViewModel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+import type { Shipment } from '../../purchased-orders/models/types';
+import type { StockInLine } from '../models/shipmentStockIn';
+
 interface BankOption { id: string; name: string; balance: number; }
 
 interface CreateInventoryViewProps {
@@ -59,6 +62,20 @@ interface CreateInventoryViewProps {
   goToPreviousStep: () => void;
   handleSubmit: () => void;
   handleCancel: () => void;
+  // ── Stock in from a shipment (optional — the wrapper may not pass them) ──
+  source?: 'manual' | 'shipment';
+  setSource?: (s: 'manual' | 'shipment') => void;
+  shipments?: Shipment[];
+  shipmentsLoading?: boolean;
+  selectedShipmentId?: string;
+  setSelectedShipmentId?: (id: string) => void;
+  shipmentLines?: StockInLine[];
+  selectedLineId?: string;
+  setSelectedLineId?: (id: string) => void;
+  selectedLine?: StockInLine | null;
+  marginPercent?: number;
+  setMarginPercent?: (n: number) => void;
+
   // Images (optional)
   selectedImages?: File[];
   addImages?: (files: File[]) => void;
@@ -317,6 +334,18 @@ export function CreateInventoryView({
   goToPreviousStep,
   handleSubmit,
   handleCancel,
+  source = 'manual',
+  setSource,
+  shipments = [],
+  shipmentsLoading = false,
+  selectedShipmentId = '',
+  setSelectedShipmentId,
+  shipmentLines = [],
+  selectedLineId = '',
+  setSelectedLineId,
+  selectedLine = null,
+  marginPercent = 25,
+  setMarginPercent,
   selectedImages = [],
   addImages,
   removeImage,
@@ -440,8 +469,159 @@ export function CreateInventoryView({
   // ══════════════════════════════════════════════════════════════════════════
   const renderDetailsStep = () => {
     const isCredit = (formData as any).ownershipType === 'Credit';
+    const fromShipment = source === 'shipment';
     return (
     <div className="space-y-6">
+
+      {/* ── Where this stock comes from ────────────────────────────────────
+          Two paths through one screen. From a shipment the cost is the landed
+          figure and the units come off the order; by hand it is typed. Asking
+          first is what stops someone entering stock that is already on a
+          shipment and paying for it twice in the books. */}
+      {setSource && (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Source</label>
+          <div className="flex gap-2">
+            {(['shipment', 'manual'] as const).map(opt => (
+              <button key={opt} type="button" onClick={() => setSource(opt)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                  source === opt
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                {opt === 'shipment' ? 'From shipment' : 'Enter by hand'}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {fromShipment && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-4">
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Shipment</label>
+            <select value={selectedShipmentId}
+              onChange={e => setSelectedShipmentId?.(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm">
+              <option value="">
+                {shipmentsLoading ? 'Loading shipments…'
+                  : shipments.length === 0 ? 'No shipments found'
+                  : '— select shipment —'}
+              </option>
+              {shipments.map(sh => (
+                <option key={sh.id} value={sh.id}>
+                  {sh.shipmentNumber} · {sh.brandName} · {sh.supplierName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Lines with nothing left are not listed — a row reading 0 remaining
+              is a row nobody can act on, and four of them hide the one that
+              matters. */}
+          {selectedShipmentId && (
+            shipmentLines.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                Every unit on this shipment has already been stocked in.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+                      <th className="px-3 py-2 text-left font-semibold">Product</th>
+                      <th className="px-3 py-2 text-right font-semibold">Ordered</th>
+                      <th className="px-3 py-2 text-right font-semibold">Stocked</th>
+                      <th className="px-3 py-2 text-right font-semibold">Left</th>
+                      <th className="px-3 py-2 text-right font-semibold">Landed / unit</th>
+                      <th className="px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shipmentLines.map(l => {
+                      const on = l.lineId === selectedLineId;
+                      return (
+                        <tr key={l.lineId}
+                          onClick={() => setSelectedLineId?.(l.lineId)}
+                          className={`border-t border-gray-100 cursor-pointer transition-colors ${
+                            on ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                          <td className="px-3 py-2 font-medium text-gray-900">
+                            {l.productName}
+                            {l.modelName && <span className="text-gray-400"> · {l.modelName}</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-gray-600">{l.ordered}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-gray-600">{l.stocked || '—'}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900">{l.remaining}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700">
+                            {l.landedUnitCost.toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {on && <span className="text-indigo-600 text-xs font-bold">selected</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+
+          {/* What makes up the cost. Shown because a locked figure with no
+              working behind it is the thing people stop trusting first. */}
+          {selectedLine && (
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">
+                Landed cost per unit
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                {([
+                  ['Goods',   selectedLine.goodsPerUnit],
+                  ['Customs', selectedLine.customsPerUnit],
+                  ['Freight', selectedLine.freightPerUnit],
+                  ['Tax',     selectedLine.taxPerUnit],
+                  ['Other',   selectedLine.otherPerUnit],
+                ] as Array<[string, number]>).map(([label, v]) => (
+                  <div key={label}>
+                    <div className="text-xs text-gray-400">{label}</div>
+                    <div className={`tabular-nums font-semibold ${v > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
+                      {v.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700">Cost per unit</span>
+                <span className="text-lg font-bold tabular-nums text-gray-900">
+                  {selectedLine.landedUnitCost.toFixed(2)}
+                </span>
+              </div>
+              {selectedLine.stocked > 0 && (
+                <p className="mt-2 text-xs text-amber-700">
+                  {selectedLine.stocked} unit{selectedLine.stocked === 1 ? '' : 's'} already went out at a lower
+                  cost. Charges paid since then land on the {selectedLine.remaining} still here, so this is
+                  higher than the shipment average.
+                </p>
+              )}
+            </div>
+          )}
+
+          {selectedLine && setMarginPercent && (
+            <div className="flex items-end gap-3">
+              <div className="w-32">
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Margin %</label>
+                <input type="number" min={0} step="any" value={marginPercent}
+                  onChange={e => setMarginPercent(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm tabular-nums" />
+              </div>
+              <p className="text-xs text-gray-500 pb-2.5">
+                Fills the sell price. It stays editable, but never below {selectedLine.landedUnitCost.toFixed(2)} —
+                selling under cost is a loss on every unit, and it is the kind that only shows up at month end.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Ownership Toggle — Credit or Owned ── */}
       <div>
