@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Inventory Module - Firebase Firestore Service Layer
  *
  * FIX: deleteProduct now HARD-DELETES from the `products` collection after
  * archiving to `deleted_products`. Previously it only set isDeleted:true,
- * leaving the document in `products` — causing the collection to appear
+ * leaving the document in `products` â€” causing the collection to appear
  * empty in the Firebase Console and confusing live queries.
  *
  * deleteSerial similarly hard-deletes when the last serial is removed.
@@ -50,7 +50,7 @@ export async function uploadInventoryImages(
       .then(() => getDownloadURL(fileRef));
     const timeoutPromise = new Promise<string>((_, reject) =>
       setTimeout(() => reject(new Error(
-        `Upload timed out after ${timeoutMs / 1000}s — check Firebase Storage CORS configuration.`
+        `Upload timed out after ${timeoutMs / 1000}s â€” check Firebase Storage CORS configuration.`
       )), timeoutMs)
     );
     return Promise.race([uploadPromise, timeoutPromise]);
@@ -281,7 +281,7 @@ export class InventoryFirebaseService {
 
   static async fetchAllProducts(): Promise<Product[]> {
     try {
-      console.log('🔥 Fetching all products...');
+      console.log('ðŸ”¥ Fetching all products...');
       const q = query(collection(db, PRODUCTS_COLLECTION), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
       const products: Product[] = [];
@@ -290,10 +290,10 @@ export class InventoryFirebaseService {
         if ((d.data() as any).isDeleted) return;
         products.push(transformDocToProduct(d));
       });
-      console.log(`✅ Fetched ${products.length} products`);
+      console.log(`âœ… Fetched ${products.length} products`);
       return products;
     } catch (error) {
-      console.error('❌ Error fetching products:', error);
+      console.error('âŒ Error fetching products:', error);
       throw new Error('Failed to fetch products from Firestore');
     }
   }
@@ -321,7 +321,7 @@ export class InventoryFirebaseService {
       }
       return products;
     } catch (error) {
-      console.error(`❌ Error fetching ${inventoryType} products:`, error);
+      console.error(`âŒ Error fetching ${inventoryType} products:`, error);
       throw new Error('Failed to fetch products from Firestore');
     }
   }
@@ -376,7 +376,7 @@ export class InventoryFirebaseService {
     paymentInfo?: { paymentStatus: 'paid' | 'unpaid' | 'partial'; transactionId?: string; paidAmount?: number; totalAmount?: number; }
   ): Promise<Product> {
     try {
-      console.log('🔥 Creating product:', dto.brandName, dto.modelName);
+      console.log('ðŸ”¥ Creating product:', dto.brandName, dto.modelName);
       const now = new Date().toISOString();
       const serialStatus: { [key: string]: SerialStatus } = {};
       dto.serialNumbers.forEach(s => { serialStatus[s] = 'Available'; });
@@ -437,10 +437,10 @@ export class InventoryFirebaseService {
       });
 
       const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), data);
-      console.log('✅ Product created:', docRef.id);
+      console.log('âœ… Product created:', docRef.id);
       return transformDocToProduct(await getDoc(docRef));
     } catch (error) {
-      console.error('❌ Error creating product:', error);
+      console.error('âŒ Error creating product:', error);
       if (error instanceof Error && error.message.toLowerCase().includes('duplicate')) throw error;
       throw new Error('Failed to create product in Firestore');
     }
@@ -448,7 +448,7 @@ export class InventoryFirebaseService {
      /**
    * Add serials to a product that already exists.
    *
-   * A second batch from a shipment is not a new product — it is the same model,
+   * A second batch from a shipment is not a new product â€” it is the same model,
    * bought later at a different landed cost. The serials join the array, the
    * cost goes on the serial, and costPrice becomes the weighted average so
    * every report that reads it keeps a sensible number.
@@ -506,7 +506,7 @@ export class InventoryFirebaseService {
   }
   static async updateProduct(id: string, dto: UpdateProductDTO): Promise<Product> {
     try {
-      console.log('🔥 Updating product:', id);
+      console.log('ðŸ”¥ Updating product:', id);
       const now = new Date().toISOString();
       let costingFields = {};
       if (dto.costingOption === 'with' && dto.costing) {
@@ -522,7 +522,7 @@ export class InventoryFirebaseService {
        * Only what the caller actually sent.
        *
        * costPrice and description were unconditional with a `?? 0` and a `?? ''`
-       * behind them, so a partial update — attaching an image, say — wrote a
+       * behind them, so a partial update â€” attaching an image, say â€” wrote a
        * cost of zero and a blank description over whatever the product had.
        *
        * The product was created with 315, the image upload called this a moment
@@ -562,10 +562,10 @@ export class InventoryFirebaseService {
       Object.assign(updateData, costingFields);
       const ref = doc(db, PRODUCTS_COLLECTION, id);
       await updateDoc(ref, updateData);
-      console.log('✅ Product updated:', id);
+      console.log('âœ… Product updated:', id);
       return transformDocToProduct(await getDoc(ref));
     } catch (error) {
-      console.error(`❌ Error updating product ${id}:`, error);
+      console.error(`âŒ Error updating product ${id}:`, error);
       throw new Error('Failed to update product in Firestore');
     }
   }
@@ -576,7 +576,7 @@ export class InventoryFirebaseService {
         receivableStatus: 'Received', status: 'Available' as ProductStatus,
         receivedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       });
-      console.log('✅ Product received:', id);
+      console.log('âœ… Product received:', id);
     } catch (error) {
       throw new Error('Failed to receive product in Firestore');
     }
@@ -592,7 +592,7 @@ export class InventoryFirebaseService {
     deletedBy: { uid: string; email: string; displayName?: string }
   ): Promise<void> {
     try {
-      console.log(`🔥 Deleting product ${id} by ${deletedBy.email}...`);
+      console.log(`ðŸ”¥ Deleting product ${id} by ${deletedBy.email}...`);
       const productRef  = doc(db, PRODUCTS_COLLECTION, id);
       const productSnap = await getDoc(productRef);
       if (!productSnap.exists()) throw new Error(`Product ${id} not found`);
@@ -609,12 +609,12 @@ export class InventoryFirebaseService {
       });
 
       // Step 2: HARD DELETE from products collection
-      // (previously only set isDeleted:true — fixed here)
+      // (previously only set isDeleted:true â€” fixed here)
       await deleteDoc(productRef);
 
-      console.log(`✅ Product ${id} archived to deleted_products and removed from products collection`);
+      console.log(`âœ… Product ${id} archived to deleted_products and removed from products collection`);
     } catch (error) {
-      console.error(`❌ Error deleting product ${id}:`, error);
+      console.error(`âŒ Error deleting product ${id}:`, error);
       throw new Error('Failed to delete product');
     }
   }
@@ -628,7 +628,7 @@ export class InventoryFirebaseService {
     deletedBy: { uid: string; email: string; displayName?: string }
   ): Promise<void> {
     try {
-      console.log(`🔥 Deleting serial ${serial} of product ${productId}...`);
+      console.log(`ðŸ”¥ Deleting serial ${serial} of product ${productId}...`);
       const productRef  = doc(db, PRODUCTS_COLLECTION, productId);
       const productSnap = await getDoc(productRef);
       if (!productSnap.exists()) throw new Error(`Product ${productId} not found`);
@@ -638,9 +638,9 @@ export class InventoryFirebaseService {
       const now = new Date().toISOString();
       const remainingSerials = existingSerials.filter(s => s !== serial);
 
-      // Last serial — delegate to deleteProduct (which now hard-deletes)
+      // Last serial â€” delegate to deleteProduct (which now hard-deletes)
       if (existingSerials.includes(serial) && remainingSerials.length === 0) {
-        console.log(`↪️  Last serial — delegating to deleteProduct for ${productId}`);
+        console.log(`â†ªï¸  Last serial â€” delegating to deleteProduct for ${productId}`);
         await this.deleteProduct(productId, deletedBy);
         return;
       }
@@ -680,9 +680,9 @@ export class InventoryFirebaseService {
           serialSoldDates: cleanedSold, serialInvoiceNumbers: cleanedInvoice, updatedAt: now,
         });
       }
-      console.log(`✅ Serial ${serial} deleted — remaining: ${remainingSerials.length}`);
+      console.log(`âœ… Serial ${serial} deleted â€” remaining: ${remainingSerials.length}`);
     } catch (error) {
-      console.error(`❌ Error deleting serial ${serial}:`, error);
+      console.error(`âŒ Error deleting serial ${serial}:`, error);
       throw new Error('Failed to delete serial');
     }
   }
@@ -729,10 +729,33 @@ export class InventoryFirebaseService {
         serialInvoiceSupplierCost:  nextSupCost,
         updatedAt: now,
       });
-      console.log(`✅ Marked ${sales.length} serial(s) as Sold on product ${productId}`);
+      console.log(`âœ… Marked ${sales.length} serial(s) as Sold on product ${productId}`);
     } catch (error) {
-      console.error(`❌ Error marking serials sold on ${productId}:`, error);
+      console.error(`âŒ Error marking serials sold on ${productId}:`, error);
       throw new Error('Failed to mark serials as sold');
+    }
+  }
+
+  static async updateSerialPaymentStatus(
+    productId: string,
+    serials: string[],
+    paymentStatus: 'Paid' | 'Partial' | 'Unpaid',
+  ): Promise<void> {
+    if (!productId || !serials || serials.length === 0) return;
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const p = snap.data() as any;
+      const nextPayStat: Record<string, any> = { ...(p.serialInvoicePaymentStatus || {}) };
+      serials.forEach(s => { if (s) nextPayStat[s] = paymentStatus; });
+      await updateDoc(ref, {
+        serialInvoicePaymentStatus: nextPayStat,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error(`Error updating serial payment status on ${productId}:`, error);
+      throw new Error('Failed to update serial payment status');
     }
   }
 
@@ -754,7 +777,7 @@ export class InventoryFirebaseService {
           _archiveId:     d.id,
         });
       });
-      console.log(`✅ Fetched ${results.length} deleted products`);
+      console.log(`âœ… Fetched ${results.length} deleted products`);
       return results;
     } catch (error) {
       throw new Error('Failed to fetch deleted products');
@@ -770,7 +793,7 @@ export class InventoryFirebaseService {
     originalId: string
   ): Promise<void> {
     try {
-      console.log(`🔥 Restoring product ${originalId} from archive ${archiveId}...`);
+      console.log(`ðŸ”¥ Restoring product ${originalId} from archive ${archiveId}...`);
       const archiveRef  = doc(db, DELETED_PRODUCTS_COLLECTION, archiveId);
       const archiveSnap = await getDoc(archiveRef);
       if (!archiveSnap.exists()) throw new Error('Archive record not found');
@@ -785,10 +808,10 @@ export class InventoryFirebaseService {
       const existingSnap = await getDoc(productRef);
 
       if (existingSnap.exists()) {
-        // Document exists (legacy isDeleted flag) — update it
+        // Document exists (legacy isDeleted flag) â€” update it
         await updateDoc(productRef, { ...cleanData, isDeleted: false, updatedAt: new Date().toISOString() });
       } else {
-        // Document was hard-deleted — recreate it
+        // Document was hard-deleted â€” recreate it
         // We can't set a specific doc ID with addDoc, so we use setDoc equivalent
         const { setDoc } = await import('firebase/firestore');
         await setDoc(productRef, { ...cleanData, updatedAt: new Date().toISOString() });
@@ -796,9 +819,9 @@ export class InventoryFirebaseService {
 
       // Remove from deleted_products archive
       await deleteDoc(archiveRef);
-      console.log(`✅ Product ${originalId} restored to products collection`);
+      console.log(`âœ… Product ${originalId} restored to products collection`);
     } catch (error) {
-      console.error(`❌ Error restoring product ${originalId}:`, error);
+      console.error(`âŒ Error restoring product ${originalId}:`, error);
       throw new Error('Failed to restore product');
     }
   }
@@ -838,7 +861,7 @@ export class InventoryFirebaseService {
         ownershipType: d.ownershipType === 'Credit' ? 'Owned' : d.ownershipType,
         updatedAt: now,
       }));
-      console.log(`✅ Serial ${serial} returned to stock on product ${productId}`);
+      console.log(`âœ… Serial ${serial} returned to stock on product ${productId}`);
     } catch (error) {
       throw new Error('Failed to return serial to stock');
     }
@@ -868,7 +891,7 @@ export class InventoryFirebaseService {
         serialNumbers, serialStatus, serialCities, serialStockInDates,
         stock: Math.max(0, (d.stock || 0) - 1), updatedAt: now,
       }));
-      console.log(`✅ Serial ${serial} moved to damaged inventory`);
+      console.log(`âœ… Serial ${serial} moved to damaged inventory`);
     } catch (error) {
       throw new Error('Failed to move serial to damaged inventory');
     }
@@ -911,7 +934,7 @@ export class InventoryFirebaseService {
           supplierCost:            (serial ? (p as any).serialInvoiceSupplierCost?.[serial] : undefined)
                                    ?? (p.ownershipType === 'Credit' ? p.supplierCost : undefined),
           purchasingCost:          p.ownershipType === 'Owned'  ? p.costPrice               : undefined,
-          // The invoice's payment status — which is what "Sold Goods Payment"
+          // The invoice's payment status â€” which is what "Sold Goods Payment"
           // means. The supplier one stays as a fallback so Credit stock that has
           // not been sold still shows something.
           supplierPaymentStatus:   (serial ? (p as any).serialInvoicePaymentStatus?.[serial] : undefined)
@@ -1110,7 +1133,7 @@ export class BrandModelFirebaseService {
       const key  = want.toLowerCase();
 
       // Firestore equality is case-sensitive, so "Nokta", "nokta" and "NOKTA"
-      // used to become three separate brands — each with its own models and
+      // used to become three separate brands â€” each with its own models and
       // its own slice of the stock. Match in memory before creating.
       const snap = await getDocs(collection(db, BRANDS_COLLECTION));
       const existing = snap.docs.find(
@@ -1133,7 +1156,7 @@ export class BrandModelFirebaseService {
       const want = name.trim();
       const key  = want.toLowerCase();
 
-      // Same case-sensitivity trap as createBrand — one equality filter on
+      // Same case-sensitivity trap as createBrand â€” one equality filter on
       // brandId (which is exact), then match the name in memory.
       const snap = await getDocs(
         query(collection(db, MODELS_COLLECTION), where('brandId', '==', brandId)),

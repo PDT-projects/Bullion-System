@@ -1,4 +1,4 @@
-// Transactions Module - Types
+﻿// Transactions Module - Types
 
 export interface PartialPayment {
   id: string;
@@ -23,11 +23,11 @@ export interface Attachment {
   uploadedAt: string;
 }
 
-// ── Approval Status ────────────────────────────────────────────────────────────
-// pending_approval  → just created, waiting for admin to approve via email
-// approved          → admin clicked Approve in email
-// rejected          → admin clicked Reject in email
-// not_required      → legacy / manually bypassed
+// â”€â”€ Approval Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// pending_approval  â†’ just created, waiting for admin to approve via email
+// approved          â†’ admin clicked Approve in email
+// rejected          â†’ admin clicked Reject in email
+// not_required      â†’ legacy / manually bypassed
 export type ApprovalStatus =
   | 'pending_approval'
   | 'approved'
@@ -80,13 +80,6 @@ export interface Transaction {
   isFullyCleared?: boolean;
   depositedToBank?: boolean;
       attachments?: Attachment[];
-  // Bill-specific fields
-  billMonth?: string;
-  imageUrl?: string;
-   // Salary-specific fields
-  salaryCurrency?: string;
-  salaryAED?: number;
-  salaryPKR?: number;
   // Profit & Loss classification
   plMainCategory?: PLMainCategory;
   plSubCategory?: string;
@@ -116,14 +109,14 @@ export interface Transaction {
   createdAt?: string;
   updatedAt?: string;
 
-  // ────────────────────────────────────────────────────────────────
-  // Phase 1 — NEW fields (all optional, backward-compat with legacy)
-  // ────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Phase 1 â€” NEW fields (all optional, backward-compat with legacy)
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   //
   // Semantic mapping between old model and new UI:
-  //   • `mainCategory` ('Cash Inflow' | 'Cash Outflow')  ↔  UI "TYPE"     (Inflow / Outflow)
-  //   • `subCategory`                                     ↔  UI "CATEGORY"
-  //   • `subCategoryDetail`  (NEW)                        ↔  UI "SUB CATEGORY" (third level, user-managed per category)
+  //   â€¢ `mainCategory` ('Cash Inflow' | 'Cash Outflow')  â†”  UI "TYPE"     (Inflow / Outflow)
+  //   â€¢ `subCategory`                                     â†”  UI "CATEGORY"
+  //   â€¢ `subCategoryDetail`  (NEW)                        â†”  UI "SUB CATEGORY" (third level, user-managed per category)
   //
   // Read helpers in transactionsService.ts (`getTxAccount`, `getTxCategoryPath`)
   // resolve this for both new AND legacy transactions, so anywhere that already
@@ -175,7 +168,7 @@ export interface Transaction {
   branchId?: string;
   branchName?: string;
 
-  /** Optional remitter (Inflow only) — "Who sent this money" in the reference UI. */
+  /** Optional remitter (Inflow only) â€” "Who sent this money" in the reference UI. */
   remitterName?: string;
 
   /** Required attachment URL on new records. Legacy records may only have `attachments[]`. */
@@ -227,7 +220,7 @@ export interface PendingPaymentData {
   chequeBank?: string;
 }
 
-// ── In-app Notification (stored in Firestore /appNotifications) ───────────────
+// â”€â”€ In-app Notification (stored in Firestore /appNotifications) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export type AppNotificationType =
   | 'transaction_pending_approval'
   | 'transaction_approved'
@@ -252,14 +245,14 @@ export interface AppNotification {
   expiresAt?: string;
 }
 
-// ── Company / Branch (user-managed, stored in Firestore /companies) ───────────
+// â”€â”€ Company / Branch (user-managed, stored in Firestore /companies) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export interface Company {
   id: string;
   name: string;
   createdAt: string;
 }
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const COMPANIES = [
   { id: 'sau', name: 'Bullion Electronics - Saudia' },
@@ -280,14 +273,14 @@ export const INVOICE_MISC_EXPENSE_CATEGORY = 'Invoice Misc Expense';
 /** Special Inflow category that opens an invoice-picker for recording customer
  *  payments against a sales invoice. Modal routes the save through
  *  InvoicePaymentService.recordPayment (which updates invoice payment history
- *  AND books the ledger entry — modal must NOT double-book). */
+ *  AND books the ledger entry â€” modal must NOT double-book). */
 export const SALES_INVOICE_CATEGORY = 'Sales Invoice';
 
 /** Special Outflow category that opens an invoice-picker for recording supplier
  *  payments (paying the supplier for goods sold via a specific invoice). Modal
  *  routes the save through InvoiceSupplierPaymentService.recordPayment which
  *  updates invoice.supplierPaidAmount / supplierPayments[] AND books the ledger
- *  entry — modal must NOT double-book. */
+ *  entry â€” modal must NOT double-book. */
 export const SOLD_GOODS_PAYMENT_CATEGORY = 'Supplier Cost';
 
 /**
@@ -300,7 +293,7 @@ export const SOLD_GOODS_PAYMENT_CATEGORY = 'Supplier Cost';
  *   Customs/Freight/Tax/Other    costing is NOT finalised
  *
  * They are opposite because what is owed to the supplier is built on received
- * quantity — unsettled until receiving is finalised — while a charge added
+ * quantity â€” unsettled until receiving is finalised â€” while a charge added
  * after costing is signed off would restate a landed cost someone has used.
  *
  * The save routes through PurchasedOrderFirebaseService, which writes the
@@ -322,18 +315,18 @@ export const PURCHASE_ORDER_SUB_KINDS = [
 export type PurchaseOrderSubKind = typeof PURCHASE_ORDER_SUB_KINDS[number];
 
 export const SUB_CATEGORIES: Record<string, string[]> = {
-  // ── Inflow (money coming in) ─────────────────────────────────────────
-  // Matches the reference exactly — three categories, no more. Sub-category
+  // â”€â”€ Inflow (money coming in) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Matches the reference exactly â€” three categories, no more. Sub-category
   // handling picks up the finer-grained distinctions (Loan / Commission /
   // Other are managed as user-added Sub-categories per parent).
   'Cash Inflow': [
     'Account Payable',
     'Account Receivable',
   ],
-  // ── Outflow (money going out) ────────────────────────────────────────
+  // â”€â”€ Outflow (money going out) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Reorganized into a curated tree that matches the reference UI.
   // The special "Invoice Misc Expense" entry opens the invoice picker.
-  // "Sold Goods Payment" also opens the invoice picker — for paying the
+  // "Sold Goods Payment" also opens the invoice picker â€” for paying the
   // supplier of goods sold via an invoice (see SOLD_GOODS_PAYMENT_CATEGORY).
   'Cash Outflow': [
     'Invoice Misc Expense',           // Special: opens invoice picker
@@ -362,14 +355,14 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
   ],
 };
 
-// ── Dynamic Category (user-added, stored in Firestore /dynamicCategories) ─────
+// â”€â”€ Dynamic Category (user-added, stored in Firestore /dynamicCategories) â”€â”€â”€â”€â”€
 export interface DynamicCategory {
   id: string;
-  // 'mainCategory' / 'subCategory'         → transaction category tree
-  // 'subCategoryDetail' (NEW)              → third-level tag under a subCategory
-  //                                          e.g. Category='Utilities' → SubCat='Electricity Bill'
-  // 'plMainCategory' / 'plSubCategory'     → P&L category tree
-  // 'bsMainCategory' / 'bsSubCategory'     → Balance Sheet category tree
+  // 'mainCategory' / 'subCategory'         â†’ transaction category tree
+  // 'subCategoryDetail' (NEW)              â†’ third-level tag under a subCategory
+  //                                          e.g. Category='Utilities' â†’ SubCat='Electricity Bill'
+  // 'plMainCategory' / 'plSubCategory'     â†’ P&L category tree
+  // 'bsMainCategory' / 'bsSubCategory'     â†’ Balance Sheet category tree
   type: 'mainCategory' | 'subCategory' | 'subCategoryDetail' | 'billCategory'
       | 'plMainCategory' | 'plSubCategory' | 'bsMainCategory' | 'bsSubCategory';
   // For 'subCategory' this is the parent mainCategory ('Cash Inflow' / 'Cash Outflow' / 'Loan').
@@ -377,14 +370,14 @@ export interface DynamicCategory {
   parentCategory?: string;
   name: string;
   /**
-   * Optional because the callers that add a category on the fly — the bills
-   * form is one — let Firestore stamp it on write. Requiring it here made a
+   * Optional because the callers that add a category on the fly â€” the bills
+   * form is one â€” let Firestore stamp it on write. Requiring it here made a
    * valid create fail typecheck while the document it produced was correct.
    */
   createdAt?: string;
 }
 
-// ── Profit & Loss Categories ───────────────────────────────────────────────────
+// â”€â”€ Profit & Loss Categories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type PLMainCategory =
   | 'Revenue'
@@ -413,7 +406,7 @@ export const PL_CATEGORIES: Record<PLMainCategory, string[]> = {
   ],
 };
 
-// ── Balance Sheet Categories ───────────────────────────────────────────────────
+// â”€â”€ Balance Sheet Categories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type BSMainCategory =
   | 'Assets'
@@ -456,9 +449,9 @@ export const LOAN_SUB_CATEGORIES = new Set([
   'Other loan - Partial',
 ]);
 
-// ────────────────────────────────────────────────────────────────
-// Phase 1 — NEW: Accounts & Branches (Cash + Banks as unified accounts)
-// ────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Phase 1 â€” NEW: Accounts & Branches (Cash + Banks as unified accounts)
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Which "kind" of account this is. Cash-in-Hand is virtual, banks are real Firestore docs. */
 export type AccountType = 'cash' | 'bank';
@@ -474,12 +467,12 @@ export const CASH_IN_HAND_NAME = 'Cash in Hand';
  * an `Account` for the transaction UI.
  *
  * Balance is always live-computed from transactions (source of truth) rather
- * than trusted from the bank doc — that keeps balances honest even when other
+ * than trusted from the bank doc â€” that keeps balances honest even when other
  * modules write bank-side debits/credits without going through this ledger.
  */
 export interface Account {
   id: string;                 // CASH_IN_HAND_ID or a bank doc id
-  name: string;               // 'Cash in Hand' | 'HBL — Main Branch' etc
+  name: string;               // 'Cash in Hand' | 'HBL â€” Main Branch' etc
   type: AccountType;
   balance: number;            // live-computed running balance
   accountNumber?: string;     // banks only
