@@ -23,3 +23,11 @@ dist/
 # Module archives for sharing — not part of the build
 *.rar
 *.zip
+
+# Local working files
+_backup_*/
+apply_fixes.sh
+move_fixes.ps1
+theirs.txt
+InventoryFirebaseService.ts
+useInvoiceFormViewModel.ts
