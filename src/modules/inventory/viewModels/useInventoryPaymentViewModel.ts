@@ -18,6 +18,7 @@ import { InventoryFirebaseService, generateInventoryTransactionId } from '../mod
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import { CashFirebaseService } from '../../banking/models/cashFirebaseService';
 import { Bank } from '../../banking/models/types';
 import { createTransactionFromInventory, TxCompany } from '../../transactions/models/TransactionBridgeService';
@@ -163,6 +164,7 @@ async function savePendingPayment(params: {
 
 export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelReturn {
   const navigate = useNavigate();
+  const { formatCurrency: formatGlobalAmount } = useGlobalCurrency();
   const [searchParams] = useSearchParams();
   const [isSaving, setIsSaving]                       = useState(false);
   const [inventoryCompany, setInventoryCompany]         = useState<TxCompany>(makeInventoryBranchValue(DEFAULT_INVENTORY_BRANCHES[0] || 'Other') as TxCompany);
@@ -320,8 +322,8 @@ export function useInventoryPaymentViewModel(): UseInventoryPaymentViewModelRetu
   const setPaidAmount = useCallback((v: number) => setPaidAmountState(v), []);
 
   const formatCurrency = useCallback((amount: number) =>
-    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount)
-  , []);
+    formatGlobalAmount(amount)
+  , [formatGlobalAmount]);
 
   const validateForm = useCallback((): boolean => {
     const errors: { [key: string]: string } = {};

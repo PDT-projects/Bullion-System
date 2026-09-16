@@ -11,12 +11,14 @@ import {
   Edit2, Check, Loader2, MapPin, Banknote, Building2, Plus, Trash2,
   Package, Clock,
 } from 'lucide-react';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
 import {
   UseInventoryPaymentViewModelReturn, PaymentMode,
   makeInventoryBranchValue, branchFromInventoryValue, DEFAULT_INVENTORY_BRANCHES,
   MultiModelPaymentEntry,
 } from '../viewModels/useInventoryPaymentViewModel';
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 // AlertDialog replaced with a plain custom modal (no Radix/portal dependency)
 
 interface InventoryPaymentViewProps extends UseInventoryPaymentViewModelReturn {}
@@ -202,7 +204,7 @@ function MultiModelSummaryTable({
         </span>
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
+      <LockedScrollTable maxHeight="65vh">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ backgroundColor: '#f8fafc' }}>
@@ -235,7 +237,7 @@ function MultiModelSummaryTable({
             </tr>
           </tfoot>
         </table>
-      </div>
+      </LockedScrollTable>
     </div>
   );
 }
@@ -519,7 +521,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
               {paymentStatus === 'partial' && installments.length === 0 && (
                 <div style={{ marginTop: 14 }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                    Paid Amount (AED) *
+                    Paid Amount ({getGlobalCurrencySymbol()}) *
                     <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#6b7280' }}>
                       out of {formatCurrency(totalAmount)}
                     </span>
@@ -570,7 +572,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                             onChange={m => updateInstallment(inst.id, { mode: m, bankId: undefined, bankName: undefined })} />
                         </div>
                         <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Amount (AED) *</label>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5 }}>Amount ({getGlobalCurrencySymbol()}) *</label>
                           <input type="number" min="0" value={inst.amount || ''}
                             onChange={e => updateInstallment(inst.id, { amount: Number(e.target.value) })}
                             style={{ ...inp }} placeholder="0.00" />

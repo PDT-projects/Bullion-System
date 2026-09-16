@@ -18,6 +18,10 @@ import {
  * the document at entry — is what converts the supplier invoice into AED. If
  * these display rates drift, a closed shipment's AED figures stay exactly as
  * they were; only the on-screen conversion moves.
+ *
+ * Kept as a fallback only — convertForDisplay() below now goes through the
+ * app's live rate feed (the same one the Admin's global currency selector
+ * uses) instead of this frozen snapshot, so it never goes stale.
  */
 export const DISPLAY_RATES: Record<DisplayCurrency, number> = {
   AED: 1,
@@ -26,10 +30,11 @@ export const DISPLAY_RATES: Record<DisplayCurrency, number> = {
   GBP: 1 / 4.62,
   SAR: 1.02,
   PKR: 279.5 / 3.67,
+  CAD: 1 / 2.70,
 };
 
 export const CURRENCY_SYMBOL: Record<DisplayCurrency, string> = {
-  AED: 'AED', USD: 'USD', EUR: 'EUR', GBP: 'GBP', SAR: 'SAR', PKR: 'PKR',
+  AED: 'AED', USD: 'USD', EUR: 'EUR', GBP: 'GBP', SAR: 'SAR', PKR: 'PKR', CAD: 'CA$',
 };
 
 /**
@@ -43,9 +48,10 @@ export const CURRENCY_SYMBOL: Record<DisplayCurrency, string> = {
 export const round2 = (n: number): number =>
   Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 
-/** Convert a stored AED figure into the currency the user is viewing. */
-export const convertForDisplay = (aed: number, to: DisplayCurrency): number =>
-  round2(aed * (DISPLAY_RATES[to] ?? 1));
+/** Display-only passthrough — the AED figure is shown as-is, just with a
+ *  different currency symbol next to it (see money() below). No conversion
+ *  happens anywhere in this function. */
+export const convertForDisplay = (aed: number, to: DisplayCurrency): number => round2(aed);
 
 const fmt = (n: number, min = 2) =>
   round2(n).toLocaleString('en-US', { minimumFractionDigits: min, maximumFractionDigits: 2 });

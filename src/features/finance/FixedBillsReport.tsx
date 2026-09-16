@@ -7,6 +7,9 @@ import {
   XCircle, Loader2, Filter, ChevronDown, X, DollarSign, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../shared/reportExport/reportExport';
+import { formatGlobalCurrency } from '../../shared/currency/globalCurrency';
 
 type BillRecord = {
   id: string;
@@ -171,8 +174,7 @@ export function FixedBillsReport() {
   const totalOverdue = useMemo(() => filteredData.filter(b => b.status === 'Overdue').reduce((s, b) => s + b.amount, 0), [filteredData]);
   const totalAll     = useMemo(() => filteredData.reduce((s, b) => s + b.amount, 0), [filteredData]);
 
-  const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+  const formatCurrency = (n: number) => formatGlobalCurrency(n);
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -229,12 +231,46 @@ export function FixedBillsReport() {
             <p className="text-sm text-gray-600">Recurring bills, due dates, and payment tracking</p>
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => {
+            const headers = ['Vendor', 'Bill Number', 'Category', 'Amount', 'Due Date', 'Status', 'Recurring'];
+            const rows = filteredData.map(b => [b.vendorName, b.billNumber, b.category, b.amount, b.dueDate, b.status, b.repeat ? 'Yes' : 'No']);
+            exportReportToExcel({
+              title: 'Fixed Bills Report',
+              subtitle: allTime ? 'All time' : `${filters.dateFrom} to ${filters.dateTo}`,
+              columns: headers.map(h => ({ header: h })),
+              rows,
+              filename: allTime ? 'fixed-bills-all-time' : `fixed-bills-${filters.dateFrom}-to-${filters.dateTo}`,
+            });
+          }}
+          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+        >
+          <Download size={16} /> Excel
+        </button>
+        <button
+          onClick={() => {
+            const headers = ['Vendor', 'Bill Number', 'Category', 'Amount', 'Due Date', 'Status', 'Recurring'];
+            const rows = filteredData.map(b => [b.vendorName, b.billNumber, b.category, b.amount, b.dueDate, b.status, b.repeat ? 'Yes' : 'No']);
+            exportReportToPdf({
+              title: 'Fixed Bills Report',
+              subtitle: allTime ? 'All time' : `${filters.dateFrom} to ${filters.dateTo}`,
+              columns: headers.map(h => ({ header: h })),
+              rows,
+              filename: allTime ? 'fixed-bills-all-time' : `fixed-bills-${filters.dateFrom}-to-${filters.dateTo}`,
+            });
+          }}
+          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+        >
+          <Download size={16} /> PDF
+        </button>
         <button
           onClick={handleExportCSV}
           className="px-4 py-2 bg-[#10b981] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 text-sm font-medium"
         >
           <Download size={16} /> Export CSV
         </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -419,7 +455,7 @@ export function FixedBillsReport() {
           <p className="text-sm text-gray-500 mt-0.5">Showing {filteredData.length} of {data.length} bills</p>
         </div>
 
-        <div className="overflow-x-auto">
+        <LockedScrollTable maxHeight="65vh">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -474,7 +510,7 @@ export function FixedBillsReport() {
               )}
             </tbody>
           </table>
-        </div>
+        </LockedScrollTable>
 
         {/* Footer total */}
         {filteredData.length > 0 && (

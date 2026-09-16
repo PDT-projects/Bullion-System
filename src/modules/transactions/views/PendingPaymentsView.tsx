@@ -6,12 +6,15 @@ import {
   Eye, Trash2, X, Check, AlertCircle, Clock,
   Loader2, TrendingUp, CreditCard, ArrowDownCircle,
   DollarSign, ReceiptText, Filter,
-  ChevronDown, RefreshCw,
+  ChevronDown, RefreshCw, FileDown, FileSpreadsheet,
 } from 'lucide-react';
 import { CurrencyDropdown } from '../../../features/finance/CurrencyPicker';
 import { CurrencyCode, RateMap, convertFromPKR, fmtCurrency, getCurrencyMeta, useCurrencyRates } from '../../../features/finance/currencyUtils';
 import { Transaction } from '../models/types';
 import { UsePendingPaymentsViewModelReturn } from '../viewModels/usePendingPaymentsViewModel';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../../shared/reportExport/reportExport';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 interface Props extends UsePendingPaymentsViewModelReturn {}
 
@@ -254,6 +257,60 @@ export function PendingPaymentsView({
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
+          <button
+            onClick={() => {
+              const headers = ['Date', 'Transaction ID', 'Type', 'Category', 'Sub-Category', `Amount (${getGlobalCurrencySymbol()})`, `Paid (${getGlobalCurrencySymbol()})`, `Remaining (${getGlobalCurrencySymbol()})`, 'Status'];
+              const rows = filteredTransactions.map(t => {
+                const { totalPaid, remainingAmount } = getTransactionTotals(t);
+                const isReceivable = t.mainCategory === 'Cash Inflow';
+                return [
+                  new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                  t.transactionId || t.id.slice(0, 16),
+                  isReceivable ? 'Receivable' : 'Payable',
+                  t.mainCategory, t.subCategory || '',
+                  t.amount || 0, totalPaid || 0, remainingAmount || 0,
+                  t.paymentStatus || '',
+                ];
+              });
+              exportReportToExcel({
+                title: 'Pending Payments',
+                subtitle: `${filteredTransactions.length} transactions`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `pending-payments-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            disabled={filteredTransactions.length === 0}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            <FileSpreadsheet size={16} /> Excel
+          </button>
+          <button
+            onClick={() => {
+              const headers = ['Date', 'Transaction ID', 'Type', 'Category', 'Sub-Category', `Amount (${getGlobalCurrencySymbol()})`, `Paid (${getGlobalCurrencySymbol()})`, `Remaining (${getGlobalCurrencySymbol()})`, 'Status'];
+              const rows = filteredTransactions.map(t => {
+                const { totalPaid, remainingAmount } = getTransactionTotals(t);
+                const isReceivable = t.mainCategory === 'Cash Inflow';
+                return [
+                  new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                  t.transactionId || t.id.slice(0, 16),
+                  isReceivable ? 'Receivable' : 'Payable',
+                  t.mainCategory, t.subCategory || '',
+                  t.amount || 0, totalPaid || 0, remainingAmount || 0,
+                  t.paymentStatus || '',
+                ];
+              });
+              exportReportToPdf({
+                title: 'Pending Payments',
+                subtitle: `${filteredTransactions.length} transactions`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `pending-payments-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            disabled={filteredTransactions.length === 0}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            <FileDown size={16} /> PDF
+          </button>
           <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Filter size={16} />
             Filters
@@ -345,7 +402,7 @@ export function PendingPaymentsView({
             <p className="text-sm text-gray-400 mt-1">Try a different filter or all transactions are cleared</p>
           </div>
         ) : (
-          <div className="overflow-x-auto px-2">
+          <LockedScrollTable maxHeight="70vh" className="px-2">
             <table className="w-full" style={{ minWidth: '900px' }}>
               <thead>
                 <tr className="border-b border-gray-200">
@@ -505,7 +562,7 @@ export function PendingPaymentsView({
                 })}
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
         )}
       </div>
 

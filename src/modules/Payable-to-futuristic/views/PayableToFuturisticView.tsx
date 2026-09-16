@@ -25,6 +25,8 @@ import type {
   CashAccount,
 } from '../viewModels/usePayableToFuturistic';
 import type { Currency } from '../models/payableToFuturistic';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 import {
   CURRENCY_SYMBOLS,
   FUTURISTIC_PRICES_USD,
@@ -474,7 +476,7 @@ function PaymentModal({
         {/* Amount paid */}
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-            Amount Paid (AED) <span className="text-red-400">*</span>
+            Amount Paid ({getGlobalCurrencySymbol()}) <span className="text-red-400">*</span>
           </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">AED</span>
@@ -944,7 +946,14 @@ export const PayableToFuturisticView: React.FC = () => {
   } = usePayableToFuturistic();
 
   const [activeTab,      setActiveTab]      = useState<'payables' | 'configure'>('payables');
-  const [activeCurrency, setActiveCurrency] = useState<Currency>('USD');
+  // Defaults to whatever the Admin has picked globally (falls back to USD
+  // if that's a currency this screen's 4-way breakdown doesn't track, e.g.
+  // CAD/GBP/EUR) — the tabs below still let anyone switch manually per visit.
+  const { code: globalCode } = useGlobalCurrency();
+  const SUPPORTED_HERE: Currency[] = ['AED', 'PKR', 'SAR', 'USD'];
+  const [activeCurrency, setActiveCurrency] = useState<Currency>(
+    SUPPORTED_HERE.includes(globalCode as Currency) ? (globalCode as Currency) : 'USD'
+  );
   const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
   const [showAddModal,   setShowAddModal]   = useState(false);
   const [payingItem,     setPayingItem]     = useState<DerivedPayable | null>(null);
@@ -1102,7 +1111,7 @@ export const PayableToFuturisticView: React.FC = () => {
               )}
             </div>
             <div className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
-              <p className="text-xs font-medium mb-1 text-gray-500">Total (AED)</p>
+              <p className="text-xs font-medium mb-1 text-gray-500">Total ({getGlobalCurrencySymbol()})</p>
               <p className="text-lg font-bold text-gray-800">{fmt(totals.aed)}</p>
               {paidTotals.aed > 0 && <p className="text-xs text-emerald-600 mt-1">Paid: {fmt(paidTotals.aed)}</p>}
             </div>

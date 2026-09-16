@@ -11,6 +11,7 @@
 //    - Serial numbers table row split into individual rows when >1 serial (clearer PDF)
 
 import React from 'react';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
 import {
   Plus, Eye, Trash2, X, Package, CheckCircle2,
   Clock, ArrowRight, MapPin, Hash, Truck, Calendar,
@@ -439,7 +440,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
             <p className="text-gray-400 text-sm mt-1">Click "New Transfer" to move products between locations</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <LockedScrollTable maxHeight="65vh">
             <table className="w-full">
               <thead className="border-b border-gray-200">
                 <tr>
@@ -573,7 +574,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                 ))}
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
         )}
       </div>
 

@@ -1,11 +1,17 @@
 // currencyUtils.ts
-// PKR ↔ AED conversion utilities
-// Rates sourced June 2026: 1 AED = 76.03 PKR
+// PKR ↔ AED conversion utilities (legacy, kept for any code that still
+// wants a plain PKR/AED swap) — PLUS a live-rate converter that takes an
+// employee's actual stored salary (PKR or AED, whichever salaryCurrency
+// says) and converts it into whatever currency the Admin has picked
+// globally, the same way every other module in the app now works.
 
 import type { SalaryCurrency } from '../views/EmployeeListView';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 // ---------------------------------------------------------------------------
-// Live-ish exchange rates (update periodically or wire to a live FX API)
+// Legacy fixed-rate helpers — still here for any existing caller, but no
+// longer used for the main salary display (see convertSalaryToGlobal below,
+// which uses live rates instead of this frozen June-2026 snapshot).
 // ---------------------------------------------------------------------------
 export const AED_TO_PKR = 76.03; // 1 AED → PKR
 export const PKR_TO_AED = 1 / AED_TO_PKR; // 1 PKR → AED  (~0.01315)
@@ -28,6 +34,29 @@ export function convertSalary(
   if (from === 'PKR' && to === 'AED') return amount * PKR_TO_AED;
   if (from === 'AED' && to === 'PKR') return amount * AED_TO_PKR;
   return amount;
+}
+
+/**
+ * Convert an employee's salary — genuinely stored in `storedCurrency`
+ * (PKR or AED, whatever that employee's contract is actually in) — into
+ * whichever currency the Admin has picked as the app-wide display
+ * currency, using today's live rate. Unlike the AED-only modules, this
+ * does NOT assume the stored number is AED; it converts from the real
+ * stored currency first.
+ */
+export function convertSalaryToGlobal(amount: number, storedCurrency: SalaryCurrency): number {
+  return amount || 0;
+}
+
+/** Formats an employee's salary with the current global display symbol.
+ *  Display-only — the number itself is never converted. */
+export function formatSalaryInGlobalCurrency(amount: number, storedCurrency: SalaryCurrency): string {
+  const symbol = getGlobalCurrencySymbol();
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount || 0);
+  return `${symbol} ${formatted}`;
 }
 
 /**

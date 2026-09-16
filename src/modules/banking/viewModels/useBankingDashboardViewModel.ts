@@ -7,8 +7,10 @@ import { BankingService } from '../models/bankingService';
 import { BankFirebaseService } from '../models/bankFirebaseService';
 import { TransferFirebaseService } from '../models/Transferfirebaseservice';
 import { CashFirebaseService } from '../models/cashFirebaseService';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 export function useBankingDashboardViewModel() {
+  useGlobalCurrency(); // re-render when Admin changes the global currency
   const [banks, setBanks] = useState<Bank[]>([]);
   const [transfers, setTransfers] = useState<BankTransfer[]>([]);
   const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);

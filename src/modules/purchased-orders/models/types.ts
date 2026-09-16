@@ -131,12 +131,12 @@ export type ShipMethod   = 'Air' | 'Sea' | 'Road' | 'Courier';
 export type FreightTerms = 'Prepaid' | 'Collect';
 
 /** Currency of the supplier's commercial invoice. */
-export type ShipmentCurrency = 'AED' | 'USD' | 'EUR' | 'GBP' | 'SAR' | 'PKR';
+export type ShipmentCurrency = 'AED' | 'USD' | 'EUR' | 'GBP' | 'SAR' | 'PKR' | 'CAD';
 
 /** Currency the user is *looking* at. Storage is always AED. */
 export type DisplayCurrency = ShipmentCurrency;
 
-export const SHIPMENT_CURRENCIES: ShipmentCurrency[] = ['AED', 'USD', 'EUR', 'GBP', 'SAR', 'PKR'];
+export const SHIPMENT_CURRENCIES: ShipmentCurrency[] = ['AED', 'USD', 'EUR', 'GBP', 'SAR', 'PKR', 'CAD'];
 export const SHIP_METHODS: ShipMethod[]    = ['Air', 'Sea', 'Road', 'Courier'];
 export const FREIGHT_TERMS: FreightTerms[] = ['Prepaid', 'Collect'];
 

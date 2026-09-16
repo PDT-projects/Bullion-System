@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { DollarSign, TrendingUp, Shield, Truck, Calculator } from 'lucide-react';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 interface BrandSummaryProps {
   totalUnitCostUSD: number;
@@ -15,6 +16,10 @@ interface BrandSummaryProps {
 
 export function BrandSummary({ totalUnitCostUSD, shipmentTotalUSD, consignmentValue, totalValueOfBrand, totalCustomsValue, totalFreightValue }: BrandSummaryProps) {
   const fmt = (v: number) => v.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Unit Cost / Shipment Total are genuinely USD — the shipment's own invoice
+  // currency, not the local display currency, so those two keep the $ sign
+  // regardless of what the Admin has picked for everything else.
+  const sym = getGlobalCurrencySymbol();
 
   return (
     <div style={{ backgroundColor: '#eff6ff', padding: 24, borderRadius: 12, border: '2px solid #3b82f6', marginTop: 24, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
@@ -26,9 +31,9 @@ export function BrandSummary({ totalUnitCostUSD, shipmentTotalUSD, consignmentVa
         {[
           { icon: DollarSign, color: '#0891b2', label: 'Total Unit Cost (USD)', value: `$${fmt(totalUnitCostUSD)}` },
           { icon: DollarSign, color: '#16a34a', label: 'Shipment Total (USD)', value: `$${fmt(shipmentTotalUSD)}` },
-          { icon: TrendingUp, color: '#2563eb', label: 'Consignment Value (AED)', value: `د.إ ${fmt(consignmentValue)}` },
-          { icon: Shield, color: '#ea580c', label: 'Total Customs (AED)', value: `د.إ ${fmt(totalCustomsValue)}` },
-          { icon: Truck, color: '#9333ea', label: 'Total Freight (AED)', value: `د.إ ${fmt(totalFreightValue)}` },
+          { icon: TrendingUp, color: '#2563eb', label: `Consignment Value (${sym})`, value: `${sym} ${fmt(consignmentValue)}` },
+          { icon: Shield, color: '#ea580c', label: `Total Customs (${sym})`, value: `${sym} ${fmt(totalCustomsValue)}` },
+          { icon: Truck, color: '#9333ea', label: `Total Freight (${sym})`, value: `${sym} ${fmt(totalFreightValue)}` },
         ].map(({ icon: Icon, color, label, value }) => (
           <div key={label} style={{ backgroundColor: 'white', padding: 16, borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid #e5e7eb' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -41,9 +46,9 @@ export function BrandSummary({ totalUnitCostUSD, shipmentTotalUSD, consignmentVa
         <div style={{ backgroundColor: '#1d4ed8', padding: 20, borderRadius: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.15)', color: 'white' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <Calculator style={{ width: 16, height: 16, color: '#bfdbfe' }} />
-            <p style={{ fontSize: 14, color: '#bfdbfe', fontWeight: 600, margin: 0 }}>Total Brand Value (AED)</p>
+            <p style={{ fontSize: 14, color: '#bfdbfe', fontWeight: 600, margin: 0 }}>Total Brand Value ({sym})</p>
           </div>
-          <p style={{ fontSize: 28, fontWeight: 'bold', color: 'white', margin: 0 }}>د.إ {fmt(totalValueOfBrand)}</p>
+          <p style={{ fontSize: 28, fontWeight: 'bold', color: 'white', margin: 0 }}>{sym} {fmt(totalValueOfBrand)}</p>
         </div>
       </div>
       <div style={{ backgroundColor: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>

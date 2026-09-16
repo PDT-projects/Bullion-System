@@ -13,6 +13,7 @@
 //     Warranty and Location from the last time that pair was entered
 
 import React, { useState, useEffect, useRef } from 'react';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import {
@@ -38,6 +39,7 @@ import { CATEGORIES } from '../viewModels/useInventoryMultimodelViewModel';
 
 import type { Shipment } from '../../purchased-orders/models/types';
 import type { StockInLine } from '../models/shipmentStockIn';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 interface BankOption { id: string; name: string; balance: number; }
 
@@ -525,7 +527,7 @@ export function CreateInventoryView({
                 Every unit on this shipment has already been stocked in.
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+              <LockedScrollTable maxHeight="50vh" className="rounded-lg border border-gray-200 bg-white">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
@@ -563,7 +565,7 @@ export function CreateInventoryView({
                     })}
                   </tbody>
                 </table>
-              </div>
+              </LockedScrollTable>
             )
           )}
 
@@ -933,7 +935,7 @@ export function CreateInventoryView({
 
         {/* Supplier cost */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Cost per unit (AED)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Cost per unit ({getGlobalCurrencySymbol()})</label>
           <input type="number" min={0} step="any"
             value={(formData as any).supplierCost ?? formData.costPrice ?? ''}
             onChange={e => setField('supplierCost', parseFloat(e.target.value) || 0)}
@@ -945,7 +947,7 @@ export function CreateInventoryView({
 
         {/* Amount paid so far */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid to Supplier So Far (AED)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid to Supplier So Far ({getGlobalCurrencySymbol()})</label>
           <input type="number" min={0} step="any"
             value={(formData as any).supplierPaidAmount ?? ''}
             onChange={e => setField('supplierPaidAmount', parseFloat(e.target.value) || 0)}
@@ -981,7 +983,7 @@ export function CreateInventoryView({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#b45309' }}>Supplier cost / unit</span>
-              <span style={{ fontWeight: 700 }}>AED {((formData as any).supplierCost ?? formData.costPrice ?? 0).toLocaleString()}</span>
+              <span style={{ fontWeight: 700 }}>{getGlobalCurrencySymbol()} {((formData as any).supplierCost ?? formData.costPrice ?? 0).toLocaleString()}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#b45309' }}>Units</span>
@@ -989,17 +991,17 @@ export function CreateInventoryView({
             </div>
             <div style={{ borderTop: '1px solid #fde68a', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 15 }}>
               <span style={{ color: '#92400e' }}>Total owed</span>
-              <span style={{ color: '#b45309' }}>AED {(((formData as any).supplierCost ?? formData.costPrice ?? 0) * (formData.stock || 0)).toLocaleString()}</span>
+              <span style={{ color: '#b45309' }}>{getGlobalCurrencySymbol()} {(((formData as any).supplierCost ?? formData.costPrice ?? 0) * (formData.stock || 0)).toLocaleString()}</span>
             </div>
             {paid > 0 && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#15803d' }}>Paid so far</span>
-                  <span style={{ fontWeight: 700, color: '#15803d' }}>AED {paid.toLocaleString()}</span>
+                  <span style={{ fontWeight: 700, color: '#15803d' }}>{getGlobalCurrencySymbol()} {paid.toLocaleString()}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#b91c1c' }}>Still owed</span>
-                  <span style={{ fontWeight: 700, color: '#b91c1c' }}>AED {remaining.toLocaleString()}</span>
+                  <span style={{ fontWeight: 700, color: '#b91c1c' }}>{getGlobalCurrencySymbol()} {remaining.toLocaleString()}</span>
                 </div>
               </>
             )}
@@ -1117,7 +1119,7 @@ export function CreateInventoryView({
                     <option value="">— Select bank account —</option>
                     {banks.map(b => (
                       <option key={b.id} value={b.id}>
-                        {b.name}{b.balance !== undefined ? ` — AED ${b.balance.toLocaleString()}` : ''}
+                        {b.name}{b.balance !== undefined ? ` — ${getGlobalCurrencySymbol()} ${b.balance.toLocaleString()}` : ''}
                       </option>
                     ))}
                   </select>
@@ -1138,7 +1140,7 @@ export function CreateInventoryView({
 
         {/* ── Amount Paid ── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (AED)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid ({getGlobalCurrencySymbol()})</label>
           <input
             type="number"
             value={formData.paidAmount ?? ''}
@@ -1232,7 +1234,7 @@ export function CreateInventoryView({
             // Credit-ownership shows supplier balance so the payable is visible, but
             // amounts paid / method are all reconciled elsewhere.
             ...((formData as any).ownershipType === 'Credit' ? [
-              ['Supplier Cost', `AED ${((formData as any).supplierCost ?? formData.costPrice ?? 0).toLocaleString()}`],
+              ['Supplier Cost', InventoryService.formatCurrency((formData as any).supplierCost ?? formData.costPrice ?? 0)],
             ] as [string,string][] : [] as [string,string][]),
           ] as [string, string][]).map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4">

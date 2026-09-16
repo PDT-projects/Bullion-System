@@ -21,6 +21,9 @@ import {
   Download, Calendar, Layers, Minimize2, Maximize2, DollarSign,
 } from 'lucide-react';
 import { Transaction } from '../../modules/transactions/models/types';
+import { useGlobalCurrency } from '../../shared/currency/useGlobalCurrency';
+import { getGlobalCurrencySymbol, getGlobalCurrency } from '../../shared/currency/globalCurrency';
+import { CurrencyCode } from './currencyUtils';
 
 interface Props {
   transactions: Transaction[];
@@ -64,7 +67,7 @@ const KNOWN_REVENUE_CATEGORIES: string[] = [
   'Sales Invoice',
 ];
 
-const CURRENCY = 'AED';
+const CURRENCY = () => getGlobalCurrencySymbol();
 const fmt = (n: number) =>
   (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -89,6 +92,8 @@ interface TreeNode {
 }
 
 export function IncomeStatementReport({ transactions, invoices }: Props) {
+  useGlobalCurrency(); // subscribe so this view re-renders on currency change
+
   // ── Date-range filter with quick presets ──────────────────────────────
   type Preset = 'thisMonth' | 'lastMonth' | 'last3Months' | 'thisQuarter' | 'thisYear' | 'allTime' | 'custom';
   const [preset, setPreset] = useState<Preset>('thisMonth');
@@ -530,7 +535,7 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
           textTransform: 'uppercase', letterSpacing: '.08em',
         }}>
           <span>Category</span>
-          <span style={{ textAlign: 'right', minWidth: 160 }}>Amount ({CURRENCY})</span>
+          <span style={{ textAlign: 'right', minWidth: 160 }}>Amount ({CURRENCY()})</span>
         </div>
 
         {/* Tree body */}
@@ -636,7 +641,7 @@ const SummaryTile: React.FC<{
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: highlight ? 'rgba(255,255,255,0.85)' : '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
         <div style={{ fontSize: 18, fontWeight: 800, color: highlight ? '#fff' : fg, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', marginTop: 2 }}>
-          {sign}<span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY}</span>{fmt(shown)}
+          {sign}<span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY()}</span>{fmt(shown)}
         </div>
       </div>
     </div>
@@ -793,7 +798,7 @@ const TreeRow: React.FC<{
         minWidth: 160, paddingLeft: 8,
       }}>
         {node.level === 2 && node.tone !== 'revenue' ? '−' : ''}
-        <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
+        <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY()}</span>
         {fmt(Math.abs(node.amount))}
       </span>
     </div>
@@ -837,7 +842,7 @@ const TotalRow: React.FC<{
         minWidth: 160, textAlign: 'right', paddingLeft: 8,
       }}>
         {!positive ? '−' : ''}
-        <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
+        <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY()}</span>
         {fmt(Math.abs(value))}
       </span>
     </div>

@@ -11,6 +11,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CashFirebaseService } from '../../modules/banking/models/cashFirebaseService';
 import { resolveBSBucket, getTransactionTotals } from '../../modules/transactions/models/transactionsService';
 import type { Transaction } from '../../modules/transactions/models/types';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
+import { exportTableToExcel } from '../../shared/excelExport/exportTableToExcel';
+import { getGlobalCurrencySymbol } from '../../shared/currency/globalCurrency';
 import {
   ArrowLeft, Tag, ChevronDown, ChevronUp, ChevronRight,
   Filter, X, Calendar, MapPin, FileDown,
@@ -47,10 +50,14 @@ type BalanceSheetReportProps = {
   invoices?: any[];
 };
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-AE', {
-    style: 'currency', currency: 'AED', minimumFractionDigits: 0
-  }).format(amount);
+const formatCurrency = (amount: number) => {
+  const symbol = getGlobalCurrencySymbol();
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount || 0);
+  return `${symbol} ${formatted}`;
+};
 
 // Products can arrive with the display name under any of several field names.
 // Try each in priority order before falling back to the id.
@@ -211,7 +218,7 @@ const DetailTable = ({
   headers: string[];
   rows: (string | number)[][];
 }) => (
-  <div className="overflow-x-auto rounded-md border border-gray-100">
+  <LockedScrollTable maxHeight="50vh" className="rounded-md border border-gray-100">
     <table className="w-full text-xs">
       <thead className="bg-gray-50">
         <tr>
@@ -244,7 +251,7 @@ const DetailTable = ({
         ))}
       </tbody>
     </table>
-  </div>
+  </LockedScrollTable>
 );
 
 export function BalanceSheetReport({ transactions, banks, loans, products, bills, invoices = [], onBack }: BalanceSheetReportProps) {
@@ -822,6 +829,38 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             </span>
             <span>Generate PDF</span>
           </button>
+          <button
+            onClick={() => {
+              const rows: (string | number)[][] = [
+                ['ASSETS', ''],
+                ['Cash in Hand', bs.assets.cashInHand],
+                ['Bank Balance', bs.assets.bankBalance],
+                ['Accounts Receivable', bs.assets.accountsReceivable],
+                ['Inventory — Payment Received', bs.assets.inventoryOwned],
+                ['Inventory — On Credit', bs.assets.inventoryCredit],
+                ['Total Current Assets', bs.assets.totalCurrentAssets],
+                ['Total Fixed Assets', bs.assets.totalFixedAssets],
+                ['TOTAL ASSETS', bs.assets.totalAssets],
+                ['', ''],
+                ['LIABILITIES', ''],
+                ['Accounts Payable', bs.liabilities.accountsPayable],
+                ['Inventory Credit Payable', bs.liabilities.inventoryCredit],
+                ['Total Current Liabilities', bs.liabilities.totalCurrentLiabilities],
+                ['TOTAL LIABILITIES', bs.liabilities.totalLiabilities],
+                ['', ''],
+                ['TOTAL EQUITY', bs.equity.totalEquity],
+              ];
+              exportTableToExcel({
+                title: 'Balance Sheet',
+                subtitle: new Date().toLocaleDateString(),
+                columns: [{ header: 'Line Item' }, { header: `Amount (${getGlobalCurrencySymbol()})` }],
+                rows,
+                filename: `balance-sheet-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors text-sm font-medium">
+            <FileDown size={16} /> Excel
+          </button>
           <button onClick={onBack}
             className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors text-sm font-medium">
             <ArrowLeft size={16} /> Back to Reports Hub
@@ -911,7 +950,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             >
               {banks.length > 0 ? (
                 <DetailTable
-                  headers={['Bank', 'Account', 'Balance (AED)']}
+                  headers={['Bank', 'Account', `Balance (${getGlobalCurrencySymbol()})`]}
                   rows={banks.map((b: any) => {
                     const isPKR = b.currency === 'PKR' || b.accountCurrency === 'PKR';
                     const bal = b.balance || 0;
@@ -1155,7 +1194,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                         {txns.length} transaction{txns.length !== 1 ? 's' : ''}
                       </button>
                       {expanded && (
-                        <div className="overflow-x-auto rounded-lg border border-gray-100">
+                        <LockedScrollTable maxHeight="50vh" className="rounded-lg border border-gray-100">
                           <table className="w-full text-xs">
                             <thead className="bg-gray-50">
                               <tr>
@@ -1177,7 +1216,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                               ))}
                             </tbody>
                           </table>
-                        </div>
+                        </LockedScrollTable>
                       )}
                     </div>
                     );

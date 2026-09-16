@@ -6,6 +6,7 @@
 //          locations from Firestore and lets users add new ones inline (persisted).
 
 import React from 'react';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 import { Search, Package, ArrowLeft, Loader2, Plus, Hash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UseInventoryAddExistingViewModelReturn } from '../viewModels/useInventoryAddExistingViewModel';
@@ -30,9 +31,11 @@ export const InventoryAddExistingView: React.FC<Props> = ({
   const lastUpdated = null;
 
   const fmtPrimary = (amount: number) => {
-    return new Intl.NumberFormat('en-AE', {
-      style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 2,
-    }).format(amount);
+    const symbol = getGlobalCurrencySymbol();
+    const formatted = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 0, maximumFractionDigits: 2,
+    }).format(amount || 0);
+    return `${symbol} ${formatted}`;
   };
 
   const grouped = filteredProducts.reduce<Record<string, typeof filteredProducts>>((acc, p) => {

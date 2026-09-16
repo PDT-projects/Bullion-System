@@ -12,6 +12,7 @@ import { db } from '../../../api/firebase/firebase';
 import { BankFirebaseService } from '../models/bankFirebaseService';
 import { CashFirebaseService } from '../models/cashFirebaseService';
 import { Bank } from '../models/types';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 export type ActivityType = 'bank_debit' | 'bank_credit' | 'bank_transfer' | 'cash_in' | 'cash_out' | 'inventory';
 
@@ -208,6 +209,7 @@ async function fetchCashActivities(): Promise<ActivityEntry[]> {
 
 // ── Main hook ──────────────────────────────────────────────────────────────────
 export function useBankActivityViewModel() {
+  const { formatCurrency: formatGlobalAmount } = useGlobalCurrency();
   const [allEntries, setAllEntries]   = useState<ActivityEntry[]>([]);
   const [banks, setBanks]             = useState<Bank[]>([]);
   const [isLoading, setIsLoading]     = useState(true);
@@ -296,8 +298,8 @@ export function useBankActivityViewModel() {
   const clearFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
 
   const formatCurrency = useCallback((n: number) =>
-    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n)
-  , []);
+    formatGlobalAmount(n)
+  , [formatGlobalAmount]);
 
   const formatDate = useCallback((d: string) => {
     try { return new Intl.DateTimeFormat('en-AE', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(d)); }

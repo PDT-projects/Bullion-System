@@ -14,9 +14,9 @@ import { generateATIId } from '../models/atiFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { SUB_CATEGORIES } from '../../transactions/models/types';
 import { Bank } from '../../banking/models/types';
+import { formatGlobalCurrency, getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n);
+const fmt = (n: number) => formatGlobalCurrency(n);
 
 interface BranchInfo { id: string; name: string; }
 
@@ -530,7 +530,7 @@ export function ATICreateForm({ invoices, isSubmitting, branches = FORM_DEFAULT_
                   <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.input} />
                 </div>
                 <div>
-                  <label style={S.label}>Amount (AED) <span style={{ color: '#ef4444' }}>*</span></label>
+                  <label style={S.label}>Amount ({getGlobalCurrencySymbol()}) <span style={{ color: '#ef4444' }}>*</span></label>
                   <input
                     type="number" value={amount} onChange={e => setAmount(e.target.value)}
                     placeholder="0" min={1}

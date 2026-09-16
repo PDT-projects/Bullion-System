@@ -7,7 +7,9 @@
 
 import React from 'react';
 import { toast } from 'sonner';
-import { ArrowLeft, FileBarChart, Search, Loader2, Filter, X, Tag, Layers, MapPin, Package, Activity, Shield, Trash2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FileBarChart, Search, Loader2, Filter, X, Tag, Layers, MapPin, Package, Activity, Shield, Trash2, AlertTriangle, FileDown } from 'lucide-react';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { exportTableToExcel } from '../../../shared/excelExport/exportTableToExcel';
 import { useInventoryReportViewModel } from '../viewModels/useInventoryReportViewModel';
 import { MultiSelectFilter } from './InventoryListView';
 import { useAuth } from '../../../providers/context/AuthContext';
@@ -134,6 +136,32 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
             </button>
           )}
         </div>
+        <button
+          onClick={() => {
+            const rows = filteredRows.map(r => {
+              const paymentLabel = r.supplierPaymentStatus ? (PAYMENT_DISPLAY[r.supplierPaymentStatus] || r.supplierPaymentStatus) : '—';
+              return [
+                formatDate(r.stockInDateAuto), r.stockInDateManual ? formatDate(r.stockInDateManual) : '—',
+                r.type || '—', r.brandName, r.modelName, r.serialNumber || '—', r.location || '—',
+                r.ownershipType || '—', r.condition, r.currentStatus, formatDate(r.soldDate),
+                r.invoiceNumber || '—', formatCurrency(r.supplierCost), formatCurrency(r.purchasingCost), paymentLabel,
+              ];
+            });
+            exportTableToExcel({
+              title: 'Inventory Report',
+              subtitle: `${filteredRows.length} records`,
+              columns: HEADERS.map(h => ({ header: h })),
+              rows,
+              filename: `inventory-report-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          disabled={filteredRows.length === 0}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', border: '1px solid #e2e8f0',
+            borderRadius: 10, backgroundColor: '#fff', color: '#334155', fontSize: 14, fontWeight: 600,
+            cursor: filteredRows.length === 0 ? 'not-allowed' : 'pointer', opacity: filteredRows.length === 0 ? 0.5 : 1,
+            whiteSpace: 'nowrap' }}>
+          <FileDown size={14} /> Excel
+        </button>
         {!hideFilterToggle && (
           <button
             onClick={toggleFilters}
@@ -277,7 +305,7 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
       ) : filteredRows.length === 0 ? (
         <div className="text-gray-400 text-sm">No inventory records match your filters.</div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        <LockedScrollTable maxHeight="70vh" className="bg-white rounded-xl shadow-sm border border-gray-200">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
@@ -346,7 +374,7 @@ export const InventoryReportView: React.FC<VM & { embedded?: boolean; hideFilter
               })}
             </tbody>
           </table>
-        </div>
+        </LockedScrollTable>
       )}
     </div>
 

@@ -11,9 +11,10 @@ import {
   emptyLine, money,
 } from '../models/purchasedOrderService';
 import {
-  ShipmentLine, ShipmentCurrency,
+  ShipmentLine, ShipmentCurrency, DisplayCurrency,
   SHIPMENT_CURRENCIES,
 } from '../models/types';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 const S = {
   card:  { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' } as React.CSSProperties,
@@ -40,6 +41,7 @@ const RATE_DEFAULTS: Record<ShipmentCurrency, number> = {
   GBP: 4.65,
   PKR: 0.0131,
   SAR: 0.98,
+  CAD: 2.70,
 };
 
 export const ShipmentCreateView: React.FC = () => {
@@ -62,6 +64,17 @@ export const ShipmentCreateView: React.FC = () => {
   // AED 19,076 instead of AED 70,009 — wrong by 73%, with nothing reporting it.
   const [currency, setCurrency] = useState<ShipmentCurrency>('AED');
   const [exchangeRate, setRate] = useState(1);
+
+  // What every money() call below displays in — the Admin's global currency
+  // pick, same as the List and Detail pages. Falls back to AED if that pick
+  // (e.g. a currency this module's costing sheet doesn't carry a rate for)
+  // isn't one of the six this module supports. This is the landed-cost
+  // display currency, separate from `currency` above, which is what the
+  // supplier billed in.
+  const { code: globalCode } = useGlobalCurrency();
+  const view: DisplayCurrency = (SHIPMENT_CURRENCIES as string[]).includes(globalCode)
+    ? (globalCode as DisplayCurrency)
+    : 'AED';
 
   const [freightAmount, setFreight] = useState(0);
   const [customsAmount, setCustoms] = useState(0);
@@ -335,7 +348,7 @@ export const ShipmentCreateView: React.FC = () => {
                     onChange={e => updateLine(l.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                     placeholder={`Price (${currency})`} style={{ ...S.inp, fontSize: 12 }} />
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textAlign: 'right' }}>
-                    {money(lineTotal)}
+                    {money(lineTotal, view)}
                   </div>
                   <button type="button" disabled={lines.length === 1}
                     onClick={() => setLines(p => p.filter(x => x.id !== l.id))}
@@ -349,7 +362,7 @@ export const ShipmentCreateView: React.FC = () => {
 
           <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 12, paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 12, color: '#64748b' }}>{preview.totalQuantity} units</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{money(preview.purchaseNet)}</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{money(preview.purchaseNet, view)}</span>
           </div>
         </div>
 
@@ -405,16 +418,16 @@ export const ShipmentCreateView: React.FC = () => {
             ].map(([label, val]) => (
               <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
                 <span style={{ fontSize: 12, color: '#cbd5e1' }}>{label}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{money(val as number)}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{money(val as number, view)}</span>
               </div>
             ))}
             <div style={{ borderTop: '1px solid #334155', marginTop: 8, paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total landed cost</span>
-              <span style={{ fontSize: 17, fontWeight: 800, color: '#fff' }}>{money(preview.landedTotal)}</span>
+              <span style={{ fontSize: 17, fontWeight: 800, color: '#fff' }}>{money(preview.landedTotal, view)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
               <span style={{ fontSize: 11, color: '#94a3b8' }}>Average landed unit cost</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#4ade80' }}>{money(preview.averageLandedUnitCost)}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#4ade80' }}>{money(preview.averageLandedUnitCost, view)}</span>
             </div>
           </div>
         )}

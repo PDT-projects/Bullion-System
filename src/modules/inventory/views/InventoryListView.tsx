@@ -10,14 +10,19 @@
 // FIX: toast.success shown on successful delete; toast.error on failure
 
 import React, { useRef, useEffect } from 'react';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 import { toast } from 'sonner';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
-import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight, Check, ChevronDown, X, Search, Tag, Layers } from 'lucide-react';
+import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight, Check, ChevronDown, X, Search, Tag, Layers, FileDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Product, ProductFilters, ProductTransfer } from '../models/types';
 import { InventoryService } from '../models/inventoryService';
 import { InventoryCurrencyDropdown } from './InventoryCurrencyDropdown';
 import { InventoryReportView } from './InventoryReportView';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { useColumnVisibility, ColumnVisibilityMenu } from '../../../shared/components/ColumnVisibility';
+import { usePagination, PaginationBar } from '../../../shared/components/Pagination';
+import { exportTableToExcel } from '../../../shared/excelExport/exportTableToExcel';
 import { useInventoryReportViewModel } from '../viewModels/useInventoryReportViewModel';
 import { Activity, FileText } from 'lucide-react';
 
@@ -421,6 +426,11 @@ export function InventoryListView({
     return result;
   }, [products, selectedLocations, selectedCategories, selectedStatuses, selectedBrands, selectedModels, searchQuery]);
 
+  const INVENTORY_COLUMNS = ['Stock-In Date (Auto)', 'Stock-In Date (Manual)', 'Type', 'Brand', 'Model', 'Serial No.', 'Location',
+    'Ownership', 'Stock', `Sell (${getGlobalCurrencySymbol()})`, 'Sold Goods Payment', 'Condition', 'Current Status', 'Actions'];
+  const cols = useColumnVisibility('inventory-list', INVENTORY_COLUMNS);
+  const pg = usePagination(displayProducts, 'inventory-list');
+
   // Prune model selections that fall outside the current brand selection
   useEffect(() => {
     if (selectedBrands.length === 0) return;
@@ -540,9 +550,11 @@ export function InventoryListView({
   const lastUpdated = null;
 
   const fmtPrimary = (amount: number) => {
-    return new Intl.NumberFormat('en-AE', {
-      style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 2,
-    }).format(amount);
+    const symbol = getGlobalCurrencySymbol();
+    const formatted = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 0, maximumFractionDigits: 2,
+    }).format(amount || 0);
+    return `${symbol} ${formatted}`;
   };
 
   return (
@@ -594,6 +606,36 @@ export function InventoryListView({
           </button>
           {tab === 'inventory' && (
             <>
+              <button
+                onClick={() => {
+                  const headers = ['Brand', 'Model', 'Type', 'Serial No.', 'Location', 'Ownership', 'Stock', `Sell (${getGlobalCurrencySymbol()})`, 'Condition', 'Current Status'];
+                  const rows = displayProducts.map((p: any) => [
+                    p.brandName || '', p.modelName || '', p.category || p.type || '',
+                    (p.serialNumbers || []).join(', '), p.location || '', p.ownershipType || '',
+                    p.stock ?? 0, p.sellPrice ?? 0, p.condition || '', p.status || '',
+                  ]);
+                  exportTableToExcel({
+                    title: 'Inventory List',
+                    subtitle: `${displayProducts.length} products`,
+                    columns: headers.map(h => ({ header: h })),
+                    rows,
+                    filename: `inventory-list-${new Date().toISOString().slice(0, 10)}`,
+                  });
+                }}
+                disabled={displayProducts.length === 0}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14,
+                  cursor: displayProducts.length === 0 ? 'not-allowed' : 'pointer',
+                  backgroundColor: '#f1f5f9', color: '#374151',
+                  border: '1px solid #e2e8f0', transition: 'all 0.15s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  opacity: displayProducts.length === 0 ? 0.5 : 1,
+                }}
+              >
+                <FileDown size={16} /> Excel
+              </button>
+              <ColumnVisibilityMenu controller={cols} />
               <button
                 onClick={onAddToExisting}
                 style={{
@@ -796,7 +838,7 @@ export function InventoryListView({
       )}
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+      <LockedScrollTable maxHeight="70vh" className="bg-white rounded-xl shadow-sm border border-gray-200">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -820,15 +862,15 @@ export function InventoryListView({
                     style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select all visible" />
                 </th>
                 {['Stock-In Date (Auto)', 'Stock-In Date (Manual)', 'Type', 'Brand', 'Model', 'Serial No.', 'Location',
-                  'Ownership', 'Stock', 'Sell (AED)',
+                  'Ownership', 'Stock', `Sell (${getGlobalCurrencySymbol()})`,
                   'Sold Goods Payment',
-                  'Condition', 'Current Status', 'Actions'].map(h => (
+                  'Condition', 'Current Status', 'Actions'].filter(h => cols.isVisible(h)).map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {displayProducts.map((product, idx) => (
+              {pg.pageRows.map((product, idx) => (
                 <tr
                   key={product.id}
                   className="transition-colors"
@@ -844,54 +886,54 @@ export function InventoryListView({
                     <input type="checkbox" checked={selectedIds.has(product.id)} onChange={() => toggleSelectOne(product.id)}
                       style={{ width: 15, height: 15, cursor: 'pointer' }} />
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                  {cols.isVisible('Stock-In Date (Auto)') && <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                     {(() => {
                       const dates = Object.values(product.serialStockInDates || {});
                       const earliest = dates.length ? dates.sort()[0] : product.createdAt;
                       return earliest ? new Date(earliest).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
                     })()}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                  </td>}
+                  {cols.isVisible('Stock-In Date (Manual)') && <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                     {(() => {
                       const dates = Object.values(product.serialStockInDatesManual || {});
                       return dates.length ? new Date(dates.sort()[0]).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
                     })()}
-                  </td>
-                  <td className="px-4 py-2.5 text-sm text-gray-600">{product.category}</td>
-                  <td className="px-4 py-2.5 font-semibold text-gray-900 text-sm">{product.brandName}</td>
-                  <td className="px-4 py-2.5 text-sm text-gray-700">{product.modelName}</td>
-                  <td className="px-4 py-2.5 text-xs font-mono text-gray-600" style={{ maxWidth: 180 }}>
+                  </td>}
+                  {cols.isVisible('Type') && <td className="px-4 py-2.5 text-sm text-gray-600">{product.category}</td>}
+                  {cols.isVisible('Brand') && <td className="px-4 py-2.5 font-semibold text-gray-900 text-sm">{product.brandName}</td>}
+                  {cols.isVisible('Model') && <td className="px-4 py-2.5 text-sm text-gray-700">{product.modelName}</td>}
+                  {cols.isVisible('Serial No.') && <td className="px-4 py-2.5 text-xs font-mono text-gray-600" style={{ maxWidth: 180 }}>
                     {product.serialNumbers.length === 0 ? '—' : (
                       <span className="truncate block" title={product.serialNumbers.join(', ')}>
                         {product.serialNumbers.slice(0, 2).join(', ')}
                         {product.serialNumbers.length > 2 && ` +${product.serialNumbers.length - 2} more`}
                       </span>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
+                  </td>}
+                  {cols.isVisible('Location') && <td className="px-4 py-3 text-sm text-gray-600">
                     <div className="flex items-center gap-1.5">
                       <MapPin size={12} className="text-slate-400 flex-shrink-0" />
                       <span className="truncate max-w-[100px]" title={getDisplayLocation(product)}>
                         {getDisplayLocation(product)}
                       </span>
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
+                  </td>}
+                  {cols.isVisible('Ownership') && <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       product.ownershipType === 'Credit' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
                     }`}>
                       {product.ownershipType || '—'}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-700">
+                  </td>}
+                  {cols.isVisible('Stock') && <td className="px-4 py-3 text-sm font-semibold text-gray-700">
                     {product.stock} units
-                  </td>
-                  <td className="px-4 py-3 text-sm">
+                  </td>}
+                  {cols.isVisible(`Sell (${getGlobalCurrencySymbol()})`) && <td className="px-4 py-3 text-sm">
                     <div style={{ fontWeight: 600, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrimary(product.sellPrice)}
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
+                  </td>}
+                  {cols.isVisible('Sold Goods Payment') && <td className="px-4 py-3">
                     {product.ownershipType === 'Credit' ? (
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         product.supplierPaymentStatus === 'Cleared' ? 'bg-green-100 text-green-700' :
@@ -901,18 +943,18 @@ export function InventoryListView({
                         {product.supplierPaymentStatus === 'Cleared' ? 'Clear' : product.supplierPaymentStatus === 'Partial' ? 'Partial' : 'Pending'}
                       </span>
                     ) : '—'}
-                  </td>
-                  <td className="px-4 py-3">
+                  </td>}
+                  {cols.isVisible('Condition') && <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
                       {product.status}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
+                  </td>}
+                  {cols.isVisible('Current Status') && <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'}`}>
                       {product.stock > 0 ? 'In Stock' : 'Sold'}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
+                  </td>}
+                  {cols.isVisible('Actions') && <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       {/* View — slate */}
                       <button
@@ -956,13 +998,14 @@ export function InventoryListView({
                         </button>
                       )}
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-      </div>
+      </LockedScrollTable>
+      <PaginationBar controller={pg} />
 
       {!isLoading && displayProducts.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200" style={{ marginTop: 12, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>

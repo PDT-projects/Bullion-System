@@ -4,6 +4,7 @@ import {
   Transaction, TransactionFilters, TransactionStats, LOAN_SUB_CATEGORIES, BSMainCategory,
   AccountType, CASH_IN_HAND_ID, CASH_IN_HAND_NAME,
 } from './types';
+import { formatGlobalCurrency } from '../../../shared/currency/globalCurrency';
 
 export const getTransactionTotals = (t: Transaction) => {
   const partialTotal = (t.partialPayments || []).reduce((s, p) => s + p.amount, 0);
@@ -119,8 +120,7 @@ export const calculateStats = (transactions: Transaction[]): TransactionStats =>
   };
 };
 
-export const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
+export const formatCurrency = (amount: number): string => formatGlobalCurrency(amount);
 
 export const formatDate = (d: string): string =>
   d ? new Date(d).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }) : '';

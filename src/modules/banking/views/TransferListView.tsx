@@ -12,9 +12,12 @@ import {
   Building2,
   TrendingUp,
   RefreshCw,
-  Loader2
+  Loader2,
+  Download
 } from 'lucide-react';
 import { BankTransfer, TransferStats, TransferFilters } from '../models/types';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../../shared/reportExport/reportExport';
 
 interface TransferListViewProps {
   // Data
@@ -85,6 +88,38 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
               <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
             </button>
           )}
+          <button
+            onClick={() => {
+              const headers = ['Date', 'From Bank', 'To Bank', 'Amount'];
+              const rows = filteredTransfers.map(t => [formatDate(t.date), t.fromBankName, t.toBankName, formatCurrency(t.amount)]);
+              exportReportToExcel({
+                title: 'Bank Transfers',
+                subtitle: `${filteredTransfers.length} transfers`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `bank-transfers-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            className="flex items-center gap-2 px-3 py-2 text-slate-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download size={16} /> Excel
+          </button>
+          <button
+            onClick={() => {
+              const headers = ['Date', 'From Bank', 'To Bank', 'Amount'];
+              const rows = filteredTransfers.map(t => [formatDate(t.date), t.fromBankName, t.toBankName, formatCurrency(t.amount)]);
+              exportReportToPdf({
+                title: 'Bank Transfers',
+                subtitle: `${filteredTransfers.length} transfers`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `bank-transfers-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            className="flex items-center gap-2 px-3 py-2 text-slate-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download size={16} /> PDF
+          </button>
           <button
             onClick={onAddTransfer}
             disabled={isLoading}
@@ -182,7 +217,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
       {/* Transfers Table */}
       {!isLoading && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
+          <LockedScrollTable maxHeight="65vh">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -229,7 +264,7 @@ export const TransferListView: React.FC<TransferListViewProps> = ({
                 ))}
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
         </div>
       )}
 

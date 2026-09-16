@@ -5,9 +5,11 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InventoryReportRow } from '../models/types';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 export function useInventoryReportViewModel() {
   const navigate = useNavigate();
+  const { formatCurrency: formatGlobalAmount } = useGlobalCurrency();
   const [rows, setRows] = useState<InventoryReportRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,8 +107,8 @@ export function useInventoryReportViewModel() {
     (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
 
   const formatCurrency = useCallback((n?: number) =>
-    n === undefined ? '—' : new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n)
-  , []);
+    n === undefined ? '—' : formatGlobalAmount(n)
+  , [formatGlobalAmount]);
 
   const formatDate = useCallback((iso?: string) => {
     if (!iso) return '—';

@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { InventoryAuditLog } from '../App';
 import { History, Filter, Download, Eye, Calendar, User, Package, ArrowRightLeft, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../shared/reportExport/reportExport';
 
 type ProductTransferReportProps = {\n  transferLogs: InventoryAuditLog[];\n};
 
@@ -216,6 +218,50 @@ toast.success('Product transfer report exported successfully');
             </button>
           )}
           <button
+            onClick={() => {
+              const headers = ['Timestamp', 'Action', 'Product', 'Brand', 'Model', 'Serial Numbers', 'From Location', 'To Location', 'Old Status', 'New Status', 'Quantity', 'Performed By', 'Notes'];
+              const rows = filteredLogs.map(log => [
+                new Date(log.timestamp).toLocaleString('en-AE'), log.action, log.productName,
+                log.brandName, log.modelName, log.serialNumbers.join('; '),
+                log.fromLocation || '', log.toLocation || '', log.oldStatus || '',
+                log.newStatus || '', log.quantity, log.performedBy, log.notes || '',
+              ]);
+              exportReportToExcel({
+                title: 'Inventory Audit Log',
+                subtitle: `${filteredLogs.length} entries`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `inventory-audit-log-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+          >
+            <Download size={16} />
+            Excel
+          </button>
+          <button
+            onClick={() => {
+              const headers = ['Timestamp', 'Action', 'Product', 'Brand', 'Model', 'Serial Numbers', 'From Location', 'To Location', 'Old Status', 'New Status', 'Quantity', 'Performed By', 'Notes'];
+              const rows = filteredLogs.map(log => [
+                new Date(log.timestamp).toLocaleString('en-AE'), log.action, log.productName,
+                log.brandName, log.modelName, log.serialNumbers.join('; '),
+                log.fromLocation || '', log.toLocation || '', log.oldStatus || '',
+                log.newStatus || '', log.quantity, log.performedBy, log.notes || '',
+              ]);
+              exportReportToPdf({
+                title: 'Inventory Audit Log',
+                subtitle: `${filteredLogs.length} entries`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `inventory-audit-log-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+          >
+            <Download size={16} />
+            PDF
+          </button>
+          <button
             onClick={handleExportCSV}
             className="px-4 py-2 text-sm font-medium text-white bg-[#10b981] rounded-lg hover:bg-[#059669] flex items-center gap-2"
           >
@@ -227,7 +273,7 @@ toast.success('Product transfer report exported successfully');
 
       {/* Audit Log Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <LockedScrollTable maxHeight="65vh">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -302,7 +348,7 @@ toast.success('Product transfer report exported successfully');
               )}
             </tbody>
           </table>
-        </div>
+        </LockedScrollTable>
       </div>
 
       {/* View Log Details Modal */}

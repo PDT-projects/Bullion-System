@@ -3,7 +3,9 @@
 
 import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
 import { CostingModel } from '../models/types';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 interface CostingTableProps {
   models: CostingModel[];
@@ -31,7 +33,7 @@ export function CostingTable({ models, onAddModel, onUpdateModelField, onRemoveM
     'Custom/Unit',
     'Freight/Model',
     'Freight/Unit',
-    'Cost (AED)',
+    `Cost (${getGlobalCurrencySymbol()})`,
     'Total Unit Cost',
     'Inventory Value',
     'Actions',
@@ -90,7 +92,7 @@ export function CostingTable({ models, onAddModel, onUpdateModelField, onRemoveM
           <p style={{ color: '#9ca3af', fontSize: 14 }}>Click "Add Model" to add your first model</p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto', maxHeight: 500, overflowY: 'auto' }}>
+        <LockedScrollTable maxHeight="500px">
           <table
             style={{ width: '100%', minWidth: 1800, borderCollapse: 'collapse', fontSize: 14 }}
           >
@@ -290,7 +292,7 @@ export function CostingTable({ models, onAddModel, onUpdateModelField, onRemoveM
               </tfoot>
             )}
           </table>
-        </div>
+        </LockedScrollTable>
       )}
 
       {models.length > 0 && (

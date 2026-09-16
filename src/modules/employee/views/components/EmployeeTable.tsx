@@ -4,6 +4,9 @@
 import { Eye, Edit, Trash2 } from 'lucide-react';
 import { Employee } from '../../models/types';
 import type { SalaryCurrency } from '../EmployeeFormView';
+import { useGlobalCurrency } from '../../../../shared/currency/useGlobalCurrency';
+import { formatSalaryInGlobalCurrency } from '../CurrencyUtils';
+import { LockedScrollTable } from '../../../../shared/components/LockedScrollTable';
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -20,10 +23,12 @@ export function EmployeeTable({
   onView,
   onEdit,
   onDelete,
-  formatCurrency,
-  convertSalary,
-  displayCurrency,
 }: EmployeeTableProps) {
+  // Subscribed so the table re-renders the instant Admin changes the
+  // global currency — the actual conversion happens in displaySalary()
+  // below, always reading the live setting.
+  const { code: globalCode } = useGlobalCurrency();
+
   if (employees.length === 0) {
     return (
       <div className="px-6 py-12 text-center text-gray-500">
@@ -33,23 +38,22 @@ export function EmployeeTable({
     );
   }
 
-  // Convert each employee's salary FROM their own currency TO the display currency.
-  // employee.salaryCurrency tells us what unit salary is stored in.
-  // If not set, fall back to 'AED' (system default for all old records).
+  // Convert each employee's salary FROM their own actually-stored currency
+  // (employee.salaryCurrency — this is a real fact about their pay, not a
+  // relabeled AED figure) INTO whatever currency the Admin has picked
+  // globally. If not set, fall back to 'AED' (system default for all old
+  // records).
   const displaySalary = (employee: Employee) => {
     const empCurrency: SalaryCurrency = (employee as any).salaryCurrency || 'AED';
-    const converted = empCurrency === displayCurrency
-      ? employee.salary
-      : convertSalary(employee.salary, empCurrency, displayCurrency);
-    return formatCurrency(converted, displayCurrency);
+    return formatSalaryInGlobalCurrency(employee.salary, empCurrency);
   };
 
   return (
-    <div className="overflow-x-auto">
+    <LockedScrollTable maxHeight="65vh">
       <table className="w-full">
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
-            {['Name', 'Position', `Salary (${displayCurrency})`, 'Phone', 'Email', 'Status', 'Actions'].map(h => (
+            {['Name', 'Position', `Salary (${globalCode})`, 'Phone', 'Email', 'Status', 'Actions'].map(h => (
               <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 {h}
               </th>
@@ -90,6 +94,6 @@ export function EmployeeTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </LockedScrollTable>
   );
 }

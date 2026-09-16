@@ -1,5 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { FileText, DollarSign, Percent, Calendar, MapPin, User, Filter, X, ChevronDown } from 'lucide-react';
+import { formatGlobalCurrency } from '../../shared/currency/globalCurrency';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
 
 type Commission = {
   id: string;
@@ -136,8 +138,7 @@ export function CommissionReport({ commissions }: CommissionReportProps) {
     statuses: [] as string[],
   });
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+  const formatCurrency = (amount: number) => formatGlobalCurrency(amount);
 
   const formatMonth = (monthStr: string) => {
     const [year, month] = monthStr.split('-');
@@ -361,7 +362,7 @@ export function CommissionReport({ commissions }: CommissionReportProps) {
           </p>
         </div>
 
-        <div className="overflow-x-auto">
+        <LockedScrollTable maxHeight="65vh">
           <table className="w-full min-w-max">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -436,7 +437,7 @@ export function CommissionReport({ commissions }: CommissionReportProps) {
               )}
             </tbody>
           </table>
-        </div>
+        </LockedScrollTable>
 
         {/* Footer total */}
         {filteredCommissions.length > 0 && (

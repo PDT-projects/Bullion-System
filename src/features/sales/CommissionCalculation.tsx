@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Calculator, Check, Edit, X, FileText, Percent, DollarSign, Calendar, MapPin, User, Maximize2, Minimize2, TrendingUp, Award, Target, BarChart3, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
+import { getGlobalCurrencySymbol } from '../../shared/currency/globalCurrency';
 
 type Commission = {
   id: string;
@@ -274,12 +276,12 @@ export function CommissionCalculation({
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'AED',
+    const symbol = getGlobalCurrencySymbol();
+    const formatted = new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
+      maximumFractionDigits: 0,
+    }).format(amount || 0);
+    return `${symbol} ${formatted}`;
   };
 
   const formatMonth = (monthStr: string) => {
@@ -361,7 +363,7 @@ export function CommissionCalculation({
             <h3 className="text-lg font-semibold">Commission Summary - {selectedCity} ({formatMonth(selectedMonth)})</h3>
           </div>
 
-          <div className="overflow-x-auto">
+          <LockedScrollTable maxHeight="65vh">
             <table className="w-full min-w-max">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -495,7 +497,7 @@ export function CommissionCalculation({
                 ))}
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
 
           {/* Action Buttons */}
           <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
@@ -519,7 +521,7 @@ export function CommissionCalculation({
             </h3>
           </div>
 
-          <div className="overflow-x-auto">
+          <LockedScrollTable maxHeight="65vh">
             <table className="w-full min-w-max">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -564,7 +566,7 @@ export function CommissionCalculation({
                 ))}
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
         </div>
       )}
 
@@ -584,7 +586,7 @@ export function CommissionCalculation({
             </div>
 
             <div className={`p-6 overflow-y-auto ${isFullScreen ? 'max-h-[calc(100vh-200px)]' : 'max-h-[60vh]'}`}>
-              <div className="overflow-x-auto">
+              <LockedScrollTable maxHeight="65vh">
                 <table className="w-full min-w-max">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
@@ -711,7 +713,7 @@ export function CommissionCalculation({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </LockedScrollTable>
             </div>
 
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">

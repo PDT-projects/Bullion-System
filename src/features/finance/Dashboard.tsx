@@ -19,28 +19,25 @@ import { useDashboardData } from './UseDashboardData';
 import { ReportsHub } from './ReportsHub';
 import { usePayableToFuturistic } from '../../modules/Payable-to-futuristic/viewModels/usePayableToFuturistic';
 import type { CurrencyAmounts } from '../../modules/Payable-to-futuristic/models/payableToFuturistic';
+import { CurrencyCode, CurrencyMeta, RateMap, FALLBACK_RATES } from './currencyUtils';
+import { useGlobalCurrency } from '../../shared/currency/useGlobalCurrency';
 
 // ─── Currency config ──────────────────────────────────────────────────────────
-
-type CurrencyCode = 'PKR' | 'CAD' | 'AED' | 'SAR';
-
-interface CurrencyMeta {
-  code: CurrencyCode;
-  label: string;
-  flag: string;
-  locale: string;
-  decimals: number;
-}
+// CurrencyCode / CurrencyMeta / RateMap / FALLBACK_RATES all come from
+// currencyUtils.ts now — this used to be a second, local copy that had
+// silently drifted out of sync with the one CurrencyPicker.tsx uses (it was
+// missing GBP/EUR), which is exactly the kind of mismatch that breaks the
+// moment either copy is extended without the other.
 
 const CURRENCIES: CurrencyMeta[] = [
   { code: 'AED', label: 'UAE Dirham',      flag: '🇦🇪', locale: 'en-AE', decimals: 2 },
   { code: 'PKR', label: 'Pakistani Rupee', flag: '🇵🇰', locale: 'en-PK', decimals: 0 },
   { code: 'CAD', label: 'Canadian Dollar', flag: '🇨🇦', locale: 'en-CA', decimals: 2 },
   { code: 'SAR', label: 'Saudi Riyal',     flag: '🇸🇦', locale: 'en-US', decimals: 2 },
+  { code: 'USD', label: 'US Dollar',       flag: '🇺🇸', locale: 'en-US', decimals: 2 },
+  { code: 'GBP', label: 'British Pound',   flag: '🇬🇧', locale: 'en-GB', decimals: 2 },
+  { code: 'EUR', label: 'Euro',            flag: '🇪🇺', locale: 'en-IE', decimals: 2 },
 ];
-
-type RateMap = Record<CurrencyCode, number> & { USD: number };
-const FALLBACK_RATES: RateMap = { PKR: 279.5, CAD: 1.38, AED: 3.67, SAR: 3.75, USD: 1 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,7 +84,10 @@ function resolvePayableAmount(amounts: CurrencyAmounts, code: CurrencyCode, rate
     case 'AED': return amounts.aed;
     case 'PKR': return amounts.pkr;
     case 'SAR': return amounts.sar;
+    case 'USD': return amounts.usd;
     case 'CAD': return amounts.usd * rates.CAD; // rates are USD-based
+    case 'GBP': return amounts.usd * rates.GBP;
+    case 'EUR': return amounts.usd * rates.EUR;
     default:    return amounts.aed;
   }
 }
@@ -106,7 +106,7 @@ function useCurrencyRates() {
       const res  = await fetch('https://open.er-api.com/v6/latest/USD');
       const data = await res.json();
       if (data.result === 'success') {
-        setRates({ PKR: data.rates.PKR, CAD: data.rates.CAD, AED: data.rates.AED, SAR: data.rates.SAR, USD: data.rates.USD || 1 });
+        setRates({ PKR: data.rates.PKR, CAD: data.rates.CAD, AED: data.rates.AED, SAR: data.rates.SAR, USD: data.rates.USD || 1, GBP: data.rates.GBP, EUR: data.rates.EUR });
         setLastUpdated(new Date());
         setError(false);
       } else throw new Error();
@@ -186,6 +186,11 @@ function BankBalanceCard({ label, icon, banks, subtitle, dark = false, accentCol
 }) {
   const totals = groupBankBalancesByCurrency(banks);
   const codes  = Object.keys(totals) as CurrencyCode[];
+  // Display-only: swap in the Admin's global currency symbol on every line.
+  // The number itself is untouched — still each bank's own real balance,
+  // just no longer labelled with that bank's own currency code.
+  const { code: globalCode } = useGlobalCurrency();
+  const globalMeta = getMeta(globalCode as CurrencyCode);
 
   const wrapCls  = dark ? '' : 'bg-white border hover:shadow-md';
   const labelCol = dark ? 'rgba(255,255,255,0.45)' : undefined;
@@ -204,11 +209,11 @@ function BankBalanceCard({ label, icon, banks, subtitle, dark = false, accentCol
         {icon}
       </div>
       {codes.length === 0 ? (
-        <p className={`text-2xl font-bold tabular-nums leading-none mb-1.5 ${amtCls}`}>{fmt(0, getMeta('AED'))}</p>
+        <p className={`text-2xl font-bold tabular-nums leading-none mb-1.5 ${amtCls}`}>{fmt(0, globalMeta)}</p>
       ) : (
         codes.map((code, i) => (
           <p key={code} className={`font-bold tabular-nums leading-tight ${i === 0 ? `text-2xl mb-0.5 ${amtCls}` : `text-base ${dark ? 'text-white/70' : 'text-gray-500'}`}`}>
-            {fmt(totals[code]!, getMeta(code))}
+            {fmt(totals[code]!, globalMeta)}
           </p>
         ))
       )}
@@ -381,7 +386,12 @@ export function Dashboard() {
   const canViewOverview = hasPermission('Dashboard');
 
   const [activeTab, setActiveTab]     = useState<string | null>(null);
-  const primaryCurrency: CurrencyCode = 'AED';
+  // Follows the Admin's global currency setting by default — the dropdown
+  // still lets anyone switch to a different comparison view for this
+  // session without changing the global setting for everyone else.
+  const { code: globalCode } = useGlobalCurrency();
+  const [primaryCurrency, setPrimaryCurrency] = useState<CurrencyCode>(globalCode as CurrencyCode);
+  useEffect(() => { setPrimaryCurrency(globalCode as CurrencyCode); }, [globalCode]);
   const extraCurrencies: CurrencyCode[] = [];
 
   const { rates, loading: ratesLoading, error: ratesError, lastUpdated } = useCurrencyRates();
@@ -506,7 +516,7 @@ export function Dashboard() {
         {/* Currency + Refresh — only show on Overview tab */}
         {activeTab !== 'reports' && (
           <div className="flex items-center gap-3">
-            <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} />
+            <CurrencyDropdown primary={primaryCurrency} extras={extraCurrencies} loading={ratesLoading} error={ratesError} lastUpdated={lastUpdated} onPrimaryChange={setPrimaryCurrency} />
             <button onClick={refresh} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors bg-white border border-gray-200 rounded-xl px-3 py-2 hover:shadow-sm">
               <RefreshCw size={13} /> Refresh
             </button>

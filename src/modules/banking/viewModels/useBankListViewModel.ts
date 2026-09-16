@@ -6,6 +6,7 @@ import { Bank, BankStats, BankFilters } from '../models/types';
 import { BankingService } from '../models/bankingService';
 import { BankFirebaseService } from '../models/bankFirebaseService';
 import { TransferFirebaseService } from '../models/Transferfirebaseservice';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 interface TransferModalData {
   fromBankId: string;
@@ -16,6 +17,7 @@ interface TransferModalData {
 }
 
 export function useBankListViewModel() {
+  useGlobalCurrency(); // re-render when Admin changes the global currency
   const [banks, setBanks] = useState<Bank[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTransferSaving, setIsTransferSaving] = useState(false);

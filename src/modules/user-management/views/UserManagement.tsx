@@ -4,9 +4,11 @@ import { toast } from 'sonner';
 import {
   Trash2, Edit2, ChevronDown, ChevronUp, AlertCircle,
   Eye, EyeOff, UserPlus, Users, X, Check, Shield,
-  Clock, CheckCircle, XCircle, UserCheck, RotateCcw, Loader2
+  Clock, CheckCircle, XCircle, UserCheck, RotateCcw, Loader2, Coins
 } from 'lucide-react';
-import { factoryReset, countAllRecords, type ResetProgress } from '../models/factoryResetService';
+import { factoryReset, countAllRecords, clearCustomLists, type ResetProgress } from '../models/factoryResetService';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
+import { setGlobalCurrency } from '../../../shared/currency/globalCurrency';
 import {
   createUser,
   getAllUsers,
@@ -57,6 +59,46 @@ export function UserManagement() {
   const [resetting,     setResetting]     = useState(false);
   const [resetStep,     setResetStep]     = useState('');
   const [resetDone,     setResetDone]     = useState<ResetProgress[] | null>(null);
+  const [clearingLists, setClearingLists] = useState(false);
+
+  // ── System currency selector ─────────────────────────────────────────────
+  // Changes only the currency name/symbol shown across the whole app.
+  // Never converts, recalculates, or touches any stored amount — every
+  // number stays exactly as it is in Firestore (AED-denominated); this
+  // only changes what label gets printed next to it.
+  const CURRENCY_OPTIONS: { code: string; symbol: string; name: string }[] = [
+    { code: 'AED', symbol: 'AED', name: 'UAE Dirham' },
+    { code: 'USD', symbol: '$',   name: 'US Dollar' },
+    { code: 'CAD', symbol: 'CA$', name: 'Canadian Dollar' },
+    { code: 'PKR', symbol: 'Rs',  name: 'Pakistani Rupee' },
+    { code: 'SAR', symbol: 'SAR', name: 'Saudi Riyal' },
+    { code: 'GBP', symbol: '£',   name: 'British Pound' },
+    { code: 'EUR', symbol: '€',   name: 'Euro' },
+  ];
+  const { code: currentCurrencyCode } = useGlobalCurrency();
+  const [selectedCurrencyCode, setSelectedCurrencyCode] = useState(currentCurrencyCode);
+  const [applyingCurrency, setApplyingCurrency] = useState(false);
+
+  useEffect(() => { setSelectedCurrencyCode(currentCurrencyCode); }, [currentCurrencyCode]);
+
+  const handleApplyCurrency = async () => {
+    const chosen = CURRENCY_OPTIONS.find(c => c.code === selectedCurrencyCode);
+    if (!chosen) return;
+    setApplyingCurrency(true);
+    try {
+      await setGlobalCurrency(chosen);
+      toast.success(`Currency changed to ${chosen.name} (${chosen.symbol}) — reloading so it shows everywhere.`);
+      // A handful of screens read the symbol via a plain function call
+      // rather than the reactive hook, so they don't re-render on their own
+      // when this changes. A full reload guarantees every screen — this one
+      // included — picks up the new symbol immediately, with no exceptions.
+      setTimeout(() => window.location.reload(), 700);
+    } catch (err) {
+      console.error('[UserManagement] currency change failed:', err);
+      toast.error('Could not change currency. Check your connection and try again.');
+      setApplyingCurrency(false);
+    }
+  };
 
   const openReset = async () => {
     setResetOpen(true); setResetConfirm(''); setResetDone(null);
@@ -81,6 +123,29 @@ export function UserManagement() {
       toast.error(e?.message || 'Factory reset failed');
     } finally {
       setResetting(false); setResetStep('');
+    }
+  };
+
+  // For custom locations/branches/salespersons added before the factory
+  // reset fix existed — clears exactly the same six lists a reset now
+  // clears, without touching any business record.
+  const runClearLists = async () => {
+    if (!window.confirm(
+      'Clear all custom-added Locations, Branches, Salespersons and Cities? ' +
+      'This only resets those dropdown lists to their defaults — no invoices, ' +
+      'products, or transactions are touched.'
+    )) return;
+    setClearingLists(true);
+    try {
+      const results = await clearCustomLists();
+      const cleared = results.reduce((s, r) => s + r.deleted, 0);
+      const failed  = results.filter(r => r.error);
+      if (failed.length === 0) toast.success(`Custom lists cleared — ${cleared} list(s) reset to defaults`);
+      else toast.warning(`${cleared} cleared · ${failed.length} list(s) blocked — check permissions`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not clear the custom lists');
+    } finally {
+      setClearingLists(false);
     }
   };
 
@@ -360,6 +425,34 @@ export function UserManagement() {
             <p className="text-gray-500 text-sm mt-1">Approve registered users, manage branch access, and control read/write permissions</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* System currency — display label only, never converts stored values. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+              <Coins size={15} className="text-amber-600" />
+              <select
+                value={selectedCurrencyCode}
+                onChange={e => setSelectedCurrencyCode(e.target.value)}
+                style={{ border: 'none', outline: 'none', fontSize: 13, fontWeight: 600, color: '#334155', backgroundColor: 'transparent', cursor: 'pointer' }}
+                title="Change what currency amounts are shown in everywhere — converts for display only, using today's rate. Stored data stays in AED."
+              >
+                {CURRENCY_OPTIONS.map(c => (
+                  <option key={c.code} value={c.code}>{c.symbol} — {c.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleApplyCurrency}
+                disabled={applyingCurrency || selectedCurrencyCode === currentCurrencyCode}
+                title="Apply — every amount shown across the app converts to this currency using today's rate. Nothing is changed in the database."
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', fontSize: 12, fontWeight: 700,
+                  borderRadius: 6, border: 'none', cursor: (applyingCurrency || selectedCurrencyCode === currentCurrencyCode) ? 'not-allowed' : 'pointer',
+                  backgroundColor: (applyingCurrency || selectedCurrencyCode === currentCurrencyCode) ? '#e2e8f0' : '#0f172a',
+                  color: (applyingCurrency || selectedCurrencyCode === currentCurrencyCode) ? '#94a3b8' : '#fff',
+                }}
+              >
+                {applyingCurrency ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                Apply
+              </button>
+            </div>
             {/* Super-admin only. Placed apart from the tabs and coloured as a
                 danger action so it is never confused with a normal control. */}
             <button
@@ -369,6 +462,18 @@ export function UserManagement() {
                 style={{ backgroundColor: '#fee2e2', color: '#7f1d1d', border: '2px solid #b91c1c' }}
               >
                 <RotateCcw size={15} /> Factory Reset
+              </button>
+            <button
+                onClick={runClearLists}
+                disabled={clearingLists}
+                title="Reset custom Locations, Branches, Salespersons and Cities to defaults"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors shadow-sm"
+                style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '2px solid #d97706',
+                         opacity: clearingLists ? 0.6 : 1, cursor: clearingLists ? 'not-allowed' : 'pointer' }}
+              >
+                {clearingLists
+                  ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Clearing…</>
+                  : <><Trash2 size={15} /> Clear Custom Lists</>}
               </button>
             <button
               onClick={() => navigate('/dashboard')}

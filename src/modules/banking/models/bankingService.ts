@@ -13,22 +13,43 @@ import {
   TransferFormData
 } from './types';
 import { validateName, validatePositiveAmount } from '../../../utils/validators';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 export class BankingService {
 
-  static formatCurrency(amount: number, currency: 'AED' | 'PKR' = 'AED'): string {
-    if (currency === 'PKR') {
-      return new Intl.NumberFormat('en-PK', {
+  // Every caller of formatCurrency(amount) — no explicit currency — now
+  // converts live into the Admin's global display currency, matching every
+  // other module. Callers that explicitly pass a specific bank's own
+  // currency (e.g. showing that one account's real PKR balance next to its
+  // name) are respected as before — that's real data about that account,
+  // not a relabeled AED figure.
+  static formatCurrency(amount: number, currency?: 'AED' | 'PKR'): string {
+    if (currency) {
+      // Caller explicitly wants this specific currency (e.g. a bank's own
+      // account currency) — honour it exactly as before, no global override.
+      if (currency === 'PKR') {
+        return new Intl.NumberFormat('en-PK', {
+          style: 'currency',
+          currency: 'PKR',
+          minimumFractionDigits: 0
+        }).format(amount);
+      }
+      return new Intl.NumberFormat('en-AE', {
         style: 'currency',
-        currency: 'PKR',
+        currency: 'AED',
         minimumFractionDigits: 0
       }).format(amount);
     }
-    return new Intl.NumberFormat('en-AE', {
-      style: 'currency',
-      currency: 'AED',
-      minimumFractionDigits: 0
-    }).format(amount);
+
+    // No explicit currency given — this is the "generic display" path used
+    // by Dashboard/List/Form screens. Just swap in the Admin's global
+    // symbol — the number itself is never converted.
+    const symbol = getGlobalCurrencySymbol();
+    const formatted = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount || 0);
+    return `${symbol} ${formatted}`;
   }
 
   static formatDate(dateString: string): string {

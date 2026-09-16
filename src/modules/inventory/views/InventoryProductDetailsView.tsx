@@ -18,6 +18,7 @@ import {
 import { BrandModelSelector } from '../components/BrandModelSelector';
 import { forceReseed } from '../models/BrandModelService';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 
 
@@ -178,7 +179,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
         <Tag className="w-4 h-4 text-emerald-500" />
-        Dealer Price (AED)
+        Dealer Price ({getGlobalCurrencySymbol()})
         <span className="ml-1 text-xs text-gray-400 font-normal">(Optional)</span>
       </label>
       <input
@@ -463,7 +464,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
                   <Tag className="w-4 h-4 text-emerald-500" />
-                  Dealer Price (AED)
+                  Dealer Price ({getGlobalCurrencySymbol()})
                   <span className="ml-1 text-xs text-gray-400 font-normal">(Optional)</span>
                 </label>
                 <input

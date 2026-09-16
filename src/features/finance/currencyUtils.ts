@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 // Shared currency conversion utilities for finance reports.
 
-export type CurrencyCode = 'PKR' | 'USD' | 'CAD' | 'AED' | 'SAR';
+export type CurrencyCode = 'PKR' | 'USD' | 'CAD' | 'AED' | 'SAR' | 'GBP' | 'EUR';
 
 export interface CurrencyMeta {
   code: CurrencyCode;
@@ -18,6 +18,8 @@ export const CURRENCIES: CurrencyMeta[] = [
   { code: 'CAD', label: 'Canadian Dollar',   flag: '🇨🇦', locale: 'en-CA', decimals: 2 },
   { code: 'AED', label: 'UAE Dirham',        flag: '🇦🇪', locale: 'en-AE', decimals: 2 },
   { code: 'SAR', label: 'Saudi Riyal',       flag: '🇸🇦', locale: 'en-US', decimals: 2 },
+  { code: 'GBP', label: 'British Pound',     flag: '🇬🇧', locale: 'en-GB', decimals: 2 },
+  { code: 'EUR', label: 'Euro',              flag: '🇪🇺', locale: 'en-IE', decimals: 2 },
 ];
 
 export type RateMap = Record<CurrencyCode, number>;
@@ -28,6 +30,8 @@ export const FALLBACK_RATES: RateMap = {
   CAD: 1.38,
   AED: 3.67,
   SAR: 3.75,
+  GBP: 0.79,
+  EUR: 0.92,
 };
 
 export const convertFromPKR = (amount: number, target: CurrencyCode, rates: RateMap): number =>
@@ -70,6 +74,8 @@ export function useCurrencyRates() {
           CAD: data.rates.CAD,
           AED: data.rates.AED,
           SAR: data.rates.SAR,
+          GBP: data.rates.GBP,
+          EUR: data.rates.EUR,
         });
         setLastUpdated(new Date());
         setError(false);

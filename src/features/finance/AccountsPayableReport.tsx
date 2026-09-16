@@ -18,6 +18,9 @@ import {
   Layers, Minimize2, Maximize2, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react';
 import { Transaction } from '../../modules/transactions/models/types';
+import { useGlobalCurrency } from '../../shared/currency/useGlobalCurrency';
+import { getGlobalCurrencySymbol, getGlobalCurrency } from '../../shared/currency/globalCurrency';
+import { CurrencyCode } from './currencyUtils';
 
 interface Props {
   transactions: Transaction[];
@@ -25,7 +28,7 @@ interface Props {
   onBack?:      () => void;
 }
 
-const CURRENCY = 'AED';
+const CURRENCY = () => getGlobalCurrencySymbol();
 
 // Classification strings that map to Accounts Payable.
 // Match is case-insensitive, trimmed, and uses SUBSTRING matching so values
@@ -101,6 +104,8 @@ interface ApTx {
 }
 
 export function AccountsPayableReport({ transactions }: Props) {
+  useGlobalCurrency(); // subscribe so this view re-renders on currency change
+
   type Preset = 'all' | 'thisMonth' | 'lastMonth' | 'last3Months' | 'thisYear' | 'custom';
   const [preset, setPreset] = useState<Preset>('all');
   const [from, setFrom] = useState<string>('2000-01-01');
@@ -310,7 +315,7 @@ export function AccountsPayableReport({ transactions }: Props) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 22px', backgroundColor: '#fafbfc', borderBottom: '1px solid #e2e8f0', fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.08em' }}>
           <span>Lender / Transaction</span>
-          <span style={{ textAlign: 'right', minWidth: 180 }}>Net Owed ({CURRENCY})</span>
+          <span style={{ textAlign: 'right', minWidth: 180 }}>Net Owed ({CURRENCY()})</span>
         </div>
 
         {byCounterparty.length === 0 ? (
@@ -345,7 +350,7 @@ export function AccountsPayableReport({ transactions }: Props) {
                 </div>
                 <span style={{ fontSize: 14, fontWeight: 800, color: stillOwe ? '#dc2626' : overpaid ? '#059669' : '#64748b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', minWidth: 180, textAlign: 'right' }}>
                   {c.net === 0 ? '' : stillOwe ? '−' : '+'}
-                  <span style={{ opacity: 0.6, fontSize: '0.82em', marginRight: 3 }}>{CURRENCY}</span>{fmt(Math.abs(c.net))}
+                  <span style={{ opacity: 0.6, fontSize: '0.82em', marginRight: 3 }}>{CURRENCY()}</span>{fmt(Math.abs(c.net))}
                   {c.net === 0 && <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 6, color: '#94a3b8' }}>SETTLED</span>}
                 </span>
               </div>
@@ -374,7 +379,7 @@ export function AccountsPayableReport({ transactions }: Props) {
                     textAlign: 'right', minWidth: 180,
                   }}>
                     {x.direction === 'borrowed' ? '+' : '−'}
-                    <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 3 }}>{CURRENCY}</span>{fmt(x.amount)}
+                    <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 3 }}>{CURRENCY()}</span>{fmt(x.amount)}
                   </span>
                 </div>
               ))}
@@ -388,7 +393,7 @@ export function AccountsPayableReport({ transactions }: Props) {
               {totals.stillOwed > 0 ? 'Total Accounts Payable (Still Owed)' : 'Fully Settled'}
             </span>
             <span style={{ fontSize: 16, fontWeight: 900, color: totals.stillOwed > 0 ? '#fca5a5' : '#6ee7b7', fontVariantNumeric: 'tabular-nums', minWidth: 180, textAlign: 'right' }}>
-              <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
+              <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY()}</span>
               {fmt(totals.stillOwed)}
             </span>
           </div>
@@ -421,7 +426,7 @@ const Tile: React.FC<{
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: highlight ? 'rgba(255,255,255,0.85)' : '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 800, color: highlight ? '#fff' : fg, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', marginTop: 2 }}>
-        {!plain && <span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY}</span>}
+        {!plain && <span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY()}</span>}
         {plain ? value : fmt(value)}
       </div>
     </div>

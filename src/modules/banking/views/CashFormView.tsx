@@ -15,6 +15,7 @@ import {
   MapPin,
   Database
 } from 'lucide-react';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 interface CashFormData {
   date: string;
@@ -287,7 +288,7 @@ export const CashFormView: React.FC<CashFormViewProps> = ({
                 } ${isSaving ? 'bg-gray-50' : 'bg-white'}`}
               >
                 <span className="flex items-center px-3 bg-gray-100 border-r border-gray-300 text-gray-600 font-medium text-sm shrink-0">
-                  AED
+                  {getGlobalCurrencySymbol()}
                 </span>
                 <input
                   type="number"

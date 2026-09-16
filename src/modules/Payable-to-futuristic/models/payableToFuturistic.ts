@@ -72,6 +72,7 @@ export function usdToAllCurrencies(usd: number): CurrencyAmounts {
 
 export const ZERO_AMOUNTS: CurrencyAmounts = { aed: 0, pkr: 0, sar: 0, usd: 0 };
 
+
 export const DEFAULT_EXCHANGE_RATES: Record<Exclude<Currency, 'AED'>, number> = {
   PKR: 75.5,
   SAR: 1.02,
@@ -92,13 +93,13 @@ export const CURRENCY_LABELS: Record<Currency, string> = {
   USD: 'US Dollar (USD)',
 };
 
+/** Display-only — the same stored AED figure is shown under every
+ *  currency's label. No conversion happens anywhere in this function; the
+ *  DEFAULT_EXCHANGE_RATES snapshot above is unused now, kept only for any
+ *  other caller that might still reference it directly. */
 export function aedToAllCurrencies(aed: number): CurrencyAmounts {
-  return {
-    aed,
-    pkr: parseFloat((aed * DEFAULT_EXCHANGE_RATES.PKR).toFixed(2)),
-    sar: parseFloat((aed * DEFAULT_EXCHANGE_RATES.SAR).toFixed(2)),
-    usd: parseFloat((aed * DEFAULT_EXCHANGE_RATES.USD).toFixed(2)),
-  };
+  const n = aed || 0;
+  return { aed: n, pkr: n, sar: n, usd: n };
 }
 
 export function formatCurrency(amount: number, currency: Currency): string {

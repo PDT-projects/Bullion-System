@@ -10,6 +10,7 @@
 //     in USD/AED/etc. and have it auto-converted to PKR for storage
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,20 +69,21 @@ export function convertToPKR(amount: number, _source: CurrencyCode, _rates: Rate
 }
 
 /**
- * Format an AED-stored base amount. AED is canonical, so the amount is shown
- * as AED with no conversion regardless of the requested display currency.
+ * Formats a stored amount with the given currency's symbol. Display-only —
+ * the number itself is never converted, this only changes which symbol is
+ * printed next to it.
  */
-export function formatInCurrency(amount: number, _currency: CurrencyCode, _rates: RateMap): string {
-  const meta = getCurrencyMeta('AED');
+export function formatInCurrency(amount: number, currency: CurrencyCode, _rates: RateMap): string {
+  const meta = getCurrencyMeta(currency);
   try {
     return new Intl.NumberFormat(meta.locale, {
       style: 'currency',
-      currency: 'AED',
+      currency: meta.code,
       minimumFractionDigits: meta.decimals,
       maximumFractionDigits: meta.decimals,
-    }).format(amount);
+    }).format(amount || 0);
   } catch {
-    return `${meta.symbol}${amount.toFixed(meta.decimals)}`;
+    return `${meta.symbol}${(amount || 0).toFixed(meta.decimals)}`;
   }
 }
 
@@ -172,8 +174,20 @@ export interface UseInventoryCurrencyReturn extends UseCurrencyRatesReturn {
 
 export function useInventoryCurrency(): UseInventoryCurrencyReturn {
   const rateState = useCurrencyRates();
-  const [primaryCurrency, setPrimary] = useState<CurrencyCode>('AED');
+  const { code: globalCode } = useGlobalCurrency();
+  // This module's CurrencyCode is narrower than the global 7 (no GBP/EUR) —
+  // fall back to AED for those so the symbol lookup never breaks.
+  const resolvedGlobal: CurrencyCode = INVENTORY_CURRENCIES.some(c => c.code === globalCode)
+    ? (globalCode as CurrencyCode)
+    : 'AED';
+  const [primaryCurrency, setPrimary] = useState<CurrencyCode>(resolvedGlobal);
   const [extraCurrencies, setExtras]  = useState<CurrencyCode[]>([]);
+
+  // Follow the Admin's global currency by default. setPrimaryCurrency below
+  // still lets a screen override it locally for the session.
+  useEffect(() => {
+    setPrimary(resolvedGlobal);
+  }, [resolvedGlobal]);
 
   const setPrimaryCurrency = useCallback((c: CurrencyCode) => {
     setPrimary(c);

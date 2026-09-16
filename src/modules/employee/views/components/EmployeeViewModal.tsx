@@ -4,6 +4,7 @@
 import { X } from 'lucide-react';
 import { Employee } from '../../models/types';
 import type { SalaryCurrency } from '../EmployeeFormView';
+import { formatSalaryInGlobalCurrency, formatSalary } from '../CurrencyUtils';
 
 interface EmployeeViewModalProps {
   employee: Employee;
@@ -17,14 +18,14 @@ interface EmployeeViewModalProps {
 export function EmployeeViewModal({
   employee,
   onClose,
-  formatCurrency,
   formatDate,
-  convertSalary,
-  displayCurrency,
 }: EmployeeViewModalProps) {
-  const primarySalary = formatCurrency(convertSalary(employee.salary, 'PKR', displayCurrency), displayCurrency);
-  const secondaryCurrency: SalaryCurrency = displayCurrency === 'PKR' ? 'AED' : 'PKR';
-  const secondarySalary = formatCurrency(convertSalary(employee.salary, 'PKR', secondaryCurrency), secondaryCurrency);
+  // employee.salaryCurrency is what this employee is actually paid in —
+  // primarySalary converts that, live, into the Admin's global currency;
+  // secondarySalary shows the real, original figure for reference.
+  const empCurrency: SalaryCurrency = (employee as any).salaryCurrency || 'AED';
+  const primarySalary = formatSalaryInGlobalCurrency(employee.salary, empCurrency);
+  const secondarySalary = formatSalary(employee.salary, empCurrency);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

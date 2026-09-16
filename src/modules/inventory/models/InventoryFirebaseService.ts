@@ -759,6 +759,40 @@ export class InventoryFirebaseService {
     }
   }
 
+  /**
+   * Adds `amount` on top of whatever cost a serial already carries.
+   *
+   * Used when a shipment charge arrives after stock-in, for units that are
+   * already in Inventory but not yet sold — their landedUnitCost was
+   * snapshotted once, at stock-in time, and never moves on its own. This
+   * lets a late-arriving charge still reach the units that will eventually
+   * carry it into an invoice's Purchase Cost.
+   */
+  static async topUpSerialCosts(
+    productId: string,
+    additions: Record<string, number>,
+  ): Promise<void> {
+    if (!productId || !additions || Object.keys(additions).length === 0) return;
+    try {
+      const ref  = doc(db, PRODUCTS_COLLECTION, productId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const p = snap.data() as any;
+      const nextCost: Record<string, number> = { ...(p.serialCostPrice || {}) };
+      Object.entries(additions).forEach(([serial, add]) => {
+        if (!serial || !(add > 0)) return;
+        nextCost[serial] = (Number(nextCost[serial]) || 0) + add;
+      });
+      await updateDoc(ref, {
+        serialCostPrice: nextCost,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error(`Error topping up serial costs on ${productId}:`, error);
+      throw new Error('Failed to top up serial costs');
+    }
+  }
+
   static async fetchDeletedProducts(): Promise<DeletedProduct[]> {
     try {
       const q = query(collection(db, DELETED_PRODUCTS_COLLECTION), orderBy('deletedAt', 'desc'));

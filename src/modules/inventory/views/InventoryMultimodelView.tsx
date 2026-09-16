@@ -3,6 +3,7 @@
 // "Without Costing" path: pick a brand, add N models with all details at once.
 
 import React, { useState, useRef } from 'react';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 import {
   ArrowLeft, ArrowRight, Package, Plus, Trash2, ChevronDown,
   Hash, Loader2, Check, AlertCircle, ImagePlus, X,
@@ -585,7 +586,7 @@ function ModelCard({
 
         {/* Dealer Price */}
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Dealer Price (AED) <span style={{ color: '#9ca3af', fontWeight: 400 }}>(Optional)</span></label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Dealer Price ({getGlobalCurrencySymbol()}) <span style={{ color: '#9ca3af', fontWeight: 400 }}>(Optional)</span></label>
           <input
             type="number"
             value={e.dealerPrice || ''}
@@ -661,14 +662,14 @@ export const InventoryMultiModelView: React.FC<Props> = ({
   // Amounts are stored in AED (what the user typed). Render directly as AED with
   // no conversion — the previous version multiplied by the FX rate, which turned
   // e.g. 499.99 into ~1,835 and mislabelled it. No math now: store == display.
-  const formatPrimary = (amount: number) =>
-    new Intl.NumberFormat('en-AE', {
-      style: 'currency',
-      currency: 'AED',
-      currencyDisplay: 'code',
+  const formatPrimary = (amount: number) => {
+    const symbol = getGlobalCurrencySymbol();
+    const formatted = new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
-    }).format(amount);
+    }).format(amount || 0);
+    return `${symbol} ${formatted}`;
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>

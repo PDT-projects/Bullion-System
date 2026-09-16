@@ -2,8 +2,11 @@
 // InventoryPayablesView — supplier-credit stock that has sold out and is still owed
 
 import React from 'react';
-import { ArrowLeft, Wallet, Search, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Wallet, Search, Loader2, X, Download } from 'lucide-react';
 import { UseInventoryPayablesViewModelReturn } from '../viewModels/useInventoryPayablesViewModel';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../../shared/reportExport/reportExport';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8,
@@ -38,6 +41,56 @@ export const InventoryPayablesView: React.FC<UseInventoryPayablesViewModelReturn
             </div>
           )}
         </div>
+        <button
+          onClick={() => {
+            const rows = filteredRecords.map(r => {
+              const remaining = Math.max(0, (r.supplierCost || 0) - (r.supplierPaidAmount || 0));
+              return [
+                r.brandName, r.modelName, (r.stock ?? 0) === 0 ? 'Sold Out - Due' : `${r.stock} in stock`,
+                formatCurrency(r.supplierCost), formatCurrency(r.supplierPaidAmount || 0),
+                formatCurrency(remaining), r.supplierPaymentStatus || 'Unpaid',
+              ];
+            });
+            exportReportToExcel({
+              title: 'Inventory Payables',
+              subtitle: `Due Now: ${formatCurrency(totalPayable)}`,
+              columns: ['Brand', 'Model', 'Stock Status', 'Supplier Cost', 'Paid', 'Remaining', 'Status'].map(h => ({ header: h })),
+              rows,
+              filename: `inventory-payables-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          disabled={filteredRecords.length === 0}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', border: '1px solid #e2e8f0',
+            borderRadius: 9, backgroundColor: '#fff', color: '#334155', fontSize: 13, fontWeight: 600,
+            cursor: filteredRecords.length === 0 ? 'not-allowed' : 'pointer', opacity: filteredRecords.length === 0 ? 0.5 : 1,
+            whiteSpace: 'nowrap' }}>
+          <Download size={14} /> Excel
+        </button>
+        <button
+          onClick={() => {
+            const rows = filteredRecords.map(r => {
+              const remaining = Math.max(0, (r.supplierCost || 0) - (r.supplierPaidAmount || 0));
+              return [
+                r.brandName, r.modelName, (r.stock ?? 0) === 0 ? 'Sold Out - Due' : `${r.stock} in stock`,
+                formatCurrency(r.supplierCost), formatCurrency(r.supplierPaidAmount || 0),
+                formatCurrency(remaining), r.supplierPaymentStatus || 'Unpaid',
+              ];
+            });
+            exportReportToPdf({
+              title: 'Inventory Payables',
+              subtitle: `Due Now: ${formatCurrency(totalPayable)}`,
+              columns: ['Brand', 'Model', 'Stock Status', 'Supplier Cost', 'Paid', 'Remaining', 'Status'].map(h => ({ header: h })),
+              rows,
+              filename: `inventory-payables-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          disabled={filteredRecords.length === 0}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', border: '1px solid #e2e8f0',
+            borderRadius: 9, backgroundColor: '#fff', color: '#334155', fontSize: 13, fontWeight: 600,
+            cursor: filteredRecords.length === 0 ? 'not-allowed' : 'pointer', opacity: filteredRecords.length === 0 ? 0.5 : 1,
+            whiteSpace: 'nowrap' }}>
+          <Download size={14} /> PDF
+        </button>
       </div>
     </div>
 
@@ -49,7 +102,7 @@ export const InventoryPayablesView: React.FC<UseInventoryPayablesViewModelReturn
       </div>
     </div>
 
-    <div style={{ flex: 1, overflow: 'auto', padding: '0 24px 24px' }}>
+    <div style={{ flex: 1, overflow: 'hidden', padding: '0 24px 24px', display: 'flex', flexDirection: 'column' }}>
       {isLoading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#6b7280', fontSize: 13 }}>
           <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading…
@@ -59,6 +112,7 @@ export const InventoryPayablesView: React.FC<UseInventoryPayablesViewModelReturn
       ) : filteredRecords.length === 0 ? (
         <div style={{ color: '#9ca3af', fontSize: 13 }}>No supplier-credit inventory with an outstanding balance.</div>
       ) : (
+        <LockedScrollTable maxHeight="65vh">
         <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', borderRadius: 10, overflow: 'hidden' }}>
           <thead>
             <tr style={{ backgroundColor: '#f8fafc' }}>
@@ -106,6 +160,7 @@ export const InventoryPayablesView: React.FC<UseInventoryPayablesViewModelReturn
             })}
           </tbody>
         </table>
+        </LockedScrollTable>
       )}
     </div>
 
@@ -124,7 +179,7 @@ export const InventoryPayablesView: React.FC<UseInventoryPayablesViewModelReturn
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 14 }}>
             Remaining: {formatCurrency(Math.max(0, (payProduct.supplierCost || 0) - (payProduct.supplierPaidAmount || 0)))}
           </div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Amount (AED) *</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Amount ({getGlobalCurrencySymbol()}) *</label>
           <input type="number" min={0} value={payAmount} onChange={e => setPayAmount(Number(e.target.value))} style={{ ...inp, marginBottom: 14 }} />
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Paid Via</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: payChannel === 'Bank' ? 12 : 18 }}>

@@ -3,6 +3,8 @@ import type { Transaction } from '../../modules/transactions/models/types';
 import type { Bank } from '../../modules/banking/models/types';
 import { Plus, Eye, Trash2, X, Printer, Download, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../shared/reportExport/reportExport';
 
 type BillsProps = {
   transactions: Transaction[];
@@ -248,6 +250,49 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
           <h2 className="text-2xl font-bold">Bills</h2>
           <p className="text-sm text-gray-600 mt-1">Manage utility bills and recurring payments</p>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => {
+            const headers = ['Date', 'Month', 'Company', 'Category', 'Paid To', 'Paid By', 'Method', 'Amount'];
+            const rows = allBills.map(bill => [
+              new Date(bill.date).toLocaleDateString('en-PK'), bill.billMonth || '-',
+              bill.company.split(': ')[1] || bill.company, bill.subCategory,
+              bill.paidTo || '-', bill.paidBy || '-',
+              `${bill.mode}${bill.bankName ? ` (${bill.bankName})` : ''}`, bill.amount,
+            ]);
+            exportReportToExcel({
+              title: 'Bills',
+              subtitle: `${allBills.length} bills`,
+              columns: headers.map(h => ({ header: h })),
+              rows,
+              filename: `bills-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <Download size={16} /> Excel
+        </button>
+        <button
+          onClick={() => {
+            const headers = ['Date', 'Month', 'Company', 'Category', 'Paid To', 'Paid By', 'Method', 'Amount'];
+            const rows = allBills.map(bill => [
+              new Date(bill.date).toLocaleDateString('en-PK'), bill.billMonth || '-',
+              bill.company.split(': ')[1] || bill.company, bill.subCategory,
+              bill.paidTo || '-', bill.paidBy || '-',
+              `${bill.mode}${bill.bankName ? ` (${bill.bankName})` : ''}`, bill.amount,
+            ]);
+            exportReportToPdf({
+              title: 'Bills',
+              subtitle: `${allBills.length} bills`,
+              columns: headers.map(h => ({ header: h })),
+              rows,
+              filename: `bills-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <Download size={16} /> PDF
+        </button>
         <button
           onClick={handleAdd}
           className="flex items-center gap-2 bg-[#4f46e5] text-white px-4 py-2 rounded-lg hover:bg-[#4338ca] transition-colors"
@@ -255,10 +300,11 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
           <Plus size={20} />
           Add Bill
         </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <LockedScrollTable maxHeight="65vh">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -333,7 +379,7 @@ export function Bills({ transactions, setTransactions, banks, setBanks }: BillsP
               )}
             </tbody>
           </table>
-        </div>
+        </LockedScrollTable>
       </div>
 
       {/* Add Bill Modal */}

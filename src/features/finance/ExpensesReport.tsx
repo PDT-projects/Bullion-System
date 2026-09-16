@@ -7,6 +7,9 @@ import {
   XCircle, Loader2, Filter, FileText, ChevronDown, X
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../shared/reportExport/reportExport';
+import { formatGlobalCurrency } from '../../shared/currency/globalCurrency';
 
 type Expense = {
   id: string;
@@ -181,8 +184,7 @@ export function ExpensesReport() {
   const totalAmount = useMemo(() => filteredData.reduce((s, e) => s + e.amount, 0), [filteredData]);
   const cashTotal   = useMemo(() => filteredData.filter(e => e.mode === 'Cash').reduce((s, e) => s + e.amount, 0), [filteredData]);
 
-  const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+  const formatCurrency = (n: number) => formatGlobalCurrency(n);
 
   const handleExportCSV = () => {
     const headers = ['Date', 'ID', 'Category', 'Amount', 'Mode', 'Bank', 'Notes'];
@@ -232,12 +234,52 @@ export function ExpensesReport() {
             <p className="text-sm text-gray-600">All expense transactions categorized and tracked</p>
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => {
+            const headers = ['Date', 'ID', 'Category', 'Amount', 'Mode', 'Bank', 'Notes'];
+            const rows = filteredData.map(e => [
+              new Date(e.date).toLocaleDateString('en-AE'),
+              e.transactionId, e.subCategory, e.amount, e.mode, e.bankName || '', e.notes || '',
+            ]);
+            exportReportToExcel({
+              title: 'Expenses Report',
+              subtitle: allTime ? 'All time' : `${filters.dateFrom} to ${filters.dateTo}`,
+              columns: headers.map(h => ({ header: h })),
+              rows,
+              filename: allTime ? 'expenses-all-time' : `expenses-${filters.dateFrom}-to-${filters.dateTo}`,
+            });
+          }}
+          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+        >
+          <Download size={16} /> Excel
+        </button>
+        <button
+          onClick={() => {
+            const headers = ['Date', 'ID', 'Category', 'Amount', 'Mode', 'Bank', 'Notes'];
+            const rows = filteredData.map(e => [
+              new Date(e.date).toLocaleDateString('en-AE'),
+              e.transactionId, e.subCategory, e.amount, e.mode, e.bankName || '', e.notes || '',
+            ]);
+            exportReportToPdf({
+              title: 'Expenses Report',
+              subtitle: allTime ? 'All time' : `${filters.dateFrom} to ${filters.dateTo}`,
+              columns: headers.map(h => ({ header: h })),
+              rows,
+              filename: allTime ? 'expenses-all-time' : `expenses-${filters.dateFrom}-to-${filters.dateTo}`,
+            });
+          }}
+          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+        >
+          <Download size={16} /> PDF
+        </button>
         <button
           onClick={handleExportCSV}
           className="px-4 py-2 bg-[#10b981] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 text-sm font-medium"
         >
           <Download size={16} /> Export CSV
         </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -400,7 +442,7 @@ export function ExpensesReport() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <LockedScrollTable maxHeight="65vh">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -459,7 +501,7 @@ export function ExpensesReport() {
               )}
             </tbody>
           </table>
-        </div>
+        </LockedScrollTable>
 
         {/* Footer total */}
         {filteredData.length > 0 && (

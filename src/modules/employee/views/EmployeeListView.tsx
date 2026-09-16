@@ -4,13 +4,14 @@
 //          alongside the salary amount. The header rate badge is still shown.
 // UPDATED: AED is now the primary display currency (shown first in toggle).
 
-import { Plus, Filter } from 'lucide-react';
+import { Plus, Filter, Coins } from 'lucide-react';
 import { Employee, EmployeeFilters as EmployeeFiltersType } from '../models/types';
 import { EmployeeService } from '../models/employeeService';
 import { EmployeeFilters } from './components/EmployeeFilters';
 import { EmployeeTable } from './components/EmployeeTable';
 import { EmployeeViewModal } from './components/EmployeeViewModal';
 import type { SalaryCurrency } from './EmployeeFormView';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 export type { SalaryCurrency };
 
@@ -41,6 +42,8 @@ export function EmployeeListView({
   handleEdit, handleDelete, handleAddEmployee,
   setFilter, clearFilters, toggleFilters, setViewEmployee,
 }: EmployeeListViewProps) {
+  const { name: globalCurrencyName, symbol: globalCurrencySymbol } = useGlobalCurrency();
+  const name = `${globalCurrencySymbol} ${globalCurrencyName}`;
   return (
     <div className="p-6">
       {/* Header */}
@@ -51,22 +54,13 @@ export function EmployeeListView({
         </div>
         <div className="flex items-center gap-3">
 
-          {/* Currency Toggle — AED listed first as the primary display currency */}
-          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
-            {(['AED', 'PKR'] as SalaryCurrency[]).map(cur => (
-              <button
-                key={cur}
-                onClick={() => onCurrencyToggle(cur)}
-                style={displayCurrency === cur ? { backgroundColor: '#374151', color: '#ffffff' } : {}}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  displayCurrency === cur
-                    ? 'shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {cur === 'PKR' ? '₨ PKR' : 'د.إ AED'}
-              </button>
-            ))}
+          {/* Salaries now follow the Admin's global currency setting
+              automatically (converted live from each employee's actual
+              pay currency) — this is just a read-only indicator, change
+              it from the Admin Dashboard. */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm font-medium text-gray-600">
+            <Coins size={14} className="text-amber-600" />
+            {name}
           </div>
 
           <button

@@ -4,8 +4,10 @@ import {
   RefreshCw, Search, Filter, X, Banknote, Building2,
   ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Package, TrendingUp,
   TrendingDown, Activity, ChevronDown, ChevronUp, Calendar, FileText,
-  DollarSign, Loader2,
+  DollarSign, Loader2, Download,
 } from 'lucide-react';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../../shared/reportExport/reportExport';
 import { useBankActivityViewModel, ActivityEntry, ActivityType } from '../viewModels/useBankActivityViewModel';
 
 // ── Multi-Select Dropdown ──────────────────────────────────────────────────────
@@ -195,12 +197,52 @@ export function BankActivityView() {
             <p className="text-sm text-gray-600">All transactions — banks, cash, inventory payments, transfers</p>
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => {
+            const headers = ['Date', 'Type', 'Description', 'Reference', 'Mode / Bank', 'Amount'];
+            const rows = displayEntries.map(entry => [
+              formatDate(entry.date), entry.type, entry.description || '—', entry.reference || '—',
+              entry.mode || entry.bankName || '—', formatCurrency(entry.amount),
+            ]);
+            exportReportToExcel({
+              title: 'Bank Activity Report',
+              subtitle: `${displayEntries.length} entries`,
+              columns: headers.map(h => ({ header: h })),
+              rows,
+              filename: `bank-activity-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <Download size={14} /> Excel
+        </button>
+        <button
+          onClick={() => {
+            const headers = ['Date', 'Type', 'Description', 'Reference', 'Mode / Bank', 'Amount'];
+            const rows = displayEntries.map(entry => [
+              formatDate(entry.date), entry.type, entry.description || '—', entry.reference || '—',
+              entry.mode || entry.bankName || '—', formatCurrency(entry.amount),
+            ]);
+            exportReportToPdf({
+              title: 'Bank Activity Report',
+              subtitle: `${displayEntries.length} entries`,
+              columns: headers.map(h => ({ header: h })),
+              rows,
+              filename: `bank-activity-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <Download size={14} /> PDF
+        </button>
         <button
           onClick={() => refreshData()}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#10b981] bg-[#10b981]/10 border border-[#10b981]/20 rounded-lg hover:bg-[#10b981]/20 transition-colors"
         >
           <RefreshCw size={14} /> Refresh
         </button>
+        </div>
       </div>
 
       {/* ── Stats ───────────────────────────────────────────────────────────── */}
@@ -375,7 +417,7 @@ export function BankActivityView() {
             <p className="text-sm">No activity found. Try adjusting your filters.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <LockedScrollTable maxHeight="65vh">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -459,7 +501,7 @@ export function BankActivityView() {
                 })}
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
         )}
 
         {/* Footer total */}

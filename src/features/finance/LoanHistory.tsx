@@ -1,7 +1,10 @@
-// LoanHistory.tsx
+﻿// LoanHistory.tsx
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Printer, Download, Filter, ChevronDown, X, Calendar, DollarSign, FileText, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatGlobalCurrency } from '../../shared/currency/globalCurrency';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
+import { exportReportToPdf, exportReportToExcel } from '../../shared/reportExport/reportExport';
 
 type Loan = {
   id: string;
@@ -24,7 +27,7 @@ type Loan = {
 
 type LoanHistoryProps = { loans: Loan[] };
 
-// ─── Multi-Select Dropdown ────────────────────────────────────────────────────
+// â”€â”€â”€ Multi-Select Dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MultiSelectDropdown({
   options, selected, onChange, placeholder,
 }: {
@@ -82,7 +85,7 @@ function MultiSelectDropdown({
   );
 }
 
-// ─── Pill ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Pill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Pill({ label, onRemove, colorClass = 'bg-[#4f46e5]/10 text-[#4f46e5]' }: {
   label: string; onRemove: () => void; colorClass?: string;
 }) {
@@ -94,14 +97,13 @@ function Pill({ label, onRemove, colorClass = 'bg-[#4f46e5]/10 text-[#4f46e5]' }
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(v);
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const formatCurrency = (v: number) => formatGlobalCurrency(v);
 
 const typeColor   = (t: string) => t === 'Receivable' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800';
 const statusColor = (s: string) => s === 'Full' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function LoanHistory({ loans }: LoanHistoryProps) {
   const today           = new Date().toISOString().split('T')[0];
   const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -256,7 +258,7 @@ export function LoanHistory({ loans }: LoanHistoryProps) {
                 allTime ? 'bg-[#4f46e5] text-white border-[#4f46e5]' : 'bg-white text-[#4f46e5] border-[#4f46e5] hover:bg-[#4f46e5]/10'
               }`}
             >
-              {allTime ? '✓ All Time' : 'Show All Time'}
+              {allTime ? 'âœ“ All Time' : 'Show All Time'}
             </button>
           </div>
 
@@ -341,7 +343,7 @@ export function LoanHistory({ loans }: LoanHistoryProps) {
               ? <Pill label="All Time" onRemove={() => setAllTime(false)} />
               : (filters.dateFrom || filters.dateTo) && (
                 <Pill
-                  label={`${filters.dateFrom || '…'} → ${filters.dateTo || '…'}`}
+                  label={`${filters.dateFrom || 'â€¦'} â†’ ${filters.dateTo || 'â€¦'}`}
                   onRemove={() => setFilters({ ...filters, dateFrom: firstDayOfMonth, dateTo: today })}
                 />
               )
@@ -370,12 +372,56 @@ export function LoanHistory({ loans }: LoanHistoryProps) {
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900">Loan Records</h3>
-          <p className="text-sm text-gray-500 mt-0.5">Showing {filtered.length} of {loans.length} loans</p>
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-900">Loan Records</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Showing {filtered.length} of {loans.length} loans</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => {
+                const headers = ['Date', 'Name', 'Type', 'Category', 'Mode', 'Amount', 'Paid', 'Remaining', 'Status'];
+                const rows = filtered.map(loan => [
+                  new Date(loan.date).toLocaleDateString('en-AE'),
+                  loan.receiverName || loan.entityName, loan.type, loan.loanType || 'â€”', loan.mode || 'â€”',
+                  formatCurrency(loan.loanAmount), formatCurrency(loan.paid), formatCurrency(loan.remaining), loan.status,
+                ]);
+                exportReportToExcel({
+                  title: 'Loan History',
+                  subtitle: `${filtered.length} of ${loans.length} loans`,
+                  columns: headers.map(h => ({ header: h })),
+                  rows,
+                  filename: `loan-history-${new Date().toISOString().slice(0, 10)}`,
+                });
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+            >
+              <Download size={14} /> Excel
+            </button>
+            <button
+              onClick={() => {
+                const headers = ['Date', 'Name', 'Type', 'Category', 'Mode', 'Amount', 'Paid', 'Remaining', 'Status'];
+                const rows = filtered.map(loan => [
+                  new Date(loan.date).toLocaleDateString('en-AE'),
+                  loan.receiverName || loan.entityName, loan.type, loan.loanType || 'â€”', loan.mode || 'â€”',
+                  formatCurrency(loan.loanAmount), formatCurrency(loan.paid), formatCurrency(loan.remaining), loan.status,
+                ]);
+                exportReportToPdf({
+                  title: 'Loan History',
+                  subtitle: `${filtered.length} of ${loans.length} loans`,
+                  columns: headers.map(h => ({ header: h })),
+                  rows,
+                  filename: `loan-history-${new Date().toISOString().slice(0, 10)}`,
+                });
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+            >
+              <Download size={14} /> PDF
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <LockedScrollTable maxHeight="65vh">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -410,8 +456,8 @@ export function LoanHistory({ loans }: LoanHistoryProps) {
                         {loan.type}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{loan.loanType || '—'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{loan.mode || '—'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{loan.loanType || 'â€”'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{loan.mode || 'â€”'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{formatCurrency(loan.loanAmount)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">{formatCurrency(loan.paid)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{formatCurrency(loan.remaining)}</td>
@@ -443,7 +489,7 @@ export function LoanHistory({ loans }: LoanHistoryProps) {
               )}
             </tbody>
           </table>
-        </div>
+        </LockedScrollTable>
 
         {/* Footer totals */}
         {filtered.length > 0 && (

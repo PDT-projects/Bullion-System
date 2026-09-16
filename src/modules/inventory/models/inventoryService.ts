@@ -11,6 +11,7 @@ import {
   CreateTransferDTO, ProductFilters, TransferFilters, ProductStats,
   TransferStats, ValidationResult, SerialStatus, CreatePaymentDTO
 } from './types';
+import { formatGlobalCurrency } from '../../../shared/currency/globalCurrency';
 
 /**
  * Returns the effective/authoritative location for a single serial number.
@@ -291,7 +292,7 @@ export class InventoryService {
   }
 
   static formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
+    return formatGlobalCurrency(amount);
   }
 
   static formatDate(dateString: string): string {

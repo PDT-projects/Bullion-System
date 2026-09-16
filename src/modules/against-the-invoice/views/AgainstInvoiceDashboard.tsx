@@ -1,6 +1,7 @@
 // Against the Invoice Module — Dashboard
 
 import React, { useState } from 'react';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
 import {
   FileText, Plus, Search, Filter, Trash2, Eye,
   TrendingDown, Wallet, CheckCircle, Receipt,
@@ -9,9 +10,9 @@ import {
 import { useATIViewModel } from '../viewModels/useATIViewModel';
 import { ATICreateForm } from './ATICreateForm';
 import { AgainstInvoiceEntry, InvoiceBalanceSummary } from '../models/types';
+import { formatGlobalCurrency } from '../../../shared/currency/globalCurrency';
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n);
+const fmt = (n: number) => formatGlobalCurrency(n);
 
 const fmtDate = (d: string) =>
   d ? new Date(d).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
@@ -409,7 +410,7 @@ export function AgainstInvoiceDashboard() {
                   </button>
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
+                <LockedScrollTable maxHeight="60vh">
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid #f3f4f6', background: '#f9fafb' }}>
@@ -426,7 +427,7 @@ export function AgainstInvoiceDashboard() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </LockedScrollTable>
               )}
             </div>
           )}

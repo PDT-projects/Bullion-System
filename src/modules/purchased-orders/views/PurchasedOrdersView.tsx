@@ -1,124 +1,116 @@
-// Purchased Orders — list view
-// Summary tiles, brand tabs, filters and priority-sorted shipment cards.
+// Purchased Orders — Shipments dashboard
+//
+// KPI row, a dense data table, and pagination. "Completed" here means all
+// six payment stages are done (shipmentWorkflow) — nothing on this page
+// reads or displays the shipment's lifecycle status field (Draft/Ordered/
+// In Transit/etc). No new business rule was invented for this screen.
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  Plus, Search, Ship, Globe, Package, Check, Clock, AlertTriangle,
-  Trash2, RefreshCw, Loader2, X,
+  Plus, Search, Ship, CheckCircle2, AlertTriangle, TrendingUp,
+  Trash2, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, MoreVertical,
+  MapPin, Filter,
 } from 'lucide-react';
 import { usePurchasedOrdersViewModel } from '../viewModels/usePurchasedOrdersViewModel';
 import {
-  calculateShipmentCosting, shipmentPriority, PRIORITY_LABEL, money,
+  calculateShipmentCosting, shipmentWorkflow, money,
 } from '../models/purchasedOrderService';
-import { Shipment, SHIPMENT_STATUSES, DisplayCurrency } from '../models/types';
+import { Shipment, DisplayCurrency, SHIPMENT_CURRENCIES } from '../models/types';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import { seedDemoShipments } from '../models/seedDemoShipments';
+import { UI, ShipmentProgressBar, KpiCard } from '../components/ShipmentUI';
 
-const S = {
-  card:  { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' } as React.CSSProperties,
-  label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 } as React.CSSProperties,
-  inp:   { width: '100%', padding: '8px 11px', borderRadius: 8, border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: 13, color: '#111827', outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
-};
+const PAGE_SIZE = 10;
 
-const PRIORITY_COLOR: Record<number, { fg: string; bg: string }> = {
-  1:  { fg: '#b91c1c', bg: '#fef2f2' },
-  2:  { fg: '#b45309', bg: '#fffbeb' },
-  3:  { fg: '#b45309', bg: '#fffbeb' },
-  4:  { fg: '#15803d', bg: '#f0fdf4' },
-  5:  { fg: '#1d4ed8', bg: '#eff6ff' },
-  90: { fg: '#475569', bg: '#f1f5f9' },
-  99: { fg: '#64748b', bg: '#f1f5f9' },
-};
+type TabKey = 'all' | 'progress' | 'completed';
 
-function Tile({ value, label, tone }: { value: number | string; label: string; tone?: 'warn' | 'ok' }) {
-  const fg = tone === 'warn' ? '#b45309' : tone === 'ok' ? '#15803d' : '#0f172a';
-  return (
-    <div style={{ ...S.card, padding: '14px 16px' }}>
-      <div style={{ fontSize: 22, fontWeight: 800, color: fg, lineHeight: 1.1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
-    </div>
-  );
+/** "Complete" means every one of the six payment stages is done — Customs,
+ *  Freight, Tax, Other Dues paid, Costing finalised, Supplier paid — not
+ *  whatever the shipment's own lifecycle status field happens to say. A
+ *  shipment can be fully paid off long before someone gets around to
+ *  updating its shipping status, and this dashboard is about money, not
+ *  where the box physically is. Cancelled shipments sit outside both tabs;
+ *  they show up under "All" only. */
+function matchesTab(s: Shipment, tab: TabKey): boolean {
+  const cancelled = s.status === 'Cancelled';
+  if (tab === 'all') return !cancelled;
+  if (cancelled) return false;
+  const stages = shipmentWorkflow(s);
+  const done = stages.filter(st => st.state === 'Completed').length;
+  if (tab === 'completed') return done === stages.length;
+  if (tab === 'progress')  return done < stages.length;
+  return true;
 }
 
-function StatusPill({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
-      padding: '3px 8px', borderRadius: 20,
-      color: ok ? '#15803d' : '#94a3b8', backgroundColor: ok ? '#f0fdf4' : '#f8fafc',
-      border: `1px solid ${ok ? '#bbf7d0' : '#e2e8f0'}`,
-    }}>
-      {ok ? <Check size={11} /> : <Clock size={11} />} {label}
-    </span>
-  );
-}
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '8px 11px', borderRadius: UI.rSm, border: `1px solid #d1d5db`,
+  backgroundColor: '#fff', fontSize: 13, color: UI.ink, outline: 'none', boxSizing: 'border-box',
+};
 
-function ShipmentCard({ s, view, onOpen, onDelete }: {
-  s: Shipment; view: DisplayCurrency; onOpen: () => void; onDelete: () => void;
+function ShipmentRow({ s, view, rowNumber, onOpen, onDelete }: {
+  s: Shipment; view: DisplayCurrency; rowNumber: number; onOpen: () => void; onDelete: () => void;
 }) {
   const costing = calculateShipmentCosting(s);
-  const p       = shipmentPriority(s);
-  const colour  = PRIORITY_COLOR[p] || PRIORITY_COLOR[5];
-  const units   = costing.totalQuantity;
-
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
-    <div onClick={onOpen}
-      style={{ ...S.card, cursor: 'pointer', borderLeft: `4px solid ${colour.fg}`, transition: 'box-shadow .15s' }}
-      onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 14px rgba(0,0,0,.08)'}
-      onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}>
-
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '.04em' }}>
-              {s.brandName || '—'}
-            </span>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, color: colour.fg, backgroundColor: colour.bg }}>
-              {PRIORITY_LABEL[p]}
-            </span>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{s.shipmentNumber}</div>
-        </div>
-        <button type="button" title="Delete shipment"
-          onClick={e => { e.stopPropagation(); onDelete(); }}
-          style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#cbd5e1', padding: 4 }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ef4444'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#cbd5e1'}>
-          <Trash2 size={14} />
+    <tr
+      onClick={onOpen}
+      style={{ cursor: 'pointer', borderBottom: `1px solid ${UI.hair}` }}
+      onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#fafbfc'}
+      onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+    >
+      <td style={{ padding: '12px 10px', fontSize: 12.5, color: UI.muted, width: 36 }}>{rowNumber}</td>
+      <td style={{ padding: '12px 10px', fontSize: 13, fontWeight: 700, color: UI.ink, whiteSpace: 'nowrap' }}>
+        {s.shipmentNumber}
+      </td>
+      <td style={{ padding: '12px 10px', fontSize: 12.5, color: UI.body, whiteSpace: 'nowrap' }}>
+        {s.supplierOrderNumber || s.shipmentNumber}
+      </td>
+      <td style={{ padding: '12px 10px', fontSize: 12.5, color: UI.body, maxWidth: 150 }}>
+        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.supplierName || '—'}</div>
+      </td>
+      <td style={{ padding: '12px 10px', fontSize: 12.5, color: UI.body, whiteSpace: 'nowrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <MapPin size={11} color={UI.muted} /> {s.destinationCountry || '—'}
+        </span>
+      </td>
+      <td style={{ padding: '12px 10px', minWidth: 120 }}>
+        <ShipmentProgressBar shipment={s} />
+      </td>
+      <td style={{ padding: '12px 10px', fontSize: 13, fontWeight: 700, color: UI.ink, textAlign: 'right', whiteSpace: 'nowrap' }}>
+        {money(costing.landedTotal, view)}
+      </td>
+      <td style={{ padding: '12px 10px', textAlign: 'center', width: 40, position: 'relative' }}
+        onClick={e => e.stopPropagation()}>
+        <button type="button" onClick={() => setMenuOpen(v => !v)}
+          style={{ border: 'none', background: 'none', cursor: 'pointer', color: UI.muted, padding: 4, display: 'inline-flex' }}>
+          <MoreVertical size={15} />
         </button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Globe size={12} /> {s.originCountry || '—'}
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Package size={12} /> {units} unit{units === 1 ? '' : 's'}
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Ship size={12} /> {s.status}
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-        <StatusPill ok={!!s.actualArrivalDate}                label="Arrived" />
-        <StatusPill ok={s.customsStatus === 'Applied'}        label="Customs" />
-        <StatusPill ok={s.freightStatus === 'Applied'}        label="Freight" />
-        <StatusPill ok={s.costingStatus === 'Complete'}       label="Costed" />
-      </div>
-
-      <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.04em' }}>Landed cost</span>
-        <span style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{money(costing.landedTotal, view)}</span>
-      </div>
-      {units > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>Avg per unit</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>{money(costing.averageLandedUnitCost, view)}</span>
-        </div>
-      )}
-    </div>
+        {menuOpen && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setMenuOpen(false)} />
+            <div style={{
+              position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 20,
+              backgroundColor: '#fff', border: `1px solid ${UI.border}`, borderRadius: UI.rSm,
+              boxShadow: '0 6px 20px rgba(15,23,42,.12)', minWidth: 140, overflow: 'hidden',
+            }}>
+              <button type="button" onClick={() => { setMenuOpen(false); onOpen(); }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none',
+                  background: 'none', cursor: 'pointer', fontSize: 12.5, color: UI.ink }}>
+                View details
+              </button>
+              <button type="button" onClick={() => { setMenuOpen(false); onDelete(); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '9px 12px',
+                  border: 'none', background: 'none', cursor: 'pointer', fontSize: 12.5, color: UI.danger }}>
+                <Trash2 size={12} /> Delete
+              </button>
+            </div>
+          </>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -126,14 +118,18 @@ export const PurchasedOrdersView: React.FC = () => {
   const navigate = useNavigate();
   const vm = usePurchasedOrdersViewModel();
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  // Everything is AED. The display-currency toggle was removed; the constant
-  // stays because money() takes a target, and AED to AED is a no-op.
-  const view: DisplayCurrency = 'AED';
+  const [tab, setTab] = useState<TabKey>('all');
+  const [page, setPage] = useState(1);
+  // Follows the Admin's global currency setting — money() takes a target
+  // and converts the stored AED figure live; AED stays the source of truth.
+  // Falls back to AED if the global pick (e.g. CAD) isn't one of the six
+  // currencies this module's costing sheet supports.
+  const { code: globalCode } = useGlobalCurrency();
+  const view: DisplayCurrency = (SHIPMENT_CURRENCIES as string[]).includes(globalCode)
+    ? (globalCode as DisplayCurrency)
+    : 'AED';
   const [seeding, setSeeding] = useState(false);
 
-  // Demo data, offered only when the collection is empty so it cannot be
-  // triggered by accident on a live list. Seeding skips numbers that already
-  // exist, so pressing it twice is harmless.
   const loadDemo = async () => {
     setSeeding(true);
     try {
@@ -149,127 +145,141 @@ export const PurchasedOrdersView: React.FC = () => {
     }
   };
 
-  const tabs = ['ALL', ...vm.brands];
+  // KPI counts — same priority grouping as the tabs, computed once per render
+  // off the full (unfiltered-by-tab) visible list so the numbers describe the
+  // whole portfolio regardless of which tab is open.
+  const kpi = useMemo(() => {
+    const list = vm.shipments;
+    return {
+      total:      list.filter(s => s.status !== 'Cancelled').length,
+      progress:   list.filter(s => matchesTab(s, 'progress')).length,
+      completed:  list.filter(s => matchesTab(s, 'completed')).length,
+    };
+  }, [vm.shipments]);
+
+  const tabbed = useMemo(() => vm.visible.filter(s => matchesTab(s, tab)), [vm.visible, tab]);
+  const pageCount = Math.max(1, Math.ceil(tabbed.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, pageCount);
+  const paged = tabbed.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+
+  const changeTab = (t: TabKey) => { setTab(t); setPage(1); };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#f8fafc' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: UI.bg }}>
 
       {/* Header */}
-      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Ship size={17} color="#fff" />
+      <div style={{ flexShrink: 0, backgroundColor: UI.surface, borderBottom: `1px solid ${UI.border}`,
+        padding: '18px 24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: UI.ink }}>Shipments</div>
+          <div style={{ fontSize: 12.5, color: UI.muted, marginTop: 2 }}>
+            Manage and track all your import shipments in one place.
+          </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Purchased Orders</div>
-          <div style={{ fontSize: 11, color: '#64748b' }}>Track imported shipments, customs, freight and landed product costs.</div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button type="button" onClick={() => vm.refresh()} disabled={vm.isLoading}
+            style={{ padding: '9px 14px', borderRadius: UI.rSm, border: `1px solid ${UI.border}`, backgroundColor: '#fff',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: UI.body }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button type="button" onClick={() => navigate('/purchased-orders/new')}
+            style={{ padding: '9px 16px', borderRadius: UI.rSm, border: 'none', backgroundColor: UI.brand, color: '#fff',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={15} /> Create Shipment
+          </button>
         </div>
-        <button type="button" onClick={() => vm.refresh()} disabled={vm.isLoading}
-          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569' }}>
-          <RefreshCw size={14} /> Refresh
-        </button>
-        <button type="button" onClick={() => navigate('/purchased-orders/new')}
-          style={{ padding: '9px 16px', borderRadius: 8, border: 'none', backgroundColor: '#0f172a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Plus size={15} /> New Shipment
-        </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {/* Summary */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
-          <Tile value={vm.summary.total}          label="Shipments" />
-          <Tile value={vm.summary.inTransit}      label="In transit" />
-          <Tile value={vm.summary.arrived}        label="Arrived" tone="ok" />
-          <Tile value={vm.summary.pendingCustoms} label="Pending duty"    tone="warn" />
-          <Tile value={vm.summary.pendingFreight} label="Pending freight" tone="warn" />
-          <Tile value={vm.summary.pendingCosting} label="Pending costing" tone="warn" />
-          <Tile value={vm.summary.partiallyReceived} label="Part received" tone="warn" />
-          <Tile value={money(vm.summary.landedValue, view)} label="Landed value" />
+        {/* KPI row — three cards, each with a real business meaning */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+          <KpiCard label="Total Shipments" value={kpi.total} tone="neutral"
+            icon={<Ship size={16} />} hint="Excludes cancelled" />
+          <KpiCard label="In Progress" value={kpi.progress} tone="info"
+            icon={<TrendingUp size={16} />} hint="Payment stages still open" />
+          <KpiCard label="Completed" value={kpi.completed} tone="ok"
+            icon={<CheckCircle2 size={16} />} hint="All 6 payment stages done" />
         </div>
 
-        {/* Brand tabs */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
-          {tabs.map(t => {
-            const active = vm.filters.brand === t;
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${UI.border}`, paddingBottom: 0 }}>
+          {([
+            ['all', `All (${kpi.total})`],
+            ['progress', `In Progress (${kpi.progress})`],
+            ['completed', `Completed (${kpi.completed})`],
+          ] as [TabKey, string][]).map(([key, label]) => {
+            const active = tab === key;
             return (
-              <button key={t} type="button" onClick={() => vm.setBrand(t)}
+              <button key={key} type="button" onClick={() => changeTab(key)}
                 style={{
-                  padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                  border: `1px solid ${active ? '#0f172a' : '#e2e8f0'}`,
-                  backgroundColor: active ? '#0f172a' : '#fff',
-                  color: active ? '#fff' : '#475569',
+                  padding: '9px 4px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${active ? UI.brand : 'transparent'}`,
+                  backgroundColor: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                  color: active ? UI.brand : UI.muted, marginRight: 14,
                 }}>
-                {t}
+                {label}
               </button>
             );
           })}
         </div>
 
-        {/* Filters */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+        {/* Search + filters */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 10, alignItems: 'end' }}>
           <div>
-            <label style={S.label}>Search</label>
             <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              <input type="text" value={vm.filters.search} onChange={e => vm.setSearch(e.target.value)}
-                placeholder="Shipment number, supplier, tracking..."
-                style={{ ...S.inp, paddingLeft: 30 }} />
+              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: UI.muted }} />
+              <input type="text" value={vm.filters.search} onChange={e => { vm.setSearch(e.target.value); setPage(1); }}
+                placeholder="Search shipment number, supplier, tracking..."
+                style={{ ...inputStyle, paddingLeft: 30 }} />
             </div>
           </div>
-          <div>
-            <label style={S.label}>Status</label>
-            <select value={vm.filters.status} onChange={e => vm.setStatus(e.target.value)} style={{ ...S.inp, cursor: 'pointer' }}>
-              <option value="ALL">All statuses</option>
-              {SHIPMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={S.label}>Costing</label>
-            <select value={vm.filters.costing} onChange={e => vm.setCosting(e.target.value)} style={{ ...S.inp, cursor: 'pointer' }}>
-              <option value="ALL">All</option>
-              <option value="Pending">Pending</option>
-              <option value="Complete">Complete</option>
-            </select>
-          </div>
-          <button type="button" onClick={vm.clearFilters}
-            style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, color: '#475569', height: 36 }}>
-            Clear
+          <select value={vm.filters.brand} onChange={e => { vm.setBrand(e.target.value); setPage(1); }}
+            style={{ ...inputStyle, cursor: 'pointer' }}>
+            <option value="ALL">All brands</option>
+            {vm.brands.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <button type="button" onClick={() => { vm.clearFilters(); setPage(1); }}
+            style={{ padding: '8px 14px', borderRadius: UI.rSm, border: `1px solid ${UI.border}`, backgroundColor: '#fff',
+              cursor: 'pointer', fontSize: 13, color: UI.body, height: 36, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Filter size={13} /> Clear
           </button>
         </div>
 
         {/* States */}
         {vm.isLoading && (
-          <div style={{ ...S.card, textAlign: 'center', padding: 40, color: '#64748b' }}>
+          <div style={{ backgroundColor: UI.surface, border: `1px solid ${UI.border}`, borderRadius: UI.r, textAlign: 'center', padding: 40, color: UI.muted }}>
             <Loader2 size={22} style={{ animation: 'spin 1s linear infinite', marginBottom: 8 }} />
             <div style={{ fontSize: 13 }}>Loading shipments...</div>
           </div>
         )}
 
         {!vm.isLoading && vm.error && (
-          <div style={{ ...S.card, borderColor: '#fecaca', backgroundColor: '#fef2f2', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <AlertTriangle size={17} color="#b91c1c" />
+          <div style={{ backgroundColor: UI.dangerBg, border: `1px solid ${UI.dangerLine}`, borderRadius: UI.r, padding: 16, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <AlertTriangle size={17} color={UI.danger} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#b91c1c' }}>Could not load shipments</div>
-              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2 }}>{vm.error}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: UI.danger }}>Could not load shipments</div>
+              <div style={{ fontSize: 12, color: UI.danger, marginTop: 2, opacity: .85 }}>{vm.error}</div>
             </div>
           </div>
         )}
 
         {!vm.isLoading && !vm.error && vm.visible.length === 0 && (
-          <div style={{ ...S.card, textAlign: 'center', padding: 46 }}>
-            <Ship size={30} color="#cbd5e1" style={{ marginBottom: 10 }} />
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>No shipments found</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+          <div style={{ backgroundColor: UI.surface, border: `1px solid ${UI.border}`, borderRadius: UI.r, textAlign: 'center', padding: 46 }}>
+            <Ship size={30} color={UI.faint} style={{ marginBottom: 10 }} />
+            <div style={{ fontSize: 14, fontWeight: 700, color: UI.ink, marginBottom: 4 }}>No shipments found</div>
+            <div style={{ fontSize: 12, color: UI.muted, marginBottom: 16 }}>
               {vm.shipments.length === 0 ? 'Create your first import shipment to get started.' : 'No shipment matches the current filters.'}
             </div>
             <div style={{ display: 'inline-flex', gap: 8 }}>
               <button type="button" onClick={() => navigate('/purchased-orders/new')}
-                style={{ padding: '9px 18px', borderRadius: 8, border: 'none', backgroundColor: '#0f172a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                style={{ padding: '9px 18px', borderRadius: UI.rSm, border: 'none', backgroundColor: UI.brand, color: '#fff',
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <Plus size={15} /> Create Shipment
               </button>
               {vm.shipments.length === 0 && (
                 <button type="button" onClick={loadDemo} disabled={seeding}
-                  style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#475569', fontWeight: 700, fontSize: 13, cursor: seeding ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  style={{ padding: '9px 18px', borderRadius: UI.rSm, border: `1px solid ${UI.faint}`, backgroundColor: '#fff',
+                    color: UI.body, fontWeight: 700, fontSize: 13, cursor: seeding ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   {seeding
                     ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Loading…</>
                     : <>Load demo data</>}
@@ -279,14 +289,75 @@ export const PurchasedOrdersView: React.FC = () => {
           </div>
         )}
 
-        {/* Cards */}
-        {!vm.isLoading && vm.visible.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: 14 }}>
-            {vm.visible.map(s => (
-              <ShipmentCard key={s.id} s={s} view={view}
-                onOpen={() => navigate(`/purchased-orders/${s.id}`)}
-                onDelete={() => setConfirmId(s.id)} />
-            ))}
+        {/* Table */}
+        {!vm.isLoading && !vm.error && vm.visible.length > 0 && (
+          <div style={{ backgroundColor: UI.surface, border: `1px solid ${UI.border}`, borderRadius: UI.r, overflow: 'hidden' }}>
+            {tabbed.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: UI.muted, fontSize: 13 }}>
+                No shipments in this view.
+              </div>
+            ) : (
+              <>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${UI.border}`, backgroundColor: '#fafbfc' }}>
+                        {['#', 'Shipment No.', 'PO No.', 'Supplier', 'Destination', 'Progress', 'Landed Cost', ''].map((h, i) => (
+                          <th key={i} style={{
+                            padding: '10px', fontSize: 10.5, fontWeight: 700, color: UI.muted,
+                            textTransform: 'uppercase', letterSpacing: '.04em', textAlign: i === 6 ? 'right' : 'left',
+                          }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paged.map((s, i) => (
+                        <ShipmentRow key={s.id} s={s} view={view} rowNumber={(pageSafe - 1) * PAGE_SIZE + i + 1}
+                          onOpen={() => navigate(`/purchased-orders/${s.id}`)}
+                          onDelete={() => setConfirmId(s.id)} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '12px 16px', borderTop: `1px solid ${UI.hair}` }}>
+                  <span style={{ fontSize: 12, color: UI.muted }}>
+                    Showing {(pageSafe - 1) * PAGE_SIZE + 1} to {Math.min(pageSafe * PAGE_SIZE, tabbed.length)} of {tabbed.length} shipments
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button type="button" disabled={pageSafe <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}
+                      style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${UI.border}`, backgroundColor: '#fff',
+                        cursor: pageSafe <= 1 ? 'default' : 'pointer', opacity: pageSafe <= 1 ? .4 : 1,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <ChevronLeft size={14} />
+                    </button>
+                    {Array.from({ length: pageCount }, (_, i) => i + 1)
+                      .filter(n => n === 1 || n === pageCount || Math.abs(n - pageSafe) <= 1)
+                      .map((n, idx, arr) => (
+                        <React.Fragment key={n}>
+                          {idx > 0 && arr[idx - 1] !== n - 1 && <span style={{ color: UI.faint, fontSize: 12, padding: '0 2px' }}>…</span>}
+                          <button type="button" onClick={() => setPage(n)}
+                            style={{ minWidth: 28, height: 28, borderRadius: 6, border: `1px solid ${n === pageSafe ? UI.brand : UI.border}`,
+                              backgroundColor: n === pageSafe ? UI.brand : '#fff', color: n === pageSafe ? '#fff' : UI.body,
+                              cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                            {n}
+                          </button>
+                        </React.Fragment>
+                      ))}
+                    <button type="button" disabled={pageSafe >= pageCount} onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+                      style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${UI.border}`, backgroundColor: '#fff',
+                        cursor: pageSafe >= pageCount ? 'default' : 'pointer', opacity: pageSafe >= pageCount ? .4 : 1,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -295,19 +366,20 @@ export const PurchasedOrdersView: React.FC = () => {
       {confirmId && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
           onClick={() => setConfirmId(null)}>
-          <div style={{ ...S.card, width: 380 }} onClick={e => e.stopPropagation()}>
+          <div style={{ backgroundColor: UI.surface, border: `1px solid ${UI.border}`, borderRadius: UI.r, padding: '18px 20px', width: 380 }}
+            onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Delete shipment?</div>
-              <button type="button" onClick={() => setConfirmId(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={16} /></button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: UI.ink }}>Delete shipment?</div>
+              <button type="button" onClick={() => setConfirmId(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: UI.muted }}><X size={16} /></button>
             </div>
-            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px' }}>
+            <p style={{ fontSize: 13, color: UI.muted, margin: '0 0 16px' }}>
               This removes the shipment and its costing. It cannot be undone.
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button type="button" onClick={() => setConfirmId(null)}
-                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d1d5db', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+                style={{ padding: '8px 16px', borderRadius: UI.rSm, border: '1px solid #d1d5db', backgroundColor: '#fff', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
               <button type="button" onClick={() => { vm.removeShipment(confirmId); setConfirmId(null); }}
-                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', backgroundColor: '#dc2626', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Delete</button>
+                style={{ padding: '8px 16px', borderRadius: UI.rSm, border: 'none', backgroundColor: UI.danger, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Delete</button>
             </div>
           </div>
         </div>

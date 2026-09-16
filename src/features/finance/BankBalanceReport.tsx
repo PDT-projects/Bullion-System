@@ -23,6 +23,9 @@ import {
 } from 'lucide-react';
 import { getTransactionTotals } from '../../modules/transactions/models/transactionsService';
 import { Transaction } from '../../modules/transactions/models/types';
+import { useGlobalCurrency } from '../../shared/currency/useGlobalCurrency';
+import { getGlobalCurrencySymbol, getGlobalCurrency } from '../../shared/currency/globalCurrency';
+import { CurrencyCode } from './currencyUtils';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Bank    = { id: string; name: string; balance: number; accountNumber?: string; };
@@ -40,7 +43,7 @@ interface Props {
 }
 
 // ── Formatters ─────────────────────────────────────────────────────────────
-const CURRENCY = 'AED';
+const CURRENCY = () => getGlobalCurrencySymbol();
 const fmt = (n: number) =>
   (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (iso: string) => {
@@ -65,6 +68,8 @@ interface TreeNode {
 }
 
 export function BalanceSheetReport({ transactions, banks, loans, products, bills = [], onBack }: Props) {
+  useGlobalCurrency(); // subscribe so this view re-renders on currency change
+
 
   // ── Date-range filter with quick presets ──────────────────────────────
   type Preset = 'all' | 'thisMonth' | 'lastMonth' | 'last3Months' | 'thisYear' | 'custom';
@@ -328,7 +333,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10.5);
       doc.text(title, marginX + 3, y + 5);
-      doc.text(`${CURRENCY} ${fmt(node.amount)}`, pageW - marginX - 3, y + 5, { align: 'right' });
+      doc.text(`${CURRENCY()} ${fmt(node.amount)}`, pageW - marginX - 3, y + 5, { align: 'right' });
       y += 10;
 
       // Category rows
@@ -342,7 +347,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           doc.setFont('helvetica', 'bold');
           doc.text(cat.label, marginX + 4, y);
           doc.setTextColor(...amountColor);
-          doc.text(`${CURRENCY} ${fmt(cat.amount)}`, pageW - marginX - 3, y, { align: 'right' });
+          doc.text(`${CURRENCY()} ${fmt(cat.amount)}`, pageW - marginX - 3, y, { align: 'right' });
           doc.setTextColor(30, 41, 59);
           y += 5;
 
@@ -357,7 +362,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               const wrapped = doc.splitTextToSize(label, pageW - marginX * 2 - 45);
               doc.text(wrapped, marginX + 10, y);
               doc.setTextColor(51, 65, 85);
-              doc.text(`${CURRENCY} ${fmt(d.amount)}`, pageW - marginX - 3, y, { align: 'right' });
+              doc.text(`${CURRENCY()} ${fmt(d.amount)}`, pageW - marginX - 3, y, { align: 'right' });
               y += wrapped.length * 3.8 + 1;
             }
             doc.setFontSize(9);
@@ -382,10 +387,10 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
     doc.text('Total Assets', marginX, y);
-    doc.text(`${CURRENCY} ${fmt(sheet.totalAssets)}`, pageW - marginX, y, { align: 'right' });
+    doc.text(`${CURRENCY()} ${fmt(sheet.totalAssets)}`, pageW - marginX, y, { align: 'right' });
     y += 6;
     doc.text('Total Liabilities + Equity', marginX, y);
-    doc.text(`${CURRENCY} ${fmt(sheet.totalLiabAndEquity)}`, pageW - marginX, y, { align: 'right' });
+    doc.text(`${CURRENCY()} ${fmt(sheet.totalLiabAndEquity)}`, pageW - marginX, y, { align: 'right' });
     y += 8;
     // Balanced/Off badge
     const balColor: [number, number, number] = sheet.isBalanced ? [5, 150, 105] : [220, 38, 38];
@@ -481,7 +486,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 22px', backgroundColor: '#fafbfc', borderBottom: '1px solid #e2e8f0', fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.08em' }}>
           <span>Category</span>
-          <span style={{ textAlign: 'right', minWidth: 160 }}>Amount ({CURRENCY})</span>
+          <span style={{ textAlign: 'right', minWidth: 160 }}>Amount ({CURRENCY()})</span>
         </div>
 
         <div>
@@ -506,7 +511,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                 : `✗ Off balance by AED ${fmt(Math.abs(sheet.totalAssets - sheet.totalLiabAndEquity))}`}
             </span>
             <span style={{ fontSize: 15, fontWeight: 900, fontVariantNumeric: 'tabular-nums', minWidth: 180, textAlign: 'right', color: sheet.isBalanced ? '#6ee7b7' : '#fca5a5' }}>
-              <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
+              <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY()}</span>
               {fmt(sheet.totalLiabAndEquity)}
             </span>
           </div>
@@ -545,7 +550,7 @@ const Tile: React.FC<{
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: highlight ? 'rgba(255,255,255,0.85)' : '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 800, color: highlight ? '#fff' : fg, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', marginTop: 2 }}>
-        <span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY}</span>{fmt(value)}
+        <span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY()}</span>{fmt(value)}
       </div>
     </div>
   </div>
@@ -640,7 +645,7 @@ const TreeRow: React.FC<{
         fontSize: node.level === 0 ? 14 : node.level === 1 ? 13 : 12,
         minWidth: 160, paddingLeft: 8,
       }}>
-        <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
+        <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY()}</span>
         {fmt(node.amount)}
       </span>
     </div>
@@ -662,7 +667,7 @@ const SubtotalRow: React.FC<{ label: string; value: number; tone: TreeNode['tone
         fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
         minWidth: 160, textAlign: 'right', paddingLeft: 8,
       }}>
-        <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>{fmt(value)}
+        <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY()}</span>{fmt(value)}
       </span>
     </div>
   );

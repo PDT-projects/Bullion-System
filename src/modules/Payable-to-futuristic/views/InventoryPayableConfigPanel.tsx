@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { useInventoryPayableConfigViewModel } from '../viewModels/useInventoryPayableConfigViewModel';
 import { aedToAllCurrencies } from '../models/payableToFuturistic';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 const USD_TO_AED = 3.67;
 
@@ -218,7 +220,7 @@ export const InventoryPayableConfigPanel: React.FC = () => {
           <div className="border border-gray-200 rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
               <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
-                <Layers size={12} /> Sale Price Slabs (AED)
+                <Layers size={12} /> Sale Price Slabs ({getGlobalCurrencySymbol()})
               </span>
               <button
                 type="button"
@@ -239,7 +241,7 @@ export const InventoryPayableConfigPanel: React.FC = () => {
                 <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 px-3 py-1.5 bg-white">
                   <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Sale price from</span>
                   <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Sale price to</span>
-                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Payable (AED)</span>
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Payable ({getGlobalCurrencySymbol()})</span>
                   <span className="w-6" />
                 </div>
                 {slabs.map((slab, i) => {
@@ -366,13 +368,13 @@ export const InventoryPayableConfigPanel: React.FC = () => {
             <p className="text-xs text-gray-400 mt-1">Add one above to enable auto-payables on invoicing.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <LockedScrollTable maxHeight="65vh">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Inventory Item</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product ID</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Amount (AED)</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Amount ({getGlobalCurrencySymbol()})</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Entered As</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Equiv. USD</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Notes</th>
@@ -445,7 +447,7 @@ export const InventoryPayableConfigPanel: React.FC = () => {
                 })}
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
         )}
       </div>
 

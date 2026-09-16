@@ -11,6 +11,7 @@ import {
   collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, orderBy,
 } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
+import { allocateNewChargeAcrossShipment } from './orphanedChargeAbsorption';
 import {
   Shipment, CreateShipmentDTO, UpdateShipmentDTO,
   ShipmentCharge, ShipmentSupplierPayment, ChargeKind,
@@ -240,7 +241,7 @@ export class PurchasedOrderFirebaseService {
    * was right on Monday is wrong on Friday with nothing recording why. Reopen
    * the costing first.
    */
-  static async addCharge(id: string, charge: Omit<ShipmentCharge, 'id' | 'createdAt'>): Promise<void> {
+  static async addCharge(id: string, charge: Omit<ShipmentCharge, 'id' | 'createdAt'>): Promise<{ adjustmentInvoiceNumber: string | null; adjustmentInvoiceNumbers: string[]; serialsToppedUp: number }> {
     const current = await this.fetchById(id);
     if (!current) throw new Error('Shipment not found');
     if (current.costingStatus === 'Complete') {
@@ -264,6 +265,23 @@ export class PurchasedOrderFirebaseService {
       charges: [...(current.charges || []), next],
       updatedAt: new Date().toISOString(),
     }));
+
+    // Give every line its value-proportional share of the new charge, and
+    // route each share to wherever it needs to go — topped up onto unsold
+    // stock, or absorbed via a dummy adjustment invoice for any line whose
+    // stock is already fully sold. Never let a hiccup here fail the charge
+    // that was already saved above.
+    let allocation: { adjustmentInvoiceNumbers: string[]; serialsToppedUp: number } = { adjustmentInvoiceNumbers: [], serialsToppedUp: 0 };
+    try {
+      allocation = await allocateNewChargeAcrossShipment(current, next.amount, next.description);
+    } catch (err) {
+      console.error('[addCharge] charge allocation failed (charge was still saved):', err);
+    }
+    return {
+      adjustmentInvoiceNumber: allocation.adjustmentInvoiceNumbers[0] || null,
+      adjustmentInvoiceNumbers: allocation.adjustmentInvoiceNumbers,
+      serialsToppedUp: allocation.serialsToppedUp,
+    };
   }
 
   static async removeCharge(id: string, chargeId: string): Promise<void> {

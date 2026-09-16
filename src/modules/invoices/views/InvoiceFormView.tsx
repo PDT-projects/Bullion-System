@@ -9,6 +9,7 @@ import { makeBranchValue, branchFromValue } from '../viewModels/useInvoiceFormVi
 import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { InvoiceCurrency, INVOICE_CURRENCIES, convertCurrency } from '../models/invoiceService';
 import { sanitizeNameInput, sanitizePhoneInput, sanitizeCNICInput } from '../../../utils/validators';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; balance: number; }
@@ -294,7 +295,7 @@ function ProductPriceInput({
           placeholder="0"
         />
         <span className="px-2 flex items-center border border-gray-300 rounded-lg text-xs h-10 bg-gray-50 text-gray-600">
-          AED
+          {getGlobalCurrencySymbol()}
         </span>
       </div>
     </div>
@@ -628,7 +629,7 @@ export function InvoiceFormView({
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                            Unit Price <span className="ml-1 font-normal text-gray-400">(AED)</span>
+                            Unit Price <span className="ml-1 font-normal text-gray-400">({getGlobalCurrencySymbol()})</span>
                           </label>
                           <ProductPriceInput
                             product={product}

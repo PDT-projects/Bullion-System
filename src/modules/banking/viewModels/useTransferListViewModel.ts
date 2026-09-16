@@ -5,8 +5,10 @@ import { toast } from 'sonner';
 import { BankTransfer, TransferStats, TransferFilters } from '../models/types';
 import { BankingService } from '../models/bankingService';
 import { TransferFirebaseService } from '../models/Transferfirebaseservice';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 export function useTransferListViewModel() {
+  useGlobalCurrency(); // re-render when Admin changes the global currency
   const [transfers, setTransfers] = useState<BankTransfer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

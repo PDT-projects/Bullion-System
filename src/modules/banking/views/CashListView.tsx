@@ -4,9 +4,14 @@ import React, { useState } from 'react';
 import {
   ArrowLeft, Search, Trash2, DollarSign, TrendingUp, TrendingDown,
   Wallet, X, Save, Loader2, RefreshCw, ArrowUpRight, ArrowDownRight,
-  Clock, AlertCircle, Tag, StickyNote,
+  Clock, AlertCircle, Tag, StickyNote, Download,
 } from 'lucide-react';
 import { CashTransaction, CashStats, CashFilters } from '../models/types';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { useColumnVisibility, ColumnVisibilityMenu } from '../../../shared/components/ColumnVisibility';
+import { usePagination, PaginationBar } from '../../../shared/components/Pagination';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { exportReportToPdf, exportReportToExcel } from '../../../shared/reportExport/reportExport';
 
 interface CashListViewProps {
   filteredTransactions: CashTransaction[];
@@ -100,6 +105,10 @@ export const CashListView: React.FC<CashListViewProps> = ({
     return { ...txn, runningBalance: running };
   });
   const ledgerRows = withBalance.reverse();
+  const CASH_COLUMNS = ['Date', 'Type', 'Sub-Category', 'Note', 'Amount', 'Balance'];
+  const cols = useColumnVisibility('cash-ledger', CASH_COLUMNS);
+  const cashLabelColsVisible = ['Date', 'Type', 'Sub-Category', 'Note', 'Amount'].filter(c => cols.isVisible(c)).length;
+  const pg = usePagination(ledgerRows, 'cash-ledger');
 
   // ── Loading ──
   if (isLoading && filteredTransactions.length === 0 && cashRecords.length === 0) {
@@ -185,19 +194,65 @@ export const CashListView: React.FC<CashListViewProps> = ({
 
       {/* ── Ledger Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 16px 0' }}>
+          <button
+            onClick={() => {
+              const headers = ['Date', 'Type', 'Sub-Category', 'Note', 'Amount', 'Balance'];
+              const rows = ledgerRows.map((txn: any) => {
+                const isInflow = txn.mainCategory === 'Cash Inflow';
+                const { date } = formatDateTime(txn.date);
+                return [date, isInflow ? 'Inflow' : 'Outflow', txn.subCategory || '—', txn.note || '—',
+                  formatCurrency(txn.amount), formatCurrency(txn.runningBalance)];
+              });
+              exportReportToExcel({
+                title: 'Cash in Hand Ledger',
+                subtitle: `Opening Balance: ${formatCurrency(openingBalance)}`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `cash-ledger-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download size={14} /> Excel
+          </button>
+          <button
+            onClick={() => {
+              const headers = ['Date', 'Type', 'Sub-Category', 'Note', 'Amount', 'Balance'];
+              const rows = ledgerRows.map((txn: any) => {
+                const isInflow = txn.mainCategory === 'Cash Inflow';
+                const { date } = formatDateTime(txn.date);
+                return [date, isInflow ? 'Inflow' : 'Outflow', txn.subCategory || '—', txn.note || '—',
+                  formatCurrency(txn.amount), formatCurrency(txn.runningBalance)];
+              });
+              exportReportToPdf({
+                title: 'Cash in Hand Ledger',
+                subtitle: `Opening Balance: ${formatCurrency(openingBalance)}`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `cash-ledger-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download size={14} /> PDF
+          </button>
+          <ColumnVisibilityMenu controller={cols} />
+        </div>
 
         {openingBalance > 0 || filteredTransactions.length > 0 ? (
-          <div className="overflow-x-auto">
+          <>
+          <LockedScrollTable maxHeight="65vh">
             <table className="w-full" style={{ minWidth: '600px' }}>
 
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 w-40">Date</th>
-                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Type</th>
-                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Sub-Category</th>
-                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Note</th>
-                  <th className="px-4 py-4 text-right text-sm font-semibold text-gray-600">Amount</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Balance</th>
+                  {cols.isVisible('Date') && <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 w-40">Date</th>}
+                  {cols.isVisible('Type') && <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Type</th>}
+                  {cols.isVisible('Sub-Category') && <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Sub-Category</th>}
+                  {cols.isVisible('Note') && <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Note</th>}
+                  {cols.isVisible('Amount') && <th className="px-4 py-4 text-right text-sm font-semibold text-gray-600">Amount</th>}
+                  {cols.isVisible('Balance') && <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Balance</th>}
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -232,7 +287,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
                 {/* Empty message when no transactions */}
                 {ledgerRows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-14 text-center">
+                    <td colSpan={cols.visibleCount + 1} className="px-6 py-14 text-center">
                       <DollarSign size={32} className="text-gray-200 mx-auto mb-2" />
                       <p className="text-sm font-medium text-gray-400">No cash transactions yet</p>
                       <p className="text-xs text-gray-300 mt-1">
@@ -243,39 +298,39 @@ export const CashListView: React.FC<CashListViewProps> = ({
                 )}
 
                 {/* Transaction rows */}
-                {ledgerRows.map(txn => {
+                {pg.pageRows.map(txn => {
                   const isInflow = txn.mainCategory === 'Cash Inflow';
                   const { date } = formatDateTime(txn.date);
                   return (
                     <tr key={txn.id} className="hover:bg-gray-50/70 transition-colors">
 
                       {/* Date */}
-                      <td className="px-6 py-4">
+                      {cols.isVisible('Date') && <td className="px-6 py-4">
                         <p className="text-sm font-medium text-gray-800">{date}</p>
-                      </td>
+                      </td>}
 
                       {/* Type badge */}
-                      <td className="px-4 py-4">
+                      {cols.isVisible('Type') && <td className="px-4 py-4">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                           isInflow ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                         }`}>
                           {isInflow ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
                           {isInflow ? 'Inflow' : 'Outflow'}
                         </span>
-                      </td>
+                      </td>}
 
                       {/* Sub-Category */}
-                      <td className="px-4 py-4">
+                      {cols.isVisible('Sub-Category') && <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
                           <Tag size={11} className="text-gray-300 shrink-0" />
                           <span className="text-sm text-gray-700 truncate max-w-[160px]">
                             {txn.subCategory || '—'}
                           </span>
                         </div>
-                      </td>
+                      </td>}
 
                       {/* Note */}
-                      <td className="px-4 py-4">
+                      {cols.isVisible('Note') && <td className="px-4 py-4">
                         {txn.note ? (
                           <div className="flex items-start gap-1.5 max-w-[180px]">
                             <StickyNote size={11} className="text-gray-300 shrink-0 mt-0.5" />
@@ -284,21 +339,21 @@ export const CashListView: React.FC<CashListViewProps> = ({
                         ) : (
                           <span className="text-xs text-gray-200">—</span>
                         )}
-                      </td>
+                      </td>}
 
                       {/* Amount */}
-                      <td className="px-4 py-4 text-right">
+                      {cols.isVisible('Amount') && <td className="px-4 py-4 text-right">
                         <span className={`text-sm font-semibold ${isInflow ? 'text-green-600' : 'text-red-600'}`}>
                           {isInflow ? '+' : '−'}{formatCurrency(txn.amount)}
                         </span>
-                      </td>
+                      </td>}
 
                       {/* Running Balance */}
-                      <td className="px-6 py-4 text-right">
+                      {cols.isVisible('Balance') && <td className="px-6 py-4 text-right">
                         <span className={`text-sm font-bold ${(txn as any).runningBalance >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                           {formatCurrency((txn as any).runningBalance)}
                         </span>
-                      </td>
+                      </td>}
 
                       {/* Delete */}
                       <td className="pr-3 py-4 text-center">
@@ -317,20 +372,22 @@ export const CashListView: React.FC<CashListViewProps> = ({
               {(openingBalance > 0 || filteredTransactions.length > 0) && (
                 <tfoot className="border-t-2 border-gray-200 bg-gray-50">
                   <tr>
-                    <td colSpan={5} className="px-6 py-3 text-sm font-semibold text-gray-700">
+                    <td colSpan={Math.max(1, cashLabelColsVisible)} className="px-6 py-3 text-sm font-semibold text-gray-700">
                       Current Cash in Hand
                     </td>
-                    <td className="px-6 py-3 text-right">
+                    {cols.isVisible('Balance') && <td className="px-6 py-3 text-right">
                       <span className={`text-base font-bold ${stats.totalCashInHand >= 0 ? 'text-gray-700' : 'text-red-600'}`}>
                         {formatCurrency(stats.totalCashInHand)}
                       </span>
-                    </td>
+                    </td>}
                     <td />
                   </tr>
                 </tfoot>
               )}
             </table>
-          </div>
+          </LockedScrollTable>
+          <PaginationBar controller={pg} />
+          </>
         ) : (
           /* No opening balance set yet */
           <div className="py-20 text-center">
@@ -375,7 +432,7 @@ export const CashListView: React.FC<CashListViewProps> = ({
             </div>
             <div className="px-6 py-5">
               {/* FIX: was hardcoded to PKR; this ledger is tracked in AED. */}
-              <label className="block text-sm font-medium text-gray-700 mb-2">Amount (AED)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Amount ({getGlobalCurrencySymbol()})</label>
               <div className="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-700 focus-within:border-gray-700 overflow-hidden">
                 <span className="pl-3 pr-2 text-gray-400 text-sm font-medium shrink-0">AED</span>
                 <input

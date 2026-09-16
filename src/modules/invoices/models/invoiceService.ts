@@ -12,6 +12,7 @@ import {
   CustomerSuggestion, ProvinceCities,
 } from './types';
 import { validateName, validatePhone, validateIdentityNumber } from '../../../utils/validators';
+import { formatGlobalCurrency } from '../../../shared/currency/globalCurrency';
 
 export const provinceCities: ProvinceCities = {
   'Federal': ['Islamabad'],
@@ -141,9 +142,23 @@ export const calculateSupplierCost = (inv: Partial<Invoice>): number =>
 export const calculatePurchaseCost = (inv: Partial<Invoice>): number =>
   (inv.products || []).reduce((s, p) => s + (p.purchaseCost || 0) * (p.quantity || 0), 0);
 
-// Net amount = product revenue − miscellaneous expense.
+// Net amount = product revenue − discount given to the customer − misc
+// expense. deductionCharges (Discount) genuinely reduces what the customer
+// pays — totalAmount is computed from product prices alone and never has
+// the discount applied to it, so it must be subtracted here or Net Sale
+// overstates real revenue by exactly the discount given.
 export const calculateNetAmount = (inv: Partial<Invoice>): number =>
-  (inv.totalAmount || 0) - calculateMiscExpense(inv);
+  (inv.totalAmount || 0) - (Number(inv.deductionCharges) || 0) - (Number(inv.miscExpense) || 0);
+
+// Net profit = Net Sale (above) minus what the goods actually cost us
+// (supplier cost for Credit-ownership items, purchase cost for items we
+// already own) minus Shipping (cargoAmount) — a real business expense on
+// this sale.
+export const calculateNetProfit = (inv: Partial<Invoice>): number => {
+  const netSale = calculateNetAmount(inv);
+  const shipping = Number((inv as any).cargoAmount) || 0;
+  return netSale - calculateSupplierCost(inv) - calculatePurchaseCost(inv) - shipping;
+};
 
 // Amount already paid / still owed.
 export const calculatePaidAmount = (inv: Partial<Invoice>): number => {
@@ -392,8 +407,7 @@ export const summarizeInvoices = (invoices: Invoice[]): InvoiceSelectionSummary 
   };
 };
 
-export const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount);
+export const formatCurrency = (amount: number): string => formatGlobalCurrency(amount);
 
 export const formatDate = (dateString: string): string =>
   dateString ? new Date(dateString).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }) : '';

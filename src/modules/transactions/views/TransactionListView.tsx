@@ -17,7 +17,7 @@ import {
   Plus, Trash2, X, Filter as FilterIcon, Check,
   ChevronDown, Wallet, Landmark, TrendingUp, TrendingDown, Loader2,
   PlusCircle, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Search, Clock, RotateCcw,
-  History, Eye, Download as DownloadIcon,
+  History, Eye, Download as DownloadIcon, Calculator,
 } from 'lucide-react';
 import { collection, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useAccountBalances } from '../viewModels/useAccountBalances';
@@ -33,6 +33,13 @@ import {
 } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
+import { getGlobalCurrencySymbol, getGlobalCurrency } from '../../../shared/currency/globalCurrency';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { useColumnVisibility, ColumnVisibilityMenu } from '../../../shared/components/ColumnVisibility';
+import { usePagination, PaginationBar } from '../../../shared/components/Pagination';
+import { exportReportToPdf, exportReportToExcel } from '../../../shared/reportExport/reportExport';
+import { CurrencyCode } from '../../../features/finance/currencyUtils';
 
 // ── Props ───────────────────────────────────────────────────────────────────
 interface Props {
@@ -54,10 +61,13 @@ interface Props {
   getCategoryColor: (c: string) => string;
 }
 
-// ── Currency prefix (kept from prior file) ──────────────────────────────────
-const CURRENCY = 'AED';
-const fmt = (n: number) =>
-  n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+// ── Currency prefix — now live, reads the Admin's global currency setting
+// and converts the AED amount for display. Kept as function calls (not
+// plain constants) so every render picks up the latest symbol/rate.
+const CURRENCY = () => getGlobalCurrencySymbol();
+const fmt = (n: number) => {
+  return (n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+};
 
 // ── View ────────────────────────────────────────────────────────────────────
 export function TransactionListView({
@@ -66,6 +76,12 @@ export function TransactionListView({
   handleDeleteTransaction, handleCreateTransaction, handleEditTransaction, setViewTransaction,
   formatDate,
 }: Props) {
+  // Subscribed purely so this whole view (and its child modals below, which
+  // close over the module-level CURRENCY()/fmt() functions) re-renders the
+  // instant the Admin changes the global currency — CURRENCY()/fmt() always
+  // read the live value regardless, this just triggers the re-render.
+  useGlobalCurrency();
+
 
   // ── Accounts (drives Opening Balance, Banks·N, and the Account filter) ──
   //
@@ -204,6 +220,31 @@ export function TransactionListView({
       return true;
     });
   }, [filteredTransactions, chipCategory, chipSubCategory, chipAccount, chipBranch, settledOnly, pendingOnly, chipType]);
+
+  // ── Footer totals — sums whatever `rows` currently shows, so it tracks
+  // every filter/search/chip live. Same getTransactionTotals() each row
+  // already uses; nothing new is calculated here.
+  const TXN_COLUMNS = ['Txn ID', 'Date', 'Manual Date', 'Type', 'Category', 'Sub Category', 'Account',
+    'Amount', 'Cash In', 'Cash Out', 'Balance', 'Balance Due', 'Evidence', 'Status', 'Actions'];
+  const cols = useColumnVisibility('transactions-list', TXN_COLUMNS);
+  const labelColsVisible = ['Txn ID', 'Date', 'Manual Date', 'Type', 'Category', 'Sub Category', 'Account']
+    .filter(c => cols.isVisible(c)).length;
+  const trailingColsVisible = ['Evidence', 'Status', 'Actions'].filter(c => cols.isVisible(c)).length;
+
+  const pg = usePagination(rows, 'transactions-list');
+
+  const footerTotals = useMemo(() => {
+    return rows.reduce((acc, t) => {
+      const { totalPaid, remainingAmount } = getTransactionTotals(t);
+      const isIn  = t.mainCategory === 'Cash Inflow';
+      const isOut = t.mainCategory === 'Cash Outflow';
+      acc.amount += t.amount || 0;
+      acc.cashIn += isIn ? totalPaid : 0;
+      acc.cashOut += isOut ? totalPaid : 0;
+      acc.balanceDue += remainingAmount > 0 ? remainingAmount : 0;
+      return acc;
+    }, { amount: 0, cashIn: 0, cashOut: 0, balanceDue: 0 });
+  }, [rows]);
 
   // ── Running balance per account for the BALANCE column ──────────────────
   //
@@ -407,7 +448,7 @@ export function TransactionListView({
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                   <Wallet size={12} color="#65a30d" /> Cash in Hand
                 </span>
-                <span style={{ fontSize: 11, color: '#64748b' }}>{CURRENCY} {fmt(summary.cash)}</span>
+                <span style={{ fontSize: 11, color: '#64748b' }}>{CURRENCY()} {fmt(summary.cash)}</span>
               </PickRow>
               <div style={{ padding: '6px 12px 4px', fontSize: 12, fontWeight: 600, color: '#64748b', backgroundColor: '#f8fafc' }}>Bank</div>
               {banks.map(b => (
@@ -415,7 +456,7 @@ export function TransactionListView({
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                     <Landmark size={12} color="#2563eb" /> {b.name}
                   </span>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>{CURRENCY} {fmt(computeBankBalance(transactions, b.id, b.balance))}</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{CURRENCY()} {fmt(computeBankBalance(transactions, b.id, b.balance))}</span>
                 </PickRow>
               ))}
             </div>
@@ -547,7 +588,7 @@ export function TransactionListView({
               </div>
               <div style={{ fontSize: 11, color: '#c2410c' }}>
                 {pendingTotal > 0
-                  ? <>Total outstanding: <b>{CURRENCY} {fmt(pendingTotal)}</b></>
+                  ? <>Total outstanding: <b>{CURRENCY()} {fmt(pendingTotal)}</b></>
                   : 'Includes invoice-linked payments and awaiting-approval entries'}
               </div>
             </div>
@@ -566,39 +607,112 @@ export function TransactionListView({
         </div>
       )}
 
+      {/* ── Export toolbar ──────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+        <button
+          onClick={() => {
+            const headers = ['Txn ID', 'Date', 'Type', 'Category', 'Sub Category', 'Account', 'Amount', 'Paid', 'Balance', 'Remaining', 'Status'];
+            const exportRows = rows.map(t => {
+              const cat = getTxCategoryPath(t);
+              const acc = getTxAccount(t);
+              const { totalPaid, remainingAmount } = getTransactionTotals(t);
+              const isIn = t.mainCategory === 'Cash Inflow';
+              const running = balanceByRow.get(t.id) ?? 0;
+              return [
+                t.transactionId, formatDate(t.date), isIn ? 'Inflow' : (t.mainCategory === 'Cash Outflow' ? 'Outflow' : t.mainCategory),
+                cat.category || '', cat.subCategory || '', acc.name,
+                t.amount || 0,
+                totalPaid || 0,
+                running || 0,
+                remainingAmount || 0,
+                t.paymentStatus || '',
+              ];
+            });
+            exportReportToExcel({
+              title: 'Transactions',
+              subtitle: `${rows.length} transactions — amounts in ${getGlobalCurrency().code}`,
+              columns: headers.map(h => ({ header: h })),
+              rows: exportRows,
+              filename: `transactions-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          disabled={rows.length === 0}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', border: '1px solid #e2e8f0',
+            borderRadius: 8, backgroundColor: '#fff', color: '#334155', fontSize: 13, fontWeight: 600,
+            cursor: rows.length === 0 ? 'not-allowed' : 'pointer', opacity: rows.length === 0 ? 0.5 : 1 }}>
+          <DownloadIcon size={14} /> Excel
+        </button>
+        <button
+          onClick={() => {
+            const headers = ['Txn ID', 'Date', 'Type', 'Category', 'Sub Category', 'Account', 'Amount', 'Paid', 'Balance', 'Remaining', 'Status'];
+            const exportRows = rows.map(t => {
+              const cat = getTxCategoryPath(t);
+              const acc = getTxAccount(t);
+              const { totalPaid, remainingAmount } = getTransactionTotals(t);
+              const isIn = t.mainCategory === 'Cash Inflow';
+              const running = balanceByRow.get(t.id) ?? 0;
+              return [
+                t.transactionId, formatDate(t.date), isIn ? 'Inflow' : (t.mainCategory === 'Cash Outflow' ? 'Outflow' : t.mainCategory),
+                cat.category || '', cat.subCategory || '', acc.name,
+                t.amount || 0,
+                totalPaid || 0,
+                running || 0,
+                remainingAmount || 0,
+                t.paymentStatus || '',
+              ];
+            });
+            exportReportToPdf({
+              title: 'Transactions',
+              subtitle: `${rows.length} transactions — amounts in ${getGlobalCurrency().code}`,
+              columns: headers.map(h => ({ header: h })),
+              rows: exportRows,
+              filename: `transactions-${new Date().toISOString().slice(0, 10)}`,
+            });
+          }}
+          disabled={rows.length === 0}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', border: '1px solid #e2e8f0',
+            borderRadius: 8, backgroundColor: '#fff', color: '#334155', fontSize: 13, fontWeight: 600,
+            cursor: rows.length === 0 ? 'not-allowed' : 'pointer', opacity: rows.length === 0 ? 0.5 : 1 }}>
+          <DownloadIcon size={14} /> PDF
+        </button>
+        <ColumnVisibilityMenu controller={cols} />
+      </div>
+
       {/* ── Table ───────────────────────────────────────────────────────── */}
       <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ maxHeight: '68vh', overflow: 'auto', position: 'relative' }}>
+        <LockedScrollTable maxHeight="68vh">
           {/* borderSpacing 0 with separate borders: sticky headers are
               unreliable under border-collapse. */}
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 1200 }}>
             <thead>
               <tr style={{ backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b' }}>
-                {(['Txn ID','Date','Manual Date','Type','Category','Sub Category','Account','Amount'] as const).map(h => (
+                {(['Txn ID','Date','Manual Date','Type','Category','Sub Category','Account','Amount'] as const)
+                  .filter(h => cols.isVisible(h))
+                  .map(h => (
                   <ThCell key={h}>{h}</ThCell>
                 ))}
-                <ThCell tone="inflow">Cash In</ThCell>
-                <ThCell tone="outflow">Cash Out</ThCell>
-                <ThCell>Balance</ThCell>
-                <ThCell>Balance Due</ThCell>
-                <ThCell>Evidence</ThCell>
-                <ThCell>Status</ThCell>
-                <ThCell align="right">Actions</ThCell>
+                {cols.isVisible('Cash In')     && <ThCell tone="inflow">Cash In</ThCell>}
+                {cols.isVisible('Cash Out')    && <ThCell tone="outflow">Cash Out</ThCell>}
+                {cols.isVisible('Balance')     && <ThCell>Balance</ThCell>}
+                {cols.isVisible('Balance Due') && <ThCell>Balance Due</ThCell>}
+                {cols.isVisible('Evidence')    && <ThCell>Evidence</ThCell>}
+                {cols.isVisible('Status')      && <ThCell>Status</ThCell>}
+                {cols.isVisible('Actions')     && <ThCell align="right">Actions</ThCell>}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={15} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
+                <tr><td colSpan={cols.visibleCount} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
                   <Loader2 size={18} style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle' }} /> Loading…
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={15} style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                <tr><td colSpan={cols.visibleCount} style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
                   {transactions.length === 0
                     ? <>No transactions yet — click <b>"+ Add Transaction"</b> to record one.</>
                     : 'No transactions match the current filters.'}
                 </td></tr>
               ) : (
-                rows.map(t => {
+                pg.pageRows.map(t => {
                   const cat = getTxCategoryPath(t);
                   const acc = getTxAccount(t);
                   const { totalPaid, remainingAmount } = getTransactionTotals(t);
@@ -608,16 +722,19 @@ export function TransactionListView({
 
                   return (
                     <tr key={t.id} style={{ boxShadow: 'inset 0 -1px 0 #f1f5f9' }}>
-                      <TdCell mono color="#4f46e5" weight={700}>{t.transactionId}</TdCell>
-                      <TdCell>{formatDate(t.date)}</TdCell>
-                      <TdCell>{t.date ? formatDate(t.date) : '—'}</TdCell>
+                      {cols.isVisible('Txn ID') && <TdCell mono color="#4f46e5" weight={700}>{t.transactionId}</TdCell>}
+                      {cols.isVisible('Date') && <TdCell>{formatDate(t.date)}</TdCell>}
+                      {cols.isVisible('Manual Date') && <TdCell>{t.date ? formatDate(t.date) : '—'}</TdCell>}
+                      {cols.isVisible('Type') && (
                       <TdCell>
                         {isIn  && <TypeBadge label="Inflow"  tone="inflow" />}
                         {isOut && <TypeBadge label="Outflow" tone="outflow" />}
                         {!isIn && !isOut && <TypeBadge label={t.mainCategory} tone="loan" />}
                       </TdCell>
-                      <TdCell>{cat.category || '—'}</TdCell>
-                      <TdCell>{cat.subCategory || '—'}</TdCell>
+                      )}
+                      {cols.isVisible('Category') && <TdCell>{cat.category || '—'}</TdCell>}
+                      {cols.isVisible('Sub Category') && <TdCell>{cat.subCategory || '—'}</TdCell>}
+                      {cols.isVisible('Account') && (
                       <TdCell>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                           {acc.type === 'cash'
@@ -626,11 +743,13 @@ export function TransactionListView({
                           {acc.name}
                         </span>
                       </TdCell>
-                      <TdCell num>{fmt(t.amount || 0)}</TdCell>
-                      <TdCell num tone="inflow"  bold>{isIn  ? fmt(totalPaid) : '—'}</TdCell>
-                      <TdCell num tone="outflow" bold>{isOut ? fmt(totalPaid) : '—'}</TdCell>
-                      <TdCell num>{fmt(running)}</TdCell>
-                      <TdCell num tone={remainingAmount > 0 ? 'outflow' : undefined}>{remainingAmount > 0 ? fmt(remainingAmount) : '—'}</TdCell>
+                      )}
+                      {cols.isVisible('Amount') && <TdCell num>{fmt(t.amount || 0)}</TdCell>}
+                      {cols.isVisible('Cash In') && <TdCell num tone="inflow"  bold>{isIn  ? fmt(totalPaid) : '—'}</TdCell>}
+                      {cols.isVisible('Cash Out') && <TdCell num tone="outflow" bold>{isOut ? fmt(totalPaid) : '—'}</TdCell>}
+                      {cols.isVisible('Balance') && <TdCell num>{fmt(running)}</TdCell>}
+                      {cols.isVisible('Balance Due') && <TdCell num tone={remainingAmount > 0 ? 'outflow' : undefined}>{remainingAmount > 0 ? fmt(remainingAmount) : '—'}</TdCell>}
+                      {cols.isVisible('Evidence') && (
                       <TdCell>
                         {evidenceOf(t)
                           ? (
@@ -645,9 +764,13 @@ export function TransactionListView({
                           )
                           : <span style={{ color: '#cbd5e1' }}>—</span>}
                       </TdCell>
+                      )}
+                      {cols.isVisible('Status') && (
                       <TdCell>
                         <StatusBadge status={t.paymentStatus} approvalStatus={t.approvalStatus} />
                       </TdCell>
+                      )}
+                      {cols.isVisible('Actions') && (
                       <TdCell align="right">
                         <div style={{ display: 'inline-flex', gap: 4 }}>
                           {t.linkedType === 'invoice' && (
@@ -660,13 +783,71 @@ export function TransactionListView({
                           <IconAction title="Delete" onClick={() => setPendingDelete(t)} color="#dc2626"><Trash2 size={12} /></IconAction>
                         </div>
                       </TdCell>
+                      )}
                     </tr>
                   );
                 })
               )}
             </tbody>
+            {!isLoading && rows.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan={Math.max(1, labelColsVisible)} style={{
+                    padding: '11px 10px', backgroundColor: '#0f172a', borderTop: '1px solid #1e293b',
+                    position: 'sticky', bottom: 0, zIndex: 15,
+                  }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: '#e2e8f0', fontSize: 12, fontWeight: 700 }}>
+                      <Calculator size={14} color="#93c5fd" /> Totals ({rows.length} shown)
+                    </span>
+                  </td>
+                  {cols.isVisible('Amount') && (
+                  <td style={{
+                    padding: '11px 10px', backgroundColor: '#0f172a', borderTop: '1px solid #1e293b', textAlign: 'right',
+                    position: 'sticky', bottom: 0, zIndex: 15,
+                  }}>
+                    <div style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>Amount</div>
+                    <div style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(footerTotals.amount)}</div>
+                  </td>
+                  )}
+                  {cols.isVisible('Cash In') && (
+                  <td style={{
+                    padding: '11px 10px', backgroundColor: '#0f172a', borderTop: '1px solid #1e293b', borderLeft: '1px solid #1e293b', textAlign: 'right',
+                    position: 'sticky', bottom: 0, zIndex: 15,
+                  }}>
+                    <div style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>Cash in</div>
+                    <div style={{ color: '#86efac', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(footerTotals.cashIn)}</div>
+                  </td>
+                  )}
+                  {cols.isVisible('Cash Out') && (
+                  <td style={{
+                    padding: '11px 10px', backgroundColor: '#0f172a', borderTop: '1px solid #1e293b', borderLeft: '1px solid #1e293b', textAlign: 'right',
+                    position: 'sticky', bottom: 0, zIndex: 15,
+                  }}>
+                    <div style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>Cash out</div>
+                    <div style={{ color: '#fca5a5', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(footerTotals.cashOut)}</div>
+                  </td>
+                  )}
+                  {cols.isVisible('Balance') && (
+                    <td style={{ padding: '11px 10px', backgroundColor: '#0f172a', borderTop: '1px solid #1e293b', position: 'sticky', bottom: 0, zIndex: 15 }} />
+                  )}
+                  {cols.isVisible('Balance Due') && (
+                  <td style={{
+                    padding: '11px 10px', backgroundColor: '#0f172a', borderTop: '1px solid #1e293b', borderLeft: '1px solid #1e293b', textAlign: 'right',
+                    position: 'sticky', bottom: 0, zIndex: 15,
+                  }}>
+                    <div style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>Balance due</div>
+                    <div style={{ color: '#fcd34d', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(footerTotals.balanceDue)}</div>
+                  </td>
+                  )}
+                  {trailingColsVisible > 0 && (
+                    <td colSpan={trailingColsVisible} style={{ padding: '11px 10px', backgroundColor: '#0f172a', borderTop: '1px solid #1e293b', position: 'sticky', bottom: 0, zIndex: 15 }} />
+                  )}
+                </tr>
+              </tfoot>
+            )}
           </table>
-        </div>
+        </LockedScrollTable>
+        <PaginationBar controller={pg} />
       </div>
 
       {/* ── Modals ────────────────────────────────────────────────────── */}
@@ -765,7 +946,7 @@ function SummaryCell({ tone, label, value, icon, onClick, active, title }: {
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</div>
         <div style={{ fontSize: 15, fontWeight: 800, color: p.fg, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-          <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 4 }}>{CURRENCY}</span>{fmt(value)}
+          <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 4 }}>{CURRENCY()}</span>{fmt(value)}
         </div>
       </div>
     </button>
@@ -1033,7 +1214,7 @@ const ReconcileDetail: React.FC<{
           <ReconRow label={<>− Outflows</>} value={allTime.outflow} tone="outflow" />
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontSize: 12, color: '#64748b' }}>Total balance</span>
-            <span style={{ fontSize: 16, fontWeight: 800, color: '#059669' }}>{CURRENCY} {fmt(totalBalance)}</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#059669' }}>{CURRENCY()} {fmt(totalBalance)}</span>
           </div>
         </div>
 
@@ -1050,7 +1231,7 @@ const ReconcileDetail: React.FC<{
           ))}
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontSize: 12, color: '#64748b' }}>Total balance</span>
-            <span style={{ fontSize: 16, fontWeight: 800, color: '#059669' }}>{CURRENCY} {fmt(sumAccounts)}</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#059669' }}>{CURRENCY()} {fmt(sumAccounts)}</span>
           </div>
         </div>
 
@@ -1061,7 +1242,7 @@ const ReconcileDetail: React.FC<{
           <ReconRow label={<>Payables · you owe</>} value={0} muted />
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontSize: 12, color: '#64748b' }}>Net position</span>
-            <span style={{ fontSize: 16, fontWeight: 800, color: '#334155' }}>{CURRENCY} 0</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#334155' }}>{CURRENCY()} 0</span>
           </div>
         </div>
 
@@ -1085,7 +1266,7 @@ const ReconcileDetail: React.FC<{
                 <div style={{ width: 42, height: 42, borderRadius: 99, backgroundColor: '#dc2626', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
                   <X size={20} strokeWidth={3} />
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>Off by {CURRENCY} {fmt(Math.abs(diff))}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>Off by {CURRENCY()} {fmt(Math.abs(diff))}</div>
                 <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Reconcile needed</div>
               </>
             )}
@@ -1093,11 +1274,11 @@ const ReconcileDetail: React.FC<{
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${Math.abs(diff) < 0.5 ? '#bbf7d0' : '#fecaca'}`, fontSize: 11 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ color: '#64748b' }}>Cash</span>
-              <span style={{ color: '#0f172a', fontWeight: 700 }}>{CURRENCY} {fmt(cashLive)}</span>
+              <span style={{ color: '#0f172a', fontWeight: 700 }}>{CURRENCY()} {fmt(cashLive)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#64748b' }}>Banks</span>
-              <span style={{ color: '#0f172a', fontWeight: 700 }}>{CURRENCY} {fmt(summary.bankSum)}</span>
+              <span style={{ color: '#0f172a', fontWeight: 700 }}>{CURRENCY()} {fmt(summary.bankSum)}</span>
             </div>
           </div>
         </div>
@@ -1114,7 +1295,7 @@ const ReconRow: React.FC<{ label: React.ReactNode; value: number; tone?: 'inflow
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0', fontSize: 12 }}>
       <span style={{ color: '#475569' }}>{label}</span>
-      <span style={{ color, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{CURRENCY} {fmt(value)}</span>
+      <span style={{ color, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{CURRENCY()} {fmt(value)}</span>
     </div>
   );
 };
@@ -1375,7 +1556,7 @@ const BanksManagerModal: React.FC<{
                 {!r.isNew && !r.toDelete && (
                   <div style={{ marginTop: 6, fontSize: 11, color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
                     <span>Current live balance</span>
-                    <span style={{ fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{CURRENCY} {fmt(live)}</span>
+                    <span style={{ fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{CURRENCY()} {fmt(live)}</span>
                   </div>
                 )}
               </div>
@@ -1563,7 +1744,7 @@ const DeletedTransactionsModal: React.FC<{
                       <td style={cell}>{r.subCategory || '—'}</td>
                       <td style={cell}>{accName}</td>
                       <td style={{ ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                        {CURRENCY} {fmt(r.amount || 0)}
+                        {CURRENCY()} {fmt(r.amount || 0)}
                       </td>
                       <td style={cell}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1663,7 +1844,7 @@ const ConfirmDeleteModal: React.FC<{
                   color: isIn ? '#059669' : isOut ? '#dc2626' : '#334155',
                   fontVariantNumeric: 'tabular-nums',
                 }}>
-                  {isIn ? '+' : isOut ? '−' : ''}{CURRENCY} {fmt(t.amount || 0)}
+                  {isIn ? '+' : isOut ? '−' : ''}{CURRENCY()} {fmt(t.amount || 0)}
                 </div>
               </div>
             </div>
@@ -1887,7 +2068,7 @@ const MiniStat: React.FC<{ label: string; value: number; fg: string }> = ({ labe
   <div style={{ textAlign: 'center', padding: '10px 6px', backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
     <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
     <div style={{ fontSize: 15, fontWeight: 800, color: fg, fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-      <span style={{ fontSize: 10, color: '#94a3b8', marginRight: 3 }}>{CURRENCY}</span>{fmt(value)}
+      <span style={{ fontSize: 10, color: '#94a3b8', marginRight: 3 }}>{CURRENCY()}</span>{fmt(value)}
     </div>
   </div>
 );
@@ -1916,7 +2097,7 @@ const HistoryRow: React.FC<{
       }}>{mode || 'Cash'}</span>
       <span style={{ color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail || '—'}</span>
       <span style={{ color: amountFg, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-        {tone === 'in' ? '+' : '−'}{CURRENCY} {fmt(amount)}
+        {tone === 'in' ? '+' : '−'}{CURRENCY()} {fmt(amount)}
       </span>
     </div>
   );

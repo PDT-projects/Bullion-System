@@ -2,6 +2,7 @@
 // UI component for creating bank transfers
 
 import React from 'react';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 import { 
   ArrowLeft, 
   ArrowRightLeft,
@@ -65,14 +66,14 @@ export const TransferFormView: React.FC<TransferFormViewProps> = ({
   const toBank = banks.find(b => b.id === formData.toBankId);
   const hasInsufficientFunds = fromBank && formData.amount > fromBank.balance;
 
-  // FIX: amounts were always formatted/labeled as AED even when the source
-  // bank is a PKR account. Format using the selected source bank's own
-  // currency (falls back to AED only when no bank is selected yet).
+  // Display-only: always shows the Admin's global currency symbol. The
+  // number itself is untouched.
   const transferCurrency = fromBank?.currency || 'AED';
-  const formatByCurrency = (amount: number, currency?: 'AED' | 'PKR') =>
-    new Intl.NumberFormat(currency === 'PKR' ? 'en-PK' : 'en-AE', {
-      style: 'currency', currency: currency || 'AED', minimumFractionDigits: 0
-    }).format(amount);
+  const formatByCurrency = (amount: number, _currency?: 'AED' | 'PKR') => {
+    const symbol = getGlobalCurrencySymbol();
+    const formatted = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0 }).format(amount || 0);
+    return `${symbol} ${formatted}`;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

@@ -12,6 +12,7 @@ import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
 import { BankFirebaseService } from '../../banking/models/bankFirebaseService';
 import { CashFirebaseService } from '../../banking/models/cashFirebaseService';
 import { Bank } from '../../banking/models/types';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 export interface UseInventoryPayablesViewModelReturn {
   records: Product[];
@@ -41,6 +42,7 @@ export interface UseInventoryPayablesViewModelReturn {
 
 export function useInventoryPayablesViewModel(): UseInventoryPayablesViewModelReturn {
   const navigate = useNavigate();
+  const { formatCurrency: formatGlobalAmount } = useGlobalCurrency();
   const [records, setRecords]   = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -157,8 +159,8 @@ export function useInventoryPayablesViewModel(): UseInventoryPayablesViewModelRe
   }, [payProduct, payAmount, payChannel, selectedBankId, banks, load]);
 
   const formatCurrency = useCallback((n?: number) =>
-    n === undefined ? '—' : new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(n)
-  , []);
+    n === undefined ? '—' : formatGlobalAmount(n)
+  , [formatGlobalAmount]);
 
   const onBack = useCallback(() => navigate('/inventory'), [navigate]);
 

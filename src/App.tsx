@@ -7,6 +7,7 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './routes';
 import { Toaster } from './components/ui/sonner';
 import { AuthProvider } from './providers/context/AuthContext';
+import { GlobalCurrencyBoot } from './shared/currency/useGlobalCurrency';
 // import { Budget } from './types/Budget';
 
 // ============================================================
@@ -54,9 +55,11 @@ export const initialData: AppData = {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RouterProvider router={router} />
-      <Toaster position="top-right" />
-    </AuthProvider>
+    <GlobalCurrencyBoot>
+      <AuthProvider>
+        <RouterProvider router={router} />
+        <Toaster position="top-right" />
+      </AuthProvider>
+    </GlobalCurrencyBoot>
   );
 }

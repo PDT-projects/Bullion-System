@@ -10,6 +10,10 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { useColumnVisibility, ColumnVisibilityMenu } from '../../../shared/components/ColumnVisibility';
+import { usePagination, PaginationBar } from '../../../shared/components/Pagination';
+import { exportReportToPdf, exportReportToExcel } from '../../../shared/reportExport/reportExport';
 import {
   Package, Plus, RotateCcw, ArrowLeftRight, Wallet, AlertTriangle,
   Trash2, Search, X, MapPin, Loader2, ChevronDown, Eye, Download,
@@ -368,6 +372,11 @@ export function InventoryDashboardView({
     'Sold Date', 'Invoice #', 'Supplier Cost', 'Purchasing Cost', 'Sold Goods Payment',
     'Actions',
   ];
+  const cols = useColumnVisibility('inventory-dashboard', HEADERS.slice(1));
+  const pg = usePagination(displayed, 'inventory-dashboard');
+  const invDashLabelColsVisible = ['Stock-In Date (Auto)', 'Stock-In Date (Manual)', 'Type', 'Brand', 'Model',
+    'Serial No.', 'Location', 'Ownership', 'Condition', 'Status', 'Sold Date', 'Invoice #']
+    .filter(c => cols.isVisible(c)).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc', overflowY: 'auto' }}>
@@ -378,10 +387,61 @@ export function InventoryDashboardView({
           <div style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Package size={20} color="#fff" />
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Inventory</div>
             <div style={{ fontSize: 12, color: '#64748b' }}>Per-serial inventory with sales, costs and payment tracking</div>
           </div>
+          <button
+            onClick={() => {
+              const rows = displayed.map((r: any) => [
+                vm.formatDate(r.stockInDateAuto), r.stockInDateManual ? vm.formatDate(r.stockInDateManual) : '—',
+                r.type || '—', r.brandName, r.modelName, r.serialNumber || '—', r.location || '—',
+                r.ownershipType || '—', r.condition, r.currentStatus,
+                r.currentStatus === 'Sold' ? vm.formatDate(r.soldDate) : '—', r.invoiceNumber || '—',
+                vm.formatCurrency(r.supplierCost), vm.formatCurrency(r.purchasingCost),
+                r.supplierPaymentStatus || '—',
+              ]);
+              exportReportToExcel({
+                title: 'Inventory',
+                subtitle: `${displayed.length} records`,
+                columns: HEADERS.slice(1, -1).map(h => ({ header: h })),
+                rows,
+                filename: `inventory-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            disabled={displayed.length === 0}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', border: '1px solid #e2e8f0',
+              borderRadius: 9, backgroundColor: '#fff', color: '#334155', fontSize: 13, fontWeight: 600,
+              cursor: displayed.length === 0 ? 'not-allowed' : 'pointer', opacity: displayed.length === 0 ? 0.5 : 1,
+              whiteSpace: 'nowrap' }}>
+            <Download size={14} /> Excel
+          </button>
+          <ColumnVisibilityMenu controller={cols} />
+          <button
+            onClick={() => {
+              const rows = displayed.map((r: any) => [
+                vm.formatDate(r.stockInDateAuto), r.stockInDateManual ? vm.formatDate(r.stockInDateManual) : '—',
+                r.type || '—', r.brandName, r.modelName, r.serialNumber || '—', r.location || '—',
+                r.ownershipType || '—', r.condition, r.currentStatus,
+                r.currentStatus === 'Sold' ? vm.formatDate(r.soldDate) : '—', r.invoiceNumber || '—',
+                vm.formatCurrency(r.supplierCost), vm.formatCurrency(r.purchasingCost),
+                r.supplierPaymentStatus || '—',
+              ]);
+              exportReportToPdf({
+                title: 'Inventory',
+                subtitle: `${displayed.length} records`,
+                columns: HEADERS.slice(1, -1).map(h => ({ header: h })),
+                rows,
+                filename: `inventory-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            disabled={displayed.length === 0}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', border: '1px solid #e2e8f0',
+              borderRadius: 9, backgroundColor: '#fff', color: '#334155', fontSize: 13, fontWeight: 600,
+              cursor: displayed.length === 0 ? 'not-allowed' : 'pointer', opacity: displayed.length === 0 ? 0.5 : 1,
+              whiteSpace: 'nowrap' }}>
+            <Download size={14} /> PDF
+          </button>
         </div>
 
         {/* Quick action cards */}
@@ -504,7 +564,7 @@ export function InventoryDashboardView({
                 No inventory items match your filters.
               </div>
             ) : (
-              <div style={{ maxHeight: '68vh', overflow: 'auto', position: 'relative' }}>
+              <LockedScrollTable maxHeight="68vh">
                 {/* borderSpacing 0 with separate borders — sticky headers are
                     unreliable under border-collapse. */}
                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 }}>
@@ -516,20 +576,20 @@ export function InventoryDashboardView({
                           onChange={toggleAll}
                           style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#fff' }} />
                       </th>
-                      {HEADERS.slice(1).map(h => (
+                      {HEADERS.slice(1).filter(h => cols.isVisible(h)).map(h => (
                         <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#fff', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', backgroundColor: '#0f172a', position: 'sticky', top: 0, zIndex: 10 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {displayed.map((r, idx) => {
+                    {pg.pageRows.map((r, idx) => {
                       const key = rowKey(r);
                       const checked = selectedKeys.has(key);
                       const payLabel = r.supplierPaymentStatus ? (PAYMENT_DISPLAY[r.supplierPaymentStatus] || r.supplierPaymentStatus) : null;
                       const condS = conditionStyle(r.condition);
                       return (
                         <tr key={key}
-                          style={{ boxShadow: idx < displayed.length - 1 ? 'inset 0 -1px 0 #f1f5f9' : 'none', backgroundColor: checked ? '#f0f9ff' : idx % 2 === 1 ? '#fafafa' : '#fff', transition: 'background 0.1s' }}
+                          style={{ boxShadow: idx < pg.pageRows.length - 1 ? 'inset 0 -1px 0 #f1f5f9' : 'none', backgroundColor: checked ? '#f0f9ff' : idx % 2 === 1 ? '#fafafa' : '#fff', transition: 'background 0.1s' }}
                           onMouseEnter={e => { if (!checked) (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = checked ? '#f0f9ff' : idx % 2 === 1 ? '#fafafa' : '#fff'; }}
                         >
@@ -537,8 +597,8 @@ export function InventoryDashboardView({
                             <input type="checkbox" checked={checked} onChange={() => toggleRow(key)}
                               style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#0f172a' }} />
                           </td>
-                          <td style={{ padding: '9px 12px', color: '#64748b', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{vm.formatDate(r.stockInDateAuto)}</td>
-                          <td
+                          {cols.isVisible('Stock-In Date (Auto)') && <td style={{ padding: '9px 12px', color: '#64748b', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{vm.formatDate(r.stockInDateAuto)}</td>}
+                          {cols.isVisible('Stock-In Date (Manual)') && <td
                             style={{
                               padding: '9px 12px',
                               whiteSpace: 'nowrap',
@@ -551,39 +611,39 @@ export function InventoryDashboardView({
                             title={r.stockInDateManual ? 'Manual override — user-entered stock-in date' : 'No manual override — auto date is the source of truth'}
                           >
                             {r.stockInDateManual ? vm.formatDate(r.stockInDateManual) : '—'}
-                          </td>
-                          <td style={{ padding: '9px 12px', color: '#64748b', verticalAlign: 'middle' }}>{r.type || '—'}</td>
-                          <td style={{ padding: '9px 12px', fontWeight: 700, color: '#0f172a', verticalAlign: 'middle' }}>{r.brandName}</td>
-                          <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{r.modelName}</td>
-                          <td style={{ padding: '9px 12px', fontFamily: 'monospace', fontSize: 11, color: '#334155', verticalAlign: 'middle' }}>{r.serialNumber || '—'}</td>
-                          <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
+                          </td>}
+                          {cols.isVisible('Type') && <td style={{ padding: '9px 12px', color: '#64748b', verticalAlign: 'middle' }}>{r.type || '—'}</td>}
+                          {cols.isVisible('Brand') && <td style={{ padding: '9px 12px', fontWeight: 700, color: '#0f172a', verticalAlign: 'middle' }}>{r.brandName}</td>}
+                          {cols.isVisible('Model') && <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{r.modelName}</td>}
+                          {cols.isVisible('Serial No.') && <td style={{ padding: '9px 12px', fontFamily: 'monospace', fontSize: 11, color: '#334155', verticalAlign: 'middle' }}>{r.serialNumber || '—'}</td>}
+                          {cols.isVisible('Location') && <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
                             {r.location ? (
                               <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#475569' }}>
                                 <MapPin size={11} />{r.location}
                               </span>
                             ) : <span style={{ color: '#94a3b8' }}>—</span>}
-                          </td>
-                          <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
+                          </td>}
+                          {cols.isVisible('Ownership') && <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
                             <Badge
                               label={r.ownershipType || '—'}
                               bg={r.ownershipType === 'Credit' ? '#fef3c7' : '#f1f5f9'}
                               color={r.ownershipType === 'Credit' ? '#92400e' : '#334155'}
                             />
-                          </td>
-                          <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
+                          </td>}
+                          {cols.isVisible('Condition') && <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
                             <Badge label={r.condition} bg={condS.bg} color={condS.color} />
-                          </td>
-                          <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
+                          </td>}
+                          {cols.isVisible('Status') && <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
                             <Badge
                               label={r.currentStatus}
                               bg={r.currentStatus === 'Sold' ? '#e0e7ff' : '#dcfce7'}
                               color={r.currentStatus === 'Sold' ? '#4338ca' : '#15803d'}
                             />
-                          </td>
-                          <td style={{ padding: '9px 12px', color: '#64748b', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                          </td>}
+                          {cols.isVisible('Sold Date') && <td style={{ padding: '9px 12px', color: '#64748b', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                             {r.currentStatus === 'Sold' ? vm.formatDate(r.soldDate) : '—'}
-                          </td>
-                          <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
+                          </td>}
+                          {cols.isVisible('Invoice #') && <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
                             {r.currentStatus === 'Sold' && r.invoiceNumber ? (
                               <button
                                 onClick={() => openInvoicePreview(r.invoiceNumber!)}
@@ -605,15 +665,15 @@ export function InventoryDashboardView({
                             ) : (
                               <span style={{ color: '#94a3b8', fontSize: 11 }}>—</span>
                             )}
-                          </td>
-                          <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{vm.formatCurrency(r.supplierCost)}</td>
-                          <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{vm.formatCurrency(r.purchasingCost)}</td>
-                          <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
+                          </td>}
+                          {cols.isVisible('Supplier Cost') && <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{vm.formatCurrency(r.supplierCost)}</td>}
+                          {cols.isVisible('Purchasing Cost') && <td style={{ padding: '9px 12px', color: '#334155', verticalAlign: 'middle' }}>{vm.formatCurrency(r.purchasingCost)}</td>}
+                          {cols.isVisible('Sold Goods Payment') && <td style={{ padding: '9px 12px', verticalAlign: 'middle' }}>
                             {payLabel
                               ? <Badge label={payLabel} bg={PAYMENT_COLOR[payLabel]?.bg || '#f3f4f6'} color={PAYMENT_COLOR[payLabel]?.color || '#6b7280'} />
                               : <span style={{ color: '#94a3b8' }}>—</span>}
-                          </td>
-                          <td style={{ padding: '9px 12px', verticalAlign: 'middle', textAlign: 'center' }}>
+                          </td>}
+                          {cols.isVisible('Actions') && <td style={{ padding: '9px 12px', verticalAlign: 'middle', textAlign: 'center' }}>
                             <button
                               onClick={e => { e.stopPropagation(); setConfirmRowDelete(r); }}
                               title={`Delete ${r.brandName} ${r.modelName}`}
@@ -636,7 +696,7 @@ export function InventoryDashboardView({
                             >
                               <Trash2 size={13} />
                             </button>
-                          </td>
+                          </td>}
                         </tr>
                       );
                     })}
@@ -645,17 +705,17 @@ export function InventoryDashboardView({
                   {/* Sticky totals footer */}
                   <tfoot>
                     <tr style={{ backgroundColor: '#0f172a', position: 'sticky', bottom: 0 }}>
-                      <td colSpan={13} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                      <td colSpan={Math.max(1, invDashLabelColsVisible + 1)} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>
                         {selectedRows.length > 0 ? `Totals — ${selectedRows.length} selected rows` : `Totals — all ${displayed.length} rows`}
                       </td>
-                      <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>{fmtAED(totalSupplier)}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>{fmtAED(totalPurchasing)}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#4ade80', whiteSpace: 'nowrap' }}>{fmtAED(totalPaid)}</td>
-                      <td />
+                      {cols.isVisible('Supplier Cost') && <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>{fmtAED(totalSupplier)}</td>}
+                      {cols.isVisible('Purchasing Cost') && <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>{fmtAED(totalPurchasing)}</td>}
+                      {cols.isVisible('Sold Goods Payment') && <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 800, color: '#4ade80', whiteSpace: 'nowrap' }}>{fmtAED(totalPaid)}</td>}
+                      {cols.isVisible('Actions') && <td />}
                     </tr>
                   </tfoot>
                 </table>
-              </div>
+              </LockedScrollTable>
             )}
           </div>
         </div>

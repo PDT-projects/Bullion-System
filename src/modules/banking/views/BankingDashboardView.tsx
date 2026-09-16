@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Bank, BankTransfer, CashTransaction, DashboardStats } from '../models/types';
 import { useCurrencyRates, convertFromPKR } from '../../../features/finance/currencyUtils';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 interface BankingDashboardViewProps {
   // Data
@@ -307,7 +308,7 @@ export const BankingDashboardView: React.FC<BankingDashboardViewProps> = ({
           return (
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">All Accounts (AED)</span>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">All Accounts ({getGlobalCurrencySymbol()})</span>
                 <span className="text-sm font-bold text-slate-700">Total: {formatCurrency(totalAED)}</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">

@@ -18,12 +18,12 @@ export type InventoryEntryType = 'in-stock' | 'on-order' | 'credit' | 'payment';
 export type InventoryEntryStep = 'details' | 'payment' | 'confirmation';
 
 // Canonical location list — single source of truth used across inventory + transfers
-export const INVENTORY_LOCATIONS = [
-  'Dubai', 
-  'Chad',
-  'Saudia',
-  'Sudan',
-] as const;
+// No built-in defaults — every location is something the business actually
+// added (via LocationSelector, saved to appConfig/inventoryLocations).
+// A hardcoded starter list here would survive "Clear Custom Lists" and
+// Factory Reset forever, since neither touches this file — exactly the
+// stale-location problem those two actions exist to fix.
+export const INVENTORY_LOCATIONS = [] as const;
 export type InventoryLocation = typeof INVENTORY_LOCATIONS[number];
 
 export interface CostingModel {

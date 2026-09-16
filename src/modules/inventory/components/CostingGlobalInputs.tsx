@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 
 interface CostingGlobalInputsProps {
   brandName: string;
@@ -132,7 +133,7 @@ export function CostingGlobalInputs({
 
         {/* ── USD Rate ── */}
         <div>
-          <label htmlFor="usdRate" className={labelCls}>USD Rate (AED)</label>
+          <label htmlFor="usdRate" className={labelCls}>USD Rate ({getGlobalCurrencySymbol()})</label>
           <input id="usdRate" type="number" className={inputCls}
             value={usdRate || ''} onChange={e => onUsdRateChange(Number(e.target.value))}
             placeholder="e.g., 3.67" />
@@ -141,7 +142,7 @@ export function CostingGlobalInputs({
 
         {/* ── Customs Duty ── */}
         <div>
-          <label htmlFor="customsValue" className={labelCls}>Total Customs Duty (AED)</label>
+          <label htmlFor="customsValue" className={labelCls}>Total Customs Duty ({getGlobalCurrencySymbol()})</label>
           <input id="customsValue" type="number" className={inputCls}
             value={totalCustomsValue || ''} onChange={e => onCustomsChange(Number(e.target.value))}
             placeholder="e.g., 500" />
@@ -150,7 +151,7 @@ export function CostingGlobalInputs({
 
         {/* ── Freight Charges ── */}
         <div>
-          <label htmlFor="freightValue" className={labelCls}>Total Freight Charges (AED)</label>
+          <label htmlFor="freightValue" className={labelCls}>Total Freight Charges ({getGlobalCurrencySymbol()})</label>
           <input id="freightValue" type="number" className={inputCls}
             value={totalFreightValue || ''} onChange={e => onFreightChange(Number(e.target.value))}
             placeholder="e.g., 250" />

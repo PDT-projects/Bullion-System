@@ -3,12 +3,7 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-
-// ── Currency helper — AED only (PKR toggle removed) ────────────────────────
-function formatAed(amount: number): string {
-  return `AED ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0)}`;
-}
-// ─────────────────────────────────────────────────────────────────────────────
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 import {
   FileText, Plus, Search, Eye, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin, Trash2,
@@ -18,12 +13,16 @@ import { toast } from 'sonner';
 import { Invoice, InvoiceStats, InvoiceFilters, InvoiceSelectionSummary, PaymentMode } from '../models/types';
 import {
   calculateSupplierCost, calculatePurchaseCost, calculateMiscExpense,
-  calculateNetAmount, calculatePaidAmount, calculateRemainingAmount,
+  calculateNetAmount, calculateNetProfit, calculatePaidAmount, calculateRemainingAmount,
   extractCost,
 } from '../models/invoiceService';
 import { downloadInvoicePdf, generateInvoicePdf } from '../models/invoicePdfService';
 import { useInvoiceFormViewModel } from '../viewModels/useInvoiceFormViewModel';
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
+import { useColumnVisibility, ColumnVisibilityMenu } from '../../../shared/components/ColumnVisibility';
+import { usePagination, PaginationBar } from '../../../shared/components/Pagination';
+import { exportTableToExcel } from '../../../shared/excelExport/exportTableToExcel';
 // InvoiceMiscExpenseService import removed — misc expense creation moved to Transactions module.
 
 interface Props {
@@ -897,7 +896,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                           const shownLoc = prodLocation || p.location || '';
                           return (
                             <option key={p.id} value={p.id}>
-                              {p.brandName} {p.modelName} (AED {(p.sellPrice || 0).toLocaleString()}, {count} left{shownLoc ? ` · ${shownLoc}` : ''})
+                              {p.brandName} {p.modelName} ({getGlobalCurrencySymbol()} {(p.sellPrice || 0).toLocaleString()}, {count} left{shownLoc ? ` · ${shownLoc}` : ''})
                             </option>
                           );
                         })}
@@ -922,7 +921,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                           style={{ ...iSty, padding: '6px 8px', fontSize: 12, textAlign: 'center' }} />
                       </div>
                       <div>
-                        <label style={{ ...lbl, fontSize: 9 }}>Price (AED)</label>
+                        <label style={{ ...lbl, fontSize: 9 }}>Price ({getGlobalCurrencySymbol()})</label>
                         <input type="number" min={0} step="any" value={l.price || ''}
                           onChange={e => updateLine(l.id, 'price', parseFloat(e.target.value) || 0)}
                           placeholder="0.00"
@@ -943,7 +942,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             <label style={{ ...lbl, marginBottom:7 }}>Charges</label>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
               <div>
-                <label style={{ ...lbl, fontSize:10 }}>Shipping (AED)</label>
+                <label style={{ ...lbl, fontSize:10 }}>Shipping ({getGlobalCurrencySymbol()})</label>
                 <input
                   type="number" min={0} step="any"
                   value={shipping}
@@ -953,7 +952,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                 />
               </div>
               <div>
-                <label style={{ ...lbl, fontSize:10 }}>Discount (AED)</label>
+                <label style={{ ...lbl, fontSize:10 }}>Discount ({getGlobalCurrencySymbol()})</label>
                 <input
                   type="number" min={0} step="any"
                   value={discount}
@@ -972,17 +971,17 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                 fontVariantNumeric: 'tabular-nums',
               }}>
                 <span>Subtotal</span>
-                <span style={{ color: '#0f172a', fontWeight: 700 }}>AED {subtotal.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                <span style={{ color: '#0f172a', fontWeight: 700 }}>{getGlobalCurrencySymbol()} {subtotal.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
                 {shippingNum > 0 && <>
                   <span>+ Shipping</span>
-                  <span style={{ color: '#0f172a', fontWeight: 700 }}>AED {shippingNum.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#0f172a', fontWeight: 700 }}>{getGlobalCurrencySymbol()} {shippingNum.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
                 </>}
                 {discountNum > 0 && <>
                   <span>− Discount</span>
-                  <span style={{ color: '#dc2626', fontWeight: 700 }}>AED {discountNum.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#dc2626', fontWeight: 700 }}>{getGlobalCurrencySymbol()} {discountNum.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
                 </>}
                 <span style={{ color: '#0f172a', fontWeight: 800, paddingTop: 4, borderTop: '1px solid #e2e8f0', marginTop: 2 }}>Total</span>
-                <span style={{ color: '#0f172a', fontWeight: 800, paddingTop: 4, borderTop: '1px solid #e2e8f0', marginTop: 2 }}>AED {total.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                <span style={{ color: '#0f172a', fontWeight: 800, paddingTop: 4, borderTop: '1px solid #e2e8f0', marginTop: 2 }}>{getGlobalCurrencySymbol()} {total.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
               </div>
             )}
           </div>
@@ -1069,7 +1068,7 @@ function QuickInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         {/* Footer */}
         <div style={{ backgroundColor:'#fff', borderTop:'1px solid #e2e8f0', padding:'11px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
           <div style={{ fontSize:13, color:'#6b7280' }}>
-            Total: <strong style={{ color:'#111827', fontSize:15 }}>AED {total.toLocaleString('en-AE',{minimumFractionDigits:2})}</strong>
+            Total: <strong style={{ color:'#111827', fontSize:15 }}>{getGlobalCurrencySymbol()} {total.toLocaleString('en-AE',{minimumFractionDigits:2})}</strong>
           </div>
           <div style={{ display:'flex', gap:8 }}>
             <button onClick={onClose} style={{ padding:'8px 16px', borderRadius:8, border:'1px solid #d1d5db', backgroundColor:'#fff', color:'#374151', fontWeight:600, fontSize:13, cursor:'pointer' }}>Cancel</button>
@@ -1107,6 +1106,36 @@ export function InvoiceListView({
   // have no imageUrls. Passing the live product list lets the PDF generator
   // look the image up by productId and render it anyway.
   const [pdfProducts, setPdfProducts] = useState<any[]>([]);
+
+  // ── Net Profit filter ─────────────────────────────────────────────────
+  // Purely client-side — Net Profit is a calculated figure, not a stored
+  // field, so there's nothing to filter in Firestore. Applied on top of
+  // whatever filteredInvoices already is.
+  const [profitFilter, setProfitFilter] = useState<'all' | 'profit' | 'loss'>('all');
+  const visibleInvoices = React.useMemo(() => {
+    if (profitFilter === 'all') return filteredInvoices;
+    return filteredInvoices.filter(inv => {
+      const misc = Number(inv.miscExpense) || 0;
+      const discount = Number((inv as any).deductionCharges) || 0;
+      const shipping = Number((inv as any).cargoAmount) || 0;
+      const netSale = (inv.totalAmount || 0) - discount - misc;
+      const netProfit = netSale - calculateSupplierCost(inv) - calculatePurchaseCost(inv) - shipping;
+      return profitFilter === 'profit' ? netProfit >= 0 : netProfit < 0;
+    });
+  }, [filteredInvoices, profitFilter]);
+
+  const INVOICE_COLUMNS = ['Invoice #', 'Date', 'Customer', 'Branch / Location',
+    'Salesperson', 'Brand', 'Model', `Amount (${getGlobalCurrencySymbol()})`,
+    'Supplier Cost', 'Purchase Cost', 'Shipping', 'Discount', 'Misc Exp',
+    'Net Sale', 'Net Profit', 'Paid', 'Amount Left',
+    'Delivery', 'Payment', 'Status', 'Actions'];
+  const cols = useColumnVisibility('invoice-list', INVOICE_COLUMNS);
+  const invLabelColsVisible = ['Invoice #', 'Date', 'Customer', 'Branch / Location', 'Salesperson', 'Brand', 'Model']
+    .filter(c => cols.isVisible(c)).length;
+  const invTrailingColsVisible = ['Delivery', 'Payment', 'Status', 'Actions']
+    .filter(c => cols.isVisible(c)).length;
+  const pg = usePagination(visibleInvoices, 'invoice-list');
+
   useEffect(() => {
     let cancelled = false;
     InventoryFirebaseService.fetchAllProducts()
@@ -1131,7 +1160,13 @@ export function InvoiceListView({
   const [generatingPdf, setGeneratingPdf] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
 
-  const formatDisplay = (aedAmount: number): string => formatAed(aedAmount);
+  const formatDisplay = (aedAmount: number): string => {
+    const symbol = getGlobalCurrencySymbol();
+    const formatted = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    }).format(aedAmount || 0);
+    return `${symbol} ${formatted}`;
+  };
 
   // FIX: Added toast.error() so the user sees feedback when PDF generation
   // fails, instead of the error being silently swallowed in the catch block.
@@ -1199,10 +1234,35 @@ export function InvoiceListView({
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Invoices</h2>
           <p className="text-gray-500 text-sm mt-0.5">
-            {filteredInvoices.length} of {invoices.length} invoices shown
+            {visibleInvoices.length} of {invoices.length} invoices shown
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              const headers = ['Date', 'Invoice #', 'Customer Name', 'City', 'Total Amount', 'Supplier Cost', 'Purchase Cost', 'Discount', 'Misc Expense', 'Net Amount', 'Net Profit', 'Paid', 'Remaining', 'Status', 'Salesperson', 'Delivery Status'];
+              const rows = visibleInvoices.map(inv => [
+                inv.date, inv.invoiceNumber, inv.customerName, inv.customerCity || '',
+                inv.totalAmount, calculateSupplierCost(inv), calculatePurchaseCost(inv),
+                Number((inv as any).deductionCharges) || 0, Number(inv.miscExpense) || 0,
+                calculateNetAmount(inv), calculateNetProfit(inv), calculatePaidAmount(inv),
+                calculateRemainingAmount(inv), inv.status, inv.salesperson || 'N/A', inv.deliveryStatus,
+              ]);
+              exportTableToExcel({
+                title: 'Invoices',
+                subtitle: `${visibleInvoices.length} of ${invoices.length} invoices`,
+                columns: headers.map(h => ({ header: h })),
+                rows,
+                filename: `invoices-${new Date().toISOString().slice(0, 10)}`,
+              });
+            }}
+            disabled={visibleInvoices.length === 0}
+            title="Download as Excel"
+            style={{ borderColor: '#e2e8f0', color: '#334155' }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-white font-semibold text-sm whitespace-nowrap flex-shrink-0 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            <FileDown size={16} /> Excel
+          </button>
+          <ColumnVisibilityMenu controller={cols} />
           <button
             onClick={() => navigate('/invoices/deleted')}
             title="Deleted Invoices"
@@ -1282,12 +1342,25 @@ export function InvoiceListView({
             <input type="date" value={filters.dateTo} onChange={e => onDateToFilter(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900" />
           </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:4, minWidth:150 }}>
+            <label style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.06em' }}>Net Profit</label>
+            <select
+              value={profitFilter}
+              onChange={e => setProfitFilter(e.target.value as 'all' | 'profit' | 'loss')}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900"
+              style={{ cursor: 'pointer' }}
+            >
+              <option value="all">All invoices</option>
+              <option value="profit">Profitable only</option>
+              <option value="loss">Loss-making only</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* ── Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto scroll-table">
+        <LockedScrollTable>
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -1297,20 +1370,20 @@ export function InvoiceListView({
                 </th>
                   {[
                   'Invoice #', 'Date', 'Customer', 'Branch / Location',
-                  'Salesperson', 'Brand', 'Model', 'Amount (AED)',
+                  'Salesperson', 'Brand', 'Model', `Amount (${getGlobalCurrencySymbol()})`,
                   'Supplier Cost', 'Purchase Cost',
                   'Shipping', 'Discount', 'Misc Exp',
-                  'Net Sale', 'Paid', 'Amount Left',
+                  'Net Sale', 'Net Profit', 'Paid', 'Amount Left',
                   'Delivery', 'Payment', 'Status', 'Actions',
-                ].map(h => (
+                ].filter(h => cols.isVisible(h)).map(h => (
                   <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredInvoices.length === 0 ? (
+              {visibleInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={20} className="px-4 py-14 text-center text-gray-400">
+                  <td colSpan={cols.visibleCount + 1} className="px-4 py-14 text-center text-gray-400">
                     <FileText className="mx-auto mb-3 text-gray-300" size={44} />
                     <p className="font-medium text-gray-500">No invoices found</p>
                     <p className="text-xs mt-1">
@@ -1318,7 +1391,7 @@ export function InvoiceListView({
                     </p>
                   </td>
                 </tr>
-              ) : filteredInvoices.map(invoice => {
+              ) : pg.pageRows.map(invoice => {
                 const supplierCost = calculateSupplierCost(invoice);
                 const purchaseCost = calculatePurchaseCost(invoice);
                 // Misc Expense is ONLY the running total added from the
@@ -1331,7 +1404,8 @@ export function InvoiceListView({
                 // are broken out into their own columns.
                 const shipping = Number((invoice as any).cargoAmount) || 0;
                 const discount = Number((invoice as any).deductionCharges) || 0;
-                const netSale = (invoice.totalAmount || 0) - misc;
+                const netSale = (invoice.totalAmount || 0) - discount - misc;
+                const netProfit = netSale - supplierCost - purchaseCost - shipping;
                 const paid = calculatePaidAmount(invoice);
                 const remaining = calculateRemainingAmount(invoice);
                 const selected = isSelected(invoice.id);
@@ -1343,23 +1417,32 @@ export function InvoiceListView({
                       className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-gray-800" />
                   </td>
 
-                  <td className="px-3 py-3 font-semibold text-gray-800 whitespace-nowrap">
+                  {cols.isVisible('Invoice #') && <td className="px-3 py-3 font-semibold text-gray-800 whitespace-nowrap">
                     {invoice.invoiceNumber}
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                  {cols.isVisible('Date') && <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
                     {formatDate(invoice.date)}
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3">
-                    <p className="font-medium text-gray-900">{invoice.customerName}</p>
+                  {cols.isVisible('Customer') && <td className="px-3 py-3">
+                    <p className="font-medium text-gray-900">
+                      {invoice.customerName}
+                      {invoice.customerName === 'Internal - Import Charge Adjustment' && (
+                        <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 800, padding: '2px 6px',
+                          borderRadius: 99, backgroundColor: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe',
+                          textTransform: 'uppercase', letterSpacing: '.04em', verticalAlign: 'middle' }}>
+                          System
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-gray-400">{invoice.customerPhone}</p>
                     {invoice.customerPhone2 && (
                       <p className="text-xs text-gray-400">{invoice.customerPhone2}</p>
                     )}
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3">
+                  {cols.isVisible('Branch / Location') && <td className="px-3 py-3">
                     <p className="font-medium text-gray-800 text-sm">{invoice.customerCity || '—'}</p>
                     {invoice.salespersonLocation && (
                       <p className="text-xs text-gray-400 mt-0.5">{invoice.salespersonLocation}</p>
@@ -1367,9 +1450,9 @@ export function InvoiceListView({
                     {invoice.productLocation && (
                       <p className="text-xs text-gray-600 mt-0.5">Stock: {invoice.productLocation}</p>
                     )}
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3">
+                  {cols.isVisible('Salesperson') && <td className="px-3 py-3">
                     {invoice.salesperson ? (
                       <div>
                         <p className="font-medium text-gray-800 text-sm">{spName(invoice.salesperson)}</p>
@@ -1381,14 +1464,14 @@ export function InvoiceListView({
                         )}
                       </div>
                     ) : <span className="text-gray-300 text-sm">—</span>}
-                  </td>
+                  </td>}
 
                                        {/* Brand — its own column.
                       productName is `${brandName} ${modelName}`, and model names
                       here often repeat the brand, which is how "FISHER FISHER F11"
                       appeared. Both are stored separately, so each gets a column
                       and the model drops the brand when it already leads with it. */}
-                  <td className="px-3 py-3" style={{ maxWidth: 120 }}>
+                  {cols.isVisible('Brand') && <td className="px-3 py-3" style={{ maxWidth: 120 }}>
                     {invoice.products.map((p: any, pi: number) => (
                       <div key={pi} style={{
                         marginBottom: pi < invoice.products.length - 1 ? 4 : 0,
@@ -1399,9 +1482,9 @@ export function InvoiceListView({
                         {(p.brandName || '').trim() || '—'}
                       </div>
                     ))}
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3" style={{ maxWidth: 190 }}>
+                  {cols.isVisible('Model') && <td className="px-3 py-3" style={{ maxWidth: 190 }}>
                     {invoice.products.map((p: any, pi: number) => {
                       const brand = (p.brandName || '').trim();
                       const model = (p.modelName || '').trim();
@@ -1424,37 +1507,40 @@ export function InvoiceListView({
                         </div>
                       );
                     })}
-                  </td>
+                  </td>}
                   
 
-                  <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">
+                  {cols.isVisible(`Amount (${getGlobalCurrencySymbol()})`) && <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">
                     {formatDisplay(invoice.totalAmount)}
-                  </td>
-                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                  </td>}
+                  {cols.isVisible('Supplier Cost') && <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
                     {(() => {
                       const hasSupplier = supplierCost > 0 && purchaseCost === 0;
                       return hasSupplier ? formatDisplay(supplierCost) : '—';
                     })()}
-                  </td>
-                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                  </td>}
+                  {cols.isVisible('Purchase Cost') && <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
                     {(() => {
                       const hasSupplierOnly = supplierCost > 0 && purchaseCost === 0;
                       return !hasSupplierOnly && purchaseCost > 0 ? formatDisplay(purchaseCost) : '—';
                     })()}
-                  </td>
+                  </td>}
                   {/* COGS per-row column removed — total is shown in footer only */}
-                  <td className="px-3 py-3 whitespace-nowrap">{shipping > 0 ? <span className="text-slate-800 font-medium">{formatDisplay(shipping)}</span> : '—'}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">{discount > 0 ? <span className="text-red-600 font-medium">−{formatDisplay(discount)}</span> : '—'}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>
-                  <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(netSale)}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">
+                  {cols.isVisible('Shipping') && <td className="px-3 py-3 whitespace-nowrap">{shipping > 0 ? <span className="text-slate-800 font-medium">{formatDisplay(shipping)}</span> : '—'}</td>}
+                  {cols.isVisible('Discount') && <td className="px-3 py-3 whitespace-nowrap">{discount > 0 ? <span className="text-red-600 font-medium">−{formatDisplay(discount)}</span> : '—'}</td>}
+                  {cols.isVisible('Misc Exp') && <td className="px-3 py-3 whitespace-nowrap">{misc > 0 ? <span className="text-red-600 font-medium">{formatDisplay(misc)}</span> : '—'}</td>}
+                  {cols.isVisible('Net Sale') && <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatDisplay(netSale)}</td>}
+                  {cols.isVisible('Net Profit') && <td className={`px-3 py-3 font-semibold whitespace-nowrap ${netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {netProfit >= 0 ? formatDisplay(netProfit) : `−${formatDisplay(Math.abs(netProfit))}`}
+                  </td>}
+                  {cols.isVisible('Paid') && <td className="px-3 py-3 whitespace-nowrap">
                     {invoice.status === 'Unpaid'
                       ? <span className="text-gray-300">—</span>
                       : paid > 0
                       ? <span className="text-green-700 font-semibold">{formatDisplay(paid)}</span>
                       : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
+                  </td>}
+                  {cols.isVisible('Amount Left') && <td className="px-3 py-3 whitespace-nowrap">
                     {invoice.status === 'Paid'
                       ? <span className="text-green-600 font-semibold">Cleared</span>
                       : invoice.status === 'Unpaid'
@@ -1462,9 +1548,9 @@ export function InvoiceListView({
                       : remaining > 0
                       ? <span className="text-red-600 font-semibold">{formatDisplay(remaining)}</span>
                       : <span className="text-green-600 font-semibold">Cleared</span>}
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3">
+                  {cols.isVisible('Delivery') && <td className="px-3 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${deliveryBadge(invoice.deliveryStatus)}`}>
                       {invoice.deliveryStatus}
                     </span>
@@ -1473,9 +1559,9 @@ export function InvoiceListView({
                         {invoice.deliveryReceivedStatus}
                       </span>
                     )}
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3">
+                  {cols.isVisible('Payment') && <td className="px-3 py-3">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {invoice.status !== 'Paid' && invoice.status !== 'Returned' && (
                         <button onClick={() => openPayment(invoice)}
@@ -1497,15 +1583,15 @@ export function InvoiceListView({
                         </span>
                       </div>
                     )}
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3">
+                  {cols.isVisible('Status') && <td className="px-3 py-3">
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusBadge(invoice.status)}`}>
                       {invoice.status}
                     </span>
-                  </td>
+                  </td>}
 
-                  <td className="px-3 py-3">
+                  {cols.isVisible('Actions') && <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => openPdfPreview(invoice)}
                         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="View PDF">
@@ -1526,15 +1612,15 @@ export function InvoiceListView({
                           : <FileDown size={15} />}
                       </button>
                     </div>
-                  </td>
+                  </td>}
                 </tr>
                 );
               })}
             </tbody>
-            {filteredInvoices.length > 0 && (() => {
+            {visibleInvoices.length > 0 && (() => {
               const src = hasSelection
-                ? filteredInvoices.filter(i => isSelected(i.id))
-                : filteredInvoices;
+                ? visibleInvoices.filter(i => isSelected(i.id))
+                : visibleInvoices;
               const tTotal    = src.reduce((s, i) => s + (i.totalAmount || 0), 0);
               const tSupplier = src.reduce((s, i) => s + calculateSupplierCost(i), 0);
               const tPurchase = src.reduce((s, i) => s + calculatePurchaseCost(i), 0);
@@ -1547,79 +1633,87 @@ export function InvoiceListView({
               const tMisc     = src.reduce((s, i) => s + (Number(i.miscExpense) || 0), 0);
               const tShipping = src.reduce((s, i) => s + (Number((i as any).cargoAmount)      || 0), 0);
               const tDiscount = src.reduce((s, i) => s + (Number((i as any).deductionCharges) || 0), 0);
-              const tNet      = tTotal - tMisc;
+              const tNet      = tTotal - tDiscount - tMisc;
+              const tNetProfit = tNet - tCogs - tShipping;
               const tPaid     = src.reduce((s, i) => s + calculatePaidAmount(i), 0);
               const tLeft     = src.reduce((s, i) => s + calculateRemainingAmount(i), 0);
               return (
                 <tfoot>
                   <tr style={{ backgroundColor: '#0f172a' }}>
                     {/* Label cell */}
-                    <td colSpan={8} style={{ padding: '0' }}>
+                    <td colSpan={Math.max(1, invLabelColsVisible + 1)} style={{ padding: '0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
                         <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.08em' }}>
                           {hasSelection ? `${src.length} selected` : `All ${src.length}`}
                         </span>
                         {hasSelection && (
                           <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, backgroundColor: '#1e293b', color: '#94a3b8', fontWeight: 700 }}>
-                            of {filteredInvoices.length} total
+                            of {visibleInvoices.length} total
                           </span>
                         )}
                       </div>
                     </td>
-                    {/* Amount (AED) */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                    {/* Amount */}
+                    {cols.isVisible(`Amount (${getGlobalCurrencySymbol()})`) && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Amount</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{formatDisplay(tTotal)}</div>
-                    </td>
+                    </td>}
                     {/* Supplier Cost */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                    {cols.isVisible('Supplier Cost') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Supplier</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8' }}>
                         {src.some(i => calculateSupplierCost(i) > 0 && calculatePurchaseCost(i) === 0)
                           ? formatDisplay(src.filter(i => calculatePurchaseCost(i) === 0).reduce((s, i) => s + calculateSupplierCost(i), 0))
                           : '—'}
                       </div>
-                    </td>
+                    </td>}
                     {/* Purchase Cost */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                    {cols.isVisible('Purchase Cost') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Purchase</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#94a3b8' }}>{tPurchase > 0 ? formatDisplay(tPurchase) : '—'}</div>
-                    </td>
+                    </td>}
                     {/* COGS per-column removed — total displayed in the trailing summary cell */}
                     {/* Shipping */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                    {cols.isVisible('Shipping') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Shipping</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: tShipping > 0 ? '#e2e8f0' : '#94a3b8' }}>{tShipping > 0 ? formatDisplay(tShipping) : '—'}</div>
-                    </td>
+                    </td>}
                     {/* Discount */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                    {cols.isVisible('Discount') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Discount</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: tDiscount > 0 ? '#fca5a5' : '#94a3b8' }}>{tDiscount > 0 ? `−${formatDisplay(tDiscount)}` : '—'}</div>
-                    </td>
+                    </td>}
                     {/* Misc Exp */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                    {cols.isVisible('Misc Exp') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Misc Exp</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#fca5a5' }}>{tMisc > 0 ? formatDisplay(tMisc) : '—'}</div>
-                    </td>
+                    </td>}
                     {/* Net Sale */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b' }}>
+                    {cols.isVisible('Net Sale') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Net Sale</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{formatDisplay(tNet)}</div>
-                    </td>
+                    </td>}
+                    {/* Net Profit */}
+                    {cols.isVisible('Net Profit') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Net Profit</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: tNetProfit >= 0 ? '#86efac' : '#fca5a5' }}>
+                        {tNetProfit >= 0 ? formatDisplay(tNetProfit) : `−${formatDisplay(Math.abs(tNetProfit))}`}
+                      </div>
+                    </td>}
                     {/* Paid */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                    {cols.isVisible('Paid') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Paid</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#86efac' }}>{tPaid > 0 ? formatDisplay(tPaid) : '—'}</div>
-                    </td>
+                    </td>}
                     {/* Amount Left */}
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                    {cols.isVisible('Amount Left') && <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Left</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: tLeft > 0 ? '#fca5a5' : '#86efac' }}>
                         {tLeft > 0 ? formatDisplay(tLeft) : '—'}
                       </div>
-                    </td>
+                    </td>}
                     {/* COGS grand total displayed here — no per-row column above, just the sum at the end */}
-                    <td colSpan={4} style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b' }}>
+                    <td colSpan={Math.max(1, invTrailingColsVisible)} style={{ padding: '10px 12px', whiteSpace: 'nowrap', borderLeft: '1px solid #1e293b' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>COGS Total</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#c4b5fd' }}>
                         {tCogs > 0 ? formatDisplay(tCogs) : '—'}
@@ -1630,7 +1724,8 @@ export function InvoiceListView({
               );
             })()}
           </table>
-        </div>
+        </LockedScrollTable>
+        <PaginationBar controller={pg} />
       </div>
 
       {/* ── Payment Modal ── */}

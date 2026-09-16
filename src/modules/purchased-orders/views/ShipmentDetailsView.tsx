@@ -9,6 +9,7 @@
 // sheet recalculates as you type. Nothing is written until Save.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -24,7 +25,8 @@ import {
   stockedQuantity, stockedValue, remainingToStock, remainingLandedUnitCost,
   unallocatedCharge,
 } from '../models/purchasedOrderService';
-import { Shipment, DisplayCurrency, ChargeKind, CHARGE_KINDS } from '../models/types';
+import { Shipment, DisplayCurrency, ChargeKind, CHARGE_KINDS, SHIPMENT_CURRENCIES } from '../models/types';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import { downloadGoodsReceivedPdf } from '../models/goodsReceivedPdf';
 import { downloadCostingExcel } from '../models/costingExcel';
 import {
@@ -32,6 +34,7 @@ import {
   MAX_ATTACHMENT_BYTES,
 } from '../models/shipmentAttachments';
 import { ATTACHMENT_KINDS, type AttachmentKind } from '../models/types';
+import { LockedPaymentRow } from '../components/ShipmentUI';
 
 /**
  * Design tokens.
@@ -305,11 +308,15 @@ export const ShipmentDetailsView: React.FC = () => {
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
-  // Everything is AED. The display-currency toggle was removed along with the
-  // currency field on the create form; the constant stays because money() and
-  // convertForDisplay both take a target and a conversion of AED to AED is a
-  // no-op that keeps their signatures unchanged.
-  const view: DisplayCurrency = 'AED';
+  // Follows the Admin's global currency setting — money() and
+  // convertForDisplay both take a target and convert the stored AED figure
+  // live; AED stays the source of truth. Falls back to AED if the global
+  // pick (e.g. CAD) isn't one of the six currencies this costing sheet
+  // supports.
+  const { code: globalCode } = useGlobalCurrency();
+  const view: DisplayCurrency = (SHIPMENT_CURRENCIES as string[]).includes(globalCode)
+    ? (globalCode as DisplayCurrency)
+    : 'AED';
 
   // Charges are edited locally and committed on Save, so a half-typed number
   // never reaches Firestore and the sheet still recalculates on every keystroke.
@@ -322,7 +329,15 @@ export const ShipmentDetailsView: React.FC = () => {
   const [confirmFinal, setConfirmFinal] = useState(false);
   const [reopening, setReopening]       = useState(false);
   const [reopenReason, setReopenReason] = useState('');
-  const [busy, setBusy]                 = useState(false);
+  // A single shared "is anything saving" flag meant every button on this
+  // page disabled together the moment ANY one action was in flight — close
+  // Customs, and Freight/Tax/Other looked locked too for that whole window.
+  // Each action now carries its own key, so only the button that triggered
+  // a save is ever disabled by it.
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const busy = busyAction !== null; // kept for any leftover generic reads
+  const setBusy = (v: boolean) => setBusyAction(v ? 'generic' : null);
+  const isBusy = (key: string) => busyAction === key;
 
   // Charge entry. Kept separate from the four legacy amounts: a shipment uses
   // one or the other, never both, and the panel switches on whether a list
@@ -465,9 +480,9 @@ export const ShipmentDetailsView: React.FC = () => {
     if (!id) return;
     const amt = parseFloat(chargeDraft.amount);
     if (!(amt > 0)) { toast.error('Enter an amount greater than zero'); return; }
-    setBusy(true);
+    setBusyAction('addCharge');
     try {
-      await PurchasedOrderFirebaseService.addCharge(id, {
+      const result = await PurchasedOrderFirebaseService.addCharge(id, {
         kind: chargeDraft.kind,
         amount: amt,
         date: chargeDraft.date,
@@ -477,15 +492,33 @@ export const ShipmentDetailsView: React.FC = () => {
       if (fresh) setShipment(fresh);
       setAddingCharge(false);
       setChargeDraft({ kind: 'Customs', amount: '', date: new Date().toLocaleDateString('en-CA'), description: '' });
-      toast.success('Charge added');
+      const { adjustmentInvoiceNumbers, serialsToppedUp } = result;
+      if (adjustmentInvoiceNumbers.length > 0 && serialsToppedUp > 0) {
+        toast.success(
+          `Charge added — split across the shipment. ${serialsToppedUp} unsold unit(s) had their cost updated, ` +
+          `and ${adjustmentInvoiceNumbers.length} fully-sold line(s) were absorbed via adjustment invoice(s) ` +
+          `${adjustmentInvoiceNumbers.join(', ')} — check Invoices to see them.`,
+          { duration: 8000 },
+        );
+      } else if (adjustmentInvoiceNumbers.length > 0) {
+        toast.success(
+          `Charge added. This line had no stock left, so it was auto-absorbed via adjustment invoice ` +
+          `${adjustmentInvoiceNumbers.join(', ')} — check Invoices to see it.`,
+          { duration: 7000 },
+        );
+      } else if (serialsToppedUp > 0) {
+        toast.success(`Charge added. ${serialsToppedUp} unsold unit(s) had their recorded cost updated to include it.`);
+      } else {
+        toast.success('Charge added');
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Could not add the charge');
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id, chargeDraft]);
 
   const removeCharge = useCallback(async (chargeId: string) => {
     if (!id) return;
-    setBusy(true);
+    setBusyAction(`removeCharge:${chargeId}`);
     try {
       await PurchasedOrderFirebaseService.removeCharge(id, chargeId);
       const fresh = await PurchasedOrderFirebaseService.fetchById(id);
@@ -493,12 +526,12 @@ export const ShipmentDetailsView: React.FC = () => {
       toast.success('Charge removed');
     } catch (e: any) {
       toast.error(e?.message || 'Could not remove the charge');
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id]);
 
   const finaliseCosting = useCallback(async () => {
     if (!id) return;
-    setBusy(true);
+    setBusyAction('finaliseCosting');
     try {
       await PurchasedOrderFirebaseService.finaliseCosting(id);
       const fresh = await PurchasedOrderFirebaseService.fetchById(id);
@@ -507,14 +540,14 @@ export const ShipmentDetailsView: React.FC = () => {
       toast.success('Costing finalised');
     } catch (e: any) {
       toast.error(e?.message || 'Could not finalise the costing');
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id]);
 
   const addSupplierPayment = useCallback(async () => {
     if (!id) return;
     const amt = parseFloat(payDraft.amount);
     if (!(amt > 0)) { toast.error('Enter an amount greater than zero'); return; }
-    setBusy(true);
+    setBusyAction('addSupplierPayment');
     try {
       await PurchasedOrderFirebaseService.recordSupplierPayment(id, {
         amount: amt,
@@ -528,12 +561,12 @@ export const ShipmentDetailsView: React.FC = () => {
       toast.success('Payment recorded');
     } catch (e: any) {
       toast.error(e?.message || 'Could not record the payment');
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id, payDraft]);
 
   const removeSupplierPayment = useCallback(async (paymentId: string) => {
     if (!id) return;
-    setBusy(true);
+    setBusyAction(`removePayment:${paymentId}`);
     try {
       await PurchasedOrderFirebaseService.removeSupplierPayment(id, paymentId);
       const fresh = await PurchasedOrderFirebaseService.fetchById(id);
@@ -541,7 +574,7 @@ export const ShipmentDetailsView: React.FC = () => {
       toast.success('Payment removed');
     } catch (e: any) {
       toast.error(e?.message || 'Could not remove the payment');
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id]);
 
   const onPickFiles = useCallback(async (files: FileList | null) => {
@@ -586,7 +619,7 @@ export const ShipmentDetailsView: React.FC = () => {
    */
   const toggleChargeKind = useCallback(async (kind: ChargeKind, close: boolean) => {
     if (!id) return;
-    setBusy(true);
+    setBusyAction(`charge:${kind}`);
     try {
       if (close) await PurchasedOrderFirebaseService.closeChargeKind(id, kind);
       else       await PurchasedOrderFirebaseService.reopenChargeKind(id, kind);
@@ -595,12 +628,12 @@ export const ShipmentDetailsView: React.FC = () => {
       toast.success(close ? `${kind} marked complete` : `${kind} reopened`);
     } catch (e: any) {
       toast.error(e?.message || `Could not update ${kind.toLowerCase()}`);
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id]);
 
   const reopenCosting = useCallback(async () => {
     if (!id || !costingReason.trim()) return;
-    setBusy(true);
+    setBusyAction('reopenCosting');
     try {
       await PurchasedOrderFirebaseService.reopenCosting(id, costingReason.trim());
       const fresh = await PurchasedOrderFirebaseService.fetchById(id);
@@ -610,7 +643,7 @@ export const ShipmentDetailsView: React.FC = () => {
       toast.success('Costing reopened');
     } catch (e: any) {
       toast.error(e?.message || 'Could not reopen the costing');
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id, costingReason]);
   const finaliseCheck = shipment
     ? canFinaliseReceiving(shipment)
@@ -618,7 +651,7 @@ export const ShipmentDetailsView: React.FC = () => {
 
   const finalise = useCallback(async () => {
     if (!id) return;
-    setBusy(true);
+    setBusyAction('finaliseReceiving');
     try {
       await PurchasedOrderFirebaseService.finaliseReceiving(id);
       const fresh = await PurchasedOrderFirebaseService.fetchById(id);
@@ -627,12 +660,12 @@ export const ShipmentDetailsView: React.FC = () => {
       toast.success('Receipt finalised');
     } catch (e: any) {
       toast.error(e?.message || 'Could not finalise the receipt');
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id]);
 
   const reopen = useCallback(async () => {
     if (!id || !reopenReason.trim()) return;
-    setBusy(true);
+    setBusyAction('reopenReceiving');
     try {
       await PurchasedOrderFirebaseService.reopenReceiving(id, reopenReason.trim());
       const fresh = await PurchasedOrderFirebaseService.fetchById(id);
@@ -642,7 +675,7 @@ export const ShipmentDetailsView: React.FC = () => {
       toast.success('Receiving reopened');
     } catch (e: any) {
       toast.error(e?.message || 'Could not reopen receiving');
-    } finally { setBusy(false); }
+    } finally { setBusyAction(null); }
   }, [id, reopenReason]);
 
   const save = useCallback(async () => {
@@ -813,7 +846,7 @@ export const ShipmentDetailsView: React.FC = () => {
             Hover any calculated figure to see the arithmetic behind it.
             Import charges are allocated by each line's share of net purchase value.
           </p>
-          <div style={{ overflowX: 'auto' }}>
+          <LockedScrollTable maxHeight="60vh">
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1520 }}>
               <thead>
                 <tr>
@@ -858,7 +891,7 @@ export const ShipmentDetailsView: React.FC = () => {
                     </td>
                     <td style={S.td}>{l.quantity}</td>
                     <td style={{ ...S.td, color: '#94a3b8' }}>{l.uom}</td>
-                    <td style={S.td}>{moneyRaw(l.unitPrice, cur)}</td>
+                    <td style={S.td}>{money(l.unitPrice, view)}</td>
                     <Cell text={M(l.netTotalBase)} formula={l.formulas.netTotalBase} />
                     <Cell text={(l.share * 100).toFixed(2) + '%'} formula={l.formulas.share} tone="muted" />
                     <Cell text={M(l.customsShare)}   formula={l.formulas.customsShare} />
@@ -947,7 +980,7 @@ export const ShipmentDetailsView: React.FC = () => {
                 )}
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
 
           {/* Closure check — the spreadsheet had no equivalent, so a broken
               formula could sit unnoticed for months. */}
@@ -997,34 +1030,17 @@ export const ShipmentDetailsView: React.FC = () => {
               invoices them, and nothing in the numbers says the last one has
               arrived. Somebody declares it, and until they do the shipment keeps
               appearing under that kind in the Transactions picker. */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(158px, 1fr))', gap: 10, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10, marginBottom: 14 }}>
             {CHARGE_KINDS.map(kind => {
               const v      = ct[kind.toLowerCase() as 'customs' | 'freight' | 'tax' | 'other'];
               const closed = isChargeKindClosed(shipment, kind);
+              const closedAt = shipment.chargeClosure?.[kind]?.closedAt;
+              const closedAtText = closedAt
+                ? new Date(closedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                : undefined;
               return (
-                <div key={kind} style={{ padding: '10px 12px', borderRadius: 9,
-                                         border: `1px solid ${closed ? T.okLine : T.border}`,
-                                         backgroundColor: closed ? T.okBg : (v > 0 ? '#f9fbfd' : T.surface) }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                      {kind}
-                    </span>
-                    {closed && <Check size={12} color={T.ok} />}
-                  </div>
-
-                  <div style={{ fontSize: 14.5, fontWeight: 800, marginTop: 3,
-                                color: v > 0 ? T.ink : T.faint, fontVariantNumeric: 'tabular-nums' }}>
-                    {M(v)}
-                  </div>
-
-                  {/* Status only. The buttons live in the Progress card — one
-                      action in one place, or the two drift apart the first time
-                      one of them changes. */}
-                  <div style={{ fontSize: 10.5, fontWeight: 600, marginTop: 4,
-                                color: closed ? T.ok : T.muted }}>
-                    {closed ? 'Paid' : 'Open'}
-                  </div>
-                </div>
+                <LockedPaymentRow key={kind} label={`${kind} paid`} amountText={M(v)}
+                  closedAt={closedAtText} state={closed ? 'locked' : 'pending'} />
               );
             })}
           </div>
@@ -1231,7 +1247,7 @@ export const ShipmentDetailsView: React.FC = () => {
               ? `Received ${shipment.receivingFinalisedAt ? new Date(shipment.receivingFinalisedAt).toLocaleString('en-GB') : ''}. The note is available above.`
               : 'Mark the shipment received once the goods have landed. This does not move inventory on its own.'}
           </p>
-          <div style={{ overflowX: 'auto' }}>
+          <LockedScrollTable maxHeight="60vh">
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
               <thead>
                 <tr>
@@ -1256,7 +1272,7 @@ export const ShipmentDetailsView: React.FC = () => {
                 </tr>
               </tbody>
             </table>
-          </div>
+          </LockedScrollTable>
         </div>
 
         </div>
@@ -1274,7 +1290,6 @@ export const ShipmentDetailsView: React.FC = () => {
             <Field label="Origin"      value={shipment.originCountry} />
             <Field label="Destination" value={shipment.destinationCountry} />
             <Field label="Order date"  value={shipment.orderDate} />
-            <Field label="Arrived"     value={shipment.actualArrivalDate} />
           </div>
         </div>
 
@@ -1334,12 +1349,13 @@ export const ShipmentDetailsView: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, marginTop: 12 }}>
               {CHARGE_KINDS.map(kind => {
                 const closed = isChargeKindClosed(shipment, kind);
+                const savingThis = isBusy(`charge:${kind}`);
                 return (
-                  <button key={kind} type="button" disabled={busy}
+                  <button key={kind} type="button" disabled={savingThis}
                     onClick={() => toggleChargeKind(kind, !closed)}
                     title={closed ? `Reopen ${kind.toLowerCase()} — another invoice arrived`
                                   : `No more ${kind.toLowerCase()} is expected on this shipment`}
-                    style={{ ...btn(closed ? 'ghost' : 'secondary', busy),
+                    style={{ ...btn(closed ? 'ghost' : 'secondary', savingThis),
                              justifyContent: 'center', fontSize: 11.5, padding: '6px 8px' }}>
                     {closed ? <><Check size={12} /> {kind} paid</> : `${kind} paid`}
                   </button>
@@ -1526,7 +1542,7 @@ export const ShipmentDetailsView: React.FC = () => {
                          backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button type="button" onClick={finalise} disabled={busy}
+              <button type="button" onClick={finalise} disabled={isBusy('finaliseReceiving')}
                 style={{ padding: '8px 18px', borderRadius: 8, border: 'none', backgroundColor: '#0f172a',
                          color: '#fff', fontSize: 13, fontWeight: 700, cursor: busy ? 'wait' : 'pointer',
                          display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1563,7 +1579,7 @@ export const ShipmentDetailsView: React.FC = () => {
                          backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button type="button" onClick={reopen} disabled={busy || !reopenReason.trim()}
+              <button type="button" onClick={reopen} disabled={isBusy('reopenReceiving') || !reopenReason.trim()}
                 style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
                          backgroundColor: reopenReason.trim() ? '#b45309' : '#cbd5e1',
                          color: '#fff', fontSize: 13, fontWeight: 700,
@@ -1634,7 +1650,7 @@ export const ShipmentDetailsView: React.FC = () => {
                          backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button type="button" onClick={addCharge} disabled={busy || !(parseFloat(chargeDraft.amount) > 0)}
+              <button type="button" onClick={addCharge} disabled={isBusy('addCharge') || !(parseFloat(chargeDraft.amount) > 0)}
                 style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
                          backgroundColor: parseFloat(chargeDraft.amount) > 0 ? '#0f172a' : '#cbd5e1',
                          color: '#fff', fontSize: 13, fontWeight: 700,
@@ -1692,7 +1708,7 @@ export const ShipmentDetailsView: React.FC = () => {
                          backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button type="button" onClick={addSupplierPayment} disabled={busy || !(parseFloat(payDraft.amount) > 0)}
+              <button type="button" onClick={addSupplierPayment} disabled={isBusy('addSupplierPayment') || !(parseFloat(payDraft.amount) > 0)}
                 style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
                          backgroundColor: parseFloat(payDraft.amount) > 0 ? '#15803d' : '#cbd5e1',
                          color: '#fff', fontSize: 13, fontWeight: 700,
@@ -1739,7 +1755,7 @@ export const ShipmentDetailsView: React.FC = () => {
                          backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button type="button" onClick={finaliseCosting} disabled={busy || !c.reconciles}
+              <button type="button" onClick={finaliseCosting} disabled={isBusy('finaliseCosting') || !c.reconciles}
                 style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
                          backgroundColor: c.reconciles ? '#15803d' : '#cbd5e1', color: '#fff',
                          fontSize: 13, fontWeight: 700, cursor: c.reconciles && !busy ? 'pointer' : 'not-allowed',
@@ -1775,7 +1791,7 @@ export const ShipmentDetailsView: React.FC = () => {
                          backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button type="button" onClick={reopenCosting} disabled={busy || !costingReason.trim()}
+              <button type="button" onClick={reopenCosting} disabled={isBusy('reopenCosting') || !costingReason.trim()}
                 style={{ padding: '8px 18px', borderRadius: 8, border: 'none',
                          backgroundColor: costingReason.trim() ? '#b45309' : '#cbd5e1', color: '#fff',
                          fontSize: 13, fontWeight: 700,

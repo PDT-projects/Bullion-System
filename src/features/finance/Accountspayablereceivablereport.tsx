@@ -58,8 +58,13 @@
 //      expanding INV-1002 shows only that invoice's position.
 
 import React, { useMemo, useState } from 'react';
-import { Download, RotateCcw, ChevronDown, ChevronRight, Calendar, X } from 'lucide-react';
+import { getGlobalCurrencySymbol } from '../../shared/currency/globalCurrency';
+import { Download, RotateCcw, ChevronDown, ChevronRight, Calendar, X, FileDown } from 'lucide-react';
 import { Transaction } from '../../modules/transactions/models/types';
+import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
+import { exportTableToExcel } from '../../shared/excelExport/exportTableToExcel';
+import { useColumnVisibility, ColumnVisibilityMenu } from '../../shared/components/ColumnVisibility';
+import { usePagination, PaginationBar } from '../../shared/components/Pagination';
 
 interface Props {
   transactions: Transaction[];
@@ -152,8 +157,10 @@ const iso = (d: unknown): string => {
   return isNaN(p.getTime()) ? '' : p.toISOString().slice(0, 10);
 };
 
-const aed = (n: number): string =>
-  `AED ${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const aed = (n: number): string => {
+  const symbol = getGlobalCurrencySymbol();
+  return `${symbol} ${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 // ── Register construction ───────────────────────────────────────────────────
 function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
@@ -551,6 +558,12 @@ export function AccountsPayableReceivableReport({
   // Newest first for reading; running totals were already fixed above.
   const view = useMemo(() => [...rows].reverse(), [rows]);
 
+  // Date (COLS[0]) is frozen while scrolling and stays out of the toggle —
+  // turning it off would break the whole point of freezing it.
+  const cols = useColumnVisibility('payable-receivable', COLS.slice(1).map(c => c.label));
+  const visibleCols = COLS.slice(1).filter(c => cols.isVisible(c.label));
+  const pg = usePagination(view, 'payable-receivable');
+
   const totals = useMemo(() => {
     let amount = 0, received = 0, paid = 0, recv = 0, pay = 0;
     for (const r of rows) {
@@ -583,10 +596,22 @@ export function AccountsPayableReceivableReport({
       {/* ── Header ───────────────────────────────────────────────────── */}
       {/* Compact by design: ReportsHub already prints the report name above
           this, and the filters are what the page is actually used through. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4, gap: 8 }}>
+        <button
+          onClick={() => exportTableToExcel({
+            title: 'Accounts Payable / Receivable',
+            subtitle: new Date().toLocaleDateString(),
+            columns: COLS.map(c => ({ header: c.label })),
+            rows: view.map(r => COLS.map(c => c.val(r))),
+            filename: `payables-receivables-${new Date().toISOString().slice(0, 10)}`,
+          })}
+          style={S.primary}>
+          <FileDown size={13} /> Excel
+        </button>
         <button onClick={handleExport} style={S.primary}>
           <Download size={13} /> Export CSV
         </button>
+        <ColumnVisibilityMenu controller={cols} />
       </div>
 
       {/* ── Filters ──────────────────────────────────────────────────── */}
@@ -663,7 +688,7 @@ export function AccountsPayableReceivableReport({
                 }}>
                   {COLS[0].label}
                 </th>
-                {COLS.slice(1).map(c => (
+                {visibleCols.map(c => (
                   <th key={c.id} style={{ ...S.th, ...S.stickyHead, textAlign: c.align }}>{c.label}</th>
                 ))}
               </tr>
@@ -671,14 +696,14 @@ export function AccountsPayableReceivableReport({
             <tbody>
               {view.length === 0 && (
                 <tr>
-                  <td colSpan={COLS.length + 1} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
+                  <td colSpan={visibleCols.length + 2} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
                     {allRows.length === 0
                       ? 'No records yet. A transaction appears here when its Category is Account Receivable or Account Payable, or when an invoice has a balance outstanding.'
                       : 'No records match these filters.'}
                   </td>
                 </tr>
               )}
-              {view.map((r, i) => {
+              {pg.pageRows.map((r, i) => {
                 const isOpen = expanded === r.key;
                 const rowBg  = isOpen ? '#eef2ff' : i % 2 ? '#fafbfc' : '#fff';
                 return (
@@ -701,7 +726,7 @@ export function AccountsPayableReceivableReport({
                       <td style={{ ...S.td, ...S.freeze1, backgroundColor: rowBg, whiteSpace: 'nowrap' }}>
                         {COLS[0].cell(r)}
                       </td>
-                      {COLS.slice(1).map(c => (
+                      {visibleCols.map(c => (
                         <td key={c.id} style={{
                           ...S.td, textAlign: c.align,
                           ...(c.align === 'right' ? { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } : {}),
@@ -710,7 +735,7 @@ export function AccountsPayableReceivableReport({
                     </tr>
                     {isOpen && (
                       <tr>
-                        <td colSpan={COLS.length + 1} style={{ padding: 0, backgroundColor: '#f8fafc' }}>
+                        <td colSpan={visibleCols.length + 2} style={{ padding: 0, backgroundColor: '#f8fafc' }}>
                           <div style={{ position: 'sticky', left: 0, width: panelWidth || undefined }}>
                           <HistoryPanel
                             counterparty={r.counterparty}
@@ -728,7 +753,7 @@ export function AccountsPayableReceivableReport({
               <tfoot>
                 <tr style={{ backgroundColor: '#0f172a' }}>
                   <td style={{ ...S.td, ...S.freeze0, backgroundColor: '#0f172a' }} />
-                  {COLS.map(c => {
+                  {[COLS[0], ...visibleCols].map(c => {
                     const map: Record<string, number> = {
                       amount: totals.amount, received: totals.received, paid: totals.paid,
                       remRecv: totals.recv, remPay: totals.pay,
@@ -748,6 +773,9 @@ export function AccountsPayableReceivableReport({
               </tfoot>
             )}
           </table>
+        </div>
+        <div style={{ padding: '0 18px' }}>
+          <PaginationBar controller={pg} />
         </div>
       </div>
 
@@ -903,7 +931,7 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
         </span>
       </div>
 
-      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+      <LockedScrollTable maxHeight="70vh" className="rounded-lg border border-gray-200">
       <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', fontSize: 11.5, backgroundColor: '#fff' }}>
         <thead>
           <tr style={{ backgroundColor: '#f1f5f9' }}>
@@ -962,7 +990,7 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
           })}
         </tbody>
       </table>
-      </div>
+      </LockedScrollTable>
 
       <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 7 }}>
         Full history for this counterparty — filters above do not narrow it.

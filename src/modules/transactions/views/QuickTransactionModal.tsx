@@ -153,7 +153,7 @@ export function QuickTransactionModal({
     }
     return shipments.filter(sh =>
       sh.status !== 'Cancelled' && !isChargeKindClosed(sh, poSubKind as ChargeKind));
-  }, [isPurchaseOrder, isSupplierPay, shipments]);
+  }, [isPurchaseOrder, isSupplierPay, shipments, poSubKind]);
 
   const selectedShipment = useMemo(
     () => eligibleShipments.find(sh => sh.id === shipmentId) || null,

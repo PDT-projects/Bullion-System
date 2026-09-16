@@ -3,6 +3,7 @@
 // Updated with loading states and empty states for Firebase integration
 
 import React from 'react';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 import { 
   Plus, 
   Search, 
@@ -104,16 +105,14 @@ export const BankListView: React.FC<BankListViewProps> = ({
   const toBank = banks.find(b => b.id === transferData.toBankId);
   const hasInsufficientFunds = fromBank && transferData.amount > 0 && transferData.amount > fromBank.balance;
 
-  // FIX: The "Total Balance" / "Highest Balance" / "Lowest Balance" stat cards
-  // were formatting raw summed/compared numbers with a single hardcoded AED
-  // formatter, even though accounts can be AED or PKR. Mixing currencies into
-  // one total (or labeling a PKR account's balance as "AED") is misleading, so
-  // balances are now grouped and formatted per-currency using each bank's own
-  // `currency`, computed directly from the `banks` list.
-  const formatByCurrency = (amount: number, currency?: 'AED' | 'PKR') =>
-    new Intl.NumberFormat(currency === 'PKR' ? 'en-PK' : 'en-AE', {
-      style: 'currency', currency: currency || 'AED', minimumFractionDigits: 0
-    }).format(amount);
+  // Display-only: always shows the Admin's global currency symbol. The
+  // number itself is untouched — still each bank's own real balance, just
+  // no longer labelled with that bank's own currency code.
+  const formatByCurrency = (amount: number, _currency?: 'AED' | 'PKR') => {
+    const symbol = getGlobalCurrencySymbol();
+    const formatted = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0 }).format(amount || 0);
+    return `${symbol} ${formatted}`;
+  };
 
   const totalsByCurrency = banks.reduce((acc, bank) => {
     const cur = bank.currency || 'AED';
@@ -380,9 +379,7 @@ export const BankListView: React.FC<BankListViewProps> = ({
               <div className="border-t border-gray-100 pt-4">
                 <p className="text-sm text-gray-600 mb-1">Current Balance</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {new Intl.NumberFormat(bank.currency === 'PKR' ? 'en-PK' : 'en-AE', {
-                    style: 'currency', currency: bank.currency || 'AED', minimumFractionDigits: 0
-                  }).format(bank.balance)}
+                  {formatByCurrency(bank.balance)}
                 </p>
                 {bank.currency && <span className="text-xs text-gray-400">{bank.currency} Account</span>}
               </div>

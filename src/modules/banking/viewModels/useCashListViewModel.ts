@@ -9,6 +9,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { CashTransaction, CashStats, CashFilters } from '../models/types';
 import { BankingService } from '../models/bankingService';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import { CashFirebaseService } from '../models/cashFirebaseService';
 import { db } from '../../../api/firebase/firebase';
 
@@ -37,6 +38,7 @@ async function fetchCashModeTransactions(): Promise<CashTransaction[]> {
 }
 
 export function useCashListViewModel() {
+  useGlobalCurrency(); // re-render when Admin changes the global currency
   const [transactions,   setTransactions]   = useState<CashTransaction[]>([]);
   const [openingBalance, setOpeningBalance] = useState(0);
   const [cashRecordId,   setCashRecordId]   = useState<string | null>(null);
