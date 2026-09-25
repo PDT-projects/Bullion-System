@@ -40,6 +40,7 @@ import { CATEGORIES } from '../viewModels/useInventoryMultimodelViewModel';
 import type { Shipment } from '../../purchased-orders/models/types';
 import type { StockInLine } from '../models/shipmentStockIn';
 import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 interface BankOption { id: string; name: string; balance: number; }
 
@@ -354,6 +355,11 @@ export function CreateInventoryView({
   removeExistingImage,
 }: CreateInventoryViewProps) {
 
+  // Subscribed purely so this whole view re-renders the instant the Admin
+  // changes the global currency — getGlobalCurrencySymbol() calls throughout
+  // this file always read the live value regardless of this call.
+  useGlobalCurrency();
+
   // ── Banks — fetched once when payment step mounts ─────────────────────────
   const [banks, setBanks]               = useState<BankOption[]>([]);
   const [banksLoading, setBanksLoading] = useState(false);
@@ -634,14 +640,14 @@ export function CreateInventoryView({
           {[
             {
               value: 'Owned',
-              label: 'Against Payment',
+              label: 'Owned Inventory',
               sub: 'Fully paid or will be paid via cash / bank',
               color: '#15803d', bg: '#f0fdf4', border: '#22c55e',
               emoji: '💳',
             },
             {
               value: 'Credit',
-              label: 'On Credit',
+              label: 'Third-party Inventory',
               sub: 'Taken from supplier on credit — payment due later',
               color: '#b45309', bg: '#fffbeb', border: '#f59e0b',
               emoji: '🤝',
@@ -926,7 +932,7 @@ export function CreateInventoryView({
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12 }}>
           <span style={{ fontSize: 22 }}>🤝</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#92400e' }}>On Credit — Supplier Payable</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#92400e' }}>Third-party Inventory — Supplier Payable</div>
             <div style={{ fontSize: 12, color: '#b45309', marginTop: 2, lineHeight: 1.5 }}>
               This inventory was taken from a supplier on credit. Record how much has been paid so far — the rest will appear in Payables.
             </div>

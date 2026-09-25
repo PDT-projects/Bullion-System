@@ -16,14 +16,12 @@
 // so nothing goes silently missing from the ledger.
 
 import React, { useMemo, useState } from 'react';
+import { useCurrency } from '../../providers/context/CurrencyContext';
 import {
   ChevronRight, TrendingUp, TrendingDown, Package, Percent,
   Download, Calendar, Layers, Minimize2, Maximize2, DollarSign,
 } from 'lucide-react';
-import { Transaction } from '../../modules/transactions/models/types';
-import { useGlobalCurrency } from '../../shared/currency/useGlobalCurrency';
-import { getGlobalCurrencySymbol, getGlobalCurrency } from '../../shared/currency/globalCurrency';
-import { CurrencyCode } from './currencyUtils';
+import { Transaction, SOLD_GOODS_PAYMENT_CATEGORY } from '../../modules/transactions/models/types';
 
 interface Props {
   transactions: Transaction[];
@@ -52,8 +50,10 @@ const KNOWN_OPEX_CATEGORIES: string[] = [
   'Grocery & Stationery',
   'Advertising and Marketing',
   'Supplier Payment',
-  'Supplier Cost',
-  'Sold Goods Payment',   // pre-rename label — old rows still carry it
+  // 'Supplier Cost' (and its pre-rename label 'Sold Goods Payment') moved OUT
+  // of this list: it's money paid to the supplier for goods sold — a direct
+  // Cost of Goods Sold item, not an operating expense. See
+  // COGS_TRANSACTION_CATEGORIES below, which now routes it into COGS instead.
   'Logistics & Freight',
   'Bank Charges',
   'Travelling/Accommodations & Food',
@@ -67,7 +67,10 @@ const KNOWN_REVENUE_CATEGORIES: string[] = [
   'Sales Invoice',
 ];
 
-const CURRENCY = () => getGlobalCurrencySymbol();
+// CURRENCY used to be a hardcoded module constant — now each component below
+// reads it from the system-wide currency setting (admin-controlled, see
+// CurrencyContext) so switching currency relabels every amount here too.
+// This is symbol-only: the underlying numbers are never converted.
 const fmt = (n: number) =>
   (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -92,8 +95,7 @@ interface TreeNode {
 }
 
 export function IncomeStatementReport({ transactions, invoices }: Props) {
-  useGlobalCurrency(); // subscribe so this view re-renders on currency change
-
+  const { primary: CURRENCY } = useCurrency();
   // ── Date-range filter with quick presets ──────────────────────────────
   type Preset = 'thisMonth' | 'lastMonth' | 'last3Months' | 'thisQuarter' | 'thisYear' | 'allTime' | 'custom';
   const [preset, setPreset] = useState<Preset>('thisMonth');
@@ -175,7 +177,19 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
     // individual transactions inside for the detail level.
     const revenueBuckets: Record<string, Transaction[]> = {};
     const opexBuckets:    Record<string, Transaction[]> = {};
+    const cogsBuckets:    Record<string, Transaction[]> = {};
     const excludedBuckets:Record<string, Transaction[]> = {};
+
+    // Outflow sub-categories that are an actual Cost of Goods Sold, not an
+    // Operating Expense — routed into COGS instead. Currently just the
+    // supplier-payment category (SOLD_GOODS_PAYMENT_CATEGORY = 'Supplier
+    // Cost' — money paid to the supplier for goods sold via a specific
+    // invoice; see types.ts). 'Sold Goods Payment' is its pre-rename label —
+    // older rows can still carry that exact string.
+    const COGS_TRANSACTION_CATEGORIES = new Set<string>([
+      SOLD_GOODS_PAYMENT_CATEGORY,
+      'Sold Goods Payment',
+    ]);
 
     for (const t of txInRange) {
       const cat  = t.subCategory || (t as any).category || 'Uncategorized';
@@ -185,8 +199,11 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
         (excludedBuckets[cat] ||= []).push(t);
         continue;
       }
-      if (main === 'Cash Inflow')  (revenueBuckets[cat]  ||= []).push(t);
-      if (main === 'Cash Outflow') (opexBuckets[cat]     ||= []).push(t);
+      if (main === 'Cash Inflow') (revenueBuckets[cat] ||= []).push(t);
+      if (main === 'Cash Outflow') {
+        if (COGS_TRANSACTION_CATEGORIES.has(cat)) (cogsBuckets[cat] ||= []).push(t);
+        else                                      (opexBuckets[cat] ||= []).push(t);
+      }
     }
 
     // Turn each bucket into a TreeNode with children = detail rows
@@ -257,23 +274,21 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
     const totalRevenue = revenueCatNodes.reduce((s, n) => s + n.amount, 0);
     const totalExpense = opexCatNodes.reduce((s, n) => s + n.amount, 0);
 
-    // COGS section — build from invoices, one child per invoice per cost type
-    let supplierTotal = 0;
+    // COGS section — build from invoices.
+    //
+    // This used to also show a "Supplier Cost" row (from inv.supplierCostTotal)
+    // alongside Purchase Cost. Removed: that figure is what's owed TO the
+    // supplier for goods bought against payment — a payable, not a cost the
+    // business has recognized as an expense yet — so showing it here inflated
+    // COGS and understated Gross Profit for invoices that hadn't actually
+    // been paid for. Purchase Cost (inv.purchaseCostTotal) is the actual
+    // recognized cost of goods sold and is what COGS is built from now.
     let purchaseTotal = 0;
-    const supplierChildren: TreeNode[] = [];
     const purchaseChildren: TreeNode[] = [];
     for (const inv of invInRange) {
-      const sc = Number(inv.supplierCostTotal) || 0;
       const pc = Number(inv.purchaseCostTotal) || 0;
       const invLabel = `${inv.invoiceNumber || 'INV-?'} · ${inv.customerName || 'Customer'}`;
       const invMeta  = fmtDate(inv.date);
-      if (sc > 0) {
-        supplierTotal += sc;
-        supplierChildren.push({
-          id: `cogs-sup-${inv.id || inv.invoiceNumber}`,
-          label: invLabel, amount: sc, meta: invMeta, level: 2, tone: 'cogs',
-        });
-      }
       if (pc > 0) {
         purchaseTotal += pc;
         purchaseChildren.push({
@@ -282,22 +297,23 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
         });
       }
     }
-    supplierChildren.sort((a, b) => b.amount - a.amount);
     purchaseChildren.sort((a, b) => b.amount - a.amount);
 
-    // COGS is ALWAYS split into two rows — Supplier Cost + Purchase Cost —
-    // even when one or both are zero for the period. This keeps the P&L
-    // shape consistent and shows the reader both cost pathways at once.
-    const cogsCatNodes: TreeNode[] = [
-      {
-        id: 'cogs-cat-supplier',
-        label: 'Supplier Cost',
-        amount: supplierTotal,
-        meta: supplierChildren.length === 0
-          ? 'no invoices'
-          : `${supplierChildren.length} ${supplierChildren.length === 1 ? 'invoice' : 'invoices'}`,
-        level: 1, tone: 'cogs', children: supplierChildren,
-      },
+    // "Supplier Cost" — actual payments made to the supplier for goods sold
+    // (COGS_TRANSACTION_CATEGORIES transactions, moved back here from
+    // Operating Expenses per user correction: this is money paid for the
+    // goods sold, a direct cost of goods sold, not an operating expense).
+    // NOTE: this is NOT the same figure the old removed COGS row used
+    // (inv.supplierCostTotal, an unpaid/accrued liability on the invoice) —
+    // that stays removed for the reason in the comment above. This is the
+    // actual recognized, paid transaction ledger for the same category name.
+    const supplierCostTxns = [
+      ...(cogsBuckets[SOLD_GOODS_PAYMENT_CATEGORY] || []),
+      ...(cogsBuckets['Sold Goods Payment'] || []),
+    ];
+    const supplierCostNode = bucketToNode('Supplier Cost', supplierCostTxns, 'cogs');
+
+    const cogsCatNodes: TreeNode[] = orderNodes([
       {
         id: 'cogs-cat-purchase',
         label: 'Purchase Cost',
@@ -307,8 +323,9 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
           : `${purchaseChildren.length} ${purchaseChildren.length === 1 ? 'invoice' : 'invoices'}`,
         level: 1, tone: 'cogs', children: purchaseChildren,
       },
-    ];
-    const cogsTotal = supplierTotal + purchaseTotal;
+      supplierCostNode,
+    ]);
+    const cogsTotal = purchaseTotal + supplierCostNode.amount;
 
     // Section-level nodes
     const revenueSection: TreeNode = {
@@ -535,7 +552,7 @@ export function IncomeStatementReport({ transactions, invoices }: Props) {
           textTransform: 'uppercase', letterSpacing: '.08em',
         }}>
           <span>Category</span>
-          <span style={{ textAlign: 'right', minWidth: 160 }}>Amount ({CURRENCY()})</span>
+          <span style={{ textAlign: 'right', minWidth: 160 }}>Amount ({CURRENCY})</span>
         </div>
 
         {/* Tree body */}
@@ -620,6 +637,7 @@ const SummaryTile: React.FC<{
   icon: React.ReactNode; label: string; value: number;
   fg: string; bg: string; showSign?: boolean; highlight?: boolean;
 }> = ({ icon, label, value, fg, bg, showSign, highlight }) => {
+  const { primary: CURRENCY } = useCurrency();
   const sign  = showSign ? (value >= 0 ? '' : '−') : '';
   const shown = showSign ? Math.abs(value) : value;
   return (
@@ -641,7 +659,7 @@ const SummaryTile: React.FC<{
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: highlight ? 'rgba(255,255,255,0.85)' : '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
         <div style={{ fontSize: 18, fontWeight: 800, color: highlight ? '#fff' : fg, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', marginTop: 2 }}>
-          {sign}<span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY()}</span>{fmt(shown)}
+          {sign}<span style={{ fontSize: 11, opacity: 0.7, marginRight: 3 }}>{CURRENCY}</span>{fmt(shown)}
         </div>
       </div>
     </div>
@@ -712,6 +730,7 @@ const TreeRow: React.FC<{
   depth: number;
   isBalanceSheet?: boolean;
 }> = ({ node, expanded, toggle, depth, isBalanceSheet }) => {
+  const { primary: CURRENCY } = useCurrency();
   const isOpen = expanded.has(node.id);
   const hasChildren = node.children && node.children.length > 0;
   const color = toneColor(node.tone);
@@ -798,7 +817,7 @@ const TreeRow: React.FC<{
         minWidth: 160, paddingLeft: 8,
       }}>
         {node.level === 2 && node.tone !== 'revenue' ? '−' : ''}
-        <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY()}</span>
+        <span style={{ opacity: 0.55, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
         {fmt(Math.abs(node.amount))}
       </span>
     </div>
@@ -812,6 +831,7 @@ const TotalRow: React.FC<{
   tone: 'positive' | 'negative';
   highlight?: boolean;
 }> = ({ label, value, marginPct, tone, highlight }) => {
+  const { primary: CURRENCY } = useCurrency();
   const color = tone === 'positive' ? '#059669' : '#dc2626';
   const positive = value >= 0;
   return (
@@ -842,7 +862,7 @@ const TotalRow: React.FC<{
         minWidth: 160, textAlign: 'right', paddingLeft: 8,
       }}>
         {!positive ? '−' : ''}
-        <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY()}</span>
+        <span style={{ opacity: 0.7, fontSize: '0.82em', marginRight: 4 }}>{CURRENCY}</span>
         {fmt(Math.abs(value))}
       </span>
     </div>

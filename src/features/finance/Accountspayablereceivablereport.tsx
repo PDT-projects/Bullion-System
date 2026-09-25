@@ -58,13 +58,9 @@
 //      expanding INV-1002 shows only that invoice's position.
 
 import React, { useMemo, useState } from 'react';
-import { getGlobalCurrencySymbol } from '../../shared/currency/globalCurrency';
-import { Download, RotateCcw, ChevronDown, ChevronRight, Calendar, X, FileDown } from 'lucide-react';
+import { Download, RotateCcw, ChevronDown, ChevronRight, Calendar, X } from 'lucide-react';
 import { Transaction } from '../../modules/transactions/models/types';
-import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
-import { exportTableToExcel } from '../../shared/excelExport/exportTableToExcel';
-import { useColumnVisibility, ColumnVisibilityMenu } from '../../shared/components/ColumnVisibility';
-import { usePagination, PaginationBar } from '../../shared/components/Pagination';
+import { useCurrency } from '../../providers/context/CurrencyContext';
 
 interface Props {
   transactions: Transaction[];
@@ -157,13 +153,15 @@ const iso = (d: unknown): string => {
   return isNaN(p.getTime()) ? '' : p.toISOString().slice(0, 10);
 };
 
-const aed = (n: number): string => {
-  const symbol = getGlobalCurrencySymbol();
-  return `${symbol} ${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
+// `currency` used to be hardcoded 'AED'. It's now the system-wide currency
+// code (see CurrencyContext) — every caller below passes it explicitly
+// (no default) so a forgotten call site fails typecheck instead of quietly
+// showing AED. Symbol-only: the numbers themselves are never converted.
+const aed = (n: number, currency: string): string =>
+  `${currency} ${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // ── Register construction ───────────────────────────────────────────────────
-function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
+function buildRows(transactions: Transaction[], invoices: any[], currency: string): Row[] {
   const raw: Row[] = [];
 
   for (const t of (transactions || []) as any[]) {
@@ -191,7 +189,7 @@ function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
       category:       String(t.subCategory || '—'),        // see FIELD MAPPING
       subCategory:    nameOf(t),                            // see FIELD MAPPING
       invoiceDetails: t.linkedType === 'invoice' && pending > 0
-                        ? `${t.linkedId || ''} · ${aed(pending)} pending`
+                        ? `${t.linkedId || ''} · ${aed(pending, currency)} pending`
                         : '',
       amount:         face,
       received:       isInflow  ? moved : 0,                // see RECEIVED vs PAID
@@ -234,7 +232,7 @@ function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
       flow:           '',
       category:       'A/C Receivable',
       subCategory:    name,
-      invoiceDetails: `${inv.invoiceNumber || ''} · ${name} · ${aed(outstanding)} pending`,
+      invoiceDetails: `${inv.invoiceNumber || ''} · ${name} · ${aed(outstanding, currency)} pending`,
       amount:         total,
       received:       paid,
       paid:           0,
@@ -291,7 +289,7 @@ function buildRows(transactions: Transaction[], invoices: any[]): Row[] {
       flow:           '',
       category:       'A/C Payable',
       subCategory:    'Futuristic',
-      invoiceDetails: `${invNo} · goods cost · ${aed(supplierTotal)}`,
+      invoiceDetails: `${invNo} · goods cost · ${aed(supplierTotal, currency)}`,
       amount:         supplierTotal,
       received:       0,
       paid:           0,
@@ -394,79 +392,6 @@ interface Col {
   cell:   (r: Row) => React.ReactNode;
 }
 
-const COLS: Col[] = [
-  { id: 'date',        label: 'Date',                 align: 'left',
-    val: r => r.date,
-    cell: r => r.date || '—' },
-  { id: 'flow',        label: 'Flow',                 align: 'left',
-    val: r => r.flow,
-    cell: r => r.flow
-      ? <span style={{ fontWeight: 700, color: r.flow === 'Inflow' ? '#059669' : '#dc2626' }}>{r.flow}</span>
-      : '—' },
-  { id: 'category',    label: 'Category',             align: 'left',
-    val: r => r.category,
-    cell: r => <span style={{ fontWeight: 700, color: r.side === 'receivable' ? '#059669' : '#dc2626' }}>
-      {r.category}</span> },
-  { id: 'subCategory', label: 'Sub-Category',         align: 'left',
-    val: r => r.subCategory,
-    cell: r => <span style={{ fontWeight: 600, color: '#0f172a' }}>{r.subCategory}</span> },
-  { id: 'invoice',     label: 'Invoice Details',      align: 'left',
-    val: r => r.invoiceDetails,
-    cell: r => r.invoiceDetails
-      ? <span style={{ color: '#0369a1' }}>{r.invoiceDetails}</span> : '—' },
-  { id: 'amount',      label: 'Amount',               align: 'right',
-    val: r => (r.amount ? aed(r.amount) : ''),
-    cell: r => aed(r.amount) },
-  { id: 'received',    label: 'Amount Received',      align: 'right',
-    val: r => (r.received ? aed(r.received) : ''),
-    cell: r => <span style={{ fontWeight: r.received ? 700 : 400, color: r.received ? '#059669' : '#94a3b8' }}>
-      {aed(r.received)}</span> },
-  { id: 'paid',        label: 'Amount Paid',          align: 'right',
-    val: r => (r.paid ? aed(r.paid) : ''),
-    cell: r => <span style={{ fontWeight: r.paid ? 700 : 400, color: r.paid ? '#dc2626' : '#94a3b8' }}>
-      {aed(r.paid)}</span> },
-  { id: 'remRecv',     label: 'Remaining Receivable', align: 'right',
-    // Shows the counterparty's NET outstanding balance (same value on every
-    // row for that party), not this single transaction's own signed delta —
-    // a lone inflow/outflow row showing a negative "remaining" confused
-    // users into thinking money was owed in reverse.
-    val: r => (r.totalRecv ? aed(r.totalRecv) : ''),
-    cell: r => <span style={{ color: r.totalRecv < 0 ? '#b91c1c' : r.totalRecv ? '#059669' : '#94a3b8' }}>
-      {aed(r.totalRecv)}</span> },
-  { id: 'remPay',      label: 'Remaining Payable',    align: 'right',
-    val: r => (r.totalPay ? aed(r.totalPay) : ''),
-    cell: r => <span style={{ color: r.totalPay < 0 ? '#b91c1c' : r.totalPay ? '#dc2626' : '#94a3b8' }}>
-      {aed(r.totalPay)}</span> },
-  { id: 'dueDate',     label: 'Due Date',             align: 'left',
-    val: r => r.dueDate,
-    cell: r => r.dueDate || '—' },
-  { id: 'status',      label: 'Payment Status',       align: 'left',
-    val: r => r.status,
-    cell: r => <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700,
-      backgroundColor: r.status === 'Cleared' ? '#ecfdf5' : r.status === 'Partial' ? '#fffbeb' : '#fef2f2',
-      color:           r.status === 'Cleared' ? '#047857' : r.status === 'Partial' ? '#b45309' : '#b91c1c',
-    }}>{r.status}</span> },
-  { id: 'remarks',     label: 'Remarks',              align: 'left',
-    val: r => r.remarks,
-    cell: r => r.remarks || '—' },
-  { id: 'txnType',     label: 'Transaction Type',     align: 'left',
-    val: r => r.txnType,
-    cell: r => r.txnType },
-  { id: 'refNo',       label: 'Reference No.',        align: 'left',
-    val: r => r.refNo,
-    cell: r => <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#4f46e5' }}>{r.refNo || '—'}</span> },
-  { id: 'counterparty', label: 'Counterparty',        align: 'left',
-    val: r => r.counterparty,
-    cell: r => r.counterparty },
-  { id: 'account',     label: 'Account',              align: 'left',
-    val: r => r.account,
-    cell: r => r.account },
-  { id: 'branch',      label: 'Branch',               align: 'left',
-    val: r => r.branch,
-    cell: r => r.branch },
-];
-
 // Columns that get a filter chip. Deliberately a subset: the table still shows
 // every column, but filtering by a free-form value (Remarks) or by a derived
 // running figure (Remaining Receivable per row) produces dropdowns with one
@@ -481,6 +406,7 @@ const CHIP_IDS = [
 export function AccountsPayableReceivableReport({
   transactions, invoices, banks,
 }: Props) {
+  const { primary: currency } = useCurrency();
   const [sel, setSel]           = useState<Record<string, string>>({});
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [range, setRange] = useState({ from: '', to: '' });
@@ -509,9 +435,85 @@ export function AccountsPayableReceivableReport({
   }, [openChip]);
 
   const allRows = useMemo(
-    () => buildRows(transactions, invoices || []),
-    [transactions, invoices],
+    () => buildRows(transactions, invoices || [], currency),
+    [transactions, invoices, currency],
   );
+
+  // Column definitions live inside the component (not at module scope) so
+  // the amount columns' `aed(...)` calls close over the current `currency`
+  // and relabel every cell the instant an admin switches it.
+  const COLS: Col[] = useMemo(() => [
+    { id: 'date',        label: 'Date',                 align: 'left',
+      val: r => r.date,
+      cell: r => r.date || '—' },
+    { id: 'flow',        label: 'Flow',                 align: 'left',
+      val: r => r.flow,
+      cell: r => r.flow
+        ? <span style={{ fontWeight: 700, color: r.flow === 'Inflow' ? '#059669' : '#dc2626' }}>{r.flow}</span>
+        : '—' },
+    { id: 'category',    label: 'Category',             align: 'left',
+      val: r => r.category,
+      cell: r => <span style={{ fontWeight: 700, color: r.side === 'receivable' ? '#059669' : '#dc2626' }}>
+        {r.category}</span> },
+    { id: 'subCategory', label: 'Sub-Category',         align: 'left',
+      val: r => r.subCategory,
+      cell: r => <span style={{ fontWeight: 600, color: '#0f172a' }}>{r.subCategory}</span> },
+    { id: 'invoice',     label: 'Invoice Details',      align: 'left',
+      val: r => r.invoiceDetails,
+      cell: r => r.invoiceDetails
+        ? <span style={{ color: '#0369a1' }}>{r.invoiceDetails}</span> : '—' },
+    { id: 'amount',      label: 'Amount',               align: 'right',
+      val: r => (r.amount ? aed(r.amount, currency) : ''),
+      cell: r => aed(r.amount, currency) },
+    { id: 'received',    label: 'Amount Received',      align: 'right',
+      val: r => (r.received ? aed(r.received, currency) : ''),
+      cell: r => <span style={{ fontWeight: r.received ? 700 : 400, color: r.received ? '#059669' : '#94a3b8' }}>
+        {aed(r.received, currency)}</span> },
+    { id: 'paid',        label: 'Amount Paid',          align: 'right',
+      val: r => (r.paid ? aed(r.paid, currency) : ''),
+      cell: r => <span style={{ fontWeight: r.paid ? 700 : 400, color: r.paid ? '#dc2626' : '#94a3b8' }}>
+        {aed(r.paid, currency)}</span> },
+    { id: 'remRecv',     label: 'Remaining Receivable', align: 'right',
+      // Shows the counterparty's NET outstanding balance (same value on every
+      // row for that party), not this single transaction's own signed delta —
+      // a lone inflow/outflow row showing a negative "remaining" confused
+      // users into thinking money was owed in reverse.
+      val: r => (r.totalRecv ? aed(r.totalRecv, currency) : ''),
+      cell: r => <span style={{ color: r.totalRecv < 0 ? '#b91c1c' : r.totalRecv ? '#059669' : '#94a3b8' }}>
+        {aed(r.totalRecv, currency)}</span> },
+    { id: 'remPay',      label: 'Remaining Payable',    align: 'right',
+      val: r => (r.totalPay ? aed(r.totalPay, currency) : ''),
+      cell: r => <span style={{ color: r.totalPay < 0 ? '#b91c1c' : r.totalPay ? '#dc2626' : '#94a3b8' }}>
+        {aed(r.totalPay, currency)}</span> },
+    { id: 'dueDate',     label: 'Due Date',             align: 'left',
+      val: r => r.dueDate,
+      cell: r => r.dueDate || '—' },
+    { id: 'status',      label: 'Payment Status',       align: 'left',
+      val: r => r.status,
+      cell: r => <span style={{
+        display: 'inline-block', padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700,
+        backgroundColor: r.status === 'Cleared' ? '#ecfdf5' : r.status === 'Partial' ? '#fffbeb' : '#fef2f2',
+        color:           r.status === 'Cleared' ? '#047857' : r.status === 'Partial' ? '#b45309' : '#b91c1c',
+      }}>{r.status}</span> },
+    { id: 'remarks',     label: 'Remarks',              align: 'left',
+      val: r => r.remarks,
+      cell: r => r.remarks || '—' },
+    { id: 'txnType',     label: 'Transaction Type',     align: 'left',
+      val: r => r.txnType,
+      cell: r => r.txnType },
+    { id: 'refNo',       label: 'Reference No.',        align: 'left',
+      val: r => r.refNo,
+      cell: r => <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#4f46e5' }}>{r.refNo || '—'}</span> },
+    { id: 'counterparty', label: 'Counterparty',        align: 'left',
+      val: r => r.counterparty,
+      cell: r => r.counterparty },
+    { id: 'account',     label: 'Account',              align: 'left',
+      val: r => r.account,
+      cell: r => r.account },
+    { id: 'branch',      label: 'Branch',               align: 'left',
+      val: r => r.branch,
+      cell: r => r.branch },
+  ], [currency]);
 
   // Each dropdown lists only values that actually occur, so no option can ever
   // return an empty table.
@@ -558,12 +560,6 @@ export function AccountsPayableReceivableReport({
   // Newest first for reading; running totals were already fixed above.
   const view = useMemo(() => [...rows].reverse(), [rows]);
 
-  // Date (COLS[0]) is frozen while scrolling and stays out of the toggle —
-  // turning it off would break the whole point of freezing it.
-  const cols = useColumnVisibility('payable-receivable', COLS.slice(1).map(c => c.label));
-  const visibleCols = COLS.slice(1).filter(c => cols.isVisible(c.label));
-  const pg = usePagination(view, 'payable-receivable');
-
   const totals = useMemo(() => {
     let amount = 0, received = 0, paid = 0, recv = 0, pay = 0;
     for (const r of rows) {
@@ -596,22 +592,10 @@ export function AccountsPayableReceivableReport({
       {/* ── Header ───────────────────────────────────────────────────── */}
       {/* Compact by design: ReportsHub already prints the report name above
           this, and the filters are what the page is actually used through. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4, gap: 8 }}>
-        <button
-          onClick={() => exportTableToExcel({
-            title: 'Accounts Payable / Receivable',
-            subtitle: new Date().toLocaleDateString(),
-            columns: COLS.map(c => ({ header: c.label })),
-            rows: view.map(r => COLS.map(c => c.val(r))),
-            filename: `payables-receivables-${new Date().toISOString().slice(0, 10)}`,
-          })}
-          style={S.primary}>
-          <FileDown size={13} /> Excel
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4 }}>
         <button onClick={handleExport} style={S.primary}>
           <Download size={13} /> Export CSV
         </button>
-        <ColumnVisibilityMenu controller={cols} />
       </div>
 
       {/* ── Filters ──────────────────────────────────────────────────── */}
@@ -688,7 +672,7 @@ export function AccountsPayableReceivableReport({
                 }}>
                   {COLS[0].label}
                 </th>
-                {visibleCols.map(c => (
+                {COLS.slice(1).map(c => (
                   <th key={c.id} style={{ ...S.th, ...S.stickyHead, textAlign: c.align }}>{c.label}</th>
                 ))}
               </tr>
@@ -696,14 +680,14 @@ export function AccountsPayableReceivableReport({
             <tbody>
               {view.length === 0 && (
                 <tr>
-                  <td colSpan={visibleCols.length + 2} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
+                  <td colSpan={COLS.length + 1} style={{ padding: 32, textAlign: 'center', color: '#94a3b8' }}>
                     {allRows.length === 0
                       ? 'No records yet. A transaction appears here when its Category is Account Receivable or Account Payable, or when an invoice has a balance outstanding.'
                       : 'No records match these filters.'}
                   </td>
                 </tr>
               )}
-              {pg.pageRows.map((r, i) => {
+              {view.map((r, i) => {
                 const isOpen = expanded === r.key;
                 const rowBg  = isOpen ? '#eef2ff' : i % 2 ? '#fafbfc' : '#fff';
                 return (
@@ -726,7 +710,7 @@ export function AccountsPayableReceivableReport({
                       <td style={{ ...S.td, ...S.freeze1, backgroundColor: rowBg, whiteSpace: 'nowrap' }}>
                         {COLS[0].cell(r)}
                       </td>
-                      {visibleCols.map(c => (
+                      {COLS.slice(1).map(c => (
                         <td key={c.id} style={{
                           ...S.td, textAlign: c.align,
                           ...(c.align === 'right' ? { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } : {}),
@@ -735,7 +719,7 @@ export function AccountsPayableReceivableReport({
                     </tr>
                     {isOpen && (
                       <tr>
-                        <td colSpan={visibleCols.length + 2} style={{ padding: 0, backgroundColor: '#f8fafc' }}>
+                        <td colSpan={COLS.length + 1} style={{ padding: 0, backgroundColor: '#f8fafc' }}>
                           <div style={{ position: 'sticky', left: 0, width: panelWidth || undefined }}>
                           <HistoryPanel
                             counterparty={r.counterparty}
@@ -753,7 +737,7 @@ export function AccountsPayableReceivableReport({
               <tfoot>
                 <tr style={{ backgroundColor: '#0f172a' }}>
                   <td style={{ ...S.td, ...S.freeze0, backgroundColor: '#0f172a' }} />
-                  {[COLS[0], ...visibleCols].map(c => {
+                  {COLS.map(c => {
                     const map: Record<string, number> = {
                       amount: totals.amount, received: totals.received, paid: totals.paid,
                       remRecv: totals.recv, remPay: totals.pay,
@@ -764,7 +748,7 @@ export function AccountsPayableReceivableReport({
                         whiteSpace: 'nowrap',
                       }}>
                         {c.id === 'date' ? 'Filtered Total'
-                          : c.id in map ? aed(map[c.id])
+                          : c.id in map ? aed(map[c.id], currency)
                           : ''}
                       </td>
                     );
@@ -773,9 +757,6 @@ export function AccountsPayableReceivableReport({
               </tfoot>
             )}
           </table>
-        </div>
-        <div style={{ padding: '0 18px' }}>
-          <PaginationBar controller={pg} />
         </div>
       </div>
 
@@ -900,6 +881,7 @@ function PanelRow({ label, selected, onClick, muted }: {
 /** Everything that ever happened with one counterparty, oldest first, with a
  *  running balance so the closing position is traceable line by line. */
 function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[] }) {
+  const { primary: currency } = useCurrency();
   // Oldest first here, unlike the main register — a running balance only reads
   // correctly downwards.
   const ordered = [...rows].sort((a, b) =>
@@ -926,12 +908,12 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
           {net === 0
             ? 'Settled — nothing outstanding'
             : net > 0
-              ? `${aed(net)} to receive`
-              : `${aed(Math.abs(net))} to pay`}
+              ? `${aed(net, currency)} to receive`
+              : `${aed(Math.abs(net), currency)} to pay`}
         </span>
       </div>
 
-      <LockedScrollTable maxHeight="70vh" className="rounded-lg border border-gray-200">
+      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid #e2e8f0' }}>
       <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', fontSize: 11.5, backgroundColor: '#fff' }}>
         <thead>
           <tr style={{ backgroundColor: '#f1f5f9' }}>
@@ -954,8 +936,8 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
             const bal = h.runRecv - h.runPay;   // running, not closing
             const remainingLabel =
               Math.abs(bal) < 0.01 ? '—'
-              : bal > 0            ? `${aed(bal)} to receive`
-                                   : `${aed(Math.abs(bal))} to pay`;
+              : bal > 0            ? `${aed(bal, currency)} to receive`
+                                   : `${aed(Math.abs(bal), currency)} to pay`;
             // Follows the RUNNING figure in the column beside it. Using the
             // row's closing status here put "Cleared" next to "3,400 to pay"
             // on the same line — the day the money was still owed.
@@ -972,9 +954,9 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
                 <td style={S.hTd}>{h.category}</td>
                 <td style={S.hTd}>{h.subCategory}</td>
                 <td style={{ ...S.hTd, fontFamily: 'monospace', fontSize: 10.5, color: '#4f46e5' }}>{h.refNo || '—'}</td>
-                <td style={S.hNum}>{aed(h.amount)}</td>
-                <td style={{ ...S.hNum, color: h.received ? '#059669' : '#cbd5e1' }}>{aed(h.received)}</td>
-                <td style={{ ...S.hNum, color: h.paid ? '#dc2626' : '#cbd5e1' }}>{aed(h.paid)}</td>
+                <td style={S.hNum}>{aed(h.amount, currency)}</td>
+                <td style={{ ...S.hNum, color: h.received ? '#059669' : '#cbd5e1' }}>{aed(h.received, currency)}</td>
+                <td style={{ ...S.hNum, color: h.paid ? '#dc2626' : '#cbd5e1' }}>{aed(h.paid, currency)}</td>
                 <td style={{
                   ...S.hTd, fontWeight: 800, paddingLeft: 28,
                   color: Math.abs(bal) < 0.01 ? '#94a3b8' : bal > 0 ? '#047857' : '#dc2626',
@@ -990,7 +972,7 @@ function HistoryPanel({ counterparty, rows }: { counterparty: string; rows: Row[
           })}
         </tbody>
       </table>
-      </LockedScrollTable>
+      </div>
 
       <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 7 }}>
         Full history for this counterparty — filters above do not narrow it.

@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import { Search, Package, ArrowLeft, Loader2, Plus, Hash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UseInventoryAddExistingViewModelReturn } from '../viewModels/useInventoryAddExistingViewModel';
@@ -24,6 +25,11 @@ export const InventoryAddExistingView: React.FC<Props> = ({
   cities, formatCurrency,
 }) => {
   const navigate = useNavigate();
+
+  // Subscribed purely so this view re-renders the instant the Admin changes
+  // the global currency — fmtPrimary()/getGlobalCurrencySymbol() below always
+  // read the live value regardless of this call.
+  useGlobalCurrency();
 
   // ── Currency ──────────────────────────────────────────────────────────────
   const ratesLoading = false;

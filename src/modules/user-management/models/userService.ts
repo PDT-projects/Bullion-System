@@ -36,23 +36,12 @@ export type Screen =
   | 'Create Advance Salary'
   | 'Salary Edit'
   | 'Salary Delete'
-  // Banking
-  | 'Banking Dashboard'
-  | 'Bank Accounts List'
-  | 'Create Bank'
-  | 'Edit Bank'
-  | 'Delete Bank'
-  | 'Bank Transfers List'
-  | 'Create Bank Transfer'
-  | 'Cash List'
-  | 'Create Cash Entry'
   // Invoices
   | 'Invoices List'
   | 'Create Invoice'
   | 'Edit Invoice'
   | 'Delete Invoice'
   | 'Invoice Reports'
-  | 'Against Invoice'
   | 'Dummy Invoices'
   | 'Deleted Invoices'
   // Inventory
@@ -134,13 +123,8 @@ export const VIEW_ONLY_SCREENS: Screen[] = [
   'Salary All List',
   'Salary Regular List',
   'Salary Advance List',
-  'Banking Dashboard',
-  'Bank Accounts List',
-  'Bank Transfers List',
-  'Cash List',
   'Invoices List',
   'Invoice Reports',
-  'Against Invoice',
   'Dummy Invoices',
   'Deleted Invoices',
   'Inventory Dashboard',
@@ -195,15 +179,8 @@ export const ALL_SCREEN_GROUPS: ScreenGroup[] = [
     ]
   },
   {
-    title: 'Banking',
-    screens: [
-      'Banking Dashboard', 'Bank Accounts List', 'Create Bank', 'Edit Bank', 'Delete Bank',
-      'Bank Transfers List', 'Create Bank Transfer', 'Cash List', 'Create Cash Entry'
-    ]
-  },
-  {
     title: 'Invoices',
-    screens: ['Invoices List', 'Create Invoice', 'Edit Invoice', 'Delete Invoice', 'Invoice Reports', 'Against Invoice', 'Dummy Invoices', 'Deleted Invoices']
+    screens: ['Invoices List', 'Create Invoice', 'Edit Invoice', 'Delete Invoice', 'Invoice Reports', 'Dummy Invoices', 'Deleted Invoices']
   },
   {
     title: 'Inventory',

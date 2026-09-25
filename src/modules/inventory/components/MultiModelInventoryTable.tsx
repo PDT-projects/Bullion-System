@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { Plus, Trash2, Edit3 } from 'lucide-react';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 interface MultiModelRow {
   modelId: string;
@@ -23,6 +24,8 @@ interface MultiModelInventoryTableProps {
 export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> = ({
   models, onUpdateModel, onAddModel, onRemoveModel, onEditModel,
 }) => {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -43,7 +46,7 @@ export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> =
             <thead>
               <tr className="border-b">
                 <th className="text-left p-3 font-semibold text-gray-900 w-48">Model</th>
-                <th className="text-right p-3 font-semibold text-gray-900">DC Cost (PKR)</th>
+                <th className="text-right p-3 font-semibold text-gray-900">DC Cost ({currencySymbol})</th>
                 <th className="text-right p-3 font-semibold text-gray-900">Sale Price</th>
                 <th className="text-right p-3 font-semibold text-gray-900">Qty</th>
                 <th className="text-right p-3 font-semibold text-gray-900 w-24">Total Sale</th>
@@ -56,7 +59,7 @@ export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> =
                   <td className="p-3 font-medium">{model.modelName}</td>
                   <td className="p-3 text-right">
                     <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
-                      PKR {model.costPrice.toLocaleString()}
+                      {currencySymbol} {model.costPrice.toLocaleString()}
                     </span>
                   </td>
                   <td className="p-3">
@@ -72,7 +75,7 @@ export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> =
                       className="w-20 text-right border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                   </td>
                   <td className="p-3 text-right font-semibold text-lg text-green-600">
-                    PKR {(model.salePrice * model.quantity).toLocaleString()}
+                    {currencySymbol} {(model.salePrice * model.quantity).toLocaleString()}
                   </td>
                   <td className="p-3">
                     <div className="flex gap-1">
@@ -93,7 +96,7 @@ export const MultiModelInventoryTable: React.FC<MultiModelInventoryTableProps> =
               <tr className="border-t font-bold bg-gray-50">
                 <td colSpan={4} className="p-3 text-right">Grand Total:</td>
                 <td className="p-3 text-right text-2xl text-green-700">
-                  PKR {models.reduce((sum, m) => sum + m.salePrice * m.quantity, 0).toLocaleString()}
+                  {currencySymbol} {models.reduce((sum, m) => sum + m.salePrice * m.quantity, 0).toLocaleString()}
                 </td>
                 <td className="p-3"></td>
               </tr>

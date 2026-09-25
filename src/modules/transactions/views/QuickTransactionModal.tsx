@@ -42,6 +42,13 @@ import {
 } from '../../purchased-orders';
 import type { Shipment, ChargeKind } from '../../purchased-orders';
 import { computeSubCategoryRemaining } from '../models/transactionsService';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+
+// Follows the Admin-selected global currency everywhere in this modal, same
+// as TransactionListView.tsx's own CURRENCY(). Previously every amount here
+// was hardcoded to the literal string "AED", so switching the app's currency
+// (e.g. to PKR) never showed up in Add Transaction — only elsewhere in the app.
+const CURRENCY = () => getGlobalCurrencySymbol();
 
 // ── Props ───────────────────────────────────────────────────────────────────
 interface Props {
@@ -402,6 +409,18 @@ export function QuickTransactionModal({
       r.readAsDataURL(f);
     });
 
+  // ── Bank balance ─────────────────────────────────────────────────────
+  // No write happens here on purpose. A bank's stored `balance` field is the
+  // static OPENING seed only — exactly like Cash-in-Hand's opening balance —
+  // and every screen that shows a "live" bank balance (this modal's Account
+  // dropdown via useAccountBalances.banksWithLiveBalance, the Transactions
+  // page's "Banks" tile, Banks Manager, the Dashboard, the Balance Sheet)
+  // derives it the same way: computeBankBalance(transactions, bankId, opening).
+  // Writing a running total into the stored field here would double-count
+  // every transaction the moment a ledger entry for it also exists (which it
+  // always does) — that was a real bug shipped briefly in this file; see
+  // useAccountBalances.ts for the read-side fix and history.
+
   // ── Submit ───────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     // Validation
@@ -423,7 +442,7 @@ export function QuickTransactionModal({
         toast.error('This invoice is fully paid — nothing left to record'); return;
       }
       if (Number(totalAmount) > invoiceStats.remaining) {
-        toast.error(`Amount cannot exceed remaining balance (AED ${invoiceStats.remaining.toLocaleString()})`);
+        toast.error(`Amount cannot exceed remaining balance (${CURRENCY()} ${invoiceStats.remaining.toLocaleString()})`);
         return;
       }
     }
@@ -434,7 +453,7 @@ export function QuickTransactionModal({
       if (isSupplierPay && selectedShipment) {
         const left = supplierRemaining(selectedShipment);
         if (Number(totalAmount) > left + 0.01) {
-          toast.error(`Only AED ${left.toLocaleString()} is outstanding on this shipment`);
+          toast.error(`Only ${CURRENCY()} ${left.toLocaleString()} is outstanding on this shipment`);
           return;
         }
       }
@@ -449,7 +468,7 @@ export function QuickTransactionModal({
         toast.error('Supplier already fully paid for this invoice'); return;
       }
       if (Number(totalAmount) > supplierStats.remaining) {
-        toast.error(`Amount cannot exceed supplier balance (AED ${supplierStats.remaining.toLocaleString()})`);
+        toast.error(`Amount cannot exceed supplier balance (${CURRENCY()} ${supplierStats.remaining.toLocaleString()})`);
         return;
       }
     }
@@ -626,11 +645,34 @@ export function QuickTransactionModal({
       // A failure here leaves the money recorded and the shipment not updated,
       // so it is reported rather than swallowed — the charge can then be added
       // by hand from the shipment.
+      // Appended to the final success toast below when adding this charge
+      // caused something worth knowing about — an adjustment invoice.
+      // Recording a shipment charge from here used to silently discard that
+      // outcome: the same allocateNewChargeAcrossShipment() logic runs
+      // either way (addCharge() is the one method both this modal and the
+      // shipment's own "Add charge" form call), but only the shipment
+      // page's form ever reported it — from here you'd get "Transaction
+      // recorded" whether or not an invoice had just been created behind it.
+      let chargeOutcomeNote = '';
+
       if (isPurchaseOrder && shipmentId) {
         try {
+          // Credit the shipment with what was ACTUALLY paid this time (`paid`),
+          // never `total`. `total` is "how much of the shipment's balance this
+          // transaction is addressing" (validated above against what's still
+          // outstanding) — `paid` is the real cash that changed hands, which
+          // can be less when Amount Paid was entered as a partial amount.
+          // This used to pass `total` unconditionally, so a transaction
+          // entered as e.g. Total 2,400 / Amount Paid 400 (a partial payment,
+          // 2,000 still due) credited the shipment with the full 2,400 —
+          // instantly marking it fully "Settled" with Rs 0 remaining, even
+          // though only 400 had actually been handed over. `paid` and `total`
+          // are equal whenever Amount Paid is left blank or matches the full
+          // amount (the common case), so a full payment behaves exactly as
+          // before — only the previously-broken partial case changes.
           if (isSupplierPay) {
             await PurchasedOrderFirebaseService.recordSupplierPayment(shipmentId, {
-              amount: total,
+              amount: paid,
               date: manualDate,
               description: description || 'Payment to supplier',
               transactionId: txId,
@@ -638,15 +680,18 @@ export function QuickTransactionModal({
               bankName: isCash ? undefined : selectedAccount?.name,
             });
           } else {
-            await PurchasedOrderFirebaseService.addCharge(shipmentId, {
+            const result = await PurchasedOrderFirebaseService.addCharge(shipmentId, {
               kind: poSubKind as 'Customs' | 'Freight' | 'Tax' | 'Other',
-              amount: total,
+              amount: paid,
               date: manualDate,
               description: description || `${poSubKind} paid`,
               transactionId: txId,
               transactionRef: txId,
               bankName: isCash ? undefined : selectedAccount?.name,
             });
+            if (result.adjustmentInvoiceNumbers.length > 0) {
+              chargeOutcomeNote = ` — auto-absorbed via adjustment invoice ${result.adjustmentInvoiceNumbers.join(', ')} (see Invoices)`;
+            }
           }
         } catch (linkErr: any) {
           toast.error(
@@ -655,7 +700,7 @@ export function QuickTransactionModal({
         }
       }
 
-      toast.success(`Transaction ${txId} recorded`);
+      toast.success(`Transaction ${txId} recorded${chargeOutcomeNote}`, chargeOutcomeNote ? { duration: 8000 } : undefined);
       onSaved();
       onClose();
     } catch (err: any) {
@@ -926,7 +971,7 @@ export function QuickTransactionModal({
                 {eligibleShipments.map(sh => (
                   <option key={sh.id} value={sh.id}>
                     {sh.shipmentNumber} · {sh.supplierName}
-                    {isSupplierPay ? ` — AED ${supplierRemaining(sh).toLocaleString()} left` : ''}
+                    {isSupplierPay ? ` — ${CURRENCY()} ${supplierRemaining(sh).toLocaleString()} left` : ''}
                   </option>
                 ))}
               </select>
@@ -942,17 +987,17 @@ export function QuickTransactionModal({
                     <>
                       <span style={{ color: '#64748b' }}>Owed for received goods</span>
                       <span style={{ fontWeight: 700, color: '#0f172a' }}>
-                        AED {supplierPayable(selectedShipment).toLocaleString()}
+                        {CURRENCY()} {supplierPayable(selectedShipment).toLocaleString()}
                       </span>
                       <span style={{ color: '#64748b' }}>Already paid</span>
                       <span style={{ fontWeight: 700, color: '#15803d' }}>
-                        AED {(Number(selectedShipment.supplierPaidAmount) || 0).toLocaleString()}
+                        {CURRENCY()} {(Number(selectedShipment.supplierPaidAmount) || 0).toLocaleString()}
                       </span>
                       <span style={{ color: '#3730a3', fontWeight: 700, paddingTop: 4, borderTop: '1px solid #eef2ff' }}>
                         Remaining
                       </span>
                       <span style={{ fontWeight: 800, color: '#b45309', paddingTop: 4, borderTop: '1px solid #eef2ff' }}>
-                        AED {supplierRemaining(selectedShipment).toLocaleString()}
+                        {CURRENCY()} {supplierRemaining(selectedShipment).toLocaleString()}
                       </span>
                     </>
                   ) : (() => {
@@ -961,15 +1006,15 @@ export function QuickTransactionModal({
                       <>
                         <span style={{ color: '#64748b' }}>Customs so far</span>
                         <span style={{ fontWeight: 700, color: ct.customs > 0 ? '#0f172a' : '#cbd5e1' }}>
-                          AED {ct.customs.toLocaleString()}
+                          {CURRENCY()} {ct.customs.toLocaleString()}
                         </span>
                         <span style={{ color: '#64748b' }}>Freight so far</span>
                         <span style={{ fontWeight: 700, color: ct.freight > 0 ? '#0f172a' : '#cbd5e1' }}>
-                          AED {ct.freight.toLocaleString()}
+                          {CURRENCY()} {ct.freight.toLocaleString()}
                         </span>
                         <span style={{ color: '#64748b' }}>Tax · Other</span>
                         <span style={{ fontWeight: 700, color: '#0f172a' }}>
-                          AED {(ct.tax + ct.other).toLocaleString()}
+                          {CURRENCY()} {(ct.tax + ct.other).toLocaleString()}
                         </span>
                       </>
                     );
@@ -1049,7 +1094,7 @@ export function QuickTransactionModal({
                     })
                     .map(inv => {
                       // Compose the display label per user spec:
-                      //   INV-XXX — CustomerFirstName · AED remaining
+                      //   INV-XXX — CustomerFirstName · <currency symbol> remaining
                       // For Sales Invoice → customer remaining
                       // For Sold Goods Payment → supplier remaining
                       // For Misc Expense → full total
@@ -1071,7 +1116,7 @@ export function QuickTransactionModal({
                       } else {
                         shownAmt = Number((inv as any).totalAmount) || 0;
                       }
-                      const label = `${inv.invoiceNumber} — ${identity} · AED ${shownAmt.toLocaleString()}${partialTag}`;
+                      const label = `${inv.invoiceNumber} — ${identity} · ${CURRENCY()} ${shownAmt.toLocaleString()}${partialTag}`;
                       return <option key={inv.id} value={inv.id}>{label}</option>;
                     })}
                 </select>
@@ -1156,7 +1201,7 @@ export function QuickTransactionModal({
                                 {p.bankName || p.note || '—'}
                               </span>
                               <span style={{ color: '#059669', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                                AED {(Number(p.amount) || 0).toLocaleString()}
+                                {CURRENCY()} {(Number(p.amount) || 0).toLocaleString()}
                               </span>
                             </div>
                           ))}
@@ -1292,24 +1337,45 @@ export function QuickTransactionModal({
               />
               {isSalesInvoice && selectedInvoice && invoiceStats.remaining > 0 && (
                 <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
-                  Max <b>AED {invoiceStats.remaining.toLocaleString()}</b> — invoice's remaining balance
+                  Max <b>{CURRENCY()} {invoiceStats.remaining.toLocaleString()}</b> — invoice's remaining balance
                 </div>
               )}
               {isSoldGoodsPayment && selectedInvoice && supplierStats.remaining > 0 && (
                 <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
-                  Max <b>AED {supplierStats.remaining.toLocaleString()}</b> — outstanding supplier balance
+                  Max <b>{CURRENCY()} {supplierStats.remaining.toLocaleString()}</b> — outstanding supplier balance
                 </div>
               )}
             </div>
             <div>
-              <label style={label}>Amount Received</label>
+              {/* Was a single static "Amount Received" label for BOTH Inflow
+                  and Outflow. For an Outflow (paying a supplier, a shipment's
+                  customs/freight charge, etc.) "received" makes no sense —
+                  you're the one paying — so anyone entering a partial outflow
+                  payment had no field that read as theirs to fill in, and
+                  left it blank. Blank is read as "fully paid" (see hint
+                  below), which is why a genuinely partial payment recorded
+                  here would silently show as fully Settled with no Balance
+                  Due anywhere — not a display bug, a data-entry one. The
+                  other "Add Transaction" screen (TransactionFormView) already
+                  gets this right with type-specific copy; this just matches
+                  it. */}
+              <label style={label}>{type === 'Inflow' ? 'Amount Received' : 'Amount Paid'}</label>
               <input
                 type="number" min={0} step="any"
                 value={amountReceived}
                 onChange={e => setAmountReceived(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
-                placeholder="Leave blank if fully received"
+                placeholder={type === 'Inflow' ? 'Leave blank if fully received' : 'Leave blank if fully paid'}
                 style={inp}
               />
+              {/* Immediate feedback at entry time — so "nothing shows the
+                  balance is due" can't happen silently. Total Amount must be
+                  set and Amount Received/Paid must be a smaller, explicit
+                  number for this to show anything. */}
+              {totalAmount !== '' && Number(totalAmount) > 0 && amountReceived !== '' && Number(amountReceived) < Number(totalAmount) && (
+                <div style={{ fontSize: 11, color: '#c2410c', marginTop: 4, fontWeight: 600 }}>
+                  Balance due: {CURRENCY()} {(Number(totalAmount) - Number(amountReceived)).toLocaleString()}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1467,7 +1533,7 @@ function SumCell({ label, value, fg, bold }: { label: string; value: number; fg:
     <div style={{ textAlign: 'center', padding: '6px 4px', backgroundColor: '#f8fafc', borderRadius: 6 }}>
       <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
       <div style={{ fontSize: 13, fontWeight: bold ? 800 : 700, color: fg, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
-        <span style={{ fontSize: 10, color: '#94a3b8', marginRight: 3 }}>AED</span>{value.toLocaleString()}
+        <span style={{ fontSize: 10, color: '#94a3b8', marginRight: 3 }}>{CURRENCY()}</span>{value.toLocaleString()}
       </div>
     </div>
   );

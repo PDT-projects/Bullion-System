@@ -1,133 +1,127 @@
-// Global Currency — how money is DISPLAYED across the whole app.
+// Plain (non-React) mirror of the system-wide currency setting.
 //
-// IMPORTANT — what this is and isn't:
-//   - Every amount is stored in Firestore in AED and NEVER changes there —
-//     no product, invoice, transaction, or shipment document is ever
-//     touched by this feature. Storage and every calculation stay AED.
-//   - What DOES change: on screen (and in PDF/Excel exports), only the
-//     currency SYMBOL/NAME printed next to a number changes — e.g.
-//     selecting Canadian Dollar shows "CA$ 5,000" for a product that's
-//     "AED 5,000" in the database. The number itself is never converted —
-//     there is no exchange rate involved anywhere in this feature.
-//   - It is global: one setting, one Firestore doc, read by every module.
+// useGlobalCurrency.tsx covers React components. This file exists for code
+// that reads the currency outside a component render — a module-level
+// constant evaluated once (e.g. `const CURRENCY = () => getGlobalCurrencySymbol()`
+// in TransactionListView.tsx), or a plain service file with no hooks at all
+// (transactionsService.ts's `formatCurrency`).
+//
+// currentCode's PRIMARY source is syncGlobalCurrencyCode(), called directly
+// by CurrencyContext.tsx whenever its own (confirmed-reliable) Firestore
+// subscription delivers a value. bootGlobalCurrency()/GlobalCurrencyBoot
+// below is a second, independent subscription to the same doc, kept as a
+// belt-and-suspenders backup for code that runs before any component using
+// useCurrency()/useGlobalCurrency() has rendered — but nothing here depends
+// on it firing; the sync call from CurrencyContext is what actually keeps
+// this file correct in practice.
+//
+// Symbol-only: nothing here converts a stored number. formatGlobalCurrency
+// only changes the label Intl.NumberFormat prints next to a figure.
 
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../../api/firebase/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from '../../api/firebase/firebase';
+import { CURRENCIES } from '../../features/finance/currencyUtils';
 
-export interface GlobalCurrencySetting {
-  code: string;    // e.g. 'AED', 'CAD' — which currency's symbol/name to show
-  symbol: string;   // what's actually printed, e.g. 'AED', 'CA$', 'Rs'
-  name: string;     // display name, e.g. 'Canadian Dollar'
-  updatedAt?: string;
-  updatedBy?: string;
-}
+const SETTINGS_DOC = doc(db, 'settings', 'currency');
+const DEFAULT_CODE = 'AED';
 
-export const DEFAULT_GLOBAL_CURRENCY: GlobalCurrencySetting = {
-  code: 'AED',
-  symbol: 'AED',
-  name: 'UAE Dirham',
+/** Short, unambiguous symbol for each currency User Management's dropdown offers. */
+const CODE_SYMBOL: Record<string, string> = {
+  PKR: 'Rs',
+  USD: '$',
+  CAD: 'CA$',
+  AED: 'AED',
+  SAR: 'SAR',
 };
 
-const DOC_PATH = { collection: 'appConfig', id: 'globalCurrency' };
+let currentCode: string = DEFAULT_CODE;
+let unsubscribeDoc: (() => void) | null = null;
+let unsubscribeAuth: (() => void) | null = null;
 
-// ── In-memory cache ──────────────────────────────────────────────────────
-// formatCurrency() below is called synchronously, all over the app, often
-// outside of any React component (plain service files). It can't `await`
-// Firestore on every call, so we keep the current value in memory and
-// refresh it (a) once on app boot and (b) whenever it's changed.
-let current: GlobalCurrencySetting = { ...DEFAULT_GLOBAL_CURRENCY };
-let loaded = false;
-
-type Listener = (c: GlobalCurrencySetting) => void;
-const listeners = new Set<Listener>();
-
-function notify() {
-  listeners.forEach(l => l(current));
+/**
+ * Direct setter, called by CurrencyContext.tsx every time its own
+ * (confirmed-reliable) Firestore subscription delivers a value — on the
+ * initial snapshot and on every later change, plus optimistically inside
+ * setPrimary(). This is what actually keeps currentCode correct in the
+ * running app; see the file-level comment above for why.
+ */
+export function syncGlobalCurrencyCode(code: string): void {
+  currentCode = code;
 }
 
-/** Call once, early (e.g. in App.tsx / your root provider), and await it
- *  before rendering — this is what loads the real saved value out of
- *  Firestore instead of the AED default. Safe to call again later too. */
-export async function loadGlobalCurrency(): Promise<GlobalCurrencySetting> {
-  try {
-    const ref = doc(db, DOC_PATH.collection, DOC_PATH.id);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const data = snap.data() as Partial<GlobalCurrencySetting>;
-      current = {
-        code: data.code || DEFAULT_GLOBAL_CURRENCY.code,
-        symbol: data.symbol || DEFAULT_GLOBAL_CURRENCY.symbol,
-        name: data.name || DEFAULT_GLOBAL_CURRENCY.name,
-        updatedAt: data.updatedAt,
-        updatedBy: data.updatedBy,
-      };
+/**
+ * Starts the live Firestore subscription backing every getter below.
+ *
+ * `settings/{docId}` requires auth (firestore.rules: `allow read, write: if
+ * isAuth()`), and this is booted from the very top of App.tsx — before
+ * Firebase Auth has restored the session on a fresh page load. Subscribing
+ * immediately would hit permission-denied and die for good (Firestore does
+ * not retry a listener that failed on permissions, even once the user is
+ * signed in moments later), so this waits for onAuthStateChanged and
+ * re-subscribes on every auth change instead of subscribing directly.
+ *
+ * Idempotent — calling it again while already booted just returns the same
+ * teardown function instead of registering a second auth listener.
+ *
+ * Kept as a backup path only — see the file-level comment. Not required for
+ * currentCode to stay correct.
+ */
+export function bootGlobalCurrency(): () => void {
+  if (unsubscribeAuth) return teardown;
+
+  unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    unsubscribeDoc?.();
+    unsubscribeDoc = null;
+
+    if (!user) {
+      // Signed out (or not yet signed in) — nothing we're allowed to read.
+      // Getters keep returning the last known value (or the AED default).
+      return;
     }
-  } catch (err) {
-    console.warn('[globalCurrency] failed to load, using default:', err);
-  } finally {
-    loaded = true;
-    notify();
-  }
-  return current;
+
+    unsubscribeDoc = onSnapshot(
+      SETTINGS_DOC,
+      (snap) => {
+        const code = snap.exists() ? (snap.data() as any)?.code : undefined;
+        currentCode = typeof code === 'string' && code ? code : DEFAULT_CODE;
+      },
+      (err) => {
+        console.error('[globalCurrency] settings/currency subscription failed:', err);
+      },
+    );
+  });
+
+  return teardown;
 }
 
-/** Admin action: change which currency's symbol/name is shown everywhere.
- *  Only writes this small settings doc — never touches any
- *  product/invoice/shipment amount anywhere, and never converts anything. */
-export async function setGlobalCurrency(next: { code: string; symbol: string; name: string }, updatedBy?: string): Promise<void> {
-  const ref = doc(db, DOC_PATH.collection, DOC_PATH.id);
-  const value: GlobalCurrencySetting = {
-    code: next.code.trim(),
-    symbol: next.symbol.trim(),
-    name: next.name.trim(),
-    updatedAt: new Date().toISOString(),
-    ...(updatedBy ? { updatedBy } : {}),
+function teardown() {
+  unsubscribeDoc?.();
+  unsubscribeAuth?.();
+  unsubscribeDoc = null;
+  unsubscribeAuth = null;
+}
+
+export function getGlobalCurrency(): { code: string; name: string; symbol: string } {
+  const meta = CURRENCIES.find(c => c.code === currentCode);
+  return {
+    code: currentCode,
+    name: meta?.label ?? currentCode,
+    symbol: CODE_SYMBOL[currentCode] ?? currentCode,
   };
-  await setDoc(ref, value, { merge: true });
-  current = value;
-  notify();
 }
 
-/** Read the current setting synchronously (from cache). */
-export function getGlobalCurrency(): GlobalCurrencySetting {
-  return current;
-}
-
-export function isGlobalCurrencyLoaded(): boolean {
-  return loaded;
-}
-
-/** Subscribe to changes — used by the useGlobalCurrency() hook below so
- *  components re-render the instant Admin clicks Apply, no reload needed. */
-export function subscribeToGlobalCurrency(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-// ── The one formatCurrency() every module should use ────────────────────
-// Takes an amount that is ALWAYS AED (that's what's stored/calculated
-// everywhere) and formats it with the currently-selected display symbol.
-// The NUMBER is never converted or changed — this only changes what
-// currency symbol is printed next to it.
-export function formatGlobalCurrency(amountAed: number, opts?: { minimumFractionDigits?: number }): string {
-  const n = Number(amountAed) || 0;
-  const frac = opts?.minimumFractionDigits ?? (current.code === 'AED' || current.code === 'PKR' ? 0 : 2);
-  try {
-    const formatted = new Intl.NumberFormat('en-US', {
-      minimumFractionDigits: frac,
-      maximumFractionDigits: frac,
-    }).format(n);
-    return `${current.symbol} ${formatted}`;
-  } catch {
-    return `${current.symbol} ${n.toFixed(frac)}`;
-  }
-}
-
-/** For places that just need the symbol/name (e.g. table headers,
- *  "Amount (AED)" style labels, PDF footers). */
 export function getGlobalCurrencySymbol(): string {
-  return current.symbol;
+  return CODE_SYMBOL[currentCode] ?? currentCode;
 }
-export function getGlobalCurrencyName(): string {
-  return current.name;
+
+/** Formats a stored figure in the live global currency. No conversion —
+ *  same number, different label. Returns '—' for an undefined amount. */
+export function formatGlobalCurrency(amount?: number): string {
+  if (amount === undefined) return '—';
+  return new Intl.NumberFormat('en-AE', {
+    style: 'currency',
+    currency: currentCode,
+    minimumFractionDigits: 0,
+  }).format(amount);
 }

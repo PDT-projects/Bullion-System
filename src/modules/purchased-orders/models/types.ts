@@ -65,6 +65,19 @@ export interface ShipmentCharge {
   transactionRef?: string;
   bankName?: string;
   createdAt: string;
+
+  /**
+   * Adjustment invoice(s) this specific charge caused, if any.
+   *
+   * Set when adding this charge found a line with no stock left to carry
+   * its share (see orphanedChargeAbsorption.ts) — one charge can spawn more
+   * than one, if several lines were already fully sold. Previously the only
+   * record of this was a one-time toast shown at the moment the charge was
+   * added; once dismissed there was no way to see it again from the
+   * shipment itself. Persisting it here lets the charge history show it
+   * permanently instead.
+   */
+  adjustmentInvoiceNumbers?: string[];
 }
 
 /**

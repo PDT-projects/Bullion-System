@@ -142,6 +142,21 @@ export interface Invoice {
   // ── Return tracking (set when a sold serial is returned via Inventory) ──
   returnedSerials?: string[];
   returnedAt?: string;
+
+  /**
+   * Set on an invoice the Purchased Orders module created for itself — the
+   * $0-revenue "adjustment" invoice it books when an import charge arrives
+   * after every unit of a shipment line has already been sold, with nowhere
+   * left to carry the cost (see orphanedChargeAbsorption.ts).
+   *
+   * Previously the only trace of which shipment caused one of these was a
+   * sentence buried in exchangeWarrantyNote, readable only by opening the
+   * invoice — the list itself gave no clue. These two fields let the list
+   * show it directly, and let anything else look the shipment up without
+   * parsing free text.
+   */
+  sourceShipmentId?: string;
+  sourceShipmentNumber?: string;
 }
 
 export interface DeletedInvoice extends Invoice {
@@ -191,6 +206,10 @@ export interface CreateInvoiceDTO {
   purchaseCostTotal?: number;
   miscExpense?: number;
   digitalStamp?: boolean;
+
+  /** See the matching fields on Invoice. */
+  sourceShipmentId?: string;
+  sourceShipmentNumber?: string;
 }
 
 export interface UpdateInvoiceDTO extends CreateInvoiceDTO {

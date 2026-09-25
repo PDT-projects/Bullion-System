@@ -73,6 +73,14 @@ export interface DummyInvoice {
   // Sales
   salesperson?: string;
   notes?:       string;
+  // Attachment + stamp — independent of the real invoice's inventory-sourced
+  // product images: a dummy invoice has no linked product to pull a photo
+  // from, so this is a single image the user attaches directly (stored as a
+  // resized base64 data URL — no Storage bucket needed for a lightweight
+  // draft-only record). digitalStamp reuses the same PDF rendering path as
+  // real invoices (see invoicePdfService.ts's wantsLogo()).
+  imageDataUrl?: string;
+  digitalStamp?: boolean;
   // Meta
   createdAt: string;
   updatedAt: string;

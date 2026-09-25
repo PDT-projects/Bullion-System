@@ -241,7 +241,7 @@ export class PurchasedOrderFirebaseService {
    * was right on Monday is wrong on Friday with nothing recording why. Reopen
    * the costing first.
    */
-  static async addCharge(id: string, charge: Omit<ShipmentCharge, 'id' | 'createdAt'>): Promise<{ adjustmentInvoiceNumber: string | null; adjustmentInvoiceNumbers: string[]; serialsToppedUp: number }> {
+  static async addCharge(id: string, charge: Omit<ShipmentCharge, 'id' | 'createdAt'>): Promise<{ adjustmentInvoiceNumber: string | null; adjustmentInvoiceNumbers: string[] }> {
     const current = await this.fetchById(id);
     if (!current) throw new Error('Shipment not found');
     if (current.costingStatus === 'Complete') {
@@ -267,20 +267,45 @@ export class PurchasedOrderFirebaseService {
     }));
 
     // Give every line its value-proportional share of the new charge, and
-    // route each share to wherever it needs to go — topped up onto unsold
-    // stock, or absorbed via a dummy adjustment invoice for any line whose
-    // stock is already fully sold. Never let a hiccup here fail the charge
+    // absorb it via a dummy adjustment invoice for any line that has already
+    // been stocked in — whether its unit(s) are unsold or already sold, both
+    // get the same treatment now. Never let a hiccup here fail the charge
     // that was already saved above.
-    let allocation: { adjustmentInvoiceNumbers: string[]; serialsToppedUp: number } = { adjustmentInvoiceNumbers: [], serialsToppedUp: 0 };
+    let allocation: { adjustmentInvoiceNumbers: string[] } = { adjustmentInvoiceNumbers: [] };
     try {
       allocation = await allocateNewChargeAcrossShipment(current, next.amount, next.description);
     } catch (err) {
       console.error('[addCharge] charge allocation failed (charge was still saved):', err);
     }
+
+    // Record which adjustment invoice(s) this charge caused, on the charge
+    // itself — the charge was already written above, before the allocation
+    // ran, so this is a second, small update rather than something foldable
+    // into the first. Without it, the only trace of the link was a toast
+    // shown once at the moment this happened; the charge history (Charges
+    // and payments, on the shipment's own page) had no memory of it at all.
+    // Re-fetches rather than reusing `current` because addCharge and
+    // allocateNewChargeAcrossShipment may have both touched the document by
+    // now, and writing from a stale copy would drop whichever changed.
+    if (allocation.adjustmentInvoiceNumbers.length > 0) {
+      try {
+        const after = await this.fetchById(id);
+        if (after) {
+          await updateDoc(doc(db, COLLECTION, id), stripUndefined({
+            charges: (after.charges || []).map(c =>
+              c.id === next.id ? { ...c, adjustmentInvoiceNumbers: allocation.adjustmentInvoiceNumbers } : c
+            ),
+            updatedAt: new Date().toISOString(),
+          }));
+        }
+      } catch (err) {
+        console.error('[addCharge] failed to record the adjustment-invoice link on the charge:', err);
+      }
+    }
+
     return {
       adjustmentInvoiceNumber: allocation.adjustmentInvoiceNumbers[0] || null,
       adjustmentInvoiceNumbers: allocation.adjustmentInvoiceNumbers,
-      serialsToppedUp: allocation.serialsToppedUp,
     };
   }
 
@@ -462,8 +487,17 @@ export class PurchasedOrderFirebaseService {
       stockedBy: batch.stockedBy,
     };
 
+    // `linkedProductId` is meant to record which inventory product this
+    // line's units became, but nothing ever wrote it — every stock-in only
+    // stored the product id on the StockBatch itself (above). Setting it
+    // here too, going forward, means new shipments no longer depend on the
+    // stockBatches fallback in resolveLineProductId(); `l.linkedProductId ||`
+    // keeps whatever was already there if a line is stocked in more than
+    // once across different products.
     const lines = current.lines.map(l =>
-      l.id === lineId ? { ...l, stockBatches: [...(l.stockBatches || []), next] } : l);
+      l.id === lineId
+        ? { ...l, stockBatches: [...(l.stockBatches || []), next], linkedProductId: l.linkedProductId || batch.productId }
+        : l);
 
     // Charges that no line can carry any more, stored rather than recomputed.
     //

@@ -19,6 +19,7 @@ import { BrandModelSelector } from '../components/BrandModelSelector';
 import { forceReseed } from '../models/BrandModelService';
 import { InventoryCurrencyDropdown, CurrencyPriceInput } from './InventoryCurrencyDropdown';
 import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 
 
@@ -33,6 +34,11 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
   costingBrandId, costingBrandName, preloadedModels, isLoadingModels,
   isSaving,
 }) => {
+  // Subscribed purely so this view re-renders the instant the Admin changes
+  // the global currency — getGlobalCurrencySymbol() calls below always read
+  // the live value regardless of this call.
+  useGlobalCurrency();
+
   // Dealer price local state (optional, not validated)
   const [dealerPrice, setDealerPrice] = useState<number | ''>('');
 
@@ -637,7 +643,7 @@ export const InventoryProductDetailsView: React.FC<InventoryProductDetailsViewPr
                     <div>
                       <p className="font-semibold text-gray-900">{model.modelName}</p>
                       <p className="text-xs text-gray-500">
-                        Cost: AED {model.costPrice.toLocaleString()}
+                        Cost: {getGlobalCurrencySymbol()} {model.costPrice.toLocaleString()}
                       </p>
                     </div>
                   </div>

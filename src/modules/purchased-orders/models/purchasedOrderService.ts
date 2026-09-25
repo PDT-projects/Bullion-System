@@ -53,7 +53,7 @@ export const round2 = (n: number): number =>
  *  happens anywhere in this function. */
 export const convertForDisplay = (aed: number, to: DisplayCurrency): number => round2(aed);
 
-const fmt = (n: number, min = 2) =>
+export const fmt = (n: number, min = 2) =>
   round2(n).toLocaleString('en-US', { minimumFractionDigits: min, maximumFractionDigits: 2 });
 
 /** Format a stored AED figure in the viewing currency. */
@@ -63,7 +63,10 @@ export const money = (aed: number, to: DisplayCurrency = 'AED'): string =>
 /** Format a figure that is already in the shipment's own invoice currency. */
 export const moneyRaw = (n: number, code: string): string => `${code} ${fmt(n)}`;
 
-/** AED with two decimals, for the PDF where the currency toggle does not exist. */
+/** AED with two decimals. Legacy — kept only for anything still importing it
+ *  from this module's barrel export. The goods-received PDF now uses its own
+ *  fmtGlobal() (goodsReceivedPdf.ts), which reads the live global currency
+ *  symbol instead of always printing AED. */
 export const fmtAed = (n: number): string => `AED ${fmt(n)}`;
 
 // ── Receiving ─────────────────────────────────────────────────────────────────
@@ -242,6 +245,8 @@ export interface ShipmentTimelineEntry {
   amount: number;
   transactionRef?: string;
   bankName?: string;
+  /** Adjustment invoice(s) this charge caused — see ShipmentCharge. */
+  adjustmentInvoiceNumbers?: string[];
 }
 
 /**
@@ -263,6 +268,7 @@ export function shipmentTimeline(s: Shipment): ShipmentTimelineEntry[] {
       label: ch.description || `${ch.kind} paid`,
       amount: Number(ch.amount) || 0,
       transactionRef: ch.transactionRef, bankName: ch.bankName,
+      adjustmentInvoiceNumbers: ch.adjustmentInvoiceNumbers,
     });
   }
 
@@ -291,6 +297,27 @@ export function shipmentTimeline(s: Shipment): ShipmentTimelineEntry[] {
 }
 
 // ── Stock-in and cost layers ─────────────────────────────────────────────────
+
+/**
+ * The inventory product a line's units became, however that is recorded.
+ *
+ * `line.linkedProductId` is the field meant to carry this — but no writer in
+ * the codebase ever actually set it; stockInFromShipment() only ever wrote
+ * the product id onto each StockBatch, so linkedProductId sat undefined on
+ * every shipment, forever. recordStockBatch() now also sets it going
+ * forward, but a shipment stocked in before that fix still has it empty, so
+ * this falls back to the most recent batch's productId — the same value —
+ * whenever linkedProductId itself is missing. Reading through this function
+ * instead of the raw field is what keeps both old and new shipments working
+ * without a data migration.
+ */
+export const resolveLineProductId = (
+  l: { linkedProductId?: string; stockBatches?: StockBatch[] },
+): string | undefined => {
+  if (l.linkedProductId) return l.linkedProductId;
+  const batches = l.stockBatches || [];
+  return batches.length > 0 ? batches[batches.length - 1].productId : undefined;
+};
 
 /** Units already taken into stock from a line. */
 export const stockedQuantity = (l: { stockBatches?: StockBatch[] }): number =>

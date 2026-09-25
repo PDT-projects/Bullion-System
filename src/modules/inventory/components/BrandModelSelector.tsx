@@ -17,6 +17,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Loader2, Check, ChevronDown } from 'lucide-react';
 import { fetchBrands, addBrand, addModel, BrandModel, ModelEntry } from '../models/BrandModelService';
 import { toast } from 'sonner';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 interface BrandModelSelectorProps {
   initialBrandId?: string;
@@ -58,6 +59,8 @@ export function BrandModelSelector({
   brandError,
   modelError,
 }: BrandModelSelectorProps) {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
   const [brands, setBrands]                 = useState<BrandModel[]>([]);
   const [isLoading, setIsLoading]           = useState(true);
   const [selectedBrandId, setSelectedBrandId] = useState(initialBrandId || '');
@@ -328,9 +331,9 @@ export function BrandModelSelector({
                   ✓ {selectedBrand?.name} — {m.name}
                   {(m.costPrice || m.sellPrice) && (
                     <span style={{ marginLeft: 8, fontWeight: 400, color: '#334155' }}>
-                      {m.costPrice ? `Cost: PKR ${m.costPrice.toLocaleString()}` : ''}
+                      {m.costPrice ? `Cost: ${currencySymbol} ${m.costPrice.toLocaleString()}` : ''}
                       {m.costPrice && m.sellPrice ? ' · ' : ''}
-                      {m.sellPrice ? `Sell: PKR ${m.sellPrice.toLocaleString()}` : ''}
+                      {m.sellPrice ? `Sell: ${currencySymbol} ${m.sellPrice.toLocaleString()}` : ''}
                     </span>
                   )}
                 </div>

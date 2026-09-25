@@ -32,6 +32,7 @@ import {
   computeCashInHandBalance, computeBankBalance, computeMonthlyFlow, computeTotalFlow,
 } from '../models/transactionsService';
 import { TransactionFirebaseService } from '../models/transactionFirebaseService';
+import { CashFirebaseService } from '../../banking/models/cashFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
 import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import { getGlobalCurrencySymbol, getGlobalCurrency } from '../../../shared/currency/globalCurrency';
@@ -1305,8 +1306,9 @@ const ReconRow: React.FC<{ label: React.ReactNode; value: number; tone?: 'inflow
 //
 // Doesn't create a transaction — it just persists a starting-point number so
 // the running-balance math has a base to add ledger deltas to. Cash goes into
-// `settings/cashOpening.amount`; banks go into each bank doc's `.balance`
-// field.
+// the primary `cashInHand` record (same one the Balance Sheet / Dashboard /
+// "Opening Bal" tile all read — see CashFirebaseService.setPrimaryCashOpening);
+// banks go into each bank doc's `.balance` field.
 // ═══════════════════════════════════════════════════════════════════════════
 const OpeningBalancesModal: React.FC<{
   /** Needed so each row can show the LIVE balance next to the opening one. */
@@ -1340,9 +1342,11 @@ const OpeningBalancesModal: React.FC<{
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Cash opening → single settings doc, written through the service so
-      // there is exactly one writer and one shape for this value.
-      await TransactionFirebaseService.setCashOpening(Number(cash) || 0);
+      // Cash opening → the primary `cashInHand` record, the SAME source the
+      // "Opening Bal" tile, the Cash tile and the Balance Sheet Report all
+      // read. (Previously wrote to a separate `settings/cashOpening` doc that
+      // nothing read anymore, so this save silently went nowhere.)
+      await CashFirebaseService.setPrimaryCashOpening(Number(cash) || 0);
       // Each bank opening → the bank doc's `balance` field
       for (const b of banks) {
         const next = Number(bankOpen[b.id]) || 0;

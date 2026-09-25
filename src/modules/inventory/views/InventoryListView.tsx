@@ -11,6 +11,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import { toast } from 'sonner';
 import { InventoryFirebaseService } from '../models/InventoryFirebaseService';
 import { Plus, Filter, Package, Eye, MapPin, ArrowLeft, Banknote, Building2, CreditCard, Trash2, AlertTriangle, ArrowRight, Check, ChevronDown, X, Search, Tag, Layers, FileDown } from 'lucide-react';
@@ -359,6 +360,10 @@ export function InventoryListView({
   onAddNew, onAddToExisting, onTransfer, onReceiveProduct, onEdit, onDelete,
   onBack, currentUser, transfers = [],
 }: InventoryListViewProps) {
+  // Subscribed purely so this whole view re-renders the instant the Admin
+  // changes the global currency — getGlobalCurrencySymbol()/fmt() below
+  // always read the live value regardless of this call.
+  useGlobalCurrency();
   const fmt = InventoryService.formatCurrency;
   const navigate = useNavigate();
   const [deleteConfirm, setDeleteConfirm] = React.useState<Product | null>(null);

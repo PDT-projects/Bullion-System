@@ -6,6 +6,7 @@
 import React from 'react';
 import { ArrowLeft, Undo2, Search, Loader2, CheckCircle2, XCircle, AlertTriangle, PackageCheck, PackageX, Check } from 'lucide-react';
 import { UseInventoryReturnViewModelReturn } from '../viewModels/useInventoryReturnViewModel';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8,
@@ -38,6 +39,9 @@ export const InventoryReturnView: React.FC<UseInventoryReturnViewModelReturn> = 
   isSubmitting, handleSubmit, reset, onBack,
   recentInvoices, damagedRecords,
 }) => {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
+
   // ── Step 1: two condition cards ─────────────────────────────────────────
   if (step === 'choose') {
     return (
@@ -149,7 +153,7 @@ export const InventoryReturnView: React.FC<UseInventoryReturnViewModelReturn> = 
                 <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: 12, fontSize: 13 }}>
                   <div style={{ fontWeight: 700, color: '#1e3a8a' }}>Linked Invoice: {linkedInvoice.invoiceNumber}</div>
                   <div style={{ color: '#1e40af', marginTop: 2 }}>
-                    {linkedInvoice.customerName} · {linkedInvoice.date} · AED {linkedInvoice.totalAmount?.toLocaleString()}
+                    {linkedInvoice.customerName} · {linkedInvoice.date} · {currencySymbol} {linkedInvoice.totalAmount?.toLocaleString()}
                   </div>
                   <div style={{ color: '#1e40af', marginTop: 4, fontSize: 12 }}>
                     This invoice will move to Deleted Invoices when you submit.
@@ -205,7 +209,7 @@ export const InventoryReturnView: React.FC<UseInventoryReturnViewModelReturn> = 
                       <span style={{ fontWeight: 700, color: '#0f172a' }}>{inv.invoiceNumber}</span>
                       <span style={{ color: '#64748b' }}>{inv.customerName}</span>
                       <span style={{ color: '#64748b' }}>{inv.date}</span>
-                      <span style={{ fontWeight: 600, color: '#334155' }}>AED {inv.totalAmount?.toLocaleString()}</span>
+                      <span style={{ fontWeight: 600, color: '#334155' }}>{currencySymbol} {inv.totalAmount?.toLocaleString()}</span>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                       {(inv.products || []).flatMap(p => (p.serialNumbers || []).filter(Boolean).map(serial => ({ serial, productId: p.productId }))).map(({ serial, productId }) => (

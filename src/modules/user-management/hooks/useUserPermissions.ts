@@ -24,7 +24,6 @@ const ROUTE_PERMISSION_MAP: { screen: Screen; path: string }[] = [
   { screen: 'Inventory Dashboard', path: '/inventory' },
   { screen: 'Employees List',      path: '/employees' },
   { screen: 'Add Transaction',     path: '/transactions' },
-  { screen: 'Banking Dashboard',   path: '/banking' },
   { screen: 'Loans Dashboard',     path: '/loans' },
 ];
 

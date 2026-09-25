@@ -6,6 +6,7 @@ import { ArrowLeft, Trash2, Search, Loader2, Download } from 'lucide-react';
 import { DeletedInvoice } from '../models/types';
 import { LockedScrollTable } from '../../../shared/components/LockedScrollTable';
 import { exportReportToPdf, exportReportToExcel } from '../../../shared/reportExport/reportExport';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 interface Props {
   filteredRecords: DeletedInvoice[];
@@ -17,7 +18,10 @@ interface Props {
   totalCount: number;
 }
 
-export const DeletedInvoicesView: React.FC<Props> = ({ filteredRecords, isLoading, error, search, setSearch, onBack, totalCount }) => (
+export const DeletedInvoicesView: React.FC<Props> = ({ filteredRecords, isLoading, error, search, setSearch, onBack, totalCount }) => {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
+  return (
   <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#f8fafc' }}>
     <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -34,7 +38,7 @@ export const DeletedInvoicesView: React.FC<Props> = ({ filteredRecords, isLoadin
         <button
           onClick={() => {
             const rows = filteredRecords.map(r => [
-              r.invoiceNumber, r.customerName, r.date, `${r.totalAmount?.toLocaleString()} AED`,
+              r.invoiceNumber, r.customerName, r.date, `${r.totalAmount?.toLocaleString()} ${currencySymbol}`,
               r.deletedAt ? new Date(r.deletedAt).toLocaleString() : '—', r.deletedByEmail || '—',
             ]);
             exportReportToExcel({
@@ -55,7 +59,7 @@ export const DeletedInvoicesView: React.FC<Props> = ({ filteredRecords, isLoadin
         <button
           onClick={() => {
             const rows = filteredRecords.map(r => [
-              r.invoiceNumber, r.customerName, r.date, `${r.totalAmount?.toLocaleString()} AED`,
+              r.invoiceNumber, r.customerName, r.date, `${r.totalAmount?.toLocaleString()} ${currencySymbol}`,
               r.deletedAt ? new Date(r.deletedAt).toLocaleString() : '—', r.deletedByEmail || '—',
             ]);
             exportReportToPdf({
@@ -109,7 +113,7 @@ export const DeletedInvoicesView: React.FC<Props> = ({ filteredRecords, isLoadin
                 <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600 }}>{r.invoiceNumber}</td>
                 <td style={{ padding: '10px 14px', fontSize: 13 }}>{r.customerName}</td>
                 <td style={{ padding: '10px 14px', fontSize: 13, color: '#6b7280' }}>{r.date}</td>
-                <td style={{ padding: '10px 14px', fontSize: 13 }}>{r.totalAmount?.toLocaleString()} AED</td>
+                <td style={{ padding: '10px 14px', fontSize: 13 }}>{r.totalAmount?.toLocaleString()} {currencySymbol}</td>
                 <td style={{ padding: '10px 14px', fontSize: 13, color: '#6b7280' }}>{r.deletedAt ? new Date(r.deletedAt).toLocaleString() : '—'}</td>
                 <td style={{ padding: '10px 14px', fontSize: 13, color: '#6b7280' }}>{r.deletedByEmail || '—'}</td>
               </tr>
@@ -120,4 +124,5 @@ export const DeletedInvoicesView: React.FC<Props> = ({ filteredRecords, isLoadin
       )}
     </div>
   </div>
-);
+  );
+};

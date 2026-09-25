@@ -18,8 +18,55 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+// The stored invoiceType value is still 'Dummy' (unchanged, so existing saved
+// invoices keep working) — only the text shown to the user in toasts below
+// reads "Fictitious", matching the rename used across this module's UI.
+function invoiceTypeDisplayLabel(t: DummyInvoiceType): string {
+  return t === 'Dummy' ? 'Fictitious' : t;
+}
+
 function emptyProduct(): DummyInvoiceProduct {
   return { id: uid(), productName: '', description: '', quantity: 1, unitPrice: 0, total: 0 };
+}
+
+// Firestore documents cap out at 1MiB, and a phone photo's base64 can easily
+// blow past that on its own — so every attached image is downscaled and
+// re-encoded as JPEG before it's ever stored. This keeps a typical photo
+// comfortably under ~150KB (well inside the doc limit, with room for
+// everything else on the invoice) without a Storage bucket to manage.
+const ATTACHMENT_MAX_DIM = 1280;
+const ATTACHMENT_JPEG_QUALITY = 0.82;
+
+function resizeImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not decode the image'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > ATTACHMENT_MAX_DIM || height > ATTACHMENT_MAX_DIM) {
+          const scale = ATTACHMENT_MAX_DIM / Math.max(width, height);
+          width  = Math.round(width  * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width  = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas not supported')); return; }
+        // White backdrop first — a transparent PNG re-encoded as JPEG would
+        // otherwise turn its transparent areas black.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', ATTACHMENT_JPEG_QUALITY));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export interface UseDummyInvoiceFormViewModelReturn {
@@ -51,6 +98,13 @@ export interface UseDummyInvoiceFormViewModelReturn {
   status:         string; setStatus:         (v: string) => void;
   // Saved salespersons for autocomplete
   savedSalespersons: string[];
+  // Attachment + digital stamp
+  imageDataUrl:     string | null;
+  isUploadingImage: boolean;
+  handleImageUpload: (file: File) => Promise<void>;
+  removeImage:       () => void;
+  digitalStamp:      boolean;
+  setDigitalStamp:   (v: boolean) => void;
   // Meta
   isEditing:  boolean;
   isSaving:   boolean;
@@ -82,6 +136,9 @@ export function useDummyInvoiceFormViewModel(): UseDummyInvoiceFormViewModelRetu
   const [savedSalespersons, setSavedSalespersons] = useState<string[]>([]);
   const [isSaving,       setIsSaving]         = useState(false);
   const [isLoading,      setIsLoading]        = useState(false);
+  const [imageDataUrl,     setImageDataUrl]     = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [digitalStamp,     setDigitalStamp]     = useState(false);
 
   const totalAmount = products.reduce((s, p) => s + (p.total || 0), 0);
 
@@ -131,9 +188,25 @@ export function useDummyInvoiceFormViewModel(): UseDummyInvoiceFormViewModelRetu
         setSalesperson(inv.salesperson || '');
         setNotes(inv.notes || '');
         setStatus(inv.status);
+        setImageDataUrl(inv.imageDataUrl || null);
+        setDigitalStamp(!!inv.digitalStamp);
       })
       .finally(() => setIsLoading(false));
   }, [id, isEditing, navigate]);
+
+  const handleImageUpload = useCallback(async (file: File) => {
+    setIsUploadingImage(true);
+    try {
+      const resized = await resizeImageFile(file);
+      setImageDataUrl(resized);
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not attach that image');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  }, []);
+
+  const removeImage = useCallback(() => setImageDataUrl(null), []);
 
   const addProduct = useCallback(() => setProducts(p => [...p, emptyProduct()]), []);
 
@@ -183,6 +256,8 @@ export function useDummyInvoiceFormViewModel(): UseDummyInvoiceFormViewModelRetu
         salesperson: salesperson || undefined,
         notes:       notes       || undefined,
         status:      status as any,
+        imageDataUrl: imageDataUrl || undefined,
+        digitalStamp,
         createdAt:   new Date().toISOString(),
         updatedAt:   new Date().toISOString(),
       };
@@ -196,11 +271,11 @@ export function useDummyInvoiceFormViewModel(): UseDummyInvoiceFormViewModelRetu
 
       if (isEditing && id) {
         await DummyInvoiceFirebaseService.update(id, clean);
-        toast.success(`${invoiceType} invoice updated`);
+        toast.success(`${invoiceTypeDisplayLabel(invoiceType)} invoice updated`);
       } else {
         const saved = await DummyInvoiceFirebaseService.create(clean);
         console.log('[DummyInvoice] Saved:', saved);
-        toast.success(`${invoiceType} invoice saved — ${invoiceNumber}`);
+        toast.success(`${invoiceTypeDisplayLabel(invoiceType)} invoice saved — ${invoiceNumber}`);
       }
       navigate('/invoices/dummy');
     } catch (err: any) {
@@ -212,7 +287,8 @@ export function useDummyInvoiceFormViewModel(): UseDummyInvoiceFormViewModelRetu
     }
   }, [invoiceType, invoiceNumber, date, validUntil, customerName, customerPhone,
       customerPhone2, customerCNIC, customerCity, customerProvince, customerAddress,
-      products, totalAmount, salesperson, notes, status, isEditing, id, navigate]);
+      products, totalAmount, salesperson, notes, status, imageDataUrl, digitalStamp,
+      isEditing, id, navigate]);
 
   const handleCancel = useCallback(() => navigate('/invoices/dummy'), [navigate]);
 
@@ -234,6 +310,8 @@ export function useDummyInvoiceFormViewModel(): UseDummyInvoiceFormViewModelRetu
     notes, setNotes,
     status, setStatus,
     savedSalespersons,
+    imageDataUrl, isUploadingImage, handleImageUpload, removeImage,
+    digitalStamp, setDigitalStamp,
     isEditing, isSaving, isLoading,
     handleSave, handleCancel,
   };

@@ -8,6 +8,7 @@ import { UseInventoryCostingDetailsViewModelReturn } from '../viewModels/useInve
 import { CostingGlobalInputs } from '../components/CostingGlobalInputs';
 import { CostingTable } from '../components/CostingTable';
 import { BrandSummary } from '../components/BrandSummary';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 interface InventoryCostingDetailsViewProps extends UseInventoryCostingDetailsViewModelReturn {}
 
@@ -60,6 +61,13 @@ export const InventoryCostingDetailsView: React.FC<InventoryCostingDetailsViewPr
 }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // Subscribed purely so this whole step (Global Inputs, the Costing Table and
+  // the Brand Summary footer) re-renders the instant the Admin changes the
+  // global currency — those children read getGlobalCurrencySymbol() directly
+  // and always have the live value, but without this the step wouldn't repaint
+  // until something else triggered a re-render.
+  useGlobalCurrency();
 
   useEffect(() => {
     if (!showCostingFields) {

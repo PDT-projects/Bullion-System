@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import {
   FileText, Plus, Search, Eye, X, Loader2, FileDown,
   Filter, XCircle, Truck, CreditCard, Hash, Building2, MapPin, Trash2,
@@ -1101,6 +1102,12 @@ export function InvoiceListView({
   banks, paymentInvoice, isRecordingPayment, openPayment, closePayment, submitPayment,
 }: Props) {
 
+  // Subscribed purely so this whole view re-renders the instant the Admin
+  // changes the global currency — getGlobalCurrencySymbol()/formatDisplay()
+  // below always read the live value regardless, but without this the page
+  // wouldn't repaint until something else triggered a re-render.
+  useGlobalCurrency();
+
   // ── Inventory products for PDF image enrichment ──────────────────────────
   // Older invoices were saved before product images existed, so their rows
   // have no imageUrls. Passing the live product list lets the PDF generator
@@ -1436,6 +1443,18 @@ export function InvoiceListView({
                         </span>
                       )}
                     </p>
+                    {/* Which shipment's late import charge this invoice absorbs.
+                        Previously this only existed as a sentence inside the
+                        invoice's own warranty-note field — invisible from the
+                        list, so there was no way to tell which shipment a
+                        given "System" invoice belonged to without opening it.
+                        Older adjustment invoices created before this field
+                        existed won't have it and just show the badge above. */}
+                    {invoice.sourceShipmentNumber && (
+                      <p className="text-xs mt-0.5" style={{ color: '#7c3aed' }}>
+                        Shipment: {invoice.sourceShipmentNumber}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-400">{invoice.customerPhone}</p>
                     {invoice.customerPhone2 && (
                       <p className="text-xs text-gray-400">{invoice.customerPhone2}</p>

@@ -20,6 +20,8 @@ import {
 import { ProductTransfer } from '../models/types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 // ── Bullion Electronics brand tokens ────────────────────────────────────────
 const _BLACK      = '#0D0D0D';
@@ -232,19 +234,20 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
     _draw(doc, _YELLOW); doc.setLineWidth(0.4);
     doc.roundedRect(mL, y, cW, 14, 2, 2, 'S');
 
+    const curSym = getGlobalCurrencySymbol();
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); _text(doc, _GRAY_TEXT);
     doc.text('Total Shipment Cost:', mL + 3, y + 5.5);
     doc.setFont('helvetica', 'bold'); _text(doc, '#92400e');
-    doc.text(`AED ${transfer.shipmentCost.toFixed(2)}`, mL + 45, y + 5.5);
+    doc.text(`${curSym} ${transfer.shipmentCost.toFixed(2)}`, mL + 45, y + 5.5);
 
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); _text(doc, _GRAY_TEXT);
     doc.text('Cost Per Unit:', mL + 3, y + 11);
     doc.setFont('helvetica', 'bold'); _text(doc, '#15803d');
-    doc.text(`AED ${costPerUnit.toFixed(2)} / unit`, mL + 45, y + 11);
+    doc.text(`${curSym} ${costPerUnit.toFixed(2)} / unit`, mL + 45, y + 11);
 
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); _text(doc, _GRAY_TEXT);
     doc.text(
-      `(AED ${transfer.shipmentCost.toFixed(2)} ÷ ${transfer.quantity} units)`,
+      `(${curSym} ${transfer.shipmentCost.toFixed(2)} ÷ ${transfer.quantity} units)`,
       pageW - mR, y + 11, { align: 'right' }
     );
 
@@ -268,7 +271,10 @@ function downloadTransferPDF(transfer: ProductTransfer): void {
     _draw(doc, '#16a34a'); doc.setLineWidth(0.4);
     doc.roundedRect(mL, y, cW, 9, 2, 2, 'S');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); _text(doc, '#15803d');
-    doc.text(`Received: ${receivedAt}`, mL + 4, y + 6);
+    const receivedLabel = transfer.receiverName
+      ? `Received by ${transfer.receiverName}: ${receivedAt}`
+      : `Received: ${receivedAt}`;
+    doc.text(receivedLabel, mL + 4, y + 6);
     y += 9 + 7;
   }
 
@@ -336,6 +342,9 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
   transfers, viewTransfer, isLoading, stats,
   onAdd, onView, onMarkReceived, onDelete, onCloseView, formatDateTime,
 }) => {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
+
   // Receiver-name prompt state — replaces the direct onMarkReceived call.
   // When the user clicks "Receive" (either from the row or the detail modal)
   // we open this prompt asking for the recipient's name. Only after they
@@ -511,7 +520,7 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                     <td className="px-6 py-4 text-sm whitespace-nowrap">
                       {t.shipmentCost && t.shipmentCost > 0 ? (
                         <div className="flex flex-col">
-                          <span className="font-semibold text-amber-700">AED {t.shipmentCost.toFixed(2)}</span>
+                          <span className="font-semibold text-amber-700">{currencySymbol} {t.shipmentCost.toFixed(2)}</span>
                           <span className="text-xs text-green-600">{(t.costPerUnit ?? 0).toFixed(2)}/unit</span>
                         </div>
                       ) : (
@@ -702,12 +711,12 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
                     <p className="text-xs text-amber-600 font-medium uppercase tracking-wide mb-1">Shipment Cost</p>
-                    <p className="text-xl font-bold text-amber-800">AED {viewTransfer.shipmentCost.toFixed(2)}</p>
+                    <p className="text-xl font-bold text-amber-800">{currencySymbol} {viewTransfer.shipmentCost.toFixed(2)}</p>
                     <p className="text-xs text-amber-500">total</p>
                   </div>
                   <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
                     <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-1">Cost Per Unit</p>
-                    <p className="text-xl font-bold text-green-700">AED {(viewTransfer.costPerUnit ?? 0).toFixed(2)}</p>
+                    <p className="text-xl font-bold text-green-700">{currencySymbol} {(viewTransfer.costPerUnit ?? 0).toFixed(2)}</p>
                     <p className="text-xs text-green-500">per piece</p>
                   </div>
                 </div>
@@ -726,12 +735,14 @@ export const ProductTransferView: React.FC<ProductTransferViewProps> = ({
                 </div>
               )}
 
-              {/* Received At — full date+time */}
+              {/* Received At — full date+time, plus who confirmed receipt */}
               {viewTransfer.receivedAt && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-100 rounded-xl">
                   <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
                   <div>
-                    <p className="text-xs font-semibold text-green-700">Received</p>
+                    <p className="text-xs font-semibold text-green-700">
+                      Received{viewTransfer.receiverName ? ` by ${viewTransfer.receiverName}` : ''}
+                    </p>
                     <p className="text-xs text-green-600">
                       {formatDateTime(viewTransfer.receivedAt)}
                     </p>

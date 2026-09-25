@@ -8,12 +8,10 @@
 // A "Generate PDF" button prints the currently filtered view.
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useCurrency } from '../../providers/context/CurrencyContext';
 import { CashFirebaseService } from '../../modules/banking/models/cashFirebaseService';
 import { resolveBSBucket, getTransactionTotals } from '../../modules/transactions/models/transactionsService';
 import type { Transaction } from '../../modules/transactions/models/types';
-import { LockedScrollTable } from '../../shared/components/LockedScrollTable';
-import { exportTableToExcel } from '../../shared/excelExport/exportTableToExcel';
-import { getGlobalCurrencySymbol } from '../../shared/currency/globalCurrency';
 import {
   ArrowLeft, Tag, ChevronDown, ChevronUp, ChevronRight,
   Filter, X, Calendar, MapPin, FileDown,
@@ -27,6 +25,11 @@ type Loan    = {
 };
 type Product = {
   id: string; costPrice: number; stock: number;
+  // The real inventory schema (see modules/inventory/models/types.ts) names a
+  // product by `brandName` + `modelName` — every one of the fields below is a
+  // guess at some other app's shape that never matches, which is why this
+  // report was falling all the way through to the raw Firestore doc id.
+  brandName?: string; modelName?: string;
   name?: string; productName?: string; product_name?: string;
   title?: string; itemName?: string; item_name?: string;
   productTitle?: string; product_title?: string;
@@ -50,14 +53,14 @@ type BalanceSheetReportProps = {
   invoices?: any[];
 };
 
-const formatCurrency = (amount: number) => {
-  const symbol = getGlobalCurrencySymbol();
-  const formatted = new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount || 0);
-  return `${symbol} ${formatted}`;
-};
+// `currency` used to be hardcoded to 'AED'. It now takes the system-wide
+// currency code (see CurrencyContext) so every caller relabels its amounts
+// when an admin switches currency — symbol-only, the numbers underneath
+// (including the PKR→AED bank-balance merge further down) are unchanged.
+const formatCurrency = (amount: number, currency: string = 'AED') =>
+  new Intl.NumberFormat('en-AE', {
+    style: 'currency', currency, minimumFractionDigits: 0
+  }).format(amount);
 
 // Products can arrive with the display name under any of several field names.
 // Try each in priority order before falling back to the id.
@@ -153,6 +156,10 @@ function buildArApRows(txns: any[], invoices: any[]) {
 }
 
 const productDisplayName = (p: Product): string => {
+  // brandName + modelName is the actual inventory schema — check it first.
+  const brandModel = [p.brandName, p.modelName].filter(v => v && String(v).trim()).join(' ');
+  if (brandModel) return brandModel;
+
   const cand =
     p.name || p.productName || p.product_name ||
     p.title || p.itemName || p.item_name ||
@@ -163,12 +170,15 @@ const productDisplayName = (p: Product): string => {
   return (cand && String(cand).trim()) || p.id;
 };
 
-const SubTotal = ({ label, value, colorClass = 'bg-blue-50' }: { label: string; value: number; colorClass?: string }) => (
-  <div className={`flex justify-between items-center py-3 ${colorClass} rounded-lg px-3 mt-2`}>
-    <span className="font-semibold text-gray-900">{label}</span>
-    <span className="font-bold text-lg text-gray-900">{formatCurrency(value)}</span>
-  </div>
-);
+const SubTotal = ({ label, value, colorClass = 'bg-blue-50' }: { label: string; value: number; colorClass?: string }) => {
+  const { primary: currency } = useCurrency();
+  return (
+    <div className={`flex justify-between items-center py-3 ${colorClass} rounded-lg px-3 mt-2`}>
+      <span className="font-semibold text-gray-900">{label}</span>
+      <span className="font-bold text-lg text-gray-900">{formatCurrency(value, currency)}</span>
+    </div>
+  );
+};
 
 // ── Expandable line-item row ─────────────────────────────────────────────────
 // Always expandable — even zero-value rows can be opened so users can verify
@@ -184,29 +194,32 @@ const ExpandableRow = ({
   hasDetails?: boolean;
   note?: string;
   children?: React.ReactNode;
-}) => (
-  <div className="border-b border-gray-100">
-    <button
-      type="button"
-      onClick={onToggle}
-      className="w-full flex justify-between items-center py-2 text-left hover:bg-gray-50 cursor-pointer transition-colors"
-    >
-      <span className="flex items-center gap-1.5 text-gray-700">
-        {expanded
-          ? <ChevronDown size={14} className="text-gray-400" />
-          : <ChevronRight size={14} className="text-gray-400" />}
-        {label}
-        {note && <span className="text-[10px] text-gray-400 italic">· {note}</span>}
-      </span>
-      <span className="font-medium text-gray-900">{formatCurrency(value)}</span>
-    </button>
-    {expanded && (
-      <div className="ml-5 mb-3 pl-3 border-l-2 border-blue-100 py-2">
-        {children}
-      </div>
-    )}
-  </div>
-);
+}) => {
+  const { primary: currency } = useCurrency();
+  return (
+    <div className="border-b border-gray-100">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex justify-between items-center py-2 text-left hover:bg-gray-50 cursor-pointer transition-colors"
+      >
+        <span className="flex items-center gap-1.5 text-gray-700">
+          {expanded
+            ? <ChevronDown size={14} className="text-gray-400" />
+            : <ChevronRight size={14} className="text-gray-400" />}
+          {label}
+          {note && <span className="text-[10px] text-gray-400 italic">· {note}</span>}
+        </span>
+        <span className="font-medium text-gray-900">{formatCurrency(value, currency)}</span>
+      </button>
+      {expanded && (
+        <div className="ml-5 mb-3 pl-3 border-l-2 border-blue-100 py-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const EmptyDetail = ({ text }: { text: string }) => (
   <p className="text-xs text-gray-400 italic py-2">{text}</p>
@@ -218,7 +231,7 @@ const DetailTable = ({
   headers: string[];
   rows: (string | number)[][];
 }) => (
-  <LockedScrollTable maxHeight="50vh" className="rounded-md border border-gray-100">
+  <div className="overflow-x-auto rounded-md border border-gray-100">
     <table className="w-full text-xs">
       <thead className="bg-gray-50">
         <tr>
@@ -251,10 +264,11 @@ const DetailTable = ({
         ))}
       </tbody>
     </table>
-  </LockedScrollTable>
+  </div>
 );
 
 export function BalanceSheetReport({ transactions, banks, loans, products, bills, invoices = [], onBack }: BalanceSheetReportProps) {
+  const { primary: currency } = useCurrency();
   // Bills were a prop nobody ever passed, so Pending Bills always read AED 0.
   const billsList = bills ?? [];
   // Cash in Hand must match the app's single source of truth (Dashboard /
@@ -556,8 +570,16 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
     // Loans receivable
     const loansReceivable = details.loansReceivableList.reduce((s, l) => s + (l.remaining || 0), 0);
 
-    // Manually classified assets not represented by the standard totals above
-    const knownAssetBuckets = new Set(['Cash & Cash Equivalents', 'Inventory', 'Accounts Receivable', 'Loans Receivable']);
+    // Manually classified assets not represented by the standard totals above.
+    // 'Bank Balances' must sit alongside 'Cash & Cash Equivalents' here — every
+    // invoice/inventory/ATI payment recorded via Bank or Cheque is auto-tagged
+    // bsSubCategory: 'Bank Balances' (see TransactionBridgeService.ts,
+    // InvoicePaymentService.ts, InvoiceMiscExpenseService.ts, atiFirebaseService.ts —
+    // all use the same `mode === 'Cash' ? 'Cash & Cash Equivalents' : 'Bank Balances'`
+    // pairing). That transaction's cash effect is already reflected in the live
+    // bank balance read below, so leaving 'Bank Balances' out of this set summed
+    // every one of those transactions' amounts a second time into Total Assets.
+    const knownAssetBuckets = new Set(['Cash & Cash Equivalents', 'Bank Balances', 'Inventory', 'Accounts Receivable', 'Loans Receivable']);
     const classifiedAssets = Array.from(classifiedBS.get('Assets')?.entries() || [])
       .filter(([sub]) => !knownAssetBuckets.has(sub))
       .reduce((sum, [, entry]) => sum + entry.total, 0);
@@ -578,7 +600,15 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       return s + ((Number((b as any).amount) || 0) - (Number((b as any).amountPaid) || 0));
     }, 0);
 
-    const knownLiabilityBuckets = new Set(['Accounts Payable', 'Short-term Loans']);
+    // 'Accrued Expenses' must also be excluded here — resolveBSBucket() (see
+    // transactionsService.ts) auto-tags any Cash Outflow whose sub-category
+    // contains "Employee salary" or "Utilities" as a Liabilities & Equity /
+    // Accrued Expenses bucket. But a Cash Outflow is money that has ALREADY
+    // been paid — its reduction is already captured in cashInHand above — so
+    // it is not an unpaid/accrued obligation and must not also be added here
+    // as a liability (that would inflate Total Liabilities, and since Equity
+    // is derived as Assets − Liabilities, silently understate Equity too).
+    const knownLiabilityBuckets = new Set(['Accounts Payable', 'Short-term Loans', 'Accrued Expenses']);
     const classifiedLiabilities = Array.from(classifiedBS.get('Liabilities & Equity')?.entries() || [])
       .filter(([sub]) => !knownLiabilityBuckets.has(sub))
       .reduce((sum, [, entry]) => sum + entry.total, 0);
@@ -614,7 +644,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       return;
     }
 
-    const fmt = (n: number) => formatCurrency(n);
+    const fmt = (n: number) => formatCurrency(n, currency);
     const esc = (s: any) => String(s ?? '').replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as any)[c]);
 
@@ -649,7 +679,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       return [b.name || '—', b.accountNumber ? '****' + b.accountNumber.slice(-4) : '—', fmt(inAed)];
     });
     const arRows        = details.receivableTxns.map(t => [(t.date || '').slice(0, 10), t.company || '—', fmt(t.amount || 0), fmt(t.remainingAmount || 0)]);
-    const invRows       = details.inventoryList.map(p => [p.displayName, p.ownershipType === 'Credit' ? 'On Credit' : 'Payment Received', fmt(p.costPrice || 0), (p.stock || 0), fmt(p.value)]);
+    const invRows       = details.inventoryList.map(p => [p.displayName, p.ownershipType === 'Credit' ? 'Third-party Inventory' : 'Owned Inventory', fmt(p.costPrice || 0), (p.stock || 0), fmt(p.value)]);
     const invCreditRows = details.inventoryList.filter(p => p.ownershipType === 'Credit').map(p => [p.displayName, fmt(p.costPrice || 0), (p.stock || 0), fmt(p.value)]);
     const loanRxRows    = details.loansReceivableList.map(l => [l.personName || l.borrowerName || l.description || l.id, fmt(l.loanAmount || 0), fmt(l.paid || 0), fmt(l.remaining || 0)]);
     const apRows        = details.payableTxns.map(t => [(t.date || '').slice(0, 10), t.company || '—', fmt(t.amount || 0), fmt(t.remainingAmount || 0)]);
@@ -719,8 +749,8 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       <div class="item">
         <div class="item-hdr"><span>Inventory Stock Value<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.assets.inventoryValue)}</span></div>
         <div style="display:flex;justify-content:space-between;font-size:8.5px;color:#475569;margin-bottom:2px">
-          <span>Payment Received: <strong>${fmt(bs.assets.inventoryOwned)}</strong></span>
-          <span>On Credit: <strong>${fmt(bs.assets.inventoryCredit)}</strong></span>
+          <span>Owned Inventory: <strong>${fmt(bs.assets.inventoryOwned)}</strong></span>
+          <span>Third-party Inventory: <strong>${fmt(bs.assets.inventoryCredit)}</strong></span>
         </div>
         ${detailTable(['Product', 'Ownership', 'Cost Price', 'Stock', 'Value'], invRows)}
       </div>
@@ -739,7 +769,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
       </div>
 
       <div class="item">
-        <div class="item-hdr"><span>Inventory On Credit<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.liabilities.inventoryCredit)}</span></div>
+        <div class="item-hdr"><span>Third-party Inventory<span class="snapshot-note">current snapshot</span></span><span>${fmt(bs.liabilities.inventoryCredit)}</span></div>
         ${detailTable(['Product', 'Cost Price', 'Stock', 'Value'], invCreditRows)}
       </div>
 
@@ -829,38 +859,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             </span>
             <span>Generate PDF</span>
           </button>
-          <button
-            onClick={() => {
-              const rows: (string | number)[][] = [
-                ['ASSETS', ''],
-                ['Cash in Hand', bs.assets.cashInHand],
-                ['Bank Balance', bs.assets.bankBalance],
-                ['Accounts Receivable', bs.assets.accountsReceivable],
-                ['Inventory — Payment Received', bs.assets.inventoryOwned],
-                ['Inventory — On Credit', bs.assets.inventoryCredit],
-                ['Total Current Assets', bs.assets.totalCurrentAssets],
-                ['Total Fixed Assets', bs.assets.totalFixedAssets],
-                ['TOTAL ASSETS', bs.assets.totalAssets],
-                ['', ''],
-                ['LIABILITIES', ''],
-                ['Accounts Payable', bs.liabilities.accountsPayable],
-                ['Inventory Credit Payable', bs.liabilities.inventoryCredit],
-                ['Total Current Liabilities', bs.liabilities.totalCurrentLiabilities],
-                ['TOTAL LIABILITIES', bs.liabilities.totalLiabilities],
-                ['', ''],
-                ['TOTAL EQUITY', bs.equity.totalEquity],
-              ];
-              exportTableToExcel({
-                title: 'Balance Sheet',
-                subtitle: new Date().toLocaleDateString(),
-                columns: [{ header: 'Line Item' }, { header: `Amount (${getGlobalCurrencySymbol()})` }],
-                rows,
-                filename: `balance-sheet-${new Date().toISOString().slice(0, 10)}`,
-              });
-            }}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors text-sm font-medium">
-            <FileDown size={16} /> Excel
-          </button>
           <button onClick={onBack}
             className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors text-sm font-medium">
             <ArrowLeft size={16} /> Back to Reports Hub
@@ -914,9 +912,9 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               note="current snapshot"
             >
               <div className="text-xs text-gray-600 mb-2 flex justify-between flex-wrap gap-1">
-                <span>Opening Balance: <strong className="text-gray-900">{formatCurrency(cashOpeningBalance)}</strong></span>
-                <span>Cash Inflows: <strong className="text-green-700">{formatCurrency(details.cashIn)}</strong></span>
-                <span>Cash Outflows: <strong className="text-red-700">{formatCurrency(details.cashOut)}</strong></span>
+                <span>Opening Balance: <strong className="text-gray-900">{formatCurrency(cashOpeningBalance, currency)}</strong></span>
+                <span>Cash Inflows: <strong className="text-green-700">{formatCurrency(details.cashIn, currency)}</strong></span>
+                <span>Cash Outflows: <strong className="text-red-700">{formatCurrency(details.cashOut, currency)}</strong></span>
               </div>
               {(details.cashInflowTxns.length + details.cashOutflowTxns.length) > 0 ? (
                 <DetailTable
@@ -926,13 +924,13 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                       (t.date || '').slice(0, 10),
                       'Inflow',
                       t.company || '—',
-                      formatCurrency(Number(t.amount) || 0),
+                      formatCurrency(Number(t.amount) || 0, currency),
                     ]),
                     ...details.cashOutflowTxns.map(t => [
                       (t.date || '').slice(0, 10),
                       'Outflow',
                       t.company || '—',
-                      `- ${formatCurrency(Number(t.amount) || 0)}`,
+                      `- ${formatCurrency(Number(t.amount) || 0, currency)}`,
                     ]),
                   ]}
                 />
@@ -950,7 +948,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             >
               {banks.length > 0 ? (
                 <DetailTable
-                  headers={['Bank', 'Account', `Balance (${getGlobalCurrencySymbol()})`]}
+                  headers={['Bank', 'Account', `Balance (${currency})`]}
                   rows={banks.map((b: any) => {
                     const isPKR = b.currency === 'PKR' || b.accountCurrency === 'PKR';
                     const bal = b.balance || 0;
@@ -958,7 +956,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                     return [
                       b.name || '—',
                       b.accountNumber ? '****' + b.accountNumber.slice(-4) : '—',
-                      isPKR ? `${formatCurrency(inAed)} (PKR ${bal.toLocaleString()})` : formatCurrency(bal),
+                      isPKR ? `${formatCurrency(inAed, currency)} (PKR ${bal.toLocaleString()})` : formatCurrency(bal, currency),
                     ];
                   })}
                 />
@@ -979,8 +977,8 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                   rows={details.receivableTxns.map(t => [
                     (t.date || '').slice(0, 10),
                     t.company || '—',
-                    formatCurrency(t.amount || 0),
-                    formatCurrency(t.remainingAmount || 0),
+                    formatCurrency(t.amount || 0, currency),
+                    formatCurrency(t.remainingAmount || 0, currency),
                   ])}
                 />
               ) : <EmptyDetail text="No outstanding receivables in this period." />}
@@ -996,9 +994,9 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
               note="current snapshot"
             >
               <div className="space-y-0">
-                {/* Payment Received — its own dropdown with history */}
+                {/* Owned Inventory — its own dropdown with history */}
                 <ExpandableRow
-                  label="Payment Received"
+                  label="Owned Inventory"
                   value={bs.assets.inventoryOwned}
                   expanded={expandedRows.has('inventoryOwned')}
                   onToggle={() => toggleRow('inventoryOwned')}
@@ -1011,17 +1009,17 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                         .filter(p => p.ownershipType !== 'Credit')
                         .map(p => [
                           p.displayName,
-                          formatCurrency(p.costPrice || 0),
+                          formatCurrency(p.costPrice || 0, currency),
                           (p.stock || 0),
-                          formatCurrency(p.value),
+                          formatCurrency(p.value, currency),
                         ])}
                     />
-                  ) : <EmptyDetail text="No inventory paid for against payment." />}
+                  ) : <EmptyDetail text="No Owned Inventory recorded." />}
                 </ExpandableRow>
 
-                {/* On Credit — its own dropdown with history */}
+                {/* Third-party Inventory — its own dropdown with history */}
                 <ExpandableRow
-                  label="On Credit"
+                  label="Third-party Inventory"
                   value={bs.assets.inventoryCredit}
                   expanded={expandedRows.has('inventoryCreditAsset')}
                   onToggle={() => toggleRow('inventoryCreditAsset')}
@@ -1034,12 +1032,12 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                         .filter(p => p.ownershipType === 'Credit')
                         .map(p => [
                           p.displayName,
-                          formatCurrency(p.costPrice || 0),
+                          formatCurrency(p.costPrice || 0, currency),
                           (p.stock || 0),
-                          formatCurrency(p.value),
+                          formatCurrency(p.value, currency),
                         ])}
                     />
-                  ) : <EmptyDetail text="No inventory taken on credit." />}
+                  ) : <EmptyDetail text="No Third-party Inventory recorded." />}
                 </ExpandableRow>
               </div>
             </ExpandableRow>
@@ -1054,7 +1052,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           <div className="border-t-2 border-gray-300 pt-4 mt-4">
             <div className="flex justify-between items-center py-4 bg-gradient-to-r from-blue-50 to-gray-50 rounded-lg px-4">
               <span className="text-xl font-bold text-gray-900">Total Assets</span>
-              <span className="text-2xl font-bold text-blue-600">{formatCurrency(bs.assets.totalAssets)}</span>
+              <span className="text-2xl font-bold text-blue-600">{formatCurrency(bs.assets.totalAssets, currency)}</span>
             </div>
           </div>
         </div>
@@ -1080,16 +1078,16 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                   rows={details.payableTxns.map(t => [
                     (t.date || '').slice(0, 10),
                     t.company || '—',
-                    formatCurrency(t.amount || 0),
-                    formatCurrency(t.remainingAmount || 0),
+                    formatCurrency(t.amount || 0, currency),
+                    formatCurrency(t.remainingAmount || 0, currency),
                   ])}
                 />
               ) : <EmptyDetail text="No outstanding payables in this period." />}
             </ExpandableRow>
 
-            {/* Inventory On Credit */}
+            {/* Third-party Inventory */}
             <ExpandableRow
-              label="Inventory On Credit"
+              label="Third-party Inventory"
               value={bs.liabilities.inventoryCredit}
               expanded={expandedRows.has('inventoryCreditLiability')}
               onToggle={() => toggleRow('inventoryCreditLiability')}
@@ -1103,12 +1101,12 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                     .filter(p => p.ownershipType === 'Credit')
                     .map(p => [
                       p.displayName,
-                      formatCurrency(p.costPrice || 0),
+                      formatCurrency(p.costPrice || 0, currency),
                       (p.stock || 0),
-                      formatCurrency(p.value),
+                      formatCurrency(p.value, currency),
                     ])}
                 />
-              ) : <EmptyDetail text="No inventory taken on credit." />}
+              ) : <EmptyDetail text="No Third-party Inventory recorded." />}
             </ExpandableRow>
 
           </div>
@@ -1117,7 +1115,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           <div className="mt-4 mb-6">
             <div className="flex justify-between items-center py-3 bg-red-50 rounded-lg px-3">
               <span className="font-semibold text-gray-900">Total Liabilities</span>
-              <span className="font-bold text-lg text-red-600">{formatCurrency(bs.liabilities.totalLiabilities)}</span>
+              <span className="font-bold text-lg text-red-600">{formatCurrency(bs.liabilities.totalLiabilities, currency)}</span>
             </div>
           </div>
 
@@ -1126,7 +1124,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             <div className="flex justify-between items-center py-2 border-b border-gray-100">
               <span className="text-gray-700">Owner's Equity (Assets − Liabilities)</span>
               <span className={`font-medium ${bs.equity.totalEquity >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                {formatCurrency(bs.equity.totalEquity)}
+                {formatCurrency(bs.equity.totalEquity, currency)}
               </span>
             </div>
           </div>
@@ -1135,7 +1133,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
           <div className="border-t-2 border-gray-300 pt-4 mt-4">
             <div className="flex justify-between items-center py-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg px-4">
               <span className="text-xl font-bold text-gray-900">Total Liabilities & Equity</span>
-              <span className="text-2xl font-bold text-green-600">{formatCurrency(bs.totalLiabilitiesAndEquity)}</span>
+              <span className="text-2xl font-bold text-green-600">{formatCurrency(bs.totalLiabilitiesAndEquity, currency)}</span>
             </div>
           </div>
         </div>
@@ -1175,7 +1173,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                     mainCat === 'Assets' ? 'bg-blue-50 text-blue-800' : 'bg-red-50 text-red-800'
                   }`}>
                     <span>{mainCat}</span>
-                    <span>{formatCurrency(bsSectionTotal(mainCat))}</span>
+                    <span>{formatCurrency(bsSectionTotal(mainCat), currency)}</span>
                   </div>
                   {Array.from(subMap.entries()).map(([subCat, { total, txns }]) => {
                     const key      = `${mainCat}__${subCat}`;
@@ -1184,7 +1182,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                     <div key={subCat} className="mb-4">
                       <div className="flex justify-between items-center py-1.5 border-b border-gray-200 mb-2">
                         <span className="text-sm font-medium text-gray-700">{subCat}</span>
-                        <span className="text-sm font-semibold text-gray-900">{formatCurrency(total)}</span>
+                        <span className="text-sm font-semibold text-gray-900">{formatCurrency(total, currency)}</span>
                       </div>
                       <button
                         onClick={() => toggleSub(key)}
@@ -1194,7 +1192,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                         {txns.length} transaction{txns.length !== 1 ? 's' : ''}
                       </button>
                       {expanded && (
-                        <LockedScrollTable maxHeight="50vh" className="rounded-lg border border-gray-100">
+                        <div className="overflow-x-auto rounded-lg border border-gray-100">
                           <table className="w-full text-xs">
                             <thead className="bg-gray-50">
                               <tr>
@@ -1211,12 +1209,12 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
                                   <td className="px-3 py-2 text-gray-700">{(t.date || '').slice(0, 10)}</td>
                                   <td className="px-3 py-2 text-gray-700">{t.company || '—'}</td>
                                   <td className="px-3 py-2 text-gray-500">{t.subCategory}</td>
-                                  <td className="px-3 py-2 font-semibold text-gray-900">{formatCurrency(t.amount || 0)}</td>
+                                  <td className="px-3 py-2 font-semibold text-gray-900">{formatCurrency(t.amount || 0, currency)}</td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
-                        </LockedScrollTable>
+                        </div>
                       )}
                     </div>
                     );
@@ -1234,12 +1232,12 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         <div className="flex items-center justify-center gap-6">
           <div>
             <p className="text-xs text-gray-500 mb-1">Total Assets</p>
-            <p className="text-2xl font-bold text-blue-600">{formatCurrency(bs.assets.totalAssets)}</p>
+            <p className="text-2xl font-bold text-blue-600">{formatCurrency(bs.assets.totalAssets, currency)}</p>
           </div>
           <span className="text-2xl text-gray-400">=</span>
           <div>
             <p className="text-xs text-gray-500 mb-1">Liabilities + Equity</p>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(bs.totalLiabilitiesAndEquity)}</p>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(bs.totalLiabilitiesAndEquity, currency)}</p>
           </div>
         </div>
         <p className={`text-sm mt-3 font-medium ${bs.balanced ? 'text-green-600' : 'text-yellow-700'}`}>

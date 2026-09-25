@@ -4,6 +4,7 @@
 
 import React, { useState, useRef } from 'react';
 import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import {
   ArrowLeft, ArrowRight, Package, Plus, Trash2, ChevronDown,
   Hash, Loader2, Check, AlertCircle, ImagePlus, X,
@@ -643,6 +644,10 @@ export const InventoryMultiModelView: React.FC<Props> = ({
   handleNext, handleBack,
   isSaving, formatCurrency,
 }) => {
+  // Subscribed purely so this view re-renders the instant the Admin changes
+  // the global currency — formatPrimary()/getGlobalCurrencySymbol() below
+  // always read the live value regardless of this call.
+  useGlobalCurrency();
   const [addingBrand, setAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState('');
 

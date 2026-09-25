@@ -23,10 +23,10 @@ import {
 } from '../models/BrandModelService';
 import { LocationSelector } from './LocationSelector';
 import { CATEGORIES } from '../viewModels/useInventoryMultimodelViewModel';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 import { useNavigate } from 'react-router-dom';
 import { PurchasedOrderFirebaseService } from '../../purchased-orders/models/purchasedOrderFirebaseService';
 import type { Shipment } from '../../purchased-orders/models/types';
-import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
 import {
   stockInLines, suggestedSellPrice,
   type StockInLine,
@@ -60,6 +60,15 @@ interface ProductRow {
   shipmentId?: string;
   shipmentLineId?: string;
   shipmentLine?: StockInLine;
+  /**
+   * A product on the SAME shipment/brand that was not itemized on the
+   * manifest (the container held one more model than was listed, or one
+   * arrived that nobody expected). `shipmentId` stays set — the unit is
+   * still this shipment's stock and gets tagged with it on save — but
+   * there is no `shipmentLineId` to fill the row from, so Model and Cost
+   * are typed by hand instead of picked from the shipment's line list.
+   */
+  manualModelInShipment?: boolean;
   id: string;
   brandName: string;
   modelName: string;
@@ -111,52 +120,176 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
   error?: { brand?: string; model?: string; category?: string; cost?: string; retail?: string; serials?: string; quantity?: string };
   isCredit: boolean;
 }) {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
+  const [openBrand, setOpenBrand] = useState(false);
+  const [openModel, setOpenModel] = useState(false);
+  const brandRef = useRef<HTMLDivElement>(null);
+  const modelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (brandRef.current && !brandRef.current.contains(e.target as Node)) setOpenBrand(false);
+      if (modelRef.current && !modelRef.current.contains(e.target as Node)) setOpenModel(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const filteredBrands = row.brandName.trim()
+    ? brandSuggestions.filter(b => b.name.toLowerCase().includes(row.brandName.toLowerCase()))
+    : brandSuggestions;
+  const filteredModels = row.modelName.trim()
+        ? modelSuggestions.filter(m => m.name.toLowerCase().includes(row.modelName.toLowerCase()))
+    : modelSuggestions;
+
+  // A typed name that matches nothing on file is about to create a NEW brand or
+  // model on save. Surfacing that as an explicit row makes the consequence
+  // visible — a stray space or typo used to create a silent duplicate.
+  const typedBrand = row.brandName.trim();
+  const typedModel = row.modelName.trim();
+  const showAddBrand = typedBrand.length > 0 &&
+    !brandSuggestions.some(b => b.name.trim().toLowerCase() === typedBrand.toLowerCase());
+  const showAddModel = typedModel.length > 0 && typedBrand.length > 0 &&
+    !modelSuggestions.some(m => m.name.trim().toLowerCase() === typedModel.toLowerCase());
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Brand — fixed by the shipment picked above. A second, editable field
-          for something already decided is what made "Model" seem to ask twice:
-          this shows what was picked, the Model field below is where a choice
-          actually happens. */}
-      <div>
-        <label style={S.label}>Brand</label>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px',
-          borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#f8fafc',
-        }}>
-          <Building2 size={14} color="#64748b" />
-          <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{row.brandName || '—'}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={S.grid2}>
+        {/* Brand — locked to the shipment's brand when this row came from one;
+            typed by hand otherwise (the plain On-Credit / manual path). */}
+        <div ref={brandRef}>
+          <label style={S.label}>Brand <span style={{ color: '#ef4444' }}>*</span></label>
+          {row.shipmentId ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 11px', borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', minHeight: 36, boxSizing: 'border-box' }}>
+              <Building2 size={14} color="#94a3b8" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{row.brandName || '—'}</span>
+            </div>
+          ) : (
+          <div style={{ position: 'relative' }}>
+            <input type="text" value={row.brandName}
+              onChange={e => { onChange('brandName', e.target.value); onChange('modelName', ''); setOpenBrand(true); }}
+              onFocus={() => setOpenBrand(true)}
+              placeholder="Type brand…" autoComplete="off"
+              style={S.inp(!!error?.brand)} />
+                        {openBrand && (filteredBrands.length > 0 || showAddBrand) && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 3px)', left: 0, right: 0, zIndex: 99, backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, boxShadow: '0 8px 20px rgba(0,0,0,0.12)', maxHeight: 180, overflowY: 'auto' }}>
+                {filteredBrands.map(b => (
+                  <div key={b.id} onMouseDown={e => { e.preventDefault(); onChange('brandName', b.name); onBrandSelect(b.name); setOpenBrand(false); }}
+                    style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: '#111827' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'}
+                                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>{b.name}</div>
+                ))}
+                {showAddBrand && (
+                  <div onMouseDown={e => { e.preventDefault(); onBrandSelect(row.brandName.trim()); setOpenBrand(false); }}
+                    style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: '#2563eb', fontWeight: 600, borderTop: filteredBrands.length ? '1px solid #f1f5f9' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>
+                    <Plus size={13} /> Add "{row.brandName.trim()}" as new brand
+                  </div>
+                )}
+              </div>
+            )}
+            {error?.brand && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.brand}</p>}
+          </div>
+          )}
+        </div>
+
+        {/* Model — the shipment's own line list when this row came from one
+            (this is the ONLY model control in that case — it used to also
+            render the free-text box below, so "Model" showed up twice on the
+            same row); typed by hand otherwise. A shipment row can also drop
+            into hand-typed Model via "+ New model on this shipment" below —
+            it keeps shipmentId (still tagged to this shipment on save) but
+            has no line to fill itself from. */}
+        <div ref={modelRef}>
+          <label style={S.label}>Model <span style={{ color: '#ef4444' }}>*</span></label>
+          {row.shipmentId && !row.manualModelInShipment ? (
+            <div style={{ position: 'relative' }}>
+              <select value={row.shipmentLineId || ''}
+                onChange={e => onModelPick?.(e.target.value)}
+                style={{ ...S.inp(!!error?.model), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
+                <option value="">Select model…</option>
+                {(shipmentLines || []).map(l => (
+                  <option key={l.lineId} value={l.lineId}>
+                    {l.modelName || l.productName} — {l.remaining} remaining
+                  </option>
+                ))}
+                <option value="__new__">+ New model on this shipment (not on the list)</option>
+              </select>
+              <ChevronDown size={13} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} />
+              {error?.model && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.model}</p>}
+              {row.shipmentLine && (
+                <p style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d', marginTop: 4 }}>
+                  {row.shipmentLine.remaining} unit{row.shipmentLine.remaining === 1 ? '' : 's'} left on this shipment
+                </p>
+              )}
+            </div>
+          ) : row.shipmentId ? (
+            <div>
+              <input type="text" value={row.modelName}
+                onChange={e => onChange('modelName', e.target.value)}
+                placeholder="Type the model name…" autoComplete="off"
+                style={S.inp(!!error?.model)} />
+              {error?.model && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.model}</p>}
+              <p style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 4 }}>
+                Still tagged to this shipment · not on its manifest, so cost is typed, not landed ·{' '}
+                <span
+                  onClick={() => { onChange('manualModelInShipment', false); onChange('modelName', ''); }}
+                  style={{ color: '#2563eb', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  choose from the shipment's list instead
+                </span>
+              </p>
+            </div>
+          ) : (
+          <div style={{ position: 'relative' }}>
+            <input type="text" value={row.modelName}
+              onChange={e => { onChange('modelName', e.target.value); setOpenModel(true); }}
+              onFocus={() => setOpenModel(true)}
+              placeholder="Type model…" autoComplete="off"
+              style={S.inp(!!error?.model)} />
+              {openModel && (filteredModels.length > 0 || showAddModel) && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 3px)', left: 0, right: 0, zIndex: 99, backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, boxShadow: '0 8px 20px rgba(0,0,0,0.12)', maxHeight: 180, overflowY: 'auto' }}>
+                {filteredModels.map(m => (
+                  <div key={m.id} onMouseDown={e => { e.preventDefault(); onChange('modelName', m.name); onModelSelect(m.name, m); setOpenModel(false); }}
+                    style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: '#111827' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>
+                    <div style={{ fontWeight: 600 }}>{m.name}</div>
+                                        {m.costPrice ? <div style={{ fontSize: 11, color: '#94a3b8' }}>{currencySymbol} {m.costPrice.toLocaleString()}</div> : null}
+                  </div>
+                ))}
+                {showAddModel && (
+                  <div onMouseDown={e => { e.preventDefault(); setOpenModel(false); }}
+                    style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', color: '#2563eb', fontWeight: 600, borderTop: filteredModels.length ? '1px solid #f1f5f9' : 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = ''}>
+                    <Plus size={13} /> Add "{row.modelName.trim()}" as new model
+                  </div>
+                )}
+              </div>
+            )}
+            {error?.model && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.model}</p>}
+          </div>
+          )}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr 78px 105px 105px', gap: 10 }}>
-        {/* Model — picked from what this shipment has left. The only place
-            model gets chosen now that Brand above is fixed by the shipment. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 12 }}>
+        {/* Category — always a real category picker now. It used to double as
+            the shipment's model list, so a row filled from a shipment could
+            never have its category set at all. */}
         <div>
-          <label style={S.label}>Model <span style={{ color: '#ef4444' }}>*</span></label>
+          <label style={S.label}>Category <span style={{ color: '#ef4444' }}>*</span></label>
           <div style={{ position: 'relative' }}>
-            <select value={row.shipmentLineId || ''}
-              onChange={e => onModelPick?.(e.target.value)}
+            <select value={row.category} onChange={e => onChange('category', e.target.value)}
               style={{ ...S.inp(!!error?.category), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
-              <option value="">Select model…</option>
-              {(shipmentLines || []).map(l => (
-                <option key={l.lineId} value={l.lineId}>
-                  {l.modelName || l.productName}  ·  {l.remaining} left
-                </option>
-              ))}
+              <option value="">Select…</option>
+              {(CATEGORIES || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
             </select>
             <ChevronDown size={13} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} />
           </div>
-          {/* Remaining stock, restated as its own badge — an option string in a
-              closed dropdown is easy to miss; this stays visible after picking. */}
-          {row.shipmentLine && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6,
-                          padding: '3px 9px', borderRadius: 20, backgroundColor: '#eef2ff', border: '1px solid #c7d2fe' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4f46e5' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#4338ca' }}>
-                {row.shipmentLine.remaining} unit{row.shipmentLine.remaining === 1 ? '' : 's'} left on this shipment
-              </span>
-            </div>
-          )}
           {error?.category && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{error.category}</p>}
         </div>
         {/* Description — multi-line so users can enter paragraphs (made in UK / 3 years warranty / etc) */}
@@ -180,6 +313,8 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
             }}
           />
         </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 1fr', gap: 12 }}>
         {/* Qty */}
         <div>
           <label style={S.label}>Qty</label>
@@ -201,7 +336,7 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
           <label style={S.label} title={isCredit
             ? 'What you owe the supplier per unit. Recorded as a payable until settled.'
             : 'What you paid to buy this stock. Used for internal valuation only.'}>
-            {isCredit ? 'Supplier Cost' : 'Purchasing Cost'} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({getGlobalCurrencySymbol()})</span> <span style={{ color: '#ef4444' }}>*</span>
+            {isCredit ? 'Supplier Cost' : 'Purchasing Cost'} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({currencySymbol})</span> <span style={{ color: '#ef4444' }}>*</span>
           </label>
           {/* Editable on every row, including the ones filled from a shipment.
               The landed figure is a strong default, not a lock — a clerk who
@@ -215,7 +350,7 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
         {/* Retail Price — customer-facing, appears on the invoice */}
         <div>
           <label style={S.label} title="What customers pay. This is the price that appears on their sales invoice.">
-            Retail Price <span style={{ color: '#9ca3af', fontWeight: 400 }}>({getGlobalCurrencySymbol()})</span> <span style={{ color: '#ef4444' }}>*</span>
+            Retail Price <span style={{ color: '#9ca3af', fontWeight: 400 }}>({currencySymbol})</span> <span style={{ color: '#ef4444' }}>*</span>
           </label>
           <input type="number" min={0} step="any" value={row.sellPrice || ''}
             onChange={e => onChange('sellPrice', parseFloat(e.target.value) || 0)}
@@ -224,15 +359,19 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
         </div>
       </div>
 
-      {/* What the purchasing cost above is made of — its own full-width card,
-          not squeezed into that field's column. A locked figure with no
-          working behind it is the first thing people stop trusting. */}
+      {/* Cost breakdown — what makes up the landed figure above. Given its own
+          full-width row (rather than squeezed inside the Cost field's own
+          narrow column) so five numbers actually have room to read clearly.
+          A locked figure with no working behind it is the first thing people
+          stop trusting. */}
       {row.shipmentLine && (
-        <div style={{ borderRadius: 10, border: '1px solid #e2e8f0', backgroundColor: '#fbfcfe', padding: '12px 14px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>
-            Landed cost breakdown — per unit
+        <div style={{ padding: '10px 14px', borderRadius: 8,
+                      border: '1px solid #e2e8f0', backgroundColor: '#fbfcfe' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8',
+                        textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+            Cost Breakdown — per unit
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
             {([
               ['Goods',   row.shipmentLine.goodsPerUnit],
               ['Customs', row.shipmentLine.customsPerUnit],
@@ -241,47 +380,24 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
               ['Other',   row.shipmentLine.otherPerUnit],
             ] as Array<[string, number]>).map(([lbl, v]) => (
               <div key={lbl}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: '#94a3b8',
-                              textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>{lbl}</div>
-                <div style={{ fontSize: 13.5, fontWeight: 700,
+                <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8',
+                              textTransform: 'uppercase', letterSpacing: '.04em' }}>{lbl}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700,
                               color: v > 0 ? '#0f172a' : '#cbd5e1',
-                              fontVariantNumeric: 'tabular-nums' }}>{getGlobalCurrencySymbol()} {v.toFixed(2)}</div>
+                              fontVariantNumeric: 'tabular-nums' }}>{v.toFixed(2)}</div>
               </div>
             ))}
           </div>
           {row.shipmentLine.stocked > 0 && (
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, marginTop: 11, paddingTop: 10, borderTop: '1px dashed #e2e8f0' }}>
-              <span style={{ fontSize: 12, flexShrink: 0 }}>ℹ️</span>
-              <p style={{ fontSize: 11, color: '#b45309', margin: 0, lineHeight: 1.5 }}>
-                {row.shipmentLine.stocked} unit{row.shipmentLine.stocked === 1 ? '' : 's'} already went out at a
-                lower cost. Charges paid since then land on the {row.shipmentLine.remaining} still here, so this
-                is higher than the shipment average.
-              </p>
-            </div>
+            <p style={{ fontSize: 10.5, color: '#b45309', margin: '9px 0 0', lineHeight: 1.5 }}>
+              {row.shipmentLine.stocked} unit{row.shipmentLine.stocked === 1 ? '' : 's'} already went out at a
+              lower cost. Charges paid since then land on the {row.shipmentLine.remaining} still here, so this
+              is higher than the shipment average.
+            </p>
           )}
         </div>
       )}
-
-      {/* Category — for a shipment row the space above is the model picker,
-          so this is the only place category can be set. Pre-filled from what
-          this brand + model was entered as before (pickModel does that); for
-          a model never seen before that guess is empty, and this is what lets
-          someone actually fill it in rather than saving with none. */}
-      {row.shipmentId && (
-        <div style={{ maxWidth: 260 }}>
-          <label style={S.label}>
-            Category <span style={{ color: '#ef4444' }}>*</span>
-          </label>
-          <div style={{ position: 'relative' }}>
-            <select value={row.category} onChange={e => onChange('category', e.target.value)}
-              style={{ ...S.inp(!!error?.category && !!row.shipmentLineId), appearance: 'none', paddingRight: 28, cursor: 'pointer' }}>
-              <option value="">Select…</option>
-              {(CATEGORIES || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <ChevronDown size={13} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} />
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Serial slots — REQUIRED, one per unit */}
       <div>
@@ -302,7 +418,7 @@ function BrandModelInputs({ row, onChange, brandSuggestions, modelSuggestions, o
         {error?.serials && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{error.serials}</p>}
         {row.costPrice > 0 && (
           <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
-            Subtotal: <strong style={{ color: '#0f172a' }}>{getGlobalCurrencySymbol()} {(row.costPrice * (row.serials.filter(s=>s.trim()).length || row.quantity)).toLocaleString()}</strong>
+            Subtotal: <strong style={{ color: '#0f172a' }}>{currencySymbol} {(row.costPrice * (row.serials.filter(s=>s.trim()).length || row.quantity)).toLocaleString()}</strong>
             <span style={{ marginLeft: 8, color: '#94a3b8' }}>({row.serials.filter(s=>s.trim()).length || row.quantity} unit{(row.serials.filter(s=>s.trim()).length || row.quantity)!==1?'s':''})</span>
           </div>
         )}
@@ -358,6 +474,8 @@ function ProductImages({ images, onChange }: {
 }
 // ── Main component ────────────────────────────────────────────────────────────
 export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onClose?: () => void }> = ({ onClose }) => {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
   const navigate  = useNavigate();
   const afterSave = () => { if (onClose) { onClose(); } else { navigate('/inventory'); } };
 
@@ -365,20 +483,23 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
   const [ownership, setOwnership] = useState<'Owned'|'Credit'>('Owned');
   const isCredit = ownership === 'Credit';
 
-  // ── Shipment (the only way stock enters now) ─────────────────────────────
-  // A free-text "enter by hand" path used to sit beside this one. It let stock
-  // in with no purchase order behind it — nothing on a shipment to reconcile
-  // against, no landed cost, no supplier position. Every unit now has to come
-  // off a shipment line, so what it cost and what is owed for it are never a
-  // second, separate figure someone typed.
+  // ── Source ────────────────────────────────────────────────────────────────
+  // Source is no longer a separate choice the clerk makes — it follows the
+  // Ownership Type directly: Against Payment (Owned) is always filled from a
+  // shipment (that is what "paying the supplier now" against a landed order
+  // means), while On Credit stays a plain, simple hand-entry row exactly like
+  // this screen worked before the shipment flow existed — no shipment picker,
+  // no margin field.
+  const source: 'manual' | 'shipment' = ownership === 'Owned' ? 'shipment' : 'manual';
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [shipmentsLoading, setShipmentsLoading] = useState(false);
   const [shipmentId, setShipmentId] = useState('');
   const [marginPercent, setMarginPercent] = useState(DEFAULT_MARGIN_PERCENT);
 
-  // Loaded on mount — every row on this screen needs a shipment now.
+  // Loaded when the shipment path is first chosen. Nobody opening this screen
+  // to type a product by hand should wait for a collection read.
   useEffect(() => {
-    if (shipments.length > 0 || shipmentsLoading) return;
+    if (source !== 'shipment' || shipments.length > 0 || shipmentsLoading) return;
     setShipmentsLoading(true);
     PurchasedOrderFirebaseService.fetchAll()
       // Only shipments with something left. One where every unit is already in
@@ -388,13 +509,25 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
         list.filter(sh => sh.status !== 'Cancelled' && stockInLines(sh).length > 0)))
       .catch(() => toast.error('Could not load shipments'))
       .finally(() => setShipmentsLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [source]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedShipment = shipments.find(sh => sh.id === shipmentId) || null;
 
   // ── Product rows ──────────────────────────────────────────────────────────
   const [rows, setRows] = useState<ProductRow[]>([newRow()]);
   const [rowErrors, setRowErrors] = useState<Record<string, any>>({});
+
+  // Switching to On Credit drops any shipment this row was linked to — Credit
+  // rows are always plain hand entry, so a leftover shipmentId here would
+  // still try to deduct stock off that shipment on save, and would still show
+  // the shipment's model list instead of a normal Category field below.
+  useEffect(() => {
+    if (ownership !== 'Credit') return;
+    setShipmentId('');
+    setRows(prev => prev.map(r => (r.shipmentId
+      ? { ...r, shipmentId: undefined, shipmentLineId: undefined, shipmentLine: undefined, manualModelInShipment: false }
+      : r)));
+  }, [ownership]);
 
   const updateRow = (id: string, field: keyof ProductRow, val: any) =>
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: val } : r));
@@ -421,6 +554,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
       shipmentId: sh.id,
       shipmentLineId: undefined,
       shipmentLine: undefined,
+      manualModelInShipment: false,
       category: '',
     })));
   };
@@ -442,6 +576,22 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
   };
 
   const pickModel = (rowId: string, lineId: string) => {
+    // "+ New model on this shipment" — this row is not one of the manifest's
+    // lines. Keep shipmentId/brandName (it is still this shipment's stock)
+    // but clear anything that pointed at a specific line, and let Model/Cost
+    // be typed by hand from here on.
+    if (lineId === '__new__') {
+      setRows(prev => prev.map(r => r.id !== rowId ? r : {
+        ...r,
+        manualModelInShipment: true,
+        shipmentLineId: undefined,
+        shipmentLine: undefined,
+        modelName: '',
+        costPrice: 0,
+      }));
+      return;
+    }
+
     const sh = shipments.find(x => x.id === rows.find(r => r.id === rowId)?.shipmentId);
     if (!sh) return;
     const l = stockInLines(sh).find(x => x.lineId === lineId);
@@ -449,6 +599,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
 
     setRows(prev => prev.map(r => r.id !== rowId ? r : {
       ...r,
+      manualModelInShipment: false,
       modelName: l.modelName || l.productName,
       // Category from what this brand and model was entered as last time. The
       // dropdown that would normally set it is showing the model list, so this
@@ -467,18 +618,22 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
   // Changing the margin re-prices every shipment row that has not been typed
   // over. A row someone edited keeps what they set.
   useEffect(() => {
+    if (source !== 'shipment') return;
     setRows(prev => prev.map(r => {
       if (!r.shipmentLine) return r;
       const auto = suggestedSellPrice(r.shipmentLine.landedUnitCost, marginPercent);
       return { ...r, sellPrice: auto };
     }));
   }, [marginPercent]); // eslint-disable-line react-hooks/exhaustive-deps
-  // A new row starts blank — without this it would have no shipmentId, and
-  // the manual brand/model/category fields would quietly reappear for that
-  // one row alone. Every row on this screen is a shipment row now.
+  // A new row while a shipment is active must start attached to it too —
+  // otherwise "+ Add Another Product" reopens a blank manual-looking row
+  // (no brand, no shipmentId) in the middle of an Against-Payment batch that
+  // is supposed to be shipment-only end to end.
   const addRow = () => setRows(prev => [
     ...prev,
-    selectedShipment ? { ...newRow(), brandName: selectedShipment.brandName, shipmentId: selectedShipment.id } : newRow(),
+    selectedShipment
+      ? { ...newRow(), brandName: selectedShipment.brandName, shipmentId: selectedShipment.id }
+      : newRow(),
   ]);
   const removeRow = (id: string) => setRows(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev);
 
@@ -593,12 +748,16 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
     rows.forEach((r, i) => {
       const e: any = {};
       if (!r.brandName.trim())  { e.brand    = 'Required'; hasErr = true; }
+      // In shipment mode modelName is only set once a line is picked (or typed,
+      // for a new-on-this-shipment row), so this one check covers "nothing
+      // chosen/typed yet" for both.
       if (!r.modelName.trim())  { e.model    = 'Required'; hasErr = true; }
-      // Every row must trace to a shipment line now — there is no manual
-      // fallback left to validate against.
-      if (!r.shipmentId) { e.category = 'Pick a shipment above first'; hasErr = true; }
-      else if (!r.shipmentLineId) { e.category = 'Pick a model'; hasErr = true; }
-      else if (!r.category.trim()) { e.category = 'Category is required'; hasErr = true; }
+      // A shipment row still needs a line UNLESS it was explicitly marked as a
+      // new model on that same shipment — that one is typed by hand instead.
+      if (r.shipmentId && !r.shipmentLineId && !r.manualModelInShipment) { e.model = 'Pick a model'; hasErr = true; }
+      // Category is now its own field on every row — shipment rows included —
+      // so it is always required, never implied by the model picked.
+      if (!r.category.trim()) { e.category = 'Required'; hasErr = true; }
       // More than the shipment has left is stock that was never bought, and the
       // shipment stops balancing at the same moment.
       if (r.shipmentLine) {
@@ -855,66 +1014,67 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* ── Shipment ──
-            Every row on this screen comes off a purchase order now — pick the
-            shipment first, then a model per row below. */}
-        <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <div style={{ width: 26, height: 26, borderRadius: 7, backgroundColor: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Building2 size={14} color="#4338ca" />
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Shipment</div>
-          </div>
-
-          <div style={{ display: 'grid', gap: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12, alignItems: 'end' }}>
-              <div>
-                <label style={S.label}>Pick a shipment <span style={{ color: '#ef4444' }}>*</span></label>
-                <select value={shipmentId}
-                  onChange={e => {
-                    const id = e.target.value;
-                    setShipmentId(id);
-                    const sh = shipments.find(x => x.id === id);
-                    if (sh) attachShipment(sh);
-                  }}
-                  style={{ ...S.inp(), cursor: 'pointer' }}>
-                  <option value="">
-                    {shipmentsLoading ? 'Loading shipments…'
-                      : shipments.length === 0 ? 'No shipments with stock left'
-                      : '— select shipment —'}
-                  </option>
-                  {shipments.map(sh => (
-                    <option key={sh.id} value={sh.id}>
-                      {sh.shipmentNumber} · {sh.brandName} · {sh.supplierName}
+            Only for Against Payment — paying the supplier now against a
+            landed order means the rows are filled from that order and the
+            cost is the landed figure. On Credit never shows this: it is a
+            plain, simple hand-entry row, exactly like this screen worked
+            before shipment stock-in existed — no shipment to pick, no
+            margin to set. */}
+        {ownership === 'Owned' && (
+          <div style={S.card}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Shipment</div>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12, alignItems: 'end' }}>
+                <div>
+                  <label style={S.label}>Pick a shipment <span style={{ color: '#ef4444' }}>*</span></label>
+                  <select value={shipmentId}
+                    onChange={e => {
+                      const id = e.target.value;
+                      setShipmentId(id);
+                      const sh = shipments.find(x => x.id === id);
+                      if (sh) attachShipment(sh);
+                    }}
+                    style={{ ...S.inp(), cursor: 'pointer' }}>
+                    <option value="">
+                      {shipmentsLoading ? 'Loading shipments…'
+                        : shipments.length === 0 ? 'No shipments found'
+                        : '— select shipment —'}
                     </option>
-                  ))}
-                </select>
+                    {shipments.map(sh => (
+                      <option key={sh.id} value={sh.id}>
+                        {sh.shipmentNumber} · {sh.brandName} · {sh.supplierName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Margin %</label>
+                  <input type="number" min={0} step="any" value={marginPercent}
+                    onChange={e => setMarginPercent(parseFloat(e.target.value) || 0)}
+                    style={{ ...S.inp(), textAlign: 'right' }} />
+                </div>
               </div>
-              <div>
-                <label style={S.label}>Margin %</label>
-                <input type="number" min={0} step="any" value={marginPercent}
-                  onChange={e => setMarginPercent(parseFloat(e.target.value) || 0)}
-                  style={{ ...S.inp(), textAlign: 'right' }} />
-              </div>
-            </div>
 
-            {selectedShipment && (
-              <p style={{ fontSize: 11.5, color: '#64748b', margin: 0, lineHeight: 1.6 }}>
-                Pick a model per row below, from what is still left on this order. Purchasing cost
-                is the landed figure and stays editable if it needs correcting. Retail is filled at{' '}
-                {marginPercent}% and stays editable too, but never below cost: selling under it is a
-                loss on every unit, and the kind that only shows up at month end.
-              </p>
-            )}
+              {selectedShipment && (
+                <p style={{ fontSize: 11.5, color: '#64748b', margin: 0, lineHeight: 1.6 }}>
+                  One row per line, filled with what is still on the order. The purchasing cost
+                  is the landed figure and cannot be edited — that is the point of stocking in
+                  from a shipment. Retail is filled at {marginPercent}% and stays editable, but
+                  never below cost: selling under it is a loss on every unit, and the kind that
+                  only shows up at month end.
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── Ownership ── */}
         <div style={S.card}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Ownership Type</div>
           <div style={S.grid2}>
             {[
-              { value: 'Owned',  label: 'Against Payment', sub: 'Paying supplier now',   Icon: Wallet, color: '#15803d', bg: '#f0fdf4', border: '#22c55e' },
-              { value: 'Credit', label: 'On Credit',        sub: 'Pay supplier later',    Icon: Users,  color: '#b45309', bg: '#fffbeb', border: '#f59e0b' },
+              { value: 'Owned',  label: 'Owned Inventory',       sub: 'Paying supplier now',   Icon: Wallet, color: '#15803d', bg: '#f0fdf4', border: '#22c55e' },
+              { value: 'Credit', label: 'Third-party Inventory', sub: 'Pay supplier later',    Icon: Users,  color: '#b45309', bg: '#fffbeb', border: '#f59e0b' },
             ].map(opt => {
               const sel = ownership === opt.value;
               return (
@@ -935,15 +1095,6 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
         </div>
 
         {/* ── Product rows ── */}
-        {!selectedShipment ? (
-          <div style={{ ...S.card, textAlign: 'center', padding: '32px 24px', color: '#94a3b8' }}>
-            <Building2 size={22} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#64748b' }}>
-              Select a shipment above to start adding products
-            </p>
-          </div>
-        ) : (
-          <>
         {rows.map((row, idx) => (
           <div key={row.id} style={{ ...S.card, position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -1027,9 +1178,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#0f172a'; (e.currentTarget as HTMLElement).style.color = '#0f172a'; (e.currentTarget as HTMLElement).style.backgroundColor = '#f1f5f9'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#cbd5e1'; (e.currentTarget as HTMLElement).style.color = '#64748b'; (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc'; }}>
           <Plus size={16} /> Add Another Product
-        </button>
-          </>
-        )}
+        </button>         
                 {/* Payment (removed)
             Payment collection UI removed from this flow. All new items are
             saved as unpaid and reconciled from the Transactions module.
@@ -1049,7 +1198,7 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
             <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>
               Grand Total — {rows.length} product{rows.length!==1?'s':''}
             </span>
-            <span style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>{getGlobalCurrencySymbol()} {grandTotal.toLocaleString()}</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>{currencySymbol} {grandTotal.toLocaleString()}</span>
           </div>
         )}
 

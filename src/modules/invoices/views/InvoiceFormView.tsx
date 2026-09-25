@@ -10,6 +10,7 @@ import { TxCompany } from '../../transactions/models/TransactionBridgeService';
 import { InvoiceCurrency, INVOICE_CURRENCIES, convertCurrency } from '../models/invoiceService';
 import { sanitizeNameInput, sanitizePhoneInput, sanitizeCNICInput } from '../../../utils/validators';
 import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 interface Employee { id: string; name: string; position: string; status: 'active' | 'inactive'; }
 interface Bank    { id: string; name: string; accountNumber: string; balance: number; }
@@ -324,6 +325,11 @@ export function InvoiceFormView({
   toggleCurrency = () => {},
   currencyRates,
 }: Props) {
+  // Subscribed purely so this form re-renders the instant the Admin changes
+  // the global currency — formatCurrency/getGlobalCurrencySymbol() below
+  // always read the live value regardless of this call.
+  useGlobalCurrency();
+
   const total = calculateTotal();
 
   // Amounts are AED (normalised on read). Display 1:1.

@@ -137,7 +137,7 @@ export function CostingGlobalInputs({
           <input id="usdRate" type="number" className={inputCls}
             value={usdRate || ''} onChange={e => onUsdRateChange(Number(e.target.value))}
             placeholder="e.g., 3.67" />
-          <p className={helpCls}>1 USD = ? AED</p>
+          <p className={helpCls}>1 USD = ? {getGlobalCurrencySymbol()}</p>
         </div>
 
         {/* ── Customs Duty ── */}

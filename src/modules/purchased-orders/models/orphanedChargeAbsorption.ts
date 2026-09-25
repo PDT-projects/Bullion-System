@@ -4,33 +4,36 @@
 // charges) is calculated using each line's proportional share of the
 // shipment's total value, but that calculation only ever runs ONCE, at
 // stock-in time, and gets snapshotted onto each serial. It never re-runs
-// later. So when a charge arrives after stock-in:
-//   - If a line still has unsold units, its share of the new charge has
-//     nowhere to land — the already-stocked serials' cost never moves.
-//   - If a line's units are already ALL sold, its share has nowhere to
-//     land at all — not even a serial to update.
+// later. So when a charge arrives after stock-in, that line's share of the
+// new charge has nowhere it can be silently baked into the existing numbers
+// — whether the line's units are still sitting unsold in inventory, or have
+// already gone out on a real sales invoice.
 //
-// THE FIX (this file): whenever a charge is added, this walks every line
-// of the shipment, computes that line's value-proportional share of the
-// NEW charge (the exact same "share" formula the costing engine already
-// uses), and for each line:
-//   - If it still has unsold serials: adds that line's share, split evenly
-//     across just the unsold serials, on top of whatever cost they already
-//     carry (topUpSerialCosts). Already-sold serials from the same line are
-//     left untouched — their invoice already recorded a real number.
-//   - If every serial from that line is already sold: creates a small
-//     dummy Product carrying exactly that line's share, and immediately
-//     sells it via a $0-revenue, clearly-labelled internal invoice, so the
-//     cost still reaches Purchase Cost / COGS through the same pipeline a
-//     real sale uses.
-// A single new charge can do both at once if a shipment has multiple lines
-// in different states — each line is handled independently.
+// THE FIX (this file): whenever a charge is added, this walks every line of
+// the shipment that has already been fully stocked in, computes that line's
+// value-proportional share of the NEW charge (the exact same "share"
+// formula the costing engine already uses), and — regardless of whether the
+// line's units are unsold or already sold — creates a small dummy Product
+// carrying exactly that line's share, and immediately sells it via a
+// $0-revenue, clearly-labelled internal adjustment invoice, so the cost
+// still reaches Purchase Cost / COGS through the same pipeline a real sale
+// uses, and always leaves a traceable ADJ-xxxx invoice behind.
+//
+// Earlier versions of this file split behaviour by sold/unsold status —
+// topping up the still-unsold unit's own recorded cost directly instead of
+// creating an adjustment invoice for it. That path was removed: the direct
+// top-up was invisible everywhere the app actually reads a unit's cost
+// (invoice creation, the Inventory Report, the Balance Sheet all read the
+// product's own costPrice, never the per-serial top-up), and per an
+// explicit decision to treat every late charge on a stocked-in line the
+// same way, so a paid charge always leaves a document you can go find and
+// point at, rather than a silent number change buried in the product.
 
 import { doc, getDoc, runTransaction } from 'firebase/firestore';
 import { db } from '../../../api/firebase/firebase';
 import { InventoryFirebaseService } from '../../inventory/models/InventoryFirebaseService';
 import { InvoiceFirebaseService } from '../../invoices/models/InvoiceFirebaseService';
-import { calculateShipmentCosting } from './purchasedOrderService';
+import { calculateShipmentCosting, resolveLineProductId } from './purchasedOrderService';
 import type { Shipment } from './types';
 
 const PRODUCTS_COLLECTION = 'products';
@@ -116,6 +119,12 @@ async function createDummyAdjustment(
     deliveryStatus: 'Self-collect',
     status: 'Paid',
     deductionCharges: 0,
+    // Previously the shipment reference only existed inside `note` above —
+    // readable, but only after opening this exact invoice. These two fields
+    // let the Invoices list show "Shipment: SHP-..." directly, and let
+    // anything else find the shipment without parsing free text.
+    sourceShipmentId: shipment.id,
+    sourceShipmentNumber: shipLabel,
   } as any);
 
   await InventoryFirebaseService.markSerialsSold(
@@ -128,27 +137,30 @@ async function createDummyAdjustment(
 }
 
 export interface ChargeAllocationResult {
-  /** Invoice numbers of any dummy adjustment invoices created (one per
-   *  fully-sold line that needed one). Empty if every line still had stock. */
+  /** Invoice numbers of any dummy adjustment invoices created — one per
+   *  stocked-in line that had a share of this charge to absorb, whether its
+   *  unit(s) were unsold or already sold. Empty if no line had been stocked
+   *  in yet (nothing to absorb — the live costing engine picks the charge up
+   *  automatically once it is). */
   adjustmentInvoiceNumbers: string[];
-  /** How many already-stocked, not-yet-sold serials had their recorded
-   *  cost topped up to include a share of the new charge. */
-  serialsToppedUp: number;
 }
 
 /**
  * Call after successfully adding a charge to a shipment. Walks every line,
  * gives each its value-proportional share of the new charge (matching the
- * shipment's own costing formula), and routes that share to wherever it
- * needs to go — topped up onto unsold stock, or absorbed via a dummy
- * adjustment invoice if that line has nothing left to carry it.
+ * shipment's own costing formula), and — for any line that has already been
+ * stocked in — absorbs that share via a dummy adjustment invoice. This is
+ * the same treatment whether the line's unit(s) are still sitting unsold in
+ * inventory or have already gone out on a real sale: neither case touches
+ * the unit's own recorded cost, so every late charge leaves the same kind of
+ * traceable ADJ-xxxx record behind.
  */
 export async function allocateNewChargeAcrossShipment(
   shipment: Shipment,
   chargeAmount: number,
   chargeDescription: string,
 ): Promise<ChargeAllocationResult> {
-  const result: ChargeAllocationResult = { adjustmentInvoiceNumbers: [], serialsToppedUp: 0 };
+  const result: ChargeAllocationResult = { adjustmentInvoiceNumbers: [] };
   const lines = shipment.lines || [];
   if (lines.length === 0 || !(chargeAmount > 0)) return result;
 
@@ -165,7 +177,13 @@ export async function allocateNewChargeAcrossShipment(
 
     const lineLabel = `${line.productName} ${line.modelName}`.trim();
 
-    if (!line.linkedProductId) {
+    // `line.linkedProductId` is the field meant to carry the stocked-in
+    // product id, but historically nothing ever wrote it (see
+    // resolveLineProductId's own doc comment) — so read it through the
+    // resolver, which falls back to the line's stockBatches, instead of the
+    // raw field directly.
+    const productId = resolveLineProductId(line);
+    if (!productId) {
       // Not stocked in yet — nothing to do. The live costing engine will
       // pick up this charge automatically (it reads charges[] fresh) the
       // next time this line is stocked in, same as always.
@@ -173,25 +191,17 @@ export async function allocateNewChargeAcrossShipment(
     }
 
     try {
-      const snap = await getDoc(doc(db, PRODUCTS_COLLECTION, line.linkedProductId));
+      const snap = await getDoc(doc(db, PRODUCTS_COLLECTION, productId));
       if (!snap.exists()) continue;
       const p = snap.data() as any;
       const serialNumbers: string[] = p.serialNumbers || [];
-      const serialStatus: Record<string, string> = p.serialStatus || {};
-      const unsold = serialNumbers.filter(s => serialStatus[s] !== 'Sold');
+      if (serialNumbers.length === 0) continue; // nothing actually stocked in on this product record
 
-      if (unsold.length > 0) {
-        const perUnit = lineAmount / unsold.length;
-        const additions: Record<string, number> = {};
-        unsold.forEach(s => { additions[s] = perUnit; });
-        await InventoryFirebaseService.topUpSerialCosts(line.linkedProductId, additions);
-        result.serialsToppedUp += unsold.length;
-      } else if (serialNumbers.length > 0) {
-        // Every serial from this line is already sold — nothing left to
-        // carry this line's share, so absorb it via a dummy adjustment.
-        const invNo = await createDummyAdjustment(shipment, lineLabel, lineAmount, chargeDescription);
-        result.adjustmentInvoiceNumbers.push(invNo);
-      }
+      // Stocked in — whether its units are unsold or already sold, this
+      // line's share always goes out via a dummy adjustment invoice now,
+      // never onto the real unit's own recorded cost.
+      const invNo = await createDummyAdjustment(shipment, lineLabel, lineAmount, chargeDescription);
+      result.adjustmentInvoiceNumbers.push(invNo);
     } catch (err) {
       console.error(`[allocateNewChargeAcrossShipment] failed for line "${lineLabel}":`, err);
       // Don't let one bad line stop the others.

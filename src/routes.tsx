@@ -12,10 +12,6 @@ import { ReportsPage } from './features/finance/ReportsPage';
 import { EmployeeListWrapper, EmployeeCreateWrapper, EmployeeEditWrapper, EmployeeDeleteWrapper } from './modules/employee';
 
 import {
-  BankingDashboardWrapper, BankListWrapper, BankCreateWrapper, BankEditWrapper, BankDeleteWrapper,
-  TransferListWrapper, TransferCreateWrapper, CashListWrapper, CashCreateWrapper,
-} from './modules/banking';
-import {
   InventoryDashboardWrapper, InventoryListWrapper, InventoryTypeSelectionWrapper,
   InventoryCostingOptionWrapper, InventoryCostingDetailsWrapper, InventoryProductDetailsWrapper,
   InventoryPaymentWrapper, InventoryAddExistingWrapper, DeletedInventoryWrapper,
@@ -25,7 +21,6 @@ import {
 import { InvoiceListWrapper, InvoiceFormWrapper, InvoiceDeleteWrapper, InvoiceReportWrapper, DeletedInvoicesWrapper } from './modules/invoices';
 import { DummyInvoiceListView }    from './modules/invoices/views/DummyInvoiceListView';
 import { DummyInvoiceFormWrapper } from './modules/invoices/views/DummyInvoiceFormWrapper';
-import { AgainstInvoiceWrapper } from './modules/against-the-invoice';
 import {
   TransactionListWrapper, TransactionCreateWrapper, TransactionEditWrapper,
   TransactionDeleteWrapper, PendingPaymentsWrapper,
@@ -95,17 +90,6 @@ function EmployeeCreateRoute() { return <EmployeeCreateWrapper />; }
 function EmployeeEditRoute()   { return <EmployeeEditWrapper />; }
 function EmployeeDeleteRoute() { return <EmployeeDeleteWrapper />; }
 
-function BankingDashboardRoute() { return <BankingDashboardWrapper />; }
-function BankListRoute()         { return <BankListWrapper />; }
-function BankCreateRoute()       { return <BankCreateWrapper />; }
-function BankEditRoute()         { return <BankEditWrapper />; }
-function BankDeleteRoute()       { return <BankDeleteWrapper />; }
-function BankTransferListRoute() { return <TransferListWrapper />; }
-function BankTransferCreateRoute(){ return <TransferCreateWrapper />; }
-function CashListRoute()         { return <CashListWrapper />; }
-function CashCreateRoute()       { return <CashCreateWrapper />; }
-function BankActivityRoute()     { return <BankActivityView />; }
-
 function InventoryDashboardRoute()      { return <InventoryDashboardWrapper />; }
 function InventoryViewRoute()           { return <InventoryListWrapper />; }
 function InventoryReceivableRoute()     { return <InventoryListWrapper />; }
@@ -130,7 +114,6 @@ function InvoiceDeleteRoute()   { return <InvoiceDeleteWrapper />; }
 function InvoiceReportRoute()   { return <InvoiceReportWrapper />; }
 function DeletedInvoicesRoute() { return <DeletedInvoicesWrapper />; }
 
-function AgainstInvoiceRoute()   { return <AgainstInvoiceWrapper />; }
 function DummyInvoiceListRoute() { return <DummyInvoiceListView />; }
 function DummyInvoiceFormRoute() { return <DummyInvoiceFormWrapper />; }
 
@@ -169,24 +152,6 @@ export const router = createBrowserRouter([
   // ── Bills ──────────────────────────────────────────────────────────────────
  
 
-  // ── Banking ────────────────────────────────────────────────────────────────
-  {
-    path: '/banking',
-    element: (<ProtectedRoute><OutletLayout activeModule="banking" /></ProtectedRoute>),
-    children: [
-      { index: true,              element: <ScreenProtectedRoute requiredScreen="Banking Dashboard"><BankingDashboardRoute /></ScreenProtectedRoute> },
-      { path: 'banks',            element: <ScreenProtectedRoute requiredScreen="Bank Accounts List"><BankListRoute /></ScreenProtectedRoute> },
-      { path: 'banks/new',        element: <ScreenProtectedRoute requiredScreen="Create Bank"><BankCreateRoute /></ScreenProtectedRoute> },
-      { path: 'banks/:id/edit',   element: <ScreenProtectedRoute requiredScreen="Edit Bank"><BankEditRoute /></ScreenProtectedRoute> },
-      { path: 'banks/:id/delete', element: <ScreenProtectedRoute requiredScreen="Delete Bank"><BankDeleteRoute /></ScreenProtectedRoute> },
-      { path: 'transfers',        element: <ScreenProtectedRoute requiredScreen="Bank Transfers List"><BankTransferListRoute /></ScreenProtectedRoute> },
-      { path: 'transfers/new',    element: <ScreenProtectedRoute requiredScreen="Create Bank Transfer"><BankTransferCreateRoute /></ScreenProtectedRoute> },
-      { path: 'cash',             element: <ScreenProtectedRoute requiredScreen="Cash List"><CashListRoute /></ScreenProtectedRoute> },
-      { path: 'cash/new',         element: <ScreenProtectedRoute requiredScreen="Create Cash Entry"><CashCreateRoute /></ScreenProtectedRoute> },
-      { path: 'activity',         element: <ScreenProtectedRoute requiredScreen="Bank Activity Report"><BankActivityRoute /></ScreenProtectedRoute> },
-    ],
-  },
-
   // ── Transactions ───────────────────────────────────────────────────────────
   {
     path: '/transactions',
@@ -215,17 +180,6 @@ export const router = createBrowserRouter([
       { path: 'dummy/new',  element: <ScreenProtectedRoute requiredScreen="Dummy Invoices"><DummyInvoiceFormRoute /></ScreenProtectedRoute> },
       { path: 'dummy/:id',  element: <ScreenProtectedRoute requiredScreen="Dummy Invoices"><DummyInvoiceFormRoute /></ScreenProtectedRoute> },
     ],
-  },
-
-  {
-    path: '/against-the-invoice',
-    element: (
-      <ProtectedRoute>
-        <AppLayout activeModule="against-the-invoice">
-          <ScreenProtectedRoute requiredScreen="Against Invoice"><AgainstInvoiceRoute /></ScreenProtectedRoute>
-        </AppLayout>
-      </ProtectedRoute>
-    ),
   },
 
   // ── Inventory ──────────────────────────────────────────────────────────────

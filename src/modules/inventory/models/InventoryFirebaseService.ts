@@ -241,6 +241,7 @@ function transformDocToTransfer(docSnap: any): ProductTransfer {
     transferItems:  d.transferItems  || undefined,
     createdAt:      d.createdAt      || '',
     receivedAt:     d.receivedAt     || undefined,
+    receiverName:   d.receiverName   || undefined,
   };
 }
 
@@ -767,6 +768,20 @@ export class InventoryFirebaseService {
    * snapshotted once, at stock-in time, and never moves on its own. This
    * lets a late-arriving charge still reach the units that will eventually
    * carry it into an invoice's Purchase Cost.
+   *
+   * BUG FIX: this used to write only `serialCostPrice` (the per-serial map).
+   * That map, in practice, is never read anywhere else in the app — every
+   * consumer that needs a unit's cost (extractCost() at invoice-creation
+   * time, the Inventory Report's "Purchasing Cost" column, the Balance
+   * Sheet's Owned Inventory valuation) reads the flat, product-level
+   * `costPrice` field instead. So a late-charge top-up updated a number
+   * nothing downstream ever looked at: it never showed up on the product,
+   * never reached that unit's eventual invoice/COGS, and never moved the
+   * Balance Sheet's inventory value — even though the toast said the cost
+   * had been "updated". Now `costPrice` is folded in too, the same
+   * weighted-average way addSerialsToProduct() already keeps it in sync:
+   * total value across every serial the product has ever carried, divided
+   * by the serial count.
    */
   static async topUpSerialCosts(
     productId: string,
@@ -779,12 +794,21 @@ export class InventoryFirebaseService {
       if (!snap.exists()) return;
       const p = snap.data() as any;
       const nextCost: Record<string, number> = { ...(p.serialCostPrice || {}) };
+      let totalAdded = 0;
       Object.entries(additions).forEach(([serial, add]) => {
         if (!serial || !(add > 0)) return;
         nextCost[serial] = (Number(nextCost[serial]) || 0) + add;
+        totalAdded += add;
       });
+      if (totalAdded <= 0) return;
+
+      const serialCount = (p.serialNumbers || []).length || 1;
+      const oldCostPrice = Number(p.costPrice) || 0;
+      const costPrice = Math.round(((oldCostPrice * serialCount + totalAdded) / serialCount) * 100) / 100;
+
       await updateDoc(ref, {
         serialCostPrice: nextCost,
+        costPrice,
         updatedAt: new Date().toISOString(),
       });
     } catch (error) {
@@ -1089,33 +1113,35 @@ export class TransferFirebaseService {
     }
   }
 
-  static async updateTransferStatus(id: string, status: ProductTransfer['status'], receivedAt?: string): Promise<void> {
+  // `receiverName` was previously never accepted here — the viewModel tried
+  // to write it via TransferFirebaseService.updateTransferReceiver(), a
+  // method that has never existed on this class. That call (and its
+  // catch-block fallback to an equally nonexistent patchTransfer()) used
+  // optional chaining, so calling a missing method silently resolved to
+  // undefined instead of throwing — the catch block never ran, and the
+  // receiver's name typed into the required "Mark as Received" field was
+  // discarded on every transfer, with no error shown anywhere. Fixed by
+  // accepting it here and writing it in the same update as status.
+  //
+  // Also removed: this used to independently re-derive and re-write the
+  // product's serialCities/location whenever status became 'Received'. Its
+  // only caller (useProductTransferViewModel.handleMarkReceived) already
+  // performs a more complete product update — serialCities, serialStatus,
+  // stockInDate and serialStockInDates — immediately before calling this,
+  // so the block here was redundant (an extra read + write recomputing the
+  // same cities) and a latent race if two transfers for the same product
+  // were ever marked Received close together.
+  static async updateTransferStatus(
+    id: string,
+    status: ProductTransfer['status'],
+    receivedAt?: string,
+    receiverName?: string,
+  ): Promise<void> {
     try {
       const ref = doc(db, TRANSFERS_COLLECTION, id);
-      await updateDoc(ref, stripUndefined({ status, receivedAt, updatedAt: new Date().toISOString() }));
-      if (status === 'Received') {
-        const t = (await getDoc(ref)).data() as any;
-        if (t?.productId && t?.toLocation) {
-          const productRef  = doc(db, PRODUCTS_COLLECTION, t.productId);
-          const productSnap = await getDoc(productRef);
-          if (productSnap.exists()) {
-            const p = productSnap.data() as any;
-            const transferredSerials: string[] = t.serialNumbers?.length ? t.serialNumbers : (p.serialNumbers || []);
-            const allSerials: string[] = p.serialNumbers || [];
-            const serialCities: Record<string, string> = { ...(p.serialCities || {}) };
-            for (const s of allSerials) {
-              if (serialCities[s] == null || serialCities[s] === '') serialCities[s] = p.location || '';
-            }
-            for (const s of transferredSerials) { serialCities[s] = t.toLocation; }
-            const values  = allSerials.map(s => serialCities[s]).filter(Boolean);
-            const allSame = values.length === allSerials.length && values.every(c => c === t.toLocation);
-            await updateDoc(productRef, stripUndefined({
-              serialCities, location: allSame ? t.toLocation : p.location,
-              updatedAt: new Date().toISOString(),
-            }));
-          }
-        }
-      }
+      await updateDoc(ref, stripUndefined({
+        status, receivedAt, receiverName, updatedAt: new Date().toISOString(),
+      }));
     } catch (error) {
       throw new Error('Failed to update transfer status in Firestore');
     }

@@ -22,8 +22,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowLeft, Calendar, MapPin, User, Loader2, Plus, Package,
-  CheckSquare, Square, X, Check, Trash2, Layers,
+  ArrowLeft, ArrowRight, Calendar, MapPin, User, Loader2, Plus, Package,
+  CheckSquare, Square, X, Check, Trash2, Layers, Settings2,
 } from 'lucide-react';
 import {
   UseProductTransferCreateViewModelReturn,
@@ -38,7 +38,7 @@ export const ProductTransferCreateView: React.FC<Props> = ({
   isSubmitting, isLoading, validation,
   setFormField, addTransferItem, removeTransferItem,
   updateTransferItemProduct, toggleSerial,
-  handleSave, addNewLocation, onBack,
+  handleSave, addNewLocation, removeLocation, resetLocations, onBack,
 }) => {
   // Ensure at least one item exists on mount
   useEffect(() => {
@@ -62,6 +62,53 @@ export const ProductTransferCreateView: React.FC<Props> = ({
       setAddLoc({ target: null, value: '', saving: false });
     } catch {
       setAddLoc(s => ({ ...s, saving: false }));
+    }
+  };
+
+  // ── Manage-locations modal — add, remove, or reset the whole list ─────
+  // One-stop admin tool: the quick "+" beside each field (below) stays for
+  // fast add-while-filling-the-form, but this modal is where you'd come to
+  // actually clean the list up — add a missing one, remove a typo/old one,
+  // or wipe it back to empty.
+  const [manageLocOpen, setManageLocOpen] = useState(false);
+  const [manageNewValue, setManageNewValue] = useState('');
+  const [addingInManage, setAddingInManage] = useState(false);
+  const [removingLoc, setRemovingLoc] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  const openManageLoc = () => {
+    setManageNewValue('');
+    setManageLocOpen(true);
+  };
+
+  const submitAddInManage = async () => {
+    const name = manageNewValue.trim();
+    if (!name || addingInManage) return;
+    setAddingInManage(true);
+    try {
+      await addNewLocation(name);
+      setManageNewValue('');
+    } finally {
+      setAddingInManage(false);
+    }
+  };
+
+  const confirmRemoveLoc = async (name: string) => {
+    setRemovingLoc(name);
+    try {
+      await removeLocation(name);
+    } finally {
+      setRemovingLoc(null);
+    }
+  };
+
+  const confirmResetLocs = async () => {
+    if (!window.confirm('Remove every saved location? This clears the list for every screen that shares it — you can add new ones again afterward.')) return;
+    setResetting(true);
+    try {
+      await resetLocations();
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -98,95 +145,135 @@ export const ProductTransferCreateView: React.FC<Props> = ({
 
         {/* Card 1: Transfer Details */}
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4 overflow-hidden">
-          <header className="px-5 py-3 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
-            <MapPin size={15} className="text-slate-500" />
-            <h2 className="text-sm font-bold text-slate-900">Transfer Details</h2>
+          <header className="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <MapPin size={15} className="text-slate-500" />
+              <h2 className="text-sm font-bold text-slate-900">Transfer Details</h2>
+            </div>
+            <button
+              type="button"
+              onClick={openManageLoc}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-colors"
+              title="Add, remove or reset the saved locations"
+            >
+              <Settings2 size={12} /> Manage locations
+            </button>
           </header>
-          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Date */}
-            <Field label="Date & Time" required icon={<Calendar size={13} />}>
-              <input
-                type="datetime-local"
-                value={formData.transferDateTime}
-                onChange={e => setFormField('transferDateTime', e.target.value)}
-                className={inputCls}
-              />
-            </Field>
-
-            {/* Transferred By */}
-            <Field label="Transferred By" required icon={<User size={13} />}>
-              <input
-                type="text"
-                value={formData.transferredBy}
-                onChange={e => setFormField('transferredBy', e.target.value)}
-                placeholder="e.g. Manager Ahmed"
-                className={inputCls}
-              />
-            </Field>
-
-            {/* From Location — SOURCE (asked first) */}
-            <Field label="From Location (Source)" required icon={<MapPin size={13} />}>
-              <div className="flex gap-2">
-                <select
-                  value={formData.fromLocation}
-                  onChange={e => {
-                    if (e.target.value === '__add_new__') {
-                      setAddLoc({ target: 'from', value: '', saving: false });
-                    } else {
-                      setFormField('fromLocation', e.target.value);
-                    }
-                  }}
+          <div className="p-5 space-y-5">
+            {/* Row 1 — date & person. Sized to what each actually needs
+                instead of stretching every field to the same half-width:
+                the date picker is a fixed-width native control, so it gets
+                a fixed max width; the name field genuinely varies, so it
+                gets the rest of the row. */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Field label="Date & Time" required icon={<Calendar size={13} />} className="sm:w-60 flex-shrink-0">
+                <input
+                  type="datetime-local"
+                  value={formData.transferDateTime}
+                  onChange={e => setFormField('transferDateTime', e.target.value)}
                   className={inputCls}
-                >
-                  <option value="">Select source…</option>
-                  {locations.map(l => <option key={l} value={l}>{l}</option>)}
-                  <option value="__add_new__">➕ Add new location…</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setAddLoc({ target: 'from', value: '', saving: false })}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                  title="Add a new location"
-                >
-                  <Plus size={14} />
-                </button>
-              </div>
-            </Field>
+                />
+              </Field>
 
-            {/* To Location — DESTINATION */}
-            <Field label="To Location (Destination)" required icon={<MapPin size={13} />}>
-              <div className="flex gap-2">
-                <select
-                  value={formData.toLocation}
-                  onChange={e => {
-                    if (e.target.value === '__add_new__') {
-                      setAddLoc({ target: 'to', value: '', saving: false });
-                    } else {
-                      setFormField('toLocation', e.target.value);
-                    }
-                  }}
-                  disabled={!formData.fromLocation}
-                  className={inputCls + (formData.fromLocation ? '' : ' opacity-50 cursor-not-allowed')}
-                >
-                  <option value="">
-                    {formData.fromLocation ? 'Select destination…' : 'Pick source first'}
-                  </option>
-                  {locations
-                    .filter(l => l !== formData.fromLocation)
-                    .map(l => <option key={l} value={l}>{l}</option>)}
-                  <option value="__add_new__">➕ Add new location…</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setAddLoc({ target: 'to', value: '', saving: false })}
-                  disabled={!formData.fromLocation}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Add a new location"
-                >
-                  <Plus size={14} />
-                </button>
+              <Field label="Transferred By" required icon={<User size={13} />} className="flex-1 min-w-0">
+                <input
+                  type="text"
+                  value={formData.transferredBy}
+                  onChange={e => setFormField('transferredBy', e.target.value)}
+                  placeholder="e.g. Manager Ahmed"
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+
+            {/* Row 2 — the route. From and To sit side by side with a
+                connecting arrow between them, so which way stock is moving
+                reads at a glance instead of two unlabeled dropdowns stacked
+                on top of each other. */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                <MapPin size={13} /> Transfer Route <span className="text-red-500 ml-0.5">*</span>
+              </label>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                {/* Source */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    Source
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={formData.fromLocation}
+                      onChange={e => {
+                        if (e.target.value === '__add_new__') {
+                          setAddLoc({ target: 'from', value: '', saving: false });
+                        } else {
+                          setFormField('fromLocation', e.target.value);
+                        }
+                      }}
+                      className={inputCls}
+                    >
+                      <option value="">Select source…</option>
+                      {locations.map(l => <option key={l} value={l}>{l}</option>)}
+                      <option value="__add_new__">➕ Add new location…</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setAddLoc({ target: 'from', value: '', saving: false })}
+                      className="flex-shrink-0 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                      title="Add a new location"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Connector — points down on mobile (stacked), right on
+                    wider screens (side by side). */}
+                <div className="flex items-center justify-center flex-shrink-0 py-0.5 sm:py-0 sm:mt-4">
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center">
+                    <ArrowRight size={14} className="rotate-90 sm:rotate-0" />
+                  </div>
+                </div>
+
+                {/* Destination */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    Destination
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={formData.toLocation}
+                      onChange={e => {
+                        if (e.target.value === '__add_new__') {
+                          setAddLoc({ target: 'to', value: '', saving: false });
+                        } else {
+                          setFormField('toLocation', e.target.value);
+                        }
+                      }}
+                      disabled={!formData.fromLocation}
+                      className={inputCls + (formData.fromLocation ? '' : ' opacity-50 cursor-not-allowed')}
+                    >
+                      <option value="">
+                        {formData.fromLocation ? 'Select destination…' : 'Pick source first'}
+                      </option>
+                      {locations
+                        .filter(l => l !== formData.fromLocation)
+                        .map(l => <option key={l} value={l}>{l}</option>)}
+                      <option value="__add_new__">➕ Add new location…</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setAddLoc({ target: 'to', value: '', saving: false })}
+                      disabled={!formData.fromLocation}
+                      className="flex-shrink-0 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Add a new location"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </Field>
+            </div>
           </div>
         </section>
 
@@ -279,28 +366,41 @@ export const ProductTransferCreateView: React.FC<Props> = ({
 
       </div>
 
-      {/* Add-location modal */}
+      {/* Add-location modal.
+          z-index: this view is often opened as a POPUP from the Inventory
+          Dashboard (InventoryDashboardView's `activePopup`, zIndex: 1000) —
+          the old `z-50` (=50) rendered this modal underneath that popup's own
+          backdrop, so it opened but was invisible and unclickable. Matches
+          the sibling "Mark as Received" modal in ProductTransferCreateWrapper,
+          which already uses 10000 for the same reason. */}
       {addLoc.target && createPortal(
         <div
           onClick={() => !addLoc.saving && setAddLoc({ target: null, value: '', saving: false })}
-          className="fixed inset-0 z-50 flex items-center justify-center p-5"
-          style={{ backgroundColor: 'rgba(15,23,42,0.55)' }}
+          className="fixed inset-0 flex items-center justify-center p-5"
+          style={{ backgroundColor: 'rgba(15,23,42,0.55)', zIndex: 10000 }}
         >
           <div onClick={e => e.stopPropagation()}
                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
               <div className={
-                'w-9 h-9 rounded-lg flex items-center justify-center ' +
+                'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ' +
                 (addLoc.target === 'from' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600')
               }>
                 <MapPin size={15} />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="text-sm font-bold text-slate-900">
                   Add {addLoc.target === 'from' ? 'source' : 'destination'} location
                 </div>
                 <div className="text-[11px] text-slate-500 mt-0.5">Saved for future transfers</div>
               </div>
+              <button
+                onClick={() => !addLoc.saving && setAddLoc({ target: null, value: '', saving: false })}
+                disabled={addLoc.saving}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
+              >
+                <X size={16} />
+              </button>
             </div>
             <div className="px-5 py-4">
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
@@ -333,6 +433,123 @@ export const ProductTransferCreateView: React.FC<Props> = ({
                 {addLoc.saving
                   ? <><Loader2 size={11} className="animate-spin" /> Saving…</>
                   : <><Check size={11} /> Add Location</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Manage-locations modal — view every saved location, remove one, or
+          reset the whole list back to empty. There was previously no way to
+          do any of this from the UI at all — only adding was possible, so a
+          wrong or stale location stuck around forever. This list is shared
+          with the rest of Inventory (appConfig/inventoryLocations), so a
+          removal or reset here is visible everywhere else too. */}
+      {manageLocOpen && createPortal(
+        <div
+          onClick={() => setManageLocOpen(false)}
+          className="fixed inset-0 flex items-center justify-center p-5"
+          style={{ backgroundColor: 'rgba(15,23,42,0.55)', zIndex: 10000 }}
+        >
+          <div onClick={e => e.stopPropagation()}
+               className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col" style={{ maxHeight: 'min(560px, calc(100vh - 2.5rem))' }}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-100 text-slate-600 flex-shrink-0">
+                <Settings2 size={15} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-slate-900">Manage locations</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {locations.length} saved · shared across Inventory
+                </div>
+              </div>
+              <button
+                onClick={() => setManageLocOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Add row — pinned at the top so adding never requires scrolling
+                past the existing list first. */}
+            <div className="px-5 py-3 border-b border-slate-100 flex gap-2 flex-shrink-0">
+              <input
+                value={manageNewValue}
+                onChange={e => setManageNewValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') submitAddInManage(); }}
+                disabled={addingInManage}
+                placeholder="Add a new location…"
+                className="flex-1 min-w-0 px-3 py-2 border-2 border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={submitAddInManage}
+                disabled={addingInManage || !manageNewValue.trim()}
+                className="px-3.5 py-2 text-xs font-bold text-white bg-slate-900 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5 flex-shrink-0"
+              >
+                {addingInManage
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <Plus size={12} />}
+                Add
+              </button>
+            </div>
+
+            <div className="px-5 py-3 overflow-y-auto flex-1 min-h-0">
+              {locations.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2.5">
+                    <MapPin size={18} className="text-slate-300" />
+                  </div>
+                  <p className="text-xs text-slate-400">No locations saved yet.</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Add one above to get started.</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {locations.map(loc => (
+                    <div
+                      key={loc}
+                      className="group flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MapPin size={13} className="text-slate-400 flex-shrink-0" />
+                        <span className="text-sm font-medium text-slate-800 truncate">{loc}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => confirmRemoveLoc(loc)}
+                        disabled={removingLoc === loc}
+                        className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors flex-shrink-0"
+                        title={`Remove ${loc}`}
+                      >
+                        {removingLoc === loc
+                          ? <Loader2 size={13} className="animate-spin" />
+                          : <Trash2 size={13} />}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={confirmResetLocs}
+                disabled={resetting || locations.length === 0}
+                className="px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                title="Remove every saved location"
+              >
+                {resetting
+                  ? <><Loader2 size={11} className="animate-spin" /> Resetting…</>
+                  : <><Trash2 size={11} /> Reset all</>}
+              </button>
+              <button
+                onClick={() => setManageLocOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Done
               </button>
             </div>
           </div>
@@ -521,7 +738,14 @@ const ItemPicker: React.FC<{
               No serials available at source for this model.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            // Auto-fill instead of a fixed 2/3-column split: each box is only
+            // as wide as a serial number needs (140px min), and the row fits
+            // as many as the available width allows — short serials pack
+            // tighter, long ones don't get clipped or leave dead space.
+            <div
+              className="grid gap-2"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}
+            >
               {serials.map(row => (
                 <label
                   key={row.serial}
@@ -566,8 +790,13 @@ const inputCls =
 
 const Field: React.FC<{
   label: string; required?: boolean; icon?: React.ReactNode; children: React.ReactNode;
-}> = ({ label, required, icon, children }) => (
-  <div>
+  /** Lets a field size itself to its own content instead of always taking
+   *  an equal grid share — e.g. "sm:w-60 flex-shrink-0" for a fixed-width
+   *  date picker, "flex-1 min-w-0" for a field that should take the rest
+   *  of the row. Defaults to full-width (previous behaviour). */
+  className?: string;
+}> = ({ label, required, icon, children, className }) => (
+  <div className={className}>
     <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
       {icon}
       {label}

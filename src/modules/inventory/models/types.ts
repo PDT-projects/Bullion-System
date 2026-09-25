@@ -269,6 +269,12 @@ export interface ProductTransfer {
   notes?: string;
   createdAt?: string;
   receivedAt?: string;
+  // Who confirmed receipt at the destination — captured in the "Mark as
+  // Received" prompt. Previously asked for and required on that form but
+  // never actually reached this type or Firestore (see TransferFirebaseService
+  // .updateTransferStatus / useProductTransferViewModel.handleMarkReceived),
+  // so it was silently discarded on every transfer ever received.
+  receiverName?: string;
   receiptName?: string;
   receiptType?: string;
   receiptDataUrl?: string;

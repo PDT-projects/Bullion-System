@@ -162,17 +162,14 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
         location:      allSame ? toLocation : product.location,
       } as any);
 
-      // Update the transfer with status + receiver info + receive date.
-      // updateTransferStatus already writes status + receivedAt; the
-      // receiverName goes via a direct doc merge in the service.
-      await TransferFirebaseService.updateTransferStatus(transfer.id, 'Received', receivedAt);
-      // Also stamp the receiverName on the transfer doc.
-      try {
-        await (TransferFirebaseService as any).updateTransferReceiver?.(transfer.id, receiverName.trim());
-      } catch {
-        // Fallback if the helper doesn't exist yet — write via generic patch
-        await (TransferFirebaseService as any).patchTransfer?.(transfer.id, { receiverName: receiverName.trim() });
-      }
+      // Update the transfer with status + receivedAt + receiverName in one
+      // write. (Previously the receiver's name was "saved" via a method
+      // that didn't exist on TransferFirebaseService — updateTransferReceiver
+      // was never defined, and the optional-chaining call silently resolved
+      // to undefined instead of throwing, so the catch-block fallback never
+      // ran either. The name typed into this required field was discarded
+      // every time, with no error. Fixed by passing it straight through.)
+      await TransferFirebaseService.updateTransferStatus(transfer.id, 'Received', receivedAt, receiverName.trim());
 
       // Sync local state
       setAllTransfers(prev =>
@@ -209,13 +206,35 @@ export function useProductTransferViewModel(): UseProductTransferViewModelReturn
   const handleDeleteTransfer = useCallback(async (id: string) => {
     if (!window.confirm('Delete this transfer record?')) return;
     try {
+      // If this transfer was never received, its serials are still reserved
+      // as 'In Transit' on the product (set at creation — see
+      // useProductTransferCreateViewModel.handleSave). Deleting the record
+      // without releasing that reservation would strand those serials:
+      // nothing else ever clears 'In Transit' back to 'Available', so they'd
+      // become permanently unsellable and untransferable.
+      const transfer = allTransfers.find(t => t.id === id);
+      if (transfer && transfer.status !== 'Received') {
+        const product = allProducts.find(p => p.id === transfer.productId);
+        if (product) {
+          const nextStatus: Record<string, string> = { ...(product.serialStatus || {}) };
+          let changed = false;
+          for (const s of (transfer.serialNumbers || [])) {
+            if (nextStatus[s] === 'In Transit') { nextStatus[s] = 'Available'; changed = true; }
+          }
+          if (changed) {
+            await InventoryFirebaseService.updateProduct(product.id, { serialStatus: nextStatus } as any);
+            setAllProducts(prev => prev.map(p => p.id === product.id ? { ...p, serialStatus: nextStatus } as any : p));
+          }
+        }
+      }
+
       await TransferFirebaseService.deleteTransfer(id);
       setAllTransfers(prev => prev.filter(t => t.id !== id));
       toast.success('Transfer deleted');
     } catch {
       toast.error('Failed to delete transfer');
     }
-  }, []);
+  }, [allTransfers, allProducts]);
 
   /**
    * Renders an ISO datetime string as "1 Jun 2026, 14:30" (Pakistan locale).

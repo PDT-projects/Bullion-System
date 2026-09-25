@@ -53,9 +53,9 @@ export function BrandSummary({ totalUnitCostUSD, shipmentTotalUSD, consignmentVa
       </div>
       <div style={{ backgroundColor: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, fontSize: 14 }}>
-          <span><span style={{ color: '#6b7280', fontWeight: 500 }}>Exchange Impact: </span><strong>د.إ {fmt(consignmentValue - shipmentTotalUSD)}</strong></span>
-          <span><span style={{ color: '#6b7280', fontWeight: 500 }}>Total Additional Costs: </span><strong>د.إ {fmt(totalCustomsValue + totalFreightValue)}</strong></span>
-          <span><span style={{ color: '#6b7280', fontWeight: 500 }}>Final Landed Value: </span><strong style={{ color: '#16a34a' }}>د.إ {fmt(totalValueOfBrand)}</strong></span>
+          <span><span style={{ color: '#6b7280', fontWeight: 500 }}>Exchange Impact: </span><strong>{sym} {fmt(consignmentValue - shipmentTotalUSD)}</strong></span>
+          <span><span style={{ color: '#6b7280', fontWeight: 500 }}>Total Additional Costs: </span><strong>{sym} {fmt(totalCustomsValue + totalFreightValue)}</strong></span>
+          <span><span style={{ color: '#6b7280', fontWeight: 500 }}>Final Landed Value: </span><strong style={{ color: '#16a34a' }}>{sym} {fmt(totalValueOfBrand)}</strong></span>
         </div>
       </div>
     </div>

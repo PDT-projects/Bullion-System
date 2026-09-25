@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, ChevronsUpDown, Plus, Loader2, Tag, Box } from 'lucide-react';
 import { BrandModelFirebaseService, BrandDoc, ModelDoc } from '../models/InventoryFirebaseService';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 interface BrandModelDropdownProps {
   onBrandChange: (brandId: string, brandName: string) => void;
@@ -23,6 +24,8 @@ interface BrandModelDropdownProps {
 export const BrandModelDropdown: React.FC<BrandModelDropdownProps> = ({
   onBrandChange, onModelChange, defaultBrandId, defaultModelId, className,
 }) => {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
   const [brandOpen, setBrandOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<BrandDoc | null>(null);
@@ -175,7 +178,7 @@ export const BrandModelDropdown: React.FC<BrandModelDropdownProps> = ({
                       <span className="flex-1 text-left">{model.name}</span>
                       {model.costPrice != null && model.costPrice > 0 && (
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${selectedModel?.id === model.id ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
-                          PKR {model.costPrice.toLocaleString()}
+                          {currencySymbol} {model.costPrice.toLocaleString()}
                         </span>
                       )}
                       {selectedModel?.id === model.id && <Check className="h-3.5 w-3.5 text-purple-500" />}
@@ -212,7 +215,7 @@ export const BrandModelDropdown: React.FC<BrandModelDropdownProps> = ({
               <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Model</span>
               <span className="font-semibold text-gray-800">{selectedModel.name}</span>
               <span className="ml-auto text-xs px-2.5 py-1 rounded-full bg-white border border-blue-200 text-blue-600 font-semibold shadow-sm whitespace-nowrap">
-                PKR {selectedModel.costPrice?.toLocaleString()}
+                {currencySymbol} {selectedModel.costPrice?.toLocaleString()}
               </span>
             </div>
           )}

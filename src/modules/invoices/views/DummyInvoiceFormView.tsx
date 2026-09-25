@@ -5,16 +5,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Plus, Trash2, X, Loader2, ChevronDown, FileText, User,
-  Phone, MapPin, Hash, ArrowLeft, Check, Save, Download,
+  Phone, Hash, ArrowLeft, Check, Save, Download,
+  ImagePlus, Stamp, ClipboardList, Receipt, Paperclip,
 } from 'lucide-react';
 import { downloadInvoicePdf } from '../models/invoicePdfService';
 import { toast } from 'sonner';
 import { UseDummyInvoiceFormViewModelReturn } from '../viewModels/useDummyInvoiceFormViewModel';
 import { DummyInvoiceType } from '../models/DummyInvoiceFirebaseService';
 import { sanitizeNameInput, sanitizePhoneInput, sanitizeCNICInput } from '../../../utils/validators';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 const TYPES: { value: DummyInvoiceType; label: string; prefix: string; color: string; bg: string; border: string }[] = [
-  { value: 'Dummy',     label: 'Dummy Invoice',   prefix: 'DUM', color: '#334155', bg: '#f1f5f9', border: '#cbd5e1' },
+  { value: 'Dummy',     label: 'Fictitious Invoice', prefix: 'DUM', color: '#334155', bg: '#f1f5f9', border: '#cbd5e1' },
   { value: 'Proforma',  label: 'Proforma Invoice', prefix: 'PRF', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
   { value: 'Booking',   label: 'Booking Invoice',  prefix: 'BOK', color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' },
   { value: 'Quotation', label: 'Quotation',        prefix: 'QUO', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
@@ -23,7 +25,7 @@ const TYPES: { value: DummyInvoiceType; label: string; prefix: string; color: st
 const STATUSES = ['Draft', 'Sent', 'Accepted', 'Rejected', 'Expired', 'Converted'];
 
 const S = {
-  card: { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px' } as React.CSSProperties,
+  card: { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '22px 24px', boxShadow: '0 1px 2px rgba(15,23,42,0.04)' } as React.CSSProperties,
   label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 } as React.CSSProperties,
   input: (err?: boolean): React.CSSProperties => ({
     width: '100%', padding: '9px 12px', borderRadius: 8,
@@ -35,9 +37,24 @@ const S = {
   grid3: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 } as React.CSSProperties,
 };
 
+/** Small colored icon chip used before a section title — gives each card a
+ *  distinct visual identity at a glance instead of uniform grey headings. */
+function SectionTitle({ icon, color, bg, children }: { icon: React.ReactNode; color: string; bg: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+      <div style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {icon}
+      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>{children}</div>
+    </div>
+  );
+}
+
 interface Props extends UseDummyInvoiceFormViewModelReturn {}
 
 export function DummyInvoiceFormView(props: Props) {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  const { symbol: currencySymbol } = useGlobalCurrency();
   const {
     invoiceType, setInvoiceType,
     invoiceNumber, setInvoiceNumber,
@@ -55,12 +72,21 @@ export function DummyInvoiceFormView(props: Props) {
     notes, setNotes,
     status, setStatus,
     savedSalespersons,
+    imageDataUrl, isUploadingImage, handleImageUpload, removeImage,
+    digitalStamp, setDigitalStamp,
     isEditing, isSaving, isLoading,
     handleSave, handleCancel,
   } = props;
 
   const [showSpDropdown, setShowSpDropdown] = useState(false);
   const spRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleImageUpload(file);
+    e.target.value = ''; // allow re-selecting the same file later
+  };
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (spRef.current && !spRef.current.contains(e.target as Node)) setShowSpDropdown(false); };
@@ -81,19 +107,24 @@ export function DummyInvoiceFormView(props: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#f8fafc' }}>
 
       {/* Header */}
-      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ flexShrink: 0, backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(15,23,42,0.03)' }}>
         <button onClick={handleCancel}
           style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e8f0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
           <ArrowLeft size={17} />
         </button>
-        <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: selectedType.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <FileText size={17} color="#fff" />
+        <div style={{ width: 38, height: 38, borderRadius: 9, backgroundColor: selectedType.color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 3px 8px ${selectedType.color}40` }}>
+          <FileText size={18} color="#fff" />
         </div>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
             {isEditing ? `Edit ${selectedType.label}` : `New ${selectedType.label}`}
           </div>
-          <div style={{ fontSize: 11, color: '#64748b' }}>{invoiceNumber || 'Generating number…'}</div>
+          <div style={{ fontSize: 11.5, color: '#64748b', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', marginTop: 1 }}>
+            {invoiceNumber || 'Generating number…'}
+          </div>
+        </div>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#94a3b8', padding: '3px 8px', borderRadius: 999, border: '1px solid #e2e8f0', textTransform: 'uppercase' }}>
+          Independent of Inventory
         </div>
         {/* PDF Download */}
         <button
@@ -122,7 +153,7 @@ export function DummyInvoiceFormView(props: Props) {
                 selectedCurrencies: ['AED'],
                 supplierCostTotal: 0, purchaseCostTotal: 0, miscExpense: 0,
                 deductionCharges: 0, cargoAmount: 0, customsAmount: 0, agentAmount: 0,
-                branch: '', digitalStamp: false,
+                branch: '', digitalStamp, imageDataUrl: imageDataUrl || undefined,
               };
               await downloadInvoicePdf(invoiceForPdf);
             } catch (err: any) {
@@ -148,7 +179,7 @@ export function DummyInvoiceFormView(props: Props) {
 
         {/* Invoice Type selector */}
         <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Invoice Type</div>
+          <SectionTitle icon={<Receipt size={15} color="#334155" />} bg="#f1f5f9" color="#334155">Invoice Type</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
             {TYPES.map(t => {
               const sel = invoiceType === t.value;
@@ -170,7 +201,7 @@ export function DummyInvoiceFormView(props: Props) {
 
         {/* Invoice meta */}
         <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>Invoice Details</div>
+          <SectionTitle icon={<Hash size={15} color="#1d4ed8" />} bg="#eff6ff" color="#1d4ed8">Invoice Details</SectionTitle>
           <div style={S.grid3}>
             <div>
               <label style={S.label}>Invoice Number</label>
@@ -189,9 +220,7 @@ export function DummyInvoiceFormView(props: Props) {
 
         {/* Customer info */}
         <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <User size={15} color="#64748b" /> Customer Information
-          </div>
+          <SectionTitle icon={<User size={15} color="#15803d" />} bg="#f0fdf4" color="#15803d">Customer Information</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={S.grid2}>
               <div>
@@ -232,8 +261,13 @@ export function DummyInvoiceFormView(props: Props) {
 
         {/* Products — fully manual */}
         <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Products / Services</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <SectionTitle icon={<ClipboardList size={15} color="#b45309" />} bg="#fffbeb" color="#b45309">
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                Products / Services
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>({products.length})</span>
+              </span>
+            </SectionTitle>
             <button type="button" onClick={addProduct}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', backgroundColor: '#0f172a', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               <Plus size={14} /> Add Line
@@ -282,15 +316,81 @@ export function DummyInvoiceFormView(props: Props) {
             <div style={{ padding: '12px 20px', backgroundColor: '#0f172a', borderRadius: 10, display: 'flex', gap: 16, alignItems: 'center' }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total</span>
               <span style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>
-                AED {totalAmount.toLocaleString('en-AE', { minimumFractionDigits: 2 })}
+                {currencySymbol} {totalAmount.toLocaleString('en-AE', { minimumFractionDigits: 2 })}
               </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Attachment + Digital Stamp */}
+        <div style={S.card}>
+          <SectionTitle icon={<Paperclip size={15} color="#7c3aed" />} bg="#f5f3ff" color="#7c3aed">Attachment &amp; Digital Stamp</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            {/* Image attachment */}
+            <div>
+              <label style={S.label}>Attached Image <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional — printed on the PDF)</span></label>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={onPickImage} style={{ display: 'none' }} />
+              {imageDataUrl ? (
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <img src={imageDataUrl} alt="Attachment preview"
+                    style={{ width: 168, height: 168, objectFit: 'cover', borderRadius: 10, border: '1px solid #e2e8f0', display: 'block' }} />
+                  <button type="button" onClick={removeImage} title="Remove image"
+                    style={{ position: 'absolute', top: -8, right: -8, width: 26, height: 26, borderRadius: '50%', border: '2px solid #fff', backgroundColor: '#ef4444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }}>
+                    <X size={13} strokeWidth={3} />
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage}
+                  style={{
+                    width: 168, height: 168, borderRadius: 10, border: '2px dashed #cbd5e1', backgroundColor: '#f8fafc',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    cursor: isUploadingImage ? 'wait' : 'pointer', color: '#64748b',
+                  }}>
+                  {isUploadingImage
+                    ? <><Loader2 size={22} style={{ animation: 'spin 1s linear infinite' }} /><span style={{ fontSize: 11, fontWeight: 600 }}>Processing…</span></>
+                    : <><ImagePlus size={22} /><span style={{ fontSize: 11, fontWeight: 600 }}>Click to upload</span></>}
+                </button>
+              )}
+            </div>
+
+            {/* Digital stamp toggle */}
+            <div>
+              <label style={S.label}>Company Stamp</label>
+              <button type="button" onClick={() => setDigitalStamp(!digitalStamp)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+                  padding: '14px 16px', borderRadius: 10, cursor: 'pointer',
+                  border: `1.5px solid ${digitalStamp ? '#a78bfa' : '#e2e8f0'}`,
+                  backgroundColor: digitalStamp ? '#f5f3ff' : '#fff',
+                }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: 9, flexShrink: 0,
+                  backgroundColor: digitalStamp ? '#7c3aed' : '#f1f5f9',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Stamp size={18} color={digitalStamp ? '#fff' : '#94a3b8'} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Digital Stamp on PDF</div>
+                  <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1 }}>Prints the company stamp on the generated PDF</div>
+                </div>
+                <div style={{
+                  width: 40, height: 22, borderRadius: 999, flexShrink: 0, position: 'relative',
+                  backgroundColor: digitalStamp ? '#7c3aed' : '#d1d5db', transition: 'background-color 0.15s',
+                }}>
+                  <div style={{
+                    position: 'absolute', top: 2, left: digitalStamp ? 20 : 2, width: 18, height: 18, borderRadius: '50%',
+                    backgroundColor: '#fff', transition: 'left 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  }} />
+                </div>
+              </button>
             </div>
           </div>
         </div>
 
         {/* Sales & Notes */}
         <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>Sales Details</div>
+          <SectionTitle icon={<Phone size={15} color="#334155" />} bg="#f1f5f9" color="#334155">Sales Details</SectionTitle>
           <div style={S.grid2}>
             {/* Salesperson */}
             <div ref={spRef} style={{ position: 'relative' }}>

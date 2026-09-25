@@ -13,6 +13,7 @@ import { Invoice } from '../models/types';
 interface Props {
   invoice: Invoice | null;
   isLoading?: boolean;
+  isDeleting?: boolean;
   handleDelete: () => void;
   handleCancel: () => void;
   formatCurrency: (amount: number) => string;
@@ -27,9 +28,10 @@ const cancelBtn: React.CSSProperties = {
 const deleteBtn: React.CSSProperties = {
   padding: '10px 18px', borderRadius: 8, border: 'none',
   backgroundColor: '#dc2626', color: '#ffffff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+  display: 'flex', alignItems: 'center', gap: 8,
 };
 
-export function InvoiceDeleteView({ invoice, isLoading, handleDelete, handleCancel, formatCurrency, formatDate }: Props) {
+export function InvoiceDeleteView({ invoice, isLoading, isDeleting, handleDelete, handleCancel, formatCurrency, formatDate }: Props) {
 
   // While the parent is still fetching the invoice list we don't know yet
   // whether the target invoice exists. Show a neutral loading state — do NOT
@@ -106,8 +108,15 @@ export function InvoiceDeleteView({ invoice, isLoading, handleDelete, handleCanc
         </div>
 
         <div className="flex justify-end gap-3">
-          <button onClick={handleCancel} style={cancelBtn}>Cancel</button>
-          <button onClick={handleDelete} style={deleteBtn}>Delete Invoice</button>
+          <button onClick={handleCancel} disabled={isDeleting} style={{ ...cancelBtn, opacity: isDeleting ? 0.6 : 1, cursor: isDeleting ? 'not-allowed' : 'pointer' }}>Cancel</button>
+          <button
+            onClick={handleDelete}
+            disabled={isDeleting}
+            style={{ ...deleteBtn, opacity: isDeleting ? 0.7 : 1, cursor: isDeleting ? 'not-allowed' : 'pointer' }}
+          >
+            {isDeleting && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+            {isDeleting ? 'Deleting…' : 'Delete Invoice'}
+          </button>
         </div>
       </div>
     </div>

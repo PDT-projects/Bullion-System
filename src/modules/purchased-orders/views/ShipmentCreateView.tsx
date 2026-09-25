@@ -284,7 +284,13 @@ export const ShipmentCreateView: React.FC = () => {
             <div>
               <label style={S.label}>
                 Exchange rate
-                <span style={{ fontWeight: 400, color: '#94a3b8' }}> — AED per 1 {currency}</span>
+                {/* "AED per 1 AED" is a rate of 1 stated as a rate — true but
+                    meaningless, and the field beside it is already disabled
+                    for this exact reason. Only show the ratio when it is
+                    actually a conversion between two different currencies. */}
+                {currency !== 'AED' && (
+                  <span style={{ fontWeight: 400, color: '#94a3b8' }}> — AED per 1 {currency}</span>
+                )}
               </label>
               <input type="number" min={0} step="any"
                 value={exchangeRate || ''}
@@ -320,11 +326,23 @@ export const ShipmentCreateView: React.FC = () => {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {lines.map((l, i) => {
-              // discountPercent is no longer collected, so this is the gross.
-              // The engine still subtracts a discount when one is stored, which
-              // is what keeps older shipments correct.
-              const gross = (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0);
-              const lineTotal = gross - gross * ((Number(l.discountPercent) || 0) / 100);
+              // Read the line's converted total from the costing engine
+              // (preview.lines is index-aligned with `lines` — same array,
+              // same order) instead of recomputing it here.
+              //
+              // The removed local calculation was: qty × price, less
+              // discount — entirely in the SUPPLIER's currency — and then
+              // handed straight to money(_, view), which just prints
+              // whatever the display-currency symbol is next to the number
+              // with no conversion. So a line entered as EUR 12,500 at an
+              // exchange rate of 4 was shown as "PKR 12,500.00" — the
+              // exchange rate was never applied. The engine's netTotalBase
+              // is the same qty×price-less-discount figure but ALREADY
+              // multiplied by the exchange rate (see purchasedOrderService's
+              // calculateShipmentCosting), which is the correct AED value —
+              // matching every other figure on this page (the "Landed cost
+              // preview" card below already reads *Base fields the same way).
+              const lineNetBase = preview.lines[i]?.netTotalBase ?? 0;
               return (
                 <div key={l.id} style={{ display: 'grid', gridTemplateColumns: '22px 1.5fr 1fr 62px 70px 100px 112px 28px', gap: 7, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right' }}>{i + 1}</span>
@@ -348,7 +366,7 @@ export const ShipmentCreateView: React.FC = () => {
                     onChange={e => updateLine(l.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                     placeholder={`Price (${currency})`} style={{ ...S.inp, fontSize: 12 }} />
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textAlign: 'right' }}>
-                    {money(lineTotal, view)}
+                    {money(lineNetBase, view)}
                   </div>
                   <button type="button" disabled={lines.length === 1}
                     onClick={() => setLines(p => p.filter(x => x.id !== l.id))}
@@ -362,7 +380,11 @@ export const ShipmentCreateView: React.FC = () => {
 
           <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 12, paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 12, color: '#64748b' }}>{preview.totalQuantity} units</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{money(preview.purchaseNet, view)}</span>
+            {/* purchaseNet is pre-exchange-rate (still in the supplier's
+                currency) — the same bug as the per-line total above.
+                purchaseNetBase is the same figure after the exchange rate,
+                consistent with every other total on this page. */}
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{money(preview.purchaseNetBase, view)}</span>
           </div>
         </div>
 

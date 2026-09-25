@@ -14,7 +14,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Check, Clock, Loader2, Ship, Truck, FileText, Calculator,
-  AlertTriangle, Save, PackageCheck, FileDown, X, Paperclip, Trash2, Upload, Plus, Lock, Banknote,
+  AlertTriangle, Save, PackageCheck, FileDown, X, Paperclip, Trash2, Upload, Lock, Banknote,
 } from 'lucide-react';
 import { PurchasedOrderFirebaseService } from '../models/purchasedOrderFirebaseService';
 import {
@@ -492,22 +492,13 @@ export const ShipmentDetailsView: React.FC = () => {
       if (fresh) setShipment(fresh);
       setAddingCharge(false);
       setChargeDraft({ kind: 'Customs', amount: '', date: new Date().toLocaleDateString('en-CA'), description: '' });
-      const { adjustmentInvoiceNumbers, serialsToppedUp } = result;
-      if (adjustmentInvoiceNumbers.length > 0 && serialsToppedUp > 0) {
+      const { adjustmentInvoiceNumbers } = result;
+      if (adjustmentInvoiceNumbers.length > 0) {
         toast.success(
-          `Charge added — split across the shipment. ${serialsToppedUp} unsold unit(s) had their cost updated, ` +
-          `and ${adjustmentInvoiceNumbers.length} fully-sold line(s) were absorbed via adjustment invoice(s) ` +
-          `${adjustmentInvoiceNumbers.join(', ')} — check Invoices to see them.`,
-          { duration: 8000 },
-        );
-      } else if (adjustmentInvoiceNumbers.length > 0) {
-        toast.success(
-          `Charge added. This line had no stock left, so it was auto-absorbed via adjustment invoice ` +
-          `${adjustmentInvoiceNumbers.join(', ')} — check Invoices to see it.`,
+          `Charge added. Absorbed via adjustment invoice${adjustmentInvoiceNumbers.length > 1 ? 's' : ''} ` +
+          `${adjustmentInvoiceNumbers.join(', ')} — check Invoices to see ${adjustmentInvoiceNumbers.length > 1 ? 'them' : 'it'}.`,
           { duration: 7000 },
         );
-      } else if (serialsToppedUp > 0) {
-        toast.success(`Charge added. ${serialsToppedUp} unsold unit(s) had their recorded cost updated to include it.`);
       } else {
         toast.success('Charge added');
       }
@@ -754,7 +745,16 @@ export const ShipmentDetailsView: React.FC = () => {
 
   const stageDone    = flow.filter(f => f.state === 'Completed').length;
   const totalStocked = c.lines.reduce((a, l) => a + stockedQuantity(l), 0);
-  const orphaned     = unallocatedCharge(c.lines);
+
+  // unallocatedCharge() sums the charge share sitting on every line that is
+  // fully stocked in — once every ordered unit has been received, a new
+  // charge always leaves this line via allocateNewChargeAcrossShipment's
+  // dummy adjustment invoice, whether that line's unit is still sitting
+  // unsold in inventory or has already been sold. Both cases get the same
+  // treatment now (a traceable ADJ-xxxx invoice, never a silent top-up to
+  // the unit's own recorded cost), so there is nothing left to split by sold
+  // status — the whole total is "absorbed via adjustment invoice".
+  const absorbedViaAdjustment = round2(unallocatedCharge(c.lines));
   const costingCheck = canFinaliseCosting(shipment);
   const timeline     = shipmentTimeline(shipment);
 
@@ -891,7 +891,15 @@ export const ShipmentDetailsView: React.FC = () => {
                     </td>
                     <td style={S.td}>{l.quantity}</td>
                     <td style={{ ...S.td, color: '#94a3b8' }}>{l.uom}</td>
-                    <td style={S.td}>{money(l.unitPrice, view)}</td>
+                    {/* This column's header already says "(EUR)" etc. when the
+                        shipment isn't in AED — l.unitPrice is the raw supplier
+                        price, never multiplied by the exchange rate. It has to
+                        be printed with the supplier's OWN currency code
+                        (moneyRaw), not money(_, view), which would slap the
+                        unrelated display-currency symbol on an unconverted
+                        number — e.g. "PKR 12,500" on a price that is really
+                        EUR 12,500. */}
+                    <td style={S.td}>{moneyRaw(l.unitPrice, cur)}</td>
                     <Cell text={M(l.netTotalBase)} formula={l.formulas.netTotalBase} />
                     <Cell text={(l.share * 100).toFixed(2) + '%'} formula={l.formulas.share} tone="muted" />
                     <Cell text={M(l.customsShare)}   formula={l.formulas.customsShare} />
@@ -961,20 +969,23 @@ export const ShipmentDetailsView: React.FC = () => {
                   <td style={S.td} />
                 </tr>
 
-                {/* Charges that arrived after every unit on a line had gone.
-                    There is no line left to carry them, and without a row the
-                    shipment would stop balancing — money spent with nowhere on
-                    the sheet to show it. It is not stock and never reaches
-                    inventory. */}
-                {orphaned > 0 && (
-                  <tr style={{ backgroundColor: T.warnBg }}>
-                    <td colSpan={4} style={{ ...S.td, textAlign: 'left', fontWeight: 700, color: T.warn }}>
+                {/* Charges that arrived after a line was fully stocked in —
+                    whether its unit(s) are still sitting unsold in inventory
+                    or have already been sold. Both are treated the same way
+                    now (allocateNewChargeAcrossShipment always absorbs this
+                    via a dummy $0 adjustment invoice, never a silent bump to
+                    the unit's own recorded cost), so one row covers both:
+                    there is no longer a distinct "still carried on the unit"
+                    case to show separately. */}
+                {absorbedViaAdjustment > 0 && (
+                  <tr style={{ backgroundColor: '#eff6ff' }}>
+                    <td colSpan={4} style={{ ...S.td, textAlign: 'left', fontWeight: 700, color: '#1d4ed8' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <AlertTriangle size={12} /> Late charges — no units left to carry them
+                        <Check size={12} /> Late charges — absorbed via adjustment invoice
                       </span>
                     </td>
-                    <Cell text={M(orphaned)} bold tone={undefined}
-                          formula={`These charges landed after every unit had been stocked in.\n\nThey cannot be put on the units — those are gone, and some are on sold invoices — so they sit on the shipment as their own row.\n\nThe shipment still balances: stocked value + remaining value + ${M(orphaned)} = ${M(c.landedTotal)}.\n\nThis is not stock. Nothing reaches inventory.`} />
+                    <Cell text={M(absorbedViaAdjustment)} bold tone={undefined}
+                          formula={`These charges landed after this line was fully stocked in — whether its unit(s) are still sitting unsold in inventory or have already been sold on a real invoice, the result is the same: this amount cannot be put on the unit's own recorded cost (which stays frozen from the original stock-in), so it is absorbed via a $0-revenue adjustment invoice instead (see Invoices).\n\nThe shipment still balances: stocked value + remaining value + ${M(absorbedViaAdjustment)} = ${M(c.landedTotal)}.\n\nThis is not stock. Nothing reaches inventory.`} />
                     <td colSpan={15} style={S.td} />
                   </tr>
                 )}
@@ -1012,14 +1023,6 @@ export const ShipmentDetailsView: React.FC = () => {
                 </span>
               )}
             </span>
-            {!costingLocked && (
-              <button type="button" onClick={() => setAddingCharge(true)}
-                style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0',
-                         backgroundColor: '#fff', color: '#334155', fontWeight: 700, fontSize: 12,
-                         cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Plus size={13} /> Add charge
-              </button>
-            )}
           </div>
 
           {/* Totals per kind, from the list when there is one and from the four
@@ -1070,12 +1073,25 @@ export const ShipmentDetailsView: React.FC = () => {
                       {isClose ? 'Complete' : e.kind}
                     </span>
 
-                    <span style={{ color: T.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: T.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          title={e.adjustmentInvoiceNumbers?.length
+                            ? `This charge had a line with no stock left to carry it, so it was auto-absorbed via adjustment invoice(s): ${e.adjustmentInvoiceNumbers.join(', ')} — see Invoices.`
+                            : undefined}>
                       {e.label}
                       {e.transactionRef && (
                         <span style={{ color: T.muted, fontFamily: 'ui-monospace, monospace' }}> · {e.transactionRef}</span>
                       )}
                       {e.bankName && <span style={{ color: T.muted }}> · {e.bankName}</span>}
+                      {/* Persistent replacement for the one-time toast shown
+                          when the charge was added — without this, coming
+                          back to the shipment later showed no sign that part
+                          of this charge had been absorbed via a dummy
+                          invoice rather than landing on stock. */}
+                      {!!e.adjustmentInvoiceNumbers?.length && (
+                        <span style={{ color: '#7c3aed', fontWeight: 700 }}>
+                          {' '}→ Adjustment: {e.adjustmentInvoiceNumbers.join(', ')}
+                        </span>
+                      )}
                     </span>
 
                     <span style={{ textAlign: 'right', fontWeight: 700,
@@ -1130,14 +1146,6 @@ export const ShipmentDetailsView: React.FC = () => {
                 </span>
               )}
             </span>
-            {remaining > 0 && (
-              <button type="button" onClick={() => setAddingPayment(true)}
-                style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0',
-                         backgroundColor: '#fff', color: '#334155', fontWeight: 700, fontSize: 12,
-                         cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Plus size={13} /> Record payment
-              </button>
-            )}
           </div>
 
           {/* No longer waits for the receipt. What is owed comes from the costing

@@ -113,7 +113,7 @@ function BankSelector({ banks, value, onChange, error, isBanksLoading }: {
           <option value="">— Choose bank account —</option>
           {banks.map(b => (
             <option key={b.id} value={b.id}>
-              {b.name} {b.balance !== undefined ? `(Balance: AED ${b.balance.toLocaleString()})` : ''}
+              {b.name} {b.balance !== undefined ? `(Balance: ${getGlobalCurrencySymbol()} ${b.balance.toLocaleString()})` : ''}
             </option>
           ))}
         </select>
@@ -674,7 +674,7 @@ export const InventoryPaymentView: React.FC<InventoryPaymentViewProps> = ({
                     ['Sell Price', formatCurrency(productSummary.sellPrice)],
                     ['Status',   productSummary.status],
                     ['Costing',  costingOption === 'with' ? 'With Costing' : 'Without Costing'],
-                    ['Type',     isCredit ? 'On Credit' : 'Payment'],
+                    ['Type',     isCredit ? 'Third-party Inventory' : 'Owned Inventory'],
                   ].map(([l, v]) => (
                     <div key={l}>
                       <span style={{ fontSize: 10, fontWeight: 600, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</span>

@@ -10,7 +10,13 @@
 
 import jsPDF from 'jspdf';
 import { Shipment, ShipmentCosting } from './types';
-import { fmtAed } from './purchasedOrderService';
+import { fmt } from './purchasedOrderService';
+import { getGlobalCurrencySymbol } from '../../../shared/currency/globalCurrency';
+
+/** Landed-cost figures on this note in the live global currency — the same
+ *  symbol-only setting the Admin controls in User Management. Same two-decimal
+ *  formatting as everywhere else in this module; only the symbol changes. */
+const fmtGlobal = (n: number): string => `${getGlobalCurrencySymbol()} ${fmt(n)}`;
 
 const PAGE_W = 210;
 const PAGE_H = 297;
@@ -164,7 +170,7 @@ export function buildGoodsReceivedPdf(s: Shipment, c: ShipmentCosting): Blob {
 
     
     text(doc, INK);
-    doc.text(fmtAed(l.landedUnitCost), COL.unitCost.x + COL.unitCost.w - 2, y + 6, { align: 'right' });
+    doc.text(fmtGlobal(l.landedUnitCost), COL.unitCost.x + COL.unitCost.w - 2, y + 6, { align: 'right' });
 
     stroke(doc, LINE);
     doc.setLineWidth(0.1);
@@ -196,8 +202,8 @@ export function buildGoodsReceivedPdf(s: Shipment, c: ShipmentCosting): Blob {
     // note says what the shipment contained and what it cost to land.
     ['LINES',         String(c.lines.length),          { r: 226, g: 232, b: 240 }],
     ['UNITS',         String(totalOrdered),            { r: 134, g: 239, b: 172 }],
-    ['LANDED TOTAL',  fmtAed(c.landedTotal),           { r: 255, g: 255, b: 255 }],
-    ['LANDED / UNIT', fmtAed(c.averageLandedUnitCost), { r: 148, g: 163, b: 184 }],
+    ['LANDED TOTAL',  fmtGlobal(c.landedTotal),           { r: 255, g: 255, b: 255 }],
+    ['LANDED / UNIT', fmtGlobal(c.averageLandedUnitCost), { r: 148, g: 163, b: 184 }],
   ];
 
   const cw = W / cells.length;

@@ -10,6 +10,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { CurrencyDropdown } from '../../../features/finance/CurrencyPicker';
 import { CurrencyCode, CurrencyMeta, getCurrencyMeta } from '../viewModels/useInventoryCurrency';
+import { useGlobalCurrency } from '../../../shared/currency/useGlobalCurrency';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,14 +33,19 @@ export function InventoryCurrencyDropdown({
   label,
   compact = false,
 }: InventoryCurrencyDropdownProps) {
+  // Follows the Admin's global currency setting — symbol-only, no conversion.
+  // Was hardcoded to 'AED' before, so this badge never reflected what was
+  // actually selected in User Management.
+  const { code: globalCode } = useGlobalCurrency();
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
       {label && (
         <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</span>
       )}
 
-      {/* Render AED-only badge */}
-      <CurrencyDropdown primary={'AED'} extras={[]} loading={loading} error={error} lastUpdated={lastUpdated} />
+      {/* Live currency badge */}
+      <CurrencyDropdown primary={globalCode as CurrencyCode} extras={[]} loading={loading} error={error} lastUpdated={lastUpdated} />
 
       {loading && (
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>
@@ -159,6 +165,11 @@ export function CurrencyPriceInput({
   required = false,
   placeholder = '0',
 }: CurrencyPriceInputProps) {
+  // Follows the Admin's global currency setting — symbol-only label, no
+  // conversion. The stored value is always the canonical unit regardless of
+  // what this badge says; only the printed code changes.
+  const { code: globalCode } = useGlobalCurrency();
+
   const [rawInput, setRawInput] = useState<string>(pkrValue > 0 ? String(pkrValue) : '');
   const isFocused = useRef(false);
   const lastEmitted = useRef<number>(pkrValue);
@@ -218,7 +229,7 @@ export function CurrencyPriceInput({
             flexShrink: 0,
           }}
         >
-          AED
+          {globalCode}
         </div>
 
         {/* Number input — value stored exactly as typed */}

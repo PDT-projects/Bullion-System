@@ -226,7 +226,11 @@ export function InventoryDashboardView({
   const totalPurchasing = totalsSource.reduce((s, r) => s + (r.purchasingCost || 0), 0);
   const totalPaid       = totalsSource.reduce((s, r) => s + (r.supplierPaidAmount || 0), 0);
 
-  const fmtAED = (n: number) => n > 0 ? `د.إ ${Math.round(n).toLocaleString('en-AE')}` : '—';
+  // Footer totals follow the Admin's global currency, same as the per-row
+  // cells below (vm.formatCurrency) — this used to be a separate helper
+  // hardcoded to the Arabic Dirham sign, which drifted from the rest of the
+  // table the moment the admin picked any other currency.
+  const fmtAED = (n: number) => n > 0 ? vm.formatCurrency(n) : '—';
 
   // ── Active filter count ───────────────────────────────────────────────────
   const activeFilters = vm.activeFilterCount;

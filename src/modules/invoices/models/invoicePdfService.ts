@@ -20,6 +20,7 @@
 
 import { jsPDF } from 'jspdf';
 import { Invoice } from './types';
+import { getGlobalCurrency } from '../../../shared/currency/globalCurrency';
 
 // ── Palette ─────────────────────────────────────────────────────────────────
 const GOLD      = { r: 232, g: 185, b: 57  };   // #E8B939 — yellow strips
@@ -62,10 +63,17 @@ const BENEFICIARY = {
 };
 
 // ── Currency ────────────────────────────────────────────────────────────────
-// Reference invoice used US$; we default to AED to match the rest of the app.
-// Change CURRENCY_CODE if you want USD/etc.
-const CURRENCY_CODE   = 'AED';
-const CURRENCY_SYMBOL = 'AED';
+// Follows the Admin's global currency setting (User Management → System
+// Currency) instead of a fixed 'AED' — same symbol-only rule as every other
+// module: no figure on this PDF is ever converted, only the code/symbol/
+// subunit name printed next to it changes. Read fresh every time a PDF is
+// generated, since this file has no live subscription of its own.
+const SUBUNIT_NAME: Record<string, string> = {
+  AED: 'Fils', SAR: 'Halalas', USD: 'Cents', CAD: 'Cents', PKR: 'Paisa',
+};
+const currencyCode   = (): string => getGlobalCurrency().code;
+const currencySymbol = (): string => getGlobalCurrency().symbol;
+const subunitName    = (): string => SUBUNIT_NAME[currencyCode()] ?? 'Fils';
 
 // ── Image loader ────────────────────────────────────────────────────────────
 // Two-stage loader:
@@ -397,8 +405,8 @@ function renderProductsHeader(doc: jsPDF, y: number, COL: Columns): number {
   if (COL.withImages) doc.text('IMAGE', COL.image.x + COL.image.w / 2, y + 6, { align: 'center' });
   doc.text('DESCRIPTION',     COL.desc.x + 4,                y + 6);
   doc.text('QTY',             COL.qty.x + COL.qty.w / 2,     y + 6, { align: 'center' });
-  doc.text(`UNIT PRICE ${CURRENCY_SYMBOL}`, COL.unit.x + COL.unit.w / 2,  y + 6, { align: 'center' });
-  doc.text(`TOTAL ${CURRENCY_SYMBOL}`,      COL.total.x + COL.total.w / 2, y + 6, { align: 'center' });
+  doc.text(`UNIT PRICE ${currencySymbol()}`, COL.unit.x + COL.unit.w / 2,  y + 6, { align: 'center' });
+  doc.text(`TOTAL ${currencySymbol()}`,      COL.total.x + COL.total.w / 2, y + 6, { align: 'center' });
 
   return y + h;
 }
@@ -519,8 +527,8 @@ function renderTotals(doc: jsPDF, invoice: Invoice, y: number): number {
   text(doc, TEXT_D);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text(`TOTAL  ${CURRENCY_CODE}`, leftX + labelW - 2, cursorY + 5, { align: 'right' });
-  doc.text(`${CURRENCY_SYMBOL}  ${fmt(totalDue)}`, rightX - 2, cursorY + 5, { align: 'right' });
+  doc.text(`TOTAL  ${currencyCode()}`, leftX + labelW - 2, cursorY + 5, { align: 'right' });
+  doc.text(`${currencySymbol()}  ${fmt(totalDue)}`, rightX - 2, cursorY + 5, { align: 'right' });
   cursorY += rowH + 2;
 
   // In Words row (spans full width)
@@ -531,7 +539,7 @@ function renderTotals(doc: jsPDF, invoice: Invoice, y: number): number {
   doc.setFontSize(9);
   doc.text('In Words', ML + 2, wordsY + 5.2);
   doc.setFont('helvetica', 'normal');
-  const words = numberToWords(Math.floor(totalDue)) + ` ${CURRENCY_CODE}${totalDue % 1 > 0 ? ' and ' + numberToWords(Math.round((totalDue % 1) * 100)) + ' Fils' : ''}`;
+  const words = numberToWords(Math.floor(totalDue)) + ` ${currencyCode()}${totalDue % 1 > 0 ? ' and ' + numberToWords(Math.round((totalDue % 1) * 100)) + ' ' + subunitName() : ''}`;
   doc.text(words, ML + 22, wordsY + 5.2);
 
   return wordsY + 8 + 4;
@@ -591,6 +599,52 @@ function renderLogo(doc: jsPDF, invoice: Invoice, y: number, logo: ImageData | n
     const sX = PAGE_W - MR - drawW;
     const sY = y + (blockH - drawH) / 2;
     doc.addImage(logo.dataUrl, logo.format, sX, sY, drawW, drawH);
+  } catch { /* draw failed — no fallback needed */ }
+
+  return y + blockH;
+}
+
+/**
+ * Renders a custom attached image (e.g. a photo of the item, a reference
+ * document) on the LEFT side of the page, mirroring the logo/stamp block
+ * on the right. Only present on invoices that carry `imageDataUrl` —
+ * currently just Dummy/Proforma/Booking/Quotation invoices, which have no
+ * linked inventory product to pull a photo from.
+ *
+ * Draws synchronously: `imageDataUrl` is already a data URL by the time it
+ * reaches here (read via FileReader + a canvas resize at upload time in the
+ * form), so unlike the logo/product-image loaders this needs no network
+ * fetch and no Promise.all() slot.
+ */
+function renderAttachment(doc: jsPDF, invoice: Invoice, y: number): number {
+  const dataUrl = (invoice as any).imageDataUrl as string | undefined;
+  if (!dataUrl) return y;
+
+  const blockH = 52;
+  const boxMax = 48;
+  let drawW = boxMax;
+  let drawH = boxMax;
+  const format: 'PNG' | 'JPEG' = dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+
+  try {
+    const props = doc.getImageProperties(dataUrl);
+    const ratio = props.width / props.height;
+    // Preserve aspect ratio rather than stretching to a square.
+    if (ratio >= 1) { drawW = boxMax; drawH = boxMax / ratio; }
+    else            { drawH = boxMax; drawW = boxMax * ratio; }
+  } catch {
+    // Corrupt/unreadable data URL — skip rather than draw garbage.
+    return y;
+  }
+
+  try {
+    const sX = ML;
+    const sY = y + (blockH - drawH) / 2;
+    doc.addImage(dataUrl, format, sX, sY, drawW, drawH);
+    text(doc, TEXT_M);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text('Attachment', sX, y + blockH - 1);
   } catch { /* draw failed — no fallback needed */ }
 
   return y + blockH;
@@ -753,7 +807,15 @@ export async function generateInvoicePdf(
   // ── Trailing sections on the last page ──────────────────────────────────
   y += 4;
   y = renderTotals(doc, invoice, y);
-  y = renderLogo(doc, invoice, y, logoImage);
+  // Logo/stamp (right) and a custom attached image (left) share the same
+  // row — both start from the same y and the cursor advances by whichever
+  // one actually drew something (or +6 if neither did).
+  {
+    const yAside = y;
+    const yAfterLogo       = renderLogo(doc, invoice, yAside, logoImage);
+    const yAfterAttachment = renderAttachment(doc, invoice, yAside);
+    y = Math.max(yAfterLogo, yAfterAttachment);
+  }
   y += 2;
   renderBeneficiary(doc, y);
   renderThankYou(doc, PAGE_H - 7);

@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Building2,LayoutDashboard, ChevronDown, ChevronRight, Package, FileText,  DollarSign, BarChart2, ArrowLeftRight, FilePlus, List,
-  Landmark, Receipt,
+  Building2,LayoutDashboard, ChevronDown, ChevronRight, Package, FileText,  BarChart2, ArrowLeftRight, FilePlus, List,
   ShieldCheck, Ship,
 } from 'lucide-react';
 
@@ -17,13 +16,7 @@ const SCREEN_PERMISSIONS: Record<string, Screen> = {
   'purchased-orders': 'Inventory Dashboard',
   'invoices': 'Invoices List',
   'dummy-invoices': 'Dummy Invoices',
-  'against-invoice': 'Against Invoice',
   'transactions-list': 'Transaction List',
-  'banking': 'Banking Dashboard',
-  'bank-accounts': 'Bank Accounts List',
-  'transfers': 'Bank Transfers List',
-  'cash-in-hand': 'Cash List',
-  'bank-activity': 'Bank Activity Report',
   'employees': 'Employees List',
   'loans': 'Loans Dashboard',
   'bills': 'Bills List',
@@ -58,17 +51,11 @@ const menuItems: MenuItem[] = [
     id: 'invoices', name: 'Invoices', icon: FileText,
     children: [
       { id: 'invoices', name: 'All Invoices', icon: List, path: '/invoices' },
-      { id: 'dummy-invoices', name: 'Dummy Invoices', icon: FilePlus, path: '/invoices/dummy' },
-      { id: 'against-invoice', name: 'Against Invoice', icon: Receipt, path: '/against-the-invoice' },
-    ],
-  },
-  {
-    id: 'banking', name: 'Banking', icon: Landmark,
-    children: [
-      { id: 'banking', name: 'Overview', icon: Landmark, path: '/banking' },
-      { id: 'bank-accounts', name: 'Bank Accounts', icon: List, path: '/banking/banks' },
-      { id: 'transfers', name: 'Transfers', icon: ArrowLeftRight, path: '/banking/transfers' },
-      { id: 'cash-in-hand', name: 'Cash Ledger', icon: DollarSign, path: '/banking/cash' },
+      // Sidebar link text only — display label changed to "Fictitious Invoices".
+      // The 'dummy-invoices' id/path and SCREEN_PERMISSIONS['dummy-invoices']
+      // permission key (still 'Dummy Invoices', see above) are left unchanged
+      // so existing role permissions and routing keep working.
+      { id: 'dummy-invoices', name: 'Fictitious Invoices', icon: FilePlus, path: '/invoices/dummy' },
     ],
   },
   { id: 'user-management', name: 'User Management', icon: ShieldCheck, path: '/user-management' },

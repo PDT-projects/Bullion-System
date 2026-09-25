@@ -1,43 +1,85 @@
-// React hook + boot-time provider for the global currency setting.
+// Shared "changing point" for every module's display currency.
 //
-// Usage in a component:
-//   const { symbol, formatCurrency } = useGlobalCurrency();
-//   <span>{formatCurrency(1234)}</span>
+// This is a thin adapter over the app's one system-wide currency setting
+// (CurrencyContext.tsx -> Firestore `settings/currency`) - the same setting
+// the admin controls from the "System Currency" dropdown in User Management,
+// and the same one already driving the Income Statement, Balance Sheet,
+// Payable/Receivable reports and the Purchased Orders module.
 //
-// Usage once, at the top of the app (e.g. App.tsx), so the real saved value
-// is loaded before anything renders:
-//   <GlobalCurrencyBoot><App /></GlobalCurrencyBoot>
+// Every consumer reads through this file instead of CurrencyContext directly
+// so they all share one "changing point": change the currency once in User
+// Management and Banking, Employee, Inventory and Purchased Orders update
+// together.
+//
+// Symbol-only, same rule as everywhere else this system follows: nothing
+// here converts a stored number. `formatCurrency` only changes the label
+// Intl.NumberFormat prints next to a figure - the figure's magnitude is
+// never touched.
 
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  getGlobalCurrency, loadGlobalCurrency, subscribeToGlobalCurrency,
-  formatGlobalCurrency, GlobalCurrencySetting, isGlobalCurrencyLoaded,
-} from './globalCurrency';
+import { useCallback, useEffect, type ReactNode } from 'react';
+import { useCurrency } from '../../providers/context/CurrencyContext';
+import { CURRENCIES } from '../../features/finance/currencyUtils';
+import { bootGlobalCurrency } from './globalCurrency';
 
-export function useGlobalCurrency() {
-  const [setting, setSetting] = useState<GlobalCurrencySetting>(getGlobalCurrency());
+/** Short, unambiguous symbol for each currency the admin can pick (User
+ *  Management's dropdown offers exactly these five, via currencyUtils.ts). */
+const CODE_SYMBOL: Record<string, string> = {
+  PKR: 'Rs',
+  USD: '$',
+  CAD: 'CA$',
+  AED: 'AED',
+  SAR: 'SAR',
+};
 
-  useEffect(() => {
-    if (!isGlobalCurrencyLoaded()) {
-      loadGlobalCurrency().then(setSetting);
-    }
-    return subscribeToGlobalCurrency(setSetting);
-  }, []);
-
-  const formatCurrency = useCallback(
-    (amount: number, opts?: { minimumFractionDigits?: number }) => formatGlobalCurrency(amount, opts),
-    [setting], // re-create when the symbol changes so callers re-render with the new label
-  );
-
-  return { symbol: setting.symbol, name: setting.name, code: setting.code, formatCurrency };
+export interface GlobalCurrency {
+  /** The system-wide currency code, e.g. 'AED', 'USD'. */
+  code: string;
+  /** Human-readable name, e.g. 'US Dollar'. Falls back to the code if unrecognized. */
+  name: string;
+  /** Short symbol, e.g. '$', 'Rs'. Falls back to the code if unrecognized. */
+  symbol: string;
+  /** Formats a stored figure in the live global currency. No conversion — same
+   *  number, different label. Returns '—' for an undefined amount. */
+  formatCurrency: (n?: number) => string;
 }
 
-/** Wrap your app root with this once, so the real Firestore value is loaded
- *  before the rest of the app uses formatGlobalCurrency(). Renders children
- *  immediately with the AED default while loading — nothing blocks. */
-export const GlobalCurrencyBoot: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function useGlobalCurrency(): GlobalCurrency {
+  const { primary } = useCurrency();
+  const meta = CURRENCIES.find(c => c.code === primary);
+
+  const formatCurrency = useCallback((n?: number) => {
+    if (n === undefined) return '—';
+    return new Intl.NumberFormat('en-AE', {
+      style: 'currency',
+      currency: primary,
+      minimumFractionDigits: 0,
+    }).format(n);
+  }, [primary]);
+
+  return {
+    code: primary,
+    name: meta?.label ?? primary,
+    symbol: CODE_SYMBOL[primary] ?? primary,
+    formatCurrency,
+  };
+}
+
+/**
+ * Mounted once at the very top of App.tsx, wrapping everything else
+ * (AuthProvider, the router, the toaster). Starts globalCurrency.ts's own
+ * backup Firestore subscription — see that file's top comment for why it's
+ * a backup and not the primary path. The primary path is CurrencyContext
+ * (mounted separately in main.tsx, above App) calling syncGlobalCurrencyCode()
+ * directly whenever its own subscription delivers a value, so
+ * getGlobalCurrencySymbol() et al. stay correct even if this boot never runs.
+ *
+ * Never withholds or delays rendering its children.
+ */
+export function GlobalCurrencyBoot({ children }: { children: ReactNode }) {
   useEffect(() => {
-    loadGlobalCurrency();
+    return bootGlobalCurrency();
   }, []);
   return <>{children}</>;
-};
+}
+
+export default useGlobalCurrency;

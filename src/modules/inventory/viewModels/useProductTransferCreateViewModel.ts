@@ -43,9 +43,11 @@ export interface UseProductTransferCreateViewModelReturn {
   getProductStockByLocation: (productId: string, location: string) => number;
   getProductById: (productId: string) => Product | undefined;
   addNewLocation: (value: string) => Promise<string | null>;
+  /** Removes one location from the shared list. Admin-only in the UI. */
+  removeLocation: (value: string) => Promise<void>;
+  /** Clears the entire saved location list back to empty. Admin-only in the UI. */
+  resetLocations: () => Promise<void>;
 }
-
-const LOCATIONS = ['Dubai', 'Saudia', 'Chad', 'Sudan'];
 
 function getSerialEffectiveLocation(product: Product, serial: string): string {
   // BUG that this fixes: the previous body just returned `product.location`,
@@ -88,7 +90,7 @@ export function useProductTransferCreateViewModel(
   const navigate = useNavigate();
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [locations, setLocations] = useState<string[]>(LOCATIONS);
+  const [locations, setLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     transferDateTime: localDateTimeNow(),
@@ -119,20 +121,32 @@ export function useProductTransferCreateViewModel(
     load();
   }, []);
 
+  // Locations here used to live in their OWN Firestore doc
+  // (appConfig/transferLocations), completely disconnected from the location
+  // list every other Inventory screen uses (appConfig/inventoryLocations, via
+  // the shared LocationSelector — see LocationSelector.tsx / INVENTORY_LOCATIONS
+  // in models/types.ts). That meant a location added while creating inventory
+  // never showed up here, and a location added here never showed up anywhere
+  // else — two disconnected lists for what is really one set of physical
+  // locations. It also carried its own hardcoded seed (['Dubai','Saudia',
+  // 'Chad','Sudan']) that was unconditionally merged back in on every load,
+  // so even a fully-cleared saved list would still show those four forever.
+  //
+  // Fixed: this now reads/writes the SAME appConfig/inventoryLocations doc as
+  // the rest of Inventory, with no hardcoded fallback — an empty saved list
+  // now actually renders as an empty dropdown, and a location added from any
+  // screen (Add Inventory, Multi-model, Add Existing, or here) shows up
+  // everywhere else immediately.
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const snap = await getDoc(doc(db, 'appConfig', 'transferLocations'));
+        const snap = await getDoc(doc(db, 'appConfig', 'inventoryLocations'));
         if (!mounted) return;
-        if (snap.exists()) {
-          const list = (snap.data().list as string[]) || [];
-          setLocations([...new Set([...LOCATIONS, ...list])].sort());
-        } else {
-          setLocations(LOCATIONS.slice().sort());
-        }
+        const list = snap.exists() ? ((snap.data().list as string[]) || []) : [];
+        setLocations([...new Set(list)].sort());
       } catch {
-        setLocations(LOCATIONS.slice().sort());
+        setLocations([]);
       }
     })();
     return () => { mounted = false; };
@@ -140,7 +154,7 @@ export function useProductTransferCreateViewModel(
 
   const saveLocationList = useCallback(async (newList: string[]) => {
     try {
-      await setDoc(doc(db, 'appConfig', 'transferLocations'), { list: newList }, { merge: true });
+      await setDoc(doc(db, 'appConfig', 'inventoryLocations'), { list: newList }, { merge: true });
     } catch (err) {
       toast.error('Failed to save location');
     }
@@ -154,6 +168,27 @@ export function useProductTransferCreateViewModel(
     await saveLocationList(updated);
     return trimmed;
   }, [locations, saveLocationList]);
+
+  // Admin-facing "manage locations" actions — there was previously no way to
+  // remove a location once added, or to clear the list back to empty, from
+  // any screen. Also clears a from/to selection that pointed at the removed
+  // location so the form never keeps a dangling, no-longer-listed value.
+  const removeLocation = useCallback(async (value: string): Promise<void> => {
+    const updated = locations.filter(l => l !== value);
+    setLocations(updated);
+    await saveLocationList(updated);
+    setFormData(prev => ({
+      ...prev,
+      fromLocation: prev.fromLocation === value ? '' : prev.fromLocation,
+      toLocation:   prev.toLocation   === value ? '' : prev.toLocation,
+    }));
+  }, [locations, saveLocationList]);
+
+  const resetLocations = useCallback(async (): Promise<void> => {
+    setLocations([]);
+    await saveLocationList([]);
+    setFormData(prev => ({ ...prev, fromLocation: '', toLocation: '' }));
+  }, [saveLocationList]);
 
   const getProductById = useCallback(
     (id: string) => products.find(p => p.id === id),
@@ -275,11 +310,28 @@ export function useProductTransferCreateViewModel(
           quantity:      item.selectedSerials.length,
         };
       });
-      // Per user request: creating a transfer does NOT touch the inventory
-      // list. Products stay where they are until the transfer is marked
-      // Received (which is when the receive-side VM updates serialCities
-      // + stockInDate + serialStatus). This keeps the inventory list
-      // stable during in-transit periods.
+      // Per user request: creating a transfer does NOT move the product's
+      // current LOCATION until it's marked Received (which is when the
+      // receive-side VM updates serialCities + stockInDate) — that keeps the
+      // inventory list's "where is it" column stable during in-transit
+      // periods, which is what was asked for originally.
+      //
+      // But leaving a transferred serial's STATUS as 'Available' the whole
+      // time it's in transit was a separate bug, not a feature: this same
+      // "still Available" serial could be sold on an invoice or picked into
+      // a second transfer while it was already on its way somewhere else —
+      // nothing anywhere tracked that it was spoken for. Fixed: each
+      // transferred serial is now reserved as 'In Transit' the moment the
+      // transfer is created (Invoice's own serial picker — see
+      // getAvailableSerialsForProduct in useInvoiceFormViewModel — already
+      // excludes 'In Transit', so this alone closes the double-booking gap
+      // there too). It's released back to 'Available' when the transfer is
+      // received (useProductTransferViewModel.handleMarkReceived, which
+      // already had this exact line, previously dead code since nothing
+      // ever set the status to begin with) or when it's deleted before
+      // receipt (useProductTransferViewModel.handleDeleteTransfer).
+      const statusPatches: Record<string, Record<string, string>> = {};
+
       for (const item of transferItems) {
         const product = getProductById(item.productId);
         if (!product) continue;
@@ -299,7 +351,21 @@ export function useProductTransferCreateViewModel(
           costPerUnit:   costPerUnit,
           transferItems: transferItemsSummary,
         });
+
+        // Accumulate per-product (not per-item) so two items against the
+        // same product in one save don't overwrite each other's reservation.
+        const base = statusPatches[product.id] || { ...(product.serialStatus || {}) };
+        for (const s of item.selectedSerials) base[s] = 'In Transit';
+        statusPatches[product.id] = base;
       }
+
+      for (const [productId, serialStatus] of Object.entries(statusPatches)) {
+        await InventoryFirebaseService.updateProduct(productId, { serialStatus } as any);
+      }
+      setProducts(prev => prev.map(p =>
+        statusPatches[p.id] ? { ...p, serialStatus: statusPatches[p.id] } as any : p
+      ));
+
       toast.success('Transfer created successfully — pending receipt');
       if (options?.onSaveSuccess) {
         options.onSaveSuccess();
@@ -332,6 +398,6 @@ export function useProductTransferCreateViewModel(
     updateTransferItemProduct, toggleSerial,
     toggleSummary, handleSave, onBack,
     getAvailableSerials, getProductStockByLocation, getProductById,
-    addNewLocation,
+    addNewLocation, removeLocation, resetLocations,
   };
 }
