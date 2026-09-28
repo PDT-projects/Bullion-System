@@ -1119,17 +1119,58 @@ export function InvoiceListView({
   // field, so there's nothing to filter in Firestore. Applied on top of
   // whatever filteredInvoices already is.
   const [profitFilter, setProfitFilter] = useState<'all' | 'profit' | 'loss'>('all');
+
+  // ── Price Range filter (NEW) ────────────────────────────────────────────
+  // Client-side min/max on the invoice total (the "Amount" column). Kept
+  // as strings so an empty box means "no bound on that side" rather than 0.
+  const [priceMin, setPriceMin] = useState<string>('');
+  const [priceMax, setPriceMax] = useState<string>('');
+
+  // ── Delivery / COD filter (NEW) ─────────────────────────────────────────
+  // deliveryStatus is saved as whatever the Delivery Method buttons wrote at
+  // invoice-creation time (Self-collect / Courier / COD / Self Delivered),
+  // which is a wider set than the older LCS / Daewoo / Delivered values —
+  // so options are seeded with every method used anywhere in the app and
+  // topped up with whatever is actually saved on real invoices, the same
+  // way the Location filter already seeds ALLOWED_CITIES and tops up from
+  // real data.
+  const KNOWN_DELIVERY_METHODS = ['Self-collect', 'Courier', 'COD', 'Self Delivered', 'LCS', 'Daewoo', 'Delivered'];
+  const deliveryOptions = React.useMemo(() => {
+    const s = new Set<string>(KNOWN_DELIVERY_METHODS);
+    invoices.forEach(inv => { if (inv.deliveryStatus) s.add(inv.deliveryStatus); });
+    return Array.from(s);
+  }, [invoices]);
+  const [deliveryFilter, setDeliveryFilter] = useState<string[]>([]);
+
   const visibleInvoices = React.useMemo(() => {
-    if (profitFilter === 'all') return filteredInvoices;
-    return filteredInvoices.filter(inv => {
-      const misc = Number(inv.miscExpense) || 0;
-      const discount = Number((inv as any).deductionCharges) || 0;
-      const shipping = Number((inv as any).cargoAmount) || 0;
-      const netSale = (inv.totalAmount || 0) - discount - misc;
-      const netProfit = netSale - calculateSupplierCost(inv) - calculatePurchaseCost(inv) - shipping;
-      return profitFilter === 'profit' ? netProfit >= 0 : netProfit < 0;
-    });
-  }, [filteredInvoices, profitFilter]);
+    let result = filteredInvoices;
+
+    if (profitFilter !== 'all') {
+      result = result.filter(inv => {
+        const misc = Number(inv.miscExpense) || 0;
+        const discount = Number((inv as any).deductionCharges) || 0;
+        const shipping = Number((inv as any).cargoAmount) || 0;
+        const netSale = (inv.totalAmount || 0) - discount - misc;
+        const netProfit = netSale - calculateSupplierCost(inv) - calculatePurchaseCost(inv) - shipping;
+        return profitFilter === 'profit' ? netProfit >= 0 : netProfit < 0;
+      });
+    }
+
+    if (priceMin.trim() !== '') {
+      const min = parseFloat(priceMin);
+      if (!isNaN(min)) result = result.filter(inv => (inv.totalAmount || 0) >= min);
+    }
+    if (priceMax.trim() !== '') {
+      const max = parseFloat(priceMax);
+      if (!isNaN(max)) result = result.filter(inv => (inv.totalAmount || 0) <= max);
+    }
+
+    if (deliveryFilter.length > 0) {
+      result = result.filter(inv => deliveryFilter.includes(inv.deliveryStatus));
+    }
+
+    return result;
+  }, [filteredInvoices, profitFilter, priceMin, priceMax, deliveryFilter]);
 
   const INVOICE_COLUMNS = ['Invoice #', 'Date', 'Customer', 'Branch / Location',
     'Salesperson', 'Brand', 'Model', `Amount (${getGlobalCurrencySymbol()})`,
@@ -1223,7 +1264,19 @@ export function InvoiceListView({
     (Array.isArray(filters.cityFilter) ? filters.cityFilter.length > 0 : !!filters.cityFilter) ||
     (Array.isArray(filters.salespersonFilter) ? filters.salespersonFilter.length > 0 : !!filters.salespersonFilter) ||
     (Array.isArray(filters.brandFilter) && filters.brandFilter.length > 0) ||
-    (Array.isArray(filters.modelFilter) && filters.modelFilter.length > 0);
+    (Array.isArray(filters.modelFilter) && filters.modelFilter.length > 0) ||
+    profitFilter !== 'all' || priceMin.trim() !== '' || priceMax.trim() !== '' || deliveryFilter.length > 0;
+
+  // Clears the viewModel-managed filters AND the local ones added on top
+  // (Net Profit, Price Range, Delivery) so "Clear all" really clears
+  // everything shown in the filter bar.
+  const handleClearAll = () => {
+    onClearFilters();
+    setProfitFilter('all');
+    setPriceMin('');
+    setPriceMax('');
+    setDeliveryFilter([]);
+  };
 
   if (isLoading) {
     return (
@@ -1294,7 +1347,7 @@ export function InvoiceListView({
           <Filter size={15} className="text-gray-600" />
           <span className="text-sm font-semibold text-gray-700">Filters</span>
           {hasActiveFilters && (
-            <button onClick={onClearFilters} className="ml-auto flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium">
+            <button onClick={handleClearAll} className="ml-auto flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium">
               <XCircle size={13} /> Clear all
             </button>
           )}
@@ -1362,6 +1415,39 @@ export function InvoiceListView({
               <option value="loss">Loss-making only</option>
             </select>
           </div>
+
+          {/* Price Range — client-side min/max on the invoice total. */}
+          <div style={{ display:'flex', flexDirection:'column', gap:4, minWidth:170 }}>
+            <label style={{ fontSize:10, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.06em' }}>
+              Price Range ({getGlobalCurrencySymbol()})
+            </label>
+            <div style={{ display:'flex', gap:6 }}>
+              <input
+                type="number"
+                min={0}
+                value={priceMin}
+                onChange={e => setPriceMin(e.target.value)}
+                placeholder="Min"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900"
+                style={{ width: '50%' }}
+              />
+              <input
+                type="number"
+                min={0}
+                value={priceMax}
+                onChange={e => setPriceMax(e.target.value)}
+                placeholder="Max"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white text-gray-900"
+                style={{ width: '50%' }}
+              />
+            </div>
+          </div>
+
+          {/* Delivery / COD — same multi-select control as Status/Location/etc. */}
+          <InvoiceMultiFilter label="Delivery"
+            selected={deliveryFilter}
+            onChange={v => setDeliveryFilter(v)}
+            options={deliveryOptions} />
         </div>
       </div>
 

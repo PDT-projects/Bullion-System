@@ -604,51 +604,13 @@ function renderLogo(doc: jsPDF, invoice: Invoice, y: number, logo: ImageData | n
   return y + blockH;
 }
 
-/**
- * Renders a custom attached image (e.g. a photo of the item, a reference
- * document) on the LEFT side of the page, mirroring the logo/stamp block
- * on the right. Only present on invoices that carry `imageDataUrl` —
- * currently just Dummy/Proforma/Booking/Quotation invoices, which have no
- * linked inventory product to pull a photo from.
- *
- * Draws synchronously: `imageDataUrl` is already a data URL by the time it
- * reaches here (read via FileReader + a canvas resize at upload time in the
- * form), so unlike the logo/product-image loaders this needs no network
- * fetch and no Promise.all() slot.
- */
-function renderAttachment(doc: jsPDF, invoice: Invoice, y: number): number {
-  const dataUrl = (invoice as any).imageDataUrl as string | undefined;
-  if (!dataUrl) return y;
-
-  const blockH = 52;
-  const boxMax = 48;
-  let drawW = boxMax;
-  let drawH = boxMax;
-  const format: 'PNG' | 'JPEG' = dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-
-  try {
-    const props = doc.getImageProperties(dataUrl);
-    const ratio = props.width / props.height;
-    // Preserve aspect ratio rather than stretching to a square.
-    if (ratio >= 1) { drawW = boxMax; drawH = boxMax / ratio; }
-    else            { drawH = boxMax; drawW = boxMax * ratio; }
-  } catch {
-    // Corrupt/unreadable data URL — skip rather than draw garbage.
-    return y;
-  }
-
-  try {
-    const sX = ML;
-    const sY = y + (blockH - drawH) / 2;
-    doc.addImage(dataUrl, format, sX, sY, drawW, drawH);
-    text(doc, TEXT_M);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.text('Attachment', sX, y + blockH - 1);
-  } catch { /* draw failed — no fallback needed */ }
-
-  return y + blockH;
-}
+// NOTE: this file used to have a renderAttachment() here that drew a custom
+// uploaded photo (invoice.imageDataUrl) on Dummy/Proforma/Booking/Quotation
+// invoices — the one thing that made a Dummy invoice's PDF look different
+// from a real invoice's. It's been removed so every invoice type produces
+// the exact same format (per request, 2026-09-28). Re-add it if that photo
+// block is ever wanted back — it was a self-contained function, safe to
+// call from generateInvoicePdf() again without touching anything else here.
 
 /** Beneficiary payment instructions block at the bottom. */
 function renderBeneficiary(doc: jsPDF, y: number): number {
@@ -733,13 +695,26 @@ export async function generateInvoicePdf(
   // singular `imageUrl` string. We accept either and use the first available.
   // As a last resort we look up `enrichMap[productId]` — this rescues
   // invoices that were saved before imageUrls were being captured.
+  //
+  // Final fallback: `invoice.imageDataUrl` — the manually uploaded photo used
+  // by Dummy/Proforma/Booking/Quotation invoices, which have no inventory
+  // link and so never have imageUrls on their product lines. It used to be
+  // drawn in a separate "Attachment" box below the totals; now it fills the
+  // same IMAGE column a real invoice's product photo would, so a dummy
+  // invoice's row looks exactly like a real one's instead of coming up
+  // blank. `loadImage()` already handles data: URLs fine (see cacheBust,
+  // which skips them), so no change was needed there.
   const products = invoice.products || [];
   const shouldLoadLogo = wantsLogo(invoice);
+  const invoiceImageDataUrl = typeof (invoice as any).imageDataUrl === 'string' && (invoice as any).imageDataUrl
+    ? (invoice as any).imageDataUrl as string
+    : null;
   const pickImageUrl = (p: any): string | null => {
     if (Array.isArray(p?.imageUrls) && p.imageUrls.length > 0) return p.imageUrls[0];
     if (typeof p?.imageUrl === 'string' && p.imageUrl) return p.imageUrl;
     const enriched = p?.productId && enrichMap[p.productId];
     if (enriched && enriched.length > 0) return enriched[0];
+    if (invoiceImageDataUrl) return invoiceImageDataUrl;
     return null;
   };
 
@@ -807,15 +782,13 @@ export async function generateInvoicePdf(
   // ── Trailing sections on the last page ──────────────────────────────────
   y += 4;
   y = renderTotals(doc, invoice, y);
-  // Logo/stamp (right) and a custom attached image (left) share the same
-  // row — both start from the same y and the cursor advances by whichever
-  // one actually drew something (or +6 if neither did).
-  {
-    const yAside = y;
-    const yAfterLogo       = renderLogo(doc, invoice, yAside, logoImage);
-    const yAfterAttachment = renderAttachment(doc, invoice, yAside);
-    y = Math.max(yAfterLogo, yAfterAttachment);
-  }
+  // Logo/stamp (right) only. The "Attachment" photo box that used to render
+  // here for Dummy/Proforma/Booking/Quotation invoices (a manually uploaded
+  // reference photo, via invoice.imageDataUrl) has been removed per request —
+  // every invoice type, dummy or real, now produces the exact same PDF
+  // format. See the NOTE further down where renderAttachment() used to be
+  // defined if this is ever wanted back.
+  y = renderLogo(doc, invoice, y, logoImage);
   y += 2;
   renderBeneficiary(doc, y);
   renderThankYou(doc, PAGE_H - 7);

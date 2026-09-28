@@ -1013,6 +1013,34 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+        {/* ── Ownership ──
+            Moved ahead of Shipment so ownership is decided first — same
+            block as before, just reordered, nothing inside it changed. */}
+        <div style={S.card}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Ownership Type</div>
+          <div style={S.grid2}>
+            {[
+              { value: 'Owned',  label: 'Owned Inventory',       sub: 'Paying supplier now',   Icon: Wallet, color: '#15803d', bg: '#f0fdf4', border: '#22c55e' },
+              { value: 'Credit', label: 'Third-party Inventory', sub: 'Pay supplier later',    Icon: Users,  color: '#b45309', bg: '#fffbeb', border: '#f59e0b' },
+            ].map(opt => {
+              const sel = ownership === opt.value;
+              return (
+                <button key={opt.value} type="button" onClick={() => setOwnership(opt.value as any)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 10, cursor: 'pointer', border: `2px solid ${sel ? opt.border : '#e5e7eb'}`, backgroundColor: sel ? opt.bg : '#fff', transition: 'all 0.15s' }}>
+                  <div style={{ padding: 7, borderRadius: 8, backgroundColor: sel ? `${opt.border}25` : '#f1f5f9' }}>
+                    <opt.Icon size={19} color={sel ? opt.color : '#94a3b8'} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: sel ? opt.color : '#374151' }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: sel ? opt.color : '#9ca3af' }}>{opt.sub}</div>
+                  </div>
+                  {sel && <span style={{ marginLeft: 'auto', width: 20, height: 20, borderRadius: '50%', backgroundColor: opt.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={12} color="#fff" /></span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* ── Shipment ──
             Only for Against Payment — paying the supplier now against a
             landed order means the rows are filled from that order and the
@@ -1067,32 +1095,6 @@ export const InventoryTypeSelectionView: React.FC<{ handleBack?: () => void; onC
             </div>
           </div>
         )}
-
-        {/* ── Ownership ── */}
-        <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Ownership Type</div>
-          <div style={S.grid2}>
-            {[
-              { value: 'Owned',  label: 'Owned Inventory',       sub: 'Paying supplier now',   Icon: Wallet, color: '#15803d', bg: '#f0fdf4', border: '#22c55e' },
-              { value: 'Credit', label: 'Third-party Inventory', sub: 'Pay supplier later',    Icon: Users,  color: '#b45309', bg: '#fffbeb', border: '#f59e0b' },
-            ].map(opt => {
-              const sel = ownership === opt.value;
-              return (
-                <button key={opt.value} type="button" onClick={() => setOwnership(opt.value as any)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 10, cursor: 'pointer', border: `2px solid ${sel ? opt.border : '#e5e7eb'}`, backgroundColor: sel ? opt.bg : '#fff', transition: 'all 0.15s' }}>
-                  <div style={{ padding: 7, borderRadius: 8, backgroundColor: sel ? `${opt.border}25` : '#f1f5f9' }}>
-                    <opt.Icon size={19} color={sel ? opt.color : '#94a3b8'} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: sel ? opt.color : '#374151' }}>{opt.label}</div>
-                    <div style={{ fontSize: 11, color: sel ? opt.color : '#9ca3af' }}>{opt.sub}</div>
-                  </div>
-                  {sel && <span style={{ marginLeft: 'auto', width: 20, height: 20, borderRadius: '50%', backgroundColor: opt.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={12} color="#fff" /></span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* ── Product rows ── */}
         {rows.map((row, idx) => (

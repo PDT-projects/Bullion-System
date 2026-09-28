@@ -259,6 +259,25 @@ export function InventoryDashboardView({
   const [invoicePreviewNumber, setInvoicePreviewNumber] = useState<string>('');
   const [invoicePreviewInvoice, setInvoicePreviewInvoice] = useState<any>(null);
 
+  // ── Inventory products for PDF image enrichment ──────────────────────────
+  // FIX: the invoice-preview PDF opened from here (the eye icon in the
+  // Invoice # column) was always missing the product photo, even though the
+  // exact same generateInvoicePdf() renderer shows it fine from the Invoices
+  // module. Root cause: InvoiceListView.tsx passes a live products list as
+  // `{ enrichWithProducts }` so the PDF can look up a photo by productId when
+  // the invoice's own saved line item has no imageUrls (e.g. older invoices,
+  // or system-generated adjustment lines) — this call site never passed that
+  // option, so the renderer had no fallback and silently drew no image.
+  // Same fetch-once pattern as InvoiceListView.tsx, so both previews agree.
+  const [pdfProducts, setPdfProducts] = useState<any[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    InventoryFirebaseService.fetchAllProducts()
+      .then(list => { if (!cancelled) setPdfProducts(list as any[]); })
+      .catch(err => console.warn('[InventoryDashboard] PDF product fetch failed:', err));
+    return () => { cancelled = true; };
+  }, []);
+
   const openInvoicePreview = useCallback(async (invoiceNumber: string) => {
     if (!invoiceNumber) return;
     setInvoicePreviewNumber(invoiceNumber);
@@ -271,7 +290,7 @@ export function InventoryDashboardView({
         return;
       }
       setInvoicePreviewInvoice(inv);
-      const blob = await generateInvoicePdf(inv as any);
+      const blob = await generateInvoicePdf(inv as any, { enrichWithProducts: pdfProducts });
       const url  = URL.createObjectURL(blob);
       setInvoicePreviewUrl(url);
     } catch (err) {
@@ -281,7 +300,7 @@ export function InventoryDashboardView({
     } finally {
       setInvoicePreviewLoading(false);
     }
-  }, []);
+  }, [pdfProducts]);
 
   const closeInvoicePreview = useCallback(() => {
     if (invoicePreviewUrl) URL.revokeObjectURL(invoicePreviewUrl);
