@@ -15,6 +15,7 @@ import type { Transaction } from '../../modules/transactions/models/types';
 import {
   ArrowLeft, Tag, ChevronDown, ChevronUp, ChevronRight,
   Filter, X, Calendar, MapPin, FileDown,
+  TrendingUp, TrendingDown, Scale, Wallet, Layers,
 } from 'lucide-react';
 
 type Bank    = { id: string; name: string; balance: number; accountNumber: string; };
@@ -267,6 +268,91 @@ const DetailTable = ({
   </div>
 );
 
+// ── Presentational-only helpers for the modernized summary ──────────────────
+// These render already-computed `bs` figures as a donut / composition bar —
+// pure display math (percentage of an existing total), nothing here feeds
+// back into any of the totals above.
+const safePct = (value: number, total: number): number => (total > 0 ? (value / total) * 100 : 0);
+
+const DONUT_COLORS = {
+  cash: '#d97706', bank: '#2563eb', receivable: '#9333ea', inventory: '#0d9488',
+  liability: '#dc2626', equity: '#16a34a',
+};
+
+const MiniDonut = ({
+  segments, icon, iconColor,
+}: {
+  segments: { value: number; color: string }[];
+  icon: React.ReactNode;
+  iconColor: string;
+}) => {
+  const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0);
+  let acc = 0;
+  const stops = total > 0
+    ? segments.map(seg => {
+        const start = acc;
+        acc += (Math.max(0, seg.value) / total) * 360;
+        return `${seg.color} ${start}deg ${acc}deg`;
+      }).join(', ')
+    : '#e5e7eb 0deg 360deg';
+  return (
+    <div style={{ position: 'relative', width: 42, height: 42, borderRadius: '50%', background: `conic-gradient(${stops})`, flexShrink: 0 }}>
+      <div style={{ position: 'absolute', inset: 7, borderRadius: '50%', background: '#fff', zIndex: 1 }} />
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, color: iconColor }}>
+        {icon}
+      </div>
+    </div>
+  );
+};
+
+const CompositionBar = ({
+  title, items, currency,
+}: {
+  title: string;
+  items: { label: string; value: number; color: string }[];
+  currency: string;
+}) => {
+  const total = items.reduce((s, it) => s + Math.max(0, it.value), 0);
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em', display: 'block', marginBottom: 9 }}>{title}</span>
+      <div style={{ display: 'flex', width: '100%', height: 10, borderRadius: 999, overflow: 'hidden', background: '#f1f5f9' }}>
+        {items.map((it, i) => (
+          <div key={i} style={{ width: `${safePct(it.value, total)}%`, background: it.color, height: '100%' }} />
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px', marginTop: 11 }}>
+        {items.map((it, i) => (
+          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#475569' }}>
+            <span style={{ width: 9, height: 9, borderRadius: 3, background: it.color, flexShrink: 0, display: 'inline-block' }} />
+            {it.label}
+            <span style={{ fontWeight: 700, color: '#0f172a' }}>{formatCurrency(it.value, currency)}</span>
+            <span style={{ color: '#94a3b8' }}>{safePct(it.value, total).toFixed(1)}%</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const KpiTile = ({
+  label, value, currency, icon, iconColor, donutSegments,
+}: {
+  label: string; value: number; currency: string;
+  icon: React.ReactNode; iconColor: string;
+  donutSegments: { value: number; color: string }[];
+}) => (
+  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</span>
+      <MiniDonut segments={donutSegments} icon={icon} iconColor={iconColor} />
+    </div>
+    <div style={{ fontSize: 22, fontWeight: 700, color: iconColor, fontVariantNumeric: 'tabular-nums' }}>
+      {formatCurrency(value, currency)}
+    </div>
+  </div>
+);
+
 export function BalanceSheetReport({ transactions, banks, loans, products, bills, invoices = [], onBack }: BalanceSheetReportProps) {
   const { primary: currency } = useCurrency();
   // Bills were a prop nobody ever passed, so Pending Bills always read AED 0.
@@ -324,6 +410,30 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
   const [customFrom,        setCustomFrom]        = useState('');
   const [customTo,          setCustomTo]          = useState('');
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+
+  // Quick period chips — purely a faster way to set the same customFrom/
+  // customTo state the date inputs already drive. The `liquid` filter below
+  // is untouched; it still just reads customFrom/customTo either way.
+  type DatePreset = 'month' | 'quarter' | 'year' | 'custom';
+  const [datePreset, setDatePreset] = useState<DatePreset>('custom');
+  const DATE_PRESETS: { id: DatePreset; label: string }[] = [
+    { id: 'month',   label: 'This Month' },
+    { id: 'quarter', label: 'This Quarter' },
+    { id: 'year',    label: 'This Year' },
+    { id: 'custom',  label: 'Custom' },
+  ];
+  const applyDatePreset = (p: DatePreset) => {
+    setDatePreset(p);
+    if (p === 'custom') return;
+    const now = new Date();
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    let from: Date;
+    if (p === 'month')        from = new Date(now.getFullYear(), now.getMonth(), 1);
+    else if (p === 'quarter') from = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    else                      from = new Date(now.getFullYear(), 0, 1);
+    setCustomFrom(iso(from));
+    setCustomTo(iso(now));
+  };
 
   const availableYears = useMemo(() => {
     const s = new Set<number>();
@@ -866,38 +976,93 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         </div>
       </div>
 
-      {/* One date range, nothing else. The old panel carried location chips,
-          four period modes, year and month pickers and a summary line — five
-          rows of controls above a report people open to read two numbers. */}
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: 10,
-        padding: '8px 14px', borderRadius: 10,
-        border: `1px solid ${customFrom || customTo ? '#4f46e5' : '#e2e8f0'}`,
-        backgroundColor: '#fff', whiteSpace: 'nowrap',
-      }}>
-        <Calendar size={14} color={customFrom || customTo ? '#4f46e5' : '#94a3b8'} />
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '.06em', textTransform: 'uppercase' }}>
-          Due Date from
+      <div className="bg-white border border-gray-200 rounded-xl px-4 py-3.5 flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center flex-wrap gap-3">
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+            <Calendar size={13} /> Due date
+          </span>
+          <div className="flex gap-1.5 flex-wrap">
+            {DATE_PRESETS.map(p => (
+              <button key={p.id} type="button" onClick={() => applyDatePreset(p.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  datePreset === p.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="date" value={customFrom} max={customTo || undefined}
+              onChange={e => { setCustomFrom(e.target.value); setDatePreset('custom'); }}
+              style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12, color: '#0f172a', outline: 'none' }} />
+            <span className="text-xs text-gray-400 font-semibold">to</span>
+            <input type="date" value={customTo} min={customFrom || undefined}
+              onChange={e => { setCustomTo(e.target.value); setDatePreset('custom'); }}
+              style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12, color: '#0f172a', outline: 'none' }} />
+            {(customFrom || customTo) && (
+              <button onClick={() => { setCustomFrom(''); setCustomTo(''); setDatePreset('custom'); }} title="Clear"
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', display: 'inline-flex' }}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
+          bs.balanced ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-yellow-50 text-yellow-700 border border-yellow-300'
+        }`}>
+          {bs.balanced ? '✓ Balanced' : '⚠ Off balance'}
         </span>
-        <input type="date" value={customFrom} max={customTo || undefined}
-          onChange={e => setCustomFrom(e.target.value)}
-          style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12, color: '#0f172a', outline: 'none' }} />
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '.06em', textTransform: 'uppercase' }}>to</span>
-        <input type="date" value={customTo} min={customFrom || undefined}
-          onChange={e => setCustomTo(e.target.value)}
-          style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12, color: '#0f172a', outline: 'none' }} />
-        {(customFrom || customTo) && (
-          <button onClick={() => { setCustomFrom(''); setCustomTo(''); }} title="Clear"
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', display: 'inline-flex' }}>
-            <X size={13} />
-          </button>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* KPI tiles — inline grid-template (not a Tailwind breakpoint class) so
+          this always lays out 3-across on desktop regardless of this
+          project's configured Tailwind screens. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
+        <KpiTile
+          label="Total Assets" value={bs.assets.totalAssets} currency={currency}
+          icon={<TrendingUp size={15} />} iconColor="#2563eb"
+          donutSegments={[
+            { value: bs.assets.cashInHand, color: DONUT_COLORS.cash },
+            { value: bs.assets.bankBalance, color: DONUT_COLORS.bank },
+            { value: bs.assets.accountsReceivable, color: DONUT_COLORS.receivable },
+            { value: bs.assets.inventoryValue, color: DONUT_COLORS.inventory },
+          ]}
+        />
+        <KpiTile
+          label="Total Liabilities" value={bs.liabilities.totalLiabilities} currency={currency}
+          icon={<TrendingDown size={15} />} iconColor="#dc2626"
+          donutSegments={[
+            { value: bs.liabilities.totalLiabilities, color: DONUT_COLORS.liability },
+            { value: bs.equity.totalEquity, color: '#fecaca' },
+          ]}
+        />
+        <KpiTile
+          label="Owner's Equity" value={bs.equity.totalEquity} currency={currency}
+          icon={<Scale size={15} />} iconColor="#16a34a"
+          donutSegments={[
+            { value: bs.liabilities.totalLiabilities, color: '#bbf7d0' },
+            { value: bs.equity.totalEquity, color: DONUT_COLORS.equity },
+          ]}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* ── ASSETS ── */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">ASSETS</h2>
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center gap-3 pb-4 mb-4 border-b border-gray-100">
+            <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0"><Wallet size={16} /></span>
+            <div>
+              <h2 className="text-[15px] font-bold text-gray-900">Assets</h2>
+              <p className="text-[11px] text-gray-400 mt-0.5">What the business owns</p>
+            </div>
+          </div>
+
+          <CompositionBar title="Composition" currency={currency} items={[
+            { label: 'Cash', value: bs.assets.cashInHand, color: DONUT_COLORS.cash },
+            { label: 'Bank', value: bs.assets.bankBalance, color: DONUT_COLORS.bank },
+            { label: 'Receivable', value: bs.assets.accountsReceivable, color: DONUT_COLORS.receivable },
+            { label: 'Inventory', value: bs.assets.inventoryValue, color: DONUT_COLORS.inventory },
+          ]} />
 
           <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">Current Assets</h3>
           <div className="space-y-0 mb-4">
@@ -1058,8 +1223,19 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         </div>
 
         {/* ── LIABILITIES & EQUITY ── */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">LIABILITIES & EQUITY</h2>
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center gap-3 pb-4 mb-4 border-b border-gray-100">
+            <span className="w-8 h-8 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0"><Layers size={16} /></span>
+            <div>
+              <h2 className="text-[15px] font-bold text-gray-900">Liabilities &amp; Equity</h2>
+              <p className="text-[11px] text-gray-400 mt-0.5">What it owes, and what's left for you</p>
+            </div>
+          </div>
+
+          <CompositionBar title="Financed By" currency={currency} items={[
+            { label: 'Liabilities', value: bs.liabilities.totalLiabilities, color: DONUT_COLORS.liability },
+            { label: 'Equity', value: bs.equity.totalEquity, color: DONUT_COLORS.equity },
+          ]} />
 
           <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">Current Liabilities</h3>
           <div className="space-y-0 mb-4">
@@ -1141,17 +1317,17 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
 
       {/* ── Manual BS Classification Panel ── */}
       {bsClassifiedCount > 0 && (
-        <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-800 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <button
             onClick={() => setShowBSClassified(v => !v)}
-            className="w-full flex items-center justify-between p-5 hover:bg-gray-800 transition-colors"
+            className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Tag size={16} className="text-gray-200" />
-              <h2 className="text-base font-bold text-gray-100">
+              <Tag size={16} className="text-amber-600" />
+              <h2 className="text-base font-bold text-gray-900">
                 Balance Sheet — Manual Classification
               </h2>
-              <span className="bg-gray-800 text-gray-200 text-xs font-semibold px-2 py-0.5 rounded-full">
+              <span className="bg-gray-100 text-gray-500 text-xs font-semibold px-2 py-0.5 rounded-full">
                 {bsClassifiedCount} transactions
               </span>
             </div>
@@ -1161,7 +1337,7 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
             }
           </button>
           {showBSClassified && (
-            <div className="p-5 border-t border-gray-800 space-y-6">
+            <div className="p-5 border-t border-gray-100 space-y-6">
               <p className="text-xs text-gray-400">
                 Transactions with a manual Balance Sheet category override set in the transaction form.
                 These reflect your deliberate classification and are shown here for reporting.
@@ -1226,24 +1402,6 @@ export function BalanceSheetReport({ transactions, banks, loans, products, bills
         </div>
       )}
 
-      {/* Balance verification */}
-      <div className={`rounded-xl p-6 border text-center ${bs.balanced ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-300'}`}>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Balance Verification</h3>
-        <div className="flex items-center justify-center gap-6">
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Total Assets</p>
-            <p className="text-2xl font-bold text-blue-600">{formatCurrency(bs.assets.totalAssets, currency)}</p>
-          </div>
-          <span className="text-2xl text-gray-400">=</span>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Liabilities + Equity</p>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(bs.totalLiabilitiesAndEquity, currency)}</p>
-          </div>
-        </div>
-        <p className={`text-sm mt-3 font-medium ${bs.balanced ? 'text-green-600' : 'text-yellow-700'}`}>
-          {bs.balanced ? '✓ Balance sheet is balanced' : '⚠ Minor rounding difference detected'}
-        </p>
-      </div>
      </div>
   );
 }
